@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import type { ActiveRightSidebarTab } from '@/store/slices/editor'
+import type { RightSidebarActivityTab } from './activity-bar-buttons'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
@@ -13,17 +13,20 @@ const FolderWorkspacePrChecksPanel = lazy(() => import('./FolderWorkspacePrCheck
 const PluginPanel = lazy(() => import('./PluginPanel'))
 
 type RightSidebarPanelContentProps = {
-  effectiveTab: ActiveRightSidebarTab
+  effectiveTab: RightSidebarActivityTab
   rightSidebarOpen: boolean
+  roomPanelRef?: (node: HTMLDivElement | null) => void
 }
 
 export function RightSidebarPanelContent({
   effectiveTab,
-  rightSidebarOpen
+  rightSidebarOpen,
+  roomPanelRef
 }: RightSidebarPanelContentProps): React.JSX.Element {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Suspense fallback={null}>
+        {effectiveTab === 'room' && <div ref={roomPanelRef} className="flex min-h-0 flex-1" />}
         {effectiveTab === 'explorer' && <FileExplorer />}
         {effectiveTab === 'source-control' && <SourceControl />}
         {effectiveTab === 'checks' && <ChecksPanel />}

@@ -1,7 +1,5 @@
-/* eslint-disable max-lines -- Why: all session-option transitions share one serialized state machine. */
 import {
   findCatalogModel,
-  findCatalogOption,
   type AgentSessionOptionCatalog,
   type CatalogMidSessionApply,
   type CatalogModel,
@@ -24,11 +22,16 @@ import type {
 } from './native-chat-session-option-command-dispatch'
 import {
   flattenNativeChatSessionOptionRecord,
-  resolveEffectiveNativeChatModelId,
   type NativeChatSessionOptionMode
 } from './native-chat-session-option-snapshot'
+import {
+  createSerializedApplyQueue,
+  currentApply,
+  restartValues,
+  trackedModelId
+} from './native-chat-session-option-apply-state'
 
-type SessionOptionApplyContext = {
+export type SessionOptionApplyContext = {
   mode: NativeChatSessionOptionMode
   catalog: AgentSessionOptionCatalog
   getModels: () => CatalogModel[]
@@ -48,64 +51,6 @@ type SessionOptionApplyContext = {
     value: SessionOptionValue,
     source: 'applied' | 'dispatched'
   ) => string | null
-}
-
-function restartValues(
-  ctx: SessionOptionApplyContext,
-  optionId: string,
-  value: SessionOptionValue,
-  previousModelId: string | null
-): Record<string, SessionOptionValue> {
-  const modelId = optionId === 'model' && typeof value === 'string' ? value : previousModelId
-  if (!modelId) {
-    return { [optionId]: value }
-  }
-  const record = ctx.getRecord()
-  const model = findCatalogModel({ ...ctx.catalog, models: ctx.getModels() }, modelId)
-  const values: Record<string, SessionOptionValue> = { model: modelId }
-  for (const option of model?.options ?? []) {
-    const tracked = record.valuesByModel[modelId]?.[option.id]?.value
-    values[option.id] = tracked ?? option.kind.defaultValue
-  }
-  values[optionId] = value
-  return values
-}
-
-/** Why: ordered applies make a later absolute target observe the result of an
- * earlier flip instead of dispatching against a stale baseline. */
-function createSerializedApplyQueue(): <T>(fn: () => Promise<T>) => Promise<T> {
-  let tail: Promise<unknown> = Promise.resolve()
-  return <T>(fn: () => Promise<T>): Promise<T> => {
-    const run = tail.then(fn, fn)
-    tail = run.then(
-      () => undefined,
-      () => undefined
-    )
-    return run
-  }
-}
-
-function currentApply(
-  ctx: SessionOptionApplyContext,
-  optionId: string
-): { apply: CatalogOptionApply; modelId: string | null } | null {
-  const models = ctx.getModels()
-  // Why: the snapshot renders each option under the effective model, so resolving from
-  // the tracked model alone would fail to find the very rows a CLI default just drew.
-  const modelId = resolveEffectiveNativeChatModelId(ctx.catalog, models, ctx.getRecord())
-  if (optionId === 'model') {
-    return { apply: ctx.catalog.modelApply, modelId }
-  }
-  const model = modelId ? findCatalogModel({ ...ctx.catalog, models }, modelId) : undefined
-  const option = findCatalogOption(model, optionId)
-  return option ? { apply: option.apply, modelId } : null
-}
-
-/** Why: the mid-dispatch guards watch for *record* changes. Resolving through the model
- *  list would also trip when discovery lands mid-dispatch and moves which row carries
- *  `isDefault` — nothing the agent saw changed, but the value would be discarded. */
-function trackedModelId(record: NativeChatSessionOptionRecord): string | null {
-  return typeof record.model?.value === 'string' ? record.model.value : null
 }
 
 function finish(

@@ -60,6 +60,7 @@ export function closeTerminalTab(
     localPtyTeardownOwnedExternally?: boolean
     /** Internal re-entry after the structured provider close is proven. */
     structuredSessionCloseConfirmed?: boolean
+    preserveSessionOnClose?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
     onClosed?: () => void
@@ -67,6 +68,9 @@ export function closeTerminalTab(
   }
 ): void {
   const state = useAppStore.getState()
+  const explicitPreserveSession = Object.hasOwn(options ?? {}, 'preserveSessionOnClose')
+    ? options?.preserveSessionOnClose === true
+    : null
   const precomputedCloseState = validatePrecomputedTerminalCloseState(
     tabId,
     options?.precomputedRetirementPlan,
@@ -74,6 +78,7 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
+    const preserveSessionOnClose = explicitPreserveSession === true
     const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
     if (closeReason !== 'pty-exit') {
       // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
@@ -82,6 +87,7 @@ export function closeTerminalTab(
         ...(options?.localPtyTeardownOwnedExternally
           ? { localPtyTeardownOwnedExternally: true }
           : {}),
+        ...(preserveSessionOnClose ? { preserveSessionOnClose: true } : {}),
         ...(options?.precomputedRetirementPlan
           ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
           : {})
@@ -91,6 +97,11 @@ export function closeTerminalTab(
     return
   }
   const { worktreeId: owningWorktreeId, terminalTabId } = target
+  const terminalTab = state.tabsByWorktree[owningWorktreeId]?.find(
+    (candidate) => candidate.id === terminalTabId
+  )
+  const preserveSessionOnClose =
+    explicitPreserveSession ?? terminalTab?.preserveSessionOnClose === true
   const worktreeRoute = resolveTerminalWorktreeRoute(state, owningWorktreeId)
   if (!worktreeRoute) {
     options?.onCancel?.()
@@ -122,6 +133,13 @@ export function closeTerminalTab(
       })
       return
     }
+  }
+
+  if (preserveSessionOnClose) {
+    closeLocalTerminalTabState(terminalTabId, { preserveSessionOnClose: true })
+    window.api.ui.notifyTerminalSurfaceClosed(terminalTabId)
+    options?.onClosed?.()
+    return
   }
 
   // Why: the X button, middle-click and the tab menu used to skip the running-process

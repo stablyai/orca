@@ -9,6 +9,13 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -35,6 +42,7 @@ export function RoomSelectorDialog({
   worktreeId: string
 }): React.JSX.Element {
   const [rooms, setRooms] = useState<Room[]>([])
+  const [query, setQuery] = useState('')
   const [name, setName] = useState('')
   const [creating, setCreating] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -119,53 +127,65 @@ export function RoomSelectorDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="min-h-0 space-y-2 overflow-y-auto pr-1 scrollbar-sleek">
-          {loading ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {translate('rooms.common.loading', 'Loading…')}
-            </p>
-          ) : error ? (
-            <p className="py-8 text-center text-sm text-destructive">{error}</p>
-          ) : rooms.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              {translate('rooms.page.empty', 'No rooms yet')}
-            </p>
-          ) : (
-            rooms.map((room) => {
-              const selected = room.id === activeRoomId
-              return (
-                <button
-                  key={room.id}
-                  type="button"
-                  onClick={() => openRoom(room)}
-                  className={cn(
-                    'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
-                    selected
-                      ? 'border-primary/50 bg-accent'
-                      : 'border-border hover:border-foreground/30 hover:bg-accent/40'
-                  )}
-                >
-                  <Check className={cn('mt-0.5 size-4 shrink-0', !selected && 'invisible')} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{room.name}</span>
-                      {room.archivedAt ? (
-                        <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
-                          <Archive className="size-3" />
-                          {translate('rooms.common.archived', 'Archived')}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                      {room.description ||
-                        translate('rooms.header.defaultTopic', 'Multi-agent room')}
-                    </p>
-                  </div>
-                </button>
-              )
-            })
-          )}
-        </div>
+        <Command className="min-h-0 flex-1 border border-border bg-background">
+          <CommandInput
+            autoFocus
+            value={query}
+            onValueChange={setQuery}
+            placeholder={translate('rooms.selector.search', 'Search rooms…')}
+          />
+          <CommandList className="min-h-0 max-h-none flex-1 p-1 [&_[cmdk-list-sizer]]:space-y-2">
+            {loading ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                {translate('rooms.common.loading', 'Loading…')}
+              </p>
+            ) : error ? (
+              <p className="py-8 text-center text-sm text-destructive">{error}</p>
+            ) : (
+              <>
+                <CommandEmpty>
+                  {query.trim()
+                    ? translate('rooms.selector.noMatches', 'No matching rooms')
+                    : translate('rooms.page.empty', 'No rooms yet')}
+                </CommandEmpty>
+                {rooms.map((room) => {
+                  const selected = room.id === activeRoomId
+                  return (
+                    <CommandItem
+                      key={room.id}
+                      value={room.id}
+                      keywords={[room.name, room.description]}
+                      onSelect={() => openRoom(room)}
+                      className={cn(
+                        'items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+                        selected
+                          ? 'border-primary/50 bg-accent'
+                          : 'border-border hover:border-foreground/30 hover:bg-accent/40'
+                      )}
+                    >
+                      <Check className={cn('mt-0.5 size-4 shrink-0', !selected && 'invisible')} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm font-medium">{room.name}</span>
+                          {room.archivedAt ? (
+                            <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                              <Archive className="size-3" />
+                              {translate('rooms.common.archived', 'Archived')}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                          {room.description ||
+                            translate('rooms.header.defaultTopic', 'Multi-agent room')}
+                        </p>
+                      </div>
+                    </CommandItem>
+                  )
+                })}
+              </>
+            )}
+          </CommandList>
+        </Command>
         <form
           className="flex gap-2 border-t border-border pt-4"
           onSubmit={(event) => {

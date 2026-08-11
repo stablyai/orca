@@ -10,7 +10,7 @@ import { participantFromRow, type RoomRow } from './rows'
 
 const ROOM_PARTICIPANT_COLUMNS = `id, room_id, identity, display_name, actor_kind, agent,
   role_id, worktree_id, pane_key, terminal_handle, provider_session_json, process_incarnation,
-  participation, state, context_json, last_seen_at, created_at, updated_at`
+  terminal_surface_visible, participation, state, context_json, last_seen_at, created_at, updated_at`
 
 /** Single source for the table shape: the fresh schema and the CHECK-extension
  *  rebuild (SQLite cannot alter a CHECK in place) must never drift apart. */
@@ -28,6 +28,8 @@ export function roomParticipantsTableSql(tableName: string): string {
         terminal_handle TEXT,
         provider_session_json TEXT,
         process_incarnation TEXT,
+        terminal_surface_visible INTEGER NOT NULL DEFAULT 0
+          CHECK(terminal_surface_visible IN (0, 1)),
         participation TEXT NOT NULL DEFAULT 'active'
           CHECK(participation IN ('active', 'paused')),
         state TEXT NOT NULL DEFAULT 'offline'
@@ -104,6 +106,7 @@ export class RoomParticipantStore {
     terminalHandle?: string | null
     providerSession?: RoomProviderSession | null
     processIncarnation?: string | null
+    terminalSurfaceVisible?: boolean
   }): RoomParticipant {
     if (input.roleId) {
       const role = this.db
@@ -123,8 +126,8 @@ export class RoomParticipantStore {
         `INSERT INTO room_participants (
           id, room_id, identity, display_name, actor_kind, agent, role_id, worktree_id,
           pane_key, terminal_handle, provider_session_json, process_incarnation,
-          context_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, 'agent', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          terminal_surface_visible, context_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 'agent', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
@@ -138,6 +141,7 @@ export class RoomParticipantStore {
         input.terminalHandle ?? null,
         input.providerSession ? JSON.stringify(input.providerSession) : null,
         input.processIncarnation ?? null,
+        input.terminalSurfaceVisible ? 1 : 0,
         JSON.stringify(EMPTY_ROOM_CONTEXT),
         now,
         now
@@ -158,6 +162,7 @@ export class RoomParticipantStore {
         | 'terminalHandle'
         | 'providerSession'
         | 'processIncarnation'
+        | 'terminalSurfaceVisible'
         | 'participation'
         | 'state'
         | 'context'
@@ -181,7 +186,8 @@ export class RoomParticipantStore {
         .prepare(
           `UPDATE room_participants SET identity = ?, display_name = ?, role_id = ?, worktree_id = ?,
            pane_key = ?, terminal_handle = ?, provider_session_json = ?, process_incarnation = ?,
-           participation = ?, state = ?, context_json = ?, last_seen_at = ?, updated_at = ? WHERE id = ?`
+           terminal_surface_visible = ?, participation = ?, state = ?, context_json = ?,
+           last_seen_at = ?, updated_at = ? WHERE id = ?`
         )
         .run(
           input.identity?.trim() ?? current.identity,
@@ -196,6 +202,13 @@ export class RoomParticipantStore {
           input.processIncarnation === undefined
             ? current.processIncarnation
             : input.processIncarnation,
+          input.terminalSurfaceVisible === undefined
+            ? current.terminalSurfaceVisible
+              ? 1
+              : 0
+            : input.terminalSurfaceVisible
+              ? 1
+              : 0,
           input.participation ?? current.participation,
           input.state ?? current.state,
           JSON.stringify(input.context ?? current.context),

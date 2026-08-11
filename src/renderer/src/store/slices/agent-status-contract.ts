@@ -43,6 +43,7 @@ export type DropHibernatedAgentPaneOptions = {
 }
 
 export type DropAgentStatusOptions = {
+  rendererOnly?: boolean
   /** The pane itself is gone (pane close, stale-row teardown). Row-only dismissals leave the
    *  cleared-at cutoff and manual-unread stamp in place so a still-live pane's next hook event
    *  cannot resurrect activity the user already cleared. */

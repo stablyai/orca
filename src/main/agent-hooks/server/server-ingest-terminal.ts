@@ -8,14 +8,17 @@ import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
-  ingestTerminalStatus(event: {
-    paneKey: string
-    tabId?: string
-    worktreeId?: string
-    connectionId?: string | null
-    providerSession?: AgentProviderSessionMetadata
-    payload: ParsedAgentStatusPayload
-  }): void {
+  ingestTerminalStatus(
+    event: {
+      paneKey: string
+      tabId?: string
+      worktreeId?: string
+      connectionId?: string | null
+      providerSession?: AgentProviderSessionMetadata
+      payload: ParsedAgentStatusPayload
+    },
+    options?: { force?: boolean }
+  ): void {
     const physicalPaneKey = event.paneKey.trim()
     const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
@@ -63,6 +66,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous?.payload.turnCompletedAt !== undefined &&
       previous.payload.turnCompletedAt === this.activeHookTurnCompletedAtByPaneKey.get(paneKey)
     if (
+      !options?.force &&
       !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
@@ -96,7 +100,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         tabId,
         worktreeId,
         connectionId,
-        ...(event.providerSession ?? preservedProviderSession
+        ...((event.providerSession ?? preservedProviderSession)
           ? { providerSession: event.providerSession ?? preservedProviderSession }
           : {}),
         payload: event.payload

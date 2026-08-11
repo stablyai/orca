@@ -567,13 +567,17 @@ describe('renderer startup runtime routing', () => {
     expect(appSource).toContain('<Toaster closeButton')
   })
 
-  it('keeps rooms in the stacked titlebar instead of suppressing its tab target', () => {
-    const source = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
-
-    expect(source).not.toContain("(activeView === 'rooms' && shouldMountTerminalWorkbench)")
-    expect(source).toContain(
-      "activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive"
+  it('renders rooms through the unified workspace tab surface', () => {
+    const appSource = readFileSync(join(process.cwd(), 'src/renderer/src/App.tsx'), 'utf8')
+    const panelSource = readFileSync(
+      join(process.cwd(), 'src/renderer/src/components/tab-group/TabGroupPanel.tsx'),
+      'utf8'
     )
+
+    expect(appSource).not.toContain("activeView === 'rooms'")
+    expect(appSource).not.toContain("setActiveView('rooms')")
+    expect(panelSource).toContain("activeTab?.contentType === 'room'")
+    expect(panelSource).toContain('roomId={activeTab.entityId}')
   })
 
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {

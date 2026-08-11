@@ -14,6 +14,7 @@ import {
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
+import { literalRoomTransportText } from './native-chat-room-transport'
 
 /** One message: its prose first, then a collapsible run folding all of the
  *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
@@ -60,6 +61,8 @@ export const MessageRow = memo(function MessageRow({
   const isSystem = message.role === 'system'
   const providerFrame = message.blocks.find((block) => block.type === 'text' && block.providerFrame)
   const isSubagentTask = message.subagentEvent?.kind === 'task'
+  const literalTransport = literalRoomTransportText(markdown)
+  const renderedText = literalTransport ?? markdown
 
   const scrollToTop = useCallback(() => {
     if (rowRef.current) {
@@ -88,20 +91,24 @@ export const MessageRow = memo(function MessageRow({
         {/* User turns get a distinct muted fill (not the card/canvas color) so
             the prompt reads apart from the assistant's body copy. */}
         <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
-          {markdown ? (
+          {renderedText ? (
             <>
               <NativeChatImageAttachments
                 blocks={prose}
                 runtimeContext={runtimeContext}
                 enablePreview={runtimeContext !== undefined}
               />
-              <CommentMarkdown
-                content={markdown}
-                variant="document"
-                className="text-sm"
-                onLinkClick={onLinkClick}
-                allowFileUriLinks={allowFileUriLinks}
-              />
+              {literalTransport !== null ? (
+                <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+              ) : (
+                <CommentMarkdown
+                  content={renderedText}
+                  variant="document"
+                  className="text-sm"
+                  onLinkClick={onLinkClick}
+                  allowFileUriLinks={allowFileUriLinks}
+                />
+              )}
             </>
           ) : (
             <NativeChatImageAttachments
@@ -134,9 +141,7 @@ export const MessageRow = memo(function MessageRow({
     )
   }
 
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  const showControls = !isReasoning && !isSystem && renderedText.length > 0
 
   return (
     <div
@@ -153,15 +158,19 @@ export const MessageRow = memo(function MessageRow({
         runtimeContext={runtimeContext}
         enablePreview={runtimeContext !== undefined}
       />
-      {markdown ? (
+      {renderedText ? (
+        literalTransport !== null ? (
+          <div className="whitespace-pre-wrap break-words">{renderedText}</div>
+        ) : (
         <CommentMarkdown
-          content={markdown}
+          content={renderedText}
           variant="document"
           className="text-sm"
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
           linkifyFilePaths={onLinkClick !== undefined}
         />
+        )
       ) : null}
       {tools.length > 0 ? (
         <NativeChatToolRun
@@ -174,7 +183,7 @@ export const MessageRow = memo(function MessageRow({
       ) : null}
       {showControls ? (
         <NativeChatAgentControls
-          markdown={markdown}
+          markdown={renderedText}
           onScrollToTop={scrollToTop}
           className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
         />

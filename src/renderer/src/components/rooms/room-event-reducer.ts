@@ -141,7 +141,7 @@ function mergeMessages(first: RoomMessage[], second: RoomMessage[]): RoomMessage
 
 function upsert<T extends { id: string }>(items: T[], item: T, key: keyof T = 'id'): T[] {
   const index = items.findIndex((value) => value[key] === item[key])
-  if (index < 0) {
+  if (index === -1) {
     const next = [...items, item]
     if ('sequence' in item) {
       next.sort(

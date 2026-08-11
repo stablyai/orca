@@ -23,10 +23,27 @@ export function createTerminalTabPresentationActions(
   | 'setGeneratedTabTitleFromAgentPrompt'
   | 'setGeneratedTabTitlesFromAgentPrompts'
   | 'clearTabLaunchAgent'
+  | 'setTabPreserveSessionOnClose'
   | 'setRuntimePaneTitle'
   | 'clearRuntimePaneTitle'
 > {
   return {
+    setTabPreserveSessionOnClose: (worktreeId, tabId) => {
+      set((state) => {
+        const tabs = state.tabsByWorktree[worktreeId]
+        if (!tabs?.some((tab) => tab.id === tabId && !tab.preserveSessionOnClose)) {
+          return state
+        }
+        return {
+          tabsByWorktree: {
+            ...state.tabsByWorktree,
+            [worktreeId]: tabs.map((tab) =>
+              tab.id === tabId ? { ...tab, preserveSessionOnClose: true } : tab
+            )
+          }
+        }
+      })
+    },
     updateTabTitle: (tabId, title) => {
       set((state) => {
         const result = applyTerminalTabTitleUpdates(state, [{ tabId, title }])

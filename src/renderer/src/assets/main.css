@@ -1743,10 +1743,42 @@ html.native-shell .app-layout {
   animation: collapsible-up 180ms ease-out;
 }
 
+.room-activity-disclosure-content {
+  overflow: hidden;
+}
+
+.room-activity-disclosure-content[data-state='open'] {
+  animation: collapsible-down 200ms ease;
+}
+
+.room-activity-disclosure-content[data-state='closed'] {
+  animation: collapsible-up 200ms ease;
+}
+
+.room-activity-stack-sheet {
+  transform-origin: bottom center;
+  transition:
+    opacity 200ms ease,
+    transform 200ms ease;
+}
+
+[data-room-activity-stack][data-state='open'] .room-activity-stack-sheet-back {
+  opacity: 0;
+  transform: translateY(24px);
+}
+
+[data-room-activity-stack][data-state='open'] .room-activity-stack-sheet-middle {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .collapsible-height-content[data-state='open'],
-  .collapsible-height-content[data-state='closed'] {
+  .collapsible-height-content[data-state='closed'],
+  .room-activity-disclosure-content[data-state],
+  .room-activity-stack-sheet {
     animation: none;
+    transition: none;
   }
 }
 

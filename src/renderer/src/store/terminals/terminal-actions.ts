@@ -82,6 +82,7 @@ export type TerminalActions = {
       viewMode?: Tab['viewMode']
       startupCwd?: string
       forceHostRuntime?: boolean
+      preserveSessionOnClose?: boolean
     }
   ) => TerminalTab
   openNewTerminalTabInActiveWorkspace: (groupId: string) => Promise<void>
@@ -94,6 +95,7 @@ export type TerminalActions = {
       captureRecentlyClosed?: boolean
       remoteCloseOwnedByHost?: boolean
       localPtyTeardownOwnedExternally?: boolean
+      preserveSessionOnClose?: boolean
       precomputedRetirementPlan?: TerminalTabRetirementPlan
     }
   ) => void
@@ -130,6 +132,7 @@ export type TerminalActions = {
     }
   ) => void
   setTabColor: (tabId: string, color: string | null) => void
+  setTabPreserveSessionOnClose: (worktreeId: string, tabId: string) => void
   /** Binds only live tabs and migrates replacement identity state before publishing ownership. */
   updateTabPtyId: (
     tabId: string,

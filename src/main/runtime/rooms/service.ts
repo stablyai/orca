@@ -40,12 +40,14 @@ export class RoomService {
   private readonly messageController: RoomMessageController
   private readonly listAttachable: RoomHarnessRuntime['listRoomAttachableAgents']
   private readonly focusTerminal: RoomHarnessRuntime['focusTerminal']
+  private readonly hideRendererStatus: RoomHarnessRuntime['hideRoomAgentStatusFromRenderer']
   private readonly publishAgentSession: RoomHarnessRuntime['publishRoomAgentProviderSession']
 
   constructor(path: string, runtime: RoomHarnessRuntime) {
     this.events = new RoomEventBus(runtime.emitRoomEvent?.bind(runtime))
     this.listAttachable = runtime.listRoomAttachableAgents.bind(runtime)
     this.focusTerminal = runtime.focusTerminal?.bind(runtime)
+    this.hideRendererStatus = runtime.hideRoomAgentStatusFromRenderer?.bind(runtime)
     this.publishAgentSession = runtime.publishRoomAgentProviderSession?.bind(runtime)
     this.db = new RoomDatabase(path)
     this.archiveTransfers = new RoomArchiveTransferStore(new RoomArchive(this.db))
@@ -67,7 +69,8 @@ export class RoomService {
       this.db,
       this.adapters,
       this.transcriptBridge,
-      (roomId, event) => this.emitEvent(roomId, event)
+      (roomId, event) => this.emitEvent(roomId, event),
+      this.hideRendererStatus
     )
     this.deliveryWorker = new RoomDeliveryWorker(
       this.db,
@@ -124,9 +127,11 @@ export class RoomService {
           // One unrecoverable agent must not block activating the rest of the room.
           try {
             const reconciled = await this.participantController.reconcile(participant)
-            this.publishParticipantSession(reconciled)
-            await this.transcriptBridge.ensure(reconciled)
-            await this.transcriptBridge.refreshContext(reconciled)
+            if (reconciled.state !== 'sleeping' && reconciled.state !== 'offline') {
+              this.publishParticipantSession(reconciled)
+              await this.transcriptBridge.ensure(reconciled)
+              await this.transcriptBridge.refreshContext(reconciled)
+            }
           } catch {}
         })
     )
@@ -226,21 +231,39 @@ export class RoomService {
   }
 
   async revealParticipant(id: string, viewMode: 'terminal' | 'chat'): Promise<void> {
-    const participant = this.db.participants.get(id)
-    if (!participant.terminalHandle || !this.focusTerminal) {
+    if (!this.focusTerminal) {
       throw new Error('room_participant_not_ready')
     }
-    this.publishParticipantSession(participant)
+    const participant = await this.participantController.ensureReady(id)
+    if (!participant.terminalHandle) {
+      throw new Error('room_participant_not_ready')
+    }
     await this.focusTerminal(participant.terminalHandle, { viewMode })
+    const revealed = this.db.participants.update(participant.id, {
+      terminalHandle: participant.terminalHandle,
+      paneKey: participant.paneKey,
+      providerSession: participant.providerSession,
+      terminalSurfaceVisible: true
+    })
+    this.publishParticipantSession(revealed, true)
   }
 
-  private publishParticipantSession({
-    terminalHandle,
-    agent,
-    providerSession
-  }: RoomParticipant): void {
+  hideParticipantTerminal(handle: string): void {
+    const participant = this.db.participants.findByTerminalHandle(handle)
+    if (participant?.terminalSurfaceVisible) {
+      const hidden = this.db.participants.update(participant.id, { terminalSurfaceVisible: false })
+      if (hidden.paneKey) {
+        this.hideRendererStatus?.(hidden.paneKey)
+      }
+  }
+  }
+
+  private publishParticipantSession(
+    { terminalHandle, agent, providerSession }: RoomParticipant,
+    force = false
+  ): void {
     if (terminalHandle && agent && providerSession) {
-      this.publishAgentSession?.(terminalHandle, agent, providerSession)
+      this.publishAgentSession?.(terminalHandle, agent, providerSession, force)
     }
   }
 

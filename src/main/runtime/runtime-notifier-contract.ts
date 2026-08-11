@@ -60,6 +60,7 @@ export type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      preserveSessionOnClose?: boolean
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -75,6 +76,7 @@ export type RuntimeNotifier = {
     | Promise<{ tabId: string; title?: string | null; identity?: TerminalRevealIdentity }>
     | { tabId: string; title?: string | null; identity?: TerminalRevealIdentity }
     | void
+  hideRoomAgentStatusFromRenderer?(paneKey: string): void
   resolveLegacyWorkerTerminalRecovery?(
     paneKey: string,
     resolution: 'adopted' | 'exited' | 'rolled_back',
@@ -117,7 +119,11 @@ export type RuntimeNotifier = {
     baseVersion: string,
     content: string
   ): Promise<RuntimeMarkdownSaveTabResult>
-  closeTerminal(tabId: string, paneRuntimeId?: number): void
+  closeTerminal(
+    tabId: string,
+    paneRuntimeId?: number,
+    options?: { preserveSessionOnClose?: boolean }
+  ): void
   closeTerminalTab?(
     tabId: string,
     options?: { localPtyTeardownOwnedExternally?: boolean; force?: boolean }

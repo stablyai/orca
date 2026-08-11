@@ -380,7 +380,7 @@ describe('OrcaRuntimeService', () => {
       title: 'worker'
     })
 
-    await expect(runtime.focusTerminal(handle)).resolves.toMatchObject({
+    await expect(runtime.focusTerminal(handle, { viewMode: 'chat' })).resolves.toMatchObject({
       handle,
       tabId: 'tab-adopted',
       worktreeId: TEST_WORKTREE_ID
@@ -389,6 +389,7 @@ describe('OrcaRuntimeService', () => {
     expect(revealTerminalSession).toHaveBeenLastCalledWith(TEST_WORKTREE_ID, {
       ptyId: 'pty-bg',
       title: 'worker',
+      viewMode: 'chat',
       tabId: expect.stringMatching(UUID_RE),
       leafId: expect.stringMatching(UUID_RE)
     })

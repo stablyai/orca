@@ -53,14 +53,17 @@ export function registerMobileAndTerminalCloseIpcBridge(
   )
 
   unsubs.push(
-    window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId }) => {
+    window.api.ui.onCloseTerminal(({ tabId, paneRuntimeId, preserveSessionOnClose }) => {
       if (paneRuntimeId != null) {
         // Why: route pane closes via the lifecycle hook for sibling promotion (falls through to closeTab on the last pane).
         const detail: CloseTerminalPaneDetail = { tabId, paneRuntimeId }
         window.dispatchEvent(new CustomEvent(CLOSE_TERMINAL_PANE_EVENT, { detail }))
       } else {
         // Why: the CLI/RPC caller is answered immediately, so it cannot wait on a modal.
-        closeTerminalTab(tabId, { skipRunningProcessConfirm: true })
+        closeTerminalTab(tabId, {
+          skipRunningProcessConfirm: true,
+          ...(preserveSessionOnClose ? { preserveSessionOnClose: true } : {})
+        })
       }
     })
   )

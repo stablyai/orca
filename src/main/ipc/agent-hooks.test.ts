@@ -152,6 +152,36 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
+  it('omits statuses owned by hidden room surfaces', async () => {
+    const snapshot = [
+      {
+        paneKey: PANE_KEY,
+        state: 'working',
+        prompt: 'hidden room agent',
+        receivedAt: 1,
+        stateStartedAt: 1
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'working',
+        prompt: 'visible agent',
+        receivedAt: 2,
+        stateStartedAt: 2
+      }
+    ]
+    getStatusSnapshot.mockReturnValue(snapshot)
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: vi.fn(() => undefined),
+      getAgentStatusOrchestrationContextForPaneKey: vi.fn(() => undefined),
+      shouldPublishAgentStatusToRenderer: vi.fn((paneKey: string) => paneKey !== PANE_KEY)
+    }
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers(runtime)
+
+    const handler = handleHandlers.get('agentStatus:getSnapshot')
+    expect(handler!({})).toEqual([snapshot[1]])
+  })
+
   it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
     const snapshot = [
       {

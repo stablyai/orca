@@ -59,6 +59,50 @@ describe('closeTerminalTab kill-all routing', () => {
     isWebRuntimeSessionActiveMock.mockReturnValue(false)
   })
 
+  it('keeps the active room selected when a background terminal exits', () => {
+    const closeTab = vi.fn()
+    const setActiveTab = vi.fn()
+    getStateMock.mockReturnValue(
+      baseState({
+        tabsByWorktree: { wt: [{ id: 'terminal-1' }, { id: 'terminal-2' }] },
+        unifiedTabsByWorktree: {
+          wt: [
+            {
+              id: 'unified-terminal-1',
+              entityId: 'terminal-1',
+              contentType: 'terminal',
+              groupId: 'group-1'
+            },
+            {
+              id: 'unified-terminal-2',
+              entityId: 'terminal-2',
+              contentType: 'terminal',
+              groupId: 'group-1'
+            },
+            { id: 'room-tab', entityId: 'room-1', contentType: 'room', groupId: 'group-1' }
+          ]
+        },
+        groupsByWorktree: {
+          wt: [
+            {
+              id: 'group-1',
+              activeTabId: 'room-tab',
+              tabOrder: ['unified-terminal-1', 'unified-terminal-2', 'room-tab']
+            }
+          ]
+        },
+        activeGroupIdByWorktree: { wt: 'group-1' },
+        closeTab,
+        setActiveTab
+      })
+    )
+
+    closeTerminalTab('terminal-1', { reason: 'pty-exit' })
+
+    expect(closeTab).toHaveBeenCalledWith('terminal-1', { reason: 'pty-exit' })
+    expect(setActiveTab).not.toHaveBeenCalled()
+  })
+
   it('force-closes a pinned terminal without opening a second confirmation', () => {
     const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()

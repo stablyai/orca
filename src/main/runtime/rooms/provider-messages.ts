@@ -55,6 +55,21 @@ export class RoomProviderMessageStore {
     }
   }
 
+  hasObservedSession(participantId: string, providerSessionId: string): boolean {
+    return Boolean(
+      this.db
+        .prepare(
+          `SELECT 1 FROM room_provider_streams
+           WHERE participant_id = ? AND provider_session_id = ?
+           UNION ALL
+           SELECT 1 FROM room_provider_messages
+           WHERE participant_id = ? AND provider_session_id = ?
+           LIMIT 1`
+        )
+        .get(participantId, providerSessionId, participantId, providerSessionId)
+    )
+  }
+
   resetStream(participantId: string): void {
     this.db.prepare('DELETE FROM room_provider_streams WHERE participant_id = ?').run(participantId)
   }

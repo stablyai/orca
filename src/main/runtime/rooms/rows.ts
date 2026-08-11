@@ -81,6 +81,7 @@ export function participantFromRow(row: RoomRow): RoomParticipant {
     terminalHandle: nullableString(row.terminal_handle),
     providerSession: parseRoomJson<RoomProviderSession | null>(row.provider_session_json, null),
     processIncarnation: nullableString(row.process_incarnation),
+    terminalSurfaceVisible: number(row.terminal_surface_visible) === 1,
     participation: row.participation === 'paused' ? 'paused' : 'active',
     state: row.state as RoomParticipant['state'],
     context: { ...EMPTY_ROOM_CONTEXT, ...rawContext },
