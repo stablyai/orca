@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const callMock = vi.hoisted(() => vi.fn())
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())
+const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE
 
 vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: getTerminalHandleMock }))
@@ -15,6 +16,16 @@ describe('orchestration check mailbox selector', () => {
     getTerminalHandleMock.mockReset()
     vi.mocked(printResult).mockClear()
     process.env.ORCA_TERMINAL_HANDLE = 'term_captain'
+  })
+
+  // Why: ORCA_TERMINAL_HANDLE is process-global and vitest reuses a worker across files, so
+  // leaving term_captain behind would make an unrelated file's result depend on run order.
+  afterEach(() => {
+    if (originalTerminalHandle === undefined) {
+      delete process.env.ORCA_TERMINAL_HANDLE
+    } else {
+      process.env.ORCA_TERMINAL_HANDLE = originalTerminalHandle
+    }
   })
 
   const invokeCheck = (flags: Map<string, string | boolean>) =>
