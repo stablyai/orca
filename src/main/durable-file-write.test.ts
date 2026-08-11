@@ -1,7 +1,8 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { writeFileDurable, writeFileDurableSync } from './durable-file-write'
 
 describe('durable file write', () => {
@@ -83,5 +84,40 @@ describe('durable file write', () => {
     await writeFileDurable(`${final}.a.tmp`, final, 'from-async')
     writeFileDurableSync(`${final}.b.tmp`, final, 'from-sync')
     expect(readFileSync(final, 'utf-8')).toBe('from-sync')
+  })
+
+  it('keeps the publish point synchronous so a newer sync writer remains last', async () => {
+    const final = join(dir, 'state.json')
+    const asyncTemp = `${final}.async.tmp`
+    writeFileSync(asyncTemp, 'older-async', 'utf-8')
+    let releaseRename = () => {}
+    const renameGate = new Promise<void>((resolve) => {
+      releaseRename = resolve
+    })
+    const asyncRename = vi.fn(async (...args: Parameters<typeof fsPromises.rename>) => {
+      await renameGate
+      return fsPromises.rename(...args)
+    })
+    vi.resetModules()
+    vi.doMock('node:fs/promises', () => ({
+      ...fsPromises,
+      // Recreate the old yield between the caller's generation check and publish.
+      rename: asyncRename
+    }))
+
+    try {
+      const { renameDurable } = await import('./durable-file-write')
+      const asyncCommit = renameDurable(asyncTemp, final)
+      const usedYieldingRename = asyncRename.mock.calls.length > 0
+      writeFileDurableSync(`${final}.sync.tmp`, final, 'newer-sync')
+      releaseRename()
+      await asyncCommit
+
+      expect(usedYieldingRename).toBe(false)
+      expect(readFileSync(final, 'utf-8')).toBe('newer-sync')
+    } finally {
+      vi.doUnmock('node:fs/promises')
+      vi.resetModules()
+    }
   })
 })

@@ -10,7 +10,8 @@ import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
-  CodexSystemDefaultIdentity
+  CodexSystemDefaultIdentity,
+  GlobalSettings
 } from '../../shared/types'
 import type {
   CodexRateLimitResetOutcome,
@@ -665,32 +666,35 @@ export class CodexAccountService {
     }
   }
 
-  // Why: a removed account's managed home is gone, so its unresolved providerPending
-  // attempt can never validate or be replayed; drop it so a target-scoped default reset
-  // is not wedged forever by hasPendingResetForTarget matching the orphan.
-  private discardResetAttemptsForRemovedAccount(accountId: string): void {
+  private persistAccountRemoval(
+    accountId: string,
+    updates: Pick<
+      GlobalSettings,
+      | 'codexManagedAccounts'
+      | 'activeCodexManagedAccountId'
+      | 'activeCodexManagedAccountIdsByRuntime'
+    >
+  ): void {
+    if (!this.durableResetLedger) {
+      // Why: reset stays fail-closed, but a corrupt ledger must not trap managed credentials on disk.
+      this.store.updateCodexAccountSettingsAndFlush(updates)
+      return
+    }
     const staleAttempts: [string, CodexResetCreditAttempt][] = []
     for (const [idempotencyKey, attempt] of this.resetAttemptsByKey) {
       if (attempt.expectedScope.accountId === accountId) {
         staleAttempts.push([idempotencyKey, attempt])
       }
     }
-    if (staleAttempts.length === 0) {
-      return
-    }
-    const staleKeySet = new Set(staleAttempts.map(([idempotencyKey]) => idempotencyKey))
-    if (this.durableResetLedger) {
-      const attempts = this.durableResetLedger.attempts.filter(
-        (attempt) => !staleKeySet.has(attempt.idempotencyKey)
+    const nextLedger: CodexResetCreditAttemptLedger = {
+      version: 1,
+      attempts: this.durableResetLedger.attempts.filter(
+        (attempt) => attempt.expectedScope.accountId !== accountId
       )
-      if (attempts.length !== this.durableResetLedger.attempts.length) {
-        const nextLedger: CodexResetCreditAttemptLedger = { version: 1, attempts }
-        // Persist first so a failed durability barrier leaves the in-memory
-        // fail-closed guards aligned with the ledger that will reload.
-        this.store.replaceCodexResetCreditAttemptLedgerAndFlush(nextLedger)
-        this.durableResetLedger = structuredClone(nextLedger)
-      }
     }
+    // Why: the account and its orphan guards must share one durability barrier before deleting its home.
+    this.store.updateCodexAccountSettingsAndResetLedgerAndFlush(updates, nextLedger)
+    this.durableResetLedger = structuredClone(nextLedger)
     for (const [idempotencyKey, attempt] of staleAttempts) {
       this.resetAttemptsByKey.delete(idempotencyKey)
       if (this.resetAttemptKeyByOffer.get(attempt.scopeKey) === idempotencyKey) {
@@ -711,9 +715,14 @@ export class CodexAccountService {
     outgoingAccountId: string | null | undefined,
     target: CodexAccountSelectionTarget | undefined
   ): void {
-    void this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, target).catch((error) => {
+    const logFailure = (error: unknown): void => {
       console.error('[codex-accounts] Quota refresh after account change failed:', error)
-    })
+    }
+    try {
+      void this.rateLimits.refreshForCodexAccountChange(outgoingAccountId, target).catch(logFailure)
+    } catch (error) {
+      logFailure(error)
+    }
   }
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
@@ -901,36 +910,59 @@ export class CodexAccountService {
 
   private async doRemoveAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
+    const accountTarget = getCodexSelectionTargetForAccount(account)
     const settings = this.store.getSettings()
     const nextAccounts = settings.codexManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeCodexAccountIdFromSelection(
-      normalizeCodexRuntimeSelection(settings),
-      accountId
+    const nextSelection = pruneInvalidCodexRuntimeSelection(
+      removeCodexAccountIdFromSelection(normalizeCodexRuntimeSelection(settings), accountId),
+      nextAccounts
     )
-    const nextActiveId =
-      settings.activeCodexManagedAccountId === accountId ? null : nextSelection.host
 
-    this.store.updateSettings({
+    const settingsUpdate = {
       codexManagedAccounts: nextAccounts,
-      activeCodexManagedAccountId: nextActiveId,
+      activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
-    this.runtimeHome.syncForCurrentSelection()
+    }
+    try {
+      this.store.withCodexAccountSettingsPreview(settingsUpdate, () => {
+        this.runtimeHome.syncForCurrentSelection(accountTarget)
+      })
+      this.persistAccountRemoval(accountId, settingsUpdate)
+    } catch (error) {
+      try {
+        this.runtimeHome.syncForCurrentSelection(accountTarget)
+      } catch (rollbackError) {
+        console.error(
+          '[codex-accounts] Failed to restore runtime after account removal rollback:',
+          rollbackError
+        )
+      }
+      throw error
+    }
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
-      this.lifecycle.onHostSystemDefaultSelected?.()
+      try {
+        this.lifecycle.onHostSystemDefaultSelected?.()
+      } catch (error) {
+        console.error(
+          '[codex-accounts] Failed to reconcile host lifecycle after account removal:',
+          error
+        )
+      }
     }
 
     this.safeRemoveManagedHome(account.managedHomePath, account.id)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
-    this.rateLimits.evictInactiveCodexCache(accountId)
-    this.discardResetAttemptsForRemovedAccount(accountId)
+    try {
+      this.rateLimits.evictInactiveCodexCache(accountId)
+    } catch (error) {
+      console.error('[codex-accounts] Failed to evict removed account quota cache:', error)
+    }
     this.startQuotaRefreshInBackground(
-      getSelectedCodexAccountIdForTarget(settings, getCodexSelectionTargetForAccount(account)) ===
-        accountId
+      getSelectedCodexAccountIdForTarget(settings, accountTarget) === accountId
         ? accountId
         : undefined,
-      getCodexSelectionTargetForAccount(account)
+      accountTarget
     )
     return this.getSnapshot()
   }

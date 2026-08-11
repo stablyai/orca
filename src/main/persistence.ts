@@ -2783,6 +2783,11 @@ export type StoreOptions = {
   dataFile?: string
 }
 
+type CodexAccountSettingsUpdate = Pick<
+  GlobalSettings,
+  'codexManagedAccounts' | 'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime'
+>
+
 export class Store {
   private state: PersistedState
   private readonly dataFile: string
@@ -2801,6 +2806,7 @@ export class Store {
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
   private quitFlushStarted = false
   private quitFlushPromise: Promise<void> | null = null
+  private codexAccountSettingsPreviewActive = false
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
   private lastDurableWriteGeneration = -1
@@ -4163,6 +4169,9 @@ export class Store {
   }
 
   flushOrThrow(): void {
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot persist during a Codex account settings preview')
+    }
     if (this.quitFlushStarted) {
       throw new Error('Cannot synchronously flush after final persistence has started')
     }
@@ -4215,6 +4224,71 @@ export class Store {
       // Why: callers use a successful return as the durability barrier before
       // handing a scarce-credit mutation to the provider.
       this.state.codexResetCreditAttemptLedger = previous
+      throw error
+    }
+  }
+
+  updateCodexAccountSettingsAndFlush(updates: CodexAccountSettingsUpdate): void {
+    this.updateCodexAccountStateAndFlush(updates)
+  }
+
+  withCodexAccountSettingsPreview<T>(updates: CodexAccountSettingsUpdate, action: () => T): T {
+    if (this.writesFrozen) {
+      throw new Error('Cannot preview Codex account removal while writes are frozen')
+    }
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot nest Codex account settings previews')
+    }
+    const previousSettings = this.state.settings
+    this.codexAccountSettingsPreviewActive = true
+    this.state.settings = { ...previousSettings, ...updates }
+    try {
+      const result = action()
+      const resultType = typeof result
+      if (
+        result !== null &&
+        (resultType === 'object' || resultType === 'function') &&
+        typeof (result as { then?: unknown }).then === 'function'
+      ) {
+        // Why: consume a rejected forbidden callback so the contract error does not leak an unhandled rejection.
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('Codex account settings preview callback must be synchronous')
+      }
+      return result
+    } finally {
+      this.state.settings = previousSettings
+      this.codexAccountSettingsPreviewActive = false
+    }
+  }
+
+  updateCodexAccountSettingsAndResetLedgerAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger: CodexResetCreditAttemptLedger
+  ): void {
+    this.updateCodexAccountStateAndFlush(updates, ledger)
+  }
+
+  private updateCodexAccountStateAndFlush(
+    updates: CodexAccountSettingsUpdate,
+    ledger?: CodexResetCreditAttemptLedger
+  ): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot persist Codex account removal while writes are frozen')
+    }
+    const nextLedger = ledger ? parseCodexResetCreditAttemptLedger(ledger) : undefined
+    const previousSettings = this.state.settings
+    const previousLedger = this.state.codexResetCreditAttemptLedger
+      ? structuredClone(this.state.codexResetCreditAttemptLedger)
+      : undefined
+    try {
+      this.updateSettings(updates)
+      if (nextLedger !== undefined) {
+        this.state.codexResetCreditAttemptLedger = nextLedger
+      }
+      this.flushOrThrow()
+    } catch (error) {
+      this.state.settings = previousSettings
+      this.state.codexResetCreditAttemptLedger = previousLedger
       throw error
     }
   }
@@ -5809,6 +5883,9 @@ export class Store {
     updates: Partial<GlobalSettings>,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
+    if (this.codexAccountSettingsPreviewActive) {
+      throw new Error('Cannot update settings during a Codex account settings preview')
+    }
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
     if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
       this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
