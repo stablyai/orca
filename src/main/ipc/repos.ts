@@ -1200,6 +1200,22 @@ async function scanNestedReposForIpc(args: {
     throw new Error('ssh_connection_unavailable')
   }
   const resolvedPath = await resolveSshProjectGroupPath(args.connectionId, args.path)
+  const hasRemoteGitMarker = async (path: string): Promise<boolean> => {
+    try {
+      const marker = await fsProvider.stat(posix.join(path, '.git'))
+      if (marker.type === 'directory' || marker.type === 'file') {
+        return true
+      }
+    } catch {
+      // Continue to cheap bare-repository marker checks below.
+    }
+    const [head, objects, refs] = await Promise.all([
+      fsProvider.stat(posix.join(path, 'HEAD')).catch(() => null),
+      fsProvider.stat(posix.join(path, 'objects')).catch(() => null),
+      fsProvider.stat(posix.join(path, 'refs')).catch(() => null)
+    ])
+    return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
+  }
   return scanNestedRepos({
     path: resolvedPath,
     options: args.options,
@@ -1215,29 +1231,17 @@ async function scanNestedReposForIpc(args: {
       readTextFile: async (filePath) => (await fsProvider.readFile(filePath)).content,
       joinPath: (parentPath, childName) => posix.join(parentPath, childName),
       basename: (path) => posix.basename(path),
-      hasGitMarker: async (path) => {
-        try {
-          const marker = await fsProvider.stat(posix.join(path, '.git'))
-          if (marker.type === 'directory' || marker.type === 'file') {
-            return true
-          }
-        } catch {
-          // Continue to cheap bare-repository marker checks below.
-        }
-        const [head, objects, refs] = await Promise.all([
-          fsProvider.stat(posix.join(path, 'HEAD')).catch(() => null),
-          fsProvider.stat(posix.join(path, 'objects')).catch(() => null),
-          fsProvider.stat(posix.join(path, 'refs')).catch(() => null)
-        ])
-        return head?.type === 'file' && objects?.type === 'directory' && refs?.type === 'directory'
-      },
+      hasGitMarker: hasRemoteGitMarker,
       isSelectedPathGitRepo: async (path) => {
         try {
           const check = await gitProvider.isGitRepoAsync(path)
-          return check.isRepo && posix.normalize(check.rootPath ?? '') === posix.normalize(path)
+          if (check.isRepo && posix.normalize(check.rootPath ?? '') === posix.normalize(path)) {
+            return true
+          }
         } catch {
-          return false
+          // Fall back when the relay cannot identify the selected repository root.
         }
+        return hasRemoteGitMarker(path)
       }
     }
   })

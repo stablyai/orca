@@ -111,6 +111,31 @@ describe('projectGroups IPC validation', () => {
     })
   })
 
+  it('recognizes a selected bare repository over a connected SSH filesystem', async () => {
+    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/mirror.git/HEAD') {
+        return { type: 'file', size: 0, mtime: 0 }
+      }
+      if (path === '/srv/mirror.git/objects' || path === '/srv/mirror.git/refs') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+
+    const result = await handlers.get('projectGroups:scanNested')!(null, {
+      path: '/srv/mirror.git',
+      connectionId: 'conn-1'
+    })
+
+    expect(result).toMatchObject({
+      selectedPath: '/srv/mirror.git',
+      selectedPathKind: 'git_repo',
+      repos: []
+    })
+    expect(mockFilesystemProvider.readDir).not.toHaveBeenCalled()
+  })
+
   it('skips symlinked directories during SSH nested repository scans', async () => {
     mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: false, rootPath: null })
     mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
