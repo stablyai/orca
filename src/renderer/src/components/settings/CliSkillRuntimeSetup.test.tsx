@@ -314,14 +314,20 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     }
   })
 
-  it('leaves WSL and non-Windows setup terminal commands untouched', () => {
+  it('rewrites WSL PowerShell wrappers to bash for setup-terminal auto-paste', () => {
+    const skillCommand = 'npx skills add orchestration --global'
     const wslCommand = buildSkillCommandForRuntime(
-      'npx skills add orchestration --global',
+      skillCommand,
       { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' },
       'win32'
     )
 
-    expect(buildSkillSetupTerminalCommand(wslCommand, 'powershell.exe', 'win32')).toBe(wslCommand)
+    expect(wslCommand.startsWith('& {')).toBe(true)
+    const setupCommand = buildSkillSetupTerminalCommand(wslCommand, 'powershell.exe', 'win32')
+    // Why: daemon forces wsl.exe under WSL worktrees, so auto-paste must not keep the PS wrapper (#13305).
+    expect(setupCommand.startsWith('&')).toBe(false)
+    expect(setupCommand).toBe(buildWslLoginShellCommand(skillCommand))
+    expect(setupCommand).toContain('npx skills add orchestration --global')
     expect(
       buildSkillSetupTerminalCommand('npx skills add orchestration --global', undefined, 'linux')
     ).toBe('npx skills add orchestration --global')

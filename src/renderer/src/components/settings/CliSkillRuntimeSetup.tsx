@@ -138,15 +138,21 @@ function normalizeWindowsSkillUpdateCommand(
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 
 /**
- * Re-adds the npx preflight for Orca's own setup terminal, which
- * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
- * string stays bare for POSIX-family shells; only the executed one is wrapped.
+ * Adapts a copied skill command for Orca's inline setup terminal auto-paste.
+ * Host Windows installs may gain an npx preflight; WSL-targeted PowerShell wrappers
+ * must become bash-native because the daemon forces wsl.exe for WSL worktrees.
  */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
   terminalShellOverride: string | undefined,
   currentPlatform = getSkillCommandPlatform()
 ): string {
+  // Why: WSL project PTYs spawn wsl.exe even when shellOverride is powershell.exe
+  // (daemon reconnect rule). Auto-pasting `& { ... wsl.exe ... }` into bash fails (#13305).
+  const wslNative = toWslNativeSkillSetupCommand(copiedCommand)
+  if (wslNative) {
+    return wslNative
+  }
   if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
     return copiedCommand
   }
@@ -155,6 +161,22 @@ export function buildSkillSetupTerminalCommand(
     currentPlatform,
     'orca-setup-terminal'
   )
+}
+
+/** Convert a PowerShell-hosted `wsl.exe` skill wrapper into a bash login-shell script. */
+export function toWslNativeSkillSetupCommand(command: string): string | null {
+  if (
+    !command.includes('wsl.exe') ||
+    !command.includes('PSNativeCommandArgumentPassing') ||
+    !command.includes('& {')
+  ) {
+    return null
+  }
+  const runs = / # Runs: (.+)$/.exec(command)?.[1]?.trim()
+  if (!runs) {
+    return null
+  }
+  return buildWslLoginShellCommand(runs)
 }
 
 function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {
