@@ -31,6 +31,16 @@ export function getUtf8ByteLength(text: string): number {
   return measureUtf8ByteLength(text).byteLength
 }
 
+export function isUtf8ByteLengthWithinLimit(text: string, maxBytes: number): boolean {
+  if (text.length === 0) {
+    return true
+  }
+  if (text.length > maxBytes) {
+    return false
+  }
+  return !measureUtf8ByteLength(text, { stopAfterBytes: maxBytes }).exceededLimit
+}
+
 export function clampUtf8TextTail(text: string, maxBytes: number): Utf8TextTail {
   if (!text || maxBytes <= 0) {
     return { text: '', bytes: 0 }
@@ -68,6 +78,21 @@ export function clampUtf8TextPrefix(text: string, maxBytes: number): string {
     end += codePoint > 0xffff ? 2 : 1
   }
   return end === text.length ? text : text.slice(0, end)
+}
+
+export function getUtf8ChunkEndIndex(text: string, startIndex: number, maxBytes: number): number {
+  let bytes = 0
+  let endIndex = startIndex
+  while (endIndex < text.length) {
+    const codePoint = text.codePointAt(endIndex) ?? 0
+    const codePointBytes = getUtf8ByteLengthForCodePoint(codePoint)
+    if (bytes > 0 && bytes + codePointBytes > maxBytes) {
+      break
+    }
+    bytes += codePointBytes
+    endIndex += codePoint > 0xffff ? 2 : 1
+  }
+  return endIndex
 }
 
 export function getUtf8ByteLengthForCodePoint(codePoint: number): number {

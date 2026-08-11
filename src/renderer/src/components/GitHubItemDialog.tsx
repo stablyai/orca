@@ -113,10 +113,12 @@ import {
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
-  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
-} from '@/lib/pr-comment-audience'
+} from '../../../shared/pr-comment-audience'
+import {
+  getPRCommentAudienceEmptyLabel,
+  getPrCommentAudienceFilters
+} from '@/lib/pr-comment-audience-labels'
 import { usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
 import {
   getPRCommentGroupCount,
@@ -124,11 +126,13 @@ import {
   getPRCommentGroupRoot,
   groupPRComments,
   isResolvedPRCommentGroup,
+  type PRCommentGroup
+} from '../../../shared/pr-comment-groups'
+import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,
   PR_COMMENT_RESOLVED_AUTHOR_CLASS,
-  PR_COMMENT_RESOLVED_CONTAINER_CLASS,
-  type PRCommentGroup
-} from '@/lib/pr-comment-groups'
+  PR_COMMENT_RESOLVED_CONTAINER_CLASS
+} from '@/lib/pr-comment-resolution-classes'
 import {
   getCommentReplyTargetCandidates,
   resolveCommentReplyTarget

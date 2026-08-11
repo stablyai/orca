@@ -1,4 +1,5 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { getUtf8ByteLengthForCodePoint } from '../../../shared/utf8-byte-limits'
 
 export type PastePayloadMetadata = {
   byteLength: number
@@ -137,17 +138,4 @@ function isPasteControlSequenceCodePoint(codePoint: number): boolean {
     (codePoint >= 0x0e && codePoint <= 0x1f) ||
     codePoint === 0x7f
   )
-}
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }

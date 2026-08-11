@@ -12,6 +12,7 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 import {
   sendNativeChatMessage,
   sendNativeChatMessageVerified,
+  typeNativeChatCommand,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt,
   sendNativeChatAskAnswer,
@@ -249,6 +250,35 @@ describe('sendNativeChatMessageVerified', () => {
     expect(
       sendRuntimePtyInputVerified.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)
     ).toBe(false)
+  })
+})
+
+describe('typeNativeChatCommand', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sendRuntimePtyInputVerified.mockReset().mockResolvedValue(true)
+    resetNativeChatPtySendQueuesForTests()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    resetNativeChatPtySendQueuesForTests()
+  })
+
+  it('writes the Codex picker command as keys instead of one pasted text write', async () => {
+    const result = typeNativeChatCommand(SETTINGS, PTY, '/model')
+    await vi.runAllTimersAsync()
+
+    await expect(result).resolves.toBe(true)
+    expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '/',
+      'm',
+      'o',
+      'd',
+      'e',
+      'l',
+      NATIVE_CHAT_SUBMIT
+    ])
   })
 })
 

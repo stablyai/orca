@@ -269,7 +269,6 @@ inline src/renderer/src/hooks/useComposerState.ts
 inline src/renderer/src/hooks/useEditorExternalWatch.ts
 inline src/renderer/src/hooks/useIpcEvents.test.ts
 inline src/renderer/src/hooks/useIpcEvents.ts
-inline src/renderer/src/hooks/useIssueMetadata.ts
 inline src/renderer/src/hooks/useSettingsNavigationMetadata.ts
 inline src/renderer/src/lib/active-agent-note-send.test.ts
 inline src/renderer/src/lib/file-type-icons.ts

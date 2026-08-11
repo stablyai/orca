@@ -164,13 +164,13 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
-import { useRepoById } from '@/store/selectors'
+import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
-  isTerminalQuickCommandComplete,
-  terminalQuickCommandMatchesRepo
+  isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -787,6 +787,7 @@ function TerminalPane(
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
   const quickCommandRepo = useRepoById(quickCommandRepoId)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
@@ -2518,6 +2519,7 @@ function TerminalPane(
     rightClickToPaste
   })
   const {
+    executionHostId: quickCommandExecutionHostId,
     hosts: quickCommandHosts,
     refreshRemoteHost: refreshQuickCommandRemoteHost,
     remoteHostLoadFailed: quickCommandHostLoadFailed,
@@ -2536,12 +2538,23 @@ function TerminalPane(
           repoCommands: commands.filter((command) => {
             const scope = getTerminalQuickCommandScope(command)
             return (
-              scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
+              scope.type === 'repo' &&
+              terminalQuickCommandMatchesWorkspaceProject(command, {
+                commandHostId: host.hostId,
+                projectHostSetups: projectHostSetupProjection.setups,
+                targetHostId: quickCommandExecutionHostId,
+                targetRepoId: quickCommandRepoId
+              })
             )
           })
         }
       }),
-    [quickCommandHosts, quickCommandRepoId]
+    [
+      projectHostSetupProjection.setups,
+      quickCommandExecutionHostId,
+      quickCommandHosts,
+      quickCommandRepoId
+    ]
   )
   useEffect(() => {
     if (contextMenu.open) {

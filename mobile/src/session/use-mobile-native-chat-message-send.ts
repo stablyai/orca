@@ -4,8 +4,10 @@ import {
   clearMobileNativeChatInput,
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome,
+  typeMobileNativeChatCommandWithOutcome,
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
+import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 import {
@@ -32,7 +34,10 @@ export type MobileNativeChatMessageSend = {
   answerQuestion: (text: string) => Promise<boolean>
   /** Session-option command dispatch (e.g. `/model sonnet`) — never touches the
    *  composer draft; callers need the outcome to track dispatched state. */
-  dispatchCommand: (text: string) => Promise<MobileNativeChatSendOutcome>
+  dispatchCommand: (
+    text: string,
+    options?: { delivery?: CatalogCommandDelivery }
+  ) => Promise<MobileNativeChatSendOutcome>
 }
 
 /** The native-chat send seam: one write path shared by composer sends, image
@@ -269,12 +274,41 @@ export function useMobileNativeChatMessageSend(args: {
   // spaces a send's body and its Enter ~500ms apart — so without this lock an
   // apply lands between them and is submitted as part of the user's prompt.
   const dispatchCommand = useCallback(
-    async (text: string): Promise<MobileNativeChatSendOutcome> => {
+    async (
+      text: string,
+      options?: { delivery?: CatalogCommandDelivery }
+    ): Promise<MobileNativeChatSendOutcome> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
         return 'rejected'
       }
       try {
+        if (options?.delivery === 'type') {
+          if (!client || !terminal || !enabled) {
+            return 'rejected'
+          }
+          const deadline = openMobileNativeChatSendBudget()
+          const mobileClient = deviceTokenRef.current
+            ? { id: deviceTokenRef.current, type: 'mobile' as const }
+            : undefined
+          if (
+            !(await healMobileNativeChatStaleInput({
+              client,
+              terminal,
+              deviceToken: deviceTokenRef.current,
+              deadline
+            }))
+          ) {
+            return 'rejected'
+          }
+          return typeMobileNativeChatCommandWithOutcome({
+            client,
+            terminal,
+            command: text,
+            ...(mobileClient ? { mobileClient } : {}),
+            deadline
+          })
+        }
         return await sendMessage(text, undefined, false, false)
       } finally {
         if (terminal) {
@@ -282,7 +316,7 @@ export function useMobileNativeChatMessageSend(args: {
         }
       }
     },
-    [handleRef, sendMessage]
+    [client, deviceTokenRef, enabled, handleRef, sendMessage]
   )
 
   return { send, sendWithOutcome, answerQuestion, dispatchCommand }

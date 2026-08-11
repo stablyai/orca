@@ -60,14 +60,20 @@ import { CheckJobLogTail } from './check-job-log-tail'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
   isBotPRComment,
-  normalizePRCommentAuthorLogin,
-  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
-} from '@/lib/pr-comment-audience'
+} from '../../../../shared/pr-comment-audience'
+import { normalizePRCommentAuthorLogin } from '../../../../shared/pr-bot-author-overrides'
+import {
+  getPRCommentAudienceEmptyLabel,
+  getPrCommentAudienceFilters
+} from '@/lib/pr-comment-audience-labels'
 import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import {
+  getPRCommentGroupId,
+  groupPRComments,
+  type PRCommentGroup
+} from '../../../../shared/pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
@@ -75,7 +81,7 @@ import {
   sortPRCommentGroupsForTimeline,
   type PRCommentGroupActionState
 } from '@/lib/pr-comment-action-state'
-import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../shared/pr-comment-time'
 import {
   getPRCommentPresentationClasses,
   getPRCommentGroupSurfaceClasses,
