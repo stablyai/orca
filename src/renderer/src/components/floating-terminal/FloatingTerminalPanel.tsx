@@ -116,6 +116,7 @@ import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-res
 import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
+import { useFloatingTerminalOpenTransition } from './floating-terminal-open-transition'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
 const NO_ACTIVITY_TERMINAL_PORTALS = []
 
@@ -326,6 +327,7 @@ export function FloatingTerminalPanel({
     leafId: string | null
   } | null>(null)
   const mountedRef = useMountedRef()
+  const { visualOpen, hidden: panelHidden } = useFloatingTerminalOpenTransition(open, panelRef)
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -1760,14 +1762,25 @@ export function FloatingTerminalPanel({
     // Drop shadow on the outer shell, border on an inner shell — mixing both on
     // one rounded node made corners look stubby. Floating tabs skip their top
     // border so the titlebar curve stays clean.
+    // Open/close transitions animate opacity/transform only (compositor-friendly).
+    // The pre-open pass snaps to the entry pose transition-free while invisible,
+    // the open flip slides up as it fades in, and close is a pure fade so the
+    // resting panel never shifts; visibility flips only after the close settles.
     <div
       ref={setPanelNode}
       data-floating-terminal-panel
       aria-hidden={!open}
+      inert={!open}
       tabIndex={-1}
-      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${open ? 'opacity-100' : 'invisible pointer-events-none opacity-0'}`}
+      className={`fixed z-[45] flex min-h-[280px] min-w-[420px] rounded-lg bg-transparent text-card-foreground shadow-[0_4px_12px_rgba(0,0,0,0.16),0_24px_64px_rgba(0,0,0,0.32)] outline-none dark:shadow-[0_8px_20px_rgba(0,0,0,0.35),0_28px_72px_rgba(0,0,0,0.58)] ${
+        visualOpen
+          ? 'translate-y-0 opacity-100 transition-[opacity,transform] duration-200 ease-out motion-reduce:transition-none'
+          : open
+            ? 'translate-y-2 opacity-0 transition-none'
+            : 'translate-y-0 opacity-0 transition-[opacity,transform] duration-150 ease-in motion-reduce:transition-none'
+      }${open ? '' : ' pointer-events-none'}`}
       style={{
-        visibility: open ? 'visible' : 'hidden',
+        visibility: panelHidden ? 'hidden' : 'visible',
         left: bounds.left,
         top: bounds.top,
         width: bounds.width,

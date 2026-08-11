@@ -850,6 +850,7 @@ describe('FloatingTerminalPanel close behavior', () => {
         cli: { getInstallStatus: mocks.getInstallStatus },
         ui: { setFloatingFocus: mocks.setFloatingFocus }
       },
+      clearTimeout: vi.fn(),
       innerHeight: 800,
       innerWidth: 1200,
       localStorage,
@@ -857,7 +858,10 @@ describe('FloatingTerminalPanel close behavior', () => {
         callback(0)
         return 1
       }),
-      removeEventListener: vi.fn()
+      removeEventListener: vi.fn(),
+      // Why: the open-transition hook schedules its exit settle through
+      // window.setTimeout; tests never need the callback to fire.
+      setTimeout: vi.fn(() => 1)
     })
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     vi.stubGlobal('HTMLElement', class {})

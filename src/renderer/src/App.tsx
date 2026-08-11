@@ -51,6 +51,7 @@ import { AgentHibernationGate } from './components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from './components/AiVaultTabTitleSyncGate'
 import { ActivityTitlebarControls } from './components/activity/ActivityTitlebarControls'
 import Sidebar from './components/Sidebar'
+import { useFloatingTerminalCloseLinger } from './components/floating-terminal/floating-terminal-close-linger'
 import { shutdownBufferCaptures } from './components/terminal-pane/shutdown-buffer-captures'
 import { dispatchWindowCloseRequest } from './components/window-close-request-coordinator'
 import {
@@ -577,9 +578,12 @@ function App(): React.JSX.Element {
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
   const terminalWorkbenchVisible =
     activeView === 'terminal' && activeWorktreeId !== null && !creationLayoutActive
-  // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor panes retain local state.
+  const floatingTerminalCloseLingering = useFloatingTerminalCloseLinger(floatingTerminalOpen)
+  // Why: once the floating workspace owns tabs, keep it mounted while closed so hidden terminal/browser/editor
+  // panes retain local state; the close linger keeps a tabless panel mounted until its exit transition finishes.
   const shouldMountFloatingTerminalPanel =
-    floatingTerminalEnabled && (floatingTerminalOpen || floatingVisibleTabCount > 0)
+    floatingTerminalEnabled &&
+    (floatingTerminalOpen || floatingVisibleTabCount > 0 || floatingTerminalCloseLingering)
   // Why: floating workspace is a transient overlay; hotkey minimize returns focus to the surface the user came from.
   const floatingTerminalReturnFocusRef = useRef<HTMLElement | null>(null)
   const floatingTerminalReturnFocusFrameRef = useRef<number | null>(null)
