@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest'
+import type { Repo } from '../../../shared/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getAgentDetectionTargetKeyForWorktree } from './useAgentDetectionTarget'
 
 describe('getAgentDetectionTargetKeyForWorktree', () => {
   it('uses an explicit runtime owner without scanning ambiguous child SSH repos', () => {
     let projectGroupReads = 0
-    const repos = Array.from({ length: 100 }, (_, index) => {
-      const repo = {
+    const repos: readonly Repo[] = Array.from({ length: 100 }, (_, index) => {
+      const repo: Repo = {
         id: `repo-${index}`,
         connectionId: `ssh-${index}`,
         executionHostId: `ssh:ssh-${index}`,
-        path: `/workspace/repo-${index}`
+        path: `/workspace/repo-${index}`,
+        displayName: `repo-${index}`,
+        badgeColor: 'blue',
+        addedAt: 1
       }
       Object.defineProperty(repo, 'projectGroupId', {
         enumerable: true,

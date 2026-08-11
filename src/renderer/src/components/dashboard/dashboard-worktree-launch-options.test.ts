@@ -94,8 +94,22 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     const options = buildDashboardWorktreeLaunchOptions(
       state({
         repos: [
-          { id: 'repo-ssh', connectionId: 'ssh-1' },
-          { id: 'repo-runtime', executionHostId: 'runtime:hub-1' }
+          {
+            id: 'repo-ssh',
+            path: '/repo-ssh',
+            displayName: 'repo-ssh',
+            badgeColor: 'blue',
+            addedAt: 1,
+            connectionId: 'ssh-1'
+          },
+          {
+            id: 'repo-runtime',
+            path: '/repo-runtime',
+            displayName: 'repo-runtime',
+            badgeColor: 'blue',
+            addedAt: 1,
+            executionHostId: 'runtime:hub-1'
+          }
         ] as LaunchState['repos'],
         worktreesByRepo: {
           'repo-ssh': [{ id: 'ssh-worktree', repoId: 'repo-ssh' }],

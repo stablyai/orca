@@ -126,7 +126,7 @@ async function resolveRepoSlug(
 }
 
 async function buildIndex(
-  repos: Repo[],
+  repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 ): Promise<{ index: SlugIndex; upstreamIndex: SlugIndex; retryDelayMs: number | null }> {
   // Why: evict cached entries for repos that no longer exist in state so

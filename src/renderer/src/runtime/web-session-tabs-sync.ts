@@ -191,9 +191,19 @@ type WebSessionTabsBatchRecordKey =
   | 'unifiedTabsByWorktree'
   | 'unreadTerminalTabs'
 
+/** Open files bucketed by worktree. A snapshot only reconciles its own worktree, so a
+ *  batch can decide there is nothing to do without walking every open file in the app.
+ *  `source` pins the array it describes; each rebuild updates it in place instead of
+ *  re-bucketing, so a batch never pays for the whole array twice. */
+type WebSessionOpenFilesIndex = {
+  source: readonly OpenFile[]
+  byWorktree: Map<string, OpenFile[]>
+}
+
 type WebSessionTabsBatchContext = {
   agentPaneKeysByTabId: Map<string, Set<string>> | null
   changedRecords: Set<WebSessionTabsBatchRecordKey>
+  openFilesIndex: WebSessionOpenFilesIndex | null
 }
 
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
@@ -1094,6 +1104,7 @@ function buildMirroredEditorTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
   state: WebSessionTabsSyncState,
+  worktreeOpenFileById: ReadonlyMap<string, OpenFile>,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
@@ -1101,9 +1112,7 @@ function buildMirroredEditorTabs(
 ): MirroredEditorTab[] {
   return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
     const fileId = localEditorFileId(tab)
-    const existingFile = state.openFiles.find(
-      (file) => file.worktreeId === snapshot.worktree && file.id === fileId
-    )
+    const existingFile = worktreeOpenFileById.get(fileId)
     const existingUnifiedTab = findExistingEditorUnifiedTab(
       state,
       snapshot.worktree,
@@ -1810,6 +1819,63 @@ function sameOpenFiles(a: readonly OpenFile[], b: readonly OpenFile[]): boolean 
   return a.every((file, index) => openFileEqual(file, b[index]!))
 }
 
+/** This worktree's open files — the only scope a snapshot reconciles, so a batch can
+ *  answer from here instead of walking every open file in the app. */
+function webSessionOpenFilesForWorktree(
+  state: WebSessionTabsSyncState,
+  worktreeId: string,
+  batchContext?: WebSessionTabsBatchContext
+): readonly OpenFile[] {
+  if (!batchContext) {
+    return state.openFiles.filter((file) => file.worktreeId === worktreeId)
+  }
+  let index = batchContext.openFilesIndex
+  if (!index || index.source !== state.openFiles) {
+    const byWorktree = new Map<string, OpenFile[]>()
+    for (const file of state.openFiles) {
+      const bucket = byWorktree.get(file.worktreeId) ?? []
+      bucket.push(file)
+      byWorktree.set(file.worktreeId, bucket)
+    }
+    index = { source: state.openFiles, byWorktree }
+    batchContext.openFilesIndex = index
+  }
+  return index.byWorktree.get(worktreeId) ?? []
+}
+
+/** Retargets the index at the array a snapshot just produced, re-bucketing only the
+ *  worktree that changed. Rebuilding it wholesale would cost the entire array again on
+ *  every snapshot, which is the cost this index exists to avoid. */
+function advanceWebSessionOpenFilesIndex(
+  batchContext: WebSessionTabsBatchContext | undefined,
+  nextOpenFiles: readonly OpenFile[],
+  worktreeId: string
+): void {
+  const index = batchContext?.openFilesIndex
+  if (!index || index.source === nextOpenFiles) {
+    return
+  }
+  const bucket: OpenFile[] = []
+  for (const file of nextOpenFiles) {
+    if (file.worktreeId === worktreeId) {
+      bucket.push(file)
+    }
+  }
+  index.byWorktree.set(worktreeId, bucket)
+  index.source = nextOpenFiles
+}
+
+/** Mirrors `openFiles.find()` first-wins lookup, which duplicate ids make observable. */
+function firstOpenFileByIdForWorktree(files: readonly OpenFile[]): Map<string, OpenFile> {
+  const byId = new Map<string, OpenFile>()
+  for (const file of files) {
+    if (!byId.has(file.id)) {
+      byId.set(file.id, file)
+    }
+  }
+  return byId
+}
+
 function tabEqual(a: Tab, b: Tab): boolean {
   return (
     a.id === b.id &&
@@ -2085,10 +2151,12 @@ function applyWebSessionTabsSnapshotWithContext(
       ? [...retainedBrowserTabs, ...mirroredBrowserTabs.map((entry) => entry.workspace)]
       : null
   const readyEditorTabs = snapshot.tabs.filter(isReadyEditorTab)
+  const worktreeOpenFiles = webSessionOpenFilesForWorktree(state, worktreeId, batchContext)
   const mirroredEditorTabs = buildMirroredEditorTabs(
     snapshot,
     environmentId,
     state,
+    firstOpenFileByIdForWorktree(worktreeOpenFiles),
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
@@ -2097,10 +2165,9 @@ function applyWebSessionTabsSnapshotWithContext(
   const mirroredEditorFileIds = new Set(mirroredEditorTabs.map((entry) => entry.file.id))
   const mirroredEditorHostTabIds = new Set(mirroredEditorTabs.map((entry) => entry.hostTabId))
   const removedEditorFileIds = new Set(
-    state.openFiles
+    worktreeOpenFiles
       .filter(
         (file) =>
-          file.worktreeId === worktreeId &&
           file.runtimeEnvironmentId === environmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           // Why: only cull host-mirrored tabs; locally opened files have no host counterpart, so their omission isn't a close signal.
@@ -2109,7 +2176,25 @@ function applyWebSessionTabsSnapshotWithContext(
       )
       .map((file) => file.id)
   )
+  const isReplacedOpenFile = (file: OpenFile): boolean =>
+    file.runtimeEnvironmentId === environmentId &&
+    (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id))
+  const replacedOpenFileCount = worktreeOpenFiles.filter(isReplacedOpenFile).length
+  // Why: both consumers below ask only about this worktree, so the surviving ids answer
+  // them in worktree scope instead of walking every open file in the app.
+  const nextWorktreeOpenFileIds = new Set<string>(
+    worktreeOpenFiles.filter((file) => !isReplacedOpenFile(file)).map((file) => file.id)
+  )
+  for (const fileId of mirroredEditorFileIds) {
+    nextWorktreeOpenFileIds.add(fileId)
+  }
+  const mirroredOpenFiles = mirroredEditorTabs.map((entry) => entry.file)
   const nextOpenFiles = (() => {
+    // Why: with nothing to drop or mirror, rebuilding reproduces the array exactly, so
+    // skip the global rebuild the equality check below would have thrown away anyway.
+    if (replacedOpenFileCount === 0 && mirroredOpenFiles.length === 0) {
+      return state.openFiles
+    }
     const retained = state.openFiles.filter(
       (file) =>
         !(
@@ -2118,9 +2203,10 @@ function applyWebSessionTabsSnapshotWithContext(
           (removedEditorFileIds.has(file.id) || mirroredEditorFileIds.has(file.id))
         )
     )
-    const next = [...retained, ...mirroredEditorTabs.map((entry) => entry.file)]
+    const next = [...retained, ...mirroredOpenFiles]
     return sameOpenFiles(state.openFiles, next) ? state.openFiles : next
   })()
+  advanceWebSessionOpenFilesIndex(batchContext, nextOpenFiles, worktreeId)
   const currentUnifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
   const retainedUnifiedTabs = currentUnifiedTabs.filter((tab) => {
     if (tab.contentType === 'browser') {
@@ -2248,13 +2334,10 @@ function applyWebSessionTabsSnapshotWithContext(
       ? (activeMirroredBrowserWorkspaceId ?? mirroredBrowserTabs[0]?.workspace.id)
       : mirroredBrowserTabs[0]?.workspace.id) ??
     null
+  const activeEditorFileIdForWorktree = state.activeFileIdByWorktree[worktreeId]
   const currentActiveEditorStillExists =
-    state.activeFileIdByWorktree[worktreeId] &&
-    nextOpenFiles.some(
-      (file) =>
-        file.worktreeId === worktreeId && file.id === state.activeFileIdByWorktree[worktreeId]
-    )
-      ? state.activeFileIdByWorktree[worktreeId]
+    activeEditorFileIdForWorktree && nextWorktreeOpenFileIds.has(activeEditorFileIdForWorktree)
+      ? activeEditorFileIdForWorktree
       : null
   const intentEditorFileId = honorSnapshotActiveFocus
     ? (intentMirroredEditor?.file.id ?? null)
@@ -2771,8 +2854,7 @@ function applyWebSessionTabsSnapshotWithContext(
       ? state.activeTabId
       : null
   const currentActiveEditorStillValid =
-    state.activeFileId &&
-    nextOpenFiles.some((file) => file.worktreeId === worktreeId && file.id === state.activeFileId)
+    state.activeFileId && nextWorktreeOpenFileIds.has(state.activeFileId)
       ? state.activeFileId
       : null
   const nextActiveTabId = isActiveWorktree
@@ -2894,7 +2976,8 @@ export function applyWebSessionTabsSnapshots(
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
     agentPaneKeysByTabId: null,
-    changedRecords: new Set()
+    changedRecords: new Set(),
+    openFilesIndex: null
   }
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
   for (const snapshot of snapshots) {

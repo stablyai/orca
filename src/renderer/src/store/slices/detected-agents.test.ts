@@ -327,6 +327,10 @@ describe('createDetectedAgentsSlice WSL context', () => {
       projects: [
         {
           id: 'repo-1',
+          displayName: 'repo-1',
+          badgeColor: 'blue',
+          createdAt: 1,
+          updatedAt: 1,
           sourceRepoIds: ['repo-1'],
           localWindowsRuntimePreference: { kind: 'windows-host' }
         }

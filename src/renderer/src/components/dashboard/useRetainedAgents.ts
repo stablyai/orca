@@ -22,7 +22,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 type RetainedAgentSnapshot = Map<string, { row: DashboardAgentRow; worktreeId: string }>
 
 type RetainedAgentsSyncInputs = {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
   folderWorkspaces: FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -38,7 +38,7 @@ function paneKeyTabId(paneKey: string): string | null {
 }
 
 function buildLiveTabIndex(args: {
-  repos: Repo[]
+  repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
   folderWorkspaces: FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>

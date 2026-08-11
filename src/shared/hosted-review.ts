@@ -1,4 +1,10 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRConflictSummary,
+  PRMergeableState,
+  PRReviewDecision
+} from './types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -30,6 +36,8 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
+  githubRepository?: GitHubRepositoryIdentity
   // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
   // checks accept a worktree head confirmed to be part of the merged PR.
   confirmedContainedHeadOid?: string

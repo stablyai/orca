@@ -33,6 +33,7 @@ import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from './github-work-items-query-bou
 
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+const runtimeEnvironmentSubscribe = vi.fn()
 
 const mockApi = {
   gh: {
@@ -62,7 +63,8 @@ const mockApi = {
     create: vi.fn()
   },
   runtimeEnvironments: {
-    call: runtimeEnvironmentTransportCall
+    call: runtimeEnvironmentTransportCall,
+    subscribe: runtimeEnvironmentSubscribe
   },
   cache: {
     getGitHub: vi.fn().mockResolvedValue(null),
@@ -77,9 +79,30 @@ function resetRemoteRuntimeMocks() {
   clearRuntimeCompatibilityCacheForTests()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  runtimeEnvironmentSubscribe.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   })
+  runtimeEnvironmentSubscribe.mockImplementation(
+    async (
+      args: RuntimeEnvironmentCallRequest,
+      handlers: {
+        onResponse: (response: unknown) => void
+        onError: (error: { message: string }) => void
+      }
+    ) => {
+      let active = true
+      void Promise.resolve(runtimeEnvironmentCall(args)).then(
+        (response) => active && handlers.onResponse(response),
+        (error) => active && handlers.onError({ message: String(error) })
+      )
+      return {
+        unsubscribe: () => {
+          active = false
+        }
+      }
+    }
+  )
 }
 
 function createTestStore() {
@@ -1442,6 +1465,109 @@ describe('createGitHubSlice.fetchPRCheckDetails', () => {
       timeoutMs: 30_000
     })
     expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+  })
+
+  it('bounds the whole runtime check-detail load when compatibility probing stalls', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeEnvironmentTransportCall.mockImplementation(() => new Promise(() => {}))
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-id'
+
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+        repos: [
+          {
+            id: repoId,
+            path: repoPath,
+            name: 'repo',
+            kind: 'git',
+            executionHostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as Partial<AppState>)
+
+      const request = store
+        .getState()
+        .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(30_000)
+
+      await rejection
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+      expect(mockApi.gh.prCheckDetails).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shares one timeout budget between runtime compatibility and check details', async () => {
+    vi.useFakeTimers()
+    try {
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+        const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
+        if (compatibility) {
+          return new Promise((resolve) => setTimeout(() => resolve(compatibility), 20_000))
+        }
+        return runtimeEnvironmentCall(args)
+      })
+      runtimeEnvironmentCall.mockImplementation(() => new Promise(() => {}))
+      const store = createTestStore()
+      const repoPath = '/repo'
+      const repoId = 'repo-id'
+      store.setState({
+        settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+        repos: [
+          {
+            id: repoId,
+            path: repoPath,
+            name: 'repo',
+            kind: 'git',
+            executionHostId: 'runtime:env-1'
+          }
+        ]
+      } as unknown as Partial<AppState>)
+
+      const request = store
+        .getState()
+        .fetchPRCheckDetails(repoPath, { checkRunId: 123, checkName: 'build' }, { repoId })
+      let settled = false
+      void request.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+        selector: 'env-1',
+        method: 'github.prCheckDetails',
+        params: {
+          repo: repoId,
+          checkRunId: 123,
+          workflowRunId: undefined,
+          checkName: 'build',
+          url: undefined,
+          prRepo: null
+        },
+        timeoutMs: 30_000
+      })
+
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(settled).toBe(false)
+      await vi.advanceTimersByTimeAsync(1)
+
+      await rejection
+      expect(settled).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('loads known local repo check details through local IPC when a runtime is focused', async () => {
@@ -6408,17 +6534,18 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
     const store = createTestStore()
+    const repos: AppState['repos'] = [
+      {
+        id: 'runtime-repo-id',
+        path: '/server/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      repos: [
-        {
-          id: 'runtime-repo-id',
-          path: '/server/repo',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ]
+      repos
     } as Partial<AppState>)
 
     await store.getState().fetchWorkItems('caller-repo-id', '/server/repo', 24, 'is:open', {
@@ -6508,17 +6635,18 @@ describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
       _meta: { runtimeId: 'source-runtime' }
     })
     const store = createTestStore()
+    const repos: AppState['repos'] = [
+      {
+        id: 'local-repo-id',
+        path: '/server/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1
+      }
+    ]
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-      repos: [
-        {
-          id: 'local-repo-id',
-          path: '/server/repo',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ]
+      repos
     } as Partial<AppState>)
 
     const sourceContext = {

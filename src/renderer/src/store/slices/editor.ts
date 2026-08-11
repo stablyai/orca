@@ -14,7 +14,9 @@ import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown-internal-links'
 import {
   buildCheckRunDetailsTabId,
+  createCheckRunDetailsRequestId,
   getCheckRunDetailsTabLabel,
+  isSameGitHubRepository,
   isSameGitLabProjectRef,
   type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
@@ -3802,14 +3804,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const checkRunDetails: OpenCheckRunDetailsState = {
       contextKey,
       check,
+      requestId: state.requestId,
       details: state.details,
       loading: state.loading,
       error: state.error,
+      githubRepository: state.githubRepository ?? null,
       gitlabProjectRef: state.gitlabProjectRef ?? null
     }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
+        const existingDetails = existing.checkRunDetails
+        const incomingIsStale =
+          existingDetails?.contextKey === contextKey &&
+          existingDetails.requestId !== undefined &&
+          (state.requestId === undefined || state.requestId < existingDetails.requestId)
         return {
           openFiles: s.openFiles.map((f) =>
             f.id === id
@@ -3818,7 +3827,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   mode: 'check-details' as const,
                   relativePath: label,
                   language: 'plaintext',
-                  checkRunDetails
+                  checkRunDetails: incomingIsStale ? existingDetails : checkRunDetails
                 }
               : f
           ),
@@ -3860,24 +3869,39 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         return s
       }
       const current = existing.checkRunDetails
+      if (current.contextKey !== contextKey) {
+        return s
+      }
+      if (
+        state.requestId !== undefined &&
+        current.requestId !== undefined &&
+        state.requestId < current.requestId
+      ) {
+        return s
+      }
       // Why: the sidebar resolves the MR's project asynchronously, so an early patch
       // must not blank a ref we already know.
+      const githubRepository = state.githubRepository ?? current.githubRepository ?? null
       const gitlabProjectRef = state.gitlabProjectRef ?? current.gitlabProjectRef ?? null
       const nextCheckRunDetails: OpenCheckRunDetailsState = {
         contextKey,
         check,
+        requestId: state.requestId ?? current.requestId,
         details: state.details,
         loading: state.loading,
         error: state.error,
+        githubRepository,
         gitlabProjectRef
       }
       if (
         current.contextKey === nextCheckRunDetails.contextKey &&
+        current.requestId === nextCheckRunDetails.requestId &&
         current.check.status === nextCheckRunDetails.check.status &&
         current.check.conclusion === nextCheckRunDetails.check.conclusion &&
         current.loading === nextCheckRunDetails.loading &&
         current.error === nextCheckRunDetails.error &&
         current.details === nextCheckRunDetails.details &&
+        isSameGitHubRepository(current.githubRepository ?? null, githubRepository) &&
         isSameGitLabProjectRef(current.gitlabProjectRef ?? null, gitlabProjectRef)
       ) {
         return s
@@ -3897,15 +3921,24 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     if (!file || file.mode !== 'check-details' || !checkRunDetails) {
       return
     }
+    const { contextKey, check } = checkRunDetails
+    const requestId = createCheckRunDetailsRequestId()
+    const patch = (next: CheckRunDetailsTabPatch): void => {
+      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, { ...next, requestId })
+    }
     const worktree = findWorktreeById(state.worktreesByRepo, file.worktreeId)
     const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(file.worktreeId)
     const repo = state.repos.find((candidate) => candidate.id === repoId)
     if (!repo?.path) {
+      patch({
+        details: checkRunDetails.details,
+        loading: false,
+        error: translate(
+          'auto.store.slices.editor.checkRunDetailsRepoUnavailable',
+          'Repository details are unavailable for this check.'
+        )
+      })
       return
-    }
-    const { contextKey, check } = checkRunDetails
-    const patch = (next: CheckRunDetailsTabPatch): void => {
-      get().patchOpenCheckRunDetails(file.worktreeId, contextKey, check, next)
     }
     patch({ details: checkRunDetails.details, loading: true, error: null })
     try {
@@ -3927,7 +3960,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               workflowRunId: check.workflowRunId,
               checkName: check.name,
               url: check.url,
-              prRepo: null
+              prRepo: checkRunDetails.githubRepository ?? null
             },
             { repoId: repo.id }
           )

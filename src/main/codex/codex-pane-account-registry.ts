@@ -256,6 +256,18 @@ export function hasRecordedLegacySharedCodexPane(): boolean {
   )
 }
 
+/** True when startup may need to repair hooks for a retained managed host pane. */
+export function hasRecordedManagedHostCodexPane(): boolean {
+  return Object.values(readRegistry().panes).some(
+    (record) =>
+      record.selectionKey === 'host' &&
+      (record.homeRoute === undefined ||
+        record.homeRoute === 'shared-home' ||
+        record.homeRoute === 'custom-home' ||
+        (record.homeRoute === 'account-home' && record.accountId !== null))
+  )
+}
+
 /** Drops records whose daemon PTYs are authoritatively absent. */
 export function reconcileCodexPaneAccountsWithLivePtys(livePtyIds: readonly string[]): void {
   const registry = readRegistry()

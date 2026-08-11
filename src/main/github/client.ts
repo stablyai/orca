@@ -124,9 +124,13 @@ import {
   spendsSharedGitHubComQuota,
   type RateLimitBucketKind
 } from './rate-limit'
+import {
+  GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
+  GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
+} from '../../shared/github-check-details-deadline'
 import { hydrateGitHubPRStack, mergeGitHubPRStack } from './github-pr-stack'
 
-type GhExecOptions = GitHubRepoExecOptions
+type GhExecOptions = GitHubRepoExecOptions & { signal?: AbortSignal }
 type HostedReviewLocalGitOptions = ReturnType<typeof getHostedReviewLocalGitOptions>
 
 const ORCA_REPO = 'stablyai/orca'
@@ -150,6 +154,30 @@ function setPrCheckLogTailCache(cacheKey: string, logTail: string | null): void 
     }
     prCheckLogTailCache.delete(oldestKey)
   }
+}
+
+function rethrowCheckDetailsAbort(signal: AbortSignal | undefined, error: unknown): void {
+  if (signal?.aborted) {
+    throw error
+  }
+}
+
+function waitForCheckDetailsResolution<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason)
+  }
+  return new Promise((resolve, reject) => {
+    const finish = (settle: () => void): void => {
+      signal.removeEventListener('abort', onAbort)
+      settle()
+    }
+    const onAbort = (): void => finish(() => reject(signal.reason))
+    signal.addEventListener('abort', onAbort, { once: true })
+    void operation.then(
+      (value) => finish(() => resolve(value)),
+      (error) => finish(() => reject(error))
+    )
+  })
 }
 const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 const MERGE_QUEUE_UNKNOWN_CACHE_TTL_MS = 60 * 1000
@@ -4094,6 +4122,7 @@ async function attachFailedJobLogTails(
       )
       job.logTail = sliceCheckLogTail(stdout)
     } catch (err) {
+      rethrowCheckDetailsAbort(ghOptions.signal, err)
       console.warn('getPRCheckDetails workflow job log fetch failed:', err)
       job.logTail = null
     }
@@ -4126,20 +4155,34 @@ export async function getPRCheckDetails(
     prRepo?: GitHubApiRepository | null
   },
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  callerSignal?: AbortSignal
 ): Promise<PRCheckRunDetails | null> {
-  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
-    repoPath,
-    args.prRepo,
-    connectionId,
-    localGitOptions
-  )
-  if (!ownerRepo) {
-    return null
+  const controller = new AbortController()
+  let hostDeadlineExpired = false
+  const forwardCallerAbort = (): void => controller.abort(callerSignal?.reason)
+  if (callerSignal?.aborted) {
+    forwardCallerAbort()
+  } else {
+    callerSignal?.addEventListener('abort', forwardCallerAbort, { once: true })
   }
-
-  await acquire()
+  const hostDeadline = setTimeout(() => {
+    hostDeadlineExpired = true
+    controller.abort(new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE))
+  }, GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS)
+  let acquired = false
   try {
+    const resolved = await waitForCheckDetailsResolution(
+      resolveGitHubRepoExecution(repoPath, args.prRepo, connectionId, localGitOptions),
+      controller.signal
+    )
+    if (!resolved.ownerRepo) {
+      return null
+    }
+    const ownerRepo = resolved.ownerRepo
+    const ghOptions: GhExecOptions = { ...resolved.ghOptions, signal: controller.signal }
+    await acquire(controller.signal)
+    acquired = true
     let checkRun: Record<string, unknown> | null = null
     let annotations: PRCheckRunDetails['annotations'] = []
     if (args.checkRunId) {
@@ -4158,6 +4201,7 @@ export async function getPRCheckDetails(
         )
         annotations = mapCheckAnnotations(JSON.parse(annotationsResult.stdout))
       } catch (err) {
+        rethrowCheckDetailsAbort(controller.signal, err)
         console.warn('getPRCheckDetails annotations fetch failed:', err)
       }
     }
@@ -4176,6 +4220,7 @@ export async function getPRCheckDetails(
         jobs = mapWorkflowJobs(JSON.parse(stdout), args.checkName)
         await attachFailedJobLogTails(jobs, ownerRepo, ghOptions)
       } catch (err) {
+        rethrowCheckDetailsAbort(controller.signal, err)
         console.warn('getPRCheckDetails workflow jobs fetch failed:', err)
       }
     }
@@ -4200,9 +4245,16 @@ export async function getPRCheckDetails(
     }
   } catch (err) {
     console.warn('getPRCheckDetails failed:', err)
-    return null
+    if (hostDeadlineExpired && !callerSignal?.aborted) {
+      throw new Error(GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE)
+    }
+    throw err
   } finally {
-    release()
+    clearTimeout(hostDeadline)
+    callerSignal?.removeEventListener('abort', forwardCallerAbort)
+    if (acquired) {
+      release()
+    }
   }
 }
 

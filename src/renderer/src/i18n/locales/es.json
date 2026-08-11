@@ -7,6 +7,9 @@
       "webDescription": "Vuelva a cargar el cliente web o vuelva a conectarse al servidor Orca vinculado."
     }
   },
+  "githubChecks": {
+    "retrying": "Reintentando…"
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -10751,7 +10754,7 @@
                 "actionRequiredHint": "Este check requiere una acción manual en GitHub (por ejemplo, aprobar la ejecución del workflow) antes de que el merge quede desbloqueado.",
                 "b3195cba33": "Desmarcar autor como bot",
                 "f588b46a6c": "Marcar autor como bot",
-                "checkDetailsLoadFailed": "No se pudieron cargar los detalles del check."
+                "e45324fbed": "No se pudieron cargar los detalles del check."
               },
               "empty": {
                 "state": {

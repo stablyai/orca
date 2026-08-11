@@ -6,6 +6,11 @@ import {
 } from './types'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from './orchestration-error'
+import {
+  acquireFederationAckLease,
+  getFederationAckedThrough,
+  recordFederationAckCheckpoint
+} from './federation-ack-checkpoints'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
 
@@ -52,6 +57,7 @@ export async function syncFederatedDispatch(
       `Saved environment ${federated.environment_name} now identifies a different Orca server.`
     )
   }
+  const ackLease = acquireFederationAckLease(runtime, dispatchId)
 
   const pulled = (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,
@@ -95,7 +101,12 @@ export async function syncFederatedDispatch(
     imported += stored.duplicate ? 0 : 1
   }
 
-  if (cursor > 0) {
+  const ackIdentity = {
+    environmentId: federated.environment_id,
+    peerFingerprint: federated.peer_fingerprint,
+    remoteRuntimeEpoch: pulled.runtimeEpoch
+  }
+  if (cursor > getFederationAckedThrough(ackLease, ackIdentity)) {
     await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
@@ -103,6 +114,10 @@ export async function syncFederatedDispatch(
       15_000,
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` }
     )
+    recordFederationAckCheckpoint(runtime, ackLease, {
+      ...ackIdentity,
+      throughSequence: cursor
+    })
   }
   const toWorker =
     db.getWorkerDispatch(dispatchId)?.state === 'ready'

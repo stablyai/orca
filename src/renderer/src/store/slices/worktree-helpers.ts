@@ -58,6 +58,8 @@ export type WorktreeFetchOptions = {
   requireAuthoritative?: boolean
   executionHostId?: ExecutionHostId
   forceLocalOwner?: boolean
+  /** Skip automatic remote lineage when the caller owns a final host-wide refresh. */
+  suppressRemoteLineageRefresh?: boolean
 }
 
 export type DirectSshWorktreeFetchOptions = WorktreeFetchOptions & {

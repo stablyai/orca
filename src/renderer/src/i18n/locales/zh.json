@@ -7,6 +7,9 @@
       "webDescription": "重试 Web 客户端或重新连接到配对的运行时。"
     }
   },
+  "githubChecks": {
+    "retrying": "正在重试..."
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -10771,7 +10774,7 @@
                 "actionRequiredHint": "此检查需要在 GitHub 上执行手动操作（例如批准工作流运行）后才能解除合并阻止。",
                 "b3195cba33": "取消将作者标记为机器人",
                 "f588b46a6c": "将作者标记为机器人",
-                "checkDetailsLoadFailed": "加载检查详细信息失败。"
+                "e45324fbed": "加载检查详细信息失败。"
               },
               "empty": {
                 "state": {

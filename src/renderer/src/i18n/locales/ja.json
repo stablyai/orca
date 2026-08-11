@@ -7,6 +7,9 @@
       "webDescription": "Web クライアントを再試行するか、ペアリングされたランタイムに再接続します。"
     }
   },
+  "githubChecks": {
+    "retrying": "再試行中…"
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -10751,7 +10754,7 @@
                 "actionRequiredHint": "マージのブロックが解除されるまでに、このチェックには GitHub 上での手動操作（例: ワークフロー実行の承認）が必要です。",
                 "b3195cba33": "作成者のボット指定を解除",
                 "f588b46a6c": "作成者をボットとして指定",
-                "checkDetailsLoadFailed": "チェック詳細の読み込みに失敗しました。"
+                "e45324fbed": "チェック詳細の読み込みに失敗しました。"
               },
               "empty": {
                 "state": {

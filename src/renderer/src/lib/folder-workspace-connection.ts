@@ -6,7 +6,7 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 export type FolderWorkspaceConnectionState = {
   folderWorkspaces: FolderWorkspace[]
   projectGroups: ProjectGroup[]
-  repos: Repo[]
+  repos: readonly Repo[]
 }
 
 function getFolderScopeCandidateRepos(args: {

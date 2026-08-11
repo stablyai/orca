@@ -149,6 +149,7 @@ import type {
   OrchestrationEnvironmentTransport,
   OrchestrationWorkerServer
 } from './orchestration/environment-transport'
+import { clearFederationAckCheckpoints } from './orchestration/federation-ack-checkpoints'
 import { syncFederatedDispatch } from './orchestration/federation-sync'
 import { formatMessagePointer } from './orchestration/formatter'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
@@ -2674,7 +2675,10 @@ export class OrcaRuntimeService {
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
   private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
-  private readonly orchestrationFederationSyncs = new Map<string, Promise<void>>()
+  private readonly orchestrationFederationSyncs = new Map<
+    string,
+    { db: OrchestrationDb; promise: Promise<void> }
+  >()
   private readonly orchestrationFederationWarnings = new Set<string>()
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
@@ -3807,6 +3811,9 @@ export class OrcaRuntimeService {
   }
 
   setOrchestrationDb(db: OrchestrationDb): void {
+    clearFederationAckCheckpoints(this)
+    this.orchestrationFederationSyncs.clear()
+    this.orchestrationFederationWarnings.clear()
     this._orchestrationDb = db
   }
 
@@ -4637,27 +4644,44 @@ export class OrcaRuntimeService {
     )
   }
 
-  private syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+  syncOrchestrationFederatedDispatch(dispatchId: string): Promise<void> {
+    const db = this.getOrchestrationDb()
     const current = this.orchestrationFederationSyncs.get(dispatchId)
-    if (current) {
-      return current
+    if (current?.db === db) {
+      return current.promise
     }
     const sync = syncFederatedDispatch(this, dispatchId)
       .then(() => {
-        this.orchestrationFederationWarnings.delete(dispatchId)
+        if (this.orchestrationFederationSyncs.get(dispatchId)?.promise === sync) {
+          this.orchestrationFederationWarnings.delete(dispatchId)
+        }
       })
       .catch((error: unknown) => {
-        if (!this.orchestrationFederationWarnings.has(dispatchId)) {
+        if (
+          this.orchestrationFederationSyncs.get(dispatchId)?.promise === sync &&
+          !this.orchestrationFederationWarnings.has(dispatchId)
+        ) {
           console.warn(`[orchestration] Federation sync failed for ${dispatchId}:`, error)
           this.orchestrationFederationWarnings.add(dispatchId)
         }
         throw error
       })
       .finally(() => {
-        this.orchestrationFederationSyncs.delete(dispatchId)
+        if (this.orchestrationFederationSyncs.get(dispatchId)?.promise === sync) {
+          this.orchestrationFederationSyncs.delete(dispatchId)
+        }
       })
-    this.orchestrationFederationSyncs.set(dispatchId, sync)
+    this.orchestrationFederationSyncs.set(dispatchId, { db, promise: sync })
     return sync
+  }
+
+  async syncOrchestrationFederatedDispatchAfterCurrent(dispatchId: string): Promise<void> {
+    const db = this.getOrchestrationDb()
+    const current = this.orchestrationFederationSyncs.get(dispatchId)
+    if (current?.db === db) {
+      await current.promise.catch(() => undefined)
+    }
+    await this.syncOrchestrationFederatedDispatch(dispatchId)
   }
 
   ensureOrchestrationFederationRelay(runId?: string): void {
@@ -4694,6 +4718,8 @@ export class OrcaRuntimeService {
     }
     this.orchestrationFederationTimers.clear()
     this.orchestrationFederationWarnings.clear()
+    this.orchestrationFederationSyncs.clear()
+    clearFederationAckCheckpoints(this)
   }
 
   getStartedAt(): number {
@@ -20083,14 +20109,17 @@ export class OrcaRuntimeService {
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
-    }
+    },
+    signal?: AbortSignal
   ): Promise<Awaited<ReturnType<typeof getPRCheckDetails>>> {
     const repo = await this.resolveRepoSelector(repoSelector)
+    const localGitOptions = this.getLocalGitExecutionOptionArgs(repo)[0] ?? {}
     return getPRCheckDetails(
       repo.path,
       { ...args, prRepo: args.prRepo ?? null },
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      localGitOptions,
+      signal
     )
   }
 

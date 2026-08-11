@@ -3646,7 +3646,7 @@ export function connectPanePty(
     ? getCachedWindowsTerminalCapabilities()
     : null
   const projectRuntime =
-    !connectionId && runtimeEnvironmentId === null
+    !tab?.forceHostRuntime && !connectionId && runtimeEnvironmentId === null
       ? getLocalProjectExecutionRuntimeContext(state, deps.worktreeId, undefined, {
           wslAvailable: localWindowsTerminalCapabilities?.wslAvailable,
           availableWslDistros: localWindowsTerminalCapabilities?.wslDistros ?? null

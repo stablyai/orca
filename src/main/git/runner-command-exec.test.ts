@@ -232,6 +232,22 @@ describe('runner execFile timeout handling', () => {
     expect(child.kill).toHaveBeenCalled()
   })
 
+  it('kills an active gh execution when its caller aborts', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+
+    controller.abort()
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
   it('honors explicit gh timeouts', async () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)

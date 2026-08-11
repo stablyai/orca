@@ -76,6 +76,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
 import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
 import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
@@ -3592,30 +3593,35 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repoPath,
       options?.sourceContext
     )
-    return requestContext.target.kind === 'environment'
-      ? await callRuntimeRpc<PRCheckRunDetails | null>(
-          { kind: 'environment', environmentId: requestContext.target.environmentId },
-          'github.prCheckDetails',
-          {
-            repo: requestContext.target.runtimeRepoId,
+    const requestTarget = requestContext.target
+    return requestTarget.kind === 'environment'
+      ? await withGitHubCheckDetailsTimeout((signal) =>
+          callRuntimeRpc<PRCheckRunDetails | null>(
+            { kind: 'environment', environmentId: requestTarget.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: requestTarget.runtimeRepoId,
+              checkRunId: args.checkRunId,
+              workflowRunId: args.workflowRunId,
+              checkName: args.checkName,
+              url: args.url,
+              prRepo: args.prRepo ?? null
+            },
+            { timeoutMs: 30_000, signal }
+          )
+        )
+      : await withGitHubCheckDetailsTimeout(() =>
+          window.api.gh.prCheckDetails({
+            repoPath,
+            repoId,
             checkRunId: args.checkRunId,
             workflowRunId: args.workflowRunId,
             checkName: args.checkName,
             url: args.url,
-            prRepo: args.prRepo ?? null
-          },
-          { timeoutMs: 30_000 }
+            prRepo: args.prRepo ?? null,
+            sourceContext: options?.sourceContext
+          })
         )
-      : ((await window.api.gh.prCheckDetails({
-          repoPath,
-          repoId,
-          checkRunId: args.checkRunId,
-          workflowRunId: args.workflowRunId,
-          checkName: args.checkName,
-          url: args.url,
-          prRepo: args.prRepo ?? null,
-          sourceContext: options?.sourceContext
-        })) as PRCheckRunDetails | null)
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {

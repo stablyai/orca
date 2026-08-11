@@ -34,6 +34,9 @@
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     }
   },
+  "githubChecks": {
+    "retrying": "Retrying…"
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -251,7 +254,8 @@
           "51f15c37d3": "Cannot open directory: {{value0}}",
           "f2e00db373": "File not found: {{value0}}",
           "checkRunDetailsUnavailable": "No details are available for this check.",
-          "checkRunDetailsLoadFailed": "Failed to load check details."
+          "checkRunDetailsLoadFailed": "Failed to load check details.",
+          "checkRunDetailsRepoUnavailable": "Repository details are unavailable for this check."
         },
         "github": {
           "f129c42773": "GitHub did not return the new comment.",
@@ -1125,7 +1129,10 @@
           "activity": "Activity",
           "noActivity": "No activity yet."
         },
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "e15a8b77ef": "No inline details are available for this check.",
+        "e45324fbed": "Failed to load check details.",
+        "dcb3c546fe": "Retry"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -1614,7 +1621,10 @@
         "8ff5ae8866": "Assignees",
         "82c87eceb9": "Edit assignees",
         "1ff5d979df": "No one assigned",
-        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked."
+        "checkActionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
+        "6b1d5ee3e4": "No inline details are available for this check.",
+        "e04c027d98": "Failed to load check details.",
+        "5df7c41d2a": "Retry"
       },
       "QuickOpen": {
         "1dbd3f59ff": "Move",
@@ -3629,7 +3639,7 @@
           },
           "CaffeinateStatusSegment": {
             "on": "On",
-            "auto": "Auto",
+            "auto": "Agent",
             "off": "Off",
             "active": "Active",
             "inactive": "Inactive",
@@ -9500,8 +9510,8 @@
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
           "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
           "modeTitle": "Keep computer awake",
-          "modeDescriptionWindows": "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings.",
-          "modeDescriptionDefault": "Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
+          "modeDescriptionWindows": "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings.",
+          "modeDescriptionDefault": "Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent status hooks",
@@ -10563,7 +10573,7 @@
         },
         "AgentAwakeSetting": {
           "on": "On",
-          "auto": "Auto",
+          "auto": "Agent",
           "off": "Off"
         }
       },
@@ -11166,6 +11176,7 @@
                 "checksUnresolvedChip": "unresolved",
                 "checksUnresolvedStripHint": "These checks finished without a pass or fail verdict.",
                 "e15a8b77ef": "No inline details are available for this check.",
+                "dcb3c546fe": "Retry",
                 "679bf2093c": "Copy log excerpt",
                 "d713f500b2": "Log excerpt",
                 "a916648574": "Open details",
@@ -11232,7 +11243,7 @@
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
                 "b3195cba33": "Unmark author as bot",
                 "f588b46a6c": "Mark author as bot",
-                "checkDetailsLoadFailed": "Failed to load check details."
+                "e45324fbed": "Failed to load check details."
               },
               "empty": {
                 "state": {
@@ -14990,6 +15001,9 @@
         "loadFailed": "Failed to load the GitLab job log.",
         "emptyTrace": "No log is available for this GitLab job.",
         "timedOut": "Timed out loading the GitLab job log."
+      },
+      "githubCheckDetailsTimeout": {
+        "timedOut": "Timed out loading check details."
       }
     },
     "ssh": {

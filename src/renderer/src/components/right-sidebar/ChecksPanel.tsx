@@ -4553,6 +4553,7 @@ export default function ChecksPanel(): React.JSX.Element {
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
+          githubRepository={pr?.prRepo ?? null}
           getGitLabProjectRef={getGitLabProjectRef}
         />
       )}

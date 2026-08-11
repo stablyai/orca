@@ -1454,8 +1454,24 @@ const GH_RETRY_DELAYS_MS = [250, 1000] as const
 const GH_RETRY_AFTER_MAX_MS = 30_000
 const DEFAULT_GH_EXEC_TIMEOUT_MS = 30_000
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw createAbortError()
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(finish, ms)
+    const onAbort = (): void => finish(createAbortError())
+    function finish(error?: Error): void {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function defaultGhExecTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -1627,7 +1643,8 @@ export async function ghExecFileAsync(
         maxBuffer: options.maxBuffer,
         // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
         timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
-        env: nonInteractiveGhEnv(options.env)
+        env: nonInteractiveGhEnv(options.env),
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
@@ -1669,7 +1686,7 @@ export async function ghExecFileAsync(
           retryAfterMs !== null
             ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
             : GH_RETRY_DELAYS_MS[attempt]
-        await sleep(delayMs)
+        await sleep(delayMs, options.signal)
         continue
       }
       throw err

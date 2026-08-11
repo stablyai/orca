@@ -7,6 +7,9 @@
       "webDescription": "웹 클라이언트를 다시 시도하거나 페어링된 런타임에 다시 연결하세요."
     }
   },
+  "githubChecks": {
+    "retrying": "재시도 중…"
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -10751,7 +10754,7 @@
                 "actionRequiredHint": "이 검사는 병합 차단이 해제되기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
                 "b3195cba33": "작성자의 봇 지정 해제",
                 "f588b46a6c": "작성자를 봇으로 지정",
-                "checkDetailsLoadFailed": "체크 세부 정보를 불러오지 못했습니다."
+                "e45324fbed": "체크 세부 정보를 불러오지 못했습니다."
               },
               "empty": {
                 "state": {
