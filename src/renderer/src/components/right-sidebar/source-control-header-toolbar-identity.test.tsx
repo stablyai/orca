@@ -54,6 +54,8 @@ function renderToolbar(options?: {
       onCreatePrHeaderClick={vi.fn()}
       onOpenHostedReviewInChecks={vi.fn()}
       sourceControlViewMode="list"
+      sourceControlCompactFolders={false}
+      onToggleCompactFolders={vi.fn()}
       viewModeToggleDisabled={false}
       onToggleViewMode={vi.fn()}
       onChangeBaseRef={vi.fn()}

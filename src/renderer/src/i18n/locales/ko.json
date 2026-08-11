@@ -10676,7 +10676,9 @@
             "c7d4e2f801": "베이스 ref 변경: {{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "생성된 검토 세부 정보에 설명이 포함되지 않았습니다. PR 생성을 다시 시도하세요.",
-            "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요."
+            "createPrIntentGenerateDetailsFailed": "검토 세부 정보를 생성할 수 없습니다. PR 생성을 다시 시도하세요.",
+            "c93d5a7e24": "폴더 경로 펼치기",
+            "d04e6b8f35": "폴더 경로 합치기"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",

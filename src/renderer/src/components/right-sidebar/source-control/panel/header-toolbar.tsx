@@ -30,6 +30,8 @@ type SourceControlHeaderToolbarProps = {
   onCreatePrHeaderClick: () => void
   onOpenHostedReviewInChecks: () => void
   sourceControlViewMode: SourceControlViewMode
+  sourceControlCompactFolders: boolean
+  onToggleCompactFolders: () => void
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
   onChangeBaseRef: () => void
@@ -113,6 +115,8 @@ function renderOverflowMenu(
   props: Pick<
     SourceControlHeaderToolbarProps,
     | 'sourceControlViewMode'
+    | 'sourceControlCompactFolders'
+    | 'onToggleCompactFolders'
     | 'viewModeToggleDisabled'
     | 'onToggleViewMode'
     | 'onChangeBaseRef'
@@ -137,6 +141,8 @@ export function SourceControlHeaderToolbar({
   onCreatePrHeaderClick,
   onOpenHostedReviewInChecks,
   sourceControlViewMode,
+  sourceControlCompactFolders,
+  onToggleCompactFolders,
   viewModeToggleDisabled,
   onToggleViewMode,
   onChangeBaseRef,
@@ -156,6 +162,8 @@ export function SourceControlHeaderToolbar({
   const showCollapsedToolbar = !filterExpanded
   const overflowProps = {
     sourceControlViewMode,
+    sourceControlCompactFolders,
+    onToggleCompactFolders,
     viewModeToggleDisabled,
     onToggleViewMode,
     onChangeBaseRef,

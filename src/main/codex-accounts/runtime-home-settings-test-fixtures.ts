@@ -66,6 +66,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlCompactFolders: false,
     sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,

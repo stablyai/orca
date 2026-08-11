@@ -11,9 +11,9 @@ import {
 } from './file-filter'
 import {
   applyGitStatusEntryAreasToSourceControlTree,
+  applySourceControlFolderCompaction,
   buildGitStatusSourceControlTree,
   buildSourceControlTree,
-  compactSourceControlTree,
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
@@ -72,6 +72,7 @@ export function useSourceControlFileProjection({
   expandedSubmoduleKeys,
   submoduleStatusByKey,
   sourceControlViewMode,
+  sourceControlCompactFolders,
   collapsedSections
 }: {
   entries: GitStatusEntry[]
@@ -85,6 +86,7 @@ export function useSourceControlFileProjection({
   expandedSubmoduleKeys: Set<string>
   submoduleStatusByKey: Record<string, SubmoduleStatusState>
   sourceControlViewMode: SourceControlViewMode
+  sourceControlCompactFolders: boolean
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
   const grouped = useMemo(() => {
@@ -136,8 +138,9 @@ export function useSourceControlFileProjection({
     const roots: Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>> =
       {}
     for (const section of displaySections) {
-      const sectionRoots = compactSourceControlTree(
-        buildGitStatusSourceControlTree(section.area, section.items)
+      const sectionRoots = applySourceControlFolderCompaction(
+        buildGitStatusSourceControlTree(section.area, section.items),
+        sourceControlCompactFolders
       )
       roots[section.id] =
         section.id === 'conflicts'
@@ -148,7 +151,7 @@ export function useSourceControlFileProjection({
           : sectionRoots
     }
     return roots
-  }, [displaySections])
+  }, [displaySections, sourceControlCompactFolders])
 
   const visibleTreeRowsBySection = useMemo(() => {
     const rows: Partial<Record<SourceControlDisplaySectionId, RenderableSourceControlNode[]>> = {}
@@ -186,8 +189,12 @@ export function useSourceControlFileProjection({
   }, [displaySections, expandedSubmoduleKeys, submoduleStatusByKey])
 
   const branchTreeRoots = useMemo(
-    () => compactSourceControlTree(buildSourceControlTree('branch', filteredBranchEntries)),
-    [filteredBranchEntries]
+    () =>
+      applySourceControlFolderCompaction(
+        buildSourceControlTree('branch', filteredBranchEntries),
+        sourceControlCompactFolders
+      ),
+    [filteredBranchEntries, sourceControlCompactFolders]
   )
   const visibleBranchTreeRows = useMemo(
     () => flattenSourceControlTree(branchTreeRoots, collapsedTreeDirs),

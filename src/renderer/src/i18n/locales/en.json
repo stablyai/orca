@@ -11789,7 +11789,9 @@
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "c93d5a7e24": "Expand folder paths",
+            "d04e6b8f35": "Compact folder paths"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

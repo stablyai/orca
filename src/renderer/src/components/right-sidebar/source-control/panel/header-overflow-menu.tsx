@@ -1,5 +1,14 @@
 import React from 'react'
-import { List, ListTree, MessageSquare, MoreHorizontal, RefreshCw, Settings2 } from 'lucide-react'
+import {
+  Folder,
+  FolderTree,
+  List,
+  ListTree,
+  MessageSquare,
+  MoreHorizontal,
+  RefreshCw,
+  Settings2
+} from 'lucide-react'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,6 +23,8 @@ import { translate } from '@/i18n/i18n'
 
 export function SourceControlHeaderOverflowMenu({
   sourceControlViewMode,
+  sourceControlCompactFolders,
+  onToggleCompactFolders,
   viewModeToggleDisabled,
   onToggleViewMode,
   onChangeBaseRef,
@@ -23,6 +34,8 @@ export function SourceControlHeaderOverflowMenu({
   onExpandNotes
 }: {
   sourceControlViewMode: SourceControlViewMode
+  sourceControlCompactFolders: boolean
+  onToggleCompactFolders: () => void
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
   onChangeBaseRef: () => void
@@ -35,6 +48,10 @@ export function SourceControlHeaderOverflowMenu({
     sourceControlViewMode === 'tree'
       ? translate('auto.components.right.sidebar.SourceControl.a91f8e2b01', 'View as list')
       : translate('auto.components.right.sidebar.SourceControl.b82e9f3c12', 'View as tree')
+  // Compaction only changes how a tree draws folder chains, so it is inert in list view.
+  const compactFoldersLabel = sourceControlCompactFolders
+    ? translate('auto.components.right.sidebar.SourceControl.c93d5a7e24', 'Expand folder paths')
+    : translate('auto.components.right.sidebar.SourceControl.d04e6b8f35', 'Compact folder paths')
 
   return (
     <DropdownMenu>
@@ -72,6 +89,17 @@ export function SourceControlHeaderOverflowMenu({
             <ListTree className="size-3.5" />
           )}
           {viewModeLabel}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          disabled={viewModeToggleDisabled || sourceControlViewMode !== 'tree'}
+          onSelect={onToggleCompactFolders}
+        >
+          {sourceControlCompactFolders ? (
+            <FolderTree className="size-3.5" />
+          ) : (
+            <Folder className="size-3.5" />
+          )}
+          {compactFoldersLabel}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onChangeBaseRef}>
           <Settings2 className="size-3.5" />

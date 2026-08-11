@@ -10678,7 +10678,9 @@
             "c7d4e2f801": "更改基引用：{{value0}}",
             "f3a1b8c204": "upstream",
             "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
-            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
+            "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。",
+            "c93d5a7e24": "展开文件夹路径",
+            "d04e6b8f35": "合并文件夹路径"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",

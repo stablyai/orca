@@ -218,6 +218,18 @@ export function compactSourceControlTree<Entry extends SourceControlTreeEntry, A
   return nodes.map((node) => compactNode(node, 0))
 }
 
+// Why: every Source Control tree honors one per-user "compact folders" preference,
+// so the conditional lives here instead of being re-derived at each call site.
+export function applySourceControlFolderCompaction<
+  Entry extends SourceControlTreeEntry,
+  Area extends string
+>(
+  nodes: SourceControlTreeNode<Entry, Area>[],
+  compactFolders: boolean
+): SourceControlTreeNode<Entry, Area>[] {
+  return compactFolders ? compactSourceControlTree(nodes) : nodes
+}
+
 export function namespaceSourceControlTreeDirectoryKeys<
   Entry extends SourceControlTreeEntry,
   Area extends string
