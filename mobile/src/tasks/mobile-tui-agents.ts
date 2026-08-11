@@ -39,6 +39,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'rovo',
   'hermes',
   'devin',
+  'reasonix',
   'openclaw'
 ] as const satisfies readonly TuiAgent[]
 
@@ -78,6 +79,7 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
   devin: 'Devin',
+  reasonix: 'Reasonix',
   openclaw: 'OpenClaw'
 }
 
@@ -112,6 +114,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   rovo: 'atlassian.com',
   hermes: 'nousresearch.com',
   devin: 'devin.ai',
+  reasonix: 'reasonix.io',
   openclaw: 'openclaw.ai'
 }
 

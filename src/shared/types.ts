@@ -2745,6 +2745,7 @@ export type TuiAgent =
   | 'copilot' // GitHub Copilot CLI
   | 'grok' // xAI Grok CLI
   | 'devin' // Devin CLI
+  | 'reasonix' // Reasonix CLI
   | 'ante' // Ante (Antigma Labs)
   | 'trae' // Trae CLI
   | 'prime-agent' // Prime Agent (Prime Intellect)

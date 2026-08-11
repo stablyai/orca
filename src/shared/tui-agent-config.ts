@@ -327,6 +327,15 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  reasonix: {
+    detectCmd: 'reasonix',
+    launchCmd: 'reasonix',
+    expectedProcess: 'reasonix',
+    // Why: bare `reasonix` opens the interactive TUI; positional prompts seed the composer.
+    promptInjectionMode: 'argv',
+    // Why: separator so prompts starting with flags/subcommands aren't parsed as CLI syntax.
+    argvPromptSeparator: '--'
   }
 }
 

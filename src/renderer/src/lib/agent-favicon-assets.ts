@@ -23,6 +23,7 @@ import qwenCodeUrl from '../../../shared/agent-icons/qwen-code.png?url'
 import rovoUrl from '../../../shared/agent-icons/rovo.png?url'
 import hermesUrl from '../../../shared/agent-icons/hermes.png?url'
 import devinUrl from '../../../shared/agent-icons/devin.png?url'
+import reasonixUrl from '../../../shared/agent-icons/reasonix.png?url'
 import openclawUrl from '../../../shared/agent-icons/openclaw.png?url'
 
 // Why: these agents have no hand-authored SVG glyph, so previously their icons
@@ -57,5 +58,6 @@ export const AGENT_FAVICON_ASSETS: Partial<Record<TuiAgent, string>> = {
   rovo: rovoUrl,
   hermes: hermesUrl,
   devin: devinUrl,
+  reasonix: reasonixUrl,
   openclaw: openclawUrl
 }

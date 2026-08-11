@@ -301,6 +301,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://devin.ai/cli'
   },
   {
+    id: 'reasonix',
+    label: translate('auto.lib.agent.catalog.reasonix_label', 'Reasonix'),
+    cmd: 'reasonix',
+    faviconDomain: 'reasonix.io',
+    homepageUrl: 'https://reasonix.io/docs/'
+  },
+  {
     id: 'openclaw',
     label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
     cmd: 'openclaw',

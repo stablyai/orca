@@ -102,6 +102,7 @@ export const AGENT_KIND_VALUES = [
   'copilot',
   'grok',
   'devin',
+  'reasonix',
   'ante',
   'trae',
   'other'
