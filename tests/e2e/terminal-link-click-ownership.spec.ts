@@ -93,11 +93,8 @@ async function expectChildMouseReports(mouseLogPath: string): Promise<void> {
 }
 
 async function expectOrcaOwnedMouseOutcome(mouseLogPath: string): Promise<void> {
-  if (process.env.ORCA_EXPECT_LINK_CLICK_CHILD_MOUSE === '1') {
-    await expectChildMouseReports(mouseLogPath)
-    return
-  }
-  await expect.poll(() => childMouseReportCount(mouseLogPath), { timeout: 1_000 }).toBe(0)
+  await new Promise<void>((resolve) => setTimeout(resolve, 1_000))
+  expect(childMouseReportCount(mouseLogPath)).toBe(0)
 }
 
 test.describe('terminal link click ownership', () => {
