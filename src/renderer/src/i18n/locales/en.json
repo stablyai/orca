@@ -10744,7 +10744,13 @@
             "b25f63edd7": "open",
             "d2ca293f3d": "Working...",
             "ef064cb7c3": "default",
-            "59b4dccf70": "destructive"
+            "59b4dccf70": "destructive",
+            "9a41a687b7": "Queue through #{{pr}} · {{count}} PR",
+            "38a1bccb14": "Queue through #{{pr}} · {{count}} PRs",
+            "3de88351c5": "GitHub will add this pull request and every pull request below it to the merge queue.",
+            "a32fe6dba6": "GitHub will merge this pull request and every pull request below it in the stack.",
+            "73e0e1819d": "Queueing stack...",
+            "e555a41d32": "Merging stack..."
           },
           "PortsPanel": {
             "3ea4a02a8f": "Cancel",
@@ -11908,6 +11914,34 @@
                   "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
                 }
               }
+            },
+            "pr": {
+              "stack": {
+                "confirmation": {
+                  "84f6f5b9eb": "Included: {{numbers}}. ",
+                  "541984b2eb": "Queue through #{{pr}}?",
+                  "4809f55cdb": "{{included}}GitHub will add {{count}} pull request to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+                  "be8f2621be": "{{included}}GitHub will add {{count}} pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+                  "92ca033e72": "Queue {{count}} PR",
+                  "478a527b15": "Queue {{count}} PRs",
+                  "1feef35ca4": "Merge through #{{pr}}?",
+                  "c3e036c99f": "{{included}}GitHub will merge {{count}} pull request atomically using {{method}}. If it cannot merge, nothing will be merged.",
+                  "369aba4b32": "{{included}}GitHub will merge {{count}} pull requests atomically using {{method}}. If any cannot merge, none will.",
+                  "493c78f521": "Merge {{count}} PR",
+                  "eb7051d268": "Merge {{count}} PRs"
+                },
+                "merge": {
+                  "55ae29b907": "Merge through #{{pr}} · {{count}} PR",
+                  "b8446f6ec2": "Merge through #{{pr}} · {{count}} PRs",
+                  "189d0ec614": "#{{pr}} is still a draft.",
+                  "640fb50d9c": "#{{pr}} is closed.",
+                  "46ffcbda75": "#{{pr}} has merge conflicts.",
+                  "6dabefd63e": "#{{pr}} has requested changes.",
+                  "2bb21fc326": "#{{pr}} still needs review approval.",
+                  "c23faf74df": "#{{pr}} must be updated.",
+                  "f561e80968": "#{{pr}} is blocked."
+                }
+              }
             }
           },
           "PluginPanel": {
@@ -11926,6 +11960,23 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "GitHubPRStackMap": {
+            "3511405914": "closed",
+            "8a9bdc36c0": "merged",
+            "568c647ccd": "draft",
+            "bea9ade223": "conflicts",
+            "838aadf512": "checks failed",
+            "316039b5db": "checks pending",
+            "4b1e5ee9d3": "changes requested",
+            "9a17b5255c": "review needed",
+            "d3d97cf3f2": "approved",
+            "e6cb964305": "open",
+            "7737bd66be": "Collapse stack #{{value0}}",
+            "0c1645ebd0": "Expand stack #{{value0}}",
+            "e3ee2daa32": "Stack #{{value0}}",
+            "cb440931b7": "{{value0}} of {{value1}} · {{value2}}",
+            "525259fa17": "Stack details are temporarily unavailable."
           }
         }
       },

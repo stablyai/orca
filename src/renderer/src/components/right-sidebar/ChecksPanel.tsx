@@ -42,6 +42,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
+import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
   PullRequestIcon,
   prStateColor,
@@ -3734,6 +3735,18 @@ export default function ChecksPanel(): React.JSX.Element {
     [activeReview, activeWorktreeId]
   )
 
+  const handleOpenStackPR = useCallback(
+    (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => {
+      openChecksPanelHostedReviewUrl({
+        url,
+        event: modifiers,
+        isMac: isMacPlatform(),
+        worktreeId: activeWorktreeId
+      })
+    },
+    [activeWorktreeId]
+  )
+
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
       return
@@ -4436,6 +4449,14 @@ export default function ChecksPanel(): React.JSX.Element {
         />
 
         {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
+
+        {activeReview.provider === 'github' && pr?.stack ? (
+          <GitHubPRStackMap
+            stack={pr.stack}
+            currentPRNumber={pr.number}
+            onOpenPullRequest={handleOpenStackPR}
+          />
+        ) : null}
 
         {/* Review title */}
         {editingTitle ? (
