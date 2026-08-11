@@ -8,7 +8,6 @@
 // `message` + `part` rows to NativeChatMessages and pages by a stable ordinal
 // window (read query-only, schema-guarded, malformed-tolerant).
 
-
 import { statSync } from 'node:fs'
 import { isAbsolute, join } from 'node:path'
 import type {
@@ -162,14 +161,14 @@ function openCodePartBlocks(partData: string | null): {
   return { blocks, reasoningText }
 }
 
-/** Map one SQLite message row (with its parts) to a NativeChatMessage, or null
+/** Map one SQLite message row (with its parts) to NativeChatMessages, or null
  *  when the row is not a conversational turn (unknown role, no mapable parts,
  *  malformed JSON — all tolerated, never thrown). */
-export function mapOpenCodeNativeChatMessage(
+export function mapOpenCodeNativeChatMessages(
   message: OpenCodeMessageRow,
   parts: OpenCodePartRow[],
   signal?: AbortSignal
-): NativeChatMessage | null {
+): NativeChatMessage[] | null {
   signal?.throwIfAborted()
   const dataRecord = parseJsonObject(message.data ?? '')
   const role = extractString(dataRecord?.role)
@@ -198,23 +197,38 @@ export function mapOpenCodeNativeChatMessage(
     }
     // Why: a message holding only reasoning reads as a thinking bubble, matching
     // the Codex decoder's reasoning-role handling.
-    return {
-      id: message.id,
-      role: 'reasoning',
-      blocks: [{ type: 'text', text: reasoningText.join('\n') }],
-      timestamp,
-      source: 'transcript'
-    }
+    return [
+      {
+        id: message.id,
+        role: 'reasoning',
+        blocks: [{ type: 'text', text: reasoningText.join('\n') }],
+        timestamp,
+        source: 'transcript'
+      }
+    ]
   }
 
   const messageRole: NativeChatRole = role === 'assistant' ? 'assistant' : 'user'
-  return {
+  const visibleMessage: NativeChatMessage = {
     id: message.id,
     role: messageRole,
     blocks,
     timestamp,
     source: 'transcript'
   }
+  if (reasoningText.length === 0) {
+    return [visibleMessage]
+  }
+  return [
+    {
+      id: `${message.id}:reasoning`,
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: reasoningText.join('\n') }],
+      timestamp,
+      source: 'transcript'
+    },
+    visibleMessage
+  ]
 }
 
 /** Stable content signature for one message; the live reconcile compares it to
@@ -234,5 +248,5 @@ export async function readOpenCodeNativeChatTranscriptTail(args: {
   signal?: AbortSignal
 }): Promise<OpenCodeReadResult> {
   args.signal?.throwIfAborted()
-  return readOpenCodeNativeChatTranscript(args, mapOpenCodeNativeChatMessage)
+  return readOpenCodeNativeChatTranscript(args, mapOpenCodeNativeChatMessages)
 }

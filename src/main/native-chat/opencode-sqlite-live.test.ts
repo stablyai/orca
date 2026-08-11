@@ -57,11 +57,11 @@ function applyOpenCodeSchema(db: DatabaseSync): void {
   `)
 }
 
-function insertSession(db: DatabaseSync, id: string): void {
+function insertSession(db: DatabaseSync, id: string, timeCreated = 1_777_634_000_000): void {
   db.prepare(
     `INSERT INTO session (id, project_id, directory, title, time_created, time_updated)
-     VALUES (?, 'proj-1', '/work', 'S', 1_777_634_000_000, 1_777_634_000_000)`
-  ).run(id)
+     VALUES (?, 'proj-1', '/work', 'S', ?, ?)`
+  ).run(id, timeCreated, timeCreated)
 }
 
 function upsertMessage(
@@ -146,6 +146,40 @@ describe('reconcileOpenCodeNativeChat', () => {
       onAppend: (messages) => appends.push(messages)
     })
     expect(appends).toEqual([])
+  })
+  it('keeps a valid empty session live until its first message arrives', async () => {
+    vi.useFakeTimers()
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_empty')
+    db.close()
+
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    const subscription = subscribeOpenCodeNativeChatTranscript({
+      dbPath: path,
+      sessionId: 'ses_empty',
+      reconciliationIntervalMs: 1_000,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: (messages) => appends.push(messages)
+    })
+    await vi.advanceTimersByTimeAsync(40)
+    expect(snapshots).toEqual([[]])
+
+    const db2 = new DatabaseSync(path)
+    upsertMessage(db2, { id: 'm1', sessionId: 'ses_empty', role: 'user', timeCreated: 1 })
+    upsertPart(db2, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_empty',
+      timeCreated: 1,
+      data: textPart('first message')
+    })
+    db2.close()
+
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(appends).toEqual([[expect.objectContaining({ id: 'm1', role: 'user' })]])
+    subscription.unsubscribe()
   })
 
   it('re-emits a mutated streaming part under the SAME stable id', async () => {
@@ -436,13 +470,15 @@ it('aborts SQLite paging when the read signal is canceled', async () => {
         if (mapped === 1) {
           controller.abort()
         }
-        return {
-          id: message.id,
-          role: 'user',
-          blocks: [{ type: 'text', text: 'mapped' }],
-          timestamp: message.time_created,
-          source: 'transcript'
-        }
+        return [
+          {
+            id: message.id,
+            role: 'user',
+            blocks: [{ type: 'text', text: 'mapped' }],
+            timestamp: message.time_created,
+            source: 'transcript'
+          }
+        ]
       }
     )
   ).rejects.toMatchObject({ name: 'AbortError' })

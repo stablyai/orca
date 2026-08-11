@@ -125,9 +125,12 @@ describe('isAgentScratchRepoRootPath', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/app/.gsd-workspaces/phase-1')).toBe(true)
   })
 
-  it('matches Windows separators and casing', () => {
+  it('matches Windows separators and casing for Codex scratch roots', () => {
     expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.codex-tmp\\Capsule-X')).toBe(true)
-    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.Claude\\Skills\\foo')).toBe(true)
+  })
+
+  it('does not classify Claude Skills as a scratch repo root', () => {
+    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.Claude\\Skills\\foo')).toBe(false)
   })
 
   it('does not match ordinary user repos', () => {

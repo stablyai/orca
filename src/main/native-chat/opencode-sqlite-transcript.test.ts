@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   canReadOpenCodeChatSession,
-  mapOpenCodeNativeChatMessage,
+  mapOpenCodeNativeChatMessages,
   openCodeMessageSignature,
   readOpenCodeNativeChatTranscriptTail,
   isRetryableOpenCodeSqliteError
@@ -114,9 +114,9 @@ const toolData = (status: 'pending' | 'completed' | 'error', tool = 'bash'): str
     }
   })
 
-describe('mapOpenCodeNativeChatMessage', () => {
+describe('mapOpenCodeNativeChatMessages', () => {
   it('maps a user text prompt with a stable id and timestamp', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_1', time_created: 1_777_634_000_500, data: JSON.stringify({ role: 'user' }) },
       [
         {
@@ -126,7 +126,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'text', text: 'Plan the work' })
         }
       ]
-    )
+    )?.[0]
     expect(message).toMatchObject({
       id: 'msg_1',
       role: 'user',
@@ -137,7 +137,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('maps assistant text plus tool call and result blocks', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_2', time_created: 1_777_634_001_000, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -153,7 +153,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: toolData('completed')
         }
       ]
-    )
+    )?.[0]
     expect(message?.role).toBe('assistant')
     expect(message?.blocks).toEqual([
       { type: 'text', text: 'Running it now' },
@@ -163,7 +163,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('marks a failed tool with an error result', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_2', time_created: 1_777_634_001_000, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -173,7 +173,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: toolData('error')
         }
       ]
-    )
+    )?.[0]
     expect(message?.blocks).toEqual([
       { type: 'tool-call', name: 'bash', input: { command: 'ls' } },
       { type: 'tool-result', output: 'command failed', isError: true }
@@ -181,7 +181,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('shows a pending tool as a bare tool-call', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_2', time_created: 1_777_634_001_000, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -191,12 +191,12 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: toolData('pending')
         }
       ]
-    )
+    )?.[0]
     expect(message?.blocks).toEqual([{ type: 'tool-call', name: 'bash', input: { command: 'ls' } }])
   })
 
   it('maps reasoning-only messages to the reasoning role', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_3', time_created: 1_777_634_001_200, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -206,13 +206,53 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'reasoning', text: 'think step by step' })
         }
       ]
-    )
+    )?.[0]
     expect(message).toMatchObject({ id: 'msg_3', role: 'reasoning' })
     expect(message?.blocks).toEqual([{ type: 'text', text: 'think step by step' }])
   })
+  it('preserves reasoning before visible content for mixed parts', () => {
+    const row = {
+      id: 'msg_mixed',
+      time_created: 1_777_634_001_250,
+      data: JSON.stringify({ role: 'assistant' })
+    }
+    const parts = [
+      {
+        id: 'part_reasoning',
+        message_id: row.id,
+        time_created: row.time_created,
+        data: JSON.stringify({ type: 'reasoning', text: 'considering the change' })
+      },
+      {
+        id: 'part_text',
+        message_id: row.id,
+        time_created: 1_777_634_001_300,
+        data: JSON.stringify({ type: 'text', text: 'implemented the change' })
+      }
+    ]
+    const first = mapOpenCodeNativeChatMessages(row, parts)
+    const second = mapOpenCodeNativeChatMessages(row, parts)
+    expect(first).toMatchObject([
+      {
+        id: 'msg_mixed:reasoning',
+        role: 'reasoning',
+        timestamp: row.time_created,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'considering the change' }]
+      },
+      {
+        id: 'msg_mixed',
+        role: 'assistant',
+        timestamp: row.time_created,
+        source: 'transcript',
+        blocks: [{ type: 'text', text: 'implemented the change' }]
+      }
+    ])
+    expect(second).toEqual(first)
+  })
 
   it('surfaces patch activity as a patch tool-call', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_4', time_created: 1_777_634_001_300, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -226,7 +266,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
           })
         }
       ]
-    )
+    )?.[0]
     expect(message?.blocks).toEqual([
       {
         type: 'tool-call',
@@ -237,7 +277,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('ignores lifecycle noise parts (step-start, step-finish) when the message has real content', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       { id: 'msg_5', time_created: 1_777_634_001_400, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -253,18 +293,18 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'text', text: 'final answer' })
         }
       ]
-    )
+    )?.[0]
     expect(message?.blocks).toEqual([{ type: 'text', text: 'final answer' }])
   })
 
   it('tolerates malformed message and part JSON without throwing', () => {
     expect(
-      mapOpenCodeNativeChatMessage(
+      mapOpenCodeNativeChatMessages(
         { id: 'msg_bad', time_created: 1_777_634_001_500, data: '{not json' },
         []
       )
     ).toBeNull()
-    const valid = mapOpenCodeNativeChatMessage(
+    const valid = mapOpenCodeNativeChatMessages(
       { id: 'msg_ok', time_created: 1_777_634_001_600, data: JSON.stringify({ role: 'user' }) },
       [
         {
@@ -280,13 +320,13 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'text', text: 'still works' })
         }
       ]
-    )
+    )?.[0]
     expect(valid?.blocks).toEqual([{ type: 'text', text: 'still works' }])
   })
 
   it('returns null for unknown roles and for no mapable content', () => {
     expect(
-      mapOpenCodeNativeChatMessage(
+      mapOpenCodeNativeChatMessages(
         {
           id: 'msg_sys',
           time_created: 1_777_634_001_000,
@@ -296,7 +336,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
       )
     ).toBeNull()
     expect(
-      mapOpenCodeNativeChatMessage(
+      mapOpenCodeNativeChatMessages(
         {
           id: 'msg_empty',
           time_created: 1_777_634_001_000,
@@ -315,7 +355,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('caps oversized text and tool output rather than shipping them whole', () => {
-    const message = mapOpenCodeNativeChatMessage(
+    const message = mapOpenCodeNativeChatMessages(
       {
         id: 'msg_big',
         time_created: 1_777_634_001_000,
@@ -339,7 +379,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
           })
         }
       ]
-    )
+    )?.[0]
     const textBlock = message?.blocks[0]
     expect(textBlock?.type === 'text' ? textBlock.text.length : 0).toBeLessThan(70_000)
     const resultBlock = message?.blocks[1]
@@ -349,7 +389,7 @@ describe('mapOpenCodeNativeChatMessage', () => {
   })
 
   it('produces a content signature that tracks mutable parts', () => {
-    const base = mapOpenCodeNativeChatMessage(
+    const base = mapOpenCodeNativeChatMessages(
       { id: 'msg_s', time_created: 1_777_634_001_000, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -359,8 +399,8 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'text', text: 'stream' })
         }
       ]
-    )!
-    const extended = mapOpenCodeNativeChatMessage(
+    )?.[0]
+    const extended = mapOpenCodeNativeChatMessages(
       { id: 'msg_s', time_created: 1_777_634_001_000, data: JSON.stringify({ role: 'assistant' }) },
       [
         {
@@ -370,7 +410,11 @@ describe('mapOpenCodeNativeChatMessage', () => {
           data: JSON.stringify({ type: 'text', text: 'streaming more' })
         }
       ]
-    )!
+    )?.[0]
+    expect(base && extended).toBeTruthy()
+    if (!base || !extended) {
+      return
+    }
     expect(openCodeMessageSignature(base)).not.toBe(openCodeMessageSignature(extended))
   })
 })

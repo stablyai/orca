@@ -527,6 +527,7 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     mkdirSync(join(overlayDir, 'node_modules', 'opencode-runtime'), { recursive: true })
     writeFileSync(join(overlayDir, 'node_modules', 'opencode-runtime', 'index.js'), '')
 
+    rmSync(join(userConfigDir, 'opencode.json'), { force: true })
     rmSync(join(userConfigDir, 'auth.json'), { force: true })
     writeFileSync(join(userConfigDir, 'auth.json'), 'rotated-user-auth-token')
     rmSync(join(userConfigDir, 'plugins', 'user-plugin.js'), { force: true })
@@ -535,11 +536,18 @@ describe('OpenCodeHookService overlay mode (user OPENCODE_CONFIG_DIR set)', () =
     const secondEnv = service.buildPtyEnv(ptyId, userConfigDir)
 
     expect(secondEnv.OPENCODE_CONFIG_DIR).toBe(overlayDir)
+    expect(existsSync(join(overlayDir, 'opencode.json'))).toBe(false)
     expect(readFileSync(join(overlayDir, 'auth.json'), 'utf8')).toBe('rotated-user-auth-token')
     expect(existsSync(join(overlayDir, 'plugins', 'user-plugin.js'))).toBe(false)
     expect(readFileSync(join(overlayDir, 'plugins', 'new-plugin.js'), 'utf8')).toBe(
       'export default "new"'
     )
     expect(existsSync(join(overlayDir, 'node_modules', 'opencode-runtime', 'index.js'))).toBe(true)
+    expect(
+      JSON.parse(readFileSync(join(overlayDir, '.orca-opencode-overlay-manifest.json'), 'utf8'))
+    ).toEqual({
+      topLevelEntries: ['auth.json'],
+      pluginEntries: ['new-plugin.js']
+    })
   })
 })

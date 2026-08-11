@@ -1161,6 +1161,7 @@ export class OpenCodeHookService {
 
       removeExistingMirrorLink(join(overlayDir, entry.name), overlayDir)
       mirrorEntry(sourcePath, join(overlayDir, entry.name))
+      nextManifest.topLevelEntries.push(entry.name)
     }
 
     this.writeOverlayManifest(overlayDir, nextManifest)

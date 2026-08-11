@@ -616,6 +616,19 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(output).toContain('PROMPT_ARRAY')
     expectBashOsc133Lifecycle(output)
   })
+  itWithBash('preserves quoted semicolons in PROMPT_COMMAND hooks', async () => {
+    const { getBashShellReadyRcfileContent } = await importFreshLocalPtyShellReady()
+    writeFileSync(
+      join(userDataPath, '.bash_profile'),
+      'PROMPT_COMMAND=\'printf "%s\\n" "left;   ;right"; printf "PROMPT_QUOTED\\n"\'\n'
+    )
+
+    const output = runInteractiveBashRcfile(getBashShellReadyRcfileContent(), userDataPath)
+
+    expect(output).toContain('left;   ;right')
+    expect(output).toContain('PROMPT_QUOTED')
+    expectBashOsc133Lifecycle(output)
+  })
 
   it('preserves a real inherited ZDOTDIR as ORCA_ORIG_ZDOTDIR', async () => {
     const previousZdotdir = process.env.ZDOTDIR

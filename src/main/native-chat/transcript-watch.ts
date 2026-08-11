@@ -197,10 +197,14 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  const agent = resolveNativeChatTranscriptAgent(args.agent)
   const decode = nativeChatLineDecoderForAgent(args.agent)
+  if (agent === 'opencode' && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
   // Why: OpenCode keeps conversations in SQLite, not a JSONL file, so live
   // updates come from a poll-based reconcile loop instead of fs.watch on a file.
-  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+  if (agent === 'opencode') {
     return subscribeOpenCodeNativeChatTranscript({
       dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
       sessionId: args.sessionId,

@@ -26,7 +26,7 @@ export type OpenCodeMessageMapper = (
   message: OpenCodeMessageRow,
   parts: OpenCodePartRow[],
   signal?: AbortSignal
-) => NativeChatMessage | null
+) => NativeChatMessage[] | null
 
 function dedupeMappedOpenCodeMessages(
   mapped: readonly OpenCodeMappedMessage[]
@@ -115,9 +115,11 @@ function mapOpenCodeWindowMessages(
   const mapped: OpenCodeMappedMessage[] = []
   for (const [index, row] of messageRows.entries()) {
     signal?.throwIfAborted()
-    const message = mapMessage(row, partsByMessage.get(row.id) ?? [], signal)
-    if (message) {
-      mapped.push({ offset: offset + index, message })
+    const messages = mapMessage(row, partsByMessage.get(row.id) ?? [], signal)
+    if (messages) {
+      for (const message of messages) {
+        mapped.push({ offset: offset + index, message })
+      }
     }
   }
   return dedupeMappedOpenCodeMessages(mapped)

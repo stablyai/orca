@@ -15,6 +15,11 @@ import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-
 import type { FileWithMtime } from './session-scanner-types'
 const OPEN_CODE_DATABASE_NAME = /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i
 
+type CanonicalOpenCodeSession = {
+  dbPath: string
+  sessionId?: string
+}
+
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
   filePath: string
@@ -24,13 +29,9 @@ export type ReadAiVaultFirstUserPromptArgs = {
 }
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
-async function canonicalOpenCodeDatabasePath(filePath: string): Promise<string | null> {
-  const synthetic = splitOpenCodeSqliteCandidate(filePath)
-  const requestedPath = (synthetic?.dbPath ?? filePath).trim()
-  if (!requestedPath) {
-    return null
-  }
-
+async function canonicalOpenCodeDatabasePath(
+  filePath: string
+): Promise<CanonicalOpenCodeSession | null> {
   const dataDirectory = resolveOpenCodeDataDirectory()
   const configured = process.env.OPENCODE_DB?.trim()
   const configuredPath =
@@ -39,6 +40,12 @@ async function canonicalOpenCodeDatabasePath(filePath: string): Promise<string |
         ? configured
         : join(dataDirectory, configured)
       : null
+  const synthetic = splitOpenCodeSqliteCandidate(filePath, configuredPath ?? undefined)
+  const requestedPath = (synthetic?.dbPath ?? filePath).trim()
+  if (!requestedPath) {
+    return null
+  }
+
   const canonicalPath = await realpath(requestedPath).catch(() => null)
   if (!canonicalPath) {
     return null
@@ -46,7 +53,7 @@ async function canonicalOpenCodeDatabasePath(filePath: string): Promise<string |
   if (configuredPath) {
     const configuredCanonicalPath = await realpath(configuredPath).catch(() => null)
     if (configuredCanonicalPath === canonicalPath) {
-      return synthetic ? `${canonicalPath}#${synthetic.sessionId}` : canonicalPath
+      return { dbPath: canonicalPath, sessionId: synthetic?.sessionId }
     }
   }
   if (!OPEN_CODE_DATABASE_NAME.test(basename(canonicalPath))) {
@@ -69,7 +76,7 @@ async function canonicalOpenCodeDatabasePath(filePath: string): Promise<string |
   if (!canonicalRoots.some((root) => root === canonicalParent)) {
     return null
   }
-  return synthetic ? `${canonicalPath}#${synthetic.sessionId}` : canonicalPath
+  return { dbPath: canonicalPath, sessionId: synthetic?.sessionId }
 }
 
 /**
@@ -90,11 +97,14 @@ export async function readAiVaultFirstUserPrompt(
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
   }
+  let sessionId = args.sessionId?.trim() || undefined
   if (args.agent === 'opencode') {
-    filePath = (await canonicalOpenCodeDatabasePath(filePath).catch(() => null)) ?? ''
-    if (!filePath) {
+    const canonicalSession = await canonicalOpenCodeDatabasePath(filePath).catch(() => null)
+    if (!canonicalSession) {
       return { prompt: null }
     }
+    filePath = canonicalSession.dbPath
+    sessionId = sessionId ?? canonicalSession.sessionId
   }
 
   // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
@@ -105,7 +115,7 @@ export async function readAiVaultFirstUserPrompt(
       parseSessionForFullFirstUserPrompt({
         agent: args.agent,
         filePath,
-        sessionId: args.sessionId?.trim() || undefined,
+        sessionId,
         codexHome: args.codexHome ?? null
       })
     )
@@ -128,17 +138,17 @@ async function parseSessionForFullFirstUserPrompt(args: {
   // earliest user row (worker list-scan path only joins newest messages).
   if (args.agent === 'opencode') {
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
+    if (args.sessionId) {
+      return parseOpenCodeSqliteSession({
+        dbPath: fromSynthetic?.dbPath ?? args.filePath,
+        sessionId: args.sessionId,
+        platform: process.platform
+      })
+    }
     if (fromSynthetic) {
       return parseOpenCodeSqliteSession({
         dbPath: fromSynthetic.dbPath,
         sessionId: fromSynthetic.sessionId,
-        platform: process.platform
-      })
-    }
-    if (args.sessionId) {
-      return parseOpenCodeSqliteSession({
-        dbPath: args.filePath,
-        sessionId: args.sessionId,
         platform: process.platform
       })
     }

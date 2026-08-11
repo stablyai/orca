@@ -16,9 +16,19 @@ describe('splitOpenCodeSqliteCandidate', () => {
     expect(result).toEqual({ dbPath: '/data/opencode-stable.db', sessionId: 'ses_xyz' })
   })
 
-  it('rejects a path whose db basename is not opencode*.db', () => {
+  it('rejects a path whose db basename is not opencode*.db without trust context', () => {
     expect(splitOpenCodeSqliteCandidate('/data/random.db#ses_abc')).toBeNull()
     expect(splitOpenCodeSqliteCandidate('/data/notes.txt#ses_abc')).toBeNull()
+  })
+
+  it('accepts a custom basename only for the exact configured database path', () => {
+    const candidate = '/data/sessions.sqlite#ses_custom'
+    expect(splitOpenCodeSqliteCandidate(candidate)).toBeNull()
+    expect(splitOpenCodeSqliteCandidate(candidate, '/data/sessions.sqlite')).toEqual({
+      dbPath: '/data/sessions.sqlite',
+      sessionId: 'ses_custom'
+    })
+    expect(splitOpenCodeSqliteCandidate(candidate, '/data/other.sqlite')).toBeNull()
   })
 
   it('rejects a path without a separator', () => {

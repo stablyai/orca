@@ -185,33 +185,47 @@ __orca_osc133_epilogue() {
   esac
   trap '__orca_osc133_preexec' DEBUG
 }
-# Why: normalize an array PROMPT_COMMAND (bash 5.1+) to a string so prepend/append
-# below is uniform, and capture $? in precmd before the user's chain mutates it.
 __orca_normalize_prompt_command() {
   local __orca_joined="" __orca_prompt_part
   if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
     for __orca_prompt_part in "\${PROMPT_COMMAND[@]}"; do
       [[ -n "$__orca_prompt_part" ]] || continue
-      if [[ -n "$__orca_joined" ]]; then
-        __orca_joined="$__orca_joined;$__orca_prompt_part"
-      else
-        __orca_joined="$__orca_prompt_part"
-      fi
+      __orca_joined+="\${__orca_joined:+;}$__orca_prompt_part"
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
-  local __orca_extglob_was_disabled=0
-  if ! shopt -q extglob; then
-    __orca_extglob_was_disabled=1
-    shopt -s extglob
-  fi
-  PROMPT_COMMAND="\${PROMPT_COMMAND//;+([[:space:]]);/;}"
-  if [[ "$__orca_extglob_was_disabled" == "1" ]]; then
-    shopt -u extglob
-  fi
-  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
-    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  local __orca_normalized="" __orca_segment="" __orca_quote="" __orca_escaped=0 __orca_char __orca_index
+  for ((__orca_index = 0; __orca_index < \${#PROMPT_COMMAND}; __orca_index++)); do
+    __orca_char="\${PROMPT_COMMAND:__orca_index:1}"
+    if [[ "$__orca_escaped" == "1" ]]; then
+      __orca_segment+="$__orca_char"; __orca_escaped=0; continue
+    fi
+    if [[ "$__orca_char" == $'\\\\' ]]; then
+      __orca_segment+="$__orca_char"; __orca_escaped=1; continue
+    fi
+    if [[ -n "$__orca_quote" ]]; then
+      __orca_segment+="$__orca_char"
+      [[ "$__orca_char" == "$__orca_quote" ]] && __orca_quote=""
+      continue
+    fi
+    case "$__orca_char" in
+      "'") __orca_quote="'"; __orca_segment+="$__orca_char" ;;
+      '"') __orca_quote='"'; __orca_segment+="$__orca_char" ;;
+      ';')
+        if [[ -n "\${__orca_segment//[[:space:]]/}" ]]; then
+          [[ -n "$__orca_normalized" ]] && __orca_normalized+=";"
+          __orca_normalized+="$__orca_segment"
+        fi
+        __orca_segment=""
+        ;;
+      *) __orca_segment+="$__orca_char" ;;
+    esac
   done
+  if [[ -n "\${__orca_segment//[[:space:]]/}" ]]; then
+    [[ -n "$__orca_normalized" ]] && __orca_normalized+=";"
+    __orca_normalized+="$__orca_segment"
+  fi
+  PROMPT_COMMAND="$__orca_normalized"
 }
 __orca_normalize_prompt_command
 PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}};__orca_osc133_epilogue"

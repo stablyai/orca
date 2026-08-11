@@ -3,10 +3,8 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  handleAiVaultGetFirstUserPrompt,
-  readAiVaultFirstUserPrompt
-} from './session-first-user-prompt-read'
+import { handleAiVaultGetFirstUserPrompt } from './session-first-user-prompt-handler'
+import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
 
 const tempRoots: string[] = []
 
@@ -102,6 +100,72 @@ describe('readAiVaultFirstUserPrompt', () => {
     expect(result.prompt).toBe(longPrompt)
     expect(result.prompt?.includes('\n\n')).toBe(true)
     expect(result.prompt?.length).toBeGreaterThan(220)
+  })
+
+  it('reads a configured custom-basename OpenCode database through the public handler', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-opencode-custom-'))
+    tempRoots.push(root)
+    const dbPath = join(root, 'sessions.sqlite')
+    const db = new DatabaseSync(dbPath)
+    db.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        data TEXT
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT,
+        session_id TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        data TEXT
+      );
+    `)
+    db.prepare('INSERT INTO session VALUES (?, ?, ?)').run('custom-session', 1, 1)
+    db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)').run(
+      'message-1',
+      'custom-session',
+      1,
+      1,
+      JSON.stringify({ role: 'user' })
+    )
+    db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run(
+      'part-1',
+      'message-1',
+      'custom-session',
+      1,
+      1,
+      JSON.stringify({ type: 'text', text: 'custom prompt' })
+    )
+    db.close()
+
+    const previousOpenCodeDb = process.env.OPENCODE_DB
+    process.env.OPENCODE_DB = dbPath
+    try {
+      await expect(
+        handleAiVaultGetFirstUserPrompt({
+          agent: 'opencode',
+          filePath: dbPath,
+          sessionId: 'custom-session'
+        })
+      ).resolves.toEqual({ prompt: 'custom prompt' })
+      await expect(
+        readAiVaultFirstUserPrompt({
+          agent: 'opencode',
+          filePath: `${dbPath}#custom-session`
+        })
+      ).resolves.toEqual({ prompt: 'custom prompt' })
+    } finally {
+      if (previousOpenCodeDb === undefined) {
+        delete process.env.OPENCODE_DB
+      } else {
+        process.env.OPENCODE_DB = previousOpenCodeDb
+      }
+    }
   })
 
   it('extracts full Codex input_text content blocks (not preview-capped)', async () => {

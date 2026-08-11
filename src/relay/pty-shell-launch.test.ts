@@ -249,4 +249,16 @@ describe('getRelayShellLaunchConfig', () => {
     expect(output).toContain('PROMPT_SEP')
     expectBashOsc133Lifecycle(output)
   })
+  itWithBash('preserves quoted semicolons in relay PROMPT_COMMAND hooks', () => {
+    writeFileSync(
+      join(homeDir, '.bash_profile'),
+      'PROMPT_COMMAND=\'printf "%s\\n" "left;   ;right"; printf "PROMPT_QUOTED\\n"\'\n'
+    )
+    const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
+    const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)
+
+    expect(output).toContain('left;   ;right')
+    expect(output).toContain('PROMPT_QUOTED')
+    expectBashOsc133Lifecycle(output)
+  })
 })

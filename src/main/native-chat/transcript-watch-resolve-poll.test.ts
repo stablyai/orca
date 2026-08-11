@@ -138,12 +138,7 @@ describe('native chat transcript resolve polling', () => {
     setPlatform('win32')
     let receivedSignal: AbortSignal | undefined
     mocks.resolveHostOwned.mockImplementation(
-      (
-        _agent: string,
-        _path: string,
-        _args: unknown,
-        signal?: AbortSignal
-      ) =>
+      (_agent: string, _path: string, _args: unknown, signal?: AbortSignal) =>
         new Promise<null>((_resolve, reject) => {
           receivedSignal = signal
           signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
@@ -216,5 +211,25 @@ describe('native chat transcript resolve polling', () => {
     installControl.finish?.({ unsubscribe, watching: true })
     await expect(setup).rejects.toBe(cancelled)
     expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+  it('does not poll OpenCode for a blank session id', async () => {
+    const onInitialSnapshot = vi.fn()
+    const onAppend = vi.fn()
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'opencode',
+      sessionId: '   ',
+      openCodeDbPath: '/tmp/opencode-test.db',
+      reconciliationIntervalMs: 10,
+      onInitialSnapshot,
+      onAppend
+    })
+
+    expect(subscription.watching).toBe(false)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onInitialSnapshot).not.toHaveBeenCalled()
+    expect(onAppend).not.toHaveBeenCalled()
+    expect(mocks.install).not.toHaveBeenCalled()
+    expect(mocks.resolve).not.toHaveBeenCalled()
+    subscription.unsubscribe()
   })
 })
