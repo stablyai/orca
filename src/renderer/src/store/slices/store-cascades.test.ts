@@ -1658,6 +1658,14 @@ describe('setActiveWorktree', () => {
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
       expect(terminal.shellOverride).toBe('wsl.exe')
+
+      const hostTerminal = store
+        .getState()
+        .createTab(wt, undefined, 'powershell.exe', { forceHostRuntime: true })
+      expect(hostTerminal).toMatchObject({
+        shellOverride: 'powershell.exe',
+        forceHostRuntime: true
+      })
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,

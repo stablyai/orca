@@ -8,6 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
@@ -144,16 +145,17 @@ type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
  */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
-  terminalShellOverride: string | undefined,
+  effectiveShell: string | undefined,
   currentPlatform = getSkillCommandPlatform()
 ): string {
-  // Why: WSL project PTYs spawn wsl.exe even when shellOverride is powershell.exe
-  // (daemon reconnect rule). Auto-pasting `& { ... wsl.exe ... }` into bash fails (#13305).
-  const wslNative = toWslNativeSkillSetupCommand(copiedCommand)
+  // Why: the created tab is authoritative when project runtime replaces the requested shell.
+  const wslNative = isWslShellName(effectiveShell)
+    ? decodeWslSetupTerminalCommand(copiedCommand)
+    : null
   if (wslNative) {
     return wslNative
   }
-  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+  if (!isSetupTerminalForcedToPowerShell(effectiveShell)) {
     return copiedCommand
   }
   return wrapWindowsSkillCommandWithNpxPrerequisite(
@@ -163,20 +165,28 @@ export function buildSkillSetupTerminalCommand(
   )
 }
 
-/** Convert a PowerShell-hosted `wsl.exe` skill wrapper into a bash login-shell script. */
-export function toWslNativeSkillSetupCommand(command: string): string | null {
+function decodeWslSetupTerminalCommand(command: string): string | null {
   if (
-    !command.includes('wsl.exe') ||
-    !command.includes('PSNativeCommandArgumentPassing') ||
-    !command.includes('& {')
+    !command.startsWith("& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe") ||
+    !command.includes(' } # Runs: ')
   ) {
     return null
   }
-  const runs = / # Runs: (.+)$/.exec(command)?.[1]?.trim()
-  if (!runs) {
+
+  const encoded = /-- sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
+    command
+  )?.[1]
+  if (!encoded) {
     return null
   }
-  return buildWslLoginShellCommand(runs)
+
+  try {
+    const binary = atob(encoded)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {

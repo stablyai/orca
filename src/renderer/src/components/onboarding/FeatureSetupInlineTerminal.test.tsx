@@ -13,7 +13,15 @@ const mocks = vi.hoisted(() => ({
     (command: string, runtime?: { runtime: 'host' | 'wsl' }) =>
       `${runtime?.runtime ?? 'host'}:${command}`
   ),
-  terminalProps: null as { command: string; shellOverride?: string } | null
+  buildSetupCommand: vi.fn(
+    (command: string, shellOverride?: string) => `${shellOverride ?? 'default'}:${command}`
+  ),
+  terminalProps: null as {
+    command: string
+    forceHostRuntime?: boolean
+    prepareCommandForShell?: (command: string, shellOverride?: string) => string
+    shellOverride?: string
+  } | null
 }))
 
 vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
@@ -21,7 +29,8 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 }))
 
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
-  buildSkillCommandForRuntime: mocks.buildCommand
+  buildSkillCommandForRuntime: mocks.buildCommand,
+  buildSkillSetupTerminalCommand: mocks.buildSetupCommand
 }))
 
 vi.mock('./OnboardingInlineCommandTerminal', () => ({
@@ -57,8 +66,13 @@ describe('FeatureSetupInlineTerminal', () => {
     })
     expect(mocks.terminalProps).toMatchObject({
       command: 'wsl:npx skills add orchestration',
+      forceHostRuntime: false,
+      prepareCommandForShell: mocks.buildSetupCommand,
       shellOverride: 'powershell.exe'
     })
+    expect(
+      mocks.terminalProps?.prepareCommandForShell?.('wsl:npx skills add orchestration', 'wsl.exe')
+    ).toBe('wsl.exe:wsl:npx skills add orchestration')
   })
 
   it('uses the host command builder when the WSL runtime needs repair', () => {
@@ -71,6 +85,7 @@ describe('FeatureSetupInlineTerminal', () => {
     expect(mocks.buildCommand).toHaveBeenCalledWith('npx skills add orchestration', undefined)
     expect(mocks.terminalProps).toMatchObject({
       command: 'host:npx skills add orchestration',
+      forceHostRuntime: true,
       shellOverride: 'powershell.exe'
     })
   })
