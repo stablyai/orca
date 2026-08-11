@@ -64,7 +64,6 @@ export function WorktreeTitleInlineRename({
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
-  const editingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
   const titleElementRef = useRef<HTMLSpanElement | null>(null)
@@ -100,7 +99,7 @@ export function WorktreeTitleInlineRename({
       titleElementRef.current = node
       // Why: wrapped titles render in full and never truncate, so skip the measure +
       // ResizeObserver entirely — for that mode it could only churn unused state.
-      if (!node || editingRef.current || wrapTitle) {
+      if (!node || editing || wrapTitle) {
         measureTitleTruncated(null)
         return
       }
@@ -120,9 +119,11 @@ export function WorktreeTitleInlineRename({
       observer.observe(node)
       titleResizeObserverRef.current = observer
     },
-    [measureTitleTruncated, wrapTitle]
+    [editing, measureTitleTruncated, wrapTitle]
   )
 
+  // Why: remounts the rendered title so truncation is measured again. The editor must
+  // not share it — an unread flip would remount the input and reselect what was typed.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
   // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
   // hovercard can use a compact field that reads more like native rename UI.
@@ -133,12 +134,13 @@ export function WorktreeTitleInlineRename({
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
+  // Why: the guard reads the rendered `editing`, so callers must be reachable only from
+  // the branch they belong to; a timer or subscription would capture a stale value.
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
-      if (editingRef.current === nextEditing) {
+      if (editing === nextEditing) {
         return
       }
-      editingRef.current = nextEditing
       if (nextEditing) {
         measureTitleTruncated(null)
       }
@@ -146,8 +148,14 @@ export function WorktreeTitleInlineRename({
       // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
       onEditingChange?.(nextEditing)
     },
-    [measureTitleTruncated, onEditingChange]
+    [editing, measureTitleTruncated, onEditingChange]
   )
+
+  // Why: double-click and the shortcut both open here, so neither can skip a step.
+  const openRenameEditor = useCallback(() => {
+    setValue(displayName)
+    setEditingMode(true)
+  }, [displayName, setEditingMode])
 
   const handleInputRef = useCallback((input: HTMLInputElement | null) => {
     inputElementRef.current = input
@@ -170,9 +178,8 @@ export function WorktreeTitleInlineRename({
     if (disabled || editing) {
       return
     }
-    setValue(displayName)
-    setEditing(true)
-  }, [beginEditing, disabled, editing, displayName, onBeginEditingConsumed])
+    openRenameEditor()
+  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -185,10 +192,9 @@ export function WorktreeTitleInlineRename({
       }
       event.preventDefault()
       event.stopPropagation()
-      setValue(displayName)
-      setEditingMode(true)
+      openRenameEditor()
     },
-    [disabled, displayName, setEditingMode]
+    [disabled, openRenameEditor]
   )
 
   const cancelRename = useCallback(() => {
@@ -260,7 +266,6 @@ export function WorktreeTitleInlineRename({
     return (
       <>
         <span
-          key={`editing:${titleElementKey}`}
           ref={handleRootRef}
           className={cn(
             'relative grid min-w-0 truncate leading-tight text-foreground',
