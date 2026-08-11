@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { useState } from 'react'
+import { StrictMode, useState } from 'react'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
@@ -128,6 +128,18 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
     fireEvent.keyDown(input, { key: 'Escape' })
 
     expect(onEditingChange.mock.calls).toEqual([[true], [false]])
+  })
+
+  it('reports the shortcut-open transition once in Strict Mode', () => {
+    const onEditingChange = vi.fn()
+
+    render(
+      <StrictMode>
+        <ShortcutRenameHarness onEditingChange={onEditingChange} />
+      </StrictMode>
+    )
+
+    expect(onEditingChange.mock.calls).toEqual([[true]])
   })
 
   it('opens the editor on double-click and reports it the same way', () => {

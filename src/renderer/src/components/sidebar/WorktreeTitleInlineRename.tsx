@@ -64,6 +64,7 @@ export function WorktreeTitleInlineRename({
   beginEditing = false,
   onBeginEditingConsumed
 }: WorktreeTitleInlineRenameProps): React.JSX.Element {
+  const editingRef = useRef(false)
   const savingRef = useRef(false)
   const mountedRef = useRef(true)
   const titleElementRef = useRef<HTMLSpanElement | null>(null)
@@ -99,7 +100,7 @@ export function WorktreeTitleInlineRename({
       titleElementRef.current = node
       // Why: wrapped titles render in full and never truncate, so skip the measure +
       // ResizeObserver entirely — for that mode it could only churn unused state.
-      if (!node || editing || wrapTitle) {
+      if (!node || editingRef.current || wrapTitle) {
         measureTitleTruncated(null)
         return
       }
@@ -119,7 +120,7 @@ export function WorktreeTitleInlineRename({
       observer.observe(node)
       titleResizeObserverRef.current = observer
     },
-    [editing, measureTitleTruncated, wrapTitle]
+    [measureTitleTruncated, wrapTitle]
   )
 
   // Why: remounts the rendered title so truncation is measured again. The editor must
@@ -134,13 +135,12 @@ export function WorktreeTitleInlineRename({
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
-  // Why: the guard reads the rendered `editing`, so callers must be reachable only from
-  // the branch they belong to; a timer or subscription would capture a stale value.
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
-      if (editing === nextEditing) {
+      if (editingRef.current === nextEditing) {
         return
       }
+      editingRef.current = nextEditing
       if (nextEditing) {
         measureTitleTruncated(null)
       }
@@ -148,7 +148,7 @@ export function WorktreeTitleInlineRename({
       // Why: the parent card disables drag while renaming; an Effect leaves one draggable commit.
       onEditingChange?.(nextEditing)
     },
-    [editing, measureTitleTruncated, onEditingChange]
+    [measureTitleTruncated, onEditingChange]
   )
 
   // Why: double-click and the shortcut both open here, so neither can skip a step.
