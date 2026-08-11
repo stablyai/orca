@@ -66,6 +66,9 @@ type WorkspaceKanbanDrawerProps = {
   onMenuOpenChange: (open: boolean) => void
 }
 
+// Why: outlast the Sheet close animation so the board does not disappear mid-slide.
+const WORKSPACE_BOARD_CLOSE_LINGER_MS = 300
+
 function formatTaskStatusSyncMessage(message: WorkspaceBoardTaskStatusSyncMessage): string {
   switch (message.kind) {
     case 'issue-read-failed':
@@ -140,7 +143,26 @@ function formatTaskStatusSyncDescription(result: WorkspaceBoardTaskStatusSyncRes
     .join('. ')
 }
 
-export default function WorkspaceKanbanDrawer({
+export default function WorkspaceKanbanDrawer(
+  props: WorkspaceKanbanDrawerProps
+): React.JSX.Element | null {
+  const [lingering, setLingering] = useState(props.open)
+  useEffect(() => {
+    if (props.open) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), WORKSPACE_BOARD_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [props.open])
+
+  if (!props.open && !lingering) {
+    return null
+  }
+  return <WorkspaceKanbanDrawerContent {...props} />
+}
+
+function WorkspaceKanbanDrawerContent({
   leftSidebarStyle,
   open,
   statusBarVisible,

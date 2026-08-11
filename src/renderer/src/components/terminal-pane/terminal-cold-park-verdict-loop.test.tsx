@@ -31,6 +31,7 @@ vi.mock('../../store', async () => {
   const { create } = await import('zustand')
   const useAppStore = create(() => ({
     pendingStartupByTabId: {} as Record<string, unknown>,
+    ptyIdsByTabId: {} as Record<string, string[]>,
     runtimeStatusByEnvironmentId: new Map<string, unknown>(),
     settings: {} as Record<string, unknown>,
     terminalLayoutsByTabId: {} as Record<string, unknown>,

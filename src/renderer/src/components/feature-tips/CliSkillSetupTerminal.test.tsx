@@ -19,8 +19,16 @@ vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
 }))
 
 vi.mock('@/components/onboarding/OnboardingInlineCommandTerminal', () => ({
-  OnboardingInlineCommandTerminal: ({ command }: { command: string }) => {
-    mocks.terminalCommand = command
+  OnboardingInlineCommandTerminal: ({
+    command,
+    prepareCommandForShell,
+    shellOverride
+  }: {
+    command: string
+    prepareCommandForShell?: (command: string, shellOverride?: string) => string
+    shellOverride?: string
+  }) => {
+    mocks.terminalCommand = prepareCommandForShell?.(command, shellOverride) ?? command
     return null
   }
 }))

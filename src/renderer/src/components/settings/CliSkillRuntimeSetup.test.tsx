@@ -324,17 +324,18 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
     }
   })
 
-  it('wraps WSL setup commands and leaves non-Windows commands untouched', () => {
+  it('adapts bare WSL setup commands to the shell that Orca created', () => {
     const runtime = { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' } as const
-    const copiedCommand = buildSkillCommandForRuntime(
-      'npx skills add orchestration --global',
-      runtime,
-      'win32'
-    )
+    const skillCommand = 'npx skills add orchestration --global'
+    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime, 'win32')
 
+    expect(copiedCommand).toBe(skillCommand)
     expect(
       buildSkillSetupTerminalCommand(copiedCommand, 'powershell.exe', runtime, 'win32')
     ).toContain("wsl.exe -d 'Ubuntu'")
+    expect(buildSkillSetupTerminalCommand(copiedCommand, 'wsl.exe', runtime, 'win32')).toBe(
+      skillCommand
+    )
     expect(
       buildSkillSetupTerminalCommand(
         'npx skills add orchestration --global',
@@ -343,6 +344,26 @@ describe('CliSkillRuntimeSetup runtime helpers', () => {
         'linux'
       )
     ).toBe('npx skills add orchestration --global')
+  })
+
+  it('preserves the exact WSL script when adapting setup-terminal auto-paste', () => {
+    const skillCommand = "printf 'héllo\n# Runs: unchanged'"
+    const runtime = {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    } as const
+    const copiedCommand = buildSkillCommandForRuntime(skillCommand, runtime)
+    const powershellCommand = buildSkillSetupTerminalCommand(
+      copiedCommand,
+      'powershell.exe',
+      runtime,
+      'win32'
+    )
+
+    expect(buildSkillSetupTerminalCommand(powershellCommand, 'wsl.exe', runtime, 'win32')).toBe(
+      buildWslLoginShellCommand(skillCommand)
+    )
   })
 
   it('keeps the bare reinstall rewrite for POSIX-family Windows skill updates', () => {

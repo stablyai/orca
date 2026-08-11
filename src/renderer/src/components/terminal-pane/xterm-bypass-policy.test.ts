@@ -44,8 +44,8 @@ describe('shouldBypassXtermKeyboardEvent — macOS', () => {
     // Why: this policy is narrowly scoped to clipboard chords. Cmd+F, Cmd+D,
     // Cmd+K, Cmd+W, Cmd+Arrow, Cmd+Backspace are handled in keyboard-handlers.ts
     // with stopImmediatePropagation before xterm's textarea listener fires.
-    // Cmd+A flows through xterm's legacy evaluator which correctly produces
-    // type=1 (selectAll), so we must not swallow it here.
+    // Cmd+A is claimed by keyboard-handlers.ts before xterm, including when
+    // Kitty keyboard reporting replaces xterm's legacy select-all evaluator.
     const cases = [
       event({ key: 'a', code: 'KeyA', metaKey: true }),
       event({ key: 't', code: 'KeyT', metaKey: true })

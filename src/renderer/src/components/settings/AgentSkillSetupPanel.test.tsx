@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     command: string
     description: string
     shellOverride?: string
+    prepareCommandForShell?: (command: string, shellOverride?: string) => string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
   }[],
@@ -48,6 +49,7 @@ vi.mock('../onboarding/OnboardingInlineCommandTerminal', () => ({
     command: string
     description: string
     shellOverride?: string
+    prepareCommandForShell?: (command: string, shellOverride?: string) => string
     onTerminalExit?: () => void
     onCommandFinished?: (bestEffortExitCode: number | null) => void
   }) => {
@@ -373,7 +375,9 @@ describe('AgentSkillSetupPanel', () => {
 
     await clickButton('Install')
 
-    expect(mocks.terminalProps.at(-1)?.command).toMatch(
+    const terminalProps = mocks.terminalProps.at(-1)
+    expect(terminalProps?.command).toBe(INSTALL_COMMAND)
+    expect(terminalProps?.prepareCommandForShell?.(INSTALL_COMMAND, 'powershell.exe')).toMatch(
       /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu'/
     )
     await act(async () => {
@@ -445,6 +449,7 @@ describe('AgentSkillSetupPanel', () => {
     })
     await clickButton('Install')
     const openedCommand = mocks.terminalProps.at(-1)?.command
+    const openedPrepareCommand = mocks.terminalProps.at(-1)?.prepareCommandForShell
 
     await rerenderInteractivePanel({
       terminalShellOverride: 'powershell.exe',
@@ -452,7 +457,9 @@ describe('AgentSkillSetupPanel', () => {
     })
 
     expect(mocks.terminalProps.at(-1)?.command).toBe(openedCommand)
-    expect(openedCommand).toContain("wsl.exe -d 'Ubuntu'")
+    expect(openedPrepareCommand?.(INSTALL_COMMAND, 'powershell.exe')).toContain(
+      "wsl.exe -d 'Ubuntu'"
+    )
 
     await rerenderInteractivePanel({
       terminalRuntime: { runtime: 'host', label: 'Windows' }
@@ -478,11 +485,15 @@ describe('AgentSkillSetupPanel', () => {
       terminalShellOverride: 'powershell.exe',
       terminalRuntime: { runtime: 'wsl', wslDistro: 'Fedora', label: 'WSL Fedora' }
     })
-    expect(mocks.terminalProps.at(-1)?.command).toContain("wsl.exe -d 'Ubuntu'")
+    expect(
+      mocks.terminalProps.at(-1)?.prepareCommandForShell?.(INSTALL_COMMAND, 'powershell.exe')
+    ).toContain("wsl.exe -d 'Ubuntu'")
 
     await clickButton('Retry')
 
-    expect(mocks.terminalProps.at(-1)?.command).toContain("wsl.exe -d 'Fedora'")
+    expect(
+      mocks.terminalProps.at(-1)?.prepareCommandForShell?.(INSTALL_COMMAND, 'powershell.exe')
+    ).toContain("wsl.exe -d 'Fedora'")
 
     await act(async () => {
       mocks.terminalProps.at(-1)?.onCommandFinished?.(1)
@@ -494,8 +505,11 @@ describe('AgentSkillSetupPanel', () => {
 
     await clickButton('Retry')
 
-    expect(mocks.terminalProps.at(-1)?.command).toMatch(/^cmd\.exe \/d \/s \/c /)
-    expect(mocks.terminalProps.at(-1)?.command).not.toContain('wsl.exe')
+    const retryCommand = mocks.terminalProps
+      .at(-1)
+      ?.prepareCommandForShell?.(INSTALL_COMMAND, 'powershell.exe')
+    expect(retryCommand).toMatch(/^cmd\.exe \/d \/s \/c /)
+    expect(retryCommand).not.toContain('wsl.exe')
   })
 
   it('falls back to the install command for installed callers without installedCommand', async () => {

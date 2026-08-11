@@ -7,6 +7,9 @@
       "webDescription": "웹 클라이언트를 다시 시도하거나 페어링된 런타임에 다시 연결하세요."
     }
   },
+  "githubChecks": {
+    "retrying": "재시도 중…"
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -64,7 +67,9 @@
     "openWorktreePalette": "워크트리 팔레트 열기",
     "window": "창",
     "help": "도움말",
-    "paste": "붙여넣기"
+    "paste": "붙여넣기",
+    "copy": "복사",
+    "selectAll": "모두 선택"
   },
   "tray": {
     "openOrca": "Orca 열기",
@@ -2602,15 +2607,6 @@
         },
         "sheet": {
           "1189e9fe0a": "닫기"
-        },
-        "team": {
-          "multi": {
-            "combobox": {
-              "de83523bf9": "검색어와 일치하는 팀이 없습니다.",
-              "301f2a796e": "모든 팀",
-              "18ec58881e": "팀 검색..."
-            }
-          }
         }
       },
       "terminal": {
@@ -2717,6 +2713,7 @@
             "ec85df5914": "빠른 명령어",
             "0a917b591a": "붙여넣기",
             "f3eeb1de13": "복사",
+            "selectAll": "모두 선택",
             "c2f0b72b8d": "삽입",
             "925f49f210": "창 확장",
             "df766809e0": "창 축소",
@@ -2771,7 +2768,7 @@
             "agent": {
               "row": {
                 "ad991ece5c": "Agent 창을 더 이상 사용할 수 없습니다.",
-                "090d607412": "오래된 agent 행-{{value0}}"
+                "090d607412": "stale-agent-row-{{value0}}"
               }
             }
           },
@@ -3014,7 +3011,12 @@
             "c781f992e4": "destructive",
             "be8f0ff166": "삭제",
             "f3a8c2d1e7": "빠른 명령 검색...",
-            "b4e7f9a2c1": "일치하는 명령 없음"
+            "b4e7f9a2c1": "일치하는 명령 없음",
+            "8d525e5f15": "복사됨",
+            "53b17a4b1b": "복사하지 못함",
+            "a9a564b7e7": "{{value0}} 복사",
+            "69a1441a21": "복사할 내용 없음",
+            "192a4616a5": "빠른 명령 작업"
           },
           "shell": {
             "icons": {
@@ -6050,7 +6052,7 @@
           "a3326f6f1b": "glab",
           "027440e1cb": "MR, 이슈, 할 일, 파이프라인을 다음 도구로 사용합니다.",
           "513abfe47d": "GitLab",
-          "51000487c4": "gh 인증 로그인",
+          "51000487c4": "gh auth login",
           "09285e9fe6": "GitHub CLI가 설치되어 있지만 인증되지 않았습니다. terminal에서 다음 명령을 실행하세요.",
           "399cf46867": "GitHub CLI 설치",
           "c0c8575e05": "PR, 이슈 및 검사를 활성화하려면 GitHub CLI를 설치하세요.",
@@ -6405,7 +6407,11 @@
           "38d61927e6": "저장된 빠른 명령이 없습니다.",
           "44923dd982": "파괴적인",
           "ec1ed99e70": "삭제",
-          "d1d0976320": "없음"
+          "d1d0976320": "없음",
+          "8d525e5f15": "복사됨",
+          "53b17a4b1b": "복사하지 못함",
+          "a9a564b7e7": "{{value0}} 복사",
+          "69a1441a21": "복사할 내용 없음"
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "탭 스트립 순서",
@@ -8272,7 +8278,7 @@
             "compareAgainstUpstreamDescription": "소스 제어가 커밋된 변경 사항 비교에 기본으로 사용할 기준을 선택합니다. 브랜치 업스트림은 현재 브랜치를 자동으로 따라가며, 업스트림이 없으면 저장소 기본 브랜치로 돌아갑니다. 비교 기준은 해당 worktree의 Git 패널에서 worktree별로 변경할 수 있습니다. Pull Request 및 리베이스 대상은 변경되지 않습니다.",
             "compareBase": "비교 기준",
             "currentBranch": "현재 브랜치",
-            "upstream": "업스트림",
+            "upstream": "upstream",
             "localChanges": "로컬 변경 사항",
             "originMaster": "origin/master",
             "committedChanges": "커밋된 변경 사항",
@@ -10757,7 +10763,7 @@
                 "actionRequiredHint": "이 검사는 병합 차단이 해제되기 전에 GitHub에서 수동 작업(예: 워크플로 실행 승인)이 필요합니다.",
                 "b3195cba33": "작성자의 봇 지정 해제",
                 "f588b46a6c": "작성자를 봇으로 지정",
-                "checkDetailsLoadFailed": "체크 세부 정보를 불러오지 못했습니다."
+                "e45324fbed": "체크 세부 정보를 불러오지 못했습니다."
               },
               "empty": {
                 "state": {
@@ -10948,7 +10954,7 @@
             "9fffaf17c1": "오른쪽 사이드바 표시/숨기기({{value0}})",
             "b37ff4a89a": "포트",
             "9f83375839": "검사",
-            "6306b48afd": "소스 제어",
+            "6306b48afd": "source-control",
             "ef182dcb12": "검색",
             "fc3095d2ed": "탐색기",
             "aiVaultSessionHistory": "에이전트",
@@ -11315,8 +11321,7 @@
             "delete": "삭제",
             "deleteReasonNonLocalHost": "이 기기에 있는 세션만 삭제할 수 있습니다.",
             "deleteReasonSyntheticPath": "이 세션은 Orca에서 삭제할 수 없습니다.",
-            "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다.",
-            "deleteReasonSessionLive": "이 세션은 아직 실행 중입니다 — 삭제하려면 완료될 때까지 기다리세요."
+            "deleteReasonUnsupportedAgent": "{{value0}} 세션은 Orca에서 삭제할 수 없습니다."
           },
           "AiVaultSessionDeleteDialog": {
             "title": "이 세션을 삭제할까요?",
@@ -11491,17 +11496,6 @@
           "yoloPermissionsInfo": "Agent 권한 정보",
           "yoloPermissionsTooltip": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
         },
-        "FeatureSetupChecklist": {
-          "77f74946f5": "Agents는 서로 메시지를 보내고, 작업을 수행하고, 핸드오프를 조정할 수 있습니다.",
-          "399cf885c0": "Agent 오케스트레이션",
-          "c5292c409d": "Agents는 요청 시 앱 창을 검사하고 로컬 앱을 작동할 수 있습니다.",
-          "1ecfb490ac": "컴퓨터 사용",
-          "01426f3a23": "Agents가 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 처리할 수 있습니다.",
-          "ea85d9e628": "Agent 브라우저 사용",
-          "linearTicketsTitle": "Linear agent 스킬",
-          "linearTicketsDescription": "Agents는 연결된 Linear 작업을 사용해 티켓 맥락을 반영한 더 풍부한 인계를 할 수 있습니다.",
-          "linearTicketsSetupSummary": "Linear 워크스페이스에 권장됩니다. Linear 연결 설정에는 영향을 주지 않습니다."
-        },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter를 눌러 명령을 실행하고 요청 시 npx를 확인합니다. 나중에 설정에서 설정할 수도 있습니다.",
           "47fc6cc6dc": "스킬 설정 명령어",
@@ -11587,37 +11581,6 @@
           "9f47f345a4": "오래 걸리지 않을 거예요!",
           "e4726b2d50": "온보딩을 건너뛰시겠습니까?"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "둘러보기",
-          "60c5576353": "투어 종료"
-        },
-        "RepoStep": {
-          "e8fdb36338": "repos를 스캔하는 중입니다. 중지하려면 클릭하세요.",
-          "b7c4da0504": "SSH? 설정에서 호스트를 설정하세요",
-          "c33b190ca3": "호스트 경로만",
-          "7b679207e4": "워크스페이스",
-          "24c7c8696c": "서버 경로로 복제",
-          "7932e95f68": "클론",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "HTTPS 또는 SSH URL을 붙여넣습니다.",
-          "132425a3e3": "repo 복제",
-          "6558d50c69": "한 번에 여러 repos를 가져오고 싶으신가요? 상위 폴더를 선택하세요.",
-          "831524961f": "로컬 디렉터리(git repo 여부)를 선택하세요.",
-          "f4e9c8dcf8": "폴더 찾아보기",
-          "e8214aa632": "폴더로 열기",
-          "3863747c56": "Git 프로젝트 추가",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "선택한 호스트에 존재하는 경로를 입력하세요.",
-          "8cab104e3c": "서버 프로젝트 열기",
-          "2d20200346": "repos 가져오기",
-          "27ca610db1": "뒤로",
-          "cecd6593fa": "스캔한 폴더:",
-          "c7af322fc3": "스캔 중지",
-          "c3d9d44ca2": "스캔 중지",
-          "cf23006ba7": "선택한 호스트",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}이 폴더에서 {{value1}} {{value2}}을(를) 찾았습니다."
-        },
         "ThemeStep": {
           "a4b254779d": "macOS 옵션 키",
           "6c51398942": "마우스",
@@ -11645,14 +11608,9 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "SSH 설정을 열 수 없습니다.",
-              "fd74e7558e": "복제 실패",
               "52acfbef51": "진행 상황을 저장할 수 없습니다."
             }
           }
-        },
-        "AgentFeatureSetupStep": {
-          "97dcdc010f": "기능 활성화"
         },
         "WindowsTerminalStep": {
           "powerShell": "PowerShell",
@@ -11753,10 +11711,6 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
-          },
-          "ProjectHostSetupCombobox": {
-            "empty": "이 프로젝트에 준비된 호스트가 없습니다.",
-            "placeholder": "호스트 선택"
           },
           "ProjectCombobox": {
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
@@ -12133,43 +12087,6 @@
             "cda56c5915": "메모 / launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "생각 중...",
-            "ef8b164dd1": "src/auth 리뷰",
-            "952d3ddd9a": "세션이 시작되었습니다",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "12개 테스트 실행",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "분할 가능한 terminal",
-            "2a7cfc82c8": "GH #1842와 연결됨",
-            "3822d8d14b": "fix/worktree-picker-truncates",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "시작",
-            "c1f28c03b2": "작업 트리 선택 도구가 잘립니다.",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "GitHub 및 Linear 작업",
-            "5171768676": "agents 3개 조율",
-            "cebc7769cd": "인증 흐름 재설계",
-            "e44269e97d": "Agent 오케스트레이션",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "청구 웹훅 리팩터링",
-            "9c812e0d7c": "CI 파이프라인 속도 향상",
-            "3c4adfd821": "로그인 경쟁 조건 수정",
-            "56a0271428": "격리된 워크스페이스",
-            "ef737dcee1": "GitHub 및 Linear 작업",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "여러 작업을 동시에 진행하세요. 각 워크스페이스는 브랜치, terminal, agent 활동을 함께 보관합니다.",
-            "70aa182266": "목표를 넘겨두고 자리를 비우세요. 코디네이터 agent가 작업을 나누어 병렬 PR을 만듭니다.",
-            "f10c14dd9d": "탭을 오갈 필요 없이 GitHub 또는 Linear 백로그에서 선택하고 한 번의 클릭으로 워크스페이스를 시작하세요.",
-            "5d6ee181b6": "워크스페이스를 열어 terminal로 돌아가고, 테스트와 로그, agents 용으로 패널을 나누세요."
-          },
           "FeatureWallBody": {
             "25ec5356d6": "설정"
           },
@@ -12196,7 +12113,7 @@
             "00078a6134": "설정에서 보기",
             "14327073cc": "저장",
             "88469e926b": "설정 스크립트",
-            "5c5b65044e": "pnpm 설치",
+            "5c5b65044e": "pnpm install",
             "a7463915b6": "설정 스크립트를 저장하지 못했습니다.",
             "6299297dac": "설정 스크립트가 저장되었습니다.",
             "f0bbf7da77": "사용해 보세요",
@@ -12412,11 +12329,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "작업 중"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",
@@ -12695,7 +12607,7 @@
           "19c45cfdc0": "모두 확장",
           "982d14bfa5": "commit 되지 않은 Diff 열기",
           "3d909843bb": "브랜치 diff 열기",
-          "8368d256ec": "결합 브랜치",
+          "8368d256ec": "combined-branch",
           "8f68ad9ca9": "{{value0}} AI {{value1}} 표시",
           "724a13568d": "{{value0}}에서",
           "6094135eec": "대 {{value0}}",
@@ -12887,7 +12799,7 @@
           "8f4d2c1a9b": "목차 크기 조절"
         },
         "MarkdownTemplatePicker": {
-          "22cd94426f": "제목없음.md",
+          "22cd94426f": "untitled.md",
           "6e2e6c04ad": "빈 Markdown",
           "df667919ca": "일치하는 템플릿이 없습니다.",
           "22fd4890ad": "템플릿 검색...",
@@ -13825,7 +13737,27 @@
           "a21f6c33ad": "자동화 소스를 새로 고쳤습니다.",
           "53f06f0ad5": "소스 다시 시도",
           "pendingAutomationMissing": "자동화를 더 이상 사용할 수 없습니다.",
-          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다."
+          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
+          "noSearchMatches": "검색과 일치하는 자동화가 없습니다.",
+          "paused": "일시 중지됨",
+          "runCount": "실행 {{count}}회",
+          "runCount_one": "실행 {{count}}회",
+          "runCount_other": "실행 {{count}}회",
+          "projectDefaultBaseRef": "프로젝트 기본값",
+          "createFromBaseRef": "{{baseRef}}에서 만들기",
+          "missingWorkspace": "워크스페이스 없음",
+          "runUsageSummary": "약 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "사용량을 사용할 수 없음",
+          "noRunUsageYet": "아직 실행 사용량 없음",
+          "noWorkspace": "워크스페이스 없음",
+          "latestSavedOutput": "최근 저장된 출력",
+          "backToList": "모든 자동화",
+          "tableName": "이름",
+          "tableProject": "프로젝트",
+          "tableStatus": "상태",
+          "tableActions": "작업",
+          "newAutomation": "새 자동화",
+          "rowActions": "자동화 작업"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo 브랜치 검색...",
@@ -13938,6 +13870,19 @@
           "5a7863909c": "새 워크스페이스마다 설정 실행",
           "18f000ad4e": "고급",
           "874b72195b": "이 자동화가 워크스페이스를 만들 때, 워크트리를 직접 만들 때와 같은 방식으로 준비합니다 — 프로젝트 설정을 실행하고 터미널 탭을 엽니다."
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "자동화 로딩 중"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "검색 텍스트가 너무 깁니다 — 목록이 필터링되지 않음",
+          "label": "자동화 검색",
+          "placeholder": "검색...",
+          "tooLongShort": "너무 김",
+          "clear": "검색 지우기"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "자동화 작업"
         }
       },
       "agent": {
@@ -14190,159 +14135,12 @@
       },
       "orca": {
         "profiles": {
-          "switcher": {
-            "cloud": {
-              "unavailable": "Orca 로그인 사용 불가"
-            },
-            "reconnect": "프로필 다시 연결",
-            "connect": "프로필 연결",
-            "organization": "조직",
-            "create": {
-              "profile": {
-                "for": {
-                  "org": "조직용 프로필 생성"
-                }
-              }
-            },
-            "signout": "로그아웃",
-            "16e3681072": "새 로컬 프로필",
-            "e3b91a3d90": "프로젝트와 워크트리를 분리할 빈 프로필을 만듭니다.",
-            "f322e1f4d6": "프로필 이름",
-            "cfa59f8ad1": "만들고 전환",
-            "b4f9d1125d": "로컬",
-            "4815f7d163": "프로필 전환",
-            "d00d853e2a": "프로필 관리",
-            "c106c674fe": "새 로컬 프로필",
-            "account": "계정",
-            "org": {
-              "members": "조직 구성원"
-            },
-            "signInWaiting": "로그인 대기 중…",
-            "signInAgain": "다시 로그인",
-            "signIn": "Orca에 로그인",
-            "accountTitle": "Orca 계정",
-            "accountSignedIn": "로그인됨",
-            "accountSignInRequired": "로그인 필요",
-            "accountSignedOut": "로그아웃됨"
-          },
-          "management": {
-            "04e7bd2a23": "전송",
-            "128c7dfe64": "복사 대상",
-            "df8b7d876b": "이동 대상",
-            "9aa26347b3": "프로젝트를 이동했습니다",
-            "816ce624b6": "프로젝트를 복사했습니다",
-            "2c45bda8d3": "프로필 관리",
-            "2db945e4a0": "활성 프로필의 프로젝트를 다른 로컬 프로필로 복사하거나 이동합니다.",
-            "8668cb2946": "이 프로필에는 프로젝트가 없습니다.",
-            "93034915ab": "프로젝트를 복사하려면 먼저 다른 프로필을 만드세요.",
-            "projectCountSingular": "{{count}}개의 프로젝트",
-            "projectCountPlural": "{{count}}개의 프로젝트"
-          },
-          "project": {
-            "transfer": {
-              "confirm": {
-                "move": {
-                  "title": "프로젝트를 이동하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 해당 프로젝트를 {{activeProfileName}}에서 제거한 뒤 파일은 유지하고 {{targetName}}(으)로 다시 시작합니다.",
-                  "action": "프로젝트 이동"
-                },
-                "copy": {
-                  "title": "프로젝트를 복사하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필 모두 동일한 파일을 별도의 Orca 메타데이터와 함께 가리킵니다.",
-                  "action": "프로젝트 복사"
-                },
-                "live": {
-                  "work": "이 프로젝트의 활성 작업"
-                },
-                "cancel": "취소",
-                "terminalSingular": "활성 터미널 탭 {{count}}개",
-                "terminalPlural": "활성 터미널 탭 {{count}}개",
-                "agentSingular": "활성 에이전트 {{count}}개",
-                "agentPlural": "활성 에이전트 {{count}}개",
-                "browserSingular": "브라우저 작업 공간 {{count}}개",
-                "browserPlural": "브라우저 작업 공간 {{count}}개"
-              }
-            }
-          },
           "signout": {
             "confirm": {
               "title": "Orca에서 로그아웃할까요?",
               "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
-            }
-          },
-          "switch": {
-            "confirm": {
-              "target": "선택된 프로필",
-              "title": "프로필을 전환하시겠습니까?",
-              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 작업 공간이 다시 로드됩니다.",
-              "live": {
-                "work": "이 프로필의 활성 작업"
-              },
-              "cancel": "취소",
-              "switch": "프로필 전환",
-              "terminalSingular": "활성 터미널 탭 {{count}}개",
-              "terminalPlural": "활성 터미널 탭 {{count}}개",
-              "agentSingular": "활성 에이전트 {{count}}개",
-              "agentPlural": "활성 에이전트 {{count}}개",
-              "browserSingular": "브라우저 작업 공간 {{count}}개",
-              "browserPlural": "브라우저 작업 공간 {{count}}개"
-            }
-          },
-          "org": {
-            "members": {
-              "role": {
-                "label": "역할",
-                "owner": "소유자",
-                "admin": "관리자",
-                "member": "구성원"
-              },
-              "not": {
-                "signed": {
-                  "in": "아직 Orca에 로그인하지 않았습니다."
-                }
-              },
-              "remove": {
-                "confirm": "제거",
-                "cancel": "취소",
-                "label": "팀원 제거"
-              },
-              "title": "조직 구성원",
-              "load": {
-                "error": "조직 구성원을 로드할 수 없습니다."
-              },
-              "retry": "다시 시도",
-              "pending": {
-                "title": "대기 중인 초대",
-                "revoke": "취소"
-              },
-              "invite": {
-                "title": "초대",
-                "placeholder": "teammate@example.com",
-                "role": "초대 역할",
-                "submit": "보내기"
-              },
-              "error": {
-                "forbidden": "이 작업을 수행할 권한이 없습니다.",
-                "conflict": "이미 구성원이거나 초대되었습니다.",
-                "remove": {
-                  "self": "자신을 제거할 수 없습니다."
-                },
-                "own": {
-                  "role": "자신의 역할을 변경할 수 없습니다."
-                },
-                "not": {
-                  "found": "해당 팀원은 이 조직에 없습니다."
-                },
-                "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
-                "unconfigured": "이 빌드에서 조직 관리를 사용할 수 없습니다.",
-                "failed": "문제가 발생했습니다. 다시 시도해 주세요."
-              },
-              "subtitle": {
-                "named": "{{orgName}}에서 Orca에 협업할 수 있는 사람들.",
-                "default": "조직에서 Orca에 협업할 수 있는 사람들."
-              }
             }
           }
         }

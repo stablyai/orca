@@ -39,6 +39,8 @@ describe('AgentMapScene project labels', () => {
           zoom={1}
           labelScale={1}
           mapScale={0.5}
+          heldProjectId={null}
+          heldWorktreeId={null}
           selectedPaneKey={null}
           allowAggregation
           showOrchestrationLinks

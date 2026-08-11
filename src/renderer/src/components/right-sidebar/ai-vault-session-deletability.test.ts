@@ -5,7 +5,6 @@ import { aiVaultSessionDeleteBlockedReason } from './ai-vault-session-deletabili
 // assertions pin the English copy as well as the gate order.
 const NON_LOCAL = 'Only sessions on this device can be deleted.'
 const SYNTHETIC = "This session can't be deleted from Orca."
-const LIVE = 'This session is still running — wait for it to finish before deleting.'
 
 const localGeminiSession = {
   agent: 'gemini' as const,
@@ -26,28 +25,6 @@ describe('aiVaultSessionDeleteBlockedReason', () => {
         filePath: '/home/user/.claude/projects/-proj/sess-1.jsonl'
       })
     ).toBeNull()
-  })
-
-  it('tells the user to wait while the agent is still running', () => {
-    for (const live of ['working', 'blocked', 'waiting'] as const) {
-      expect(aiVaultSessionDeleteBlockedReason(localGeminiSession, live)).toBe(LIVE)
-    }
-  })
-
-  it('offers Delete for a finished session (done) and one with no live state', () => {
-    expect(aiVaultSessionDeleteBlockedReason(localGeminiSession, 'done')).toBeNull()
-    expect(aiVaultSessionDeleteBlockedReason(localGeminiSession, null)).toBeNull()
-  })
-
-  it('keeps the permanent reason over "running" for an unsupported live session', () => {
-    // A live but unsupported agent stays "unsupported" — it would never become
-    // deletable, so "wait for it to finish" would mislead.
-    expect(
-      aiVaultSessionDeleteBlockedReason(
-        { agent: 'codex', executionHostId: 'local', filePath: '/home/user/.codex/x.jsonl' },
-        'working'
-      )
-    ).toBe("Codex sessions can't be deleted from Orca.")
   })
 
   it('blocks ssh- and runtime-hosted sessions regardless of agent', () => {

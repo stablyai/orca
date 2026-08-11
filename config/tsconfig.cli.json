@@ -12,6 +12,7 @@
     "../src/main/agent-hooks/local-agent-cli-presence.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
+    "../src/main/agent-hooks/managed-hook-script-refresh.ts",
     "../src/main/amp/hook-service.ts",
     "../src/main/antigravity/hook-service.ts",
     "../src/main/claude/hook-settings.ts",
@@ -74,6 +75,7 @@
     "../src/main/openclaude/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
+    "../src/main/startup/windows-shell-path-ownership.ts",
     // Why: serve-electron-flag-parity.test.ts checks the Electron-side serve argv rewrite against this
     // project's serve spec; the module has no imports, so listing it pulls in nothing else.
     "../src/main/startup/serve-mode-argv.ts",

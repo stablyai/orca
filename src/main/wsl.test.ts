@@ -29,7 +29,8 @@ import {
   parseWslPath,
   toLinuxPath,
   toWindowsWslPath,
-  wslUncDirectoryExists
+  wslUncDirectoryExists,
+  wslUncDirectoryExistsAsync
 } from './wsl'
 
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
@@ -805,36 +806,39 @@ describe('wslUncDirectoryExists', () => {
   })
 
   it('returns true when the distro reports the directory exists', () => {
-    execFileSyncMock.mockReturnValue('')
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
     )
     expect(result).toBe(true)
     expect(execFileSyncMock).toHaveBeenCalledWith(
       'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'test', '-d', '/home/jin/repo'],
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'sh',
+        '-c',
+        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
+        'sh',
+        '/home/jin/repo'
+      ],
       expect.objectContaining({ timeout: 5000 })
     )
   })
 
-  it('returns false when test -d exits non-zero (directory missing)', () => {
-    execFileSyncMock.mockImplementation(() => {
-      // Why: child_process surfaces a non-zero exit as an Error with `status`.
-      const error = new Error('Command failed') as Error & { status: number }
-      error.status = 1
-      throw error
-    })
+  it('returns false when the guest reports the directory missing', () => {
+    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_MISSING__')
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing')
     )
     expect(result).toBe(false)
   })
 
-  it('returns null when wsl.exe is unavailable (inconclusive)', () => {
+  it('returns null when wsl.exe or the distro is unavailable', () => {
     execFileSyncMock.mockImplementation(() => {
-      // No numeric `status` -> spawn failure (ENOENT), not a missing directory.
-      const error = new Error('spawn wsl.exe ENOENT') as Error & { code: string }
-      error.code = 'ENOENT'
+      const error = new Error('distro unavailable') as Error & { status: number }
+      error.status = 4294967295
       throw error
     })
     const result = withPlatform('win32', () =>
@@ -849,5 +853,69 @@ describe('wslUncDirectoryExists', () => {
       withPlatform('linux', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin'))
     ).toBeNull()
     expect(execFileSyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('wslUncDirectoryExistsAsync', () => {
+  afterEach(() => {
+    execFileMock.mockReset()
+  })
+
+  it('returns true when the distro reports the directory exists', async () => {
+    execFileMock.mockImplementation((_command, _args, _options, callback) =>
+      callback(null, '__ORCA_DIRECTORY_EXISTS__')
+    )
+
+    await expect(
+      withPlatformAsync('win32', () =>
+        wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+      )
+    ).resolves.toBe(true)
+    expect(execFileMock).toHaveBeenCalledWith(
+      'wsl.exe',
+      [
+        '-d',
+        'Ubuntu',
+        '--',
+        'sh',
+        '-c',
+        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
+        'sh',
+        '/home/jin/repo'
+      ],
+      expect.objectContaining({ timeout: 5000 }),
+      expect.any(Function)
+    )
+  })
+
+  it('distinguishes a missing directory from an inconclusive probe', async () => {
+    execFileMock
+      .mockImplementationOnce((_command, _args, _options, callback) =>
+        callback(null, '__ORCA_DIRECTORY_MISSING__')
+      )
+      .mockImplementationOnce((_command, _args, _options, callback) =>
+        callback(Object.assign(new Error('distro unavailable'), { code: 4294967295 }), '')
+      )
+
+    await withPlatformAsync('win32', async () => {
+      await expect(
+        wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing')
+      ).resolves.toBe(false)
+      await expect(
+        wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+      ).resolves.toBeNull()
+    })
+  })
+
+  it('returns null without spawning for paths outside WSL or off Windows', async () => {
+    await expect(
+      withPlatformAsync('win32', () => wslUncDirectoryExistsAsync('C:\\Users\\jin\\repo'))
+    ).resolves.toBeNull()
+    await expect(
+      withPlatformAsync('linux', () =>
+        wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+      )
+    ).resolves.toBeNull()
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 })

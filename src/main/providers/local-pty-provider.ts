@@ -239,9 +239,9 @@ function getWslContextFromWorktreeId(
  */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
-): { distro: string } | undefined {
+): { distro: string; treatPosixCwdAsWsl: true } | undefined {
   const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed } : undefined
+  return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
 /**

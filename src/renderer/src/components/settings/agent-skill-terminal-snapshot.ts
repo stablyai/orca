@@ -3,7 +3,7 @@ import { buildSkillSetupTerminalCommand } from './CliSkillRuntimeSetup'
 
 export type SkillTerminalSnapshot = {
   copiedCommand: string
-  executionCommand: string
+  prepareCommandForShell: (command: string, effectiveShell: string | undefined) => string
   shellOverride: string | undefined
 }
 
@@ -12,9 +12,11 @@ export function createTerminalSnapshot(
   shellOverride: string | undefined,
   runtime: LocalAgentRuntime | undefined
 ): SkillTerminalSnapshot {
+  const pinnedRuntime = runtime ? { ...runtime } : undefined
   return {
     copiedCommand,
-    executionCommand: buildSkillSetupTerminalCommand(copiedCommand, shellOverride, runtime),
+    prepareCommandForShell: (command, effectiveShell) =>
+      buildSkillSetupTerminalCommand(command, effectiveShell, pinnedRuntime),
     shellOverride
   }
 }

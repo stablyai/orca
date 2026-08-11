@@ -173,6 +173,17 @@ describe('prunePendingSends', () => {
 })
 
 describe('pendingSendsAsMessages', () => {
+  it('returns the empty input without reading existing history', () => {
+    const pending: NativeChatPendingSend[] = []
+    const unreadableHistory = new Proxy([] as NativeChatMessage[], {
+      get: () => {
+        throw new Error('existing history was read')
+      }
+    })
+
+    expect(pendingSendsAsMessages(pending, unreadableHistory)).toEqual([])
+  })
+
   it('maps pending sends to prefixed scrape-source user messages sorted by sentAt', () => {
     const messages = pendingSendsAsMessages([{ id: 'p1', text: 'queued text', sentAt: 42 }])
     expect(messages).toEqual([

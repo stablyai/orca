@@ -108,13 +108,13 @@ import {
   type WorkspaceEmojiReplacement,
   type WorkspaceEmojiSuggestion
 } from '@/lib/workspace-emoji-shortcodes'
-import { WorkspaceEmojiSuggestionPopover } from './WorkspaceEmojiSuggestionPopover'
+import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
 
 type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 
 type SmartWorkspaceNameFieldProps = {
-  repos: RepoOption[]
+  repos: readonly RepoOption[]
   repoId: string
   onRepoChange: (repoId: string) => void
   value: string

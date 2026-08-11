@@ -33,6 +33,8 @@ export const AGENT_MAP_RING_HEADER_HEIGHT = 40
  */
 export const AGENT_MAP_LINEAGE_RELATION = 'orchestration'
 
+export type AgentMapMotionState = 'entering' | 'exiting'
+
 const PROJECT_PADDING = 12
 const WORLD_MARGIN = 32
 const RING_CONTENT_OFFSET = AGENT_MAP_RING_HEADER_HEIGHT / 2
@@ -46,6 +48,7 @@ export type AgentMapAgentNode = {
   radius: number
   durationMinutes: number
   status: DashboardCardDotState
+  motionState?: AgentMapMotionState
 }
 
 export type AgentMapWorktreeRing = {
@@ -63,6 +66,7 @@ export type AgentMapWorktreeRing = {
   agents: AgentMapAgentNode[]
   statusCounts: AgentMapStatusCounts
   quiet: boolean
+  motionState?: AgentMapMotionState
 }
 
 export type AgentMapProjectRing = {
@@ -73,6 +77,7 @@ export type AgentMapProjectRing = {
   radius: number
   worktrees: AgentMapWorktreeRing[]
   agentCount: number
+  motionState?: AgentMapMotionState
 }
 
 export type AgentMapLayout = {

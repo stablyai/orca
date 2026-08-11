@@ -24,7 +24,7 @@ import {
   type AiVaultSubagentListArgs,
   type AiVaultSubagentListResult
 } from '../../shared/ai-vault-types'
-import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-read'
+import { handleAiVaultGetFirstUserPrompt } from '../ai-vault/session-first-user-prompt-handler'
 import { registerAiVaultResumeHandler, type AiVaultResumeHandlerOptions } from './ai-vault-resume'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -48,6 +48,14 @@ import {
   scanHostLegWithCache
 } from './ai-vault-host-leg-cache'
 import { requestedAiVaultSessionDepth } from '../../shared/ai-vault-session-depth'
+import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../shared/ai-vault-session-title'
+import {
+  resolveAiVaultSessionTitlesByHost,
+  type RuntimeAiVaultSessionTitleResolver
+} from './ai-vault-session-title-routing'
 
 const AI_VAULT_ALL_HOST_RUNTIME_TIMEOUT_MS = 3_000
 // Why: a remote home with many agent roots routinely needs seconds to walk,
@@ -62,7 +70,7 @@ type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
-    getSessionLiveness?: Parameters<typeof deleteAiVaultSession>[1]['getSessionLiveness']
+    resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
   }
 
 let scanCoordinator = new AiVaultScanCoordinator()
@@ -71,11 +79,13 @@ const listCancellations = createSenderScopedRequestCancellations()
 // Shared by the IPC registration and the test internals: a delete must drop
 // the multi-host leg cache, which this module owns the only caller of.
 const aiVaultDeleteDeps = {
-  invalidateMultiHostListCache: invalidateAiVaultHostLegCache,
-  getSessionLiveness: (
-    target: Parameters<NonNullable<AiVaultHandlerOptions['getSessionLiveness']>>[0]
-  ) => handlerOptions.getSessionLiveness?.(target) ?? Promise.resolve('unknown' as const)
+  invalidateMultiHostListCache: invalidateAiVaultHostLegCache
 }
+
+const resolveAiVaultSessionTitles = (
+  args: AiVaultSessionTitlesArgs
+): Promise<AiVaultSessionTitlesResult> =>
+  resolveAiVaultSessionTitlesByHost(args, handlerOptions.resolveRuntimeAiVaultSessionTitles)
 
 async function listAiVaultSessions(
   args?: AiVaultListArgs,
@@ -129,7 +139,7 @@ async function scanAiVaultSessionsByHostScope(
   const depth = requestedAiVaultSessionDepth(args)
   const scopePaths = args?.scopePaths ?? []
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
-    return scanLocalAiVaultSessions(args, signal)
+    return scanLocalAiVaultSessionsAsIssue(args, signal)
   }
   if (executionHostScope === 'all') {
     const runtimeHosts = getActiveRuntimeAiVaultHostInfosResult()
@@ -139,7 +149,7 @@ async function scanAiVaultSessionsByHostScope(
       ...(sshHosts.issue ? [sshHosts.issue] : [])
     ]
     const scannedResults = await Promise.all([
-      scanLocalAiVaultSessionsForAllScope(args, signal),
+      scanLocalAiVaultSessionsAsIssue(args, signal),
       ...sshHosts.hostInfos.map((hostInfo) =>
         scanHostLegWithCache({
           cacheKey: `${cacheKey}|${toSshExecutionHostId(hostInfo.targetId)}`,
@@ -216,8 +226,10 @@ function getActiveSshAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<{ targ
 
 // Why: the SSH legs already degrade to an issue row so one bad host can't take
 // the shared Promise.all down; the local leg can throw too (parse-cache load,
-// WSL home resolution) and would otherwise discard every host's sessions.
-async function scanLocalAiVaultSessionsForAllScope(
+// WSL home resolution, scanner service supervision) and would otherwise discard
+// every host's sessions under 'all', or replace the list with a raw error string
+// under single-host scope.
+async function scanLocalAiVaultSessionsAsIssue(
   args: AiVaultListArgs | undefined,
   signal: AbortSignal | undefined
 ): Promise<AiVaultListResult> {
@@ -280,6 +292,11 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     }
   })
   ipcMain.handle(
+    'aiVault:resolveSessionTitles',
+    (_event, args: AiVaultSessionTitlesArgs): Promise<AiVaultSessionTitlesResult> =>
+      resolveAiVaultSessionTitles(args)
+  )
+  ipcMain.handle(
     'aiVault:cancelListSessions',
     (event, args: { requestToken?: string } | undefined): void => {
       if (typeof args?.requestToken === 'string' && args.requestToken.length <= 128) {
@@ -310,13 +327,13 @@ function resetAiVaultCacheForTests(): void {
   resetAiVaultHostLegCacheForTests()
   scanCoordinator = new AiVaultScanCoordinator()
   handlerOptions = {}
-  // The local leg delegates to the shared cache module; reset it too so tests
-  // never see a scan cached by an earlier case.
+  // Keep tests isolated from the shared local-leg cache.
   resetAiVaultSessionListCacheForTests()
 }
 
 export const _internals = {
   listAiVaultSessions,
+  resolveAiVaultSessionTitles,
   listAiVaultSubagentSessions,
   deleteAiVaultSession: (args?: AiVaultDeleteSessionArgs) =>
     deleteAiVaultSession(args, aiVaultDeleteDeps),

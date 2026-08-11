@@ -32,16 +32,8 @@ import TerminalSearch from '@/components/TerminalSearch'
 import type { PtyTransport } from './pty-transport'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
 import { fitPanes, isWindowsUserAgent } from './pane-helpers'
-import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
-import {
-  getExplicitRuntimeEnvironmentIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
-import {
-  selectRuntimeAwareSshStatus,
-  selectRuntimeAwareSshTargetLabel,
-  selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh'
+import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
@@ -93,6 +85,11 @@ import {
 import { useSystemPrefersDark } from './use-system-prefers-dark'
 import { useTerminalPaneGlobalEffects } from './use-terminal-pane-global-effects'
 import { useTerminalPaneLifecycle } from './use-terminal-pane-lifecycle'
+import { TerminalLinkActionPopover } from './TerminalLinkActionPopover'
+import {
+  closeTerminalLinkActionRequest,
+  type TerminalLinkActionRequest
+} from './terminal-link-action-request'
 import { useTerminalPaneContextMenu } from './use-terminal-pane-context-menu'
 import {
   detachTerminalPaneToTab,
@@ -118,7 +115,6 @@ import {
   resolveNativeChatLeafRoute,
   type NativeChatLeafRoute
 } from '../native-chat/native-chat-leaf-routing'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolvePaneKeyForManager } from '@/lib/pane-manager/pane-key-resolution'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
 import { clearTerminalScrollbackAndFollowOutput } from '@/lib/pane-manager/terminal-scrollback-clear'
@@ -138,6 +134,12 @@ import {
   readPrimarySelectionText
 } from '@/lib/primary-selection'
 import { APP_MENU_PASTE_EVENT } from '@/lib/app-menu-paste'
+import {
+  APP_MENU_SELECTION_ACTION_EVENT,
+  type AppMenuSelectionAction
+} from '@/lib/app-menu-selection-actions'
+import { isEditableTarget } from '@/lib/editable-target'
+import { copyTerminalSelection } from './terminal-selection-copy'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { WORKSPACE_FILE_PATH_MIME, WORKSPACE_FILE_PATHS_MIME } from '@/lib/workspace-file-drag'
 import { isTerminalSessionStateSaveFailure } from '../../../../shared/terminal-session-state-save-failure'
@@ -158,18 +160,17 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   getRepoExecutionHostId,
-  isRuntimeOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
-import { useRepoById } from '@/store/selectors'
+import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
   getTerminalQuickCommandScope,
-  isTerminalQuickCommandComplete,
-  terminalQuickCommandMatchesRepo
+  isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 import {
   createTerminalQuickCommandDraft,
   TerminalQuickCommandDialog
@@ -232,6 +233,7 @@ import {
   getCachedUnifiedTerminalTabForWorktree
 } from './terminal-unified-tab-lookup'
 import { resolveNativeChatLeafTitleAgent } from './native-chat-leaf-title-agent'
+import { selectTerminalPaneHostState } from './terminal-pane-host-state'
 import {
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
@@ -338,37 +340,14 @@ function TerminalPane(
   const isRendererVisible = isVisible && isWorktreeActive
   const isVisibleRef = useRef(isRendererVisible)
   isVisibleRef.current = isRendererVisible
-  const sshReconnectTargetId = useAppStore((store) => {
-    const connectionId = getConnectionIdFromState(store, worktreeId)
-    // Why: runtime-owned SSH targets are internal plumbing users can't connect to, so a reconnect prompt would mislead.
-    if (!connectionId || isRuntimeOwnedSshTargetId(connectionId)) {
-      return null
-    }
-    return connectionId
-  })
-  const nativeChatTranscriptIsLocalReadable = useAppStore((store) =>
-    isNativeChatTranscriptLocalReadable(getConnectionIdFromState(store, worktreeId))
-  )
-  // Which machine's SSH store this target belongs to: a remote server's per-environment bucket, or null for this machine's local SSH maps.
-  const sshReconnectEnvironmentId = useAppStore((store) =>
-    sshReconnectTargetId ? getExplicitRuntimeEnvironmentIdForWorktree(store, worktreeId) : null
-  )
-  const sshReconnectStatus = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshStatus(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : null
-  )
-  const sshReconnectTargetLabel = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetLabel(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : ''
-  )
-  // Why: a ghost target (removed from its host) can only fail reconnect, so the overlay offers Remove instead of Connect.
-  const sshReconnectTargetRemoved = useAppStore((store) =>
-    sshReconnectTargetId
-      ? selectRuntimeAwareSshTargetRemoved(store, sshReconnectEnvironmentId, sshReconnectTargetId)
-      : false
-  )
+  const {
+    nativeChatTranscriptIsLocalReadable,
+    sshReconnectEnvironmentId,
+    sshReconnectStatus,
+    sshReconnectTargetId,
+    sshReconnectTargetLabel,
+    sshReconnectTargetRemoved
+  } = useAppStore(useShallow((store) => selectTerminalPaneHostState(store, worktreeId)))
   useEffect(() => {
     if (!sshReconnectEnvironmentId) {
       return
@@ -384,6 +363,14 @@ function TerminalPane(
   const [paneCount, setPaneCount] = useState<number>(0)
   // Why: pane reorders can move panes without changing count or size, so overlay rects need an explicit layout-change render trigger.
   const [paneLayoutRevision, setPaneLayoutRevision] = useState(0)
+  const [terminalLinkActionRequest, setTerminalLinkActionRequest] =
+    useState<TerminalLinkActionRequest | null>(null)
+  const requestTerminalLinkAction = useCallback((request: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest(request)
+  }, [])
+  const closeTerminalLinkActions = useCallback((dismissed?: TerminalLinkActionRequest) => {
+    setTerminalLinkActionRequest((current) => closeTerminalLinkActionRequest(current, dismissed))
+  }, [])
   const [searchOpen, setSearchOpen] = useState(false)
   const searchOpenRef = useRef(false)
   searchOpenRef.current = searchOpen
@@ -800,31 +787,12 @@ function TerminalPane(
   const quickCommandRepoId =
     worktreeId === FLOATING_TERMINAL_WORKTREE_ID ? null : getRepoIdFromWorktreeId(worktreeId)
   const quickCommandRepo = useRepoById(quickCommandRepoId)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const quickCommandRepoLabel = quickCommandRepo
     ? quickCommandRepo.displayName || quickCommandRepo.path
     : quickCommandRepoId
       ? 'This Repo'
       : null
-  const {
-    hosts: quickCommandHosts,
-    refreshRemoteHost: refreshQuickCommandRemoteHost,
-    remoteHostLoadFailed: quickCommandHostLoadFailed,
-    remoteHostPending: quickCommandHostOwnershipPending
-  } = useTerminalQuickCommandHosts(worktreeId)
-  const visibleQuickCommandHosts = quickCommandHosts.map((host) => {
-    const commands = host.commands.filter(isTerminalQuickCommandComplete)
-    return {
-      globalCommands: commands.filter(
-        (command) => getTerminalQuickCommandScope(command).type === 'global'
-      ),
-      hostId: host.hostId,
-      label: host.label,
-      repoCommands: commands.filter((command) => {
-        const scope = getTerminalQuickCommandScope(command)
-        return scope.type === 'repo' && terminalQuickCommandMatchesRepo(command, quickCommandRepoId)
-      })
-    }
-  })
   const quickCommandGroupId =
     useAppStore(
       (s) =>
@@ -1376,6 +1344,7 @@ function TerminalPane(
     settings,
     settingsRef,
     requestOpenLinksInAppPreference,
+    requestTerminalLinkAction,
     effectiveMacOptionAsAlt,
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
@@ -1427,6 +1396,10 @@ function TerminalPane(
     resolveExternalPaneDropTarget,
     onExternalPaneDrop: handleExternalPaneDrop
   })
+
+  useEffect(() => {
+    closeTerminalLinkActions()
+  }, [closeTerminalLinkActions, isActive, isRendererVisible, paneLayoutRevision])
 
   useEffect(() => {
     const manager = managerRef.current
@@ -2159,9 +2132,44 @@ function TerminalPane(
       })
     }
 
+    const onAppMenuSelectionAction = (event: Event): void => {
+      const activeElement = document.activeElement
+      if (
+        !(activeElement instanceof Element) ||
+        !container.contains(activeElement) ||
+        isEditableTarget(activeElement) ||
+        activeElement.closest('[data-terminal-search-root]') ||
+        isInsideNativeChatRoot(activeElement)
+      ) {
+        return
+      }
+      const manager = managerRef.current
+      const pane = manager?.getActivePane() ?? manager?.getPanes()[0]
+      if (!pane) {
+        return
+      }
+      const action = (event as CustomEvent<AppMenuSelectionAction>).detail
+      if (action === 'copy') {
+        if (!pane.terminal.getSelection()) {
+          return
+        }
+        event.preventDefault()
+        void copyTerminalSelection({
+          terminal: pane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText
+        }).catch(() => undefined)
+        return
+      }
+      if (action === 'select-all') {
+        event.preventDefault()
+        pane.terminal.selectAll()
+      }
+    }
+
     container.addEventListener('keydown', onKeyPaste, { capture: true })
     container.addEventListener('paste', onPaste, { capture: true })
     window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+    window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     return () => {
       if (pasteSuppressionTimerId !== null) {
         window.clearTimeout(pasteSuppressionTimerId)
@@ -2169,6 +2177,7 @@ function TerminalPane(
       container.removeEventListener('keydown', onKeyPaste, { capture: true })
       container.removeEventListener('paste', onPaste, { capture: true })
       window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
+      window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
     }
   }, [isActive, worktreeId, keybindings, forceBracketedMultilineTextPaste, tabId])
 
@@ -2509,6 +2518,44 @@ function TerminalPane(
     forceBracketedMultilineTextPaste,
     rightClickToPaste
   })
+  const {
+    executionHostId: quickCommandExecutionHostId,
+    hosts: quickCommandHosts,
+    refreshRemoteHost: refreshQuickCommandRemoteHost,
+    remoteHostLoadFailed: quickCommandHostLoadFailed,
+    remoteHostPending: quickCommandHostOwnershipPending
+  } = useTerminalQuickCommandHosts(worktreeId, contextMenu.open)
+  const visibleQuickCommandHosts = useMemo(
+    () =>
+      quickCommandHosts.map((host) => {
+        const commands = host.commands.filter(isTerminalQuickCommandComplete)
+        return {
+          globalCommands: commands.filter(
+            (command) => getTerminalQuickCommandScope(command).type === 'global'
+          ),
+          hostId: host.hostId,
+          label: host.label,
+          repoCommands: commands.filter((command) => {
+            const scope = getTerminalQuickCommandScope(command)
+            return (
+              scope.type === 'repo' &&
+              terminalQuickCommandMatchesWorkspaceProject(command, {
+                commandHostId: host.hostId,
+                projectHostSetups: projectHostSetupProjection.setups,
+                targetHostId: quickCommandExecutionHostId,
+                targetRepoId: quickCommandRepoId
+              })
+            )
+          })
+        }
+      }),
+    [
+      projectHostSetupProjection.setups,
+      quickCommandExecutionHostId,
+      quickCommandHosts,
+      quickCommandRepoId
+    ]
+  )
   useEffect(() => {
     if (contextMenu.open) {
       refreshQuickCommandRemoteHost()
@@ -2986,6 +3033,7 @@ function TerminalPane(
             <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
               <NativeChatView
                 terminalTabId={tabId}
+                isVisible={isRendererVisible}
                 paneKey={makePaneKey(tabId, chatPane.leafId)}
                 targetPtyId={chatPanePtyId}
                 launchAgent={chatPaneLaunchAgent}
@@ -3038,6 +3086,7 @@ function TerminalPane(
           contextMenu.menuPaneId !== null && contextMenu.menuPaneId === expandedPaneId
         }
         onCopy={() => void contextMenu.onCopy()}
+        onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
@@ -3068,6 +3117,10 @@ function TerminalPane(
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
+      />
+      <TerminalLinkActionPopover
+        request={terminalLinkActionRequest}
+        onClose={closeTerminalLinkActions}
       />
       {/* Why: repos is a broad store slice; only subscribe while the editor is visible. */}
       {quickCommandEditorOpen ? (

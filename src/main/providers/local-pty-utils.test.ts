@@ -93,9 +93,21 @@ describe('validateWorkingDirectory', () => {
 
   it('rejects a missing native Windows path', () => {
     existsSyncMock.mockReturnValue(false)
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
 
-    expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/does not exist/)
-    expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    try {
+      expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(
+        /does not exist.*orca: 1\.4\.178-test/
+      )
+      expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+    } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
+    }
   })
 
   it('rejects a native Windows path that exists but is not a directory', () => {

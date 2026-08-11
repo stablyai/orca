@@ -19,6 +19,8 @@ export type {
 
 export type PtyProviderBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   /** Authoritative normal buffer captured beside an alternate-screen frame. */
   scrollbackAnsi?: string
   cols: number

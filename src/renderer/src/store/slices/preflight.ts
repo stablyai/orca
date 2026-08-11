@@ -90,10 +90,13 @@ export const createPreflightSlice: StateCreator<AppState, [], [], PreflightSlice
       preflightStatusError: null
     })
 
+    const localPreflightCheck = window.api?.preflight?.check
     const request = (
       runtimeTarget.kind === 'environment'
         ? callRuntimeRpc<PreflightStatus>(runtimeTarget, 'preflight.check', force ? { force } : {})
-        : window.api.preflight.check(preflightArgs)
+        : localPreflightCheck
+          ? localPreflightCheck(preflightArgs)
+          : Promise.reject(new Error('Desktop preflight API is unavailable.'))
     )
       .then((status) => {
         if (requestId !== latestPreflightRequestId) {

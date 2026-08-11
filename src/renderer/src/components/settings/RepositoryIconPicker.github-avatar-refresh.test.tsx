@@ -106,7 +106,7 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
         label: 'stablyai/orca'
       }
     })
-    // Offline/unauthed: the parent lookup returns null. The fork's own origin
+    // Offline/unauthed: the parent lookup returns null. The same-name origin
     // owner must NOT be persisted over the parent identity.
     apiMocks.repoUpstream.mockResolvedValueOnce(null)
     apiMocks.repoSlug.mockResolvedValueOnce({ owner: 'parkerrex', repo: 'orca' })
@@ -117,6 +117,5 @@ describe('RepositoryIconPicker GitHub avatar refresh', () => {
     await flushEffects()
 
     expect(updateRepo).not.toHaveBeenCalled()
-    expect(apiMocks.repoSlug).not.toHaveBeenCalled()
   })
 })

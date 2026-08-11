@@ -39,7 +39,10 @@ import {
   shutdownDaemon
 } from './daemon/daemon-init'
 import {
-  hasRecordedLegacySharedCodexPane,
+  type CodexPaneHomeRoute,
+  getCodexPaneAccount,
+  hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -159,6 +162,11 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
+import {
+  startWindowsDesktopBeforeShellPathReady,
+  type WindowsDesktopStartupServices
+} from './startup/windows-desktop-shell-path-startup'
 import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
@@ -215,6 +223,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
+import { reconcileRetainedCodexHookHomes } from './codex/retained-codex-hook-state'
 import {
   ensureRealHomeCodexHookState,
   isRealHomeCodexHookLaneUsable
@@ -252,7 +261,10 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
-import { setDefaultWslDistroOverride } from './git/runner'
+import {
+  configureWindowsHostGitEnvironmentReadiness,
+  setDefaultWslDistroOverride
+} from './git/runner'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -266,6 +278,7 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
@@ -398,10 +411,23 @@ function handleCodexHomePtySpawned(args: {
   id: string
   codexHomePath: string | null
   reattached?: boolean
+  reattachedHomeRoute?: CodexPaneHomeRoute | null
   launchEnv?: NodeJS.ProcessEnv
   startedAt?: Date
   startedSequence?: number
 }): void {
+  // Why: only shared or ambiguous retained shells can create rollout logs that still need publication.
+  if (args.reattached && args.startedSequence !== undefined) {
+    const paneAccount = getCodexPaneAccount(args.id)
+    const homeRoute =
+      args.reattachedHomeRoute !== undefined
+        ? (args.reattachedHomeRoute ?? undefined)
+        : paneAccount?.homeRoute
+    if (codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
+      codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
+      return
+    }
+  }
   const fullScanRequired =
     codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,
@@ -904,7 +930,7 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   })
 }
 
-function startTerminalRuntimeStartupServices(): Promise<void> {
+function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: both desktop and headless serve must adopt the same persistent provider before creating terminals or a renderer.
@@ -915,10 +941,19 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
-      if (codexRuntimeHome?.isHostSystemDefaultRealHome() && hasRecordedLegacySharedCodexPane()) {
+      // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
+      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
+          const settings = store?.getSettings()
+          reconcileRetainedCodexHookHomes({
+            hookService: codexHookService,
+            hooksEnabled:
+              isAgentStatusHooksEnabled(settings) &&
+              settings?.disabledTuiAgents.includes('codex') !== true,
+            runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
+          })
         }
       }
       // Why: retained shells can invoke Codex immediately after the startup gate.
@@ -952,19 +987,24 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       console.error('[agent-hooks] Failed to start local hook server:', error)
     }
   })
-  firstWindowStartupServicesReady = startupServices.firstWindowReady
-  localPtyStartupReady = startupServices.localPtyReady
-  localPtyProviderStartupReady = startupServices.localPtyProviderReady
-  void firstWindowStartupServicesReady.then(() => {
+  void startupServices.firstWindowReady.then(() => {
     logStartupMilestone('first-window-startup-services-ready')
   })
-  void localPtyStartupReady.then(() => {
+  void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
     void reapRestoredSubagentsWithoutLiveAgent().catch((error) => {
       console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
     })
   })
-  return firstWindowStartupServicesReady
+  return startupServices
+}
+
+function bindTerminalRuntimeStartupServices(
+  services: Promise<WindowsDesktopStartupServices>
+): void {
+  firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
+  localPtyStartupReady = services.then((value) => value.localPtyReady)
+  localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)
 }
 
 function prepareCodexRuntimeHomeForLaunch(
@@ -1220,7 +1260,7 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
-function openMainWindow(): BrowserWindow {
+function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -1309,6 +1349,7 @@ function openMainWindow(): BrowserWindow {
       void presentRendererRecoveryPrompt(recentRecoveryCount)
     },
     deferLoad: true,
+    ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1347,6 +1388,9 @@ function openMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
     setImmediate(createSystemTrayDeferred)
+  })
+  window.once('show', () => {
+    logStartupMilestone('window-shown')
   })
   const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
@@ -2124,6 +2168,24 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  const windowsShellPathHydration = createWindowsShellPathHydration()
+  configureWindowsHostGitEnvironmentReadiness(
+    process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
+  )
+  if (process.platform === 'win32') {
+    const settings = store.getSettings()
+    if (app.isPackaged) {
+      void windowsShellPathHydration.hydrate(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    } else {
+      windowsShellPathHydration.configure(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    }
+  }
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
@@ -2132,6 +2194,22 @@ void app.whenReady().then(async () => {
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
+    }
+    if (
+      ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
+      process.platform === 'win32'
+    ) {
+      if (app.isPackaged) {
+        void windowsShellPathHydration.hydrate(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      } else {
+        windowsShellPathHydration.configure(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      }
     }
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
@@ -2184,7 +2262,12 @@ void app.whenReady().then(async () => {
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
-  agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  agentAwakeService.setMode(
+    normalizeComputerAwakeMode(
+      store.getSettings().computerAwakeMode,
+      store.getSettings().keepComputerAwakeWhileAgentsRun
+    )
+  )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
@@ -2742,7 +2825,7 @@ void app.whenReady().then(async () => {
     if (isAgentStatusHooksEnabled(store.getSettings())) {
       const managedHookStore = store
       void applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
@@ -2916,7 +2999,20 @@ void app.whenReady().then(async () => {
     }
   })
 
-  startTerminalRuntimeStartupServices()
+  const shellPathReady = windowsShellPathHydration.whenReady()
+  let desktopWindow: BrowserWindow | null = null
+  if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
+    const desktopStartup = startWindowsDesktopBeforeShellPathReady({
+      openWindow: () => openMainWindow({ revealOnDidFinishLoad: true }),
+      shellPathReady,
+      startServices: startTerminalRuntimeStartupServices
+    })
+    desktopWindow = desktopStartup.window
+    bindTerminalRuntimeStartupServices(desktopStartup.services)
+  } else {
+    await shellPathReady
+    bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
+  }
   app.on('activate', handleMacAppActivation)
 
   if (serveOptions) {
@@ -3000,15 +3096,21 @@ void app.whenReady().then(async () => {
   }
 
   // Why: window and RPC startup run in parallel; registerPtyHandlers gates PTY spawns so RPC binds without racing the daemon provider swap.
+  const desktopRuntimeRpc = runtimeRpc
+  if (!desktopRuntimeRpc) {
+    throw new Error('runtime_rpc_unavailable')
+  }
   const [win, runtimeRpcStartResult] = await Promise.all([
-    Promise.resolve(openMainWindow()),
-    runtimeRpc.start().then(
-      () => ({ ok: true as const }),
-      (error: unknown) => {
-        recordRuntimeRpcStartFailure(error)
-        return { ok: false as const, error }
-      }
-    )
+    Promise.resolve(desktopWindow ?? openMainWindow()),
+    shellPathReady
+      .then(() => desktopRuntimeRpc.start())
+      .then(
+        () => ({ ok: true as const }),
+        (error: unknown) => {
+          recordRuntimeRpcStartFailure(error)
+          return { ok: false as const, error }
+        }
+      )
   ])
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)

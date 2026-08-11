@@ -233,6 +233,13 @@ describe('WslHookRelayManager', () => {
     return { manager: new WslHookRelayManager(deps), deps }
   }
 
+  it('exposes the stable guest endpoint instance key with a port fallback', () => {
+    expect(createManager({}).manager.getInstanceKey()).toBe('testinstance')
+    expect(createManager({ instanceKey: () => 'unsafe/key' }).manager.getInstanceKey()).toBe(
+      'port43117'
+    )
+  })
+
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})
     manager.ensureForDistro('Ubuntu')

@@ -34,19 +34,26 @@ exec "$ORCA_POWERSHELL" -NoProfile -ExecutionPolicy Bypass -File "$ORCA_BRIDGE_P
 
 export function buildWslBridgeScript(): string {
   return `${BRIDGE_MANAGED_MARKER}
-[CmdletBinding(PositionalBinding=$false)]
-param(
-  [Parameter(Mandatory=$true, Position=0)]
-  [string]$OrcaLauncher,
-
-  [string]$WslCwd,
-
-  [Parameter(ValueFromRemainingArguments=$true)]
-  [string[]]$ForwardArgs
-)
-
 $exitCode = 0
 try {
+  # Why: a param block prefix-binds forwarded flags such as --for in PowerShell 5.1.
+  if ($args.Count -lt 1) {
+    throw 'Invalid Orca WSL CLI bridge invocation.'
+  }
+  [string]$OrcaLauncher = $args[0]
+  [string]$WslCwd = ''
+  [int]$ForwardArgStart = 1
+  if ($args.Count -ge 2 -and $args[1] -eq '-WslCwd') {
+    if ($args.Count -lt 3) {
+      throw 'Invalid Orca WSL CLI bridge invocation.'
+    }
+    $WslCwd = $args[2]
+    $ForwardArgStart = 3
+  }
+  [string[]]$ForwardArgs = @()
+  if ($args.Count -gt $ForwardArgStart) {
+    $ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])
+  }
   if ([string]::IsNullOrEmpty($WslCwd)) {
     Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue
   } else {

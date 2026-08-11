@@ -69,6 +69,8 @@ vi.mock('@/lib/workspace-tab-palette-activation', () => ({
 vi.mock('@/components/ui/command', async () => {
   const React = await import('react')
   return {
+    Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    CommandGroup: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     // Why the commandProps passthrough: cmdk resolves Enter against its `value`, so the controlled
     // value is the only honest stand-in for "what would Enter activate" without mounting real cmdk.
     CommandDialog: ({
@@ -311,6 +313,28 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
 
     expect(getRenderedRowIds().find((id) => id.length > 0)).toBe('workspace-tab:tab-host')
     expect(getCommandValue()).toBe('workspace-tab:tab-host')
+  })
+
+  // Why: after typing, arrow moves must stick. Dropping onValueChange while cmdk already
+  // advanced its internal cursor made the next ArrowDown a no-op (Object.is short-circuit).
+  it('keeps arrow selection after the typed query ranking has committed', async () => {
+    await renderPalette(makeTypedRelevanceState())
+
+    await act(async () => {
+      setCommandQuery?.('perf')
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+
+    const rows = getRenderedRowIds().filter((id) => id.length > 0)
+    expect(rows.length).toBeGreaterThan(1)
+
+    await act(async () => {
+      setCommandSelection?.(rows[1])
+    })
+    await flushEffects()
+
+    expect(getCommandValue()).toBe(rows[1])
   })
 
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {

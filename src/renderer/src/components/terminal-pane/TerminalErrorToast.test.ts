@@ -1,10 +1,35 @@
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+
+import React from 'react'
+import { cleanup, render, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const environmentMocks = vi.hoisted(() => ({
+  resolveFooter: vi.fn()
+}))
+
+vi.mock('@/lib/client-environment-info', () => ({
+  resolveClientEnvironmentFooter: environmentMocks.resolveFooter
+}))
+
 import {
+  TerminalErrorToast,
   humanizeTerminalError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
+
+beforeEach(() => {
+  environmentMocks.resolveFooter.mockReset()
+  environmentMocks.resolveFooter.mockResolvedValue(
+    ['---', 'Orca: 1.4.178-rc.2', 'OS: darwin 25.0.0 (arm64)', 'Shell: /bin/zsh'].join('\n')
+  )
+})
+
+afterEach(() => {
+  cleanup()
+})
 
 const SSH_FAILURE =
   "SSH connection failed: Error invoking remote method 'ssh:connect': Error: Relay package for linux-x64 not found locally."
@@ -106,5 +131,49 @@ describe('shouldOfferDaemonRestart', () => {
   it('does not match unrelated terminal spawn errors', () => {
     expect(shouldOfferDaemonRestart('SSH connection is not active.')).toBe(false)
     expect(shouldOfferDaemonRestart('node-pty: open_slave failed: EMFILE (errno 24)')).toBe(false)
+  })
+})
+
+describe('TerminalErrorToast environment footer', () => {
+  it('appends client environment details to local errors', async () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'Paste failed.',
+        onDismiss: vi.fn()
+      })
+    )
+
+    await waitFor(() => expect(view.container.textContent).toContain('Orca: 1.4.178-rc.2'))
+  })
+
+  it('does not retain a prior async footer when the next error already has one', async () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: 'First failure.',
+        onDismiss: vi.fn()
+      })
+    )
+    await waitFor(() => expect(view.container.textContent).toContain('Orca: 1.4.178-rc.2'))
+
+    view.rerender(
+      React.createElement(TerminalErrorToast, {
+        error: 'Second failure.\n\n---\nOrca: embedded\nOS: linux 6.8 (x64)',
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent).toContain('Orca: embedded')
+    expect(view.container.textContent).not.toContain('Orca: 1.4.178-rc.2')
+  })
+
+  it('omits client details for every SSH reconnect-owned error', async () => {
+    render(
+      React.createElement(TerminalErrorToast, {
+        error: SSH_FAILURE,
+        onDismiss: vi.fn()
+      })
+    )
+
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
   })
 })

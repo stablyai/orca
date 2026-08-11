@@ -34,10 +34,10 @@ export function FeatureSetupInlineTerminal({
   const setupRuntime = runtimeContext ?? activeSkillRuntime
   const agentRuntime = getOnboardingFeatureSetupAgentRuntime(setupRuntime)
   const copiedCommand = buildSkillCommandForRuntime(command, agentRuntime)
-  const runtimeCommand = buildSkillSetupTerminalCommand(
-    copiedCommand,
-    setupRuntime.terminalShellOverride,
-    agentRuntime
+  const prepareCommandForShell = useCallback(
+    (terminalCommand: string, effectiveShell: string | undefined) =>
+      buildSkillSetupTerminalCommand(terminalCommand, effectiveShell, agentRuntime),
+    [agentRuntime]
   )
 
   const selectionTelemetry = useMemo(
@@ -76,8 +76,10 @@ export function FeatureSetupInlineTerminal({
 
   return (
     <OnboardingInlineCommandTerminal
-      command={runtimeCommand}
+      command={copiedCommand}
+      prepareCommandForShell={prepareCommandForShell}
       shellOverride={setupRuntime.terminalShellOverride}
+      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
       title={translate(
         'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
         'Skill setup'

@@ -54,6 +54,11 @@ import {
   isDefaultBranchWorkspace,
   isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  getPairedDeviceIdsByEnvironment,
+  isWorkspaceFromOtherDevice
+} from '@/components/sidebar/workspace-creator-visibility'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
@@ -79,7 +84,8 @@ import {
   createWorktreePaletteRequestGuard,
   getNextWorktreePaletteSelection,
   getWorktreePaletteSelectionItemIds,
-  getWorktreePaletteCreateActionState
+  getWorktreePaletteCreateActionState,
+  type WorktreePaletteRequestGuard
 } from '@/lib/worktree-palette-create-action'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import {
@@ -169,6 +175,8 @@ import { resolvePaletteFocusRestoreTarget } from '@/components/cmd-j/palette-foc
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import { buildPluginQuickActions } from '@/components/cmd-j/plugin-quick-actions'
+import { WorkspaceEmojiSuggestionPopover } from '@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover'
+import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePluginCommands } from '@/store/plugin-panels'
 import {
   getComposerEligibleRepos,
@@ -260,8 +268,11 @@ type PaletteListEntry = PaletteItem | CreateWorktreePaletteItem | SectionHeader 
 
 const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_QUICK_ACTION_ID}`
 
-// Why: outlast the CommandDialog close animation (~150–200ms) so gated status maps stay live until fading rows are gone.
-const PALETTE_STATUS_INPUTS_LINGER_MS = 300
+// Why: outlast the CommandDialog close animation so its rows do not disappear mid-fade.
+const PALETTE_CLOSE_LINGER_MS = 300
+// Why `jump-palette-item`: selection chrome lives in main.css — flat accent is invisible on light popovers.
+const JUMP_PALETTE_ITEM_CLASSNAME =
+  'jump-palette-item group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 text-left outline-none transition-[background-color,box-shadow]'
 
 type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem
 
@@ -506,9 +517,42 @@ function getSettingsTargetFromSectionId(sectionId: string): {
 }
 
 export default function WorktreeJumpPalette(): React.JSX.Element | null {
+  const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
+  const [lingering, setLingering] = useState(visible)
+  useEffect(() => {
+    if (visible) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), PALETTE_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [visible])
+  // Why: reopening must invalidate a pending create lookup from the previous content mount.
+  const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
+
+  if (!visible && !lingering) {
+    return null
+  }
+  return (
+    <WorktreeJumpPaletteContent
+      visible={visible}
+      lingering={lingering}
+      createLookupGuard={createLookupGuard}
+    />
+  )
+}
+
+function WorktreeJumpPaletteContent({
+  visible,
+  lingering,
+  createLookupGuard
+}: {
+  visible: boolean
+  lingering: boolean
+  createLookupGuard: WorktreePaletteRequestGuard
+}): React.JSX.Element | null {
   // Why: subscribe to language changes so translated memos recompute without a fake i18n.language dependency.
   useTranslation()
-  const visible = useAppStore((s) => s.activeModal === 'worktree-palette')
   const closeModal = useAppStore((s) => s.closeModal)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -524,27 +568,14 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
   const pendingWorktreeCreations = useAppStore((s) => s.pendingWorktreeCreations)
   const pluginCommands = usePluginCommands()
-  // Why: keep status maps subscribed through the close animation — dropping them while CommandDialog fades out would flash rows empty mid-animation.
-  const [statusInputsLingering, setStatusInputsLingering] = useState(false)
-  useEffect(() => {
-    if (visible) {
-      setStatusInputsLingering(true)
-      return
-    }
-    const timer = window.setTimeout(
-      () => setStatusInputsLingering(false),
-      PALETTE_STATUS_INPUTS_LINGER_MS
-    )
-    return () => window.clearTimeout(timer)
-  }, [visible])
-  const paletteStatusInputsActive = visible || statusInputsLingering
-  // Why: these hot status maps get a new identity on every app-wide write, so gate the subscription on active-or-closing to stop the always-mounted palette re-rendering on unrelated terminals.
+  const paletteStatusInputsActive = visible || lingering
+  // Why: keep hot status maps live through the shell's close-animation linger.
   // Why: ptyIdsByTabId must be included — slept tabs keep a wake-hint sessionId in tab.ptyId, so without it the palette dot would lie green.
   const { ptyIdsByTabId, terminalLayoutsByTabId, tabsByWorktree } = useAppStore(
     useShallow((s) => selectPaletteStatusInputs(s, paletteStatusInputsActive))
   )
   const { prCache, issueCache, hostedReviewCache } = useAppStore(
-    useShallow((s) => selectWorktreePaletteCacheInputs(s, visible || statusInputsLingering))
+    useShallow((s) => selectWorktreePaletteCacheInputs(s, paletteStatusInputsActive))
   )
   const migrationUnsupportedByPtyId = useAppStore((s) => s.migrationUnsupportedByPtyId)
   const activeView = useAppStore((s) => s.activeView)
@@ -592,6 +623,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
@@ -608,7 +640,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
-  const latestQueryRef = useRef('')
   // Why: the id cmdk auto-selected for the last committed list, so a late recent-order snapshot can
   // tell "nobody has moved the highlight yet" from "the user arrowed somewhere deliberately".
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -632,7 +663,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   const inputRef = useRef<HTMLInputElement>(null)
   const fallbackFocusOuterFrameRef = useRef<number | null>(null)
   const fallbackFocusInnerFrameRef = useRef<number | null>(null)
-  const createLookupGuard = useMemo(() => createWorktreePaletteRequestGuard(), [])
   const preserveCreateLookupOnCloseRef = useRef(false)
 
   const repoMap = useMemo(() => new Map(repos.map((r) => [r.id, r])), [repos])
@@ -726,6 +756,13 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       ),
     [agentStatusByPaneKey, tabsByWorktree]
   )
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      hideWorkspacesFromOtherDevices
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
 
   // Why: empty-query mirrors sidebar filters so Search opens on the same quiet list; typed search widens to global non-archived scope.
   const emptyQueryVisibleWorktrees = useMemo(
@@ -749,6 +786,12 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           return false
         }
         if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
+          return false
+        }
+        if (
+          hideWorkspacesFromOtherDevices &&
+          isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
+        ) {
           return false
         }
         if (
@@ -777,6 +820,8 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
       hideCliCreatedWorkspaces,
       hideDefaultBranchWorkspace,
       hideDetachedHeadWorkspaces,
+      hideWorkspacesFromOtherDevices,
+      pairedDeviceIdsByEnvironment,
       ptyIdsByTabId,
       showSleepingWorkspaces,
       tabsByWorktree,
@@ -1828,7 +1873,6 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           ? document.activeElement
           : null
       skipRestoreFocusRef.current = false
-      latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
       // Why: reset on open, not on close — closing races the fade-out, and a
@@ -1865,16 +1909,23 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
     showCreateAction
   })
 
-  const handleCommandSelectionChange = useCallback(
-    (nextItemId: string) => {
-      // Why: cmdk can report the old list head before the deferred query commits its new ranking.
-      if (latestQueryRef.current !== deferredQuery) {
-        return
-      }
-      setSelectedItemId(nextItemId)
-    },
-    [deferredQuery]
-  )
+  // Why: cmdk writes its internal cursor *before* calling onValueChange. Dropping that
+  // callback (e.g. while deferredQuery lags the keystroke) leaves internal state advanced
+  // while the controlled `value` prop stays put — the next ArrowDown/Up then no-ops on
+  // cmdk's Object.is guard, so keyboard navigation dies after typing. Always accept the
+  // report so the cursor stays aligned; the deferred-commit effect below re-auto-selects
+  // the new ranking head once the list the user sees actually changes.
+  const handleCommandSelectionChange = useCallback((nextItemId: string) => {
+    setSelectedItemId(nextItemId)
+  }, [])
+
+  // Why: while query is mid-deferral, cmdk (and mid-lag arrows) can latch a selection
+  // against the previous ranking. When the deferred list commits, snap Enter back to the
+  // new head — matching handleQueryChange's clear, but covering selection that landed
+  // after the keystroke and before this commit.
+  useLayoutEffect(() => {
+    setSelectedItemId('')
+  }, [deferredQuery])
 
   useEffect(() => {
     const isCreateWorkspaceHighlighted =
@@ -1888,11 +1939,15 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
   }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
 
   const handleQueryChange = useCallback((nextQuery: string) => {
-    latestQueryRef.current = nextQuery
     setQuery(nextQuery)
     setSelectedItemId('')
     listRef.current?.scrollTo(0, 0)
   }, [])
+  const emojiInput = useWorkspaceEmojiShortcodeInput({
+    inputRef,
+    onValueChange: handleQueryChange,
+    value: query
+  })
 
   const cancelFallbackFocusFrames = useCallback((): void => {
     if (fallbackFocusOuterFrameRef.current !== null) {
@@ -2455,7 +2510,10 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
           'Search chats, terminals, worktrees, settings, and actions...'
         )}
         value={query}
-        onValueChange={handleQueryChange}
+        onValueChange={emojiInput.handleValueChange}
+        onClick={(event) => emojiInput.syncCursor(event.currentTarget)}
+        onSelect={(event) => emojiInput.syncCursor(event.currentTarget)}
+        onKeyDown={(event) => emojiInput.handleKeyDown(event)}
         wrapperClassName="mx-3 mt-3 rounded-lg border border-border/55 bg-muted/28 px-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
         iconClassName="mr-2.5 h-4 w-4 text-muted-foreground/60"
         className="h-12 text-[14px] placeholder:text-muted-foreground/75"
@@ -2470,6 +2528,19 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
             />
           </div>
         }
+      />
+      <WorkspaceEmojiSuggestionPopover
+        anchorRef={inputRef}
+        open={emojiInput.open}
+        commandValue={emojiInput.commandValue}
+        heading={translate('auto.components.new.workspace.SmartWorkspaceNameField.emoji', 'Emoji')}
+        suggestions={emojiInput.suggestions}
+        onCommandValueChange={emojiInput.onCommandValueChange}
+        onSelect={emojiInput.selectSuggestion}
+        onOpenChange={(open) => !open && emojiInput.close()}
+        portalContainer={dialogElement}
+        side="bottom"
+        contentClassName="w-80"
       />
       <PaletteFilterChips model={filterModel} filter={filter} onFilterChange={setRawFilter} />
       <CommandList
@@ -2523,7 +2594,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     key={entry.id}
                     value={CREATE_WORKTREE_ITEM_ID}
                     onSelect={handleCreateWorktree}
-                    className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground"
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'mt-1 py-1.5')}
                   >
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
                       <Plus size={13} aria-hidden="true" />
@@ -2567,10 +2638,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
                     data-current={isCurrentWorktree ? 'true' : undefined}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
                       <PaletteWorktreeStatusDot worktree={worktree} />
@@ -2696,10 +2764,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <FolderTree className="size-3.5" aria-hidden="true" />
@@ -2743,10 +2808,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Icon className="size-3.5" aria-hidden="true" />
@@ -2791,10 +2853,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <PaletteRecentTabStatusDot
@@ -2876,10 +2935,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Smartphone className="size-3.5" aria-hidden="true" />
@@ -2955,10 +3011,7 @@ export default function WorktreeJumpPalette(): React.JSX.Element | null {
                   key={entry.id}
                   value={entry.id}
                   onSelect={() => handleSelectItem(entry)}
-                  className={cn(
-                    'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                    'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                  )}
+                  className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                 >
                   <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                     <Globe className="size-3.5" aria-hidden="true" />

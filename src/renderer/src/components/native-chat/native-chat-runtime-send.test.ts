@@ -11,7 +11,9 @@ vi.mock('@/runtime/runtime-terminal-inspection', () => ({
 
 import {
   sendNativeChatMessage,
+  sendNativeChatTypedCommand,
   sendNativeChatMessageVerified,
+  typeNativeChatCommand,
   sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt,
   sendNativeChatAskAnswer,
@@ -249,6 +251,69 @@ describe('sendNativeChatMessageVerified', () => {
     expect(
       sendRuntimePtyInputVerified.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)
     ).toBe(false)
+  })
+})
+
+describe('typeNativeChatCommand', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sendRuntimePtyInput.mockReset().mockReturnValue(true)
+    sendRuntimePtyInputVerified.mockReset().mockResolvedValue(true)
+    resetNativeChatPtySendQueuesForTests()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    resetNativeChatPtySendQueuesForTests()
+  })
+
+  it('writes the Codex picker command as keys instead of one pasted text write', async () => {
+    const result = typeNativeChatCommand(SETTINGS, PTY, '/model')
+    await vi.runAllTimersAsync()
+
+    await expect(result).resolves.toBe(true)
+    expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '/',
+      'm',
+      'o',
+      'd',
+      'e',
+      'l',
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('queues composer commands as the same paced key sequence', async () => {
+    const handle = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    await vi.runAllTimersAsync()
+    await handle.settled
+
+    expectWriteOrder(sendRuntimePtyInputVerified.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      '/',
+      's',
+      't',
+      'a',
+      't',
+      'u',
+      's',
+      NATIVE_CHAT_SUBMIT
+    ])
+  })
+
+  it('does not clear into the next queued send after cancellation', async () => {
+    const command = sendNativeChatTypedCommand(SETTINGS, PTY, '/status')
+    command.cancel()
+    const next = sendNativeChatMessage(SETTINGS, PTY, 'next')
+    await vi.runAllTimersAsync()
+    await Promise.all([command.settled, next.settled])
+
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes('next'),
+      NATIVE_CHAT_SUBMIT
+    ])
   })
 })
 

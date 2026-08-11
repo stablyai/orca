@@ -89,6 +89,7 @@ type TerminalMenuState = {
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
+  onSelectAll: () => void
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
@@ -170,6 +171,14 @@ export function useTerminalPaneContextMenu({
       // typing works (see #592).
       focus: () => pane.terminal.focus()
     })
+  }
+
+  const onSelectAll = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      pane.terminal.selectAll()
+      pane.terminal.focus()
+    }
   }
 
   const onCopyPaneId = async (): Promise<void> => {
@@ -588,6 +597,7 @@ export function useTerminalPaneContextMenu({
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,
+    onSelectAll,
     onCopyTerminalId,
     onCopyPaneId,
     onPaste,

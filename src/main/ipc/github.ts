@@ -13,6 +13,7 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
+  GitHubReactionContent,
   PRRefreshOutcome,
   GitHubPRFile
 } from '../../shared/types'
@@ -39,6 +40,7 @@ import {
   getPRChecks,
   getPRCheckDetails,
   getPRComments,
+  setPRCommentReaction,
   resolveReviewThread,
   setPRFileViewed,
   addPRReviewComment,
@@ -662,6 +664,36 @@ export function registerGitHubHandlers(store: Store, stats: StatsCollector): voi
         args.prNumber,
         { noCache: args.noCache, prRepo: args.prRepo ?? null },
         repoConnectionId(repo),
+        ...localGitOptionArgs(store, repo)
+      )
+    }
+  )
+
+  ipcMain.handle(
+    'gh:setPRCommentReaction',
+    (
+      _event,
+      args: {
+        repoPath: string
+        repoId?: string | null
+        sourceContext?: TaskSourceContext | null
+        reactionSubjectId: string
+        content: GitHubReactionContent
+        reacted: boolean
+        prRepo?: GitHubOwnerRepo | null
+      }
+    ) => {
+      const repo = assertRegisteredRepo(args, store)
+      if (!args.reactionSubjectId?.trim()) {
+        return false
+      }
+      return setPRCommentReaction(
+        repo.path,
+        args.reactionSubjectId.trim(),
+        args.content,
+        args.reacted,
+        repoConnectionId(repo),
+        args.prRepo ?? null,
         ...localGitOptionArgs(store, repo)
       )
     }

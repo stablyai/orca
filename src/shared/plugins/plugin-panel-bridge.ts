@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
+import { isPluginPanelAction } from './plugin-host-api'
 
 /**
  * postMessage protocol between a sandboxed plugin panel iframe and the host
@@ -149,22 +149,4 @@ export function readPanelPongId(data: unknown): number | null {
   // isSafeInteger, not isInteger: zod's .int() rejects 2**53 and above, and a
   // wider reader would admit ids the watchdog can never have issued.
   return Number.isSafeInteger(frame.pingId) && frame.pingId >= 0 ? frame.pingId : null
-}
-
-/** Validates action params against the host API spec (shared with workers). */
-export function parsePanelActionParams(
-  action: string,
-  params: unknown
-): { ok: true; params: unknown } | { ok: false; error: string } {
-  const spec = getPluginHostMethodSpec(action)
-  if (!spec) {
-    return { ok: false, error: `unknown action: ${action}` }
-  }
-  const parsed = spec.params.safeParse(params)
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0]
-    const path = issue?.path.join('.') || '(root)'
-    return { ok: false, error: `${path}: ${issue?.message ?? 'invalid action params'}` }
-  }
-  return { ok: true, params: parsed.data }
 }

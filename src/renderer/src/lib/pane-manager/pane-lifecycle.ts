@@ -255,6 +255,12 @@ export function disposePane(
     /* ignore */
   }
   try {
+    // Drop renderer selection state before a recovery remount replaces the surface.
+    pane.terminal.clearSelection()
+  } catch {
+    /* ignore */
+  }
+  try {
     pane.terminal.dispose()
   } catch {
     /* ignore */
