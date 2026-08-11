@@ -8723,8 +8723,8 @@
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
-            "bitbucketDescription": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "bitbucketAccessToken": "access token"
+            "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
+            "af5ae87847": "access token"
           }
         },
         "jira": {
