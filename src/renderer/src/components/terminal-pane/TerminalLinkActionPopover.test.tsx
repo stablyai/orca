@@ -1,13 +1,20 @@
 // @vitest-environment happy-dom
 import type { ReactNode } from 'react'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import type { TerminalLinkActionRequest } from './terminal-link-action-request'
 
 const mocks = vi.hoisted(() => ({
   openSettingsPage: vi.fn(),
-  openSettingsTarget: vi.fn()
+  openSettingsTarget: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  writeClipboardText: vi.fn()
+}))
+
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, success: mocks.toastSuccess }
 }))
 
 vi.mock('@/store', () => ({
@@ -139,6 +146,49 @@ describe('TerminalLinkActionPopover', () => {
     expect(
       screen.getByText('System Browser').closest('button')?.querySelector('.lucide-external-link')
     ).toBeTruthy()
+  })
+
+  it('copies the resolved URL without closing the popover', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    mocks.writeClipboardText.mockResolvedValue(undefined)
+    const onClose = vi.fn()
+    const focusTerminal = vi.fn()
+    const request: TerminalLinkActionRequest = {
+      paneId: 1,
+      anchorX: 100,
+      anchorY: 200,
+      destination: 'https://example.com/hidden-destination',
+      kind: 'url',
+      primary: { label: 'Open link', run: vi.fn() },
+      focusTerminal
+    }
+
+    render(<TerminalLinkActionPopover request={request} onClose={onClose} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledWith(request.destination))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy())
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Copied link')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(focusTerminal).not.toHaveBeenCalled()
+  })
+
+  it('does not offer copy link for non-URL destinations', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    const request: TerminalLinkActionRequest = {
+      paneId: 1,
+      anchorX: 100,
+      anchorY: 200,
+      destination: '/tmp/example.ts',
+      kind: 'file',
+      primary: { label: 'Open file', run: vi.fn() },
+      focusTerminal: vi.fn()
+    }
+
+    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+
+    expect(screen.queryByRole('button', { name: 'Copy link' })).toBeNull()
   })
 
   it('opens the terminal link setting from the compact settings button', () => {

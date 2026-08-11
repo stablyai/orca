@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
-import { ExternalLink, Globe, Settings } from 'lucide-react'
+import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
+import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { useAppStore } from '@/store'
@@ -48,6 +50,8 @@ export function TerminalLinkActionPopover({
 }: TerminalLinkActionPopoverProps): React.JSX.Element {
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
+  const copyableDestination = request?.kind === 'url' ? request.destination : ''
+  const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -67,6 +71,28 @@ export function TerminalLinkActionPopover({
     'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
     'Terminal link settings'
   )
+  const copyLabel =
+    copyStatus === 'copied'
+      ? translate('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
+      : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+
+  const copyDestination = async (): Promise<void> => {
+    if (await copyText()) {
+      toast.success(
+        translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink',
+          'Copied link'
+        )
+      )
+      return
+    }
+    toast.error(
+      translate(
+        'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
+        'Failed to copy link'
+      )
+    )
+  }
 
   const openTerminalLinkSettings = (): void => {
     onClose()
@@ -104,6 +130,24 @@ export function TerminalLinkActionPopover({
             >
               {request.destination}
             </span>
+            {request.kind === 'url' ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    aria-label={copyLabel}
+                    className="text-muted-foreground"
+                    size="icon-xs"
+                    variant="ghost"
+                    onClick={() => void copyDestination()}
+                  >
+                    {copyStatus === 'copied' ? <Check /> : <Copy />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  {copyLabel}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

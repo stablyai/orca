@@ -2856,7 +2856,11 @@
             "openTaskTerminal": "Open task terminal",
             "systemBrowser": "System Browser",
             "orcaBrowser": "Orca Browser",
-            "terminalLinkSettings": "Terminal link settings"
+            "terminalLinkSettings": "Terminal link settings",
+            "copyLink": "Copy link",
+            "copied": "Copied",
+            "copiedLink": "Copied link",
+            "copyLinkFailed": "Failed to copy link"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
