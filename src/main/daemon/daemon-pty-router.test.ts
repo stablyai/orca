@@ -433,6 +433,7 @@ describe('DaemonPtyRouter', () => {
     const fresh = await router.spawn({ cols: 80, rows: 24 })
     router.write('v30-session', 'old-v30\n')
     router.write('v31-session', 'old-v31\n')
+    router.write('v32-session', 'old-v32\n')
     router.write(fresh.id, 'new\n')
 
     expect(legacyV30.spawn).toHaveBeenCalledWith({ sessionId: 'v30-session', cols: 80, rows: 24 })
@@ -441,6 +442,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacyV30.write).toHaveBeenCalledWith('v30-session', 'old-v30\n')
     expect(legacyV31.write).toHaveBeenCalledWith('v31-session', 'old-v31\n')
+    expect(legacyV32.write).toHaveBeenCalledWith('v32-session', 'old-v32\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
