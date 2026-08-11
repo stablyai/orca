@@ -131,6 +131,7 @@ function buildWslShellArgs(linuxCwd: string, distro?: string): string[] {
   return distro ? ['-d', distro, ...shellArgs] : shellArgs
 }
 
+/** Converts an MSYS drive spelling to the native cwd used by Windows terminal processes. */
 export function normalizeWindowsTerminalCwd(cwd: string): string {
   const match = cwd.match(/^\/([A-Za-z])(?:\/(.*))?$/)
   if (!match) {
