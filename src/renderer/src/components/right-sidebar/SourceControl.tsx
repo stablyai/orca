@@ -246,6 +246,7 @@ import {
 } from './source-control-pull-policy-error-notice'
 import { SourceControlTextGenerationDialog } from './SourceControlTextGenerationDialog'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import {
   hasConfiguredCommitMessageGenerationDefaults,
   hasConfiguredSourceControlTextGenerationDefaults
@@ -2753,26 +2754,18 @@ function SourceControlInner(): React.JSX.Element {
         setRightSidebarTab('checks')
       }
       try {
-        if (worktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(worktreeId, { linkedPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(worktreeId, { linkedGitLabMR: result.number })
-        }
-        if (worktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(worktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (worktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(worktreeId, { linkedGiteaPR: result.number })
+        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+        if (worktreeId && result.provider !== 'unsupported') {
+          await updateWorktreeMeta(worktreeId, createdLink.worktree)
         }
         const linkedReviewNumbers = {
-          linkedGitHubPR: result.provider === 'github' ? result.number : linkedGitHubPR,
+          linkedGitHubPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedGitLabMR,
           linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          ...createdLink.lookup
         }
         if (result.provider === 'gitlab') {
           await fetchHostedReviewForBranch(repoPath, branch, {

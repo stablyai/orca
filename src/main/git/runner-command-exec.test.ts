@@ -179,8 +179,8 @@ describe('commandExecFileAsync Windows command shims', () => {
 describe('runner execFile timeout handling', () => {
   beforeEach(() => {
     execFileMock.mockReset()
-    execFileSyncMock.mockReset()
     spawnMock.mockReset()
+    execFileSyncMock.mockReset()
     vi.useFakeTimers()
   })
 

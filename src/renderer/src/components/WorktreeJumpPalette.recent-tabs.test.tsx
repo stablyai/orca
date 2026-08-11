@@ -315,6 +315,28 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe('workspace-tab:tab-host')
   })
 
+  // Why: after typing, arrow moves must stick. Dropping onValueChange while cmdk already
+  // advanced its internal cursor made the next ArrowDown a no-op (Object.is short-circuit).
+  it('keeps arrow selection after the typed query ranking has committed', async () => {
+    await renderPalette(makeTypedRelevanceState())
+
+    await act(async () => {
+      setCommandQuery?.('perf')
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+
+    const rows = getRenderedRowIds().filter((id) => id.length > 0)
+    expect(rows.length).toBeGreaterThan(1)
+
+    await act(async () => {
+      setCommandSelection?.(rows[1])
+    })
+    await flushEffects()
+
+    expect(getCommandValue()).toBe(rows[1])
+  })
+
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
     await renderPalette({
       ...makeTypedRelevanceState(),

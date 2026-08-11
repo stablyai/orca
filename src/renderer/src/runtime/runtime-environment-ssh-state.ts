@@ -132,8 +132,9 @@ async function runEnvironmentSshTargetMetadataRefresh(environmentId: string): Pr
   useAppStore.getState().setEnvironmentSshTargetsMetadata(environmentId, targets, generation)
   const priorTargetIds = new Set(bucket?.targetLabels.keys() ?? [])
   // Why: read states after the write — a resync racing this fetch can label a target that never had one read.
-  const knownStates = useAppStore.getState().sshStateByEnvironment.get(environmentId)
-    ?.connectionStates
+  const knownStates = useAppStore
+    .getState()
+    .sshStateByEnvironment.get(environmentId)?.connectionStates
   const needStateRead = targets.filter(
     (target) => !priorTargetIds.has(target.id) || !knownStates?.has(target.id)
   )

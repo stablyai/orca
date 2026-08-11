@@ -1788,10 +1788,13 @@ describe('orchestration RPC methods', () => {
       })
     })
 
-    it('rejects invalid deps JSON', async () => {
+    it('rejects non-JSON deps', async () => {
       setup()
       await expect(
         call('orchestration.taskCreate', { spec: 'bad', deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+      await expect(
+        call('orchestration.taskCreate', { spec: 'bad', deps: '[task_example]' })
       ).rejects.toThrow('Invalid --deps')
     })
   })

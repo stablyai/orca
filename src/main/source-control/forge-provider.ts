@@ -15,6 +15,7 @@ import {
   getBitbucketPullRequestForBranchOrThrow,
   getBitbucketRepoSlug
 } from '../bitbucket/client'
+import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
 import {
   getGiteaPullRequest,
   getGiteaPullRequestForBranchOrThrow,
@@ -198,7 +199,7 @@ const gitHubForgeProvider = {
 
 const bitbucketForgeProvider = {
   id: 'bitbucket',
-  supportsReviewCreation: false,
+  supportsReviewCreation: true,
   resolveRepository: (context) =>
     getBitbucketRepoSlug(
       context.repoPath,
@@ -225,7 +226,8 @@ const bitbucketForgeProvider = {
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapBitbucketReview(pr) : null
-  }
+  },
+  createReview: createBitbucketPullRequest
 } satisfies ForgeProvider
 
 const azureDevOpsForgeProvider = {

@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning must keep platform launch setup, preflight, and lifecycle guards in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
+import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
@@ -246,16 +247,25 @@ function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
   delete env.ELECTRON_RUN_AS_NODE
 }
 
+function daemonEnvironmentDiagSuffix(): string {
+  const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+  const systemVersion =
+    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
+    release()
+  const platform = `${process.platform} ${systemVersion}`
+  return ` (orca: ${orca}, arch: ${process.arch}, platform: ${platform})`
+}
+
 /**
  * Formats a daemon preflight failure with the same ENOENT details node-pty exposes.
  */
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  const missingTarget = kind === 'helper' ? 'node-pty install' : 'working directory'
+  const diag = daemonEnvironmentDiagSuffix()
   return new DaemonProtocolError(
-    `Daemon's ${kind === 'helper' ? 'node-pty install' : 'working directory'} is gone ` +
-      `(worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT ` +
-      `(errno 2, No such file or directory) - ${detailName}='${path}'`
+    `Daemon's ${missingTarget} is gone (worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT (errno 2, No such file or directory) - ${detailName}='${path}'${diag}`
   )
 }
 
@@ -399,8 +409,9 @@ function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
  */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
+  const diag = daemonEnvironmentDiagSuffix()
   const formatted = new DaemonProtocolError(
-    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}`
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}${diag}`
   )
   if (err instanceof Error && err.stack) {
     formatted.stack = err.stack

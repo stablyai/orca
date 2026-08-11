@@ -16,6 +16,12 @@ export type HostedReviewProvider =
 
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
 
+// Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
+// there would either publish a live PR or fail at submit.
+export function hostedReviewProviderSupportsDraft(provider: HostedReviewProvider): boolean {
+  return provider !== 'bitbucket'
+}
+
 /** A linked review is identified by a positive integer PR/MR number. */
 export function isPositiveHostedReviewNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0

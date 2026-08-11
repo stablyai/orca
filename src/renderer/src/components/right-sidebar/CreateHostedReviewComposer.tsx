@@ -21,7 +21,10 @@ import {
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import type { HostedReviewProvider } from '../../../../shared/hosted-review'
+import {
+  hostedReviewProviderSupportsDraft,
+  type HostedReviewProvider
+} from '../../../../shared/hosted-review'
 import { stripBaseRef } from './useCreatePullRequestDialogFields'
 import type { DropdownActionKind, DropdownEntry } from './source-control-dropdown-items'
 import { CreateHostedReviewComposerFields } from './CreateHostedReviewComposerFields'
@@ -104,6 +107,9 @@ export function CreateHostedReviewComposer({
   onDropdownAction
 }: CreateHostedReviewComposerProps): React.JSX.Element {
   const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+  // Providers without draft reviews must not carry a stale draft flag into submit.
+  const supportsDraft = hostedReviewProviderSupportsDraft(provider)
+  const effectiveDraft = supportsDraft && draft
   const ReviewIcon = provider === 'gitlab' ? GitMerge : GitPullRequestArrow
   const normalizedBase = stripBaseRef(base)
   const strippedBranch = stripBaseRef(branch)
@@ -229,6 +235,7 @@ export function CreateHostedReviewComposer({
           setBody={setBody}
           draft={draft}
           setDraft={setDraft}
+          supportsDraft={supportsDraft}
           baseQuery={baseQuery}
           setBaseQuery={setBaseQuery}
           baseResults={baseResults}
@@ -265,7 +272,7 @@ export function CreateHostedReviewComposer({
               {getCreateButtonLabel({
                 isCreating,
                 pushBeforeCreate,
-                draft,
+                draft: effectiveDraft,
                 shortLabel: copy.shortLabel
               })}
             </span>

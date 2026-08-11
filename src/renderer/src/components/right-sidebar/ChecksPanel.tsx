@@ -100,9 +100,10 @@ import type {
 } from './pr-comments-ai-launch-ack'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github-links'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import type {
-  HostedReviewCreationEligibility,
-  HostedReviewProvider
+import {
+  hostedReviewProviderSupportsDraft,
+  type HostedReviewCreationEligibility,
+  type HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
@@ -188,6 +189,7 @@ import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
@@ -3906,26 +3908,18 @@ export default function ChecksPanel(): React.JSX.Element {
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
-        if (activeWorktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedPR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGiteaPR: result.number })
+        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+        if (activeWorktreeId && result.provider !== 'unsupported') {
+          await updateWorktreeMeta(activeWorktreeId, createdLink.worktree)
         }
         const linkedReviewNumbers = {
-          linkedGitHubPR: result.provider === 'github' ? result.number : linkedPR,
+          linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedGitLabMR,
           linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          ...createdLink.lookup
         }
         if (result.provider === 'gitlab') {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
@@ -4036,7 +4030,7 @@ export default function ChecksPanel(): React.JSX.Element {
         head: normalizeHostedReviewHeadRef(branch),
         title,
         body: prBody,
-        draft: prDraft,
+        draft: prDraft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
         worktreePath,
         useTemplate: prCreationDefaults.useTemplate
       })

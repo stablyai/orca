@@ -41,6 +41,7 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { fitRevealedPane } from './pane-reveal-fit'
 import { PaneIdentityRegistry } from './pane-identity-registry'
@@ -391,12 +392,15 @@ export class PaneManager {
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values())
+    suspendPaneRendering(this.panes.values(), {
+      owner: this,
+      livePanes: () => (this.destroyed ? [] : this.panes.values())
+    })
   }
 
   resumeRendering(): void {
     this.renderingSuspended = false
-    resumePaneRendering(this.panes.values())
+    resumePaneRendering(this.panes.values(), this)
   }
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {
@@ -410,6 +414,7 @@ export class PaneManager {
   destroy(): void {
     this.destroyed = true
     unregisterLivePaneManager(this)
+    releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
     for (const pane of this.panes.values()) {

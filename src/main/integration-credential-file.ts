@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs'
+import { chmodSync, statSync, writeFileSync } from 'node:fs'
 import { safeStorage } from 'electron'
 import {
   credentialDecryptionMessage,
@@ -12,6 +12,36 @@ export function credentialFileHasContent(path: string): boolean {
     return statSync(path).size > 0
   } catch {
     return false
+  }
+}
+
+// Falls back to 0600 plaintext when the OS keyring is unavailable, matching the
+// Linear/Jira token writers so a keyring-less box still connects.
+export function writeEncryptedCredential(
+  service: IntegrationCredentialService,
+  path: string,
+  value: string
+): void {
+  if (safeStorage.isEncryptionAvailable()) {
+    writeFileSync(path, safeStorage.encryptString(value), { mode: 0o600 })
+    restrictCredentialFileToOwner(path)
+    return
+  }
+  console.warn(
+    `[${service.toLowerCase()}] safeStorage encryption unavailable — storing credential in plaintext`
+  )
+  writeFileSync(path, value, { encoding: 'utf-8', mode: 0o600 })
+  restrictCredentialFileToOwner(path)
+}
+
+// Why: writeFileSync's `mode` only applies when it creates the file, so
+// rewriting an existing credential would silently keep looser permissions.
+// Best-effort: Windows has no POSIX modes, so chmod is a documented no-op there.
+export function restrictCredentialFileToOwner(path: string): void {
+  try {
+    chmodSync(path, 0o600)
+  } catch {
+    // Best-effort hardening; the write itself already succeeded.
   }
 }
 

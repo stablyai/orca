@@ -14,6 +14,7 @@ type CreateHostedReviewComposerFieldsProps = {
   setBody: (value: string) => void
   draft: boolean
   setDraft: (value: boolean) => void
+  supportsDraft: boolean
   baseQuery: string
   setBaseQuery: (value: string) => void
   baseResults: string[]
@@ -38,6 +39,7 @@ export function CreateHostedReviewComposerFields({
   setBody,
   draft,
   setDraft,
+  supportsDraft,
   baseQuery,
   setBaseQuery,
   baseResults,
@@ -159,25 +161,27 @@ export function CreateHostedReviewComposerFields({
         </div>
       </div>
 
-      <label
-        className={cn(
-          'flex h-7 items-center gap-2 rounded-md border border-border bg-background px-2 text-xs text-foreground transition-colors',
-          fieldsLocked
-            ? 'cursor-not-allowed opacity-60'
-            : 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
-        )}
-      >
-        <input
-          type="checkbox"
-          checked={draft}
-          disabled={fieldsLocked}
-          onChange={(event) => setDraft(event.target.checked)}
-          className="size-3.5 shrink-0 rounded border-border accent-primary"
-        />
-        <span className="min-w-0 flex-1 truncate">
-          {translate('auto.components.right.sidebar.SourceControl.78ddfd0bb4', 'Create as draft')}
-        </span>
-      </label>
+      {supportsDraft ? (
+        <label
+          className={cn(
+            'flex h-7 items-center gap-2 rounded-md border border-border bg-background px-2 text-xs text-foreground transition-colors',
+            fieldsLocked
+              ? 'cursor-not-allowed opacity-60'
+              : 'cursor-pointer hover:bg-accent hover:text-accent-foreground'
+          )}
+        >
+          <input
+            type="checkbox"
+            checked={draft}
+            disabled={fieldsLocked}
+            onChange={(event) => setDraft(event.target.checked)}
+            className="size-3.5 shrink-0 rounded border-border accent-primary"
+          />
+          <span className="min-w-0 flex-1 truncate">
+            {translate('auto.components.right.sidebar.SourceControl.78ddfd0bb4', 'Create as draft')}
+          </span>
+        </label>
+      ) : null}
 
       {baseResults.length > 0 ? (
         <div className="max-h-28 overflow-auto rounded-md border border-border p-1 scrollbar-sleek">
