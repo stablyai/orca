@@ -2087,6 +2087,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         // the pane to a bare shell instead of `--resume`-ing the agent logged in.
         const retainsResumableRecoveryIdentity =
           payload.state === 'done' &&
+          s.paneForegroundAgentByPaneKey[paneKey]?.shellForeground !== true &&
           isResumableTuiAgent(identity.agentType) &&
           providerSession !== undefined &&
           getAgentResumeArgv(identity.agentType, providerSession) !== null

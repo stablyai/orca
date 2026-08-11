@@ -2079,6 +2079,7 @@ export function connectPanePty(
     return (
       Boolean(state.paneForegroundAgentByPaneKey[cacheKey]?.agent) ||
       paneHasLiveHookAgentIcon(state) ||
+      Boolean(state.sleepingAgentSessionsByPaneKey[cacheKey]?.agent) ||
       isTuiAgent(registeredLaunchAgent)
     )
   }
@@ -2139,6 +2140,7 @@ export function connectPanePty(
     publish: (entry) => useAppStore.getState().setPaneForegroundAgent(cacheKey, entry),
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
+      useAppStore.getState().clearSleepingAgentSession(cacheKey)
       clearStaleAgentTabTitleOnConfirmedShell()
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
       // surviving shell then receives pointer moves as typed SGR reports; the
