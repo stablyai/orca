@@ -431,9 +431,9 @@ describe('completed background-worker retirement resume matrix', () => {
     await releaseCompletedWorker('exited')
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
 
-    const staleRestart = persistAndParseCurrentSession()
-    expect(staleRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(staleRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
+    const retiredRestart = persistAndParseCurrentSession()
+    expect(retiredRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
 
     // Case 4: legacy rollback preserves a fenced record; exited resolution clears it.
     seedWorkspace()
@@ -560,7 +560,7 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation of the never-visited target consumes the stale orphan.
+    // Case 8: first activation of the never-visited target cannot resurrect retired authority.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
