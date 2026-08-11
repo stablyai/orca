@@ -309,7 +309,12 @@ export function buildDashboardSnapshot(
           launchableAgentsByWorktreeId: buildDashboardWorktreeLaunchOptions(
             state,
             cards,
-            workspaces
+            workspaces,
+            new Map(
+              activeWorktrees.flatMap(({ repo, worktree }) =>
+                repo ? ([[worktree.id, repo]] as const) : []
+              )
+            )
           )
         }
       : {}),

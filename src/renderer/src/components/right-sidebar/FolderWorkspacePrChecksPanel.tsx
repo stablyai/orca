@@ -24,6 +24,7 @@ export default function FolderWorkspacePrChecksPanel({
 }: FolderWorkspacePrChecksPanelProps): React.JSX.Element {
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceKey = useAppStore((s) => s.activeWorkspaceKey)
+  const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
   const folderWorkspaces = useAppStore((s) => s.folderWorkspaces)
   const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
@@ -45,6 +46,7 @@ export default function FolderWorkspacePrChecksPanel({
       getAttachedWorktreesForFolderWorkspace({
         activeWorkspaceKey,
         activeWorktreeId,
+        activeWorkspaceExecutionHostId,
         folderWorkspaces,
         workspaceLineageByChildKey,
         worktreeLineageById,
@@ -52,6 +54,7 @@ export default function FolderWorkspacePrChecksPanel({
       }),
     [
       activeWorkspaceKey,
+      activeWorkspaceExecutionHostId,
       activeWorktreeId,
       folderWorkspaces,
       workspaceLineageByChildKey,

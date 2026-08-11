@@ -3,20 +3,33 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
 import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
+import { resolveFolderWorkspaceExecutionHostId } from './folder-workspace-execution-host'
+import {
+  findIndexedFolderWorkspaceOwner,
+  findIndexedProjectGroupOwner
+} from './worktree-runtime-owner-index'
 
 export type AiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
 type AiVaultResumeRepoOwner = Pick<Repo, 'connectionId' | 'executionHostId'>
+type AiVaultResumeWorkspaceState = Pick<
+  AppState,
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
+>
 
 export function getAiVaultResumeRepoTargetStatus(
   repo: AiVaultResumeRepoOwner | null | undefined
@@ -120,7 +133,7 @@ export function getAiVaultResumeWorktreeTargetStatus(args: {
 }
 
 export function getAiVaultResumeWorkspaceExecutionHostId(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  state: AiVaultResumeWorkspaceState,
   workspaceId: string | null
 ): ExecutionHostId | null {
   if (!workspaceId) {
@@ -144,7 +157,7 @@ export function getAiVaultResumeWorkspaceExecutionHostId(
 }
 
 export function getAiVaultResumeWorkspaceTargetStatus(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>,
+  state: AiVaultResumeWorkspaceState,
   workspaceId: string | null
 ): AiVaultResumeTargetStatus {
   if (!workspaceId) {
@@ -169,22 +182,20 @@ export function getAiVaultResumeWorkspaceTargetStatus(
 type AiVaultResumeRepoOwnerWithId = AiVaultResumeRepoOwner & { id: string }
 
 function getAiVaultResumeFolderTargetStatus(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
+  state: AiVaultResumeWorkspaceState,
   folderWorkspaceId: string
 ): AiVaultResumeTargetStatus {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
-  if (!workspace) {
+  const owner = resolveAiVaultResumeFolderOwner(state, folderWorkspaceId)
+  if (!owner) {
     return 'unknown'
   }
 
-  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
-  if (groupHostId) {
-    return getAiVaultResumeExecutionHostTargetStatus(groupHostId)
-  }
-  const explicitConnectionId = (workspace.connectionId ?? group?.connectionId ?? '').trim()
-  if (explicitConnectionId) {
-    return getAiVaultResumeExecutionHostTargetStatus(toSshExecutionHostId(explicitConnectionId))
+  const hostId = resolveFolderWorkspaceExecutionHostId({
+    folderWorkspace: owner.workspace,
+    projectGroup: owner.group
+  })
+  if (hostId) {
+    return getAiVaultResumeExecutionHostTargetStatus(hostId)
   }
 
   return mergeAiVaultResumeExecutionHostTargetStatuses(
@@ -193,26 +204,60 @@ function getAiVaultResumeFolderTargetStatus(
 }
 
 function getAiVaultResumeFolderExecutionHostId(
-  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos'>,
+  state: AiVaultResumeWorkspaceState,
   folderWorkspaceId: string
 ): ExecutionHostId | null {
-  const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
-  if (!workspace) {
+  const owner = resolveAiVaultResumeFolderOwner(state, folderWorkspaceId)
+  if (!owner) {
     return null
   }
 
-  const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
-  if (groupHostId) {
-    return groupHostId
-  }
-  const explicitConnectionId = (workspace.connectionId ?? group?.connectionId ?? '').trim()
-  if (explicitConnectionId) {
-    return toSshExecutionHostId(explicitConnectionId)
+  const hostId = resolveFolderWorkspaceExecutionHostId({
+    folderWorkspace: owner.workspace,
+    projectGroup: owner.group
+  })
+  if (hostId) {
+    return hostId
   }
   return mergeAiVaultResumeExecutionHostIds(
     getFolderWorkspaceCandidateRepos(state, folderWorkspaceId).map(getRepoExecutionHostId)
   )
+}
+
+function resolveAiVaultResumeFolderOwner(
+  state: AiVaultResumeWorkspaceState,
+  folderWorkspaceId: string
+): {
+  workspace: AppState['folderWorkspaces'][number]
+  group: AppState['projectGroups'][number] | null
+} | null {
+  const preferredHostId =
+    state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined
+  const workspace = findIndexedFolderWorkspaceOwner(
+    state.folderWorkspaces,
+    folderWorkspaceId,
+    preferredHostId
+  ) as AppState['folderWorkspaces'][number] | null
+  if (!workspace) {
+    return null
+  }
+  const matchingGroups = state.projectGroups.filter(
+    (group) => group.id === workspace.projectGroupId
+  )
+  const workspaceHostId = resolveFolderWorkspaceExecutionHostId({
+    folderWorkspace: workspace
+  })
+  const group =
+    matchingGroups.length <= 1
+      ? (matchingGroups[0] ?? null)
+      : (findIndexedProjectGroupOwner(
+          state.projectGroups,
+          workspace.projectGroupId,
+          preferredHostId ?? workspaceHostId ?? undefined
+        ) as AppState['projectGroups'][number] | null)
+  return matchingGroups.length > 1 && !group ? null : { workspace, group }
 }
 
 function getAiVaultResumeExecutionHostTargetStatus(

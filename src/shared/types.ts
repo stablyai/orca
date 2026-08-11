@@ -315,6 +315,8 @@ export type ProjectGroup = {
   connectionId?: string | null
   /** Renderer-owned host stamp for groups fetched from a runtime environment. */
   executionHostId?: string | null
+  /** Execution owner in a paired runtime's namespace before transport projection. */
+  runtimeSourceExecutionHostId?: ExecutionHostId
   parentGroupId: string | null
   createdFrom: ProjectGroupCreatedFrom
   tabOrder: number
@@ -339,6 +341,8 @@ export type FolderWorkspace = {
   connectionId?: string | null
   /** Renderer-owned host stamp for host-qualified folder catalogs. */
   executionHostId?: ExecutionHostId | null
+  /** Execution owner in a paired runtime's namespace before transport projection. */
+  runtimeSourceExecutionHostId?: ExecutionHostId
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
@@ -982,6 +986,7 @@ export type BrowserPage = {
   id: string
   workspaceId: string
   worktreeId: string
+  workspaceExecutionHostId?: ExecutionHostId
   url: string
   title: string
   loading: boolean
@@ -1000,6 +1005,7 @@ export type BrowserPage = {
 export type BrowserWorkspace = {
   id: string
   worktreeId: string
+  workspaceExecutionHostId?: ExecutionHostId
   /** Stable display label for the outer Orca tab ("Browser 1", "Browser 2", …).
    *  Optional so sessions persisted before this field was added fall back
    *  gracefully to the URL-derived label in getBrowserTabLabel. */
@@ -1120,6 +1126,7 @@ export type PersistedOpenFile = {
   worktreeId: string
   language: string
   isPreview?: boolean
+  workspaceExecutionHostId?: ExecutionHostId
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string

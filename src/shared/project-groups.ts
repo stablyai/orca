@@ -1,5 +1,15 @@
-import { normalizeExecutionHostId } from './execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
+  normalizeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import type { Repo, ProjectGroup, ProjectGroupCreatedFrom } from './types'
+import {
+  resolveDeclaredFolderScopeOwner,
+  resolveProjectGroupOwner
+} from './folder-workspace-owner-resolution'
 
 export const UNGROUPED_PROJECT_GROUP_KEY = 'project-group:ungrouped'
 
@@ -14,6 +24,13 @@ function createProjectGroupId(): string {
 export function normalizeProjectGroupName(name: string, fallback = 'Untitled group'): string {
   const trimmed = name.trim()
   return trimmed.length > 0 ? trimmed : fallback
+}
+
+function getNormalizedProjectGroupHostId(group: Partial<ProjectGroup>): ExecutionHostId {
+  return (
+    normalizeExecutionHostId(group.executionHostId) ??
+    (group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID)
+  )
 }
 
 export function createProjectGroup(input: {
@@ -52,22 +69,24 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
       continue
     }
     const raw = candidate as Partial<ProjectGroup>
-    if (typeof raw.id !== 'string' || seen.has(raw.id)) {
+    if (typeof raw.id !== 'string') {
       continue
     }
-    seen.add(raw.id)
+    const hostId = getNormalizedProjectGroupHostId(raw)
+    const identity = `${hostId}\0${raw.id}`
+    if (seen.has(identity)) {
+      continue
+    }
+    seen.add(identity)
     const now = Date.now()
     const executionHostId = normalizeExecutionHostId(raw.executionHostId)
     groups.push({
       id: raw.id,
       name: normalizeProjectGroupName(typeof raw.name === 'string' ? raw.name : ''),
       parentPath: typeof raw.parentPath === 'string' ? raw.parentPath : null,
-      connectionId:
-        typeof raw.connectionId === 'string'
-          ? raw.connectionId
-          : raw.connectionId === null
-            ? null
-            : null,
+      ...(typeof raw.connectionId === 'string' || raw.connectionId === null
+        ? { connectionId: raw.connectionId }
+        : {}),
       parentGroupId: typeof raw.parentGroupId === 'string' ? raw.parentGroupId : null,
       createdFrom:
         raw.createdFrom === 'manual' ||
@@ -90,9 +109,16 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   groups.sort(
     (left, right) => left.tabOrder - right.tabOrder || left.name.localeCompare(right.name)
   )
-  const groupIds = new Set(groups.map((group) => group.id))
+  const groupIdentities = new Set(
+    groups.map((group) => `${getNormalizedProjectGroupHostId(group)}\0${group.id}`)
+  )
   for (const group of groups) {
-    if (group.parentGroupId === group.id || !groupIds.has(group.parentGroupId ?? '')) {
+    if (
+      group.parentGroupId === group.id ||
+      !groupIdentities.has(
+        `${getNormalizedProjectGroupHostId(group)}\0${group.parentGroupId ?? ''}`
+      )
+    ) {
       group.parentGroupId = null
     }
   }
@@ -100,12 +126,62 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
 }
 
 export function clearMissingProjectGroupMemberships(repos: Repo[], groups: ProjectGroup[]): Repo[] {
-  const groupIds = new Set(groups.map((group) => group.id))
   return repos.map((repo) =>
-    repo.projectGroupId && !groupIds.has(repo.projectGroupId)
+    repo.projectGroupId && !hasProjectGroupForRepoExecutionHost(repo, repo.projectGroupId, groups)
       ? { ...repo, projectGroupId: null }
       : repo
   )
+}
+
+export function hasProjectGroupForRepoExecutionHost(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
+  groupId: string,
+  groups: readonly ProjectGroup[]
+): boolean {
+  const candidates = groups.filter((group) => group.id === groupId)
+  const repoHostId = getRepoExecutionHostId(repo)
+  if (
+    candidates.length === 1 &&
+    resolveDeclaredFolderScopeOwner(candidates[0]!).status === 'unknown'
+  ) {
+    return true
+  }
+  const owners = candidates.map(resolveProjectGroupOwner)
+  return (
+    !owners.some((owner) => owner.status === 'invalid') &&
+    owners.some((owner) => owner.status === 'owned' && owner.executionHostId === repoHostId)
+  )
+}
+
+export function findProjectGroupForConnection(
+  groups: readonly ProjectGroup[],
+  groupId: string,
+  connectionId?: string | null
+): ProjectGroup | undefined {
+  const candidates = groups.filter((group) => group.id === groupId)
+  if (candidates.some((group) => resolveDeclaredFolderScopeOwner(group).status === 'invalid')) {
+    return undefined
+  }
+  if (connectionId === undefined) {
+    return candidates.length === 1 ? candidates[0] : undefined
+  }
+  const executionHostId = connectionId
+    ? toSshExecutionHostId(connectionId)
+    : LOCAL_EXECUTION_HOST_ID
+  const owners = candidates.map(resolveProjectGroupOwner)
+  const matches = candidates.filter(
+    (_, index) =>
+      owners[index]?.status === 'owned' && owners[index].executionHostId === executionHostId
+  )
+  if (matches.length === 1) {
+    return matches[0]
+  }
+  const soleGroup = candidates.length === 1 ? candidates[0] : undefined
+  return soleGroup &&
+    normalizeExecutionHostId(soleGroup.executionHostId) === null &&
+    soleGroup.connectionId === undefined
+    ? soleGroup
+    : undefined
 }
 
 export function getProjectGroupSubtreeIds(

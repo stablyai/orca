@@ -385,6 +385,7 @@ describe('repo RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('projectGroup.update', {
         groupId: group.id,
+        executionHostId: 'ssh:ssh-1',
         updates: { name: 'Core', isCollapsed: true }
       })
     )
@@ -406,6 +407,7 @@ describe('repo RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('folderWorkspace.update', {
         folderWorkspaceId: 'folder-workspace-1',
+        executionHostId: 'ssh:ssh-1',
         updates: { comment: 'x' }
       })
     )
@@ -415,7 +417,15 @@ describe('repo RPC methods', () => {
     const statusResponse = await dispatcher.dispatch(
       makeRequest('folderWorkspace.getPathStatus', {
         scope: 'folder-workspace',
-        folderWorkspaceId: 'folder-workspace-1'
+        folderWorkspaceId: 'folder-workspace-1',
+        executionHostId: 'ssh:ssh-1'
+      })
+    )
+    await dispatcher.dispatch(
+      makeRequest('folderWorkspace.getPathStatus', {
+        scope: 'project-group',
+        projectGroupId: group.id,
+        executionHostId: 'local'
       })
     )
     const directPathStatusResponse = await dispatcher.dispatch(
@@ -431,10 +441,14 @@ describe('repo RPC methods', () => {
       parentPath: '/srv/platform',
       createdFrom: 'folder-scan'
     })
-    expect(runtime.updateProjectGroup).toHaveBeenCalledWith(group.id, {
-      name: 'Core',
-      isCollapsed: true
-    })
+    expect(runtime.updateProjectGroup).toHaveBeenCalledWith(
+      group.id,
+      {
+        name: 'Core',
+        isCollapsed: true
+      },
+      { executionHostId: 'ssh:ssh-1' }
+    )
     expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id)
     expect(runtime.moveProjectToGroup).toHaveBeenCalledWith('repo-1', group.id, 2)
     expect(runtime.listFolderWorkspaces).toHaveBeenCalled()
@@ -442,13 +456,21 @@ describe('repo RPC methods', () => {
       projectGroupId: group.id,
       name: 'Refund fix'
     })
-    expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
-      comment: 'x'
-    })
+    expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith(
+      'folder-workspace-1',
+      { comment: 'x' },
+      { executionHostId: 'ssh:ssh-1' }
+    )
     expect(runtime.deleteFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1')
     expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
       scope: 'folder-workspace',
-      folderWorkspaceId: 'folder-workspace-1'
+      folderWorkspaceId: 'folder-workspace-1',
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
+      scope: 'project-group',
+      projectGroupId: group.id,
+      executionHostId: 'local'
     })
     expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
       scope: 'path',

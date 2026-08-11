@@ -9,7 +9,7 @@ import {
   inferFolderWorkspacePathConnection
 } from './folder-workspace-path-status'
 import type { IFilesystemProvider } from '../providers/types'
-import type { ProjectGroup, Repo } from '../../shared/types'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 
 function makeGroup(overrides: Partial<ProjectGroup> = {}): ProjectGroup {
   return {
@@ -35,6 +35,29 @@ function makeRepo(overrides: Partial<Repo> = {}): Repo {
     badgeColor: 'gray',
     addedAt: 1,
     projectGroupId: 'group-1',
+    ...overrides
+  }
+}
+
+function makeFolderWorkspace(
+  folderPath: string,
+  overrides: Partial<FolderWorkspace> = {}
+): FolderWorkspace {
+  return {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    name: 'Folder',
+    folderPath,
+    connectionId: null,
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 1,
+    updatedAt: 1,
     ...overrides
   }
 }
@@ -129,6 +152,57 @@ describe('folder workspace path status', () => {
     expect(provider.stat).toHaveBeenCalledWith('/workspace/platform')
   })
 
+  it('keeps an explicit-local folder workspace off its SSH group provider', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-folder-status-local-owner-'))
+    const sshStat = vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
+    try {
+      await expect(
+        getFolderWorkspacePathStatus(
+          {
+            getRepos: () => [makeRepo({ connectionId: 'ssh-1' })],
+            getProjectGroups: () => [makeGroup({ connectionId: 'ssh-1' })],
+            getFolderWorkspaces: () => [makeFolderWorkspace(root)]
+          },
+          { scope: 'folder-workspace', folderWorkspaceId: 'folder-1' },
+          {
+            getSshFilesystemProvider: () => ({ stat: sshStat }) as unknown as IFilesystemProvider
+          }
+        )
+      ).resolves.toEqual({ path: root, exists: true })
+      expect(sshStat).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('treats an explicit local execution host as authoritative', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-folder-status-local-host-'))
+    const sshStat = vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
+    try {
+      await expect(
+        getFolderWorkspacePathStatus(
+          {
+            getRepos: () => [makeRepo({ connectionId: 'ssh-1' })],
+            getProjectGroups: () => [makeGroup({ connectionId: 'ssh-1' })],
+            getFolderWorkspaces: () => [
+              makeFolderWorkspace(root, {
+                connectionId: undefined,
+                executionHostId: 'local'
+              })
+            ]
+          },
+          { scope: 'folder-workspace', folderWorkspaceId: 'folder-1' },
+          {
+            getSshFilesystemProvider: () => ({ stat: sshStat }) as unknown as IFilesystemProvider
+          }
+        )
+      ).resolves.toEqual({ path: root, exists: true })
+      expect(sshStat).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('reports unavailable when an inferred SSH provider is missing', async () => {
     await expect(
       getFolderWorkspacePathStatusForPath(
@@ -171,7 +245,7 @@ describe('folder workspace path status', () => {
     ).toEqual({ kind: 'ambiguous' })
   })
 
-  it('reports ambiguous connection when explicit SSH scope conflicts with repos', () => {
+  it('keeps known SSH authority isolated from foreign grouped repos', () => {
     expect(
       inferFolderWorkspacePathConnection({
         folderPath: '/workspace/platform',
@@ -183,7 +257,65 @@ describe('folder workspace path status', () => {
           makeRepo({ id: 'repo-2', connectionId: 'ssh-2' })
         ]
       })
-    ).toEqual({ kind: 'ambiguous' })
+    ).toEqual({ kind: 'ssh', connectionId: 'ssh-1' })
+  })
+
+  it.each([
+    { label: 'local-first catalogs', reversed: false },
+    { label: 'SSH-first catalogs', reversed: true }
+  ])('host-scopes same-ID groups and repos for $label', async (testCase) => {
+    const localRoot = await mkdtemp(join(tmpdir(), 'orca-folder-status-host-scope-'))
+    const remoteRoot = '/remote/workspace/platform'
+    const sshStat = vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 1 })
+    const ordered = <T>(local: T, ssh: T): T[] => (testCase.reversed ? [ssh, local] : [local, ssh])
+
+    try {
+      const store = {
+        getRepos: () =>
+          ordered(
+            makeRepo({ id: 'repo-local', path: join(localRoot, 'repo'), connectionId: undefined }),
+            makeRepo({ id: 'repo-ssh', path: `${remoteRoot}/repo`, connectionId: 'ssh-1' })
+          ),
+        getProjectGroups: () =>
+          ordered(
+            makeGroup({ parentPath: localRoot, connectionId: null }),
+            makeGroup({ parentPath: remoteRoot, connectionId: 'ssh-1' })
+          ),
+        getFolderWorkspaces: () =>
+          ordered(
+            makeFolderWorkspace(localRoot, { id: 'folder-local', connectionId: null }),
+            makeFolderWorkspace(remoteRoot, {
+              id: 'folder-ssh',
+              connectionId: 'ssh-1'
+            })
+          )
+      }
+      const deps = {
+        getSshFilesystemProvider: (connectionId: string) =>
+          connectionId === 'ssh-1'
+            ? ({ stat: sshStat } as unknown as IFilesystemProvider)
+            : undefined
+      }
+
+      await expect(
+        getFolderWorkspacePathStatus(
+          store,
+          { scope: 'folder-workspace', folderWorkspaceId: 'folder-ssh' },
+          deps
+        )
+      ).resolves.toEqual({ path: remoteRoot, exists: true })
+      await expect(
+        getFolderWorkspacePathStatus(
+          store,
+          { scope: 'folder-workspace', folderWorkspaceId: 'folder-local' },
+          deps
+        )
+      ).resolves.toEqual({ path: localRoot, exists: true })
+      expect(sshStat).toHaveBeenCalledTimes(1)
+      expect(sshStat).toHaveBeenCalledWith(remoteRoot)
+    } finally {
+      await rm(localRoot, { recursive: true, force: true })
+    }
   })
 
   it('supports direct path scope without a persisted project group', async () => {

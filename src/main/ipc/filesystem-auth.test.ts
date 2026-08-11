@@ -222,6 +222,82 @@ describe('filesystem-auth path containment', () => {
     }
   })
 
+  it('authorizes an explicit-null local workspace under an SSH group', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-local-folder-override-'))
+    try {
+      const folderPath = join(tempRoot, 'local-platform')
+      await mkdir(folderPath, { recursive: true })
+      const projectGroup = makeProjectGroup({
+        parentPath: '/remote/platform',
+        connectionId: 'ssh-1'
+      })
+      const folderWorkspace = makeFolderWorkspace({
+        folderPath,
+        projectGroupId: projectGroup.id,
+        connectionId: null
+      })
+      const store = makeStore(
+        [{ ...repo, projectGroupId: projectGroup.id, connectionId: 'ssh-1' }],
+        { projectGroups: [projectGroup], folderWorkspaces: [folderWorkspace] }
+      )
+
+      await expect(resolveAuthorizedPath(folderPath, store)).resolves.toBe(
+        await realpath(folderPath)
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize contradictory folder ownership as local', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-conflicting-folder-owner-'))
+    try {
+      const groupPath = join(tempRoot, 'group')
+      const workspacePath = join(tempRoot, 'workspace')
+      await mkdir(groupPath)
+      await mkdir(workspacePath)
+      const projectGroup = makeProjectGroup({
+        parentPath: groupPath,
+        connectionId: 'ssh-1',
+        executionHostId: 'local'
+      })
+      const folderWorkspace = makeFolderWorkspace({
+        folderPath: workspacePath,
+        projectGroupId: projectGroup.id,
+        connectionId: 'ssh-1',
+        executionHostId: 'local'
+      })
+      const store = makeStore([], {
+        projectGroups: [projectGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(groupPath, store)).rejects.toThrow('Access denied')
+      await expect(resolveAuthorizedPath(workspacePath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
+  it('does not authorize a workspace with ambiguous same-id group ownership', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-ambiguous-folder-owner-'))
+    try {
+      const folderPath = join(tempRoot, 'ambiguous-platform')
+      await mkdir(folderPath, { recursive: true })
+      const localGroup = makeProjectGroup({ parentPath: null, connectionId: null })
+      const sshGroup = makeProjectGroup({ parentPath: null, connectionId: 'ssh-1' })
+      const folderWorkspace = makeFolderWorkspace({ folderPath })
+      const store = makeStore([], {
+        projectGroups: [localGroup, sshGroup],
+        folderWorkspaces: [folderWorkspace]
+      })
+
+      await expect(resolveAuthorizedPath(folderPath, store)).rejects.toThrow('Access denied')
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('does not authorize repo-less SSH-provenance folder roots as local paths', async () => {
     const tempRoot = await mkdtemp(join(tmpdir(), 'orca-auth-remote-folder-provenance-'))
     try {

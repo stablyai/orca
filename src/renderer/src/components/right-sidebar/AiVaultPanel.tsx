@@ -63,7 +63,9 @@ export default function AiVaultPanel(): React.JSX.Element {
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo
+      worktreesByRepo: state.worktreesByRepo,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId
     }))
   )
   const settings = useAppStore((s) => s.settings)

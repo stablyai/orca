@@ -102,6 +102,29 @@ describe('workspace session editor drafts', () => {
     )
   })
 
+  it('persists the editor workspace execution host', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          {
+            id: '/repo/local.ts',
+            filePath: '/repo/local.ts',
+            relativePath: 'local.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit',
+            isDirty: false,
+            workspaceExecutionHostId: 'local'
+          } as never
+        ]
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1']?.[0]).toEqual(
+      expect.objectContaining({ workspaceExecutionHostId: 'local' })
+    )
+  })
+
   it('persists the disk baseline signature only alongside a dirty draft', () => {
     const payload = buildWorkspaceSessionPayload(
       createSnapshot({

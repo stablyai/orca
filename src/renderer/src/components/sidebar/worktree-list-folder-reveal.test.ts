@@ -7,6 +7,7 @@ import {
   sidebarWorkspaceStillExists
 } from './worktree-list-folder-reveal'
 import { getProjectGroupHeaderKey } from './worktree-list-groups'
+import { buildSidebarProjectGroupOwnerIndex } from './worktree-list-project-group-owner'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {
   return {
@@ -115,5 +116,85 @@ describe('worktree list folder reveal', () => {
         [child, root]
       )
     ).toEqual([getProjectGroupHeaderKey(root.id), getProjectGroupHeaderKey(child.id)])
+  })
+
+  it('resolves same-ID paired folders and reveal groups by physical owner', () => {
+    const localGroup = makeProjectGroup({
+      id: 'shared-group',
+      name: 'Local',
+      connectionId: null,
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'local'
+    })
+    const sshGroup = makeProjectGroup({
+      id: 'shared-group',
+      name: 'SSH',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const localFolder = makeFolderWorkspace({
+      id: 'shared-folder',
+      projectGroupId: localGroup.id,
+      name: 'Local folder',
+      connectionId: null,
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'local'
+    })
+    const sshFolder = makeFolderWorkspace({
+      id: 'shared-folder',
+      projectGroupId: sshGroup.id,
+      name: 'SSH folder',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const folders = [sshFolder, localFolder]
+    const groups = [sshGroup, localGroup]
+    const ownerIndex = buildSidebarProjectGroupOwnerIndex(groups)
+    const workspaceId = folderWorkspaceKey(localFolder.id)
+
+    expect(getKnownSidebarWorktreeById(workspaceId, new Map(), folders, 'local')).toMatchObject({
+      displayName: localFolder.name,
+      hostId: 'local',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    expect(
+      getKnownSidebarWorktreeById(workspaceId, new Map(), folders, 'ssh:builder')
+    ).toMatchObject({
+      displayName: sshFolder.name,
+      hostId: 'ssh:builder',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    expect(getKnownSidebarWorktreeById(workspaceId, new Map(), folders)).toBeNull()
+    expect(getFolderWorkspaceRevealGroupKeys(workspaceId, folders, groups, 'local')).toEqual([
+      ownerIndex.getHeaderKey(localGroup)
+    ])
+    expect(getFolderWorkspaceRevealGroupKeys(workspaceId, folders, groups, 'ssh:builder')).toEqual([
+      ownerIndex.getHeaderKey(sshGroup)
+    ])
+  })
+
+  it('resolves a direct SSH folder using its SSH owner', () => {
+    const sshGroup = makeProjectGroup({
+      id: 'ssh-group',
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const sshFolder = makeFolderWorkspace({
+      id: 'ssh-folder',
+      projectGroupId: sshGroup.id,
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+
+    expect(
+      getKnownSidebarWorktreeById(
+        folderWorkspaceKey(sshFolder.id),
+        new Map(),
+        [sshFolder],
+        'ssh:builder'
+      )
+    ).toMatchObject({ hostId: 'ssh:builder' })
   })
 })

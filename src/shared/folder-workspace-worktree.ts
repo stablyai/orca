@@ -1,9 +1,65 @@
 import type { FolderWorkspace, Worktree } from './types'
 import { folderWorkspaceKey } from './workspace-scope'
-import { toSshExecutionHostId } from './execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
+
+type FolderWorktreeOwner = Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>
+
+function getConnectionHostId(connectionId: string | null | undefined): ExecutionHostId | null {
+  if (connectionId === null) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  const normalized = connectionId?.trim()
+  return normalized ? toSshExecutionHostId(normalized) : null
+}
+
+function getFolderWorktreeOwner(folderWorkspace: FolderWorkspace): FolderWorktreeOwner {
+  const rawExecutionHostId = folderWorkspace.executionHostId
+  const executionHost = parseExecutionHostId(rawExecutionHostId)
+  const rawSourceHostId = folderWorkspace.runtimeSourceExecutionHostId
+  const sourceHost = parseExecutionHostId(rawSourceHostId)
+  const connectionHostId = getConnectionHostId(folderWorkspace.connectionId)
+  if (
+    (rawExecutionHostId != null && !executionHost) ||
+    (rawSourceHostId != null && !sourceHost) ||
+    (folderWorkspace.connectionId !== undefined && !connectionHostId)
+  ) {
+    return {}
+  }
+
+  const physicalHostIds = new Set<ExecutionHostId>()
+  if (sourceHost) {
+    physicalHostIds.add(sourceHost.id)
+  }
+  if (connectionHostId) {
+    physicalHostIds.add(connectionHostId)
+  }
+  if (executionHost?.kind !== 'runtime' && executionHost) {
+    physicalHostIds.add(executionHost.id)
+  }
+  if (physicalHostIds.size > 1) {
+    return {}
+  }
+
+  if (executionHost?.kind === 'runtime') {
+    const hostId = physicalHostIds.values().next().value as ExecutionHostId | undefined
+    return hostId
+      ? { hostId, runtimeOwnerEnvironmentId: executionHost.environmentId }
+      : { runtimeOwnerEnvironmentId: executionHost.environmentId }
+  }
+  const hostId =
+    (physicalHostIds.values().next().value as ExecutionHostId | undefined) ??
+    LOCAL_EXECUTION_HOST_ID
+  return { hostId }
+}
 
 export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Worktree {
   const linkedTask = folderWorkspace.linkedTask
+  const owner = getFolderWorktreeOwner(folderWorkspace)
   return {
     id: folderWorkspaceKey(folderWorkspace.id),
     repoId: `folder-workspace:${folderWorkspace.projectGroupId}`,
@@ -39,8 +95,6 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     isBare: false,
     isSparse: false,
     isMainWorktree: false,
-    hostId:
-      folderWorkspace.executionHostId ??
-      (folderWorkspace.connectionId ? toSshExecutionHostId(folderWorkspace.connectionId) : 'local')
+    ...owner
   }
 }

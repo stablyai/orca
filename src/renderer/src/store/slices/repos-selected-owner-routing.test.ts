@@ -30,6 +30,7 @@ const baseRepo: Repo = {
 
 const reposList = vi.fn()
 const projectGroupsList = vi.fn()
+const projectGroupsUpdate = vi.fn()
 const projectGroupsImportNested = vi.fn()
 const projectGroupsScanNested = vi.fn()
 const projectGroupsCancelNestedScan = vi.fn()
@@ -48,6 +49,7 @@ beforeEach(() => {
       repos: { list: reposList },
       projectGroups: {
         list: projectGroupsList,
+        update: projectGroupsUpdate,
         importNested: projectGroupsImportNested,
         scanNested: projectGroupsScanNested,
         cancelNestedScan: projectGroupsCancelNestedScan,
@@ -114,12 +116,205 @@ describe('selected Add Project owner routing', () => {
 
     expect(store.getState().projectGroups).toEqual([
       localGroup,
-      { ...runtimeGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
     expect(store.getState().folderWorkspaces).toEqual([
       localFolder,
-      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeFolder,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
+  })
+
+  it('updates only the focused host group when another runtime has the same ID', async () => {
+    const targetGroup = {
+      ...projectGroup,
+      id: 'shared-group',
+      executionHostId: 'runtime:env-1' as const
+    }
+    const siblingGroup = {
+      ...targetGroup,
+      name: 'Sibling platform',
+      parentPath: '/sibling/platform',
+      executionHostId: 'runtime:env-2' as const
+    }
+    const updatedGroup = { ...targetGroup, name: 'Updated platform', updatedAt: 2 }
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-update-group',
+      ok: true,
+      result: { group: { ...updatedGroup, executionHostId: undefined } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [targetGroup, siblingGroup]
+    })
+
+    await expect(
+      store.getState().updateProjectGroup(targetGroup.id, { name: updatedGroup.name })
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'projectGroup.update',
+      params: {
+        groupId: targetGroup.id,
+        updates: { name: updatedGroup.name },
+        executionHostId: 'local'
+      },
+      timeoutMs: 15_000
+    })
+    expect(store.getState().projectGroups).toEqual([
+      { ...updatedGroup, runtimeSourceExecutionHostId: 'local' },
+      siblingGroup
+    ])
+  })
+
+  it('updates only the selected owner when local and direct-SSH groups share an ID', async () => {
+    const localGroup = {
+      ...projectGroup,
+      id: 'shared-group',
+      name: 'Local group',
+      connectionId: null,
+      executionHostId: 'local' as const
+    }
+    const sshGroup = {
+      ...projectGroup,
+      id: localGroup.id,
+      name: 'SSH group',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    const updatedSshGroup = { ...sshGroup, name: 'Updated SSH group', updatedAt: 2 }
+    projectGroupsUpdate.mockResolvedValue(updatedSshGroup)
+    const store = createTestStore()
+    store.setState({ projectGroups: [localGroup, sshGroup] })
+
+    await expect(
+      store.getState().updateProjectGroup(localGroup.id, { name: 'Ambiguous' })
+    ).resolves.toBe(false)
+    await expect(
+      store
+        .getState()
+        .updateProjectGroup(sshGroup.id, { name: updatedSshGroup.name }, { hostId: 'ssh:ssh-1' })
+    ).resolves.toBe(true)
+
+    expect(projectGroupsUpdate).toHaveBeenCalledTimes(1)
+    expect(projectGroupsUpdate).toHaveBeenCalledWith({
+      groupId: sshGroup.id,
+      updates: { name: updatedSshGroup.name },
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(store.getState().projectGroups).toEqual([localGroup, updatedSshGroup])
+  })
+
+  it.each([
+    ['forward', false],
+    ['reverse', true]
+  ])('updates same-runtime physical owners independently in %s order', async (_label, reverse) => {
+    const localGroup = {
+      ...projectGroup,
+      id: 'shared-group',
+      name: 'Local group',
+      connectionId: null,
+      executionHostId: 'runtime:env-1' as const,
+      runtimeSourceExecutionHostId: 'local' as const
+    }
+    const sshGroup = {
+      ...projectGroup,
+      id: localGroup.id,
+      name: 'SSH group',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1' as const,
+      runtimeSourceExecutionHostId: 'ssh:builder' as const
+    }
+    runtimeEnvironmentCall.mockImplementation(async ({ method, params }) => {
+      const request = params as {
+        updates: { name: string }
+        executionHostId: 'local' | 'ssh:builder'
+      }
+      const selected = request.executionHostId === 'local' ? localGroup : sshGroup
+      return {
+        id: `rpc-${method}`,
+        ok: true,
+        result: {
+          group: {
+            ...selected,
+            name: request.updates.name,
+            executionHostId: undefined,
+            runtimeSourceExecutionHostId: undefined
+          }
+        },
+        _meta: { runtimeId: 'runtime-remote' }
+      }
+    })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: reverse ? [sshGroup, localGroup] : [localGroup, sshGroup]
+    })
+
+    await expect(
+      store
+        .getState()
+        .updateProjectGroup(
+          localGroup.id,
+          { name: 'Updated local' },
+          { hostId: 'runtime:env-1', sourceExecutionHostId: 'local' }
+        )
+    ).resolves.toBe(true)
+    await expect(
+      store
+        .getState()
+        .updateProjectGroup(
+          sshGroup.id,
+          { name: 'Updated SSH' },
+          { hostId: 'runtime:env-1', sourceExecutionHostId: 'ssh:builder' }
+        )
+    ).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall.mock.calls.map(([request]) => request.params)).toEqual([
+      {
+        groupId: localGroup.id,
+        updates: { name: 'Updated local' },
+        executionHostId: 'local'
+      },
+      {
+        groupId: sshGroup.id,
+        updates: { name: 'Updated SSH' },
+        executionHostId: 'ssh:builder'
+      }
+    ])
+    expect(
+      Object.fromEntries(
+        store
+          .getState()
+          .projectGroups.map((group) => [group.runtimeSourceExecutionHostId, group.name])
+      )
+    ).toEqual({ local: 'Updated local', 'ssh:builder': 'Updated SSH' })
+  })
+
+  it('rejects contradictory direct project-group authority before update routing', async () => {
+    const invalidGroup = {
+      ...projectGroup,
+      connectionId: 'ssh-1',
+      executionHostId: 'local' as const
+    }
+    const store = createTestStore()
+    store.setState({ projectGroups: [invalidGroup] })
+
+    await expect(
+      store.getState().updateProjectGroup(invalidGroup.id, { name: 'Unsafe' }, { hostId: 'local' })
+    ).resolves.toBe(false)
+
+    expect(projectGroupsUpdate).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('merges explicit runtime groups and folders without erasing local siblings', async () => {
@@ -174,11 +369,19 @@ describe('selected Add Project owner routing', () => {
 
     expect(store.getState().projectGroups).toEqual([
       localGroup,
-      { ...runtimeGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
     expect(store.getState().folderWorkspaces).toEqual([
       localFolder,
-      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeFolder,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
 
     projectGroupsList.mockResolvedValue([localGroup])
@@ -189,11 +392,19 @@ describe('selected Add Project owner routing', () => {
 
     expect(store.getState().projectGroups).toEqual([
       localGroup,
-      { ...runtimeGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
     expect(store.getState().folderWorkspaces).toEqual([
       { ...localFolder, executionHostId: 'local' },
-      { ...runtimeFolder, executionHostId: 'runtime:env-1' }
+      {
+        ...runtimeFolder,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
   })
 
@@ -367,7 +578,11 @@ describe('selected Add Project owner routing', () => {
       { ...newGroup, executionHostId: 'runtime:env-1' }
     ])
     expect(store.getState().folderWorkspaces).toEqual([
-      { ...newFolder, executionHostId: 'runtime:env-1' }
+      {
+        ...newFolder,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
   })
 

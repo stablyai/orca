@@ -303,6 +303,76 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
+  it('watches the active physical folder owner independent of catalog order', () => {
+    const repo = makeRepo('repo-folder')
+    const state = makeState({
+      repo,
+      worktree: makeWorktree(repo.id),
+      openFiles: [makeOpenFile('folder:shared')]
+    })
+    state.activeWorktreeId = 'folder:shared'
+    state.activeWorkspaceExecutionHostId = 'ssh:builder'
+    state.folderWorkspaces = [
+      {
+        id: 'shared',
+        projectGroupId: 'group',
+        folderPath: '/local/folder',
+        executionHostId: 'local'
+      },
+      {
+        id: 'shared',
+        projectGroupId: 'group',
+        folderPath: '/remote/folder',
+        executionHostId: 'ssh:builder',
+        connectionId: 'builder'
+      }
+    ] as never
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([
+      {
+        worktreeId: 'folder:shared',
+        worktreePath: '/remote/folder',
+        connectionId: 'builder',
+        runtimeEnvironmentId: null
+      }
+    ])
+  })
+
+  it('omits duplicate folder ids from owner-unqualified runtime watches', () => {
+    const repo = makeRepo('repo-paired-folder')
+    const state = makeState({
+      repo,
+      worktree: makeWorktree(repo.id),
+      openFiles: [
+        {
+          ...makeOpenFile('folder:shared'),
+          runtimeEnvironmentId: 'hub-a'
+        }
+      ]
+    })
+    state.activeWorktreeId = 'folder:shared'
+    state.activeWorkspaceExecutionHostId = 'ssh:builder'
+    state.folderWorkspaces = [
+      {
+        id: 'shared',
+        projectGroupId: 'group',
+        folderPath: '/local/folder',
+        executionHostId: 'runtime:hub-a',
+        runtimeSourceExecutionHostId: 'local'
+      },
+      {
+        id: 'shared',
+        projectGroupId: 'group',
+        folderPath: '/remote/folder',
+        executionHostId: 'runtime:hub-a',
+        runtimeSourceExecutionHostId: 'ssh:builder',
+        connectionId: 'builder'
+      }
+    ] as never
+
+    expect(getEditorExternalWatchTargets(state).targets).toEqual([])
+  })
+
   it('keeps restored ownerless tabs local when an active runtime is selected', () => {
     const repo = makeRepo('repo-restored')
     const worktree = makeWorktree(repo.id, 'wt-restored')

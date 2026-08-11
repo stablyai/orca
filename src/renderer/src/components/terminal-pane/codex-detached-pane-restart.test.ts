@@ -138,6 +138,40 @@ describe('codex detached pane restart executor', () => {
     expect(blocksCodexPaneInput(state.codexRestartNoticeByPtyId[NEW_PTY])).toBe(false)
   })
 
+  it('does not respawn against an ambiguous folder owner path', async () => {
+    seedQueuedRestart()
+    const folderKey = 'folder:shared'
+    const tab = useAppStore.getState().tabsByWorktree.wt1![0]!
+    useAppStore.setState({
+      folderWorkspaces: [
+        {
+          id: 'shared',
+          projectGroupId: 'group',
+          folderPath: '/local/folder',
+          executionHostId: 'local'
+        },
+        {
+          id: 'shared',
+          projectGroupId: 'group',
+          folderPath: '/remote/folder',
+          executionHostId: 'ssh:builder',
+          connectionId: 'builder'
+        }
+      ] as never,
+      tabsByWorktree: { [folderKey]: [{ ...tab, worktreeId: folderKey }] }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    try {
+      await sweepUnclaimedCodexPaneRestarts()
+
+      expect(window.api.pty.spawn).not.toHaveBeenCalled()
+      expect(window.api.pty.kill).not.toHaveBeenCalled()
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
   it('executes via the store subscription without a lifecycle timeout', async () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
     try {

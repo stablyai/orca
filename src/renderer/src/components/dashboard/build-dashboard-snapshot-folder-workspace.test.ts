@@ -141,4 +141,188 @@ describe('buildDashboardSnapshot folder workspaces', () => {
     expect(snapshot.cards[0].hostKind).toBe('remote')
     expect(snapshot.cards[0].executionHostId).toBe('runtime:environment-1')
   })
+
+  it('classifies an explicit-local folder as local under an SSH group', () => {
+    const localState = state()
+    localState.folderWorkspaces = [{ ...folderWorkspace(), connectionId: null }]
+    localState.projectGroups = [
+      { ...projectGroup(), executionHostId: 'ssh:ssh-1', connectionId: 'ssh-1' }
+    ]
+
+    const snapshot = buildDashboardSnapshot(localState, NOW)
+
+    expect(snapshot.cards[0].hostKind).toBe('local')
+    expect(snapshot.cards[0].executionHostId).toBe('local')
+  })
+
+  it.each([false, true])(
+    'omits same-id folders when their owner cannot be represented by the dashboard key (reversed=%s)',
+    (reversed) => {
+      const collisionState = state()
+      const local = { ...folderWorkspace(), connectionId: null, executionHostId: 'local' as const }
+      const ssh = {
+        ...folderWorkspace(),
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      collisionState.folderWorkspaces = reversed ? [ssh, local] : [local, ssh]
+      collisionState.projectGroups = [
+        { ...projectGroup(), connectionId: null, executionHostId: 'local' },
+        { ...projectGroup(), connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+      ]
+
+      const snapshot = buildDashboardSnapshot(collisionState, NOW)
+
+      expect(snapshot.cards).toEqual([])
+      expect(snapshot.workspaces).toEqual([])
+      expect(snapshot.filterOptions?.projects).toEqual([])
+      expect(snapshot.launchableAgentsByWorktreeId).toEqual({})
+    }
+  )
+
+  it('omits duplicate legacy folders from count-only snapshots without group catalogs', () => {
+    const collisionState = state()
+    collisionState.folderWorkspaces = [folderWorkspace(), folderWorkspace()]
+    collisionState.projectGroups = undefined
+
+    const snapshot = buildDashboardSnapshot(collisionState, NOW, {
+      includeCardDetails: false,
+      includeFilterOptions: false
+    })
+
+    expect(snapshot.cards).toEqual([])
+  })
+
+  it('associates a unique folder with the project group on the same owner', () => {
+    const ownerState = state()
+    ownerState.folderWorkspaces = [
+      { ...folderWorkspace(), connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }
+    ]
+    ownerState.projectGroups = [
+      {
+        ...projectGroup(),
+        name: 'Local documentation',
+        connectionId: null,
+        executionHostId: 'local'
+      },
+      {
+        ...projectGroup(),
+        name: 'Remote documentation',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1'
+      }
+    ]
+
+    const snapshot = buildDashboardSnapshot(ownerState, NOW)
+
+    expect(snapshot.cards[0]).toMatchObject({
+      repoName: 'Remote documentation',
+      executionHostId: 'ssh:ssh-1'
+    })
+  })
+
+  it('uses physical source provenance to associate paired-runtime groups', () => {
+    const ownerState = state()
+    ownerState.folderWorkspaces = [
+      {
+        ...folderWorkspace(),
+        executionHostId: 'runtime:hub',
+        runtimeSourceExecutionHostId: 'ssh:ssh-1'
+      }
+    ]
+    ownerState.projectGroups = [
+      {
+        ...projectGroup(),
+        name: 'Hub local documentation',
+        connectionId: null,
+        executionHostId: 'runtime:hub',
+        runtimeSourceExecutionHostId: 'local'
+      },
+      {
+        ...projectGroup(),
+        name: 'Hub SSH documentation',
+        executionHostId: 'runtime:hub',
+        runtimeSourceExecutionHostId: 'ssh:ssh-1'
+      }
+    ]
+
+    const snapshot = buildDashboardSnapshot(ownerState, NOW)
+
+    expect(snapshot.cards[0]).toMatchObject({
+      repoName: 'Hub SSH documentation',
+      hostKind: 'remote',
+      executionHostId: 'runtime:hub'
+    })
+  })
+
+  it.each([false, true])(
+    'owner-qualifies project identities for same-id groups (reversed=%s)',
+    (reversed) => {
+      const ownerState = state()
+      const localFolder = {
+        ...folderWorkspace(),
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const sshFolder = {
+        ...folderWorkspace(),
+        id: 'folder-2',
+        name: 'Remote workspace',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      const localGroup = {
+        ...projectGroup(),
+        name: 'Local documentation',
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const sshGroup = {
+        ...projectGroup(),
+        name: 'Remote documentation',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      ownerState.folderWorkspaces = reversed ? [sshFolder, localFolder] : [localFolder, sshFolder]
+      ownerState.projectGroups = reversed ? [sshGroup, localGroup] : [localGroup, sshGroup]
+
+      const snapshot = buildDashboardSnapshot(ownerState, NOW)
+      const projects = snapshot.filterOptions?.projects ?? []
+
+      expect(projects.map((project) => project.label).sort()).toEqual([
+        'Local documentation',
+        'Remote documentation'
+      ])
+      expect(new Set(projects.map((project) => project.id))).toHaveProperty('size', 2)
+    }
+  )
+
+  it.each(['folder', 'group'] as const)(
+    'omits contradictory %s owner metadata',
+    (contradiction) => {
+      const contradictoryState = state()
+      contradictoryState.folderWorkspaces = [
+        {
+          ...folderWorkspace(),
+          ...(contradiction === 'folder'
+            ? { connectionId: 'ssh-1', executionHostId: 'local' as const }
+            : { connectionId: undefined, executionHostId: undefined })
+        }
+      ]
+      contradictoryState.projectGroups = [
+        {
+          ...projectGroup(),
+          ...(contradiction === 'group'
+            ? { connectionId: 'ssh-1', executionHostId: 'local' as const }
+            : {})
+        }
+      ]
+
+      const snapshot = buildDashboardSnapshot(contradictoryState, NOW)
+
+      expect(snapshot.cards).toEqual([])
+      expect(snapshot.workspaces).toEqual([])
+      expect(snapshot.launchableAgentsByWorktreeId).toEqual({})
+    }
+  )
 })

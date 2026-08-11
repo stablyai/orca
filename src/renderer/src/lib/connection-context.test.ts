@@ -455,7 +455,6 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
     projectGroupId: 'group-1',
     name: 'Platform workspace',
     folderPath: '/home/neil/platform',
-    connectionId: null,
     linkedTask: null,
     comment: '',
     isArchived: false,

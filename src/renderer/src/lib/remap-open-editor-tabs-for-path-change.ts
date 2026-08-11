@@ -6,6 +6,7 @@ import {
   buildDiffEditorFileId,
   buildOwnedEditorFileId,
   resolveEditorFileIdForOwner,
+  type OpenFile,
   type OpenFilePathRekey,
   type RekeyOpenFilesResult
 } from '@/store/slices/editor'
@@ -236,13 +237,18 @@ export function remapOpenEditorTabsForPathChange({
   // unaffected tab already at the destination is honoured via
   // resolveEditorFileIdForOwner; a same-owner conflict is a real collision the
   // rekey action rejects.
-  const ownerKeyOf = (file: { worktreeId: string; runtimeEnvironmentId?: string | null }): string =>
-    `${file.worktreeId}::${file.runtimeEnvironmentId?.trim() || ''}`
+  const ownerKeyOf = (file: {
+    worktreeId: string
+    runtimeEnvironmentId?: string | null
+    workspaceExecutionHostId?: OpenFile['workspaceExecutionHostId']
+  }): string =>
+    `${file.worktreeId}::${file.runtimeEnvironmentId?.trim() || ''}::${file.workspaceExecutionHostId ?? ''}`
   const plainPathOwner = new Map<string, string>()
   const reservedSourceId = (file: {
     filePath: string
     worktreeId: string
     runtimeEnvironmentId?: string | null
+    workspaceExecutionHostId?: OpenFile['workspaceExecutionHostId']
   }): string => {
     const updatedPath = updatedPathOf(file)
     const ownerKey = ownerKeyOf(file)
@@ -251,14 +257,20 @@ export function remapOpenEditorTabsForPathChange({
       return updatedPath
     }
     if (claimed !== undefined) {
-      return buildOwnedEditorFileId(updatedPath, file.worktreeId, file.runtimeEnvironmentId)
+      return buildOwnedEditorFileId(
+        updatedPath,
+        file.worktreeId,
+        file.runtimeEnvironmentId,
+        file.workspaceExecutionHostId
+      )
     }
     const id = resolveEditorFileIdForOwner(
       state,
       updatedPath,
       file.worktreeId,
       file.runtimeEnvironmentId,
-      ['edit']
+      ['edit'],
+      file.workspaceExecutionHostId
     )
     if (id === updatedPath) {
       plainPathOwner.set(updatedPath, ownerKey)
@@ -319,7 +331,8 @@ export function remapOpenEditorTabsForPathChange({
         file.worktreeId,
         file.diffSource,
         newRelativePath,
-        file.runtimeEnvironmentId
+        file.runtimeEnvironmentId,
+        file.workspaceExecutionHostId
       ),
       oldFilePath: file.filePath,
       newFilePath: updatedPathOf(file),

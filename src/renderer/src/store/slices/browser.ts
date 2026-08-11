@@ -31,8 +31,7 @@ import {
   pushRecentlyClosedTabKind
 } from './recently-closed-tabs'
 import type { RecentlyClosedTabPosition } from './recently-closed-tabs'
-import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type {
   BrowserDetectProfilesResult,
   BrowserProfileClearDefaultCookiesResult,
@@ -59,6 +58,7 @@ import {
   type WorkspaceSessionHydrationOptions
 } from '@/lib/workspace-session-hydration-keys'
 import { buildValidWorktreeIdsForSessionHydration } from './degraded-repo-worktree-validity'
+import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-page-close'
 
 type CreateBrowserTabOptions = {
   activate?: boolean
@@ -70,6 +70,7 @@ type CreateBrowserTabOptions = {
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
+  workspaceExecutionHostId?: ExecutionHostId
 }
 
 type CreateBrowserPageOptions = {
@@ -335,22 +336,10 @@ function browserImportStateForHostUpdate(
   return getBrowserSettingsHostId(state) === hostId ? { browserSessionImportState } : {}
 }
 
-function closeRemoteBrowserPageInOwningEnvironment(
-  worktreeId: string,
-  handle: RemoteBrowserPageHandle
-): void {
-  const target: RuntimeClientTarget = { kind: 'environment', environmentId: handle.environmentId }
-  void callRuntimeRpc(
-    target,
-    'browser.tabClose',
-    { worktree: toRuntimeWorktreeSelector(worktreeId), page: handle.remotePageId },
-    { timeoutMs: 15_000 }
-  ).catch(() => {})
-}
-
 function buildBrowserPage(
   workspaceId: string,
   worktreeId: string,
+  workspaceExecutionHostId: ExecutionHostId,
   url: string,
   title?: string,
   browserRuntimeEnvironmentId?: string | null
@@ -360,6 +349,7 @@ function buildBrowserPage(
     id: createBrowserUuid(),
     workspaceId,
     worktreeId,
+    workspaceExecutionHostId,
     url: normalizedUrl,
     title: normalizeBrowserTitle(title, normalizedUrl),
     // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
@@ -384,6 +374,7 @@ function buildWorkspaceFromPage(
   return {
     id,
     worktreeId,
+    workspaceExecutionHostId: page.workspaceExecutionHostId,
     sessionProfileId: sessionProfileId ?? null,
     sessionPartition: sessionPartition ?? null,
     activePageId: page.id,
@@ -561,9 +552,12 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
   createBrowserTab: (worktreeId, url, options) => {
     const workspaceId = createBrowserUuid()
+    const workspaceExecutionHostId =
+      options?.workspaceExecutionHostId ?? getBrowserWorktreeHostId(get(), worktreeId)
     const page = buildBrowserPage(
       workspaceId,
       worktreeId,
+      workspaceExecutionHostId,
       url,
       options?.title,
       options?.browserRuntimeEnvironmentId
@@ -908,7 +902,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         activate: true,
         sessionProfileId,
         sessionPartition,
-        targetGroupId: entryToRestore.position?.groupId
+        targetGroupId: entryToRestore.position?.groupId,
+        workspaceExecutionHostId: snap.workspaceExecutionHostId
       })
       restoreRecentlyClosedTabPosition(get, worktreeId, restored.id, entryToRestore.position)
       return get().browserTabsByWorktree[worktreeId]?.find((tab) => tab.id === restored.id) ?? null
@@ -922,7 +917,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       sessionProfileId,
       sessionPartition,
       targetGroupId: entryToRestore.position?.groupId,
-      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId
+      browserRuntimeEnvironmentId: firstPage.browserRuntimeEnvironmentId,
+      workspaceExecutionHostId: snap.workspaceExecutionHostId ?? firstPage.workspaceExecutionHostId
     })
 
     for (const p of restPages) {
@@ -1007,6 +1003,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     const page = buildBrowserPage(
       workspaceId,
       workspace.worktreeId,
+      workspace.workspaceExecutionHostId ?? getBrowserWorktreeHostId(get(), workspace.worktreeId),
       url,
       options?.title,
       options?.browserRuntimeEnvironmentId
@@ -1660,6 +1657,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
                   id: createBrowserUuid(),
                   workspaceId: tab.id,
                   worktreeId,
+                  workspaceExecutionHostId: tab.workspaceExecutionHostId,
                   url: normalizeUrl(tab.url),
                   title: tab.title,
                   loading: false,
@@ -1680,6 +1678,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               ...persistedPage,
               workspaceId: tab.id,
               worktreeId,
+              workspaceExecutionHostId:
+                persistedPage.workspaceExecutionHostId ?? tab.workspaceExecutionHostId,
               url: normalizeUrl(page.url),
               loading: false,
               loadError: page.loadError ?? null

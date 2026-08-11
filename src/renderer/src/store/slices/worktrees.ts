@@ -130,7 +130,10 @@ import type {
   SshExecutionHostId
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
-import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import {
+  findIndexedFolderWorkspaceOwner,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/worktree-runtime-owner-index'
 import { catalogRowsEqual, reuseEqualCatalogRows } from './worktree-catalog-reconciliation'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
@@ -169,9 +172,19 @@ function getFolderWorkspaceActivityPersistence(
   if (existing) {
     return existing
   }
-  const created = new FolderWorkspaceActivityPersistence((folderWorkspaceId, activityAt) => {
-    if (get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-      void get().updateFolderWorkspace(folderWorkspaceId, { lastActivityAt: activityAt })
+  const created = new FolderWorkspaceActivityPersistence((target, activityAt) => {
+    if (
+      findIndexedFolderWorkspaceOwner(
+        get().folderWorkspaces,
+        target.folderWorkspaceId,
+        target.executionHostId
+      )
+    ) {
+      void get().updateFolderWorkspace(
+        target.folderWorkspaceId,
+        { lastActivityAt: activityAt },
+        { executionHostId: target.executionHostId }
+      )
     }
   }, FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS)
   folderWorkspaceActivityPersistenceByStore.set(get, created)
@@ -782,16 +795,49 @@ function applyDetectedWorktreeUpdates(
   return changed ? nextByRepo : detectedWorktreesByRepo
 }
 
+function getFolderWorkspaceOwnerHostId(workspace: FolderWorkspace): ExecutionHostId | null {
+  const owner = folderWorkspaceToWorktree(workspace)
+  const physicalHostId = parseExecutionHostId(owner.hostId)?.id
+  if (physicalHostId) {
+    return physicalHostId
+  }
+  const transportHost = parseExecutionHostId(workspace.executionHostId)
+  return owner.runtimeOwnerEnvironmentId && transportHost?.kind === 'runtime'
+    ? transportHost.id
+    : null
+}
+
 function folderWorkspaceMatchesHost(
-  workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>,
+  workspace: FolderWorkspace,
   executionHostId: ExecutionHostId
 ): boolean {
-  return (
-    (parseExecutionHostId(workspace.executionHostId)?.id ??
-      (workspace.connectionId?.trim()
-        ? toSshExecutionHostId(workspace.connectionId)
-        : LOCAL_EXECUTION_HOST_ID)) === executionHostId
-  )
+  return getFolderWorkspaceOwnerHostId(workspace) === executionHostId
+}
+
+function findFolderWorkspaceMetaOwner(
+  state: Pick<
+    AppState,
+    | 'folderWorkspaces'
+    | 'activeWorktreeId'
+    | 'activeWorkspaceKey'
+    | 'activeWorkspaceExecutionHostId'
+  >,
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
+): { hostId: ExecutionHostId; workspace: FolderWorkspace } | null {
+  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+  const preferredHostId =
+    executionHostId ??
+    (state.activeWorktreeId === workspaceKey || state.activeWorkspaceKey === workspaceKey
+      ? (state.activeWorkspaceExecutionHostId ?? undefined)
+      : undefined)
+  const workspace = findIndexedFolderWorkspaceOwner(
+    state.folderWorkspaces,
+    folderWorkspaceId,
+    preferredHostId
+  ) as FolderWorkspace | null
+  const hostId = workspace ? getFolderWorkspaceOwnerHostId(workspace) : null
+  return workspace && hostId ? { hostId, workspace } : null
 }
 
 function findKnownWorktreeById(
@@ -801,11 +847,11 @@ function findKnownWorktreeById(
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
-      (workspace) =>
-        workspace.id === workspaceScope.folderWorkspaceId &&
-        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
-    )
+    const folderWorkspace = findIndexedFolderWorkspaceOwner(
+      state.folderWorkspaces,
+      workspaceScope.folderWorkspaceId,
+      executionHostId
+    ) as FolderWorkspace | null
     if (!folderWorkspace) {
       return undefined
     }
@@ -4810,14 +4856,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   updateWorktreeMeta: async (worktreeId, updates, options) => {
     const shouldApplyUpdate = options?.shouldApply
-    const existingWorktree = get().getKnownWorktreeById(worktreeId)
-    if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
-      return { ok: true }
-    }
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderUpdates = getFolderWorkspaceMetaUpdates(updates)
       if (Object.keys(folderUpdates).length === 0) {
+        return { ok: true }
+      }
+      const owner = findFolderWorkspaceMetaOwner(
+        get(),
+        workspaceScope.folderWorkspaceId,
+        options?.executionHostId
+      )
+      if (!owner) {
+        return {
+          ok: false,
+          error: translate(
+            'auto.store.slices.worktrees.a17f4d2e93',
+            'Could not update this workspace.'
+          )
+        }
+      }
+      if (shouldApplyUpdate && !shouldApplyUpdate(folderWorkspaceToWorktree(owner.workspace))) {
         return { ok: true }
       }
       try {
@@ -4825,7 +4884,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         // reporting ok would show the dialog a save that silently undid itself.
         const updated = await get().updateFolderWorkspace(
           workspaceScope.folderWorkspaceId,
-          folderUpdates
+          folderUpdates,
+          { executionHostId: owner.hostId }
         )
         return updated
           ? { ok: true }
@@ -4840,6 +4900,10 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         console.error('Failed to update folder workspace meta:', err)
         return { ok: false, error: err instanceof Error ? err.message : String(err) }
       }
+    }
+    const existingWorktree = get().getKnownWorktreeById(worktreeId)
+    if (shouldApplyUpdate && !shouldApplyUpdate(existingWorktree)) {
+      return { ok: true }
     }
     const normalizedUpdates = existingWorktree
       ? clearOlderHostedReviewLinksForReplacement(updates, existingWorktree)
@@ -5139,29 +5203,43 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     )
   },
 
-  setWorktreesPinnedAndReveal: (worktreeIds, isPinned) => {
+  setWorktreesPinnedAndReveal: (worktreeIds, isPinned, options) => {
+    const executionHostId = worktreeIds.length === 1 ? options?.executionHostId : undefined
     // Only follow a toggled row with the viewport when it's the focused worktree, not an unfocused card.
     const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
       get().activeWorkspaceKey,
       get().activeWorktreeId
     )
+    const activeWorkspaceExecutionHostId = get().activeWorkspaceExecutionHostId
     // Skip worktrees already in the target state so a no-op toggle doesn't scroll the viewport away.
     const updates = new Map<string, Partial<WorktreeMeta>>()
     let didChange = false
     let revealWorktreeId: string | null = null
     for (const worktreeId of worktreeIds) {
-      const current = get().getKnownWorktreeById(worktreeId)
+      const current = get().getKnownWorktreeById(worktreeId, executionHostId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
       didChange = true
       const workspaceScope = parseWorkspaceKey(worktreeId)
       if (workspaceScope?.type === 'folder') {
-        void get().updateWorktreeMeta(worktreeId, { isPinned })
+        void get().updateWorktreeMeta(
+          worktreeId,
+          { isPinned },
+          executionHostId ? { executionHostId } : undefined
+        )
       } else {
         updates.set(worktreeId, { isPinned })
       }
-      if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
+      const activeOwnerMatches =
+        workspaceScope?.type !== 'folder' ||
+        executionHostId === undefined ||
+        executionHostId === activeWorkspaceExecutionHostId
+      if (
+        revealWorktreeId === null &&
+        worktreeId === activeSidebarWorktreeId &&
+        activeOwnerMatches
+      ) {
         revealWorktreeId = worktreeId
       }
     }
@@ -5181,31 +5259,30 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      let shouldPersist = false
+      let ownerHostId: ExecutionHostId | null = null
       set((s) => {
-        const folderWorkspace = s.folderWorkspaces.find(
-          (workspace) => workspace.id === folderWorkspaceId
-        )
-        if (!folderWorkspace || folderWorkspace.isUnread) {
+        const owner = findFolderWorkspaceMetaOwner(s, folderWorkspaceId)
+        if (!owner || owner.workspace.isUnread) {
           return s
         }
-        shouldPersist = true
+        ownerHostId = owner.hostId
         return {
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId
+            workspace === owner.workspace
               ? { ...workspace, isUnread: true, lastActivityAt: now }
               : workspace
           ),
           sortEpoch: s.sortEpoch + 1
         }
       })
-      if (!shouldPersist) {
+      if (!ownerHostId) {
         return
       }
-      void get().updateFolderWorkspace(folderWorkspaceId, {
-        isUnread: true,
-        lastActivityAt: now
-      })
+      void get().updateFolderWorkspace(
+        folderWorkspaceId,
+        { isUnread: true, lastActivityAt: now },
+        { executionHostId: ownerHostId }
+      )
       return
     }
     let shouldPersist = false
@@ -5315,19 +5392,21 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     const workspaceScope = parseWorkspaceKey(worktreeId)
     if (workspaceScope?.type === 'folder') {
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      const folderWorkspace = get().folderWorkspaces.find(
-        (workspace) => workspace.id === folderWorkspaceId
-      )
-      if (!folderWorkspace?.isUnread) {
+      const owner = findFolderWorkspaceMetaOwner(get(), folderWorkspaceId)
+      if (!owner?.workspace.isUnread) {
         return
       }
       // Why: flip locally first — this runs per keystroke, so the guard above must dedupe before the IPC round-trip lands.
       set((s) => ({
         folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-          workspace.id === folderWorkspaceId ? { ...workspace, isUnread: false } : workspace
+          workspace === owner.workspace ? { ...workspace, isUnread: false } : workspace
         )
       }))
-      void get().updateFolderWorkspace(folderWorkspaceId, { isUnread: false })
+      void get().updateFolderWorkspace(
+        folderWorkspaceId,
+        { isUnread: false },
+        { executionHostId: owner.hostId }
+      )
       return
     }
     let shouldPersist = false
@@ -5375,23 +5454,27 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: folder meta lives on the FolderWorkspace record — persistWorktreeMeta would write a
       // worktreeMeta['folder:…'] row that folderWorkspaces:list never reads back (#10251).
       const folderWorkspaceId = workspaceScope.folderWorkspaceId
-      let shouldPersist = false
+      let ownerHostId: ExecutionHostId | null = null
       set((s) => {
-        if (!s.folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
+        const owner = findFolderWorkspaceMetaOwner(s, folderWorkspaceId)
+        if (!owner) {
           return s
         }
-        shouldPersist = true
+        ownerHostId = owner.hostId
         const isActive = s.activeWorktreeId === worktreeId
         return {
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId ? { ...workspace, lastActivityAt: now } : workspace
+            workspace === owner.workspace ? { ...workspace, lastActivityAt: now } : workspace
           ),
           // Why: active-workspace PTY events are click side-effects, so they must not reorder it.
           ...(isActive ? {} : { sortEpoch: s.sortEpoch + 1 })
         }
       })
-      if (shouldPersist) {
-        getFolderWorkspaceActivityPersistence(get).record(folderWorkspaceId, now)
+      if (ownerHostId) {
+        getFolderWorkspaceActivityPersistence(get).record(
+          { folderWorkspaceId, executionHostId: ownerHostId },
+          now
+        )
       }
       return
     }
@@ -5591,6 +5674,14 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       return false
     }
     const workspaceScope = worktreeId ? parseWorkspaceKey(worktreeId) : null
+    const folderWorkspaceOwner =
+      workspaceScope?.type === 'folder'
+        ? findFolderWorkspaceMetaOwner(get(), workspaceScope.folderWorkspaceId, executionHostId)
+        : null
+    if (workspaceScope?.type === 'folder' && !folderWorkspaceOwner) {
+      return false
+    }
+    const selectedExecutionHostId = folderWorkspaceOwner?.hostId ?? executionHostId
     if (worktreeId && shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -5627,7 +5718,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         }
       }
 
-      const worktree = findKnownWorktreeById(s, worktreeId, executionHostId)
+      const worktree = findKnownWorktreeById(s, worktreeId, selectedExecutionHostId)
       shouldClearUnread = Boolean(worktree?.isUnread)
 
       // Why: Search lives under Explorer, so the files/search sub-route must switch with the worktree, not leak the prior one.
@@ -5770,7 +5861,9 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const nextFolderWorkspaces =
         shouldClearUnread && workspaceScope?.type === 'folder'
           ? s.folderWorkspaces.map((workspace) =>
-              workspace.id === workspaceScope.folderWorkspaceId
+              workspace.id === workspaceScope.folderWorkspaceId &&
+              folderWorkspaceOwner &&
+              folderWorkspaceMatchesHost(workspace, folderWorkspaceOwner.hostId)
                 ? { ...workspace, isUnread: false }
                 : workspace
             )
@@ -5803,7 +5896,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : { ...s.activeTabTypeByWorktree, [worktreeId]: activeTabType }
       const hasStateChange =
         s.activeWorktreeId !== worktreeId ||
-        s.activeWorkspaceExecutionHostId !== (executionHostId ?? null) ||
+        s.activeWorkspaceExecutionHostId !== (selectedExecutionHostId ?? null) ||
         // Why: a pending-creation panel can show over the prior worktree; a non-null activePendingCreationId counts as a change.
         s.activePendingCreationId !== null ||
         s.activeFileId !== activeFileId ||
@@ -5832,7 +5925,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeWorkspaceKey: isWorkspaceKey(worktreeId)
           ? worktreeId
           : worktreeWorkspaceKey(worktreeId),
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: selectedExecutionHostId ?? null,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -5906,13 +5999,17 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       get().refreshGitHubForWorktreeIfStale(worktreeId)
     }
 
-    if (!worktreeId || !get().getKnownWorktreeById(worktreeId, executionHostId)) {
+    if (!worktreeId || !get().getKnownWorktreeById(worktreeId, selectedExecutionHostId)) {
       return true
     }
 
     if (shouldClearUnread) {
-      if (workspaceScope?.type === 'folder') {
-        void get().updateFolderWorkspace(workspaceScope.folderWorkspaceId, { isUnread: false })
+      if (workspaceScope?.type === 'folder' && folderWorkspaceOwner) {
+        void get().updateFolderWorkspace(
+          workspaceScope.folderWorkspaceId,
+          { isUnread: false },
+          { executionHostId: folderWorkspaceOwner.hostId }
+        )
         return true
       }
       persistPassiveWorktreeMetaForOwner(
@@ -5927,10 +6024,11 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
 
   setActiveFolderWorkspace: (folderWorkspaceId, executionHostId) => {
     const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-    const workspace = findKnownWorktreeById(get(), workspaceKey, executionHostId)
-    if (!workspace) {
+    const owner = findFolderWorkspaceMetaOwner(get(), folderWorkspaceId, executionHostId)
+    if (!owner) {
       return
     }
+    const workspace = folderWorkspaceToWorktree(owner.workspace)
     if (shouldDeferActivationTerminalPrep()) {
       markInputQuietSchedulerInput()
     }
@@ -6013,7 +6111,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         activeRepoId: null,
         activeWorktreeId: workspaceKey,
         activeWorkspaceKey: workspaceKey,
-        activeWorkspaceExecutionHostId: executionHostId ?? null,
+        activeWorkspaceExecutionHostId: owner.hostId,
         activePendingCreationId: null,
         activeFileId,
         activeBrowserTabId,
@@ -6026,8 +6124,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         everActivatedWorktreeIds: nextEverActivated,
         folderWorkspaces: workspace.isUnread
           ? s.folderWorkspaces.map((entry) =>
-              entry.id === folderWorkspaceId &&
-              (!executionHostId || folderWorkspaceMatchesHost(entry, executionHostId))
+              entry.id === folderWorkspaceId && folderWorkspaceMatchesHost(entry, owner.hostId)
                 ? { ...entry, isUnread: false }
                 : entry
             )
@@ -6038,7 +6135,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       void get().updateFolderWorkspace(
         folderWorkspaceId,
         { isUnread: false },
-        executionHostId ? { executionHostId } : undefined
+        { executionHostId: owner.hostId }
       )
     }
   },

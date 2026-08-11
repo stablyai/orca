@@ -192,7 +192,10 @@ describe('projectGroups IPC validation', () => {
     mockFilesystemProvider.stat.mockReset()
     mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
     mockGitProvider.isGitRepoAsync.mockReset()
-    mockGitProvider.isGitRepoAsync.mockResolvedValue({ isRepo: true, rootPath: null })
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
     mockGitProvider.listWorktrees.mockReset()
     mockGitProvider.listWorktrees.mockResolvedValue([])
     listWorktreeGraphMock.mockReset()
@@ -348,6 +351,23 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_update_args')
 
     expect(mockStore.updateProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('forwards the repo execution host when moving a local project group row', () => {
+    const moved = { id: 'repo-1', projectGroupId: 'group-1' }
+    mockStore.moveProjectToGroup.mockReturnValue(moved)
+
+    expect(
+      handlers.get('projectGroups:moveProject')!(null, {
+        projectId: 'repo-1',
+        groupId: 'group-1',
+        order: 3,
+        executionHostId: toSshExecutionHostId('conn-1')
+      })
+    ).toBe(moved)
+    expect(mockStore.moveProjectToGroup).toHaveBeenCalledWith('repo-1', 'group-1', 3, {
+      executionHostId: toSshExecutionHostId('conn-1')
+    })
   })
 
   it('scans nested repositories over a connected SSH filesystem', async () => {
@@ -791,6 +811,115 @@ describe('projectGroups IPC validation', () => {
     expect(mockMultiplexer.notify).toHaveBeenCalledWith('session.registerRoot', {
       rootPath: '/srv/platform/api'
     })
+  })
+
+  it('delegates failed import group rollback through the runtime', async () => {
+    const group = {
+      id: 'group-rollback',
+      name: 'Platform',
+      parentPath: '/srv/platform',
+      parentGroupId: null,
+      createdFrom: 'folder-scan',
+      tabOrder: 0,
+      isCollapsed: false,
+      color: null,
+      createdAt: 1,
+      updatedAt: 1
+    }
+    const runtime = { deleteProjectGroup: vi.fn().mockResolvedValue({ deleted: true }) }
+    registerRepoHandlers(mockWindow as never, mockStore as never, runtime as never)
+    mockStore.createProjectGroup.mockReturnValue(group)
+    mockStore.addRepo.mockImplementation(() => {
+      throw new Error('persist failed')
+    })
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: path === '/srv/platform/api',
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform/api/.git') {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (dirPath: string) =>
+      dirPath === '/srv/platform' ? [{ name: 'api', isDirectory: true, isSymlink: false }] : []
+    )
+
+    const result = await handlers.get('projectGroups:importNested')!(null, {
+      parentPath: '/srv/platform',
+      groupName: 'Platform',
+      projectPaths: ['/srv/platform/api'],
+      connectionId: 'conn-1',
+      mode: 'group'
+    })
+
+    expect(result).toMatchObject({ importedCount: 0, failedCount: 1 })
+    expect(runtime.deleteProjectGroup).toHaveBeenCalledWith(group.id, { notify: false })
+    expect(mockStore.deleteProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('continues nested-import rollback and publishes invalidation when one runtime delete rejects', async () => {
+    const repoPaths = ['/srv/platform/services/api', '/srv/platform/services/web']
+    let groupIndex = 0
+    mockStore.createProjectGroup.mockImplementation((input) => ({
+      ...input,
+      id: `rollback-group-${groupIndex++}`,
+      tabOrder: groupIndex,
+      isCollapsed: false,
+      color: null,
+      createdAt: groupIndex,
+      updatedAt: groupIndex
+    }))
+    mockStore.addRepo.mockImplementation(() => {
+      throw new Error('persist failed')
+    })
+    mockGitProvider.isGitRepoAsync.mockImplementation(async (path: string) => ({
+      isRepo: repoPaths.includes(path),
+      rootPath: null
+    }))
+    mockFilesystemProvider.stat.mockImplementation(async (path: string) => {
+      if (repoPaths.some((repoPath) => path === `${repoPath}/.git`)) {
+        return { type: 'directory', size: 0, mtime: 0 }
+      }
+      throw new Error('not found')
+    })
+    mockFilesystemProvider.readDir.mockImplementation(async (path: string) => {
+      if (path === '/srv/platform') {
+        return [{ name: 'services', isDirectory: true, isSymlink: false }]
+      }
+      if (path === '/srv/platform/services') {
+        return ['api', 'web'].map((name) => ({ name, isDirectory: true, isSymlink: false }))
+      }
+      return []
+    })
+    const deleteProjectGroup = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('first rollback failed'))
+      .mockResolvedValue({ deleted: true })
+    registerRepoHandlers(mockWindow as never, mockStore as never, { deleteProjectGroup } as never)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      const result = await handlers.get('projectGroups:importNested')!(null, {
+        parentPath: '/srv/platform',
+        groupName: 'Platform',
+        projectPaths: repoPaths,
+        connectionId: 'conn-1',
+        mode: 'group'
+      })
+
+      expect(result).toMatchObject({ importedCount: 0, failedCount: 2 })
+      expect(deleteProjectGroup).toHaveBeenCalledTimes(2)
+      expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+      expect(mockWindow.webContents.send).toHaveBeenCalledWith('repos:changed')
+      expect(warn).toHaveBeenCalledWith(
+        '[repos] failed to roll back nested-import project group',
+        expect.objectContaining({ groupId: expect.any(String) })
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('resolves SSH linked worktree imports through the SSH provider worktree graph', async () => {

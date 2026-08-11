@@ -34,6 +34,7 @@ import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-dis
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per (worktreeId+path).
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
@@ -99,12 +100,14 @@ export type EditorExternalWatchTargetState = Pick<
   | 'sshConnectionStates'
   | 'folderWorkspaces'
   | 'projectGroups'
->
+> &
+  Partial<Pick<AppState, 'activeWorkspaceExecutionHostId'>>
 
 let cachedOpenFiles: AppState['openFiles'] | null = null
 let cachedWorktreesByRepo: AppState['worktreesByRepo'] | null = null
 let cachedRepos: AppState['repos'] | null = null
 let cachedActiveWorktreeId: string | null = null
+let cachedActiveWorkspaceExecutionHostId: AppState['activeWorkspaceExecutionHostId'] = null
 let cachedRuntimeEnvironmentId: string | undefined
 let cachedRightSidebarOpen: boolean | null = null
 let cachedRightSidebarTab: AppState['rightSidebarTab'] | null = null
@@ -133,6 +136,7 @@ export function getEditorExternalWatchTargets(
     cachedWorktreesByRepo === state.worktreesByRepo &&
     cachedRepos === state.repos &&
     cachedActiveWorktreeId === state.activeWorktreeId &&
+    cachedActiveWorkspaceExecutionHostId === state.activeWorkspaceExecutionHostId &&
     cachedRuntimeEnvironmentId === runtimeEnvironmentId &&
     cachedRightSidebarOpen === state.rightSidebarOpen &&
     cachedRightSidebarTab === state.rightSidebarTab &&
@@ -188,15 +192,19 @@ export function getEditorExternalWatchTargets(
 
   const nextTargets: WatchedTarget[] = []
   const parts: string[] = []
+  const folderWorkspaceIdCounts = new Map<string, number>()
+  for (const workspace of state.folderWorkspaces) {
+    folderWorkspaceIdCounts.set(workspace.id, (folderWorkspaceIdCounts.get(workspace.id) ?? 0) + 1)
+  }
   const sortedWorktreeIds = Array.from(targetOwnersByWorktreeId.keys()).sort()
   for (const id of sortedWorktreeIds) {
     const wt = findWorktreeById(state.worktreesByRepo, id)
     const workspaceScope = parseWorkspaceKey(id)
     const folderWorkspace =
       workspaceScope?.type === 'folder'
-        ? state.folderWorkspaces.find(
-            (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-          )
+        ? (findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId) as
+            | AppState['folderWorkspaces'][number]
+            | null)
         : undefined
     if (!wt && !folderWorkspace) {
       continue
@@ -212,6 +220,14 @@ export function getEditorExternalWatchTargets(
       (a ?? '').localeCompare(b ?? '')
     )
     for (const owner of owners) {
+      if (
+        owner &&
+        workspaceScope?.type === 'folder' &&
+        (folderWorkspaceIdCounts.get(workspaceScope.folderWorkspaceId) ?? 0) > 1
+      ) {
+        // Why: files.watch has no physical-owner field, so a shared runtime cannot disambiguate duplicate folder ids.
+        continue
+      }
       const target = {
         worktreeId: id,
         worktreePath: wt?.path ?? folderWorkspace!.folderPath,
@@ -228,6 +244,7 @@ export function getEditorExternalWatchTargets(
   cachedWorktreesByRepo = state.worktreesByRepo
   cachedRepos = state.repos
   cachedActiveWorktreeId = state.activeWorktreeId
+  cachedActiveWorkspaceExecutionHostId = state.activeWorkspaceExecutionHostId ?? null
   cachedRuntimeEnvironmentId = runtimeEnvironmentId
   cachedRightSidebarOpen = state.rightSidebarOpen
   cachedRightSidebarTab = state.rightSidebarTab

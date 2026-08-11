@@ -48,6 +48,9 @@ const SCOPE_TABS: { scope: AiVaultScope; label: string }[] = [
   { scope: 'project', label: 'Project' },
   { scope: 'all', label: 'All' }
 ]
+const OWNER_QUALIFIED_LIST_PARAMS = { ownerQualified: true as const }
+const WORKTREE_LIST_PARAMS = { limit: 10000, ownerQualified: true as const }
+const RESUME_RPC_OPTIONS = { timeoutMs: RESUME_RPC_TIMEOUT_MS }
 
 export function MobileAgentSessionHistoryPanel({
   hostId,
@@ -76,7 +79,7 @@ export function MobileAgentSessionHistoryPanel({
     let cancelled = false
     void (async () => {
       try {
-        const worktreeResponse = await client.sendRequest('worktree.ps', { limit: 10000 })
+        const worktreeResponse = await client.sendRequest('worktree.ps', WORKTREE_LIST_PARAMS)
         if (cancelled) {
           return
         }
@@ -377,17 +380,15 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
   ] = await Promise.all([
     client.sendRequest('repo.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS }),
     client
-      .sendRequest('folderWorkspace.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+      .sendRequest('folderWorkspace.list', OWNER_QUALIFIED_LIST_PARAMS, RESUME_RPC_OPTIONS)
       .catch(() => null),
     client
-      .sendRequest('projectGroup.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+      .sendRequest('projectGroup.list', OWNER_QUALIFIED_LIST_PARAMS, RESUME_RPC_OPTIONS)
       .catch(() => null),
     client
       .sendRequest('settings.get', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
       .catch(() => null),
-    client
-      .sendRequest('worktree.ps', { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
-      .catch(() => null)
+    client.sendRequest('worktree.ps', WORKTREE_LIST_PARAMS, RESUME_RPC_OPTIONS).catch(() => null)
   ])
   if (!repoResponse.ok) {
     throw new Error(repoResponse.error?.message || 'Unable to load workspace metadata.')

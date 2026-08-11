@@ -619,6 +619,27 @@ describe('createEditorSlice openDiff', () => {
     )
   })
 
+  it('rejects an explicit runtime hint that contradicts a published owner', () => {
+    const store = createEditorStore()
+    const worktreeId = 'repo-1::/srv/repo/worktree'
+    store.setState({
+      repos: [
+        { id: 'repo-1', executionHostId: 'runtime:owner-env' }
+      ] as unknown as AppState['repos'],
+      worktreesByRepo: {
+        'repo-1': [{ id: worktreeId, repoId: 'repo-1', hostId: 'runtime:owner-env' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    store
+      .getState()
+      .openDiff(worktreeId, '/srv/repo/worktree/file.ts', 'file.ts', 'typescript', false, {
+        runtimeEnvironmentId: 'stale-env'
+      })
+
+    expect(store.getState().openFiles).toEqual([])
+  })
+
   it('keeps an SSH-owned worktree diff off the focused runtime so it routes via its connection', () => {
     const store = createEditorStore()
     // An SSH worktree is owned by its connection, not the focused runtime. Its
@@ -627,6 +648,8 @@ describe('createEditorSlice openDiff', () => {
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'focused-env' } as AppState['settings'],
       repos: [{ id: 'repo-ssh', connectionId: 'conn-1' }] as unknown as AppState['repos'],
+      sshConnectionStates: new Map(),
+      sshStateByEnvironment: new Map(),
       worktreesByRepo: {
         'repo-ssh': [{ id: 'repo-ssh::/srv/wt', repoId: 'repo-ssh', hostId: 'ssh:conn-1' }]
       } as unknown as AppState['worktreesByRepo']
@@ -637,7 +660,16 @@ describe('createEditorSlice openDiff', () => {
       .openDiff('repo-ssh::/srv/wt', '/srv/wt/file.ts', 'file.ts', 'typescript', false)
 
     expect(store.getState().openFiles[0]).toEqual(
-      expect.objectContaining({ runtimeEnvironmentId: null })
+      expect.objectContaining({
+        runtimeEnvironmentId: null,
+        externalSshTargetId: 'conn-1',
+        workspaceExecutionHostId: 'ssh:conn-1',
+        operationProvenance: expect.objectContaining({
+          generation: expect.objectContaining({
+            route: { executionHostId: 'ssh:conn-1', runtimeEnvironmentId: null }
+          })
+        })
+      })
     )
   })
 
@@ -705,6 +737,7 @@ describe('createEditorSlice openDiff', () => {
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
+    expect(store.getState().openFiles[0]?.workspaceExecutionHostId).toBe('local')
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(1)
@@ -767,6 +800,69 @@ describe('createEditorSlice openDiff', () => {
         expectedSshConnectionGeneration: 2
       })
     )
+  })
+
+  it('keeps SSH-first and local tabs separate for the same workspace path', () => {
+    const store = createEditorStore()
+    const file = {
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit' as const
+    }
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-1' }]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    } as never)
+    store.getState().openFile(file)
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', executionHostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      }
+    } as never)
+    store.getState().openFile(file)
+
+    expect(store.getState().openFiles).toHaveLength(2)
+    expect(store.getState().openFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          workspaceExecutionHostId: 'ssh:ssh-1',
+          operationProvenance: expect.objectContaining({
+            generation: expect.objectContaining({
+              route: { executionHostId: 'ssh:ssh-1', runtimeEnvironmentId: null }
+            })
+          })
+        }),
+        expect.objectContaining({
+          workspaceExecutionHostId: 'local',
+          operationProvenance: expect.objectContaining({
+            generation: expect.objectContaining({
+              route: { executionHostId: 'local', runtimeEnvironmentId: null }
+            })
+          })
+        })
+      ])
+    )
+    expect(
+      store.getState().openFiles.find((openFile) => openFile.workspaceExecutionHostId === 'local')
+    ).not.toHaveProperty('externalSshTargetId')
   })
 
   it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
@@ -2184,6 +2280,78 @@ describe('createEditorSlice markdown table of contents visibility', () => {
 })
 
 describe('createEditorSlice openMarkdownPreview', () => {
+  it('copies and reconciles the source workspace owner evidence', () => {
+    const store = createEditorStore()
+    const sourceId = '/repo/docs/owner.md'
+    const localProvenance = {
+      generation: { route: { executionHostId: 'local', runtimeEnvironmentId: null } }
+    }
+    const runtimeProvenance = {
+      generation: {
+        route: { executionHostId: 'runtime:env-owner', runtimeEnvironmentId: 'env-owner' }
+      }
+    }
+    const source = {
+      id: sourceId,
+      filePath: sourceId,
+      relativePath: 'docs/owner.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      isDirty: false,
+      mode: 'edit',
+      runtimeEnvironmentId: null,
+      workspaceExecutionHostId: 'local',
+      operationProvenance: localProvenance
+    }
+    store.setState({ openFiles: [source] as never })
+
+    store.getState().openMarkdownPreview(
+      {
+        filePath: source.filePath,
+        relativePath: source.relativePath,
+        worktreeId: source.worktreeId,
+        language: source.language
+      },
+      { sourceFileId: source.id }
+    )
+
+    expect(store.getState().openFiles.at(-1)).toMatchObject({
+      mode: 'markdown-preview',
+      runtimeEnvironmentId: null,
+      workspaceExecutionHostId: 'local',
+      operationProvenance: localProvenance
+    })
+
+    store.setState((state) => ({
+      openFiles: state.openFiles.map((file) =>
+        file.id === source.id
+          ? {
+              ...file,
+              runtimeEnvironmentId: 'env-owner',
+              workspaceExecutionHostId: 'runtime:env-owner',
+              operationProvenance: runtimeProvenance
+            }
+          : file
+      ) as never
+    }))
+    store.getState().openMarkdownPreview(
+      {
+        filePath: source.filePath,
+        relativePath: source.relativePath,
+        worktreeId: source.worktreeId,
+        language: source.language
+      },
+      { sourceFileId: source.id }
+    )
+
+    expect(store.getState().openFiles.at(-1)).toMatchObject({
+      mode: 'markdown-preview',
+      runtimeEnvironmentId: 'env-owner',
+      workspaceExecutionHostId: 'runtime:env-owner',
+      operationProvenance: runtimeProvenance
+    })
+  })
+
   it('keeps external SSH ownership after the source edit tab closes', () => {
     const store = createEditorStore()
     store.getState().openFile({
@@ -3596,6 +3764,59 @@ describe('createEditorSlice combined diff exclusions', () => {
 })
 
 describe('createEditorSlice openBranchDiff', () => {
+  it('preserves exact SSH provenance when a same-id owner becomes ambiguous', () => {
+    const store = createEditorStore()
+    const worktreeId = 'repo-ssh::/srv/repo/worktree'
+    const branchSummary: GitBranchCompareSummary = {
+      baseRef: 'main',
+      baseOid: 'base-oid',
+      compareRef: 'HEAD',
+      headOid: 'head-oid',
+      mergeBase: 'merge-base-oid',
+      changedFiles: 1,
+      status: 'ready'
+    }
+    const ownerA = { id: worktreeId, repoId: 'repo-ssh', hostId: 'ssh:ssh-a' as const }
+    store.setState({
+      repos: [{ id: 'repo-ssh', connectionId: 'ssh-a' }] as unknown as AppState['repos'],
+      sshConnectionStates: new Map(),
+      sshStateByEnvironment: new Map(),
+      worktreesByRepo: { 'repo-ssh': [ownerA] } as unknown as AppState['worktreesByRepo']
+    })
+    const open = (): void =>
+      store
+        .getState()
+        .openBranchDiff(
+          worktreeId,
+          '/srv/repo/worktree',
+          { path: 'src/file.ts', status: 'modified' },
+          branchSummary,
+          'typescript'
+        )
+
+    open()
+    const exactFile = store.getState().openFiles[0]
+    expect(exactFile).toEqual(
+      expect.objectContaining({
+        externalSshTargetId: 'ssh-a',
+        operationProvenance: expect.objectContaining({
+          generation: expect.objectContaining({
+            route: { executionHostId: 'ssh:ssh-a', runtimeEnvironmentId: null }
+          })
+        })
+      })
+    )
+    store.setState({
+      worktreesByRepo: {
+        'repo-ssh': [ownerA, { ...ownerA, hostId: 'ssh:ssh-b' }]
+      } as unknown as AppState['worktreesByRepo']
+    })
+
+    open()
+
+    expect(store.getState().openFiles).toEqual([exactFile])
+  })
+
   it('derives a runtime owner for branch diffs from the worktree host', () => {
     const store = createEditorStore()
     const worktreeId = 'repo-1::/srv/repo/worktree'
@@ -5313,6 +5534,64 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     )
   })
 
+  it('captures durable SSH workspace ownership without mutation provenance', () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-1' }]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    } as never)
+
+    openReadOnlyLog(store)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        workspaceExecutionHostId: 'ssh:ssh-1',
+        operationProvenance: undefined
+      })
+    )
+  })
+
+  it('keeps a local read-only tab off an unrelated focused runtime', () => {
+    const store = createEditorStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'focused-env' },
+      repos: [{ id: 'repo-1', path: '/repo', executionHostId: 'local' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }]
+      }
+    } as never)
+
+    store.getState().openFile({
+      filePath: LOG_PATH,
+      relativePath: LOG_PATH,
+      worktreeId: 'wt-1',
+      language: 'jsonl',
+      mode: 'edit',
+      readOnly: true
+    })
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({
+        workspaceExecutionHostId: 'local',
+        runtimeEnvironmentId: null
+      })
+    )
+  })
+
   it('bumps the reload nonce on repeated View Log of a clean read-only tab', () => {
     const store = createEditorStore()
     openReadOnlyLog(store)
@@ -5424,6 +5703,32 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
 
     expect(store.getState().openFiles[0]).toEqual(
       expect.objectContaining({ externalSshTargetId: 'ssh-1' })
+    )
+  })
+
+  it('restores durable local workspace ownership', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/repo/local.ts',
+            relativePath: 'local.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            workspaceExecutionHostId: 'local'
+          }
+        ]
+      }
+    } as never)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ workspaceExecutionHostId: 'local' })
     )
   })
 })

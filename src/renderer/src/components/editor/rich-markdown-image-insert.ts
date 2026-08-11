@@ -1,18 +1,22 @@
 import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { dirname, basename } from '@/lib/path'
-import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { translate } from '@/i18n/i18n'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  findIndexedWorktreeOwner,
+  findIndexedWorktreeOwnerForHost
+} from '@/lib/worktree-runtime-owner-index'
 import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 
 export type RichMarkdownImageInsertArgs = {
   editor: Editor
+  fileId: string
   filePath: string
   sourcePath: string
   worktreeId: string | null
@@ -23,6 +27,7 @@ export type RichMarkdownImageInsertArgs = {
 
 export async function insertRichMarkdownImageFromPath({
   editor,
+  fileId,
   filePath,
   sourcePath,
   worktreeId,
@@ -32,30 +37,28 @@ export async function insertRichMarkdownImageFromPath({
 }: RichMarkdownImageInsertArgs): Promise<void> {
   try {
     const state = useAppStore.getState()
-    const worktreePath = getWorktreePath(worktreeId)
-    const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
-    const resolvedConnectionId = getConnectionId(worktreeId)
-    if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
+    const liveFile = state.openFiles.find(
+      (file) => file.id === fileId && file.worktreeId === worktreeId
+    )
+    if (worktreeId && !liveFile) {
       throw new Error("Couldn't verify which host owns this file. Reopen the file and try again.")
     }
-    const connectionId = resolvedConnectionId ?? undefined
+    const ownerHostId = parseExecutionHostId(
+      liveFile?.operationProvenance?.generation.route.executionHostId ??
+        liveFile?.workspaceExecutionHostId
+    )?.id
+    const worktreePath = getWorktreePath(state, worktreeId, ownerHostId)
     const fileContext =
-      worktreeId && parsedWorkspace?.type !== 'folder'
-        ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
+      worktreeId && liveFile
+        ? getEditorFileOperationContext(state, liveFile, worktreePath)
         : {
             settings: settingsForRuntimeOwner(state.settings, runtimeEnvironmentId),
             worktreeId,
             worktreePath,
-            connectionId,
-            expectedExecutionHostId: connectionId
-              ? (`ssh:${encodeURIComponent(connectionId)}` as const)
-              : ('local' as const),
-            ...(connectionId
-              ? captureDirectSshMutationExpectation(state, connectionId, runtimeEnvironmentId)
-              : {})
+            expectedExecutionHostId: 'local' as const
           }
     const settings = fileContext.settings
-    if (settings?.activeRuntimeEnvironmentId?.trim() && !worktreePath) {
+    if (settings?.activeRuntimeEnvironmentId?.trim() && !fileContext.worktreePath) {
       toast.error(
         translate(
           'auto.components.editor.useLocalImagePick.91d835dc88',
@@ -106,19 +109,20 @@ function encodeMarkdownImageBasename(destPath: string): string {
   return encodeURIComponent(basename(destPath))
 }
 
-function getWorktreePath(worktreeId: string | null): string | null {
-  if (!worktreeId) {
+function getWorktreePath(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string | null,
+  ownerHostId: ExecutionHostId | undefined
+): string | null {
+  if (!worktreeId || parseWorkspaceKey(worktreeId)?.type === 'folder') {
     return null
   }
-  const state = useAppStore.getState()
-  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
-  if (parsedWorkspaceKey?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find(
-        (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
-      )?.folderPath ?? null
-    )
-  }
-  const worktrees = Object.values(state.worktreesByRepo ?? {}).flat()
-  return worktrees.find((worktree) => worktree.id === worktreeId)?.path ?? null
+  const indexedOwner = ownerHostId
+    ? findIndexedWorktreeOwnerForHost(state.worktreesByRepo, worktreeId, ownerHostId)
+    : findIndexedWorktreeOwner(state.worktreesByRepo, worktreeId)
+  return (
+    Object.values(state.worktreesByRepo ?? {})
+      .flat()
+      .find((worktree) => worktree === indexedOwner)?.path ?? null
+  )
 }

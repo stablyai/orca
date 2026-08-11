@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSubagentSnapshot } from '../../shared/agent-status-types'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { toAppSshPtyId } from '../../shared/ssh-pty-id'
+import type { FolderWorkspace, ProjectGroup } from '../../shared/types'
 import { AgentHookServer } from './server'
 import {
   indexPersistedPaneKeyPtyIds,
@@ -502,12 +503,10 @@ describe('resolveAgentWorkspaceExecutionHostId', () => {
   }
   const runtimeRepo = {
     id: 'runtime-repo',
-    connectionId: null,
     executionHostId: 'runtime:ephemeral-vm-1' as const
   }
   const futureHostRepo = {
     id: 'future-repo',
-    connectionId: null,
     executionHostId: 'container:future-host'
   }
   const deps = {
@@ -525,12 +524,16 @@ describe('resolveAgentWorkspaceExecutionHostId', () => {
       }
       return undefined
     },
-    getFolderWorkspace: (id: string) =>
-      id === 'folder-runtime' ? { projectGroupId: 'group-runtime', connectionId: null } : undefined,
+    getFolderWorkspaces: () => [
+      {
+        id: 'folder-runtime',
+        projectGroupId: 'group-runtime',
+        executionHostId: 'runtime:ephemeral-vm-1' as const
+      }
+    ],
     getProjectGroups: () => [
       {
         id: 'group-runtime',
-        connectionId: null,
         executionHostId: 'runtime:ephemeral-vm-1'
       }
     ]
@@ -560,5 +563,100 @@ describe('resolveAgentWorkspaceExecutionHostId', () => {
     expect(resolveAgentWorkspaceExecutionHostId('missing::/repo', deps)).toBeNull()
     expect(resolveAgentWorkspaceExecutionHostId(undefined, deps)).toBeNull()
     expect(isLocalExecutionHost(null)).toBe(false)
+  })
+
+  it('keeps explicit-null folder ownership local under an SSH group', () => {
+    expect(
+      resolveAgentWorkspaceExecutionHostId('folder:folder-local', {
+        ...deps,
+        getFolderWorkspaces: () => [
+          {
+            id: 'folder-local',
+            projectGroupId: 'shared-group',
+            connectionId: null
+          }
+        ],
+        getProjectGroups: () => [{ id: 'shared-group', connectionId: 'ssh-1' }]
+      })
+    ).toBe('local')
+  })
+
+  it('treats contradictory folder or group ownership as unknown', () => {
+    const resolveOwner = (
+      folderWorkspace: Pick<
+        FolderWorkspace,
+        'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+      >,
+      projectGroup: Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
+    ) =>
+      resolveAgentWorkspaceExecutionHostId('folder:conflicting-folder', {
+        ...deps,
+        getFolderWorkspaces: () => [folderWorkspace],
+        getProjectGroups: () => [projectGroup]
+      })
+    const localGroup = { id: 'conflicting-group', connectionId: null }
+    const inheritedWorkspace = {
+      id: 'conflicting-folder',
+      projectGroupId: localGroup.id
+    }
+
+    expect(
+      resolveOwner(
+        {
+          ...inheritedWorkspace,
+          connectionId: 'ssh-1',
+          executionHostId: 'local'
+        },
+        localGroup
+      )
+    ).toBeNull()
+    expect(
+      resolveOwner(inheritedWorkspace, {
+        ...localGroup,
+        connectionId: 'ssh-1',
+        executionHostId: 'local'
+      })
+    ).toBeNull()
+  })
+
+  it('proves the local owner across same-id workspace catalog order', () => {
+    const workspaces = [
+      { id: 'shared-folder', projectGroupId: 'shared-group', connectionId: null },
+      { id: 'shared-folder', projectGroupId: 'shared-group', connectionId: 'ssh-1' }
+    ]
+    const groups = [
+      { id: 'shared-group', connectionId: null },
+      { id: 'shared-group', connectionId: 'ssh-1' }
+    ]
+    const resolveWithCatalog = (
+      folderWorkspaces: typeof workspaces,
+      projectGroups: typeof groups
+    ): ReturnType<typeof resolveAgentWorkspaceExecutionHostId> =>
+      resolveAgentWorkspaceExecutionHostId('folder:shared-folder', {
+        ...deps,
+        getFolderWorkspaces: () => folderWorkspaces,
+        getProjectGroups: () => projectGroups
+      })
+
+    expect(resolveWithCatalog(workspaces, groups)).toBe('local')
+    expect(resolveWithCatalog(workspaces.toReversed(), groups.toReversed())).toBe('local')
+  })
+
+  it('treats omitted ownership under colliding same-id groups as unknown', () => {
+    const groups = [
+      { id: 'shared-group', connectionId: null },
+      { id: 'shared-group', connectionId: 'ssh-1' }
+    ]
+    const resolveWithGroups = (
+      projectGroups: typeof groups
+    ): ReturnType<typeof resolveAgentWorkspaceExecutionHostId> =>
+      resolveAgentWorkspaceExecutionHostId('folder:folder-legacy', {
+        ...deps,
+        getFolderWorkspaces: () => [{ id: 'folder-legacy', projectGroupId: 'shared-group' }],
+        getProjectGroups: () => projectGroups
+      })
+
+    expect(resolveWithGroups(groups)).toBeNull()
+    expect(resolveWithGroups(groups.toReversed())).toBeNull()
   })
 })

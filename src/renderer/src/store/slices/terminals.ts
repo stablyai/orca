@@ -90,11 +90,13 @@ import {
   retireParkedTerminalTab
 } from '@/components/terminal-pane/terminal-parked-watcher-registry'
 import {
+  capturePtyShutdownExitScope,
   clearCommittedPtyShutdownSettlements,
   hasCommittedPtyShutdownSettlement,
   markCommittedPtyShutdowns,
   noteCommittedPtyShutdownSettlements,
-  settleDeferredPtyShutdownExits
+  releaseDeferredPtyShutdownExitsOutsideScope,
+  settleScopedDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import {
   normalizeTerminalLayoutSnapshot,
@@ -134,6 +136,7 @@ import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { sanitizeTerminalLayoutPaneTitles } from '@/lib/terminal-pane-title-sanitization'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -415,15 +418,12 @@ function resolveCreatedTabShellOverride(
   return undefined
 }
 
-function worktreeUsesWslPath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
-  worktreeId: string
-): boolean {
+function worktreeUsesWslPath(state: AppState, worktreeId: string): boolean {
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
-      (workspace) => workspace.id === parsed.folderWorkspaceId
-    )
+    const folderWorkspace = findFolderWorkspaceOwner(state, parsed.folderWorkspaceId) as
+      | AppState['folderWorkspaces'][number]
+      | null
     return folderWorkspace ? isWslUncPath(folderWorkspace.folderPath) : false
   }
   const worktree = Object.values(state.worktreesByRepo)
@@ -731,6 +731,8 @@ export type TerminalSlice = {
       expectedRuntimePtyIds?: string[]
       /** Opt-in for callers that already tore the workspace down backend-side; omitting it keeps the runtime stop. */
       backendOwnsPtyTeardown?: boolean
+      /** Prevents an obsolete teardown from mutating replacement renderer state after an awaited stop. */
+      isCurrent?: () => boolean
     }
   ) => Promise<void>
   shutdownCompletedAgentPaneForHibernation: (
@@ -3051,6 +3053,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
   shutdownWorktreeTerminals: async (worktreeId, opts) => {
     const keepIdentifiers = opts?.keepIdentifiers ?? false
+    const isCurrent = opts?.isCurrent ?? (() => true)
     const shutdownReason: AgentStatusWorktreeShutdownReason =
       opts?.shutdownReason ?? (keepIdentifiers ? 'manual-sleep' : 'remove-worktree')
     const tabs = get().tabsByWorktree[worktreeId] ?? []
@@ -3060,6 +3063,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     const runtimeEnvironmentId = resolveTerminalStopRuntimeEnvironmentId(get(), worktreeId)
     // Why: only renderer-bound ids emit pane exit callbacks, so they are the complete guard set (expectedRuntimePtyIds are raw RPC handles).
     const exitGuardPtyIds = rendererShutdownPtyIds
+    const exitDeferralScope = capturePtyShutdownExitScope(exitGuardPtyIds)
     const sleepingAgentSessionRecords = keepIdentifiers
       ? collectSleepingAgentSessionRecordsForWorktree(get(), worktreeId, {
           paneKeys: opts?.sleepingPaneKeys,
@@ -3119,14 +3123,20 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         (ptyId) => !hasCommittedPtyShutdownSettlement(ptyId)
       )
       markCommittedPtyShutdowns(committedPtyIds)
-      settleDeferredPtyShutdownExits(committedPtyIds, 'committed')
-      settleDeferredPtyShutdownExits(rolledBackPtyIds, 'rolled-back')
+      settleScopedDeferredPtyShutdownExits(committedPtyIds, 'committed', exitDeferralScope)
+      settleScopedDeferredPtyShutdownExits(rolledBackPtyIds, 'rolled-back', exitDeferralScope)
+      releaseDeferredPtyShutdownExitsOutsideScope(settledPtyIds, exitDeferralScope)
       clearCommittedPtyShutdownSettlements(settledPtyIds)
     }
     const stopRendererPtys = async (): Promise<{
       stoppedPtyIds: string[]
       failure?: PromiseRejectedResult
     }> => {
+      if (opts?.backendOwnsPtyTeardown === true) {
+        // Why: backend teardown can free a stable ID for reuse before renderer cleanup runs.
+        disposeParkedTerminalWatchersForPtyIds(rendererShutdownPtyIds)
+        return { stoppedPtyIds: rendererShutdownPtyIds }
+      }
       const localPtyIds = rendererShutdownPtyIds.filter((ptyId) => !ptyId.startsWith('remote:'))
       const results = await Promise.allSettled(
         localPtyIds.map((ptyId) => window.api.pty.kill(ptyId, { keepHistory: keepIdentifiers }))
@@ -3145,7 +3155,11 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
         )
       }
     }
-    const settlePartialRendererStop = (stoppedPtyIds: readonly string[]): void => {
+    const settleRendererStop = (
+      stoppedPtyIds: readonly string[],
+      pruneCapturedBindings: boolean,
+      installLateExitGuard: boolean
+    ): void => {
       partialRendererStopSettled = true
       const stopped = new Set(stoppedPtyIds)
       const stoppedSnapshots = handlerSnapshots.filter((snapshot) => stopped.has(snapshot.ptyId))
@@ -3156,11 +3170,13 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       restorePtyDataHandlersAfterFailedShutdown(failedSnapshots)
       noteCommittedPtyShutdownSettlements(stoppedPtyIds)
       set((s) => {
-        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-        for (const tab of tabs) {
-          nextPtyIdsByTabId[tab.id] = (s.ptyIdsByTabId[tab.id] ?? []).filter(
-            (ptyId) => !stopped.has(ptyId)
-          )
+        const nextPtyIdsByTabId = pruneCapturedBindings ? { ...s.ptyIdsByTabId } : null
+        if (nextPtyIdsByTabId) {
+          for (const tab of tabs) {
+            nextPtyIdsByTabId[tab.id] = (s.ptyIdsByTabId[tab.id] ?? []).filter(
+              (ptyId) => !stopped.has(ptyId)
+            )
+          }
         }
         const nextPending = { ...s.pendingPtyShutdownIds }
         const nextSuppressed = { ...s.suppressedPtyExitIds }
@@ -3170,23 +3186,41 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
             nextPending[ptyId] = remainingOwners
           } else {
             delete nextPending[ptyId]
-            if (!stopped.has(ptyId)) {
+            if (!stopped.has(ptyId) || !installLateExitGuard) {
               delete nextSuppressed[ptyId]
             }
           }
         }
         return {
-          ptyIdsByTabId: nextPtyIdsByTabId,
+          ...(nextPtyIdsByTabId ? { ptyIdsByTabId: nextPtyIdsByTabId } : {}),
           pendingPtyShutdownIds: nextPending,
           suppressedPtyExitIds: nextSuppressed
         }
       })
       const failedPtyIds = exitGuardPtyIds.filter((ptyId) => !stopped.has(ptyId))
-      markCommittedPtyShutdowns(stoppedPtyIds)
-      settleDeferredPtyShutdownExits(stoppedPtyIds, 'committed')
-      settleDeferredPtyShutdownExits(failedPtyIds, 'rolled-back')
+      if (installLateExitGuard) {
+        markCommittedPtyShutdowns(stoppedPtyIds)
+      }
+      const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
+      const settled = new Set(settledPtyIds)
+      settleScopedDeferredPtyShutdownExits(
+        stoppedPtyIds.filter((ptyId) => settled.has(ptyId)),
+        'committed',
+        exitDeferralScope
+      )
+      settleScopedDeferredPtyShutdownExits(
+        failedPtyIds.filter((ptyId) => settled.has(ptyId)),
+        'rolled-back',
+        exitDeferralScope
+      )
+      releaseDeferredPtyShutdownExitsOutsideScope(settledPtyIds, exitDeferralScope)
       clearCommittedPtyShutdownSettlements(exitGuardPtyIds)
     }
+    const settlePartialRendererStop = (stoppedPtyIds: readonly string[]): void =>
+      settleRendererStop(stoppedPtyIds, true, true)
+    // Why: replacement state may reuse stable IDs, so invalidated teardown settles only exits already deferred.
+    const settleInvalidatedRendererStop = (stoppedPtyIds: readonly string[]): void =>
+      settleRendererStop(stoppedPtyIds, false, false)
 
     // Why: capture buffers before kill, which unmounts panes and drops SSH relay history.
     // Why: capture() updates layouts, so the following updater must merge current state.
@@ -3224,6 +3258,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
 
         // Why: client-owned teardown waits for the owner RPC so a failure leaves renderer bindings retryable.
         const rendererStop = await stopRendererPtys()
+        if (!isCurrent()) {
+          settleInvalidatedRendererStop(rendererStop.stoppedPtyIds)
+          return
+        }
         if (rendererStop.failure) {
           settlePartialRendererStop(rendererStop.stoppedPtyIds)
           throw rendererStop.failure.reason
@@ -3283,6 +3321,10 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       try {
         const rendererStop = await stopRendererPtys()
+        if (!isCurrent()) {
+          settleInvalidatedRendererStop(rendererStop.stoppedPtyIds)
+          return
+        }
         if (rendererStop.failure) {
           settlePartialRendererStop(rendererStop.stoppedPtyIds)
           throw rendererStop.failure.reason
@@ -3467,7 +3509,8 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
     get().clearPaneForegroundAgentByWorktree(worktreeId)
     const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
     markCommittedPtyShutdowns(settledPtyIds)
-    settleDeferredPtyShutdownExits(settledPtyIds, 'committed')
+    settleScopedDeferredPtyShutdownExits(settledPtyIds, 'committed', exitDeferralScope)
+    releaseDeferredPtyShutdownExitsOutsideScope(settledPtyIds, exitDeferralScope)
     clearCommittedPtyShutdownSettlements(settledPtyIds)
   },
 

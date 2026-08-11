@@ -15,6 +15,7 @@ import {
   findIndexedWorktreeOwnerForHost
 } from './worktree-runtime-owner-index'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner'
+import { resolveFolderWorkspaceExecutionHostId } from './folder-workspace-execution-host'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
@@ -32,13 +33,15 @@ function getResolvedFolderHost(
   const group = folder
     ? findIndexedProjectGroupOwner(state.projectGroups, folder.projectGroupId, preferredHostId)
     : null
-  const explicitHost = parseExecutionHostId(folder?.executionHostId ?? group?.executionHostId)
-  if (explicitHost) {
-    return explicitHost.id
-  }
-  const connectionId = folder?.connectionId?.trim() || group?.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
+  if (folder) {
+    const hostId = resolveFolderWorkspaceExecutionHostId({
+      folderWorkspace: folder,
+      projectGroup: group,
+      fallbackHostId: preferredHostId
+    })
+    if (hostId) {
+      return hostId
+    }
   }
   const restoredHost = parseExecutionHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey?.[folderWorkspaceKey(folderWorkspaceId)]

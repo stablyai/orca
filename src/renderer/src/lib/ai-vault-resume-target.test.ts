@@ -14,7 +14,12 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 type ResumeTargetState = Pick<
   AppState,
-  'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
 >
 
 function makeState(
@@ -25,6 +30,8 @@ function makeState(
     projectGroups: [],
     repos: [],
     worktreesByRepo: {},
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
     ...overrides
   } as unknown as ResumeTargetState
 }
@@ -284,6 +291,69 @@ describe('ai vault resume target ownership', () => {
       )
     ).toBe('ssh')
   })
+
+  it('keeps an explicit-local folder off its SSH project-group host', () => {
+    const state = makeState({
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          name: 'Platform',
+          folderPath: '/repo/platform',
+          connectionId: null
+        }
+      ],
+      projectGroups: [{ id: 'group-1', connectionId: 'ssh-1', executionHostId: 'ssh:ssh-1' }]
+    })
+
+    expect(getAiVaultResumeWorkspaceTargetStatus(state, folderWorkspaceKey('folder-1'))).toBe(
+      'local'
+    )
+    expect(getAiVaultResumeWorkspaceExecutionHostId(state, folderWorkspaceKey('folder-1'))).toBe(
+      'local'
+    )
+  })
+
+  it.each([['local-first' as const], ['ssh-first' as const]])(
+    'classifies the active same-ID folder owner with %s catalog order',
+    (order) => {
+      const localFolder = {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        name: 'Local',
+        folderPath: '/local/platform',
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const sshFolder = {
+        ...localFolder,
+        name: 'SSH',
+        folderPath: '/remote/platform',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      const localGroup = { id: 'group-1', connectionId: null, executionHostId: 'local' as const }
+      const sshGroup = {
+        id: 'group-1',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      const state = makeState({
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        activeWorkspaceExecutionHostId: 'ssh:ssh-1',
+        folderWorkspaces:
+          order === 'local-first' ? [localFolder, sshFolder] : [sshFolder, localFolder],
+        projectGroups: order === 'local-first' ? [localGroup, sshGroup] : [sshGroup, localGroup]
+      })
+
+      expect(getAiVaultResumeWorkspaceTargetStatus(state, folderWorkspaceKey('folder-1'))).toBe(
+        'ssh'
+      )
+      expect(getAiVaultResumeWorkspaceExecutionHostId(state, folderWorkspaceKey('folder-1'))).toBe(
+        'ssh:ssh-1'
+      )
+    }
+  )
 
   it('prefers runtime project-group ownership over stale SSH folder connection ids', () => {
     expect(

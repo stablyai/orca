@@ -39,7 +39,10 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   }
 
   if (options.hostId) {
-    return matchingRepos.find((repo) => getRepoExecutionHostId(repo) === options.hostId) ?? null
+    const hostMatches = matchingRepos.filter(
+      (repo) => getRepoExecutionHostId(repo) === options.hostId
+    )
+    return hostMatches.length === 1 ? hostMatches[0] : null
   }
 
   if (matchingRepos.length === 1) {

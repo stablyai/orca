@@ -3,6 +3,7 @@
  * schemas themselves are unchanged apart from the per-entry tolerance the
  * session schema now declares everywhere. */
 import { z } from 'zod'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import type { BrowserWorkspace } from './types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { salvagingArray } from './zod-salvage'
@@ -23,6 +24,10 @@ const browserViewportPresetIdSchema = z.enum([
   'desktop'
 ])
 
+const executionHostIdSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+)
+
 // Why: the z.ZodType<BrowserWorkspace> cast only aligns the static type — it
 // does NOT let new fields survive parsing. z.object strips unknown keys, so
 // every additive field must be listed below (optional+nullable) or it is
@@ -30,6 +35,7 @@ const browserViewportPresetIdSchema = z.enum([
 export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   id: z.string(),
   worktreeId: z.string(),
+  workspaceExecutionHostId: executionHostIdSchema.optional(),
   label: z.string().optional(),
   sessionProfileId: z.string().nullable().optional(),
   // Why: optional+nullable so pre-field sessions still validate; without this
@@ -53,6 +59,7 @@ export const browserPageSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   worktreeId: z.string(),
+  workspaceExecutionHostId: executionHostIdSchema.optional(),
   url: z.string(),
   title: z.string(),
   loading: z.boolean(),

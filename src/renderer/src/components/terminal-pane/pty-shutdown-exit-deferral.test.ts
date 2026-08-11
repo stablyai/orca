@@ -1,10 +1,14 @@
 import { expect, it, vi } from 'vitest'
 import {
   applyHostWorktreeTerminalSleepState,
+  capturePtyShutdownExitScope,
   consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
   isHostPtySleepPending,
   markCommittedPtyShutdowns,
+  registerPtyShutdownExitIncarnation,
+  releaseDeferredPtyShutdownExitsOutsideScope,
+  settleScopedDeferredPtyShutdownExits,
   settleDeferredPtyShutdownExits
 } from './pty-shutdown-exit-deferral'
 import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
@@ -49,6 +53,25 @@ it('clears a committed guard when its deferred exit is replayed', () => {
 
   expect(callback).toHaveBeenCalledWith('committed')
   expect(consumeCommittedPtyShutdownExit('pty-deferred-commit')).toBe(false)
+})
+
+it('releases a same-ID replacement exit outside the captured shutdown incarnation', () => {
+  const ptyId = 'pty-reused-during-shutdown'
+  const oldBinding = registerPtyShutdownExitIncarnation(ptyId)
+  const scope = capturePtyShutdownExitScope([ptyId])
+  const replacementBinding = registerPtyShutdownExitIncarnation(ptyId)
+  const oldExit = vi.fn()
+  const replacementExit = vi.fn()
+  deferPtyShutdownExit(ptyId, oldExit, oldBinding.incarnation)
+  deferPtyShutdownExit(ptyId, replacementExit, replacementBinding.incarnation)
+
+  settleScopedDeferredPtyShutdownExits([ptyId], 'committed', scope)
+  releaseDeferredPtyShutdownExitsOutsideScope([ptyId], scope)
+
+  expect(oldExit).toHaveBeenCalledWith('committed')
+  expect(replacementExit).toHaveBeenCalledWith('unrelated')
+  oldBinding.unregister()
+  replacementBinding.unregister()
 })
 
 it('preserves another client binding through host sleep until the host reports wake', () => {

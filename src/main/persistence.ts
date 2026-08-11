@@ -221,12 +221,18 @@ import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
+  findProjectGroupForConnection,
   getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
+  hasProjectGroupForRepoExecutionHost,
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from '../shared/project-groups'
 import { createNestedProjectGroupResolver } from './project-groups/nested-repo-import'
+import {
+  resolveDeclaredFolderScopeOwner,
+  resolveProjectGroupOwner
+} from '../shared/folder-workspace-owner-resolution'
 import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   normalizeRepoSourceControlAiOverrides,
@@ -2682,7 +2688,7 @@ function removeWorkspaceSessionOwners(
   return next
 }
 
-function inferFolderScopeConnectionIdForMigration(args: {
+function inferFolderScopeConnectionId(args: {
   folderPath: string
   projectGroupId: string
   projectGroups: readonly ProjectGroup[]
@@ -2720,16 +2726,33 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
 } {
   const groups = state.projectGroups ?? []
   const repos = state.repos ?? []
+  const persistedGroupsById = new Map<string, ProjectGroup[]>()
+  for (const group of groups) {
+    const matching = persistedGroupsById.get(group.id) ?? []
+    matching.push(group)
+    persistedGroupsById.set(group.id, matching)
+  }
   let changed = false
   const projectGroups = groups.map((group) => {
-    if (group.connectionId || !group.parentPath) {
+    if (group.connectionId !== undefined || !group.parentPath) {
       return group
     }
-    const connectionId = inferFolderScopeConnectionIdForMigration({
+    const groupHostId = getProjectGroupPersistenceHostId(group)
+    if (!groupHostId) {
+      return group
+    }
+    const hasHostCollidingGroup = (persistedGroupsById.get(group.id)?.length ?? 0) > 1
+    const hostScopedProjectGroups = hasHostCollidingGroup
+      ? groups.filter((candidate) => getProjectGroupPersistenceHostId(candidate) === groupHostId)
+      : groups
+    const hostScopedRepos = hasHostCollidingGroup
+      ? repos.filter((repo) => getRepoExecutionHostId(repo) === groupHostId)
+      : repos
+    const connectionId = inferFolderScopeConnectionId({
       folderPath: group.parentPath,
       projectGroupId: group.id,
-      projectGroups: groups,
-      repos
+      projectGroups: hostScopedProjectGroups,
+      repos: hostScopedRepos
     })
     if (!connectionId) {
       return group
@@ -2737,20 +2760,49 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
     changed = true
     return { ...group, connectionId }
   })
-  const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
+  const groupsById = new Map<string, ProjectGroup[]>()
+  for (const group of projectGroups) {
+    const matching = groupsById.get(group.id) ?? []
+    matching.push(group)
+    groupsById.set(group.id, matching)
+  }
   const folderWorkspaces = (state.folderWorkspaces ?? []).map((workspace) => {
-    if (workspace.connectionId) {
+    if (workspace.connectionId !== undefined) {
       return workspace
     }
-    const groupConnectionId = groupsById.get(workspace.projectGroupId)?.connectionId ?? null
+    const candidateGroups = groupsById.get(workspace.projectGroupId) ?? []
+    const workspaceHostId = getFolderWorkspacePersistenceHostId(workspace, projectGroups, repos)
+    if (!workspaceHostId) {
+      return workspace
+    }
+    const matchingGroups = candidateGroups.filter(
+      (group) => getProjectGroupPersistenceHostId(group) === workspaceHostId
+    )
+    const group =
+      matchingGroups.length === 1
+        ? matchingGroups[0]
+        : candidateGroups.length === 1
+          ? candidateGroups[0]
+          : undefined
+    const hostScopedProjectGroups =
+      candidateGroups.length > 1
+        ? projectGroups.filter(
+            (candidate) => getProjectGroupPersistenceHostId(candidate) === workspaceHostId
+          )
+        : projectGroups
+    const hostScopedRepos =
+      candidateGroups.length > 1
+        ? repos.filter((repo) => getRepoExecutionHostId(repo) === workspaceHostId)
+        : repos
     const connectionId =
-      groupConnectionId ??
-      inferFolderScopeConnectionIdForMigration({
-        folderPath: workspace.folderPath,
-        projectGroupId: workspace.projectGroupId,
-        projectGroups,
-        repos
-      })
+      group?.connectionId !== undefined
+        ? group.connectionId
+        : inferFolderScopeConnectionId({
+            folderPath: workspace.folderPath,
+            projectGroupId: workspace.projectGroupId,
+            projectGroups: hostScopedProjectGroups,
+            repos: hostScopedRepos
+          })
     if (!connectionId) {
       return workspace
     }
@@ -2761,6 +2813,54 @@ function backfillFolderScopeConnectionIds(state: PersistedState): {
     changed,
     state: changed ? { ...state, projectGroups, folderWorkspaces } : state
   }
+}
+
+function getProjectGroupPersistenceHostId(group: ProjectGroup): ExecutionHostId | null {
+  const owner = resolveProjectGroupOwner(group)
+  return owner.status === 'owned' ? owner.executionHostId : null
+}
+
+function getFolderWorkspacePersistenceHostId(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[],
+  repos: readonly Repo[]
+): ExecutionHostId | null {
+  const workspaceOwner = resolveDeclaredFolderScopeOwner(workspace)
+  if (workspaceOwner.status !== 'unknown') {
+    return workspaceOwner.status === 'owned' ? workspaceOwner.executionHostId : null
+  }
+  const candidateGroups = projectGroups.filter((entry) => entry.id === workspace.projectGroupId)
+  const workspaceConnectionHostId = LOCAL_EXECUTION_HOST_ID
+  const matchingGroups = candidateGroups.filter(
+    (group) => getProjectGroupPersistenceHostId(group) === workspaceConnectionHostId
+  )
+  const group =
+    matchingGroups.length === 1
+      ? matchingGroups[0]
+      : candidateGroups.length === 1
+        ? candidateGroups[0]
+        : undefined
+  const groupOwner = group ? resolveDeclaredFolderScopeOwner(group) : null
+  if (groupOwner && groupOwner.status !== 'unknown') {
+    return groupOwner.status === 'owned' ? groupOwner.executionHostId : null
+  }
+  const hostScopedProjectGroups =
+    candidateGroups.length > 1
+      ? projectGroups.filter(
+          (candidate) => getProjectGroupPersistenceHostId(candidate) === workspaceConnectionHostId
+        )
+      : projectGroups
+  const hostScopedRepos =
+    candidateGroups.length > 1
+      ? repos.filter((repo) => getRepoExecutionHostId(repo) === workspaceConnectionHostId)
+      : repos
+  const connectionId = inferFolderScopeConnectionId({
+    folderPath: workspace.folderPath,
+    projectGroupId: workspace.projectGroupId,
+    projectGroups: hostScopedProjectGroups,
+    repos: hostScopedRepos
+  })
+  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
 function deleteRemovedTerminalScrollbackSnapshots(
@@ -4399,12 +4499,27 @@ export class Store {
 
   updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    options: { executionHostId?: ExecutionHostId } = {}
   ): ProjectGroup | null {
-    const group = (this.state.projectGroups ?? []).find((entry) => entry.id === groupId)
-    if (!group) {
+    const requestedHostId = options.executionHostId
+      ? normalizeExecutionHostId(options.executionHostId)
+      : null
+    if (options.executionHostId && !requestedHostId) {
       return null
     }
+    const groups = (this.state.projectGroups ?? []).filter((entry) => {
+      const ownerHostId = getProjectGroupPersistenceHostId(entry)
+      return (
+        entry.id === groupId &&
+        ownerHostId !== null &&
+        (!requestedHostId || ownerHostId === requestedHostId)
+      )
+    })
+    if (groups.length !== 1) {
+      return null
+    }
+    const group = groups[0]!
     if (updates.name !== undefined) {
       group.name = normalizeProjectGroupName(updates.name, group.name)
     }
@@ -4422,35 +4537,82 @@ export class Store {
     return group
   }
 
-  deleteProjectGroup(groupId: string): boolean {
-    const before = this.state.projectGroups?.length ?? 0
-    const deletedGroupIds = getProjectGroupSubtreeIds(this.state.projectGroups ?? [], groupId)
-    this.state.projectGroups = (this.state.projectGroups ?? []).filter(
-      (group) => !deletedGroupIds.has(group.id)
-    )
-    if ((this.state.projectGroups?.length ?? 0) === before) {
+  deleteProjectGroup(
+    groupId: string,
+    options: {
+      executionHostId?: ExecutionHostId
+      preserveRendererWorkspaceIds?: readonly string[]
+    } = {}
+  ): boolean {
+    // Why: removed workspace ownership must resolve against the pre-delete group and repo catalogs.
+    const projectGroups = this.state.projectGroups ?? []
+    const repos = this.state.repos
+    const requestedHostId = options.executionHostId
+      ? normalizeExecutionHostId(options.executionHostId)
+      : null
+    if (options.executionHostId && !requestedHostId) {
       return false
     }
+    const matchingRoots = projectGroups.filter((group) => {
+      const ownerHostId = getProjectGroupPersistenceHostId(group)
+      return (
+        group.id === groupId &&
+        ownerHostId !== null &&
+        (!requestedHostId || ownerHostId === requestedHostId)
+      )
+    })
+    if (matchingRoots.length !== 1) {
+      return false
+    }
+    const ownerHostId = getProjectGroupPersistenceHostId(matchingRoots[0]!)
+    if (!ownerHostId) {
+      return false
+    }
+    const ownerGroups = projectGroups.filter(
+      (group) => getProjectGroupPersistenceHostId(group) === ownerHostId
+    )
+    const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
+    const preservedWorkspaceIds = new Set(options.preserveRendererWorkspaceIds ?? [])
+    this.state.projectGroups = (this.state.projectGroups ?? []).filter(
+      (group) =>
+        !deletedGroupIds.has(group.id) || getProjectGroupPersistenceHostId(group) !== ownerHostId
+    )
     // Why: groups are sidebar organization only, so deleting one ungroups its repos rather than deleting them.
     this.state.repos = this.state.repos.map((repo) =>
-      repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
+      repo.projectGroupId &&
+      deletedGroupIds.has(repo.projectGroupId) &&
+      getRepoExecutionHostId(repo) === ownerHostId
         ? { ...repo, projectGroupId: null }
         : repo
     )
+    const removedWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) =>
+        deletedGroupIds.has(workspace.projectGroupId) &&
+        getFolderWorkspacePersistenceHostId(workspace, projectGroups, repos) === ownerHostId
+    )
+    const removedWorkspaceSet = new Set(removedWorkspaces)
+    const survivingWorkspaces = (this.state.folderWorkspaces ?? []).filter(
+      (workspace) => !removedWorkspaceSet.has(workspace)
+    )
     const removedFolderWorkspaceKeys = new Set<string>()
-    for (const workspace of this.state.folderWorkspaces ?? []) {
-      if (deletedGroupIds.has(workspace.projectGroupId)) {
-        removedFolderWorkspaceKeys.add(folderWorkspaceKey(workspace.id))
-        this.state.workspaceSession = removeWorkspaceSessionOwner(
-          this.state.workspaceSession,
-          folderWorkspaceKey(workspace.id)
-        )!
+    for (const workspace of removedWorkspaces) {
+      const workspaceKey = folderWorkspaceKey(workspace.id)
+      const workspaceHostId = getFolderWorkspacePersistenceHostId(workspace, projectGroups, repos)
+      if (!workspaceHostId) {
+        continue
+      }
+      const sameIdSiblings = survivingWorkspaces.filter((entry) => entry.id === workspace.id)
+      if (sameIdSiblings.length > 0 && workspaceHostId !== LOCAL_EXECUTION_HOST_ID) {
+        this.removeWorkspaceSessionOwnerInPartition(workspaceKey, workspaceHostId, {})
+      } else if (sameIdSiblings.length === 0) {
+        this.removeWorkspaceSessionStateForWorktree(workspaceKey, workspaceHostId)
+      }
+      if (!preservedWorkspaceIds.has(workspace.id) && sameIdSiblings.length === 0) {
+        removedFolderWorkspaceKeys.add(workspaceKey)
         this.removeWorkspaceLineageForFolderParent(workspace.id)
       }
     }
-    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
-      (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
-    )
+    this.state.folderWorkspaces = survivingWorkspaces
     this.pruneMobileClientTabSelections((worktreeId) => removedFolderWorkspaceKeys.has(worktreeId))
     this.scheduleSave()
     return true
@@ -4462,8 +4624,29 @@ export class Store {
     )
   }
 
-  getFolderWorkspace(id: string): FolderWorkspace | undefined {
-    return (this.state.folderWorkspaces ?? []).find((workspace) => workspace.id === id)
+  getFolderWorkspace(
+    id: string,
+    options: { executionHostId?: ExecutionHostId } = {}
+  ): FolderWorkspace | undefined {
+    const requestedHostId = options.executionHostId
+      ? normalizeExecutionHostId(options.executionHostId)
+      : null
+    if (options.executionHostId && !requestedHostId) {
+      return undefined
+    }
+    const workspaces = (this.state.folderWorkspaces ?? []).filter((workspace) => {
+      const ownerHostId = getFolderWorkspacePersistenceHostId(
+        workspace,
+        this.state.projectGroups ?? [],
+        this.state.repos
+      )
+      return (
+        workspace.id === id &&
+        ownerHostId !== null &&
+        (!requestedHostId || ownerHostId === requestedHostId)
+      )
+    })
+    return workspaces.length === 1 ? workspaces[0] : undefined
   }
 
   createFolderWorkspace(input: {
@@ -4476,8 +4659,10 @@ export class Store {
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
-    const group = (this.state.projectGroups ?? []).find(
-      (entry) => entry.id === input.projectGroupId
+    const group = findProjectGroupForConnection(
+      this.state.projectGroups ?? [],
+      input.projectGroupId,
+      input.connectionId
     )
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
@@ -4494,7 +4679,8 @@ export class Store {
       projectGroupId: group.id,
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
-      connectionId: input.connectionId ?? group.connectionId ?? null,
+      connectionId:
+        input.connectionId !== undefined ? input.connectionId : (group.connectionId ?? null),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
         ? sourceContext
@@ -4538,9 +4724,10 @@ export class Store {
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
       >
-    >
+    >,
+    options: { executionHostId?: ExecutionHostId } = {}
   ): FolderWorkspace | null {
-    const workspace = this.getFolderWorkspace(id)
+    const workspace = this.getFolderWorkspace(id, options)
     if (!workspace) {
       return null
     }
@@ -4615,34 +4802,92 @@ export class Store {
     return workspace
   }
 
-  removeFolderWorkspace(id: string): boolean {
-    const before = this.state.folderWorkspaces?.length ?? 0
-    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
-      (workspace) => workspace.id !== id
-    )
-    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+  removeFolderWorkspace(
+    id: string,
+    options: {
+      executionHostId?: ExecutionHostId
+      preserveRendererWorkspaceKey?: boolean
+    } = {}
+  ): boolean {
+    const workspaces = this.state.folderWorkspaces ?? []
+    const requestedHostId = options.executionHostId
+      ? normalizeExecutionHostId(options.executionHostId)
+      : null
+    if (options.executionHostId && !requestedHostId) {
       return false
     }
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      folderWorkspaceKey(id)
-    )!
-    this.removeWorkspaceLineageForFolderParent(id)
-    this.pruneMobileClientTabSelections((worktreeId) => worktreeId === folderWorkspaceKey(id))
+    const matchingIndexes = workspaces.flatMap((workspace, index) => {
+      if (workspace.id !== id) {
+        return []
+      }
+      const ownerHostId = getFolderWorkspacePersistenceHostId(
+        workspace,
+        this.state.projectGroups ?? [],
+        this.state.repos
+      )
+      if (ownerHostId === null || (requestedHostId && ownerHostId !== requestedHostId)) {
+        return []
+      }
+      return [index]
+    })
+    if (matchingIndexes.length !== 1) {
+      return false
+    }
+    const removedIndex = matchingIndexes[0]!
+    const workspace = workspaces[removedIndex]!
+    const ownerHostId = getFolderWorkspacePersistenceHostId(
+      workspace,
+      this.state.projectGroups ?? [],
+      this.state.repos
+    )
+    if (!ownerHostId) {
+      return false
+    }
+    this.state.folderWorkspaces = workspaces.filter((_, index) => index !== removedIndex)
+    const sameIdSiblings = this.state.folderWorkspaces.filter((entry) => entry.id === id)
+    const workspaceKey = folderWorkspaceKey(id)
+    if (sameIdSiblings.length > 0 && ownerHostId !== LOCAL_EXECUTION_HOST_ID) {
+      this.removeWorkspaceSessionOwnerInPartition(workspaceKey, ownerHostId, {})
+    } else if (sameIdSiblings.length === 0) {
+      this.removeWorkspaceSessionStateForWorktree(workspaceKey, ownerHostId)
+    }
+    if (!options.preserveRendererWorkspaceKey && sameIdSiblings.length === 0) {
+      this.removeWorkspaceLineageForFolderParent(id)
+      this.pruneMobileClientTabSelections((worktreeId) => worktreeId === workspaceKey)
+    }
     this.scheduleSave()
     return true
   }
 
-  moveProjectToGroup(repoId: string, groupId: string | null, order?: number): Repo | null {
-    const repo = this.state.repos.find((entry) => entry.id === repoId)
-    if (!repo) {
+  moveProjectToGroup(
+    repoId: string,
+    groupId: string | null,
+    order?: number,
+    options: { executionHostId?: ExecutionHostId } = {}
+  ): Repo | null {
+    const requestedHostId = options.executionHostId
+      ? normalizeExecutionHostId(options.executionHostId)
+      : null
+    if (options.executionHostId && !requestedHostId) {
       return null
     }
+    const matches = this.state.repos.filter(
+      (entry) =>
+        entry.id === repoId &&
+        (!requestedHostId || getRepoExecutionHostId(entry) === requestedHostId)
+    )
+    if (matches.length !== 1) {
+      return null
+    }
+    const repo = matches[0]!
     const normalizedGroupId =
-      groupId && (this.state.projectGroups ?? []).some((group) => group.id === groupId)
+      groupId && hasProjectGroupForRepoExecutionHost(repo, groupId, this.state.projectGroups ?? [])
         ? groupId
         : null
-    const siblingRepos = this.state.repos.filter((entry) => entry.id !== repoId)
+    const repoHostId = getRepoExecutionHostId(repo)
+    const siblingRepos = this.state.repos.filter(
+      (entry) => entry !== repo && getRepoExecutionHostId(entry) === repoHostId
+    )
     repo.projectGroupId = normalizedGroupId
     repo.projectGroupOrder =
       typeof order === 'number' && Number.isFinite(order)
@@ -4653,7 +4898,13 @@ export class Store {
   }
 
   addRepo(repo: Repo): void {
-    this.state.repos.push(repo)
+    const projectGroupId = repo.projectGroupId
+    this.state.repos.push(
+      projectGroupId &&
+        !hasProjectGroupForRepoExecutionHost(repo, projectGroupId, this.state.projectGroups ?? [])
+        ? { ...repo, projectGroupId: null }
+        : repo
+    )
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()
   }
@@ -4919,12 +5170,23 @@ export class Store {
       return null
     }
     const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    const prospectiveRepoOwner = {
+      connectionId: repo.connectionId,
+      executionHostId:
+        'executionHostId' in sanitizedUpdates
+          ? normalizeExecutionHostId(sanitizedUpdates.executionHostId)
+          : repo.executionHostId
+    }
     if ('projectGroupId' in sanitizedUpdates) {
       const nextGroupId = sanitizedUpdates.projectGroupId
       if (
         typeof nextGroupId !== 'string' ||
         nextGroupId.trim().length === 0 ||
-        !this.state.projectGroups.some((group) => group.id === nextGroupId)
+        !hasProjectGroupForRepoExecutionHost(
+          prospectiveRepoOwner,
+          nextGroupId,
+          this.state.projectGroups ?? []
+        )
       ) {
         sanitizedUpdates.projectGroupId = null
       }

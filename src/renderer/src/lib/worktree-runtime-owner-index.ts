@@ -3,18 +3,21 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { buildCatalogOwnerIndex } from './catalog-owner-index'
 
 type WorktreeOwnerRecord = Pick<Worktree, 'id' | 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 type DetectedWorktreeListing = { worktrees: readonly WorktreeOwnerRecord[] }
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 type FolderWorkspaceOwnerRecord = Pick<
   FolderWorkspace,
-  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'runtimeSourceExecutionHostId'
 >
-type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
+type ProjectGroupOwnerRecord = Pick<
+  ProjectGroup,
+  'id' | 'connectionId' | 'executionHostId' | 'runtimeSourceExecutionHostId'
+>
 
 // Why: owner resolution runs inside retained selectors and interaction paths;
 // immutable-slice indexes prevent unrelated store writes from rescanning.
@@ -50,41 +53,6 @@ type IndexedProjectGroupOwnerResolution =
   | { kind: 'resolved'; owner: ProjectGroupOwnerRecord }
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
-
-function catalogOwnerHostId(owner: {
-  connectionId?: string | null
-  executionHostId?: string | null
-}): ExecutionHostId {
-  const explicitHost = parseExecutionHostId(owner.executionHostId)
-  if (explicitHost) {
-    return explicitHost.id
-  }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : 'local'
-}
-
-function buildCatalogOwnerIndex<
-  T extends { id: string; connectionId?: string | null; executionHostId?: string | null }
->(
-  records: readonly T[]
-): ReadonlyMap<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }> {
-  const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
-  for (const record of records) {
-    const id = record.id
-    const hostId = catalogOwnerHostId(record)
-    const current = next.get(id)
-    if (!current) {
-      next.set(id, { kind: 'resolved', owner: record })
-    } else if (current.kind === 'resolved' && catalogOwnerHostId(current.owner) !== hostId) {
-      next.set(id, { kind: 'ambiguous' })
-    }
-    next.set(`${id}\0${hostId}`, {
-      kind: 'resolved',
-      owner: record
-    })
-  }
-  return next
-}
 
 export function findIndexedWorktreeOwner(
   worktreesByRepo: Record<string, readonly WorktreeOwnerRecord[]> | undefined,

@@ -116,7 +116,8 @@ describe('folder workspace generic activation and activity', () => {
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
     expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
       folderWorkspaceId: folderWorkspace.id,
-      updates: { isUnread: false }
+      updates: { isUnread: false },
+      executionHostId: 'local'
     })
   })
 
@@ -146,7 +147,8 @@ describe('folder workspace generic activation and activity', () => {
     expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(1)
     expect(folderWorkspacesUpdate).toHaveBeenLastCalledWith({
       folderWorkspaceId: folderWorkspace.id,
-      updates: { lastActivityAt: 1_000 }
+      updates: { lastActivityAt: 1_000 },
+      executionHostId: 'local'
     })
 
     // Why: the first IPC must not rewind local activity that advanced while it was in flight.
@@ -165,7 +167,8 @@ describe('folder workspace generic activation and activity', () => {
     expect(folderWorkspacesUpdate).toHaveBeenCalledTimes(2)
     expect(folderWorkspacesUpdate).toHaveBeenLastCalledWith({
       folderWorkspaceId: folderWorkspace.id,
-      updates: { lastActivityAt: 1_200 }
+      updates: { lastActivityAt: 1_200 },
+      executionHostId: 'local'
     })
     await Promise.resolve()
     await Promise.resolve()

@@ -113,7 +113,7 @@ export function buildEditorSessionData(
 > {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
-  const editFileIdsByWorktree: Record<string, Set<string>> = {}
+  const fileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
     // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
@@ -124,6 +124,7 @@ export function buildEditorSessionData(
       worktreeId: f.worktreeId,
       language: f.language,
       isPreview: f.isPreview || undefined,
+      workspaceExecutionHostId: f.workspaceExecutionHostId,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
       externalSshTargetId: f.externalSshTargetId,
       // Why: persist readOnly only when true; absence is the writable default on restore.
@@ -135,8 +136,7 @@ export function buildEditorSessionData(
         ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
         : {})
     })
-    const ids =
-      editFileIdsByWorktree[f.worktreeId] ?? (editFileIdsByWorktree[f.worktreeId] = new Set())
+    const ids = fileIdsByWorktree[f.worktreeId] ?? (fileIdsByWorktree[f.worktreeId] = new Set())
     ids.add(f.id)
   }
 
@@ -145,7 +145,7 @@ export function buildEditorSessionData(
     if (!fileId) {
       continue
     }
-    if (editFileIdsByWorktree[worktreeId]?.has(fileId)) {
+    if (fileIdsByWorktree[worktreeId]?.has(fileId)) {
       activeFileEntries.push([worktreeId, fileId])
     }
   }
@@ -169,7 +169,7 @@ export function buildEditorSessionData(
     string,
     WorkspaceVisibleTabType
   >
-  const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
+  const allEditFileIds = new Set(Object.values(fileIdsByWorktree).flatMap((ids) => [...ids]))
   // Why: preserve the value so per-file hide overrides survive restart (map only carries `false`; visible is the default).
   const persistedMarkdownFrontmatterVisible = Object.fromEntries(
     Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>

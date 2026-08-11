@@ -3,6 +3,7 @@ import {
   getRuntimeMobileSessionSyncKey,
   hasRegisteredRuntimeTerminalTab,
   registerRuntimeTerminalTab,
+  resolveMountedRuntimeTerminalPaneIdByPtyId,
   runtimeMobileSessionSyncKeysEqual,
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
@@ -72,6 +73,24 @@ afterEach(() => {
 })
 
 describe('runtime terminal registration ownership', () => {
+  it('reports a registered tab without a pane manager as unmounted', () => {
+    const unregister = registerRuntimeTerminalTab({
+      tabId: 'term-mounting',
+      worktreeId: 'wt-1',
+      getManager: () => null,
+      getContainer: () => null,
+      getPtyIdForPane: () => null
+    })
+
+    try {
+      expect(resolveMountedRuntimeTerminalPaneIdByPtyId('term-mounting', 'pty-1')).toEqual({
+        status: 'unmounted'
+      })
+    } finally {
+      unregister()
+    }
+  })
+
   it('ignores stale cleanup after a replacement registers the same tab', () => {
     const first = registerRuntimeTerminalTab({
       tabId: 'term-replaced',

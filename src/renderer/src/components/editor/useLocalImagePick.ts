@@ -6,6 +6,7 @@ import { extractIpcErrorMessage } from './rich-markdown-ipc-error-message'
 
 export function useLocalImagePick(
   editor: Editor | null,
+  fileId: string,
   filePath: string,
   worktreeId: string | null,
   runtimeEnvironmentId?: string | null
@@ -27,6 +28,7 @@ export function useLocalImagePick(
       }
       await insertRichMarkdownImageFromPath({
         editor,
+        fileId,
         filePath,
         sourcePath: srcPath,
         worktreeId,
@@ -38,5 +40,5 @@ export function useLocalImagePick(
     } catch (err) {
       toast.error(extractIpcErrorMessage(err, 'Failed to insert image.'))
     }
-  }, [editor, filePath, runtimeEnvironmentId, worktreeId])
+  }, [editor, fileId, filePath, runtimeEnvironmentId, worktreeId])
 }

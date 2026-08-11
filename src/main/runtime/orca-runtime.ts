@@ -450,6 +450,10 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
+import {
+  findProjectGroupForConnection,
+  getProjectGroupSubtreeIds
+} from '../../shared/project-groups'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
 import { isWslUncPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -976,6 +980,10 @@ import {
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 import {
+  resolveFolderWorkspaceTerminalTeardownTargets,
+  stopFolderWorkspaceTerminals
+} from './folder-workspace-terminal-teardown'
+import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
 } from './mobile-notification-replay'
@@ -1012,8 +1020,14 @@ import {
   assertFolderWorkspacePathUsable,
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath,
+  getFolderWorkspacePathStatusForWorkspace,
   inferFolderWorkspacePathConnection
 } from '../project-groups/folder-workspace-path-status'
+import {
+  resolveDeclaredFolderScopeOwner,
+  resolveFolderWorkspaceOwner,
+  resolveProjectGroupOwner
+} from '../../shared/folder-workspace-owner-resolution'
 import {
   getSshGitProvider,
   getSshGitProviderGeneration,
@@ -1676,6 +1690,8 @@ type RuntimePtyController = {
     agentSessionCreateOperationId?: string
     signal?: AbortSignal
     onPtySpawnCommitted?: () => void
+    /** Direct runtime spawns hold this through their post-spawn publication. */
+    worktreeSpawnLeaseHeld?: boolean
     adoptedStablePane?: {
       result: PtySpawnResult
       owner: {
@@ -2452,6 +2468,11 @@ type TerminalWorkspaceLaunchScope = {
   folderWorkspace: FolderWorkspace | null
 }
 
+type FolderWorkspaceTerminalSpawnOwner = {
+  executionHostId: ExecutionHostId
+  connectionId: string | null
+}
+
 type WorktreeLineageInput = {
   parentWorkspace?: string
   envParentWorkspace?: string
@@ -2666,6 +2687,186 @@ function getSetupRunnerCommandPlatformForLaunch(
   return getSetupRunnerCommandPlatformForPath(setup?.runnerScriptPath ?? '', fallbackPlatform)
 }
 
+function pruneDeletedTerminalLayoutLeaves(
+  root: TerminalPaneLayoutNode | null,
+  deletedLeafIds: ReadonlySet<string>
+): TerminalPaneLayoutNode | null {
+  if (!root) {
+    return null
+  }
+  const pending: { node: TerminalPaneLayoutNode; visited: boolean }[] = [
+    { node: root, visited: false }
+  ]
+  const pruned: (TerminalPaneLayoutNode | null)[] = []
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (current.node.type === 'leaf') {
+      pruned.push(deletedLeafIds.has(current.node.leafId) ? null : current.node)
+      continue
+    }
+    if (!current.visited) {
+      pending.push({ node: current.node, visited: true })
+      pending.push({ node: current.node.second, visited: false })
+      pending.push({ node: current.node.first, visited: false })
+      continue
+    }
+    const second = pruned.pop() ?? null
+    const first = pruned.pop() ?? null
+    pruned.push(
+      first && second
+        ? first === current.node.first && second === current.node.second
+          ? current.node
+          : { ...current.node, first, second }
+        : (first ?? second)
+    )
+  }
+  return pruned[0] ?? null
+}
+
+function collectTerminalLayoutLeafIds(root: TerminalPaneLayoutNode | null): string[] {
+  if (!root) {
+    return []
+  }
+  const leafIds: string[] = []
+  const pending = [root]
+  while (pending.length > 0) {
+    const current = pending.pop()!
+    if (current.type === 'leaf') {
+      leafIds.push(current.leafId)
+    } else {
+      pending.push(current.second, current.first)
+    }
+  }
+  return leafIds
+}
+
+function omitDeletedTerminalLayoutLeafRecords(
+  source: Record<string, string> | undefined,
+  deletedLeafIds: ReadonlySet<string>
+): Record<string, string> | undefined {
+  if (!source) {
+    return undefined
+  }
+  const entries = Object.entries(source).filter(([leafId]) => !deletedLeafIds.has(leafId))
+  if (entries.length === Object.keys(source).length) {
+    return source
+  }
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+function pruneDeletedFolderWorkspaceTerminalLayout(
+  layout: TerminalLayoutSnapshot,
+  deletedLeafIds: ReadonlySet<string>
+): TerminalLayoutSnapshot {
+  const root = pruneDeletedTerminalLayoutLeaves(layout.root, deletedLeafIds)
+  const retainedLeafIds = collectTerminalLayoutLeafIds(root)
+  const retainedLeafIdSet = new Set(retainedLeafIds)
+  const ptyIdsByLeafId = omitDeletedTerminalLayoutLeafRecords(layout.ptyIdsByLeafId, deletedLeafIds)
+  const buffersByLeafId = omitDeletedTerminalLayoutLeafRecords(
+    layout.buffersByLeafId,
+    deletedLeafIds
+  )
+  const scrollbackRefsByLeafId = omitDeletedTerminalLayoutLeafRecords(
+    layout.scrollbackRefsByLeafId,
+    deletedLeafIds
+  )
+  const titlesByLeafId = omitDeletedTerminalLayoutLeafRecords(layout.titlesByLeafId, deletedLeafIds)
+  const {
+    ptyIdsByLeafId: _oldPtyIdsByLeafId,
+    buffersByLeafId: _oldBuffersByLeafId,
+    scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
+    titlesByLeafId: _oldTitlesByLeafId,
+    ...layoutWithoutLeafRecords
+  } = layout
+  return {
+    ...layoutWithoutLeafRecords,
+    root,
+    activeLeafId:
+      layout.activeLeafId && retainedLeafIdSet.has(layout.activeLeafId)
+        ? layout.activeLeafId
+        : (retainedLeafIds[0] ?? null),
+    expandedLeafId:
+      layout.expandedLeafId && retainedLeafIdSet.has(layout.expandedLeafId)
+        ? layout.expandedLeafId
+        : null,
+    ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
+    ...(buffersByLeafId ? { buffersByLeafId } : {}),
+    ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
+    ...(titlesByLeafId ? { titlesByLeafId } : {})
+  }
+}
+
+function filterDeletedFolderWorkspacePtysFromMobileSnapshot(
+  snapshot: RuntimeMobileSessionTabsSnapshot,
+  deletedPtyIds: ReadonlySet<string> | undefined
+): RuntimeMobileSessionTabsSnapshot {
+  if (!deletedPtyIds || deletedPtyIds.size === 0) {
+    return snapshot
+  }
+  const deletedLeafIdsByParentTabId = new Map<string, Set<string>>()
+  for (const tab of snapshot.tabs) {
+    if (tab.type !== 'terminal') {
+      continue
+    }
+    const deletedLeafIds = deletedLeafIdsByParentTabId.get(tab.parentTabId) ?? new Set<string>()
+    if (typeof tab.ptyId === 'string' && deletedPtyIds.has(tab.ptyId)) {
+      deletedLeafIds.add(tab.leafId)
+    }
+    for (const [leafId, ptyId] of Object.entries(tab.parentLayout?.ptyIdsByLeafId ?? {})) {
+      if (deletedPtyIds.has(ptyId)) {
+        deletedLeafIds.add(leafId)
+      }
+    }
+    if (deletedLeafIds.size > 0) {
+      deletedLeafIdsByParentTabId.set(tab.parentTabId, deletedLeafIds)
+    }
+  }
+  if (deletedLeafIdsByParentTabId.size === 0) {
+    return snapshot
+  }
+  const tabs = snapshot.tabs.flatMap((tab): RuntimeMobileSessionSnapshotTab[] => {
+    if (tab.type !== 'terminal') {
+      return [tab]
+    }
+    const deletedLeafIds = deletedLeafIdsByParentTabId.get(tab.parentTabId)
+    if (!deletedLeafIds) {
+      return [tab]
+    }
+    if (deletedLeafIds.has(tab.leafId)) {
+      return []
+    }
+    return [
+      tab.parentLayout
+        ? {
+            ...tab,
+            parentLayout: pruneDeletedFolderWorkspaceTerminalLayout(
+              tab.parentLayout,
+              deletedLeafIds
+            )
+          }
+        : tab
+    ]
+  })
+  const activeTab =
+    (snapshot.activeTabId ? tabs.find((tab) => tab.id === snapshot.activeTabId) : undefined) ??
+    tabs.find((tab) => tab.isActive) ??
+    tabs[0] ??
+    null
+  const normalizedTabs = activeTab
+    ? tabs.map((tab) =>
+        tab.isActive === (tab.id === activeTab.id)
+          ? tab
+          : { ...tab, isActive: tab.id === activeTab.id }
+      )
+    : tabs
+  return {
+    ...snapshot,
+    tabs: normalizedTabs,
+    activeTabId: activeTab?.id ?? null,
+    activeTabType: activeTab?.type ?? null
+  }
+}
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
   private readonly startedAt = Date.now()
@@ -2679,6 +2880,9 @@ export class OrcaRuntimeService {
   private rendererGraphEpoch = 0
   private graphStatus: RuntimeGraphStatus = 'unavailable'
   private authoritativeWindowId: number | null = null
+  private rendererDeletedFolderWorkspaceKeys = new Set<string>()
+  private rendererDeletedFolderWorkspacePtyIds = new Map<string, Set<string>>()
+  private rendererPendingFolderWorkspaceDeletionKeys = new Set<string>()
   // Why: paired graph transactions need foreground timer cadence only until their publication settles.
   private readonly rendererPublicationThrottle = new RendererPublicationThrottle()
   private tabs = new Map<string, RuntimeSyncedTab>()
@@ -2709,6 +2913,7 @@ export class OrcaRuntimeService {
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
   private terminalSleepByWorktreeId = new Map<string, Promise<RuntimeWorktreeTerminalSleepResult>>()
   private terminalMutationTailByWorktreeId = new Map<string, Promise<void>>()
+  private folderWorkspaceDeletionTail: Promise<void> = Promise.resolve()
   private terminalSleepStateByWorktreeId = new Map<
     string,
     {
@@ -4703,14 +4908,13 @@ export class OrcaRuntimeService {
   private tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
-      const workspace = this.store
-        ?.getFolderWorkspaces?.()
-        .find((entry) => entry.id === scope.folderWorkspaceId)
-      if (!workspace) {
+      const workspaces = (this.store?.getFolderWorkspaces?.() ?? []).filter(
+        (entry) => entry.id === scope.folderWorkspaceId
+      )
+      if (workspaces.length !== 1) {
         return null
       }
-      const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      return this.getFolderWorkspaceExecutionHostId(workspaces[0]!)
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
     const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
@@ -4763,15 +4967,22 @@ export class OrcaRuntimeService {
     const repoHostIdByRepoId = new Map(
       repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
     )
-    const folderHostIdByWorkspaceId = new Map(
-      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-        return [
-          workspace.id,
-          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-        ] as const
-      })
-    )
+    const folderOwnerByWorkspaceId = new Map<
+      string,
+      { count: number; hostIds: Set<ExecutionHostId> }
+    >()
+    for (const workspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      const owner = folderOwnerByWorkspaceId.get(workspace.id) ?? {
+        count: 0,
+        hostIds: new Set<ExecutionHostId>()
+      }
+      owner.count += 1
+      const hostId = this.getFolderWorkspaceExecutionHostId(workspace)
+      if (hostId) {
+        owner.hostIds.add(hostId)
+      }
+      folderOwnerByWorkspaceId.set(workspace.id, owner)
+    }
     const hostIds = new Set<ExecutionHostId>(['local'])
     for (const repo of repos) {
       hostIds.add(getRepoExecutionHostId(repo))
@@ -4788,9 +4999,15 @@ export class OrcaRuntimeService {
       }
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
         const scope = parseWorkspaceKey(worktreeId)
+        const folderOwner =
+          scope?.type === 'folder'
+            ? folderOwnerByWorkspaceId.get(scope.folderWorkspaceId)
+            : undefined
         const ownerHostId =
           scope?.type === 'folder'
-            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
+            ? folderOwner?.count === 1 && folderOwner.hostIds.size === 1
+              ? ([...folderOwner.hostIds][0] ?? null)
+              : null
             : (repoHostIdByRepoId.get(
                 getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
               ) ?? LOCAL_EXECUTION_HOST_ID)
@@ -5437,14 +5654,66 @@ export class OrcaRuntimeService {
       throw new Error('Runtime graph publisher does not match the authoritative window')
     }
 
+    const rendererDeletedFolderWorkspaceKeys = new Set(this.rendererDeletedFolderWorkspaceKeys)
+    const rendererDeletedFolderWorkspacePtyIds = new Map(
+      [...this.rendererDeletedFolderWorkspacePtyIds].map(([workspaceKey, ptyIds]) => [
+        workspaceKey,
+        new Set(ptyIds)
+      ])
+    )
+    const rendererPendingFolderWorkspaceDeletionKeys = new Set(
+      this.rendererPendingFolderWorkspaceDeletionKeys
+    )
+    const acceptsRendererWorkspace = (worktreeId: string): boolean => {
+      if (splitWorktreeId(worktreeId)) {
+        return true
+      }
+      const scope = parseWorkspaceKey(worktreeId)
+      return (
+        scope?.type !== 'folder' ||
+        (!rendererDeletedFolderWorkspaceKeys.has(folderWorkspaceKey(scope.folderWorkspaceId)) &&
+          !rendererPendingFolderWorkspaceDeletionKeys.has(
+            folderWorkspaceKey(scope.folderWorkspaceId)
+          ))
+      )
+    }
+    const acceptsRendererPty = (worktreeId: string, ptyId: string | null): boolean =>
+      acceptsRendererWorkspace(worktreeId) &&
+      (!ptyId || !rendererDeletedFolderWorkspacePtyIds.get(worktreeId)?.has(ptyId))
+    const syncedTabs = [
+      ...graph.tabs.filter((tab) => acceptsRendererWorkspace(tab.worktreeId)),
+      ...[...this.tabs.values()].filter((tab) =>
+        rendererPendingFolderWorkspaceDeletionKeys.has(tab.worktreeId)
+      )
+    ]
+    const syncedLeaves = [
+      ...graph.leaves.filter((leaf) => acceptsRendererPty(leaf.worktreeId, leaf.ptyId)),
+      ...[...this.leaves.values()].filter((leaf) =>
+        rendererPendingFolderWorkspaceDeletionKeys.has(leaf.worktreeId)
+      )
+    ]
+    const mobileSessionTabs = graph.mobileSessionTabs
+      ?.filter((snapshot) => acceptsRendererWorkspace(snapshot.worktree))
+      .map((snapshot) =>
+        filterDeletedFolderWorkspacePtysFromMobileSnapshot(
+          snapshot,
+          rendererDeletedFolderWorkspacePtyIds.get(snapshot.worktree)
+        )
+      )
+    const unchangedMobileSessionWorktrees = [
+      ...(graph.unchangedMobileSessionWorktrees?.filter(acceptsRendererWorkspace) ?? []),
+      ...[...rendererPendingFolderWorkspaceDeletionKeys].filter((workspaceKey) =>
+        this.mobileSessionTabsByWorktree.has(workspaceKey)
+      )
+    ]
     const previousTabs = this.tabs
     const previousLeaves = this.leaves
-    this.tabs = new Map(graph.tabs.map((tab) => [tab.tabId, tab]))
-    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(graph.leaves)
+    this.tabs = new Map(syncedTabs.map((tab) => [tab.tabId, tab]))
+    const lifecycleLeaves = this.reconcileMobileSessionRetirementFences(syncedLeaves)
     const mobileSessionResyncWorktrees = new Set<string>()
     const changedMobileWorktrees = this.syncMobileSessionTabs(
-      graph.mobileSessionTabs,
-      graph.unchangedMobileSessionWorktrees,
+      mobileSessionTabs,
+      unchangedMobileSessionWorktrees,
       mobileSessionResyncWorktrees
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
@@ -5527,8 +5796,10 @@ export class OrcaRuntimeService {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
         if (
+          oldLeaf &&
+          acceptsRendererPty(oldLeaf.worktreeId, oldLeaf.ptyId) &&
           preserveLivePtysDuringReload &&
-          oldLeaf?.ptyId &&
+          oldLeaf.ptyId &&
           this.handleByPtyId.has(oldLeaf.ptyId) &&
           !nextPtyIds.has(oldLeaf.ptyId)
         ) {
@@ -5558,7 +5829,11 @@ export class OrcaRuntimeService {
     }
 
     for (const [ptyId, leaf] of this.detachedPreAllocatedLeaves) {
-      if (nextPtyIds.has(ptyId) || !this.handleByPtyId.has(ptyId)) {
+      if (
+        !acceptsRendererPty(leaf.worktreeId, ptyId) ||
+        nextPtyIds.has(ptyId) ||
+        !this.handleByPtyId.has(ptyId)
+      ) {
         this.detachedPreAllocatedLeaves.delete(ptyId)
         continue
       }
@@ -5613,6 +5888,42 @@ export class OrcaRuntimeService {
     // new leaf so it can return a handle. Drain callbacks after leaves update.
     for (const cb of [...this.graphSyncCallbacks]) {
       cb()
+    }
+
+    const publishedWorkspaceIds = new Set([
+      ...graph.tabs.map((tab) => tab.worktreeId),
+      ...graph.leaves.map((leaf) => leaf.worktreeId),
+      ...(graph.mobileSessionTabs ?? []).map((snapshot) => snapshot.worktree),
+      ...(graph.unchangedMobileSessionWorktrees ?? [])
+    ])
+    for (const workspaceKey of rendererDeletedFolderWorkspaceKeys) {
+      if (!publishedWorkspaceIds.has(workspaceKey)) {
+        this.rendererDeletedFolderWorkspaceKeys.delete(workspaceKey)
+      }
+    }
+    const unchangedMobileSessionWorktreeSet = new Set(graph.unchangedMobileSessionWorktrees ?? [])
+    for (const [workspaceKey, ptyIds] of rendererDeletedFolderWorkspacePtyIds) {
+      const graphStillPublishesPty = graph.leaves.some(
+        (leaf) => leaf.worktreeId === workspaceKey && leaf.ptyId && ptyIds.has(leaf.ptyId)
+      )
+      const changedSnapshot = graph.mobileSessionTabs?.find(
+        (snapshot) => snapshot.worktree === workspaceKey
+      )
+      const snapshotStillPublishesPty = changedSnapshot?.tabs.some(
+        (tab) =>
+          tab.type === 'terminal' &&
+          [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})].some(
+            (ptyId) => typeof ptyId === 'string' && ptyIds.has(ptyId)
+          )
+      )
+      if (
+        !graphStillPublishesPty &&
+        !snapshotStillPublishesPty &&
+        !unchangedMobileSessionWorktreeSet.has(workspaceKey) &&
+        (changedSnapshot !== undefined || !publishedWorkspaceIds.has(workspaceKey))
+      ) {
+        this.rendererDeletedFolderWorkspacePtyIds.delete(workspaceKey)
+      }
     }
 
     const agentOrchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
@@ -17533,7 +17844,10 @@ export class OrcaRuntimeService {
     })
   }
 
-  async getWorktreePs(limit = DEFAULT_WORKTREE_PS_LIMIT): Promise<{
+  async getWorktreePs(
+    limit = DEFAULT_WORKTREE_PS_LIMIT,
+    options: { ownerQualified?: boolean } = {}
+  ): Promise<{
     worktrees: RuntimeWorktreePsSummary[]
     totalCount: number
     truncated: boolean
@@ -17630,21 +17944,42 @@ export class OrcaRuntimeService {
       })
     }
 
-    const projectGroupById = new Map(
-      (this.store?.getProjectGroups?.() ?? []).map((group) => [group.id, group])
-    )
-    for (const folderWorkspace of this.store?.getFolderWorkspaces?.() ?? []) {
-      const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+    const folderWorkspaceCountById = new Map<string, number>()
+    for (const workspace of folderWorkspaces) {
+      folderWorkspaceCountById.set(
+        workspace.id,
+        (folderWorkspaceCountById.get(workspace.id) ?? 0) + 1
+      )
+    }
+    for (const folderWorkspace of folderWorkspaces) {
+      const workspaceHostId = this.getFolderWorkspaceExecutionHostId(folderWorkspace)
+      if (!workspaceHostId) {
+        continue
+      }
+      const workspaceIdCount = folderWorkspaceCountById.get(folderWorkspace.id) ?? 0
+      if (workspaceIdCount > 1 && options.ownerQualified !== true) {
+        continue
+      }
+      const matchingGroups = projectGroups.filter(
+        (group) =>
+          group.id === folderWorkspace.projectGroupId &&
+          this.getProjectGroupExecutionHostId(group) === workspaceHostId
+      )
+      const projectGroup = matchingGroups.length === 1 ? matchingGroups[0] : undefined
       if (!projectGroup?.parentPath) {
         continue
       }
       const worktree = folderWorkspaceToWorktree(folderWorkspace)
-      summaries.set(worktree.id, {
+      const summaryKey = workspaceIdCount > 1 ? `${workspaceHostId}\0${worktree.id}` : worktree.id
+      summaries.set(summaryKey, {
         // Why: folder workspaces use the same mobile grouping/order contract as
         // git worktrees, but legacy records may be missing order metadata.
         workspaceKind: 'folder-workspace',
         worktreeId: worktree.id,
         repoId: worktree.repoId,
+        ...(workspaceHostId ? { hostId: workspaceHostId } : {}),
         repo: projectGroup.name,
         path: worktree.path,
         branch: worktree.branch,
@@ -17721,7 +18056,8 @@ export class OrcaRuntimeService {
         summaries,
         runtimeWorktreeSummaryPathIndex,
         missingRuntimeWorktreeIds,
-        leaf.worktreeId
+        leaf.worktreeId,
+        this.getPtyExecutionHostMetadata(leaf.ptyId).executionHostId
       )
       if (!summary) {
         continue
@@ -17787,7 +18123,8 @@ export class OrcaRuntimeService {
         summaries,
         runtimeWorktreeSummaryPathIndex,
         missingRuntimeWorktreeIds,
-        owner.worktreeId
+        owner.worktreeId,
+        this.getPtyExecutionHostMetadata(pty.ptyId).executionHostId
       )
       if (!summary) {
         continue
@@ -17813,13 +18150,13 @@ export class OrcaRuntimeService {
     const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
     for (const summary of summaries.values()) {
       const repo = repoById.get(summary.repoId)
-      const hostId = repo ? getRepoExecutionHostId(repo) : 'local'
+      const hostId = summary.hostId ?? (repo ? getRepoExecutionHostId(repo) : 'local')
       const session = this.store?.getWorkspaceSession?.(hostId)
       if (session) {
         sessionsByHostId.set(hostId, session)
       }
     }
-    for (const session of sessionsByHostId.values()) {
+    for (const [hostId, session] of sessionsByHostId) {
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
         for (const tab of tabs) {
           mirroredWorktreeIdByTabId.set(tab.id, worktreeId)
@@ -17831,7 +18168,8 @@ export class OrcaRuntimeService {
           summaries,
           runtimeWorktreeSummaryPathIndex,
           missingRuntimeWorktreeIds,
-          worktreeId
+          worktreeId,
+          hostId
         )
         if (!summary) {
           continue
@@ -17848,7 +18186,8 @@ export class OrcaRuntimeService {
           summaries,
           runtimeWorktreeSummaryPathIndex,
           missingRuntimeWorktreeIds,
-          worktreeId
+          worktreeId,
+          hostId
         )
         if (summary) {
           summary.hasHostSidebarActivity = true
@@ -17859,7 +18198,8 @@ export class OrcaRuntimeService {
           summaries,
           runtimeWorktreeSummaryPathIndex,
           missingRuntimeWorktreeIds,
-          session.activeWorktreeId
+          session.activeWorktreeId,
+          hostId
         )
         if (activeSummary) {
           activeSummary.isActive = true
@@ -18000,7 +18340,7 @@ export class OrcaRuntimeService {
       return
     }
     const orchestrationByPaneKey = this.buildAgentOrchestrationByPaneKey()
-    const rowsByWorktree = new Map<string, RuntimeWorktreeAgentRow[]>()
+    const rowsBySummary = new Map<RuntimeWorktreePsSummary, RuntimeWorktreeAgentRow[]>()
     const now = Date.now()
     for (const src of rowSources.values()) {
       // Why: hooks retain launch-time attribution across automatic workspace
@@ -18037,7 +18377,10 @@ export class OrcaRuntimeService {
         summaries,
         runtimeWorktreeSummaryPathIndex,
         missingRuntimeWorktreeIds,
-        worktreeId
+        worktreeId,
+        src.connectionId && !isWslHookRelayConnectionId(src.connectionId)
+          ? toSshExecutionHostId(src.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
       )
       if (!summary) {
         continue
@@ -18062,31 +18405,28 @@ export class OrcaRuntimeService {
       }
       // Why: SSH/runtime projections can spell an equivalent path differently;
       // bucket by the canonical summary id so mobile keeps the agent activity.
-      const rows = rowsByWorktree.get(summary.worktreeId)
+      const rows = rowsBySummary.get(summary)
       if (rows) {
         rows.push(row)
       } else {
-        rowsByWorktree.set(summary.worktreeId, [row])
+        rowsBySummary.set(summary, [row])
       }
     }
-    for (const [worktreeId, rows] of rowsByWorktree) {
+    for (const [summary, rows] of rowsBySummary) {
       // Oldest-started first, matching the desktop dashboard's start-order sort.
       rows.sort((a, b) => a.stateStartedAt - b.stateStartedAt)
-      const summary = summaries.get(worktreeId)
-      if (summary) {
-        summary.agents = rows
-        for (const row of rows) {
-          if (!isFreshNonDoneAgentStatus(row, now)) {
-            continue
-          }
-          // Why: worktree.ps is mobile's host-sidebar parity source, so a live
-          // agent must survive the same temporary PTY gaps as desktop.
-          summary.hasHostSidebarActivity = true
-          summary.status = mergeWorktreeStatus(
-            summary.status,
-            row.state === 'working' ? 'working' : 'permission'
-          )
+      summary.agents = rows
+      for (const row of rows) {
+        if (!isFreshNonDoneAgentStatus(row, now)) {
+          continue
         }
+        // Why: worktree.ps is mobile's host-sidebar parity source, so a live
+        // agent must survive the same temporary PTY gaps as desktop.
+        summary.hasHostSidebarActivity = true
+        summary.status = mergeWorktreeStatus(
+          summary.status,
+          row.state === 'working' ? 'working' : 'permission'
+        )
       }
     }
   }
@@ -18289,27 +18629,489 @@ export class OrcaRuntimeService {
 
   async updateProjectGroup(
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    options: { executionHostId?: ExecutionHostId; notify?: boolean } = {}
   ): Promise<ProjectGroup | null> {
     if (!this.store?.updateProjectGroup) {
       throw new Error('runtime_unavailable')
     }
-    const updated = this.store.updateProjectGroup(groupId, updates)
-    if (updated) {
+    const requestedHostId = options.executionHostId
+      ? parseExecutionHostId(options.executionHostId)?.id
+      : null
+    if (options.executionHostId && !requestedHostId) {
+      return null
+    }
+    const matchingGroups = (this.store.getProjectGroups?.() ?? []).filter((group) => {
+      const ownerHostId = this.getProjectGroupExecutionHostId(group)
+      return (
+        group.id === groupId &&
+        ownerHostId !== null &&
+        (!requestedHostId || ownerHostId === requestedHostId)
+      )
+    })
+    if (matchingGroups.length !== 1) {
+      return null
+    }
+    const ownerHostId = this.getProjectGroupExecutionHostId(matchingGroups[0]!)
+    if (!ownerHostId) {
+      return null
+    }
+    const updated = this.store.updateProjectGroup(groupId, updates, {
+      executionHostId: ownerHostId
+    })
+    if (updated && options.notify !== false) {
       this.notifyReposChanged()
     }
     return updated
   }
 
-  async deleteProjectGroup(groupId: string): Promise<{ deleted: boolean }> {
-    if (!this.store?.deleteProjectGroup) {
+  private async acquireFolderWorkspaceDeletion(): Promise<() => void> {
+    const previous = this.folderWorkspaceDeletionTail
+    let releaseCurrent = (): void => {}
+    const current = new Promise<void>((resolve) => {
+      releaseCurrent = resolve
+    })
+    const tail = previous.catch(() => {}).then(() => current)
+    this.folderWorkspaceDeletionTail = tail
+    await previous.catch(() => {})
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      releaseCurrent()
+      void tail.finally(() => {
+        if (this.folderWorkspaceDeletionTail === tail) {
+          this.folderWorkspaceDeletionTail = Promise.resolve()
+        }
+      })
+    }
+  }
+
+  private getFolderWorkspaceTerminalTeardownTargets(workspaces: readonly FolderWorkspace[]) {
+    return resolveFolderWorkspaceTerminalTeardownTargets({
+      workspaces,
+      projectGroups: this.store?.getProjectGroups?.() ?? [],
+      repos: this.store?.getRepos() ?? []
+    })
+  }
+
+  private getFolderWorkspaceExecutionHostId(workspace: FolderWorkspace): ExecutionHostId | null {
+    const owner = resolveFolderWorkspaceOwner(workspace, this.store?.getProjectGroups?.() ?? [])
+    return owner.status === 'owned' ? owner.executionHostId : null
+  }
+
+  private requireFolderWorkspaceExecutionHostId(workspace: FolderWorkspace): ExecutionHostId {
+    const executionHostId = this.getFolderWorkspaceExecutionHostId(workspace)
+    if (!executionHostId) {
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    return executionHostId
+  }
+
+  private folderWorkspaceMatchesExecutionHost(
+    workspace: FolderWorkspace,
+    executionHostId: ExecutionHostId
+  ): boolean {
+    return this.getFolderWorkspaceExecutionHostId(workspace) === executionHostId
+  }
+
+  private getProjectGroupExecutionHostId(group: ProjectGroup): ExecutionHostId | null {
+    const owner = resolveProjectGroupOwner(group)
+    return owner.status === 'owned' ? owner.executionHostId : null
+  }
+
+  private resolvePreservedRendererWorkspaceKeys(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    requestedKeys: ReadonlySet<string>,
+    deletedWorkspaces: readonly FolderWorkspace[]
+  ): Set<string> {
+    const preserved = new Set(
+      targets
+        .filter((target) => target.connection.kind === 'ambiguous')
+        .map((target) => target.workspaceKey)
+    )
+    const deletedIdentities = new Set(
+      deletedWorkspaces.map(
+        (workspace) => `${this.getFolderWorkspaceExecutionHostId(workspace)}\0${workspace.id}`
+      )
+    )
+    for (const workspace of this.store?.getFolderWorkspaces?.() ?? []) {
+      const identity = `${this.getFolderWorkspaceExecutionHostId(workspace)}\0${workspace.id}`
+      if (
+        deletedWorkspaces.some((deleted) => deleted.id === workspace.id) &&
+        !deletedIdentities.has(identity)
+      ) {
+        preserved.add(folderWorkspaceKey(workspace.id))
+      }
+    }
+    if (
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID
+    ) {
+      for (const workspaceKey of requestedKeys) {
+        if (targets.some((target) => target.workspaceKey === workspaceKey)) {
+          preserved.add(workspaceKey)
+        }
+      }
+    }
+    for (const target of targets) {
+      const hasForeignPty =
+        [...this.leaves.values()].some(
+          (leaf) =>
+            leaf.worktreeId === target.workspaceKey &&
+            leaf.ptyId &&
+            !this.folderWorkspaceTeardownTargetOwnsPty(
+              target,
+              leaf.ptyId,
+              this.ptysById.get(leaf.ptyId)?.connectionId
+            )
+        ) ||
+        [...this.ptysById.values()].some(
+          (pty) =>
+            pty.worktreeId === target.workspaceKey &&
+            !this.folderWorkspaceTeardownTargetOwnsPty(target, pty.ptyId, pty.connectionId)
+        )
+      if (hasForeignPty) {
+        preserved.add(target.workspaceKey)
+      }
+    }
+    return preserved
+  }
+
+  private requireDirectSshFolderWorkspaceProviders(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>
+  ): void {
+    for (const target of targets) {
+      if (
+        target.connection.kind === 'ssh' &&
+        !this.getSshProviderFn?.(target.connection.connectionId)
+      ) {
+        throw new Error(
+          `PTY provider unavailable for folder workspace deletion: ${target.workspaceKey}`
+        )
+      }
+    }
+  }
+
+  private beginPendingFolderWorkspaceDeletionFence(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>
+  ): () => void {
+    const workspaceKeys = new Set(targets.map((target) => target.workspaceKey))
+    for (const workspaceKey of workspaceKeys) {
+      this.rendererPendingFolderWorkspaceDeletionKeys.add(workspaceKey)
+    }
+    return () => {
+      for (const workspaceKey of workspaceKeys) {
+        this.rendererPendingFolderWorkspaceDeletionKeys.delete(workspaceKey)
+      }
+    }
+  }
+
+  private async stopFolderWorkspaceTargets(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    requirePhysicalSshStop = false
+  ): Promise<void> {
+    try {
+      await stopFolderWorkspaceTerminals(targets, {
+        runtime: this,
+        getLocalProvider: () => this.getLocalProvider(),
+        getSshProvider: (connectionId) => this.getSshProviderFn?.(connectionId),
+        onPtyStopped: this.onPtyStopped ?? undefined,
+        ...(requirePhysicalSshStop ? { requirePhysicalSshStop: true } : {})
+      })
+    } catch (error) {
+      if (requirePhysicalSshStop) {
+        throw error
+      }
+      console.warn('[folder-workspace-teardown] batch failed:', error)
+    }
+  }
+
+  private purgeFolderWorkspaceTargets(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    preserveRendererWorkspaceKeys: ReadonlySet<string>
+  ): void {
+    for (const target of targets) {
+      if (preserveRendererWorkspaceKeys.has(target.workspaceKey)) {
+        this.purgeFolderWorkspaceOwnerRuntimeState(target)
+      } else {
+        this.purgeWorkspaceRuntimeState(target.workspaceKey)
+      }
+    }
+  }
+
+  private async commitFolderWorkspaceDeletion(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    preserveRendererWorkspaceKeys: ReadonlySet<string>,
+    deleteMetadata: () => boolean
+  ): Promise<boolean> {
+    const requirePhysicalSshStop = targets.some((target) => target.connection.kind === 'ssh')
+    if (requirePhysicalSshStop) {
+      this.requireDirectSshFolderWorkspaceProviders(targets)
+    }
+    const releasePendingFence = requirePhysicalSshStop
+      ? this.beginPendingFolderWorkspaceDeletionFence(targets)
+      : null
+    try {
+      if (requirePhysicalSshStop) {
+        await this.stopFolderWorkspaceTargets(targets, true)
+      }
+      if (!deleteMetadata()) {
+        return false
+      }
+      const snapshotPtyIdsByWorkspace = this.pruneDeletedFolderWorkspaceMobileSnapshots(
+        targets,
+        preserveRendererWorkspaceKeys
+      )
+      this.fenceDeletedFolderWorkspaceRendererGraphs(
+        targets,
+        preserveRendererWorkspaceKeys,
+        snapshotPtyIdsByWorkspace
+      )
+      if (!requirePhysicalSshStop) {
+        await this.stopFolderWorkspaceTargets(targets)
+      }
+      this.purgeFolderWorkspaceTargets(targets, preserveRendererWorkspaceKeys)
+      return true
+    } finally {
+      releasePendingFence?.()
+    }
+  }
+
+  private folderWorkspaceTeardownTargetOwnsPty(
+    target: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>[number],
+    ptyId: string,
+    connectionId: string | null | undefined
+  ): boolean {
+    if (ptyId.startsWith('remote:')) {
+      return false
+    }
+    if (target.connection.kind === 'ambiguous') {
+      return false
+    }
+    const ownerConnectionId = connectionId ?? parseAppSshPtyId(ptyId)?.connectionId ?? null
+    return target.connection.kind === 'ssh'
+      ? ownerConnectionId === target.connection.connectionId
+      : ownerConnectionId === null
+  }
+
+  private pruneDeletedFolderWorkspaceMobileSnapshots(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    preserveRendererWorkspaceKeys: ReadonlySet<string>
+  ): Map<string, Set<string>> {
+    const deletedPtyIdsByWorkspace = new Map<string, Set<string>>()
+    for (const target of targets) {
+      if (!preserveRendererWorkspaceKeys.has(target.workspaceKey)) {
+        continue
+      }
+      const snapshot = this.mobileSessionTabsByWorktree.get(target.workspaceKey)
+      if (!snapshot) {
+        continue
+      }
+      const deletedPtyIds = new Set(deletedPtyIdsByWorkspace.get(target.workspaceKey) ?? [])
+      for (const tab of snapshot.tabs) {
+        if (tab.type !== 'terminal') {
+          continue
+        }
+        for (const ptyId of [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})]) {
+          if (
+            typeof ptyId === 'string' &&
+            this.folderWorkspaceTeardownTargetOwnsPty(
+              target,
+              ptyId,
+              this.ptysById.get(ptyId)?.connectionId
+            )
+          ) {
+            deletedPtyIds.add(ptyId)
+            this.invalidateDeletedWorkspacePtyHandles(ptyId)
+          }
+        }
+      }
+      if (deletedPtyIds.size === 0) {
+        continue
+      }
+      deletedPtyIdsByWorkspace.set(target.workspaceKey, deletedPtyIds)
+      const filtered = filterDeletedFolderWorkspacePtysFromMobileSnapshot(snapshot, deletedPtyIds)
+      if (filtered === snapshot) {
+        continue
+      }
+      this.mobileSessionTabsByWorktree.set(target.workspaceKey, {
+        ...filtered,
+        snapshotVersion: snapshot.snapshotVersion + 1
+      })
+      this.mobileSessionTabsNotifyCoalescer.schedule(target.workspaceKey)
+    }
+    return deletedPtyIdsByWorkspace
+  }
+
+  private fenceDeletedFolderWorkspaceRendererGraphs(
+    targets: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>,
+    preserveRendererWorkspaceKeys: ReadonlySet<string>,
+    snapshotPtyIdsByWorkspace: ReadonlyMap<string, ReadonlySet<string>>
+  ): void {
+    if (
+      this.authoritativeWindowId === null ||
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+    ) {
+      return
+    }
+    for (const target of targets) {
+      const preserveRendererWorkspace = preserveRendererWorkspaceKeys.has(target.workspaceKey)
+      const fencedPtyIds = new Set([
+        ...(this.rendererDeletedFolderWorkspacePtyIds.get(target.workspaceKey) ?? []),
+        ...(snapshotPtyIdsByWorkspace.get(target.workspaceKey) ?? [])
+      ])
+      if (!preserveRendererWorkspace) {
+        this.rendererDeletedFolderWorkspaceKeys.add(target.workspaceKey)
+        this.rendererDeletedFolderWorkspacePtyIds.delete(target.workspaceKey)
+      }
+      for (const leaf of this.leaves.values()) {
+        if (
+          leaf.worktreeId !== target.workspaceKey ||
+          (preserveRendererWorkspace &&
+            (!leaf.ptyId ||
+              !this.folderWorkspaceTeardownTargetOwnsPty(
+                target,
+                leaf.ptyId,
+                this.ptysById.get(leaf.ptyId)?.connectionId
+              )))
+        ) {
+          continue
+        }
+        this.invalidateLeafHandle(this.getLeafKey(leaf.tabId, leaf.leafId))
+        if (leaf.ptyId) {
+          if (preserveRendererWorkspace) {
+            fencedPtyIds.add(leaf.ptyId)
+          }
+          this.invalidateDeletedWorkspacePtyHandles(leaf.ptyId)
+        }
+      }
+      for (const pty of this.ptysById.values()) {
+        if (
+          pty.worktreeId === target.workspaceKey &&
+          (!preserveRendererWorkspace ||
+            this.folderWorkspaceTeardownTargetOwnsPty(target, pty.ptyId, pty.connectionId))
+        ) {
+          if (preserveRendererWorkspace) {
+            fencedPtyIds.add(pty.ptyId)
+          }
+          this.invalidateDeletedWorkspacePtyHandles(pty.ptyId)
+        }
+      }
+      if (preserveRendererWorkspace && fencedPtyIds.size > 0) {
+        this.rendererDeletedFolderWorkspacePtyIds.set(target.workspaceKey, fencedPtyIds)
+      }
+    }
+  }
+
+  private invalidateDeletedWorkspacePtyHandles(ptyId: string): void {
+    const leaderHandle = this.handleByPtyId.get(ptyId)
+    if (leaderHandle) {
+      this.claudeAgentTeams.removeTeamForLeaderHandle(leaderHandle)
+    }
+    this.invalidateAllHandlesForPty(ptyId)
+  }
+
+  async deleteProjectGroup(
+    groupId: string,
+    options: {
+      executionHostId?: ExecutionHostId
+      notify?: boolean
+      preserveRendererWorkspaceIds?: readonly string[]
+    } = {}
+  ): Promise<{ deleted: boolean }> {
+    if (
+      !this.store?.deleteProjectGroup ||
+      !this.store.getProjectGroups ||
+      !this.store.getFolderWorkspaces
+    ) {
       throw new Error('runtime_unavailable')
     }
-    const deleted = this.store.deleteProjectGroup(groupId)
-    if (deleted) {
-      this.notifyReposChanged()
+    const requestedHostId = options.executionHostId
+      ? parseExecutionHostId(options.executionHostId)?.id
+      : null
+    if (options.executionHostId && !requestedHostId) {
+      return { deleted: false }
     }
-    return { deleted }
+    const releaseDeletion = await this.acquireFolderWorkspaceDeletion()
+    const releases = new Map<string, () => void>()
+    try {
+      while (true) {
+        const groups = this.store.getProjectGroups()
+        const matchingRoots = groups.filter((group) => {
+          const ownerHostId = this.getProjectGroupExecutionHostId(group)
+          return (
+            group.id === groupId &&
+            ownerHostId !== null &&
+            (!requestedHostId || ownerHostId === requestedHostId)
+          )
+        })
+        if (matchingRoots.length !== 1) {
+          return { deleted: false }
+        }
+        const ownerHostId = this.getProjectGroupExecutionHostId(matchingRoots[0]!)
+        if (!ownerHostId) {
+          return { deleted: false }
+        }
+        const ownerGroups = groups.filter(
+          (group) => this.getProjectGroupExecutionHostId(group) === ownerHostId
+        )
+        const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
+        const workspaces = this.store
+          .getFolderWorkspaces()
+          .filter(
+            (workspace) =>
+              deletedGroupIds.has(workspace.projectGroupId) &&
+              this.folderWorkspaceMatchesExecutionHost(workspace, ownerHostId)
+          )
+        const pendingKeys = workspaces
+          .map((workspace) => folderWorkspaceKey(workspace.id))
+          .filter((workspaceKey) => !releases.has(workspaceKey))
+          .sort()
+        if (pendingKeys.length > 0) {
+          for (const workspaceKey of pendingKeys) {
+            releases.set(workspaceKey, await this.acquireWorktreeTerminalMutation(workspaceKey))
+          }
+          continue
+        }
+        const targets = this.getFolderWorkspaceTerminalTeardownTargets(workspaces)
+        const preserveRendererWorkspaceKeys = this.resolvePreservedRendererWorkspaceKeys(
+          targets,
+          new Set((options.preserveRendererWorkspaceIds ?? []).map(folderWorkspaceKey)),
+          workspaces
+        )
+        const preservedRendererWorkspaceIds = workspaces
+          .filter((workspace) =>
+            preserveRendererWorkspaceKeys.has(folderWorkspaceKey(workspace.id))
+          )
+          .map((workspace) => workspace.id)
+        const deleted = await this.commitFolderWorkspaceDeletion(
+          targets,
+          preserveRendererWorkspaceKeys,
+          () =>
+            this.store!.deleteProjectGroup!(groupId, {
+              executionHostId: ownerHostId,
+              ...(preservedRendererWorkspaceIds.length > 0
+                ? { preserveRendererWorkspaceIds: preservedRendererWorkspaceIds }
+                : {})
+            })
+        )
+        if (!deleted) {
+          return { deleted: false }
+        }
+        if (options.notify !== false) {
+          this.notifyReposChanged()
+        }
+        return { deleted: true }
+      }
+    } finally {
+      for (const release of [...releases.values()].toReversed()) {
+        release()
+      }
+      releaseDeletion()
+    }
   }
 
   async moveProjectToGroup(
@@ -18321,7 +19123,9 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const repo = await this.resolveRepoSelector(repoSelector)
-    const moved = this.store.moveProjectToGroup(repo.id, groupId, order)
+    const moved = this.store.moveProjectToGroup(repo.id, groupId, order, {
+      executionHostId: getRepoExecutionHostId(repo)
+    })
     if (!moved) {
       throw new Error('repo_not_found')
     }
@@ -18343,7 +19147,11 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const projectGroups = this.store.getProjectGroups?.() ?? []
-    const group = projectGroups.find((entry) => entry.id === input.projectGroupId)
+    const group = findProjectGroupForConnection(
+      projectGroups,
+      input.projectGroupId,
+      input.connectionId
+    )
     const folderPath =
       typeof input.folderPath === 'string' && input.folderPath.trim().length > 0
         ? input.folderPath
@@ -18351,18 +19159,31 @@ export class OrcaRuntimeService {
     if (!group || !folderPath) {
       throw new Error('folder_workspace_project_group_not_found')
     }
+    const inputConnectionIdIsAuthoritative = input.connectionId !== undefined
     const status = await getFolderWorkspacePathStatusForPath(
       {
         folderPath,
         projectGroupId: group.id,
-        connectionId: input.connectionId ?? group.connectionId ?? null,
+        connectionId: inputConnectionIdIsAuthoritative
+          ? input.connectionId
+          : (group.connectionId ?? null),
+        connectionIdIsAuthoritative:
+          inputConnectionIdIsAuthoritative || group.connectionId !== undefined,
         projectGroups,
         repos: this.store.getRepos()
       },
       { getSshFilesystemProvider }
     )
     assertFolderWorkspacePathUsable(status)
-    const workspace = this.store.createFolderWorkspace(input)
+    const releaseDeletion = await this.acquireFolderWorkspaceDeletion()
+    let workspace: FolderWorkspace
+    try {
+      workspace = this.store.createFolderWorkspace(input)
+      this.rendererDeletedFolderWorkspaceKeys.delete(folderWorkspaceKey(workspace.id))
+      this.rendererDeletedFolderWorkspacePtyIds.delete(folderWorkspaceKey(workspace.id))
+    } finally {
+      releaseDeletion()
+    }
     this.notifyReposChanged()
     return workspace
   }
@@ -18397,27 +19218,56 @@ export class OrcaRuntimeService {
         | 'firstAgentMessageRenameError'
         | 'lastActivityAt'
       >
-    >
+    >,
+    options: { executionHostId?: ExecutionHostId; notify?: boolean } = {}
   ): Promise<FolderWorkspace | null> {
     if (!this.store?.updateFolderWorkspace) {
       throw new Error('runtime_unavailable')
     }
+    const requestedHostId = options.executionHostId
+      ? parseExecutionHostId(options.executionHostId)?.id
+      : null
+    if (options.executionHostId && !requestedHostId) {
+      return null
+    }
+    const matchingWorkspaces = (this.store.getFolderWorkspaces?.() ?? []).filter((workspace) => {
+      const ownerHostId = this.getFolderWorkspaceExecutionHostId(workspace)
+      return (
+        workspace.id === folderWorkspaceId &&
+        ownerHostId !== null &&
+        (!requestedHostId || ownerHostId === requestedHostId)
+      )
+    })
+    if (matchingWorkspaces.length !== 1) {
+      return null
+    }
+    const workspace = matchingWorkspaces[0]!
     if (typeof updates.folderPath === 'string' && updates.folderPath.trim().length > 0) {
-      const workspace = this.store
-        .getFolderWorkspaces?.()
-        .find((entry) => entry.id === folderWorkspaceId)
-      if (!workspace) {
+      const projectGroups = this.store.getProjectGroups?.() ?? []
+      const workspaceHostId = this.getFolderWorkspaceExecutionHostId(workspace)
+      if (!workspaceHostId) {
         return null
       }
-      const projectGroups = this.store.getProjectGroups?.() ?? []
+      const candidateGroups = projectGroups.filter((entry) => entry.id === workspace.projectGroupId)
+      const matchingGroups = candidateGroups.filter(
+        (group) => this.getProjectGroupExecutionHostId(group) === workspaceHostId
+      )
+      const group =
+        matchingGroups.length === 1
+          ? matchingGroups[0]
+          : candidateGroups.length === 1
+            ? candidateGroups[0]
+            : undefined
+      const workspaceConnectionIdIsAuthoritative = workspace.connectionId !== undefined
       const status = await getFolderWorkspacePathStatusForPath(
         {
           folderPath: updates.folderPath,
           projectGroupId: workspace.projectGroupId,
-          connectionId:
-            workspace.connectionId ??
-            projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-            null,
+          connectionId: workspaceConnectionIdIsAuthoritative
+            ? workspace.connectionId
+            : (group?.connectionId ?? null),
+          connectionIdIsAuthoritative:
+            workspaceConnectionIdIsAuthoritative || group?.connectionId !== undefined,
           projectGroups,
           repos: this.store.getRepos()
         },
@@ -18425,22 +19275,84 @@ export class OrcaRuntimeService {
       )
       assertFolderWorkspacePathUsable(status)
     }
-    const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates)
-    if (updated) {
+    const ownerHostId = this.getFolderWorkspaceExecutionHostId(workspace)
+    if (!ownerHostId) {
+      return null
+    }
+    const updated = this.store.updateFolderWorkspace(folderWorkspaceId, updates, {
+      executionHostId: ownerHostId
+    })
+    if (updated && options.notify !== false) {
       this.notifyReposChanged()
     }
     return updated
   }
 
-  async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
-    if (!this.store?.removeFolderWorkspace) {
+  async deleteFolderWorkspace(
+    folderWorkspaceId: string,
+    options: {
+      executionHostId?: ExecutionHostId
+      notify?: boolean
+      preserveRendererWorkspaceKey?: boolean
+    } = {}
+  ): Promise<{ deleted: boolean }> {
+    if (!this.store?.removeFolderWorkspace || !this.store.getFolderWorkspaces) {
       throw new Error('runtime_unavailable')
     }
-    const deleted = this.store.removeFolderWorkspace(folderWorkspaceId)
-    if (deleted) {
-      this.notifyReposChanged()
+    const releaseDeletion = await this.acquireFolderWorkspaceDeletion()
+    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+    let releaseMutation: (() => void) | null = null
+    try {
+      releaseMutation = await this.acquireWorktreeTerminalMutation(workspaceKey)
+      const requestedHostId = options.executionHostId
+        ? parseExecutionHostId(options.executionHostId)?.id
+        : null
+      if (options.executionHostId && !requestedHostId) {
+        return { deleted: false }
+      }
+      const matchingWorkspaces = this.store.getFolderWorkspaces().filter((entry) => {
+        const ownerHostId = this.getFolderWorkspaceExecutionHostId(entry)
+        return (
+          entry.id === folderWorkspaceId &&
+          ownerHostId !== null &&
+          (!requestedHostId || ownerHostId === requestedHostId)
+        )
+      })
+      if (matchingWorkspaces.length !== 1) {
+        return { deleted: false }
+      }
+      const workspace = matchingWorkspaces[0]!
+      const ownerHostId = this.getFolderWorkspaceExecutionHostId(workspace)
+      if (!ownerHostId) {
+        return { deleted: false }
+      }
+      const targets = this.getFolderWorkspaceTerminalTeardownTargets([workspace])
+      const preserveRendererWorkspaceKeys = this.resolvePreservedRendererWorkspaceKeys(
+        targets,
+        options.preserveRendererWorkspaceKey ? new Set([workspaceKey]) : new Set(),
+        [workspace]
+      )
+      const preserveRendererWorkspaceKey = preserveRendererWorkspaceKeys.has(workspaceKey)
+      const deleted = await this.commitFolderWorkspaceDeletion(
+        targets,
+        preserveRendererWorkspaceKeys,
+        () =>
+          this.store!.removeFolderWorkspace!(folderWorkspaceId, {
+            executionHostId: ownerHostId,
+            ...(preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+          })
+      )
+      if (!deleted) {
+        return { deleted: false }
+      }
+      if (options.notify !== false) {
+        this.notifyReposChanged()
+      }
+      return { deleted: true }
+    } finally {
+      releaseMutation?.()
+      releaseDeletion()
     }
-    return { deleted }
   }
 
   async scanNestedRepos(path: string): Promise<NestedRepoScanResult> {
@@ -18543,7 +19455,9 @@ export class OrcaRuntimeService {
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
           if (group) {
-            this.store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
+            this.store.moveProjectToGroup(existing.id, group.id, projectGroupOrder, {
+              executionHostId: getRepoExecutionHostId(existing)
+            })
           }
           importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
           results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -24067,9 +24981,97 @@ export class OrcaRuntimeService {
     } else {
       store.removeWorktreeMeta(worktreeId)
     }
+    this.purgeWorkspaceRuntimeState(worktreeId)
+  }
+
+  private purgeFolderWorkspaceOwnerRuntimeState(
+    target: ReturnType<typeof resolveFolderWorkspaceTerminalTeardownTargets>[number]
+  ): void {
+    for (const [leafKey, leaf] of this.leaves) {
+      if (
+        leaf.worktreeId !== target.workspaceKey ||
+        !leaf.ptyId ||
+        !this.folderWorkspaceTeardownTargetOwnsPty(
+          target,
+          leaf.ptyId,
+          this.ptysById.get(leaf.ptyId)?.connectionId
+        )
+      ) {
+        continue
+      }
+      this.leaves.delete(leafKey)
+      this.invalidateLeafHandle(leafKey)
+    }
+    for (const [ptyId, leaf] of this.detachedPreAllocatedLeaves) {
+      if (
+        leaf.worktreeId === target.workspaceKey &&
+        this.folderWorkspaceTeardownTargetOwnsPty(
+          target,
+          ptyId,
+          this.ptysById.get(ptyId)?.connectionId
+        )
+      ) {
+        this.detachedPreAllocatedLeaves.delete(ptyId)
+      }
+    }
+    this.rebuildLeafPtyIndex()
+    for (const pty of [...this.ptysById.values()]) {
+      if (
+        pty.worktreeId !== target.workspaceKey ||
+        !this.folderWorkspaceTeardownTargetOwnsPty(target, pty.ptyId, pty.connectionId)
+      ) {
+        continue
+      }
+      if (!pty.connected) {
+        this.dropDisconnectedPtyRecord(pty.ptyId)
+        continue
+      }
+      pty.tabId = null
+      pty.paneKey = null
+      this.invalidateDeletedWorkspacePtyHandles(pty.ptyId)
+    }
+  }
+
+  private purgeWorkspaceRuntimeState(worktreeId: string): void {
+    this.rendererDeletedFolderWorkspacePtyIds.delete(worktreeId)
+    this.mobileSessionTabsNotifyCoalescer.cancel(worktreeId)
     this.mobileSessionTabsByWorktree.delete(worktreeId)
     this.mobileSessionTabsAgentStatusHeartbeat.removeWorktree(worktreeId)
     this.acceptedRendererMobileSnapshotByWorktree.delete(worktreeId)
+    for (const [tabId, tab] of this.tabs) {
+      if (runtimeWorktreeIdsEqual(tab.worktreeId, worktreeId)) {
+        this.tabs.delete(tabId)
+      }
+    }
+    for (const [leafKey, leaf] of this.leaves) {
+      if (!runtimeWorktreeIdsEqual(leaf.worktreeId, worktreeId)) {
+        continue
+      }
+      this.leaves.delete(leafKey)
+      this.invalidateLeafHandle(leafKey)
+    }
+    for (const [ptyId, leaf] of this.detachedPreAllocatedLeaves) {
+      if (runtimeWorktreeIdsEqual(leaf.worktreeId, worktreeId)) {
+        this.detachedPreAllocatedLeaves.delete(ptyId)
+      }
+    }
+    this.rebuildLeafPtyIndex()
+    for (const pty of [...this.ptysById.values()]) {
+      if (!runtimeWorktreeIdsEqual(pty.worktreeId, worktreeId)) {
+        continue
+      }
+      if (!pty.connected) {
+        this.dropDisconnectedPtyRecord(pty.ptyId)
+        continue
+      }
+      pty.tabId = null
+      pty.paneKey = null
+      this.invalidateDeletedWorkspacePtyHandles(pty.ptyId)
+    }
+    this.notifyMobileSessionTabsRemoved(worktreeId)
+    const mutationKey = runtimeWorktreeIdentityKey(worktreeId)
+    this.terminalSleepByWorktreeId.delete(worktreeId)
+    this.terminalSleepStateByWorktreeId.delete(mutationKey)
     advertisedUrlWatcher.forgetWorktree(worktreeId)
     deleteWorktreeHistoryDir(worktreeId)
     this.closeHeadlessBrowserPagesForWorktree(worktreeId)
@@ -24082,8 +25084,12 @@ export class OrcaRuntimeService {
     if (!this.offscreenBrowserBackend || !this.agentBrowserBridge?.tabList) {
       return
     }
-    for (const tab of this.agentBrowserBridge.tabList(worktreeId).tabs) {
-      void this.offscreenBrowserBackend.closeTab(tab.browserPageId).catch(() => {})
+    try {
+      for (const tab of this.agentBrowserBridge.tabList(worktreeId).tabs) {
+        void this.offscreenBrowserBackend.closeTab(tab.browserPageId).catch(() => {})
+      }
+    } catch {
+      // Best-effort cleanup must not make logical deletion fail.
     }
   }
 
@@ -25411,12 +26417,18 @@ export class OrcaRuntimeService {
       let tabId = canAdoptPaneIdentity ? (hintedTabId as string) : randomUUID()
       let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : randomUUID()
       let paneKey = makePaneKey(tabId, leafId)
-      const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
-        worktreeId: workspace.id,
-        connectionId: workspace.connectionId,
-        tabId,
-        leafId
-      })
+      const releaseWorktreeSpawn = await this.acquireWorktreeTerminalSpawn(
+        workspace.id,
+        workspace.folderWorkspace
+          ? {
+              executionHostId: this.requireFolderWorkspaceExecutionHostId(
+                workspace.folderWorkspace
+              ),
+              connectionId: workspace.connectionId
+            }
+          : undefined
+      )
+      let claimedStablePaneCreate: (() => void) | undefined
       let stablePaneCreateReleased = false
       const releaseStablePaneCreate = (): void => {
         if (stablePaneCreateReleased) {
@@ -25426,6 +26438,12 @@ export class OrcaRuntimeService {
         claimedStablePaneCreate?.()
       }
       try {
+        claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
+          worktreeId: workspace.id,
+          connectionId: workspace.connectionId,
+          tabId,
+          leafId
+        })
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
@@ -25573,6 +26591,7 @@ export class OrcaRuntimeService {
             ...(launchOpts.onPtySpawnCommitted
               ? { onPtySpawnCommitted: reportPtySpawnCommitted }
               : {}),
+            worktreeSpawnLeaseHeld: true,
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
@@ -25704,6 +26723,7 @@ export class OrcaRuntimeService {
         }
       } finally {
         releaseStablePaneCreate()
+        releaseWorktreeSpawn()
       }
     }
 
@@ -27203,77 +28223,95 @@ export class OrcaRuntimeService {
     }
     const direction = opts.direction ?? 'horizontal'
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(`id:${pty.worktreeId}`)
-    const leafId = randomUUID()
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
-    const paneKey = makePaneKey(parentTabId, leafId)
-    const result = await this.ptyController.spawn({
-      cols: 120,
-      rows: 40,
-      cwd: workspace.path,
-      command: opts.command,
-      commandDelivery: 'provider',
-      env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
-      envToDelete: opts.envToDelete,
-      connectionId: workspace.connectionId,
-      worktreeId: workspace.id,
-      preAllocatedHandle,
-      tabId: parentTabId,
-      leafId,
-      persistHostSessionBinding: true
-    })
-    this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
-    if (result.wslDistro) {
-      this.preparePtyExecutionContext(result.id, result.wslDistro)
-    }
-    this.registerPty(result.id, workspace.id, workspace.connectionId)
-    const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
-    if (createdPty) {
-      createdPty.tabId = parentTabId
-      createdPty.paneKey = paneKey
-      createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
-      this.setPairedRendererSessionOwnership(
-        createdPty.ptyId,
-        this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
-      )
-    }
-
+    const releaseWorktreeSpawn = await this.acquireWorktreeTerminalSpawn(
+      workspace.id,
+      workspace.folderWorkspace
+        ? {
+            executionHostId: this.requireFolderWorkspaceExecutionHostId(workspace.folderWorkspace),
+            connectionId: workspace.connectionId
+          }
+        : undefined
+    )
     try {
-      await this.notifier?.revealTerminalSession?.(workspace.id, {
-        ptyId: result.id,
-        title: null,
-        activate: opts.activate !== false,
-        ...ownerSurfacing(opts.surfaceOwner !== false),
-        tabId: parentTabId,
-        leafId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        splitDirection: direction,
-        splitTelemetrySource: opts.telemetrySource
-      })
-    } catch (error) {
-      this.setPairedRendererSessionOwnership(result.id, false)
-      this.ptyController.kill?.(result.id)
-      throw error
-    }
-    if (createdPty) {
-      this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
-        tabId: parentTabId,
-        leafId,
-        title: null,
-        activate: opts.activate !== false,
-        split: { splitFromLeafId: parsedPaneKey.leafId, direction }
-      })
-      // Why: persist the split so a later snapshot rebuild keeps it instead of collapsing to a single pane.
-      this.persistHeadlessTerminalSplit({
+      const leafId = randomUUID()
+      const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+      const paneKey = makePaneKey(parentTabId, leafId)
+      const result = await this.ptyController.spawn({
+        cols: 120,
+        rows: 40,
+        cwd: workspace.path,
+        command: opts.command,
+        commandDelivery: 'provider',
+        env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
+        envToDelete: opts.envToDelete,
+        connectionId: workspace.connectionId,
         worktreeId: workspace.id,
+        preAllocatedHandle,
         tabId: parentTabId,
         leafId,
-        ptyId: createdPty.ptyId,
-        splitFromLeafId: parsedPaneKey.leafId,
-        direction
+        persistHostSessionBinding: true,
+        worktreeSpawnLeaseHeld: true
       })
-    }
+      this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
+      if (result.wslDistro) {
+        this.preparePtyExecutionContext(result.id, result.wslDistro)
+      }
+      this.registerPty(result.id, workspace.id, workspace.connectionId)
+      const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
+      if (createdPty) {
+        createdPty.tabId = parentTabId
+        createdPty.paneKey = paneKey
+        createdPty.runtimeSessionOwned = pty.runtimeSessionOwned
+        this.setPairedRendererSessionOwnership(
+          createdPty.ptyId,
+          this.pairedRendererSessionOwnedPtyIds.has(pty.ptyId)
+        )
+      }
 
-    return { handle: this.issuePtyHandle(createdPty ?? pty), tabId: parentTabId, paneRuntimeId: -1 }
+      try {
+        await this.notifier?.revealTerminalSession?.(workspace.id, {
+          ptyId: result.id,
+          title: null,
+          activate: opts.activate !== false,
+          ...ownerSurfacing(opts.surfaceOwner !== false),
+          tabId: parentTabId,
+          leafId,
+          splitFromLeafId: parsedPaneKey.leafId,
+          splitDirection: direction,
+          splitTelemetrySource: opts.telemetrySource
+        })
+      } catch (error) {
+        this.setPairedRendererSessionOwnership(result.id, false)
+        this.ptyController.kill?.(result.id)
+        throw error
+      }
+      if (createdPty) {
+        this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
+          tabId: parentTabId,
+          leafId,
+          title: null,
+          activate: opts.activate !== false,
+          split: { splitFromLeafId: parsedPaneKey.leafId, direction }
+        })
+        // Why: persist the split so a later snapshot rebuild keeps it instead of collapsing to a single pane.
+        this.persistHeadlessTerminalSplit({
+          worktreeId: workspace.id,
+          tabId: parentTabId,
+          leafId,
+          ptyId: createdPty.ptyId,
+          splitFromLeafId: parsedPaneKey.leafId,
+          direction
+        })
+      }
+
+      return {
+        handle: this.issuePtyHandle(createdPty ?? pty),
+        tabId: parentTabId,
+        paneRuntimeId: -1
+      }
+    } finally {
+      releaseWorktreeSpawn()
+    }
   }
 
   async handleAgentTeamsTmuxCompat(
@@ -27375,8 +28413,10 @@ export class OrcaRuntimeService {
       ) => Promise<{ stopped: boolean; owner: boolean }>
       /** Authoritative id for an orphan whose selector no longer resolves. */
       resolvedWorktreeId?: string
-      resolvedConnectionId?: string
+      resolvedConnectionId?: string | null
       resolvedRuntimeEnvironmentId?: string
+      excludedPtyIds?: ReadonlySet<string>
+      excludeRemoteRuntimePtys?: boolean
     } = {}
   ): Promise<{ stopped: number }> {
     // Why: this mutates live PTYs, so reject while the graph is reloading rather than act on cached leaf ownership.
@@ -27394,6 +28434,9 @@ export class OrcaRuntimeService {
           candidate ? runtimeWorktreeIdsEqual(candidate, worktree.id) : false
       : (candidate: string | undefined): boolean => candidate === worktree.id
     const ownsHost = (ptyId: string, connectionId?: string | null): boolean => {
+      if (options.excludeRemoteRuntimePtys && ptyId.startsWith('remote:')) {
+        return false
+      }
       if (options.resolvedRuntimeEnvironmentId !== undefined) {
         return ptyId.startsWith(
           `remote:${encodeURIComponent(options.resolvedRuntimeEnvironmentId)}@@`
@@ -27403,18 +28446,34 @@ export class OrcaRuntimeService {
         options.resolvedConnectionId === undefined || connectionId === options.resolvedConnectionId
       )
     }
+    const getLeafConnectionId = (ptyId: string): string | null | undefined => {
+      const tracked = this.ptysById.get(ptyId)?.connectionId
+      if (tracked !== undefined) {
+        return tracked
+      }
+      if (ptyId.startsWith('remote:')) {
+        return undefined
+      }
+      return parseAppSshPtyId(ptyId)?.connectionId ?? null
+    }
     const ptyIds = new Set<string>()
     for (const leaf of this.leaves.values()) {
       if (
+        !options.excludedPtyIds?.has(leaf.ptyId ?? '') &&
         ownsWorktree(leaf.worktreeId) &&
         leaf.ptyId &&
-        ownsHost(leaf.ptyId, this.ptysById.get(leaf.ptyId)?.connectionId)
+        ownsHost(leaf.ptyId, getLeafConnectionId(leaf.ptyId))
       ) {
         ptyIds.add(leaf.ptyId)
       }
     }
     for (const pty of this.ptysById.values()) {
-      if (ownsWorktree(pty.worktreeId) && pty.connected && ownsHost(pty.ptyId, pty.connectionId)) {
+      if (
+        !options.excludedPtyIds?.has(pty.ptyId) &&
+        ownsWorktree(pty.worktreeId) &&
+        pty.connected &&
+        ownsHost(pty.ptyId, pty.connectionId)
+      ) {
         ptyIds.add(pty.ptyId)
       }
     }
@@ -27475,11 +28534,43 @@ export class OrcaRuntimeService {
     }
   }
 
-  async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
+  private folderWorkspaceMatchesTerminalSpawnOwner(
+    workspace: FolderWorkspace,
+    expectedOwner: FolderWorkspaceTerminalSpawnOwner
+  ): boolean {
+    if (this.getFolderWorkspaceExecutionHostId(workspace) !== expectedOwner.executionHostId) {
+      return false
+    }
+    try {
+      return this.resolveFolderWorkspaceConnectionId(workspace) === expectedOwner.connectionId
+    } catch {
+      return false
+    }
+  }
+
+  async acquireWorktreeTerminalSpawn(
+    worktreeId?: string,
+    expectedFolderWorkspaceOwner?: FolderWorkspaceTerminalSpawnOwner
+  ): Promise<() => void> {
     if (!worktreeId) {
       return () => {}
     }
     const release = await this.acquireWorktreeTerminalMutation(worktreeId)
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.()
+    if (
+      workspaceScope?.type === 'folder' &&
+      folderWorkspaces &&
+      !folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === workspaceScope.folderWorkspaceId &&
+          (!expectedFolderWorkspaceOwner ||
+            this.folderWorkspaceMatchesTerminalSpawnOwner(workspace, expectedFolderWorkspaceOwner))
+      )
+    ) {
+      release()
+      throw new Error('folder_workspace_not_found')
+    }
     const key = runtimeWorktreeIdentityKey(worktreeId)
     const sleepState = this.terminalSleepStateByWorktreeId.get(key)
     if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
@@ -28044,6 +29135,8 @@ export class OrcaRuntimeService {
     this.graphStatus = 'unavailable'
     this.setTerminalSideEffectConsumerAvailable(false)
     this.authoritativeWindowId = null
+    this.rendererDeletedFolderWorkspaceKeys.clear()
+    // Why: exact PTY fences survive reload until the renderer acknowledges owner-binding removal.
     this.rememberDetachedPreAllocatedLeaves()
     this.tabs.clear()
     this.leaves.clear()
@@ -28074,10 +29167,45 @@ export class OrcaRuntimeService {
   private resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
     const repos = this.store?.getRepos() ?? []
     const projectGroups = this.store?.getProjectGroups?.() ?? []
+    const matchingGroups = projectGroups.filter((group) => group.id === workspace.projectGroupId)
+    const group = matchingGroups.length === 1 ? matchingGroups[0] : undefined
+    const workspaceOwner = resolveDeclaredFolderScopeOwner(workspace)
+    if (workspaceOwner.status === 'invalid') {
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    if (workspaceOwner.status === 'owned') {
+      const parsedOwner = parseExecutionHostId(workspaceOwner.executionHostId)
+      if (parsedOwner?.kind === 'ssh') {
+        return parsedOwner.targetId
+      }
+      if (parsedOwner?.kind === 'local') {
+        return null
+      }
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    const groupOwner = group ? resolveDeclaredFolderScopeOwner(group) : null
+    if (groupOwner?.status === 'invalid') {
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    if (groupOwner?.status === 'owned') {
+      const parsedOwner = parseExecutionHostId(groupOwner.executionHostId)
+      if (parsedOwner?.kind === 'ssh') {
+        return parsedOwner.targetId
+      }
+      if (parsedOwner?.kind === 'local') {
+        return null
+      }
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    const workspaceConnectionIdIsAuthoritative = workspace.connectionId !== undefined
     const connection = inferFolderWorkspacePathConnection({
       folderPath: workspace.folderPath,
       projectGroupId: workspace.projectGroupId,
-      connectionId: workspace.connectionId ?? null,
+      connectionId: workspaceConnectionIdIsAuthoritative
+        ? workspace.connectionId
+        : (group?.connectionId ?? null),
+      connectionIdIsAuthoritative:
+        workspaceConnectionIdIsAuthoritative || group?.connectionId !== undefined,
       projectGroups,
       repos
     })
@@ -28096,20 +29224,22 @@ export class OrcaRuntimeService {
     if (parsed?.type !== 'folder') {
       return null
     }
-    const workspace = this.store
-      ?.getFolderWorkspaces?.()
-      .find((entry) => entry.id === parsed.folderWorkspaceId)
-    if (!workspace) {
+    const workspaces = (this.store?.getFolderWorkspaces?.() ?? []).filter(
+      (entry) => entry.id === parsed.folderWorkspaceId
+    )
+    if (workspaces.length === 0) {
       throw new Error('selector_not_found')
     }
+    if (workspaces.length > 1) {
+      throw new Error('folder_workspace_connection_ambiguous')
+    }
+    const workspace = workspaces[0]!
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
-    const status = await getFolderWorkspacePathStatus(
-      this.store,
-      { scope: 'folder-workspace', folderWorkspaceId: workspace.id },
-      { getSshFilesystemProvider }
-    )
+    const status = await getFolderWorkspacePathStatusForWorkspace(this.store, workspace, {
+      getSshFilesystemProvider
+    })
     assertFolderWorkspacePathUsable(status)
     return {
       id: folderWorkspaceKey(workspace.id),
@@ -28289,11 +29419,18 @@ export class OrcaRuntimeService {
     const rawSelector = selector.startsWith('id:') ? selector.slice('id:'.length) : selector
     const parsed = parseWorkspaceKey(rawSelector)
     if (parsed?.type === 'folder') {
-      const folderWorkspace = this.store
-        ?.getFolderWorkspaces?.()
-        .find((workspace) => workspace.id === parsed.folderWorkspaceId)
-      if (!folderWorkspace) {
+      const candidates = (this.store?.getFolderWorkspaces?.() ?? []).filter(
+        (workspace) => workspace.id === parsed.folderWorkspaceId
+      )
+      if (candidates.length === 0) {
         throw new Error('selector_not_found')
+      }
+      if (candidates.length > 1) {
+        throw new Error('selector_ambiguous')
+      }
+      const folderWorkspace = candidates[0]!
+      if (!this.getFolderWorkspaceExecutionHostId(folderWorkspace)) {
+        throw new Error('selector_ambiguous')
       }
       return {
         type: 'folder',
@@ -29676,13 +30813,25 @@ export class OrcaRuntimeService {
     summaries: Map<string, RuntimeWorktreePsSummary>,
     runtimeWorktreeSummaryPathIndex: RuntimeWorktreeSummaryPathIndex,
     missingRuntimeWorktreeIds: Set<string>,
-    runtimeWorktreeId: string
+    runtimeWorktreeId: string,
+    executionHostId?: ExecutionHostId
   ): RuntimeWorktreePsSummary | null {
     const exact = summaries.get(runtimeWorktreeId)
-    if (exact) {
+    if (exact && (!executionHostId || exact.hostId === executionHostId)) {
       return exact
     }
-    if (missingRuntimeWorktreeIds.has(runtimeWorktreeId)) {
+    const lookupKey = executionHostId
+      ? `${executionHostId}\0${runtimeWorktreeId}`
+      : runtimeWorktreeId
+    const identityMatches = [...summaries.values()].filter(
+      (summary) =>
+        summary.worktreeId === runtimeWorktreeId &&
+        (!executionHostId || summary.hostId === executionHostId)
+    )
+    if (identityMatches.length === 1) {
+      return identityMatches[0]!
+    }
+    if (identityMatches.length > 1 || missingRuntimeWorktreeIds.has(lookupKey)) {
       return null
     }
     const parsed = parseRuntimeWorktreeId(runtimeWorktreeId)
@@ -29700,7 +30849,7 @@ export class OrcaRuntimeService {
     if (indexed) {
       return indexed
     }
-    missingRuntimeWorktreeIds.add(runtimeWorktreeId)
+    missingRuntimeWorktreeIds.add(lookupKey)
     return null
   }
 

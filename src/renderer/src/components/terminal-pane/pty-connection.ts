@@ -61,7 +61,9 @@ import type { SessionRestoredBannerReason } from './session-restored-banner-pane
 import {
   consumeCommittedPtyShutdownExit,
   deferPtyShutdownExit,
-  isHostPtySleepPending
+  isHostPtySleepPending,
+  registerPtyShutdownExitIncarnation,
+  type PtyShutdownExitIncarnation
 } from './pty-shutdown-exit-deferral'
 import {
   cancelPendingSafeFitContinuations,
@@ -2351,6 +2353,11 @@ export function connectPanePty(
     claimPendingVisibleRemoteViewport()
   }
   let activePanePtyBinding: string | null = null
+  let activePtyExitIncarnation: {
+    ptyId: string
+    incarnation: PtyShutdownExitIncarnation
+    unregister: () => void
+  } | null = null
   // Why: bind time lets async liveness reconcile ignore a request started
   // before this PTY bound (newborn race). Null disables the guard (fail-safe).
   let activePanePtyBindingBoundAt: number | null = null
@@ -2413,6 +2420,8 @@ export function connectPanePty(
     pendingVisibleRemoteViewportClaim = false
     activePanePtyBinding = null
     activePanePtyBindingBoundAt = null
+    activePtyExitIncarnation?.unregister()
+    activePtyExitIncarnation = null
     delete pane.container.dataset.ptyId
     delete pane.container.dataset.ptyRecoveryState
   }
@@ -2627,11 +2636,17 @@ export function connectPanePty(
     }
     if (deps.isPtyShutdownPending(ptyId) || isHostPtySleepPending(ptyId, runtimeEnvironmentId)) {
       // Why: the transport emits exit once; replay it only after a verified commit so rollback keeps renderer state retryable.
-      deferPtyShutdownExit(ptyId, (settlement) => {
-        if (settlement === 'committed') {
-          onExit(ptyId, { preserveRendererBinding: true })
-        }
-      })
+      deferPtyShutdownExit(
+        ptyId,
+        (settlement) => {
+          if (settlement === 'committed') {
+            onExit(ptyId, { preserveRendererBinding: true })
+          } else if (settlement === 'unrelated') {
+            onExit(ptyId)
+          }
+        },
+        activePtyExitIncarnation?.ptyId === ptyId ? activePtyExitIncarnation.incarnation : undefined
+      )
       return
     }
     const preserveRendererBinding =
@@ -2997,6 +3012,8 @@ export function connectPanePty(
     }
     setPanePtyFitBinding(ptyId)
     activePanePtyBinding = ptyId
+    activePtyExitIncarnation?.unregister()
+    activePtyExitIncarnation = { ptyId, ...registerPtyShutdownExitIncarnation(ptyId) }
     reportPanePtyVisibility(ptyId, deps.isVisibleRef.current)
     // Why: record bind time on the spawn/attach chokepoint so the reconcile
     // guard knows this binding is newer than any pre-bind snapshot.

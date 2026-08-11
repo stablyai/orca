@@ -178,7 +178,11 @@ describe('all-host folder workspace startup catalogs', () => {
 
     expect(store.getState().projectGroups).toEqual([
       { ...localProjectGroup, executionHostId: 'local' },
-      { ...remoteProjectGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...remoteProjectGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
     expect(store.getState().folderWorkspaces.map((workspace) => workspace.id)).toEqual([
       'local-folder',

@@ -13,22 +13,13 @@ import {
   type HostSessionSlices,
   type HostIdByWorktreeId
 } from './workspace-session-host-split'
+import { indexWorkspaceRuntimeHostOwnership } from './workspace-runtime-host-ownership'
 import {
-  indexWorkspaceRuntimeHostOwnership,
-  type WorkspaceRuntimeOwnerProjection
-} from './workspace-runtime-host-ownership'
+  getFolderWorkspaceRuntimeHostId,
+  type HostPersistenceState
+} from './workspace-session-folder-host-partition'
 
-export type HostPersistenceState = {
-  repos: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-  projectGroups?: readonly { id: string; executionHostId?: string | null }[]
-  folderWorkspaces?: readonly {
-    id: string
-    projectGroupId: string
-    executionHostId?: ExecutionHostId | null
-  }[]
-  worktreesByRepo: Record<string, readonly WorkspaceRuntimeOwnerProjection[]>
-  restoredRuntimeHostIdByWorkspaceSessionKey?: Record<string, ExecutionHostId>
-}
+export type { HostPersistenceState } from './workspace-session-folder-host-partition'
 
 type SessionApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
@@ -127,42 +118,6 @@ function buildRuntimeHostIdByWorkspaceSessionKey(
     }
   }
   return owners
-}
-
-function getRestoredRuntimeHostId(
-  owners: Record<string, ExecutionHostId> | undefined,
-  key: string
-): ExecutionHostId | null {
-  const hostId = owners?.[key]
-  return hostId && parseExecutionHostId(hostId)?.kind === 'runtime' ? hostId : null
-}
-
-function getFolderWorkspaceRuntimeHostId(
-  state: HostPersistenceState,
-  key: string
-): ExecutionHostId {
-  const scope = parseWorkspaceKey(key)
-  if (scope?.type !== 'folder') {
-    return LOCAL_EXECUTION_HOST_ID
-  }
-  const workspace = state.folderWorkspaces?.find((entry) => entry.id === scope.folderWorkspaceId)
-  const group = workspace
-    ? state.projectGroups?.find((entry) => entry.id === workspace.projectGroupId)
-    : null
-  const parsed = parseExecutionHostId(workspace?.executionHostId ?? group?.executionHostId)
-  if (parsed) {
-    return parsed.kind === 'runtime' ? parsed.id : LOCAL_EXECUTION_HOST_ID
-  }
-  if (workspace && group) {
-    // Why: once the folder and group catalogs are both known, a missing runtime
-    // owner is authoritative local/SSH persistence, not a startup gap.
-    return LOCAL_EXECUTION_HOST_ID
-  }
-  const restoredHostId = getRestoredRuntimeHostId(
-    state.restoredRuntimeHostIdByWorkspaceSessionKey,
-    key
-  )
-  return restoredHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
 /** Map a worktree to the host partition it persists under.

@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import {
   DASHBOARD_MAX_LAUNCH_WORKTREES,
   type DashboardCard,
@@ -12,6 +12,7 @@ import {
 } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { resolveDashboardFolderCatalogOwner } from './dashboard-folder-catalog-owner'
 
 export type DashboardLaunchDetectionState = Pick<
   AppState,
@@ -26,16 +27,23 @@ type DashboardLaunchOptionState = Pick<AppState, 'repos' | 'settings' | 'worktre
   Partial<DashboardLaunchDetectionState>
 
 type DashboardLaunchCatalog = {
-  foldersById: Map<string, AppState['folderWorkspaces'][number]>
-  groupsById: Map<string, AppState['projectGroups'][number]>
+  folderIdCounts: Map<string, number>
   reposById: Map<string, AppState['repos'][number]>
   worktreesByRepoAndId: Map<string, Map<string, AppState['worktreesByRepo'][string][number]>>
 }
 
+type DashboardAgentDetection = {
+  agents: readonly TuiAgent[]
+  ownerResolved: boolean
+}
+
 function buildDashboardLaunchCatalog(state: DashboardLaunchOptionState): DashboardLaunchCatalog {
+  const folderIdCounts = new Map<string, number>()
+  for (const folder of state.folderWorkspaces ?? []) {
+    folderIdCounts.set(folder.id, (folderIdCounts.get(folder.id) ?? 0) + 1)
+  }
   return {
-    foldersById: new Map((state.folderWorkspaces ?? []).map((folder) => [folder.id, folder])),
-    groupsById: new Map((state.projectGroups ?? []).map((group) => [group.id, group])),
+    folderIdCounts,
     reposById: new Map((state.repos ?? []).map((repo) => [repo.id, repo])),
     worktreesByRepoAndId: new Map(
       Object.entries(state.worktreesByRepo ?? {}).map(([repoId, worktrees]) => [
@@ -50,43 +58,101 @@ function detectedAgentsForWorktree(
   state: DashboardLaunchOptionState,
   worktreeId: string,
   repoId: string,
-  catalog: DashboardLaunchCatalog
-): readonly TuiAgent[] {
+  catalog: DashboardLaunchCatalog,
+  executionHostId?: DashboardWorkspace['executionHostId'],
+  repoOwner?: AppState['repos'][number]
+): DashboardAgentDetection {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folder = catalog.foldersById.get(workspaceScope.folderWorkspaceId)
-    const group = folder ? catalog.groupsById.get(folder.projectGroupId) : undefined
-    const host = parseExecutionHostId(group?.executionHostId)
-    if (host?.kind === 'runtime') {
-      return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+    const matchingFolderCount = catalog.folderIdCounts.get(workspaceScope.folderWorkspaceId) ?? 0
+    const owner = resolveDashboardFolderCatalogOwner(
+      {
+        folderWorkspaces: state.folderWorkspaces ?? [],
+        projectGroups: state.projectGroups ?? []
+      },
+      workspaceScope.folderWorkspaceId
+    )
+    if (
+      matchingFolderCount !== 1 ||
+      !owner ||
+      (executionHostId && owner.executionHostId !== executionHostId)
+    ) {
+      return { agents: [], ownerResolved: false }
     }
-    const connectionId = folder?.connectionId ?? group?.connectionId
-    return connectionId ? (state.remoteDetectedAgentIds?.[connectionId] ?? []) : []
+    const host = parseExecutionHostId(owner?.executionHostId)
+    if (host?.kind === 'runtime') {
+      return {
+        agents: state.runtimeDetectedAgentIds?.[host.environmentId] ?? [],
+        ownerResolved: true
+      }
+    }
+    if (host?.kind === 'ssh') {
+      return {
+        agents: state.remoteDetectedAgentIds?.[host.targetId] ?? [],
+        ownerResolved: true
+      }
+    }
+    return {
+      agents: host?.kind === 'local' ? (state.detectedAgentIds ?? []) : [],
+      ownerResolved: host?.kind === 'local'
+    }
   }
 
-  const worktree = catalog.worktreesByRepoAndId.get(repoId)?.get(worktreeId)
-  const repo = catalog.reposById.get(worktree?.repoId ?? repoId)
-  const host = parseExecutionHostId(worktree?.hostId ?? repo?.executionHostId)
+  const catalogRepoId = repoOwner?.id ?? repoId
+  const worktree = catalog.worktreesByRepoAndId.get(catalogRepoId)?.get(worktreeId)
+  const repo = repoOwner ?? catalog.reposById.get(worktree?.repoId ?? catalogRepoId)
+  const runtimeOwnerEnvironmentId = worktree?.runtimeOwnerEnvironmentId?.trim()
+  const host = parseExecutionHostId(
+    runtimeOwnerEnvironmentId
+      ? toRuntimeExecutionHostId(runtimeOwnerEnvironmentId)
+      : (worktree?.hostId ?? repo?.executionHostId)
+  )
   if (host?.kind === 'runtime') {
-    return state.runtimeDetectedAgentIds?.[host.environmentId] ?? []
+    return {
+      agents: state.runtimeDetectedAgentIds?.[host.environmentId] ?? [],
+      ownerResolved: true
+    }
   }
   const connectionId = host?.kind === 'ssh' ? host.targetId : repo?.connectionId
-  return connectionId
-    ? (state.remoteDetectedAgentIds?.[connectionId] ?? [])
-    : (state.detectedAgentIds ?? [])
+  return {
+    agents: connectionId
+      ? (state.remoteDetectedAgentIds?.[connectionId] ?? [])
+      : (state.detectedAgentIds ?? []),
+    ownerResolved: true
+  }
 }
 
 /** Host-detected choices plus providers already proven to run in the workspace. */
 export function buildDashboardWorktreeLaunchOptions(
   state: DashboardLaunchOptionState,
   cards: readonly DashboardCard[],
-  workspaces: readonly DashboardWorkspace[] = []
+  workspaces: readonly DashboardWorkspace[] = [],
+  repoOwnersByWorktreeId: ReadonlyMap<string, AppState['repos'][number]> = new Map()
 ): Record<string, TuiAgent[]> {
   const catalog = buildDashboardLaunchCatalog(state)
   const cardsByWorktreeId = new Map<string, DashboardCard[]>()
+  const executionHostIdByWorktreeId = new Map<string, DashboardWorkspace['executionHostId']>()
+  const ambiguousOwnerWorktreeIds = new Set<string>()
   const repoIdByWorktreeId = new Map(
     workspaces.map((workspace) => [workspace.worktreeId, workspace.repoId])
   )
+  const recordExecutionHostId = (
+    worktreeId: string,
+    executionHostId: DashboardWorkspace['executionHostId'] | undefined
+  ): void => {
+    if (!executionHostId) {
+      return
+    }
+    const existing = executionHostIdByWorktreeId.get(worktreeId)
+    if (existing && existing !== executionHostId) {
+      ambiguousOwnerWorktreeIds.add(worktreeId)
+    } else {
+      executionHostIdByWorktreeId.set(worktreeId, executionHostId)
+    }
+  }
+  for (const workspace of workspaces) {
+    recordExecutionHostId(workspace.worktreeId, workspace.executionHostId)
+  }
   for (const card of cards) {
     repoIdByWorktreeId.set(card.worktreeId, card.repoId)
     const existing = cardsByWorktreeId.get(card.worktreeId)
@@ -95,6 +161,7 @@ export function buildDashboardWorktreeLaunchOptions(
     } else {
       cardsByWorktreeId.set(card.worktreeId, [card])
     }
+    recordExecutionHostId(card.worktreeId, card.executionHostId)
   }
 
   const result: Record<string, TuiAgent[]> = {}
@@ -105,9 +172,19 @@ export function buildDashboardWorktreeLaunchOptions(
       break
     }
     const worktreeCards = cardsByWorktreeId.get(worktreeId) ?? []
-    const available = new Set<TuiAgent>(
-      detectedAgentsForWorktree(state, worktreeId, repoId, catalog)
+    const detection = detectedAgentsForWorktree(
+      state,
+      worktreeId,
+      repoId,
+      catalog,
+      executionHostIdByWorktreeId.get(worktreeId),
+      repoOwnersByWorktreeId.get(worktreeId)
     )
+    if (ambiguousOwnerWorktreeIds.has(worktreeId) || !detection.ownerResolved) {
+      result[worktreeId] = []
+      continue
+    }
+    const available = new Set<TuiAgent>(detection.agents)
     for (const card of worktreeCards) {
       if (isTuiAgent(card.agentType)) {
         available.add(card.agentType)

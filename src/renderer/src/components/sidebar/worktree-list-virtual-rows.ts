@@ -35,7 +35,7 @@ export function getRenderRowKey(row: RenderRow): string {
     return `pending:${row.creationId}`
   }
   if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
+    return row.key
   }
   return `wt:${row.rowKey}`
 }

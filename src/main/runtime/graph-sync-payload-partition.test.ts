@@ -9,7 +9,8 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncWindowGraphResult
 } from '../../shared/runtime-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { FolderWorkspace, WorkspaceSessionState } from '../../shared/types'
+import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
 
 const WT_A = 'repo-1::/tmp/worktree-a'
@@ -65,13 +66,39 @@ function makeTerminalTab(id: string, ptyId: string) {
 }
 
 type RuntimeInternals = {
+  rendererDeletedFolderWorkspaceKeys: Set<string>
+  tabs: Map<string, { worktreeId: string }>
+  leaves: Map<string, { worktreeId: string }>
+  ptysById: Map<string, { worktreeId: string }>
   mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
+  acceptedRendererMobileSnapshotByWorktree: Map<string, unknown>
 }
 
-function createRuntime() {
+function makeFolderWorkspace(id: string): FolderWorkspace {
+  return {
+    id,
+    projectGroupId: 'group-1',
+    name: id,
+    folderPath: `/tmp/${id}`,
+    connectionId: null,
+    linkedTask: null,
+    comment: '',
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    createdAt: 1,
+    updatedAt: 1
+  }
+}
+
+function createRuntime(initialFolderWorkspaces: FolderWorkspace[] = []) {
   let session = makeSession()
+  let folderWorkspaces = [...initialFolderWorkspaces]
   const runtime = new OrcaRuntimeService({
     ...storeBase,
+    getFolderWorkspaces: () => folderWorkspaces,
     getWorkspaceSession: () => session,
     setWorkspaceSession: (next: WorkspaceSessionState) => {
       session = next
@@ -81,6 +108,9 @@ function createRuntime() {
   runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
   const setSession = (next: WorkspaceSessionState): void => {
     session = next
+  }
+  const setFolderWorkspaces = (next: FolderWorkspace[]): void => {
+    folderWorkspaces = [...next]
   }
   const sync = (
     mobileSessionTabs: RuntimeMobileSessionTabsSnapshot[],
@@ -92,7 +122,14 @@ function createRuntime() {
       mobileSessionTabs,
       ...(unchangedMobileSessionWorktrees ? { unchangedMobileSessionWorktrees } : {})
     })
-  return { runtime, events, sync, setSession, internals: runtime as unknown as RuntimeInternals }
+  return {
+    runtime,
+    events,
+    sync,
+    setSession,
+    setFolderWorkspaces,
+    internals: runtime as unknown as RuntimeInternals
+  }
 }
 
 function makeSnapshot(worktree: string, version: number): RuntimeMobileSessionTabsSnapshot {
@@ -178,6 +215,81 @@ describe('graph-sync mobile payload partition', () => {
     expect(internals.mobileSessionTabsByWorktree.get(WT_B)?.tabs).toEqual([
       expect.objectContaining({ parentTabId: 'tab-1' })
     ])
+  })
+
+  it('prunes a deleted folder withheld by a stale renderer and rejects its exact resend', () => {
+    const folderWorkspace = makeFolderWorkspace('folder-a')
+    const folderKey = folderWorkspaceKey(folderWorkspace.id)
+    const gitWorktreeId = 'folder::/tmp/worktree'
+    const { events, sync, setFolderWorkspaces, internals } = createRuntime([folderWorkspace])
+    const folderSnapshot = makeSnapshot(folderKey, 1)
+    const gitSnapshot = makeSnapshot(gitWorktreeId, 1)
+    sync([folderSnapshot, gitSnapshot])
+    vi.advanceTimersByTime(300)
+    events.length = 0
+
+    setFolderWorkspaces([])
+    internals.rendererDeletedFolderWorkspaceKeys.add(folderKey)
+    const withheld = sync([], [folderKey, gitWorktreeId])
+    vi.advanceTimersByTime(300)
+
+    expect(withheld.mobileSessionResyncWorktrees).toBeUndefined()
+    expect(internals.mobileSessionTabsByWorktree.has(folderKey)).toBe(false)
+    expect(internals.acceptedRendererMobileSnapshotByWorktree.has(folderKey)).toBe(false)
+    expect(internals.mobileSessionTabsByWorktree.get(gitWorktreeId)).toBeDefined()
+    expect(
+      events.filter((event) => 'removed' in event && event.removed === true).map((e) => e.worktree)
+    ).toEqual([folderKey])
+
+    events.length = 0
+    const staleResend = sync([folderSnapshot], [gitWorktreeId])
+    vi.advanceTimersByTime(300)
+
+    expect(staleResend.mobileSessionResyncWorktrees).toBeUndefined()
+    expect(internals.mobileSessionTabsByWorktree.has(folderKey)).toBe(false)
+    expect(internals.acceptedRendererMobileSnapshotByWorktree.has(folderKey)).toBe(false)
+    expect(internals.mobileSessionTabsByWorktree.get(gitWorktreeId)).toBeDefined()
+    expect(events).toEqual([])
+
+    sync([], [gitWorktreeId])
+    expect(internals.rendererDeletedFolderWorkspaceKeys.has(folderKey)).toBe(false)
+  })
+
+  it('keeps a remote folder graph that is absent from the local catalog', () => {
+    const remoteFolderKey = folderWorkspaceKey('remote-folder')
+    const remotePtyId = 'remote:env-1@@pty-1'
+    const { runtime, internals } = createRuntime([])
+    const remoteSnapshot = makeSnapshot(remoteFolderKey, 1)
+    remoteSnapshot.tabs = remoteSnapshot.tabs.map((tab) =>
+      tab.type === 'terminal' ? { ...tab, ptyId: remotePtyId } : tab
+    )
+
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'remote-tab',
+          worktreeId: remoteFolderKey,
+          title: 'remote',
+          activeLeafId: 'remote-leaf',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'remote-tab',
+          worktreeId: remoteFolderKey,
+          leafId: 'remote-leaf',
+          paneRuntimeId: 1,
+          ptyId: remotePtyId
+        }
+      ],
+      mobileSessionTabs: [remoteSnapshot]
+    })
+
+    expect([...internals.tabs.values()].map((tab) => tab.worktreeId)).toEqual([remoteFolderKey])
+    expect([...internals.leaves.values()].map((leaf) => leaf.worktreeId)).toEqual([remoteFolderKey])
+    expect([...internals.ptysById.values()].map((pty) => pty.worktreeId)).toEqual([remoteFolderKey])
+    expect(internals.mobileSessionTabsByWorktree.has(remoteFolderKey)).toBe(true)
   })
 
   it('asks for a republish when headless hydration masks a dropped renderer snapshot', () => {

@@ -257,6 +257,93 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(patch.mock.calls[0][1]).toBeUndefined()
   })
 
+  it.each([false, true])(
+    'routes a colliding folder session through its active owner regardless of catalog order (reversed=%s)',
+    (reversed) => {
+      const folderKey = folderWorkspaceKey('shared-folder')
+      const local = {
+        id: 'shared-folder',
+        projectGroupId: 'shared-group',
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const runtime = {
+        ...local,
+        executionHostId: 'runtime:env-1' as const,
+        runtimeSourceExecutionHostId: 'ssh:builder' as const
+      }
+      const folderWorkspaces = reversed ? [runtime, local] : [local, runtime]
+
+      const runtimeOwner = buildHostIdByWorktreeId({
+        repos: [],
+        folderWorkspaces,
+        worktreesByRepo: {},
+        activeWorktreeId: folderKey,
+        activeWorkspaceExecutionHostId: 'runtime:env-1'
+      })
+      const localOwner = buildHostIdByWorktreeId({
+        repos: [],
+        folderWorkspaces,
+        worktreesByRepo: {},
+        activeWorktreeId: folderKey,
+        activeWorkspaceExecutionHostId: 'local'
+      })
+
+      expect(runtimeOwner(folderKey)).toBe('runtime:env-1')
+      expect(localOwner(folderKey)).toBe('local')
+    }
+  )
+
+  it('uses restored ownership for a colliding inactive folder session', () => {
+    const folderKey = folderWorkspaceKey('shared-folder')
+    const owner = buildHostIdByWorktreeId({
+      repos: [],
+      folderWorkspaces: [
+        {
+          id: 'shared-folder',
+          projectGroupId: 'shared-group',
+          connectionId: null,
+          executionHostId: 'local'
+        },
+        {
+          id: 'shared-folder',
+          projectGroupId: 'shared-group',
+          connectionId: null,
+          executionHostId: 'runtime:env-1',
+          runtimeSourceExecutionHostId: 'ssh:builder'
+        }
+      ],
+      worktreesByRepo: {},
+      restoredRuntimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' }
+    })
+
+    expect(owner(folderKey)).toBe('runtime:env-1')
+  })
+
+  it('keeps an ownerless colliding folder session in the local spill', () => {
+    const folderKey = folderWorkspaceKey('shared-folder')
+    const owner = buildHostIdByWorktreeId({
+      repos: [],
+      folderWorkspaces: [
+        {
+          id: 'shared-folder',
+          projectGroupId: 'shared-group',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        },
+        {
+          id: 'shared-folder',
+          projectGroupId: 'shared-group',
+          connectionId: null,
+          executionHostId: 'local'
+        }
+      ],
+      worktreesByRepo: {}
+    })
+
+    expect(owner(folderKey)).toBe('local')
+  })
+
   it('routes placeholder-owned runtime worktree patches back to the runtime host', async () => {
     const worktreeId = 'remote-repo::/srv/remote-wt'
     const patch = vi.fn().mockResolvedValue(undefined)

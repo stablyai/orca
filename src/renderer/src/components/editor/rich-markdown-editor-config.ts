@@ -41,6 +41,7 @@ export type EditorConfigParams = {
   codec: RichMarkdownEditorCodec
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   content: string
+  fileId: string
   filePath: string
   worktreeId: string
   worktreeRoot: string | null
@@ -95,6 +96,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     content,
     codec,
     htmlSuperscriptLinkContext,
+    fileId,
     filePath,
     worktreeId,
     worktreeRoot,
@@ -145,6 +147,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         handleRichMarkdownPaste({
           editor: editorRef.current,
           event,
+          fileId,
           filePath,
           worktreeId,
           runtimeEnvironmentId,

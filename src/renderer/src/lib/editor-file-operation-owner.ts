@@ -13,6 +13,7 @@ import {
   settingsForWorktreeOperationRoute,
   type WorktreeOperationRoute
 } from './worktree-operation-route'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
@@ -162,13 +163,18 @@ export function getEditorFileOperationContext(
     : provenance.generation.route
   const host = parseExecutionHostId(route.executionHostId)
   const workspaceScope = parseWorkspaceKey(file.worktreeId)
+  const folderWorkspace =
+    workspaceScope?.type === 'folder'
+      ? (findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId) as
+          | AppState['folderWorkspaces'][number]
+          | null)
+      : null
   const resolvedWorktreePath =
     (worktreePath?.trim() ? worktreePath : null) ??
-    (workspaceScope?.type === 'folder'
-      ? (state.folderWorkspaces.find(
-          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-        )?.folderPath ?? null)
-      : null)
+    (workspaceScope?.type === 'folder' ? (folderWorkspace?.folderPath ?? null) : null)
+  if (workspaceScope?.type === 'folder' && !resolvedWorktreePath) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
   if (!host) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }

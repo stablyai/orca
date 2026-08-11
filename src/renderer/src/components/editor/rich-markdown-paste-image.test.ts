@@ -1,15 +1,33 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { clipboardHasImage, handleRichMarkdownImagePaste } from './rich-markdown-paste-image'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
+
+const mocks = vi.hoisted(() => ({
+  fileOwner: null as {
+    operationContext: {
+      settings: { activeRuntimeEnvironmentId: string | null }
+      connectionId?: string
+    }
+    sourceOwner:
+      | { kind: 'local' }
+      | { kind: 'runtime'; runtimeEnvironmentId: string }
+      | {
+          kind: 'ssh'
+          connectionId: string
+        }
+    worktreeRoot: string
+  } | null
+}))
 
 vi.mock('./rich-markdown-image-insert', () => ({
   insertRichMarkdownImageFromPath: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: vi.fn(() => 'ssh-1')
+vi.mock('./rich-markdown-file-owner', () => ({
+  resolveRichMarkdownFileOwner: vi.fn(() => mocks.fileOwner)
 }))
 
 vi.mock('@/store', () => ({
@@ -18,16 +36,6 @@ vi.mock('@/store', () => ({
       settings: { activeRuntimeEnvironmentId: null }
     }))
   }
-}))
-
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  settingsForRuntimeOwner: vi.fn((settings, runtimeEnvironmentId) =>
-    runtimeEnvironmentId === null
-      ? { activeRuntimeEnvironmentId: null }
-      : runtimeEnvironmentId
-        ? { activeRuntimeEnvironmentId: runtimeEnvironmentId }
-        : settings
-  )
 }))
 
 vi.mock('sonner', () => ({
@@ -62,6 +70,14 @@ describe('rich markdown image paste', () => {
   beforeEach(() => {
     document.body.replaceChildren()
     vi.clearAllMocks()
+    mocks.fileOwner = {
+      operationContext: {
+        settings: { activeRuntimeEnvironmentId: null },
+        connectionId: 'ssh-1'
+      },
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' },
+      worktreeRoot: '/repo'
+    }
     vi.stubGlobal('window', {
       api: {
         ui: {
@@ -91,6 +107,7 @@ describe('rich markdown image paste', () => {
       handleRichMarkdownImagePaste({
         editor: editor as never,
         event,
+        fileId: 'file-1',
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'
       })
@@ -103,6 +120,7 @@ describe('rich markdown image paste', () => {
     })
     expect(insertRichMarkdownImageFromPath).toHaveBeenCalledWith({
       editor,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       sourcePath: '/tmp/orca-paste-image.png',
       worktreeId: 'wt-1',
@@ -114,10 +132,16 @@ describe('rich markdown image paste', () => {
 
   it('does not upload clipboard images to SSH first when the markdown belongs to a runtime', async () => {
     const event = pasteEvent([{ kind: 'file', type: 'image/png' }])
+    mocks.fileOwner = {
+      operationContext: { settings: { activeRuntimeEnvironmentId: 'env-1' } },
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' },
+      worktreeRoot: '/repo'
+    }
 
     handleRichMarkdownImagePaste({
       editor: editorAt(3) as never,
       event,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       worktreeId: 'wt-1',
       runtimeEnvironmentId: 'env-1'
@@ -127,6 +151,28 @@ describe('rich markdown image paste', () => {
     expect(window.api.ui.saveClipboardImageAsTempFile).toHaveBeenCalledWith({
       connectionId: undefined
     })
+  })
+
+  it('fails closed before saving clipboard bytes when file ownership is unresolved', async () => {
+    mocks.fileOwner = null
+    const event = pasteEvent([{ kind: 'file', type: 'image/png' }])
+
+    expect(
+      handleRichMarkdownImagePaste({
+        editor: editorAt(3) as never,
+        event,
+        fileId: 'file-1',
+        filePath: '/repo/note.md',
+        worktreeId: 'wt-1'
+      })
+    ).toBe(true)
+
+    await flushPromises()
+    expect(window.api.ui.saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(insertRichMarkdownImageFromPath).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith(
+      "Couldn't determine which host owns this file. Check the workspace connection and try again."
+    )
   })
 
   it('does not insert a pasted image after the editor is destroyed', async () => {
@@ -142,6 +188,7 @@ describe('rich markdown image paste', () => {
       handleRichMarkdownImagePaste({
         editor: editor as never,
         event,
+        fileId: 'file-1',
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'
       })

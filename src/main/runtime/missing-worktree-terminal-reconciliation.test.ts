@@ -57,6 +57,13 @@ describe('stopMissingWorktreeTerminals', () => {
       `${survivingId}@@surviving-session`,
       expect.anything()
     )
+    expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(
+      deletedId,
+      expect.objectContaining({
+        resolvedWorktreeId: deletedId,
+        resolvedConnectionId: null
+      })
+    )
   })
 
   it('uses the owning SSH provider without consulting the local provider', async () => {

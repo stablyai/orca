@@ -12,6 +12,7 @@ import type {
   WorktreeMeta
 } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { WorktreeMetaUpdateOptions } from '@/store/slices/worktree-helpers'
 
 // Why: Radix tooltips need a provider the dialog does not own, and the menu's
 // portal needs real layout. Stand-ins keep these tests on provider selection.
@@ -63,7 +64,8 @@ const updateWorktreeMeta =
   vi.fn<
     (
       id: string,
-      updates: Partial<WorktreeMeta>
+      updates: Partial<WorktreeMeta>,
+      options?: WorktreeMetaUpdateOptions
     ) => Promise<{ ok: true } | { ok: false; error: string }>
   >()
 const fetchLinearIssue = vi.fn<(...args: never[]) => Promise<LinearIssue | null>>()
@@ -135,6 +137,7 @@ function openDialog(
     /** Extra owners of the same workspace ID, which the index reads as ambiguous. */
     otherRepos?: { repoId: string; worktree?: Partial<Worktree> }[]
     modalRepoId?: string
+    modalExecutionHostId?: WorktreeMetaUpdateOptions['executionHostId']
     linearViewerOrganizationUrlKey?: string
   } = {}
 ): void {
@@ -171,6 +174,7 @@ function openDialog(
     modalData: {
       worktreeId: options.worktreeId ?? worktree.id,
       ...(options.modalRepoId ? { repoId: options.modalRepoId } : {}),
+      ...(options.modalExecutionHostId ? { executionHostId: options.modalExecutionHostId } : {}),
       currentDisplayName: worktree.displayName,
       currentComment: worktree.comment,
       focus: 'comment'
@@ -408,6 +412,35 @@ describe('WorktreeMetaDialog issue link row', () => {
 
     expect(issueInput().value).toBe('STA-901')
     expect(providerChip().textContent).toContain('Linear')
+  })
+
+  it('forwards the clicked folder owner when saving metadata', async () => {
+    const worktreeId = folderWorkspaceKey('fw-1')
+    openDialog({
+      worktree: { displayName: 'SSH folder', comment: '' },
+      worktreeId,
+      folderWorkspace: {
+        name: 'SSH folder',
+        connectionId: 'builder',
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'ssh:builder'
+      },
+      modalExecutionHostId: 'ssh:builder'
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
+      target: { value: 'remote note' }
+    })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktreeId,
+      expect.objectContaining({ comment: 'remote note' }),
+      { executionHostId: 'ssh:builder' }
+    )
   })
 
   // A background `orca worktree set` must not move the baseline mid-edit: the

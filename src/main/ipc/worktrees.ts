@@ -86,6 +86,10 @@ import { listRepoWorktrees } from '../repo-worktrees'
 import { getSshGitProvider, requireSshGitProvider } from '../providers/ssh-git-dispatch'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import {
+  resolveDeclaredFolderScopeOwner,
+  resolveFolderWorkspaceOwner
+} from '../../shared/folder-workspace-owner-resolution'
+import {
   createIssueCommandRunnerScript,
   getEffectiveHooks,
   getEffectiveHooksFromConfig,
@@ -1426,35 +1430,32 @@ function resolveWorktreeLineageOwner(
 
 function getFolderLineageCandidateRepos(
   context: LineageResolutionContext,
-  folder: LineageFolder
+  folder: LineageFolder,
+  executionHostId: ExecutionHostId
 ): Repo[] {
-  let groupIds = context.groupSubtreeIdsByRoot.get(folder.projectGroupId)
+  const subtreeKey = `${executionHostId}\0${folder.projectGroupId}`
+  let groupIds = context.groupSubtreeIdsByRoot.get(subtreeKey)
   if (!groupIds) {
-    groupIds = getProjectGroupSubtreeIds(context.groups, folder.projectGroupId)
-    context.groupSubtreeIdsByRoot.set(folder.projectGroupId, groupIds)
+    const ownerGroups = context.groups.filter((group) => {
+      const owner = resolveDeclaredFolderScopeOwner(group)
+      return owner.status === 'owned' && owner.executionHostId === executionHostId
+    })
+    groupIds = getProjectGroupSubtreeIds(ownerGroups, folder.projectGroupId)
+    context.groupSubtreeIdsByRoot.set(subtreeKey, groupIds)
   }
-  const grouped = context.repos.filter(
+  const ownerRepos = context.repos.filter((repo) => {
+    const owner = resolveRepoLineageOwner(repo)
+    return owner.status === 'owned' && owner.hostId === executionHostId
+  })
+  const grouped = ownerRepos.filter(
     (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
   )
-  const pathRepos = context.repos.filter(
+  const pathRepos = ownerRepos.filter(
     (repo) =>
       !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
       isPathInsideOrEqual(folder.folderPath, repo.path)
   )
-  const group = context.groupsById.get(folder.projectGroupId)?.[0]
-  const connectionId = folder.connectionId ?? group?.connectionId ?? null
-  return connectionId
-    ? [...grouped, ...pathRepos.filter((repo) => (repo.connectionId ?? null) === connectionId)]
-    : grouped.length > 0
-      ? [
-          ...grouped,
-          ...pathRepos.filter((repo) =>
-            new Set(grouped.map((candidate) => candidate.connectionId ?? null)).has(
-              repo.connectionId ?? null
-            )
-          )
-        ]
-      : pathRepos
+  return grouped.length > 0 ? [...grouped, ...pathRepos] : pathRepos
 }
 
 function resolveFolderLineageOwner(
@@ -1475,39 +1476,24 @@ function resolveFolderLineageOwner(
   }
   const folder = folders[0]
   const groups = context.groupsById.get(folder.projectGroupId) ?? []
-  if (groups.length !== 1) {
+  const folderOwner = resolveFolderWorkspaceOwner(folder, groups)
+  if (folderOwner.status !== 'owned') {
     return remember({ status: 'ambiguous' })
   }
-  const group = groups[0]
-  const hosts = new Set<ExecutionHostId>()
-  if (folder.connectionId) {
-    hosts.add(`ssh:${encodeURIComponent(folder.connectionId)}`)
-  }
-  if (group.connectionId) {
-    hosts.add(`ssh:${encodeURIComponent(group.connectionId)}`)
-  }
-  if (group.executionHostId) {
-    const parsed = parseExecutionHostId(group.executionHostId)
-    if (!parsed) {
-      return remember({ status: 'ambiguous' })
-    }
-    hosts.add(parsed.id)
-  }
-  for (const repo of getFolderLineageCandidateRepos(context, folder)) {
+  const executionHostId = folderOwner.executionHostId
+  for (const repo of getFolderLineageCandidateRepos(context, folder, executionHostId)) {
     const owner = resolveRepoLineageOwner(repo)
     if (owner.status !== 'owned') {
       return remember(owner)
     }
-    hosts.add(owner.hostId)
+    if (owner.hostId !== executionHostId) {
+      return remember({ status: 'contradictory' })
+    }
   }
-  if (hosts.size > 1) {
-    return remember({ status: 'contradictory' })
-  }
-  const hostId = [...hosts][0] ?? LOCAL_EXECUTION_HOST_ID
   return remember(
-    parseExecutionHostId(hostId)?.kind === 'runtime'
+    parseExecutionHostId(executionHostId)?.kind === 'runtime'
       ? { status: 'runtime' }
-      : { status: 'owned', hostId }
+      : { status: 'owned', hostId: executionHostId }
   )
 }
 

@@ -150,6 +150,180 @@ describe('mobile AI Vault resume target guards', () => {
     ).toBe('unknown')
   })
 
+  it.each([false, true])('fails closed for same-id worktree owners (reversed=%s)', (reversed) => {
+    const local = worktree({ worktreeId: 'shared-wt', path: '/Users/ada/shared', hostId: 'local' })
+    const ssh = worktree({
+      worktreeId: 'shared-wt',
+      path: '/home/ada/shared',
+      hostId: 'ssh:builder'
+    })
+    expect(
+      getMobileAiVaultResumeWorktreeTargetStatus({
+        worktreeId: 'shared-wt',
+        worktrees: reversed ? [ssh, local] : [local, ssh],
+        repos: []
+      })
+    ).toBe('unknown')
+  })
+
+  it('keeps an explicit-null folder local under an SSH group', () => {
+    expect(
+      getMobileAiVaultResumeWorktreeTargetStatus({
+        worktreeId: 'folder:shared-folder',
+        worktrees: [
+          {
+            worktreeId: 'folder:shared-folder',
+            repoId: 'folder-workspace:shared-group',
+            workspaceKind: 'folder-workspace'
+          }
+        ],
+        repos: [],
+        folderWorkspaces: [
+          {
+            id: 'shared-folder',
+            projectGroupId: 'shared-group',
+            folderPath: '/Users/ada/shared',
+            connectionId: null
+          }
+        ],
+        projectGroups: [{ id: 'shared-group', connectionId: 'builder' }]
+      })
+    ).toBe('local')
+  })
+
+  it.each([
+    {
+      label: 'folder',
+      folder: { connectionId: null, executionHostId: 'ssh:builder' as const },
+      group: { connectionId: null }
+    },
+    {
+      label: 'group',
+      folder: {},
+      group: { connectionId: null, executionHostId: 'ssh:builder' as const }
+    }
+  ])('rejects contradictory $label ownership metadata', ({ folder, group }) => {
+    expect(
+      getMobileAiVaultResumeWorktreeTargetStatus({
+        worktreeId: 'folder:contradictory-folder',
+        worktrees: [
+          {
+            worktreeId: 'folder:contradictory-folder',
+            repoId: 'folder-workspace:contradictory-group',
+            workspaceKind: 'folder-workspace',
+            hostId: 'local'
+          }
+        ],
+        repos: [],
+        folderWorkspaces: [
+          {
+            id: 'contradictory-folder',
+            projectGroupId: 'contradictory-group',
+            folderPath: '/workspace/contradictory',
+            ...folder
+          }
+        ],
+        projectGroups: [{ id: 'contradictory-group', ...group }]
+      })
+    ).toBe('unknown')
+  })
+
+  it('selects a same-id folder by its worktree host regardless of catalog order', () => {
+    const localFolder = {
+      id: 'shared-folder',
+      projectGroupId: 'shared-group',
+      folderPath: '/Users/ada/shared',
+      connectionId: null
+    }
+    const sshFolder = {
+      ...localFolder,
+      folderPath: '/home/ada/shared',
+      connectionId: 'builder'
+    }
+    const localGroup = { id: 'shared-group', connectionId: null }
+    const sshGroup = { id: 'shared-group', connectionId: 'builder' }
+    const resolve = (hostId: 'local' | 'ssh:builder', reverse: boolean) =>
+      getMobileAiVaultResumeWorktreeTargetStatus({
+        worktreeId: 'folder:shared-folder',
+        worktrees: [
+          {
+            worktreeId: 'folder:shared-folder',
+            repoId: 'folder-workspace:shared-group',
+            workspaceKind: 'folder-workspace',
+            hostId
+          }
+        ],
+        repos: [],
+        folderWorkspaces: reverse ? [sshFolder, localFolder] : [localFolder, sshFolder],
+        projectGroups: reverse ? [sshGroup, localGroup] : [localGroup, sshGroup]
+      })
+
+    expect(resolve('local', true)).toBe('local')
+    expect(resolve('local', false)).toBe('local')
+    expect(resolve('ssh:builder', false)).toBe('ssh')
+  })
+
+  it.each([false, true])(
+    'treats an unstamped same-id project group as local (reversed=%s)',
+    (reversed) => {
+      const localFolder = {
+        id: 'legacy-folder',
+        projectGroupId: 'shared-group',
+        folderPath: '/Users/ada/shared'
+      }
+      const sshFolder = {
+        ...localFolder,
+        folderPath: '/home/ada/shared',
+        connectionId: 'builder'
+      }
+      const localGroup = { id: 'shared-group' }
+      const sshGroup = { id: 'shared-group', connectionId: 'builder' }
+      expect(
+        getMobileAiVaultResumeWorktreeTargetStatus({
+          worktreeId: 'folder:legacy-folder',
+          worktrees: [
+            {
+              worktreeId: 'folder:legacy-folder',
+              repoId: 'folder-workspace:shared-group',
+              workspaceKind: 'folder-workspace',
+              hostId: 'local'
+            }
+          ],
+          repos: [],
+          folderWorkspaces: reversed ? [sshFolder, localFolder] : [localFolder, sshFolder],
+          projectGroups: reversed ? [sshGroup, localGroup] : [localGroup, sshGroup]
+        })
+      ).toBe('local')
+    }
+  )
+
+  it('treats omitted folder ownership under same-id groups as unknown', () => {
+    expect(
+      getMobileAiVaultResumeWorktreeTargetStatus({
+        worktreeId: 'folder:legacy-folder',
+        worktrees: [
+          {
+            worktreeId: 'folder:legacy-folder',
+            repoId: 'folder-workspace:shared-group',
+            workspaceKind: 'folder-workspace'
+          }
+        ],
+        repos: [],
+        folderWorkspaces: [
+          {
+            id: 'legacy-folder',
+            projectGroupId: 'shared-group',
+            folderPath: '/workspace/legacy'
+          }
+        ],
+        projectGroups: [
+          { id: 'shared-group', connectionId: null },
+          { id: 'shared-group', connectionId: 'builder' }
+        ]
+      })
+    ).toBe('unknown')
+  })
+
   it('supports local targets only; SSH hosts cannot see host-local transcripts', () => {
     expect(isSupportedMobileAiVaultResumeTargetStatus('local')).toBe(true)
     expect(isSupportedMobileAiVaultResumeTargetStatus('ssh')).toBe(false)
@@ -303,7 +477,9 @@ describe('mobile AI Vault resume target guards', () => {
           folderPath: '/workspace/folder'
         }
       ],
-      projectGroups
+      projectGroups: projectGroups.map((group) =>
+        group.id === 'group-local' ? { id: group.id } : group
+      )
     })
     expect(target.status).toBe('blocked')
     expect(target.status === 'blocked' ? target.message : '').toContain('runtime-hosted')
@@ -362,7 +538,9 @@ describe('mobile AI Vault resume target guards', () => {
           folderPath: '/Users/ada/mixed'
         }
       ],
-      projectGroups
+      projectGroups: projectGroups.map((group) =>
+        group.id === 'group-local' ? { id: group.id } : group
+      )
     })
     expect(target).toEqual({
       status: 'blocked',

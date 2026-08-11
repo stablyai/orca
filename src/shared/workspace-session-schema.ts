@@ -41,6 +41,9 @@ const terminalTabIdSchema = z
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
+const executionHostIdSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+)
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
 // forcing zod to resolve the whole tree at definition time.
@@ -188,6 +191,7 @@ const persistedOpenFileSchema = z.object({
   worktreeId: z.string(),
   language: z.string(),
   isPreview: z.boolean().optional(),
+  workspaceExecutionHostId: executionHostIdSchema.optional(),
   runtimeEnvironmentId: z.string().nullable().optional(),
   externalSshTargetId: z.string().trim().min(1).optional(),
   dirtyDraftContent: z.string().optional(),
@@ -214,11 +218,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeWorkspaceKey: salvagedOptional('activeWorkspaceKey', workspaceKeySchema.nullable()),
   activeWorkspaceExecutionHostId: salvagedOptional(
     'activeWorkspaceExecutionHostId',
-    z
-      .custom<ExecutionHostId>(
-        (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
-      )
-      .nullable()
+    executionHostIdSchema.nullable()
   ),
   activeWorktreeId: salvagedField('activeWorktreeId', z.string().nullable(), () => null),
   activeTabId: salvagedField('activeTabId', z.string().nullable(), () => null),

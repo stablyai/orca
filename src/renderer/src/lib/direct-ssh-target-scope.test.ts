@@ -127,6 +127,144 @@ describe('resolveDirectSshTargetScope', () => {
     )
   })
 
+  it('keeps an explicit-local folder out of its SSH group target scope', () => {
+    const scope = resolveDirectSshTargetScope({
+      ...baseInput,
+      repos: [
+        {
+          id: 'remote-repo',
+          path: '/srv/project/repo',
+          projectGroupId: 'remote-group',
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'remote-group',
+          parentGroupId: null,
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'local-folder',
+          projectGroupId: 'remote-group',
+          folderPath: '/srv/project',
+          connectionId: null
+        }
+      ]
+    })
+
+    expect(scope.terminalWorkspaceKeys.size).toBe(0)
+    expect(scope.ambiguousOwnerCount).toBe(0)
+    expect(scope.contradictoryOwnerCount).toBe(0)
+  })
+
+  it('isolates grouped repos by an explicit folder SSH owner', () => {
+    const scope = resolveDirectSshTargetScope({
+      ...baseInput,
+      repos: [
+        {
+          id: 'shared-repo',
+          path: '/local/project/repo',
+          projectGroupId: 'shared-group',
+          connectionId: null,
+          executionHostId: 'local'
+        },
+        {
+          id: 'shared-repo',
+          path: '/srv/project/repo',
+          projectGroupId: 'shared-group',
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      projectGroups: [
+        {
+          id: 'shared-group',
+          parentGroupId: null,
+          connectionId: null,
+          executionHostId: 'local'
+        },
+        {
+          id: 'shared-group',
+          parentGroupId: null,
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'remote-folder',
+          projectGroupId: 'shared-group',
+          folderPath: '/srv/project',
+          connectionId: 'target-a'
+        }
+      ]
+    })
+
+    expect(scope.terminalWorkspaceKeys).toEqual(new Set(['folder:remote-folder']))
+    expect(scope.ambiguousOwnerCount).toBe(0)
+    expect(scope.contradictoryOwnerCount).toBe(0)
+  })
+
+  it('lets an omitted folder connection inherit one SSH group owner', () => {
+    const scope = resolveDirectSshTargetScope({
+      ...baseInput,
+      repos: [],
+      projectGroups: [
+        {
+          id: 'remote-group',
+          parentGroupId: null,
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'remote-folder',
+          projectGroupId: 'remote-group',
+          folderPath: '/srv/project'
+        }
+      ]
+    })
+
+    expect(scope.terminalWorkspaceKeys).toEqual(new Set(['folder:remote-folder']))
+  })
+
+  it('fails closed when an omitted folder connection has conflicting group owners', () => {
+    const scope = resolveDirectSshTargetScope({
+      ...baseInput,
+      repos: [],
+      projectGroups: [
+        {
+          id: 'shared-group',
+          parentGroupId: null,
+          connectionId: null,
+          executionHostId: 'local'
+        },
+        {
+          id: 'shared-group',
+          parentGroupId: null,
+          connectionId: 'target-a',
+          executionHostId: 'ssh:target-a'
+        }
+      ],
+      folderWorkspaces: [
+        {
+          id: 'ambiguous-folder',
+          projectGroupId: 'shared-group',
+          folderPath: '/srv/project'
+        }
+      ]
+    })
+
+    expect(scope.terminalWorkspaceKeys.size).toBe(0)
+    expect(scope.ambiguousOwnerCount).toBe(1)
+  })
+
   it('keeps runtime-owned SSH work isolated from the direct target', () => {
     const scope = resolveDirectSshTargetScope({
       ...baseInput,
@@ -259,7 +397,7 @@ describe('resolveDirectSshTargetScope', () => {
     expect(scope.contradictoryOwnerCount).toBe(1)
   })
 
-  it('does not infer an effective folder connection from an SSH host stamp alone', () => {
+  it('treats explicit folder null as local despite a stale SSH group host stamp', () => {
     const scope = resolveDirectSshTargetScope({
       ...baseInput,
       repos: [],
@@ -282,6 +420,6 @@ describe('resolveDirectSshTargetScope', () => {
     })
 
     expect(scope.terminalWorkspaceKeys.size).toBe(0)
-    expect(scope.ambiguousOwnerCount).toBe(1)
+    expect(scope.ambiguousOwnerCount).toBe(0)
   })
 })

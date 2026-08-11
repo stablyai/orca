@@ -15,8 +15,12 @@ export { getBashShellReadyRcfileContent } from '../providers/local-pty-shell-rea
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../runtime/mobile-session-terminal-persistence-retirement'
-import type { GlobalSettings, TuiAgent } from '../../shared/types'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import type { FolderWorkspace, GlobalSettings, TuiAgent } from '../../shared/types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { terminalOutputBacklogCapChars } from '../../shared/terminal-scrollback-policy'
 import type {
@@ -221,8 +225,9 @@ import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getStartupTerminalColorQueryReplyColors } from './terminal-startup-color-query-replies'
 import {
   assertFolderWorkspacePathUsable,
-  getFolderWorkspacePathStatus
+  getFolderWorkspacePathStatusForWorkspace
 } from '../project-groups/folder-workspace-path-status'
+import { findFolderWorkspaceForExecutionHost } from '../../shared/folder-workspace-owner-resolution'
 import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../local-project-runtime-resolution'
 import { isPtyIncarnationId } from '../../shared/pty-incarnation'
@@ -564,6 +569,20 @@ function makePaneSpawnReservationKey(
   paneKey: string | null | undefined
 ): string | null {
   return paneKey ? JSON.stringify([connectionId ?? null, worktreeId ?? null, paneKey]) : null
+}
+
+function resolveFolderWorkspaceSpawnOwner(connectionId: string | null | undefined): {
+  executionHostId: ExecutionHostId
+  connectionId: string | null
+} {
+  const normalizedConnectionId = connectionId ?? null
+  return {
+    executionHostId:
+      normalizedConnectionId === null
+        ? LOCAL_EXECUTION_HOST_ID
+        : toSshExecutionHostId(normalizedConnectionId),
+    connectionId: normalizedConnectionId
+  }
 }
 
 function claimRuntimePaneCreate(ownerKey: string): () => void {
@@ -4152,24 +4171,46 @@ export function registerPtyHandlers(
     mainWindow.webContents.on('did-finish-load', didFinishLoadHandler)
   }
 
-  const assertFolderWorkspacePtyPathUsable = async (
-    worktreeId: string | undefined
-  ): Promise<void> => {
+  const resolveFolderWorkspacePtySpawnOwner = (
+    worktreeId: string | undefined,
+    connectionId: string | null | undefined
+  ): FolderWorkspace | undefined => {
     const workspaceScope = typeof worktreeId === 'string' ? parseWorkspaceKey(worktreeId) : null
-    if (!store || workspaceScope?.type !== 'folder') {
+    if (workspaceScope?.type !== 'folder') {
+      return undefined
+    }
+    if (!store) {
+      throw new Error('folder_workspace_not_found')
+    }
+    const expectedOwner = resolveFolderWorkspaceSpawnOwner(connectionId)
+    const workspace = findFolderWorkspaceForExecutionHost({
+      folderWorkspaceId: workspaceScope.folderWorkspaceId,
+      executionHostId: expectedOwner.executionHostId,
+      folderWorkspaces: store.getFolderWorkspaces(),
+      projectGroups: store.getProjectGroups()
+    })
+    if (!workspace) {
+      throw new Error('folder_workspace_not_found')
+    }
+    return workspace
+  }
+
+  const assertFolderWorkspacePtyPathUsable = async (
+    workspace: FolderWorkspace | undefined
+  ): Promise<void> => {
+    if (!store || !workspace) {
       return
     }
-    const status = await getFolderWorkspacePathStatus(
-      store,
-      { scope: 'folder-workspace', folderWorkspaceId: workspaceScope.folderWorkspaceId },
-      { getSshFilesystemProvider }
-    )
+    const status = await getFolderWorkspacePathStatusForWorkspace(store, workspace, {
+      getSshFilesystemProvider
+    })
     assertFolderWorkspacePathUsable(status)
   }
 
   const resolvePtySpawnStartupCwd = (
     worktreeId: string | undefined,
     cwd: string | undefined,
+    folderWorkspace: FolderWorkspace | undefined,
     missingDirFallback?: TerminalStartupCwdMissingDirFallback
   ): string | undefined =>
     resolveTerminalStartupCwdForWorkspace({
@@ -4177,7 +4218,7 @@ export function registerPtyHandlers(
       requestedCwd: cwd,
       missingDirFallback,
       resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
+        folderWorkspace?.id === folderWorkspaceId ? folderWorkspace.folderPath : undefined
     })
 
   const localStartupCwdDirectoryExists = (path: string): boolean => {
@@ -4445,10 +4486,14 @@ export function registerPtyHandlers(
         }
         return result
       }
+      const folderWorkspace = resolveFolderWorkspacePtySpawnOwner(
+        args.worktreeId,
+        args.connectionId
+      )
       if (!preAdoptedStablePane) {
-        await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+        await assertFolderWorkspacePtyPathUsable(folderWorkspace)
       }
-      const cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
+      const cwd = resolvePtySpawnStartupCwd(args.worktreeId, args.cwd, folderWorkspace)
       const provider = getProvider(args.connectionId)
       const freshSpawnRecovery = preAdoptedStablePane
         ? undefined
@@ -4860,7 +4905,12 @@ export function registerPtyHandlers(
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
-        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
+        if (!args.worktreeSpawnLeaseHeld) {
+          releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(
+            args.worktreeId,
+            resolveFolderWorkspaceSpawnOwner(args.connectionId)
+          )
+        }
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -5515,15 +5565,6 @@ export function registerPtyHandlers(
       try {
         provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
       } catch {
-        if (connectionId) {
-          // Why: an absent SSH provider means there is no live target left to
-          // await, but the relay lease must still be tombstoned.
-          const incarnationId = finishPtyShutdown(ptyId, connectionId, store)
-          runtime?.onPtyExit(ptyId, -1, incarnationId)
-          rememberSyntheticKillExit(ptyId)
-          sendPtyExitToRenderer({ id: ptyId, code: -1 })
-          return true
-        }
         return false
       }
       let providerExitObserved = false
@@ -5791,6 +5832,10 @@ export function registerPtyHandlers(
       if (startupPromise) {
         await startupPromise
       }
+      const folderWorkspace = resolveFolderWorkspacePtySpawnOwner(
+        args.worktreeId,
+        args.connectionId
+      )
       // Why: honor the fallback only for fresh local spawns — reattach needs exact cwd and SSH can't probe the local filesystem.
       const requestedMissingCwdFallback =
         !args.connectionId && !args.sessionId && args.cwdFallback === 'worktree'
@@ -5798,11 +5843,11 @@ export function registerPtyHandlers(
         args.cwd?.startsWith('/') === true && !/^\/[A-Za-z](?:\/|$)/.test(args.cwd)
       const startupWorkspaceCwd =
         requestedMissingCwdFallback && isWslOwnedPosixCwd
-          ? resolvePtySpawnStartupCwd(args.worktreeId, '.')
+          ? resolvePtySpawnStartupCwd(args.worktreeId, '.', folderWorkspace)
           : undefined
       const initiallyResolvedStartupCwd =
         requestedMissingCwdFallback && isWslOwnedPosixCwd
-          ? resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
+          ? resolvePtySpawnStartupCwd(args.worktreeId, args.cwd, folderWorkspace)
           : undefined
       const startupTerminalRuntimeOptions =
         requestedMissingCwdFallback && process.platform === 'win32'
@@ -5849,6 +5894,7 @@ export function registerPtyHandlers(
       const cwd = resolvePtySpawnStartupCwd(
         args.worktreeId,
         args.cwd,
+        folderWorkspace,
         allowMissingCwdFallback
           ? {
               directoryExists: (path) =>
@@ -5915,7 +5961,7 @@ export function registerPtyHandlers(
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
         if (!earlyStablePaneOwner) {
-          await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+          await assertFolderWorkspacePtyPathUsable(folderWorkspace)
         }
         const provider = getProvider(args.connectionId)
         const preAdoptedStablePane =
@@ -5932,7 +5978,7 @@ export function registerPtyHandlers(
               })
             : null
         if (earlyStablePaneOwner && !preAdoptedStablePane) {
-          await assertFolderWorkspacePtyPathUsable(args.worktreeId)
+          await assertFolderWorkspacePtyPathUsable(folderWorkspace)
         }
         const freshSpawnRecovery = preAdoptedStablePane
           ? undefined
@@ -6372,7 +6418,10 @@ export function registerPtyHandlers(
         if (preSpawnHiddenMarkId !== null) {
           transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, true)
         }
-        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(
+          args.worktreeId,
+          resolveFolderWorkspaceSpawnOwner(args.connectionId)
+        )
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)

@@ -1,4 +1,10 @@
 import type { FolderWorkspace, ProjectGroup } from './types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
@@ -12,6 +18,27 @@ export function normalizeFolderWorkspaceName(
   return trimmed.length > 0 ? trimmed : fallback
 }
 
+function getNormalizedFolderWorkspaceHostId(
+  workspace: Partial<FolderWorkspace>,
+  group: ProjectGroup | undefined
+): ExecutionHostId {
+  const workspaceHostId = normalizeExecutionHostId(workspace.executionHostId)
+  if (workspaceHostId) {
+    return workspaceHostId
+  }
+  if (typeof workspace.connectionId === 'string') {
+    return toSshExecutionHostId(workspace.connectionId)
+  }
+  if (workspace.connectionId === null) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  if (groupHostId) {
+    return groupHostId
+  }
+  return group?.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
+}
+
 export function normalizeFolderWorkspaces(
   value: unknown,
   projectGroups: readonly ProjectGroup[]
@@ -19,10 +46,17 @@ export function normalizeFolderWorkspaces(
   if (!Array.isArray(value)) {
     return []
   }
-  const folderGroups = new Map<string, ProjectGroup>()
+  const folderGroupsByIdentity = new Map<string, ProjectGroup>()
+  const folderGroupsById = new Map<string, ProjectGroup[]>()
   for (const group of projectGroups) {
     if (group.parentPath) {
-      folderGroups.set(group.id, group)
+      folderGroupsByIdentity.set(
+        `${getNormalizedFolderWorkspaceHostId({}, group)}\0${group.id}`,
+        group
+      )
+      const matchingGroups = folderGroupsById.get(group.id) ?? []
+      matchingGroups.push(group)
+      folderGroupsById.set(group.id, matchingGroups)
     }
   }
 
@@ -33,16 +67,25 @@ export function normalizeFolderWorkspaces(
       continue
     }
     const raw = candidate as Partial<FolderWorkspace>
+    const candidateGroups =
+      typeof raw.projectGroupId === 'string' ? (folderGroupsById.get(raw.projectGroupId) ?? []) : []
+    const rawHostId = getNormalizedFolderWorkspaceHostId(raw, undefined)
+    const group =
+      typeof raw.projectGroupId === 'string'
+        ? (folderGroupsByIdentity.get(`${rawHostId}\0${raw.projectGroupId}`) ??
+          (candidateGroups.length === 1 ? candidateGroups[0] : undefined))
+        : undefined
+    const executionHostId = getNormalizedFolderWorkspaceHostId(raw, group)
+    const identity = `${executionHostId}\0${raw.id ?? ''}`
     if (
       typeof raw.id !== 'string' ||
       raw.id.trim().length === 0 ||
-      seen.has(raw.id) ||
+      seen.has(identity) ||
       typeof raw.projectGroupId !== 'string' ||
-      !folderGroups.has(raw.projectGroupId)
+      !group
     ) {
       continue
     }
-    const group = folderGroups.get(raw.projectGroupId)
     const folderPath =
       typeof raw.folderPath === 'string' && raw.folderPath.trim().length > 0
         ? raw.folderPath
@@ -53,18 +96,16 @@ export function normalizeFolderWorkspaces(
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
-    seen.add(raw.id)
+    seen.add(identity)
     workspaces.push({
       id: raw.id,
       projectGroupId: raw.projectGroupId,
       name: normalizeFolderWorkspaceName(raw.name),
       folderPath,
-      connectionId:
-        typeof raw.connectionId === 'string'
-          ? raw.connectionId
-          : raw.connectionId === null
-            ? null
-            : (group?.connectionId ?? null),
+      ...(typeof raw.connectionId === 'string' || raw.connectionId === null
+        ? { connectionId: raw.connectionId }
+        : {}),
+      ...(normalizeExecutionHostId(raw.executionHostId) ? { executionHostId } : {}),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
         linkedTask,

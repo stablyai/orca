@@ -6,6 +6,11 @@ import type { Store } from '../persistence'
 import { isRepoRoot, listRepoWorktrees } from '../repo-worktrees'
 import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  resolveDeclaredFolderScopeOwner,
+  type DeclaredFolderScopeOwner
+} from '../../shared/folder-workspace-owner-resolution'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
 
@@ -75,26 +80,32 @@ function getFolderScopeCandidateRepos(
 function isRemoteOnlyFolderScope(
   folderPath: string,
   projectGroupId: string,
-  connectionId: string | null | undefined,
+  owner: DeclaredFolderScopeOwner,
   projectGroups: readonly ProjectGroup[],
   repos: readonly Repo[]
 ): boolean {
-  if (connectionId) {
+  if (owner.status === 'invalid') {
     return true
+  }
+  if (owner.status === 'owned') {
+    return owner.executionHostId !== LOCAL_EXECUTION_HOST_ID
   }
   const candidates = getFolderScopeCandidateRepos(folderPath, projectGroupId, projectGroups, repos)
   return candidates.length > 0 && candidates.every((repo) => Boolean(repo.connectionId))
 }
 
-function getFolderWorkspaceConnectionId(
+function getFolderWorkspaceDeclaredOwner(
   workspace: FolderWorkspace,
   projectGroups: readonly ProjectGroup[]
-): string | null {
-  return (
-    workspace.connectionId ??
-    projectGroups.find((group) => group.id === workspace.projectGroupId)?.connectionId ??
-    null
-  )
+): DeclaredFolderScopeOwner {
+  const workspaceOwner = resolveDeclaredFolderScopeOwner(workspace)
+  if (workspaceOwner.status !== 'unknown') {
+    return workspaceOwner
+  }
+  const groups = projectGroups.filter((group) => group.id === workspace.projectGroupId)
+  return groups.length > 1
+    ? { status: 'invalid' }
+    : resolveDeclaredFolderScopeOwner(groups[0] ?? workspace)
 }
 
 function getLocalFolderScopeRoots(store: Store): string[] {
@@ -106,7 +117,13 @@ function getLocalFolderScopeRoots(store: Store): string[] {
   for (const group of projectGroups) {
     if (
       group.parentPath &&
-      !isRemoteOnlyFolderScope(group.parentPath, group.id, group.connectionId, projectGroups, repos)
+      !isRemoteOnlyFolderScope(
+        group.parentPath,
+        group.id,
+        resolveDeclaredFolderScopeOwner(group),
+        projectGroups,
+        repos
+      )
     ) {
       roots.push(resolve(group.parentPath))
     }
@@ -116,7 +133,7 @@ function getLocalFolderScopeRoots(store: Store): string[] {
       !isRemoteOnlyFolderScope(
         workspace.folderPath,
         workspace.projectGroupId,
-        getFolderWorkspaceConnectionId(workspace, projectGroups),
+        getFolderWorkspaceDeclaredOwner(workspace, projectGroups),
         projectGroups,
         repos
       )

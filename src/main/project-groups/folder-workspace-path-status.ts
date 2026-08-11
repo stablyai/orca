@@ -6,7 +6,21 @@ import type {
 } from '../../shared/folder-workspace-path-status'
 import { getProjectGroupSubtreeIds } from '../../shared/project-groups'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../shared/types'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import type { IFilesystemProvider } from '../providers/types'
+import {
+  resolveDeclaredFolderScopeOwner,
+  resolveFolderWorkspaceDirectAuthority,
+  resolveProjectGroupDirectAuthority
+} from '../../shared/folder-workspace-owner-resolution'
+import {
+  findFolderWorkspacePathStatusScope,
+  findProjectGroupPathStatusScope
+} from './folder-workspace-path-status-scope'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -23,6 +37,25 @@ type FolderWorkspacePathStatusDeps = {
   getSshFilesystemProvider: (connectionId: string) => IFilesystemProvider | undefined
 }
 
+type ResolvedFolderWorkspaceStatusPath = {
+  folderPath: string
+  projectGroupId: string | null
+  connectionId?: string | null
+  connectionIdIsAuthoritative?: boolean
+  authorityIsInvalid?: boolean
+}
+
+function getKnownFolderPathExecutionHostId(args: {
+  connectionId?: string | null
+  connectionIdIsAuthoritative?: boolean
+}) {
+  return args.connectionId
+    ? toSshExecutionHostId(args.connectionId)
+    : args.connectionIdIsAuthoritative
+      ? LOCAL_EXECUTION_HOST_ID
+      : null
+}
+
 function getFolderScopeCandidateRepos(args: {
   folderPath: string
   projectGroupId?: string | null
@@ -30,15 +63,25 @@ function getFolderScopeCandidateRepos(args: {
   projectGroups: readonly ProjectGroup[]
   repos: readonly Repo[]
 }): Repo[] {
+  const executionHostId = getKnownFolderPathExecutionHostId(args)
+  const projectGroups = executionHostId
+    ? args.projectGroups.filter((group) => {
+        const owner = resolveDeclaredFolderScopeOwner(group)
+        return owner.status === 'owned' && owner.executionHostId === executionHostId
+      })
+    : args.projectGroups
+  const repos = executionHostId
+    ? args.repos.filter((repo) => getRepoExecutionHostId(repo) === executionHostId)
+    : args.repos
   const groupIds = args.projectGroupId
-    ? getProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
+    ? getProjectGroupSubtreeIds(projectGroups, args.projectGroupId)
     : null
   const groupRepos = groupIds
-    ? args.repos.filter(
+    ? repos.filter(
         (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
       )
     : []
-  const pathRepos = args.repos.filter(
+  const pathRepos = repos.filter(
     (repo) =>
       !(groupIds && typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
       isPathInsideOrEqual(args.folderPath, repo.path)
@@ -63,9 +106,17 @@ export function inferFolderWorkspacePathConnection(args: {
   folderPath: string
   projectGroupId?: string | null
   connectionId?: string | null
+  connectionIdIsAuthoritative?: boolean
+  authorityIsInvalid?: boolean
   projectGroups: readonly ProjectGroup[]
   repos: readonly Repo[]
 }): FolderWorkspacePathConnectionResolution {
+  if (args.authorityIsInvalid) {
+    return { kind: 'ambiguous' }
+  }
+  if (args.connectionIdIsAuthoritative && !args.connectionId) {
+    return { kind: 'local' }
+  }
   const candidateRepos = getFolderScopeCandidateRepos(args)
   let hasLocalRepo = false
   const connectionIds = new Set<string>()
@@ -140,6 +191,8 @@ export async function getFolderWorkspacePathStatusForPath(
     folderPath: string
     projectGroupId?: string | null
     connectionId?: string | null
+    connectionIdIsAuthoritative?: boolean
+    authorityIsInvalid?: boolean
     projectGroups: readonly ProjectGroup[]
     repos: readonly Repo[]
   },
@@ -152,19 +205,24 @@ export async function getFolderWorkspacePathStatusForPath(
 export function resolveFolderWorkspaceStatusPath(args: {
   store: FolderWorkspacePathStatusStore
   request: FolderWorkspacePathStatusRequest
-}): { folderPath: string; projectGroupId: string | null; connectionId?: string | null } {
+}): ResolvedFolderWorkspaceStatusPath {
   const { request } = args
   if (request.scope === 'project-group') {
-    const group = args.store
-      .getProjectGroups?.()
-      .find((entry) => entry.id === request.projectGroupId)
+    const group = findProjectGroupPathStatusScope({
+      groups: args.store.getProjectGroups?.() ?? [],
+      projectGroupId: request.projectGroupId,
+      executionHostId: request.executionHostId
+    })
     if (!group?.parentPath) {
       throw new Error('folder_workspace_path_scope_not_found')
     }
+    const authority = resolveProjectGroupDirectAuthority(group)
     return {
       folderPath: group.parentPath,
       projectGroupId: group.id,
-      connectionId: group.connectionId ?? null
+      connectionId: authority.status === 'direct' ? authority.connectionId : undefined,
+      connectionIdIsAuthoritative: authority.status === 'direct',
+      authorityIsInvalid: authority.status === 'invalid'
     }
   }
 
@@ -172,24 +230,55 @@ export function resolveFolderWorkspaceStatusPath(args: {
     return {
       folderPath: request.path,
       projectGroupId: null,
-      connectionId: request.connectionId ?? null
+      connectionId: request.connectionId ?? null,
+      connectionIdIsAuthoritative: 'connectionId' in request
     }
   }
 
-  const workspace = args.store
-    .getFolderWorkspaces?.()
-    .find((entry) => entry.id === request.folderWorkspaceId)
+  const projectGroups = args.store.getProjectGroups?.() ?? []
+  const workspace = findFolderWorkspacePathStatusScope({
+    workspaces: args.store.getFolderWorkspaces?.() ?? [],
+    groups: projectGroups,
+    folderWorkspaceId: request.folderWorkspaceId,
+    executionHostId: request.executionHostId
+  })
   if (!workspace) {
     throw new Error('folder_workspace_path_scope_not_found')
   }
-  const group = args.store
-    .getProjectGroups?.()
-    .find((entry) => entry.id === workspace.projectGroupId)
+  return resolveFolderWorkspaceStatusPathForWorkspace(args.store, workspace)
+}
+
+function resolveFolderWorkspaceStatusPathForWorkspace(
+  store: FolderWorkspacePathStatusStore,
+  workspace: FolderWorkspace
+): ResolvedFolderWorkspaceStatusPath {
+  const groups = (store.getProjectGroups?.() ?? []).filter(
+    (entry) => entry.id === workspace.projectGroupId
+  )
+  const authority = resolveFolderWorkspaceDirectAuthority(workspace, groups)
   return {
     folderPath: workspace.folderPath,
     projectGroupId: workspace.projectGroupId,
-    connectionId: workspace.connectionId ?? group?.connectionId ?? null
+    connectionId: authority.status === 'direct' ? authority.connectionId : undefined,
+    connectionIdIsAuthoritative: authority.status === 'direct',
+    authorityIsInvalid: authority.status === 'invalid'
   }
+}
+
+export async function getFolderWorkspacePathStatusForWorkspace(
+  store: FolderWorkspacePathStatusStore,
+  workspace: FolderWorkspace,
+  deps: FolderWorkspacePathStatusDeps
+): Promise<FolderWorkspacePathStatus> {
+  const scope = resolveFolderWorkspaceStatusPathForWorkspace(store, workspace)
+  return getFolderWorkspacePathStatusForPath(
+    {
+      ...scope,
+      projectGroups: store.getProjectGroups?.() ?? [],
+      repos: store.getRepos()
+    },
+    deps
+  )
 }
 
 export async function getFolderWorkspacePathStatus(
@@ -203,6 +292,8 @@ export async function getFolderWorkspacePathStatus(
       folderPath: scope.folderPath,
       projectGroupId: scope.projectGroupId,
       connectionId: scope.connectionId,
+      connectionIdIsAuthoritative: scope.connectionIdIsAuthoritative,
+      authorityIsInvalid: scope.authorityIsInvalid,
       projectGroups: store.getProjectGroups?.() ?? [],
       repos: store.getRepos()
     },

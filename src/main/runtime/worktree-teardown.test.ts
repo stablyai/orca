@@ -832,6 +832,33 @@ describe('killAllProcessesForWorktree', () => {
     }
   })
 
+  it('keeps provider RPC deadlines live for a 49-workspace first-wave budget', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-10T00:00:00Z'))
+    try {
+      const startedAt = Date.now()
+      const firstWaveBudgetMs = Math.floor(12_000 / Math.ceil(49 / 4) / 2)
+      const localProvider = createProviderStub(async () => [
+        { id: 'w1@@owned', cwd: '/tmp/w1', title: 'shell' }
+      ])
+      listRegisteredPtysMock.mockReturnValue([])
+
+      await expect(
+        killAllProcessesForWorktree('w1', { localProvider, timeoutMs: firstWaveBudgetMs })
+      ).resolves.toMatchObject({ providerStopped: 1 })
+
+      const listOptions = (localProvider.listProcesses as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[0] as { deadlineMs?: number } | undefined
+      const shutdownOptions = (localProvider.shutdown as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0]?.[1] as { deadlineMs?: number } | undefined
+      expect(listOptions?.deadlineMs).toBeGreaterThan(startedAt)
+      expect(shutdownOptions?.deadlineMs).toBeGreaterThan(startedAt)
+      expect(shutdownOptions?.deadlineMs).toBeLessThanOrEqual(startedAt + firstWaveBudgetMs)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not issue shutdown after a timed-out provider list settles late', async () => {
     vi.useFakeTimers()
     try {

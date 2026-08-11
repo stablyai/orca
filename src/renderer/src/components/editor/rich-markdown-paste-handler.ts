@@ -10,6 +10,7 @@ import { getRichMarkdownVisibleText } from './rich-markdown-visible-text-map'
 export type RichMarkdownPasteHandlerArgs = {
   editor: Editor | null
   event: ClipboardEvent
+  fileId: string
   filePath: string
   worktreeId: string
   runtimeEnvironmentId?: string | null
@@ -20,6 +21,7 @@ export type RichMarkdownPasteHandlerArgs = {
 export function handleRichMarkdownPaste({
   editor,
   event,
+  fileId,
   filePath,
   worktreeId,
   runtimeEnvironmentId,
@@ -30,6 +32,7 @@ export function handleRichMarkdownPaste({
     handleRichMarkdownImagePaste({
       editor,
       event,
+      fileId,
       filePath,
       worktreeId,
       runtimeEnvironmentId

@@ -551,12 +551,28 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [worktree.path])
 
   const handleToggleRead = useCallback(() => {
-    updateWorktreeMeta(worktree.id, { isUnread: !worktree.isUnread })
-  }, [worktree.id, worktree.isUnread, updateWorktreeMeta])
+    updateWorktreeMeta(
+      worktree.id,
+      { isUnread: !worktree.isUnread },
+      worktree.hostId ? { executionHostId: worktree.hostId } : undefined
+    )
+  }, [worktree.hostId, worktree.id, worktree.isUnread, updateWorktreeMeta])
 
   const handleTogglePin = useCallback(() => {
+    if (folderWorkspaceId && worktree.hostId) {
+      setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned, {
+        executionHostId: worktree.hostId
+      })
+      return
+    }
     setWorktreesPinnedAndReveal([worktree.id], !worktree.isPinned)
-  }, [worktree.id, worktree.isPinned, setWorktreesPinnedAndReveal])
+  }, [
+    folderWorkspaceId,
+    setWorktreesPinnedAndReveal,
+    worktree.hostId,
+    worktree.id,
+    worktree.isPinned
+  ])
 
   const handleCreateGroupFromRepo = useCallback(() => {
     if (!repo) {
@@ -616,8 +632,18 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       }
       // Why: outside the workspace board (e.g. the sidebar list) status changes
       // are local-only; Linear sync is scoped to board moves like drag-and-drop.
+      const worktreeById = new Map(activeContextWorktrees.map((item) => [item.id, item]))
+      // Why: raw-ID selection can retain a sibling, so the clicked row overrides its own target.
+      worktreeById.set(worktree.id, worktree)
       void Promise.all(
-        plan.localWriteIds.map((id) => updateWorktreeMeta(id, { workspaceStatus: status }))
+        plan.localWriteIds.map((id) => {
+          const executionHostId = worktreeById.get(id)?.hostId
+          return updateWorktreeMeta(
+            id,
+            { workspaceStatus: status },
+            executionHostId ? { executionHostId } : undefined
+          )
+        })
       )
     },
     [
@@ -625,6 +651,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       onAssignWorkspaceStatus,
       setMenuOpenState,
       updateWorktreeMeta,
+      worktree,
       workspaceStatuses
     ]
   )
@@ -635,6 +662,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this row instead of the ambiguous lookup.
       repoId: worktree.repoId,
+      executionHostId: worktree.hostId,
       currentDisplayName: worktree.displayName,
       currentIssue: worktree.linkedIssue,
       currentPR: worktree.linkedPR,
@@ -644,6 +672,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
   }, [
     worktree.id,
     worktree.repoId,
+    worktree.hostId,
     worktree.displayName,
     worktree.linkedIssue,
     worktree.linkedPR,
@@ -681,7 +710,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
           worktrees: batchDeleteWorktrees.map(({ id, instanceId }) => ({ id, instanceId }))
         }
       : folderWorkspaceId
-        ? { kind: 'folder', folderWorkspaceId }
+        ? { kind: 'folder', folderWorkspaceId, executionHostId: worktree.hostId }
         : {
             kind: 'worktree',
             worktree: { id: worktree.id, instanceId: worktree.instanceId }
@@ -693,6 +722,7 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     folderWorkspaceId,
     isMultiContext,
     setMenuOpenState,
+    worktree.hostId,
     worktree.id,
     worktree.instanceId
   ])

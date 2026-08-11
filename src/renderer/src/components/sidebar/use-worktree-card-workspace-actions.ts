@@ -54,14 +54,18 @@ export function useWorktreeCardWorkspaceActions({
       event.stopPropagation()
       if (showDeleteQuickAction) {
         if (folderWorkspaceId) {
-          void deleteFolderWorkspace(folderWorkspaceId).then((deleted) => {
-            if (
-              deleted &&
-              useAppStore.getState().activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
-            ) {
-              setActiveWorktree(null)
+          void deleteFolderWorkspace(folderWorkspaceId, { hostId: worktree.hostId }).then(
+            (deleted) => {
+              const state = useAppStore.getState()
+              if (
+                deleted &&
+                state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId) &&
+                state.activeWorkspaceExecutionHostId === (worktree.hostId ?? null)
+              ) {
+                setActiveWorktree(null)
+              }
             }
-          })
+          )
           return
         }
         runWorktreeDelete(worktree.id)
@@ -72,6 +76,7 @@ export function useWorktreeCardWorkspaceActions({
       folderWorkspaceId,
       setActiveWorktree,
       showDeleteQuickAction,
+      worktree.hostId,
       worktree.id
     ]
   )

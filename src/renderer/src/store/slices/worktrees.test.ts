@@ -7767,7 +7767,8 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
       folderWorkspace.id,
-      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      expect.objectContaining({ lastActivityAt: expect.any(Number) }),
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
     )
   })
 
@@ -7786,7 +7787,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
       folderWorkspace.id,
-      expect.objectContaining({ lastActivityAt: expect.any(Number) })
+      expect.objectContaining({ lastActivityAt: expect.any(Number) }),
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
     )
     expect(store.getState().sortEpoch).toBe(sortEpochBefore)
   })
@@ -7803,9 +7805,11 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().folderWorkspaces[0]?.isUnread).toBe(false)
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledTimes(1)
-    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(folderWorkspace.id, {
-      isUnread: false
-    })
+    expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspace.id,
+      { isUnread: false },
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
+    )
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
@@ -7823,7 +7827,8 @@ describe('worktree remote runtime mutations', () => {
 
     expect(store.getState().updateFolderWorkspace).toHaveBeenCalledWith(
       folderWorkspace.id,
-      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) })
+      expect.objectContaining({ isUnread: true, lastActivityAt: expect.any(Number) }),
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
     )
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
@@ -7841,11 +7846,15 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
       1,
       folderWorkspace.id,
-      expect.objectContaining({ isUnread: true })
+      expect.objectContaining({ isUnread: true }),
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
     )
-    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(2, folderWorkspace.id, {
-      isUnread: false
-    })
+    expect(store.getState().updateFolderWorkspace).toHaveBeenNthCalledWith(
+      2,
+      folderWorkspace.id,
+      { isUnread: false },
+      { executionHostId: LOCAL_EXECUTION_HOST_ID }
+    )
   })
 
   // A rejected folder update reconciles the optimistic write away, so reporting
@@ -7877,6 +7886,49 @@ describe('worktree remote runtime mutations', () => {
       .updateWorktreeMeta(folderWorkspaceKey(folderWorkspace.id), { comment: 'note' })
 
     expect(result).toEqual({ ok: false, error: 'Runtime is offline' })
+  })
+
+  it('routes folder metadata to the caller owner instead of the active same-ID owner', async () => {
+    const store = createTestStore()
+    const folderWorkspaceId = 'folder-shared'
+    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+    const local = makeFolderWorkspace({
+      id: folderWorkspaceId,
+      name: 'Local workspace',
+      connectionId: null,
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const ssh = makeFolderWorkspace({
+      id: folderWorkspaceId,
+      name: 'SSH workspace',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
+    store.setState({
+      folderWorkspaces: [local, ssh],
+      activeWorktreeId: workspaceKey,
+      activeWorkspaceKey: workspaceKey,
+      activeWorkspaceExecutionHostId: LOCAL_EXECUTION_HOST_ID,
+      updateFolderWorkspace
+    } as Partial<AppState>)
+
+    const result = await store
+      .getState()
+      .updateWorktreeMeta(
+        workspaceKey,
+        { comment: 'remote note' },
+        { executionHostId: 'ssh:builder' }
+      )
+
+    expect(result).toEqual({ ok: true })
+    expect(updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspaceId,
+      expect.objectContaining({ comment: 'remote note', lastActivityAt: expect.any(Number) }),
+      { executionHostId: 'ssh:builder' }
+    )
   })
 
   it('persists activity for hidden detected worktrees', async () => {
@@ -9645,6 +9697,45 @@ describe('setWorktreesPinnedAndReveal', () => {
     expect(reveal).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo.repo1[0].isPinned).toBe(true)
     expect(store.getState().worktreesByRepo.repo1[1].isPinned).toBe(true)
+  })
+
+  it('routes a focused folder pin to the explicit same-ID owner before revealing it', () => {
+    const store = createTestStore()
+    const folderWorkspaceId = 'folder-shared-pin'
+    const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
+    const local = makeFolderWorkspace({
+      id: folderWorkspaceId,
+      connectionId: null,
+      isPinned: true,
+      runtimeSourceExecutionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const ssh = makeFolderWorkspace({
+      id: folderWorkspaceId,
+      connectionId: 'builder',
+      isPinned: false,
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const updateFolderWorkspace = vi.fn().mockResolvedValue(true)
+    const reveal = vi.fn()
+    store.setState({
+      folderWorkspaces: [local, ssh],
+      activeWorktreeId: workspaceKey,
+      activeWorkspaceKey: workspaceKey,
+      activeWorkspaceExecutionHostId: 'ssh:builder',
+      revealWorktreeInSidebar: reveal,
+      updateFolderWorkspace
+    } as Partial<AppState>)
+
+    store
+      .getState()
+      .setWorktreesPinnedAndReveal([workspaceKey], true, { executionHostId: 'ssh:builder' })
+
+    expect(updateFolderWorkspace).toHaveBeenCalledWith(
+      folderWorkspaceId,
+      expect.objectContaining({ isPinned: true }),
+      { executionHostId: 'ssh:builder' }
+    )
+    expect(reveal).toHaveBeenCalledWith(workspaceKey, { behavior: 'smooth', highlight: true })
   })
 })
 

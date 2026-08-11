@@ -3243,6 +3243,29 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
+  it('applies a deferred exit released from an unrelated shutdown incarnation', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')
+    const transport = createMockTransport('pty-pane-2')
+    transportFactoryQueue.push(transport)
+    const manager = createManager(1)
+    let pending = true
+    const deps = createDeps({
+      isPtyShutdownPending: vi.fn(() => pending),
+      consumeSuppressedPtyExit: vi.fn(() => false)
+    })
+
+    connectPanePty(createPane(2) as never, manager as never, deps as never)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    onPtyExit?.('pty-pane-2')
+
+    pending = false
+    settleDeferredPtyShutdownExits(['pty-pane-2'], 'unrelated')
+
+    expect(deps.clearTabPtyId).toHaveBeenCalledWith('tab-1', 'pty-pane-2')
+    expect(deps.clearRuntimePaneTitle).toHaveBeenCalledWith('tab-1', 2)
+  })
+
   it('preserves wake identifiers when exit arrives after a committed shutdown', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { markCommittedPtyShutdowns } = await import('./pty-shutdown-exit-deferral')

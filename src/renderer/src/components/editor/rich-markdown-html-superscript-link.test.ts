@@ -317,6 +317,34 @@ describe('rich Markdown HTML superscript links', () => {
     )
   })
 
+  it.each([false, true])(
+    'uses the cited file owner for same-id folder roots (reversed=%s)',
+    (reversed) => {
+      const local = {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        connectionId: null,
+        executionHostId: 'local' as const,
+        folderPath: '/workspace/local'
+      }
+      const ssh = {
+        ...local,
+        connectionId: 'builder',
+        executionHostId: 'ssh:builder' as const,
+        folderPath: '/workspace/remote'
+      }
+      const state = {
+        folderWorkspaces: reversed ? [ssh, local] : [local, ssh],
+        worktreesByRepo: {}
+      } as Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
+
+      expect(
+        resolveRichMarkdownWorktreeRoot(state, folderWorkspaceKey('folder-1'), 'ssh:builder')
+      ).toBe('/workspace/remote')
+      expect(resolveRichMarkdownWorktreeRoot(state, folderWorkspaceKey('folder-1'))).toBeNull()
+    }
+  )
+
   it('self-validates clipboard HTML and rejects a forged semantic mismatch', () => {
     const source = '<sup><a title="Source" href="./guide.md">[12]</a></sup>'
     const host = document.createElement('div')

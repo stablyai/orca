@@ -18,6 +18,7 @@ import type { GlobalSettings, TerminalTab } from '../../../shared/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import { getRendererAppPlatform } from './renderer-app-platform'
 import {
   getCachedWindowsTerminalCapabilities,
@@ -36,7 +37,8 @@ type CodexPaneLaneState = Pick<
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
->
+> &
+  Partial<Pick<AppState, 'activeWorkspaceExecutionHostId'>>
 
 /**
  * Lane keys for panes whose Codex credentials come from another machine.
@@ -50,6 +52,7 @@ type CodexPaneLaneState = Pick<
 const RUNTIME_ENVIRONMENT_LANE_PREFIX = 'env:'
 const SSH_CONNECTION_LANE_KEY = 'ssh-connection'
 const UNATTRIBUTED_REMOTE_LANE_KEY = 'remote-runtime'
+const UNATTRIBUTED_WORKSPACE_LANE_KEY = 'unattributed-workspace'
 const HOST_LANE_KEY = 'host'
 const WSL_LANE_PREFIX = 'wsl:'
 
@@ -188,6 +191,13 @@ export function resolveCodexPaneSelectionLaneKey(args: {
   if (parseAppSshPtyId(args.ptyId) !== null) {
     return SSH_CONNECTION_LANE_KEY
   }
+  const workspaceScope = parseWorkspaceKey(args.tab.worktreeId)
+  if (
+    workspaceScope?.type === 'folder' &&
+    !findFolderWorkspaceOwner(args.state, workspaceScope.folderWorkspaceId)
+  ) {
+    return UNATTRIBUTED_WORKSPACE_LANE_KEY
+  }
   return getCodexSelectionLaneKey(resolveLocalPaneSelectionTarget(args))
 }
 
@@ -291,10 +301,10 @@ function getWorkspacePath(
 ): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
-    return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
+    const owner = findFolderWorkspaceOwner(state, parsed.folderWorkspaceId) as
+      | AppState['folderWorkspaces'][number]
+      | null
+    return owner?.folderPath ?? null
   }
   return (
     Object.values(state.worktreesByRepo ?? {})

@@ -29,6 +29,7 @@ import {
   type ProjectHostSetupProjection
 } from '../../../../shared/project-host-setup-projection'
 import {
+  FOLDER_WORKSPACE_OWNER_QUALIFIED_DELETE_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
@@ -67,8 +68,13 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
   hasRuntimeRpcErrorCode,
+  runtimeEnvironmentSupportsCapability,
   settingsForRuntimeOwner
 } from '../../runtime/runtime-rpc-client'
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision
+} from '../../runtime/runtime-environment-revision'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
@@ -91,14 +97,29 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/worksp
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 import { getEnvironmentSshStateGeneration } from './runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from './runtime-status'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import {
-  findFolderWorkspaceOwner,
-  getRuntimeEnvironmentIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
+  resolveFolderWorkspacePathStatusSourceHostId,
+  resolveProjectGroupPathStatusSourceHostId,
+  resolveRepoPathStatusSourceHostId
+} from '@/lib/folder-workspace-path-status-request'
+import { resolveFolderWorkspaceExecutionHostId } from '@/lib/folder-workspace-execution-host'
 import {
   FolderWorkspaceUpdateCoordinator,
   type FolderWorkspaceUpdateTicket
 } from './folder-workspace-update-coordinator'
+import {
+  snapshotFolderWorkspaceRendererTeardown,
+  snapshotFolderWorkspaceRuntimeTerminalHandles,
+  teardownDeletedFolderWorkspaceRendererState,
+  type FolderWorkspaceRendererOwnerRemoval,
+  type FolderWorkspaceRendererTeardownSnapshot
+} from './folder-workspace-renderer-teardown'
+import { getRemovedFolderWorkspaceKeys } from './folder-workspace-catalog-removal'
+import {
+  isLegacyRuntimeFolderWorkspaceDeletionBlocked,
+  type FolderWorkspaceRuntimeTerminalRemoval
+} from './folder-workspace-legacy-terminal-close'
 
 const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
@@ -106,6 +127,7 @@ const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?
 const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
 type HostCatalogKind = 'project-groups' | 'folder-workspaces'
 type HostCatalogFence = {
+  expectedEnvironmentPairingRevision: number | undefined
   key: string
   generation: number
   target: ReturnType<typeof getActiveRuntimeTarget>
@@ -201,7 +223,13 @@ export type FolderWorkspacePathStatusCacheEntry = {
 }
 
 export type DeleteProjectGroupWithContainedProjectsOptions = {
+  hostId?: ExecutionHostId
+  sourceExecutionHostId?: ExecutionHostId
   removeContainedProjects: boolean
+} & RuntimeOwnerMutationFence
+
+type RuntimeOwnerMutationFence = {
+  expectedEnvironmentPairingRevision?: number
 }
 
 type AllHostCatalogFetchOptions = {
@@ -308,6 +336,17 @@ function getRuntimeTargetHostId(
   return target.kind === 'environment'
     ? toRuntimeExecutionHostId(target.environmentId)
     : LOCAL_EXECUTION_HOST_ID
+}
+
+function getRuntimeTargetForExecutionHost(
+  state: Pick<AppState, 'settings'>,
+  hostId?: ExecutionHostId
+): ReturnType<typeof getActiveRuntimeTarget> {
+  const parsedHost = parseExecutionHostId(hostId)
+  if (parsedHost?.kind === 'runtime') {
+    return { kind: 'environment', environmentId: parsedHost.environmentId }
+  }
+  return hostId ? { kind: 'local' } : getActiveRuntimeTarget(state.settings)
 }
 
 function getProjectSetupRuntimeTarget(
@@ -434,14 +473,22 @@ function repoWithFetchedOwner(repo: Repo, target: ReturnType<typeof getActiveRun
 function projectGroupWithFetchedOwner(
   projectGroup: ProjectGroup,
   target: ReturnType<typeof getActiveRuntimeTarget>
-): ProjectGroup {
+): ProjectGroup | null {
   if (target.kind === 'environment') {
-    return { ...projectGroup, executionHostId: getRuntimeTargetHostId(target) }
+    const targetHostId = getRuntimeTargetHostId(target)
+    const source = resolveProjectedRuntimeSourceExecutionHostId(projectGroup, targetHostId)
+    if (source.kind === 'invalid') {
+      return null
+    }
+    return {
+      ...projectGroup,
+      executionHostId: targetHostId,
+      runtimeSourceExecutionHostId:
+        source.kind === 'resolved' ? source.hostId : LOCAL_EXECUTION_HOST_ID
+    }
   }
-  if (projectGroup.connectionId) {
-    return { ...projectGroup, executionHostId: toSshExecutionHostId(projectGroup.connectionId) }
-  }
-  return { ...projectGroup, executionHostId: LOCAL_EXECUTION_HOST_ID }
+  const executionHostId = getProjectGroupHostId(projectGroup)
+  return executionHostId ? { ...projectGroup, executionHostId } : null
 }
 
 function setupWithFetchedOwner(
@@ -953,22 +1000,51 @@ function mergeProjectCompatibilityForHostRepoChange({
   })
 }
 
-function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>) {
-  if (group.executionHostId) {
-    return group.executionHostId
-  }
-  return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
+function getProjectGroupHostId(
+  group: Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
+): ExecutionHostId | null {
+  return resolveFolderWorkspaceExecutionHostId({
+    folderWorkspace: {},
+    projectGroup: group,
+    fallbackHostId: LOCAL_EXECUTION_HOST_ID
+  })
 }
 
 function getProjectGroupHostIdentity(group: ProjectGroup): string {
   return JSON.stringify([getProjectGroupHostId(group), group.id])
 }
 
-function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
+function catalogOwnsHost(catalogHostId: string, rowHostId: string | null): boolean {
+  if (!rowHostId) {
+    return false
+  }
   if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
     return catalogHostId === rowHostId
   }
   return parseExecutionHostId(rowHostId)?.kind !== 'runtime'
+}
+
+function deletionTargetOwnsHost(
+  targetHostId: ExecutionHostId,
+  rowHostId: ExecutionHostId | null,
+  exactHost: boolean
+): boolean {
+  return exactHost ? targetHostId === rowHostId : catalogOwnsHost(targetHostId, rowHostId)
+}
+
+function getProjectGroupSubtreeIdsForHost(
+  projectGroups: readonly ProjectGroup[],
+  groupId: string,
+  hostId: ExecutionHostId,
+  exactHost = false,
+  sourceExecutionHostId?: ExecutionHostId
+): Set<string> {
+  return getProjectGroupSubtreeIds(
+    projectGroups.filter((group) =>
+      projectGroupMatchesRequestedOwner(group, hostId, exactHost, sourceExecutionHostId)
+    ),
+    groupId
+  )
 }
 
 function mergeFetchedProjectGroupsForHost(
@@ -988,24 +1064,177 @@ function mergeFetchedProjectGroupsForHost(
 }
 
 function getFolderWorkspaceHostId(
-  workspace: FolderWorkspace,
+  workspace: Pick<FolderWorkspace, 'connectionId' | 'executionHostId' | 'projectGroupId'>,
   projectGroups: readonly ProjectGroup[]
-): ExecutionHostId {
-  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
-  if (explicitHostId) {
-    return explicitHostId
+): ExecutionHostId | null {
+  if (workspace.executionHostId !== undefined || workspace.connectionId !== undefined) {
+    return resolveFolderWorkspaceExecutionHostId({ folderWorkspace: workspace })
   }
-  if (workspace.connectionId) {
-    return toSshExecutionHostId(workspace.connectionId)
+  const matchingGroups = projectGroups.filter((group) => group.id === workspace.projectGroupId)
+  if (matchingGroups.some((group) => !getProjectGroupHostId(group))) {
+    return null
   }
-  const matchingHosts = new Set(
-    projectGroups
-      .filter((group) => group.id === workspace.projectGroupId)
-      .map(getProjectGroupHostId)
+  const matchingHosts = new Set(matchingGroups.map(getProjectGroupHostId))
+  if (matchingHosts.size > 1) {
+    return LOCAL_EXECUTION_HOST_ID
+  }
+  return resolveFolderWorkspaceExecutionHostId({
+    folderWorkspace: workspace,
+    projectGroup: matchingGroups[0],
+    fallbackHostId: LOCAL_EXECUTION_HOST_ID
+  })
+}
+
+type ProjectedRuntimeSourceResolution =
+  | { kind: 'resolved'; hostId: ExecutionHostId }
+  | { kind: 'none' | 'invalid' }
+
+function resolveProjectedRuntimeSourceExecutionHostId(
+  scope: Pick<
+    ProjectGroup | FolderWorkspace,
+    'connectionId' | 'executionHostId' | 'runtimeSourceExecutionHostId'
+  >,
+  transportHostId: ExecutionHostId
+): ProjectedRuntimeSourceResolution {
+  const sourceValue = scope.runtimeSourceExecutionHostId
+  const retainedSource = parseExecutionHostId(sourceValue)?.id
+  if (sourceValue !== undefined && !retainedSource) {
+    return { kind: 'invalid' }
+  }
+  const declaredHosts = new Set<ExecutionHostId>()
+  if (retainedSource) {
+    declaredHosts.add(retainedSource)
+  }
+  if (scope.connectionId !== undefined) {
+    const connectionId = scope.connectionId?.trim()
+    if (scope.connectionId !== null && !connectionId) {
+      return { kind: 'invalid' }
+    }
+    declaredHosts.add(connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID)
+  }
+  const executionValue = scope.executionHostId
+  const explicitHostId = parseExecutionHostId(executionValue)?.id
+  if (executionValue !== undefined && executionValue !== null && !explicitHostId) {
+    return { kind: 'invalid' }
+  }
+  if (explicitHostId && explicitHostId !== transportHostId) {
+    declaredHosts.add(explicitHostId)
+  }
+  if (declaredHosts.size > 1) {
+    return { kind: 'invalid' }
+  }
+  const hostId = declaredHosts.values().next().value as ExecutionHostId | undefined
+  return hostId ? { kind: 'resolved', hostId } : { kind: 'none' }
+}
+
+function getFolderWorkspaceRuntimeMutationHostId(
+  workspace: Pick<
+    FolderWorkspace,
+    'connectionId' | 'executionHostId' | 'projectGroupId' | 'runtimeSourceExecutionHostId'
+  >,
+  projectGroups: readonly ProjectGroup[],
+  transportHostId: ExecutionHostId
+): ExecutionHostId | null {
+  const workspaceSource = resolveProjectedRuntimeSourceExecutionHostId(workspace, transportHostId)
+  if (workspaceSource.kind === 'invalid') {
+    return null
+  }
+  if (workspaceSource.kind === 'resolved') {
+    return workspaceSource.hostId
+  }
+  const groupResolutions = projectGroups
+    .filter(
+      (group) =>
+        group.id === workspace.projectGroupId && getProjectGroupHostId(group) === transportHostId
+    )
+    .map((group) => resolveProjectedRuntimeSourceExecutionHostId(group, transportHostId))
+  if (groupResolutions.some((resolution) => resolution.kind === 'invalid')) {
+    return null
+  }
+  const groupSources = new Set(
+    groupResolutions.flatMap((resolution) =>
+      resolution.kind === 'resolved' ? [resolution.hostId] : []
+    )
   )
-  return matchingHosts.size === 1
-    ? ([...matchingHosts][0] as ExecutionHostId)
-    : LOCAL_EXECUTION_HOST_ID
+  if (groupSources.size > 1) {
+    return null
+  }
+  return ([...groupSources][0] as ExecutionHostId | null | undefined) ?? LOCAL_EXECUTION_HOST_ID
+}
+
+function getProjectGroupRuntimeMutationHostId(
+  group: ProjectGroup,
+  transportHostId: ExecutionHostId
+): ExecutionHostId | null {
+  const resolution = resolveProjectedRuntimeSourceExecutionHostId(group, transportHostId)
+  if (resolution.kind === 'invalid') {
+    return null
+  }
+  return resolution.kind === 'resolved' ? resolution.hostId : LOCAL_EXECUTION_HOST_ID
+}
+
+function folderWorkspaceMatchesMutationOwner(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[],
+  ownerHostId: ExecutionHostId,
+  mutationExecutionHostId: ExecutionHostId
+): boolean {
+  if (getFolderWorkspaceHostId(workspace, projectGroups) !== ownerHostId) {
+    return false
+  }
+  return parseExecutionHostId(ownerHostId)?.kind !== 'runtime'
+    ? mutationExecutionHostId === ownerHostId
+    : getFolderWorkspaceRuntimeMutationHostId(workspace, projectGroups, ownerHostId) ===
+        mutationExecutionHostId
+}
+
+function projectGroupMatchesMutationOwner(
+  group: ProjectGroup,
+  ownerHostId: ExecutionHostId,
+  mutationExecutionHostId: ExecutionHostId
+): boolean {
+  if (getProjectGroupHostId(group) !== ownerHostId) {
+    return false
+  }
+  return parseExecutionHostId(ownerHostId)?.kind !== 'runtime'
+    ? mutationExecutionHostId === ownerHostId
+    : getProjectGroupRuntimeMutationHostId(group, ownerHostId) === mutationExecutionHostId
+}
+
+function projectGroupMatchesRequestedOwner(
+  group: ProjectGroup,
+  targetHostId: ExecutionHostId,
+  exactHost: boolean,
+  sourceExecutionHostId?: ExecutionHostId
+): boolean {
+  const ownerHostId = getProjectGroupHostId(group)
+  return (
+    deletionTargetOwnsHost(targetHostId, ownerHostId, exactHost) &&
+    (!sourceExecutionHostId ||
+      (ownerHostId !== null &&
+        projectGroupMatchesMutationOwner(group, ownerHostId, sourceExecutionHostId)))
+  )
+}
+
+function folderWorkspaceMatchesRequestedOwner(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[],
+  targetHostId: ExecutionHostId,
+  exactHost: boolean,
+  sourceExecutionHostId?: ExecutionHostId
+): boolean {
+  const ownerHostId = getFolderWorkspaceHostId(workspace, projectGroups)
+  return (
+    deletionTargetOwnsHost(targetHostId, ownerHostId, exactHost) &&
+    (!sourceExecutionHostId ||
+      (ownerHostId !== null &&
+        folderWorkspaceMatchesMutationOwner(
+          workspace,
+          projectGroups,
+          ownerHostId,
+          sourceExecutionHostId
+        )))
+  )
 }
 
 function getFolderWorkspaceHostIdentity(
@@ -1070,16 +1299,14 @@ function getFolderWorkspaceCatalogReplacementIdentities(
   projectGroups: readonly ProjectGroup[]
 ): Set<string> {
   const replacedIdentities = new Set(
-    catalog.folderWorkspaces.map((workspace) =>
-      getFolderWorkspaceUpdateIdentity(
-        getFolderWorkspaceHostId(workspace, projectGroups),
-        workspace.id
-      )
-    )
+    catalog.folderWorkspaces.flatMap((workspace) => {
+      const hostId = getFolderWorkspaceHostId(workspace, projectGroups)
+      return hostId ? [getFolderWorkspaceUpdateIdentity(hostId, workspace.id)] : []
+    })
   )
   for (const workspace of currentFolderWorkspaces) {
     const hostId = getFolderWorkspaceHostId(workspace, projectGroups)
-    if (catalogOwnsHost(catalog.hostId, hostId)) {
+    if (hostId && catalogOwnsHost(catalog.hostId, hostId)) {
       replacedIdentities.add(getFolderWorkspaceUpdateIdentity(hostId, workspace.id))
     }
   }
@@ -1225,13 +1452,21 @@ async function fetchProjectGroupCatalogForTarget(
     target.kind === 'local'
       ? await window.api.projectGroups.list()
       : (
-          await callRuntimeRpc<{ groups: ProjectGroup[] }>(target, 'projectGroup.list', undefined, {
-            timeoutMs: 15_000,
-            reuseRecentCompatibilityFailure: true
-          })
+          await callRuntimeRpc<{ groups: ProjectGroup[] }>(
+            target,
+            'projectGroup.list',
+            { ownerQualified: true },
+            {
+              timeoutMs: 15_000,
+              reuseRecentCompatibilityFailure: true
+            }
+          )
         ).groups
   return {
-    projectGroups: fetchedGroups.map((group) => projectGroupWithFetchedOwner(group, target)),
+    projectGroups: fetchedGroups.flatMap((group) => {
+      const ownedGroup = projectGroupWithFetchedOwner(group, target)
+      return ownedGroup ? [ownedGroup] : []
+    }),
     hostId: getRuntimeTargetHostId(target)
   }
 }
@@ -1252,7 +1487,8 @@ function mergeFetchedProjectGroupCatalog(
 
 async function fetchFolderWorkspaceCatalogForTarget(
   target: ReturnType<typeof getActiveRuntimeTarget>,
-  projectGroups: readonly ProjectGroup[]
+  projectGroups: readonly ProjectGroup[],
+  expectedEnvironmentPairingRevision?: number
 ): Promise<FetchedFolderWorkspaceCatalog> {
   const fetchedFolderWorkspaces =
     target.kind === 'local'
@@ -1261,14 +1497,19 @@ async function fetchFolderWorkspaceCatalogForTarget(
           await callRuntimeRpc<{ folderWorkspaces: FolderWorkspace[] }>(
             target,
             'folderWorkspace.list',
-            undefined,
-            { timeoutMs: 15_000, reuseRecentCompatibilityFailure: true }
+            { ownerQualified: true },
+            {
+              timeoutMs: 15_000,
+              reuseRecentCompatibilityFailure: true,
+              expectedEnvironmentPairingRevision
+            }
           )
         ).folderWorkspaces
   return {
-    folderWorkspaces: fetchedFolderWorkspaces.map((workspace) =>
-      folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
-    ),
+    folderWorkspaces: fetchedFolderWorkspaces.flatMap((workspace) => {
+      const ownedWorkspace = folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
+      return ownedWorkspace ? [ownedWorkspace] : []
+    }),
     hostId: getRuntimeTargetHostId(target)
   }
 }
@@ -1277,13 +1518,41 @@ function folderWorkspaceWithFetchedOwner(
   workspace: FolderWorkspace,
   target: ReturnType<typeof getActiveRuntimeTarget>,
   projectGroups: readonly ProjectGroup[]
-): FolderWorkspace {
+): FolderWorkspace | null {
+  const targetHostId = getRuntimeTargetHostId(target)
+  if (target.kind !== 'environment') {
+    const executionHostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    return executionHostId ? { ...workspace, executionHostId } : null
+  }
+  const workspaceSource = resolveProjectedRuntimeSourceExecutionHostId(workspace, targetHostId)
+  if (workspaceSource.kind === 'invalid') {
+    return null
+  }
+  const matchingGroupResolutions = projectGroups
+    .filter(
+      (group) =>
+        group.id === workspace.projectGroupId && getProjectGroupHostId(group) === targetHostId
+    )
+    .map((group) => resolveProjectedRuntimeSourceExecutionHostId(group, targetHostId))
+  if (matchingGroupResolutions.some((resolution) => resolution.kind === 'invalid')) {
+    return null
+  }
+  const matchingGroupSources = new Set(
+    matchingGroupResolutions.flatMap((resolution) =>
+      resolution.kind === 'resolved' ? [resolution.hostId] : []
+    )
+  )
+  if (workspaceSource.kind === 'none' && matchingGroupSources.size > 1) {
+    return null
+  }
+  const sourceHostId =
+    workspaceSource.kind === 'resolved'
+      ? workspaceSource.hostId
+      : (([...matchingGroupSources][0] as ExecutionHostId | undefined) ?? LOCAL_EXECUTION_HOST_ID)
   return {
     ...workspace,
-    executionHostId:
-      target.kind === 'environment'
-        ? getRuntimeTargetHostId(target)
-        : getFolderWorkspaceHostId(workspace, projectGroups)
+    executionHostId: targetHostId,
+    runtimeSourceExecutionHostId: sourceHostId
   }
 }
 
@@ -1306,48 +1575,192 @@ function mergeFetchedFolderWorkspaceCatalog(
   }
 }
 
+function getRemovedFolderWorkspaceKeysForHost(
+  state: Pick<AppState, 'folderWorkspaces' | 'projectGroups'>,
+  nextFolderWorkspaces: readonly FolderWorkspace[],
+  catalogHostId: ExecutionHostId,
+  exactHost = false
+): string[] {
+  const belongsToHost = (workspace: FolderWorkspace): boolean =>
+    deletionTargetOwnsHost(
+      catalogHostId,
+      getFolderWorkspaceHostId(workspace, state.projectGroups),
+      exactHost
+    )
+  return getRemovedFolderWorkspaceKeys(
+    state.folderWorkspaces.filter(belongsToHost),
+    nextFolderWorkspaces.filter(belongsToHost)
+  )
+}
+
+function getFolderWorkspaceRendererOwnerRemoval(
+  hostId: ExecutionHostId,
+  workspaceKeys: readonly string[],
+  closeLegacyRuntimeTerminals = false,
+  expectedEnvironmentPairingRevision?: number
+): FolderWorkspaceRendererOwnerRemoval {
+  const host = parseExecutionHostId(hostId)
+  if (host?.kind === 'runtime') {
+    return {
+      kind: 'runtime',
+      environmentId: host.environmentId,
+      expectedEnvironmentPairingRevision,
+      hostId,
+      workspaceKeys,
+      closeLegacyRuntimeTerminals
+    }
+  }
+  if (host?.kind === 'ssh') {
+    return { kind: 'ssh', hostId, targetId: host.targetId, workspaceKeys }
+  }
+  return { kind: 'local', hostId, workspaceKeys }
+}
+
+function snapshotCatalogFolderWorkspaceRendererTeardown(
+  state: AppState,
+  nextFolderWorkspaces: readonly FolderWorkspace[],
+  catalogHostId: ExecutionHostId,
+  expectedEnvironmentPairingRevision?: number
+): FolderWorkspaceRendererTeardownSnapshot[] {
+  const ownerWorkspaceKeys = getRemovedFolderWorkspaceKeysForHost(
+    state,
+    nextFolderWorkspaces,
+    catalogHostId
+  )
+  return snapshotFolderWorkspaceRendererTeardown(
+    state,
+    getRemovedFolderWorkspaceKeys(state.folderWorkspaces, nextFolderWorkspaces),
+    getFolderWorkspaceRendererOwnerRemoval(
+      catalogHostId,
+      ownerWorkspaceKeys,
+      true,
+      expectedEnvironmentPairingRevision
+    )
+  )
+}
+
+function isFolderWorkspaceRendererTeardownCurrent(
+  state: AppState,
+  snapshot: FolderWorkspaceRendererTeardownSnapshot
+): boolean {
+  const ownerRemoval = snapshot.ownerRemoval
+  if (
+    ownerRemoval?.kind === 'runtime' &&
+    ownerRemoval.expectedEnvironmentPairingRevision !== undefined &&
+    getRuntimeEnvironmentRevision(ownerRemoval.environmentId) !==
+      ownerRemoval.expectedEnvironmentPairingRevision
+  ) {
+    return false
+  }
+  const matchingWorkspaces = state.folderWorkspaces.filter(
+    (workspace) => folderWorkspaceKey(workspace.id) === snapshot.workspaceKey
+  )
+  if (snapshot.purgeRendererState) {
+    return matchingWorkspaces.length === 0
+  }
+  return ownerRemoval
+    ? !matchingWorkspaces.some(
+        (workspace) =>
+          getFolderWorkspaceHostId(workspace, state.projectGroups) === ownerRemoval.hostId
+      )
+    : false
+}
+
+function snapshotLegacyFolderWorkspaceRuntimeTerminals(
+  state: AppState,
+  environmentId: string,
+  workspaceKeys: readonly string[],
+  expectedEnvironmentPairingRevision: number | undefined
+): FolderWorkspaceRuntimeTerminalRemoval {
+  return {
+    environmentId,
+    expectedEnvironmentPairingRevision,
+    terminalHandles: snapshotFolderWorkspaceRuntimeTerminalHandles(
+      state,
+      workspaceKeys,
+      environmentId
+    )
+  }
+}
+
 async function reconcileFailedFolderWorkspaceUpdate(args: {
   target: ReturnType<typeof getActiveRuntimeTarget>
   folderWorkspaceId: string
   updateIdentity: string
   ownerHostId: ExecutionHostId
+  mutationExecutionHostId: ExecutionHostId
   ticket: FolderWorkspaceUpdateTicket<FolderWorkspaceUpdateField>
   coordinator: FolderWorkspaceUpdateCoordinatorInstance
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
 }): Promise<void> {
   try {
+    const fence = claimHostCatalogFence(args.get, 'folder-workspaces', args.target)
     const catalog = await fetchFolderWorkspaceCatalogForTarget(
       args.target,
-      args.get().projectGroups
+      args.get().projectGroups,
+      fence.expectedEnvironmentPairingRevision
     )
+    if (!isHostCatalogFenceCurrent(args.get, fence)) {
+      return
+    }
     const latestFields = args.coordinator.latestFields(args.updateIdentity, args.ticket)
     if (latestFields.length === 0) {
       return
     }
     const refreshed = catalog.folderWorkspaces.find(
-      (workspace) => workspace.id === args.folderWorkspaceId
+      (workspace) =>
+        workspace.id === args.folderWorkspaceId &&
+        folderWorkspaceMatchesMutationOwner(
+          workspace,
+          args.get().projectGroups,
+          args.ownerHostId,
+          args.mutationExecutionHostId
+        )
     )
-    args.set((state) => ({
-      folderWorkspaces: refreshed
+    let teardownSnapshots: FolderWorkspaceRendererTeardownSnapshot[] = []
+    args.set((state) => {
+      if (!isHostCatalogFenceCurrent(args.get, fence)) {
+        return state
+      }
+      const folderWorkspaces = refreshed
         ? state.folderWorkspaces.map((workspace) =>
             workspace.id === args.folderWorkspaceId &&
-            getFolderWorkspaceHostId(workspace, state.projectGroups) === args.ownerHostId
+            folderWorkspaceMatchesMutationOwner(
+              workspace,
+              state.projectGroups,
+              args.ownerHostId,
+              args.mutationExecutionHostId
+            )
               ? mergeFolderWorkspaceUpdateResponse(workspace, refreshed, latestFields)
               : workspace
           )
         : state.folderWorkspaces.filter(
             (workspace) =>
               workspace.id !== args.folderWorkspaceId ||
-              getFolderWorkspaceHostId(workspace, state.projectGroups) !== args.ownerHostId
-          ),
-      ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields) || !refreshed
-        ? { folderWorkspacePathStatuses: {} }
-        : {})
-    }))
-    if (!refreshed) {
-      args.get().purgeWorktreeTerminalState([folderWorkspaceKey(args.folderWorkspaceId)])
-    }
+              !folderWorkspaceMatchesMutationOwner(
+                workspace,
+                state.projectGroups,
+                args.ownerHostId,
+                args.mutationExecutionHostId
+              )
+          )
+      teardownSnapshots = snapshotCatalogFolderWorkspaceRendererTeardown(
+        state,
+        folderWorkspaces,
+        catalog.hostId,
+        fence.expectedEnvironmentPairingRevision
+      )
+      return {
+        folderWorkspaces,
+        ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields) || !refreshed
+          ? { folderWorkspacePathStatuses: {} }
+          : {})
+      }
+    })
+    await teardownDeletedFolderWorkspaceRendererState(args.set, args.get, teardownSnapshots, {
+      isCurrent: (snapshot) => isFolderWorkspaceRendererTeardownCurrent(args.get(), snapshot)
+    })
   } catch (err) {
     console.warn('Failed to reconcile folder workspace after update failure:', err)
   }
@@ -1391,12 +1804,12 @@ function settingsForRepoOwner(
 
 function getFolderWorkspacePathStatusScopeKey(request: FolderWorkspacePathStatusRequest): string {
   if (request.scope === 'project-group') {
-    return `project-group:${request.projectGroupId}`
+    return `project-group:${request.executionHostId ? `${request.executionHostId}:` : ''}${request.projectGroupId}`
   }
   if (request.scope === 'path') {
     return `path:${request.connectionId ?? ''}:${request.path}`
   }
-  return `folder-workspace:${request.folderWorkspaceId}`
+  return `folder-workspace:${request.executionHostId ? `${request.executionHostId}:` : ''}${request.folderWorkspaceId}`
 }
 
 function getRuntimeTargetCachePrefix(
@@ -1491,112 +1904,142 @@ async function fetchRuntimeAddProjectPathStatus(args: {
   }
 }
 
-function getFolderWorkspaceStatusRequestSnapshot(
-  state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'sshConnectionStates'>,
-  request: FolderWorkspacePathStatusRequest
-): string | null {
-  if (request.scope === 'path') {
-    const candidateRepos = state.repos.filter((repo) =>
-      isPathInsideOrEqual(request.path, repo.path)
-    )
-    const relevantConnectionIds = new Set<string>()
-    if (request.connectionId) {
-      relevantConnectionIds.add(request.connectionId)
-    }
-    for (const repo of candidateRepos) {
-      if (repo.connectionId) {
-        relevantConnectionIds.add(repo.connectionId)
-      }
-    }
-    const sshFingerprint = [...relevantConnectionIds]
-      .map(
-        (connectionId) =>
-          `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
-      )
-      .sort()
-      .join('|')
-    const repoFingerprint = candidateRepos
-      .map(
-        (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
-      )
-      .sort()
-      .join('|')
-    return [request.path, '', request.connectionId ?? '', sshFingerprint, repoFingerprint].join(
-      '\0'
-    )
-  }
-
-  const scope =
-    request.scope === 'project-group'
-      ? state.projectGroups.find((group) => group.id === request.projectGroupId)
-      : state.folderWorkspaces.find((workspace) => workspace.id === request.folderWorkspaceId)
-  const projectGroup =
-    request.scope === 'project-group'
-      ? scope && 'parentPath' in scope
-        ? scope
-        : null
-      : scope && 'projectGroupId' in scope
-        ? state.projectGroups.find((group) => group.id === scope.projectGroupId)
-        : null
-  const folderPath =
-    request.scope === 'project-group'
-      ? scope && 'parentPath' in scope
-        ? scope.parentPath
-        : null
-      : scope && 'folderPath' in scope
-        ? scope.folderPath
-        : null
-  const projectGroupId =
-    request.scope === 'project-group'
-      ? request.projectGroupId
-      : scope && 'projectGroupId' in scope
-        ? scope.projectGroupId
-        : null
-  const scopeConnectionId =
-    request.scope === 'project-group'
-      ? scope && 'parentPath' in scope
-        ? scope.connectionId
-        : null
-      : scope && 'folderPath' in scope
-        ? (scope.connectionId ?? projectGroup?.connectionId)
-        : null
-  if (!folderPath || !projectGroupId) {
-    return null
-  }
-  const groupIds = getProjectGroupSubtreeIds(state.projectGroups, projectGroupId)
-  const candidateRepos = state.repos.filter(
-    (repo) =>
-      (typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
-      isPathInsideOrEqual(folderPath, repo.path)
+function repoMatchesPathStatusOwner(
+  repo: Repo,
+  targetHostId: ExecutionHostId,
+  sourceHostId: ExecutionHostId | null
+): boolean {
+  return (
+    catalogOwnsHost(targetHostId, getRepoExecutionHostId(repo)) &&
+    (!sourceHostId || resolveRepoPathStatusSourceHostId(repo) === sourceHostId)
   )
-  const relevantConnectionIds = new Set<string>()
-  if (scopeConnectionId) {
-    relevantConnectionIds.add(scopeConnectionId)
-  }
-  for (const repo of candidateRepos) {
-    if (repo.connectionId) {
-      relevantConnectionIds.add(repo.connectionId)
-    }
-  }
-  const sshFingerprint = [...relevantConnectionIds]
+}
+
+function getPathStatusSshFingerprint(
+  state: Pick<AppState, 'sshConnectionStates'>,
+  connectionIds: Iterable<string>
+): string {
+  return [...connectionIds]
     .map(
       (connectionId) =>
         `${connectionId}:${state.sshConnectionStates.get(connectionId)?.status ?? 'missing'}`
     )
     .sort()
     .join('|')
-  const repoFingerprint = candidateRepos
-    .map(
-      (repo) => `${repo.id}:${repo.path}:${repo.projectGroupId ?? ''}:${repo.connectionId ?? ''}`
+}
+
+function getPathStatusRepoFingerprint(repos: readonly Repo[]): string {
+  return repos
+    .map((repo) =>
+      [
+        repo.id,
+        repo.path,
+        repo.projectGroupId ?? '',
+        repo.executionHostId ?? '',
+        repo.connectionId ?? ''
+      ].join(':')
     )
     .sort()
     .join('|')
+}
+
+function getFolderWorkspaceStatusRequestSnapshot(
+  state: Pick<AppState, 'projectGroups' | 'folderWorkspaces' | 'repos' | 'sshConnectionStates'>,
+  request: FolderWorkspacePathStatusRequest,
+  targetHostId: ExecutionHostId
+): string | null {
+  if (request.scope === 'path') {
+    const sourceHostId =
+      'connectionId' in request
+        ? request.connectionId
+          ? toSshExecutionHostId(request.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+        : null
+    const candidateRepos = state.repos.filter(
+      (repo) =>
+        repoMatchesPathStatusOwner(repo, targetHostId, sourceHostId) &&
+        isPathInsideOrEqual(request.path, repo.path)
+    )
+    const connectionIds = new Set(candidateRepos.flatMap((repo) => repo.connectionId ?? []))
+    if (request.connectionId) {
+      connectionIds.add(request.connectionId)
+    }
+    return [
+      request.path,
+      request.connectionId ?? '',
+      getPathStatusSshFingerprint(state, connectionIds),
+      getPathStatusRepoFingerprint(candidateRepos)
+    ].join('\0')
+  }
+
+  const sourceHostId = request.executionHostId ?? null
+  const targetGroups = state.projectGroups.filter((group) =>
+    catalogOwnsHost(targetHostId, getProjectGroupHostId(group))
+  )
+  const groupsForSource = sourceHostId
+    ? targetGroups.filter(
+        (group) => resolveProjectGroupPathStatusSourceHostId(group) === sourceHostId
+      )
+    : targetGroups
+  const folderWorkspaceSourceHostId = (workspace: FolderWorkspace): ExecutionHostId | null => {
+    const matchingGroups = groupsForSource.filter((group) => group.id === workspace.projectGroupId)
+    return resolveFolderWorkspacePathStatusSourceHostId(
+      workspace,
+      matchingGroups.length === 1 ? matchingGroups[0] : undefined
+    )
+  }
+  const scopeCandidates =
+    request.scope === 'project-group'
+      ? targetGroups.filter(
+          (group) =>
+            group.id === request.projectGroupId &&
+            (!sourceHostId || resolveProjectGroupPathStatusSourceHostId(group) === sourceHostId)
+        )
+      : state.folderWorkspaces.filter(
+          (workspace) =>
+            workspace.id === request.folderWorkspaceId &&
+            catalogOwnsHost(
+              targetHostId,
+              getFolderWorkspaceHostId(workspace, state.projectGroups)
+            ) &&
+            (!sourceHostId || folderWorkspaceSourceHostId(workspace) === sourceHostId)
+        )
+  if (scopeCandidates.length !== 1) {
+    return null
+  }
+  const scope = scopeCandidates[0]!
+  const folderPath = 'parentPath' in scope ? scope.parentPath : scope.folderPath
+  const projectGroupId = 'parentPath' in scope ? scope.id : scope.projectGroupId
+  if (!folderPath) {
+    return null
+  }
+  const parsedSourceHost = parseExecutionHostId(sourceHostId)
+  const scopeConnectionId =
+    parsedSourceHost?.kind === 'ssh'
+      ? parsedSourceHost.targetId
+      : parsedSourceHost?.kind === 'local'
+        ? null
+        : scope.connectionId
+  const groupIds = getProjectGroupSubtreeIds(groupsForSource, projectGroupId)
+  const candidateRepos = state.repos.filter(
+    (repo) =>
+      repoMatchesPathStatusOwner(repo, targetHostId, sourceHostId) &&
+      ((typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) ||
+        isPathInsideOrEqual(folderPath, repo.path))
+  )
+  const connectionIds = new Set(candidateRepos.flatMap((repo) => repo.connectionId ?? []))
+  if (scopeConnectionId) {
+    connectionIds.add(scopeConnectionId)
+  }
   return [
     folderPath,
     projectGroupId,
+    sourceHostId ?? '',
+    scope.executionHostId ?? '',
+    'runtimeSourceExecutionHostId' in scope ? (scope.runtimeSourceExecutionHostId ?? '') : '',
     scopeConnectionId ?? '',
-    sshFingerprint,
-    repoFingerprint
+    getPathStatusSshFingerprint(state, connectionIds),
+    getPathStatusRepoFingerprint(candidateRepos)
   ].join('\0')
 }
 
@@ -1613,9 +2056,10 @@ function getFreshFolderWorkspacePathStatusFromCache(args: {
 
 function getFolderWorkspacePathStatusRequestSnapshotForRead(
   state: AppState,
-  request: FolderWorkspacePathStatusRequest
+  request: FolderWorkspacePathStatusRequest,
+  targetHostId: ExecutionHostId
 ): string | null {
-  return getFolderWorkspaceStatusRequestSnapshot(state, request)
+  return getFolderWorkspaceStatusRequestSnapshot(state, request, targetHostId)
 }
 
 export type RepoSlice = {
@@ -1704,12 +2148,22 @@ export type RepoSlice = {
     updates: FolderWorkspaceUpdates,
     options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
-  deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
+  deleteFolderWorkspace: (
+    folderWorkspaceId: string,
+    options?: { hostId?: ExecutionHostId } & RuntimeOwnerMutationFence
+  ) => Promise<boolean>
   updateProjectGroup: (
     groupId: string,
-    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>
+    updates: Partial<Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>>,
+    options?: { hostId?: ExecutionHostId; sourceExecutionHostId?: ExecutionHostId }
   ) => Promise<boolean>
-  deleteProjectGroup: (groupId: string) => Promise<boolean>
+  deleteProjectGroup: (
+    groupId: string,
+    options?: {
+      hostId?: ExecutionHostId
+      sourceExecutionHostId?: ExecutionHostId
+    } & RuntimeOwnerMutationFence
+  ) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
     groupId: string,
     options: DeleteProjectGroupWithContainedProjectsOptions
@@ -1723,7 +2177,10 @@ export type RepoSlice = {
   // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
   removeProject: (
     projectId: string,
-    options?: { hostId?: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+    options?: {
+      hostId?: ExecutionHostId
+      errorFeedback?: 'toast' | 'silent'
+    } & RuntimeOwnerMutationFence
   ) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
@@ -1762,6 +2219,10 @@ function claimHostCatalogFence(
   const generation = (generations.get(key) ?? 0) + 1
   generations.set(key, generation)
   return {
+    expectedEnvironmentPairingRevision:
+      target.kind === 'environment'
+        ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
+        : undefined,
     key,
     generation,
     target,
@@ -1787,6 +2248,8 @@ function isHostCatalogFenceCurrent(get: () => AppState, fence: HostCatalogFence)
       get().removedRuntimeEnvironmentIds
     ) &&
     getEnvironmentSshStateGeneration(fence.target.environmentId) === fence.sshStateGeneration &&
+    getRuntimeEnvironmentRevision(fence.target.environmentId) ===
+      fence.expectedEnvironmentPairingRevision &&
     getRuntimeEnvironmentConnectionGeneration(fence.target.environmentId) ===
       fence.runtimeConnectionGeneration
   )
@@ -2231,10 +2694,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
       )
       const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-      const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+      const catalog = await fetchFolderWorkspaceCatalogForTarget(
+        target,
+        get().projectGroups,
+        fence.expectedEnvironmentPairingRevision
+      )
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return
       }
+      let teardownSnapshots: FolderWorkspaceRendererTeardownSnapshot[] = []
       set((current) => {
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return current
@@ -2251,7 +2719,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           current.folderWorkspaces,
           current.projectGroups
         )
+        teardownSnapshots = snapshotCatalogFolderWorkspaceRendererTeardown(
+          current,
+          folderWorkspaces,
+          catalog.hostId,
+          fence.expectedEnvironmentPairingRevision
+        )
         return { folderWorkspaces, folderWorkspacePathStatuses: {} }
+      })
+      await teardownDeletedFolderWorkspaceRendererState(set, get, teardownSnapshots, {
+        isCurrent: (snapshot) => isFolderWorkspaceRendererTeardownCurrent(get(), snapshot)
       })
     } catch (err) {
       console.error('Failed to fetch folder workspaces:', err)
@@ -2261,13 +2738,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchFolderWorkspacesForAllHosts: async (options) => {
     const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
     // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
-    const applyCatalog = (
+    const applyCatalog = async (
       catalog: FetchedFolderWorkspaceCatalog,
       fence: HostCatalogFence
-    ): void => {
+    ): Promise<void> => {
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return
       }
+      let teardownSnapshots: FolderWorkspaceRendererTeardownSnapshot[] = []
       set((current) => {
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return current
@@ -2279,14 +2757,24 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             current.projectGroups
           )
         )
+        const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+          catalog,
+          current.folderWorkspaces,
+          current.projectGroups
+        )
+        teardownSnapshots = snapshotCatalogFolderWorkspaceRendererTeardown(
+          current,
+          folderWorkspaces,
+          catalog.hostId,
+          fence.expectedEnvironmentPairingRevision
+        )
         return {
-          folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
-            catalog,
-            current.folderWorkspaces,
-            current.projectGroups
-          ).folderWorkspaces,
+          folderWorkspaces,
           folderWorkspacePathStatuses: {}
         }
+      })
+      await teardownDeletedFolderWorkspaceRendererState(set, get, teardownSnapshots, {
+        isCurrent: (snapshot) => isFolderWorkspaceRendererTeardownCurrent(get(), snapshot)
       })
     }
 
@@ -2294,7 +2782,14 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     try {
       const target = { kind: 'local' as const }
       const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
-      applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
+      await applyCatalog(
+        await fetchFolderWorkspaceCatalogForTarget(
+          target,
+          get().projectGroups,
+          fence.expectedEnvironmentPairingRevision
+        ),
+        fence
+      )
     } catch (err) {
       failed = true
       console.error('Failed to fetch local folder workspaces for all-host load:', err)
@@ -2312,8 +2807,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         }
         const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
         try {
-          applyCatalog(
-            await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
+          await applyCatalog(
+            await fetchFolderWorkspaceCatalogForTarget(
+              target,
+              get().projectGroups,
+              fence.expectedEnvironmentPairingRevision
+            ),
             fence
           )
         } catch (err) {
@@ -2341,13 +2840,24 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const state = get()
     const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
     const cached = state.folderWorkspacePathStatuses[cacheKey]
-    const requestSnapshot = getFolderWorkspacePathStatusRequestSnapshotForRead(state, request)
+    const targetHostId = getRuntimeTargetHostId(
+      getActiveRuntimeTarget(getFolderWorkspacePathStatusRouteSettings(options, state.settings))
+    )
+    const requestSnapshot = getFolderWorkspacePathStatusRequestSnapshotForRead(
+      state,
+      request,
+      targetHostId
+    )
     return getFreshFolderWorkspacePathStatusFromCache({ entry: cached, requestSnapshot })
   },
 
   fetchFolderWorkspacePathStatus: async (request, options) => {
+    const target = getActiveRuntimeTarget(
+      getFolderWorkspacePathStatusRouteSettings(options, get().settings)
+    )
+    const targetHostId = getRuntimeTargetHostId(target)
     const cacheKey = get().getFolderWorkspacePathStatusCacheKey(request, options)
-    const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request)
+    const requestSnapshot = getFolderWorkspaceStatusRequestSnapshot(get(), request, targetHostId)
     const cached = get().folderWorkspacePathStatuses[cacheKey]
     const freshCachedStatus = getFreshFolderWorkspacePathStatusFromCache({
       entry: cached,
@@ -2357,9 +2867,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       return freshCachedStatus
     }
     try {
-      const target = getActiveRuntimeTarget(
-        getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-      )
       const status =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.getPathStatus(request)
@@ -2374,7 +2881,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set((state) => ({
         folderWorkspacePathStatuses:
           requestSnapshot !== null &&
-          getFolderWorkspaceStatusRequestSnapshot(state, request) === requestSnapshot
+          getFolderWorkspaceStatusRequestSnapshot(state, request, targetHostId) === requestSnapshot
             ? {
                 ...state.folderWorkspacePathStatuses,
                 [cacheKey]: { status, checkedAt: Date.now(), requestSnapshot }
@@ -2505,6 +3012,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).group
       const ownedGroup = projectGroupWithFetchedOwner(group, target)
+      if (!ownedGroup) {
+        return null
+      }
       set((s) => ({
         projectGroups: [...s.projectGroups, ownedGroup],
         folderWorkspacePathStatuses: {}
@@ -2544,6 +3054,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               )
             ).folderWorkspace
       const ownedWorkspace = folderWorkspaceWithFetchedOwner(workspace, target, get().projectGroups)
+      if (!ownedWorkspace) {
+        throw new Error('folder_workspace_owner_invalid')
+      }
       set((s) => ({
         folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
         folderWorkspacePathStatuses: {}
@@ -2564,17 +3077,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
         ? (state.activeWorkspaceExecutionHostId ?? undefined)
         : undefined)
-    if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
+    const owner = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+    if (!owner) {
       return false
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
-      state,
-      folderWorkspaceId,
-      executionHostId
-    )
     // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
-    const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
-    const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
+    const ownerHostId = getFolderWorkspaceHostId(owner, state.projectGroups)
+    if (!ownerHostId) {
+      console.warn('Folder workspace update has invalid owner authority')
+      return false
+    }
+    const target = getRuntimeTargetForExecutionHost(state, ownerHostId)
+    const mutationExecutionHostId =
+      target.kind === 'environment'
+        ? getFolderWorkspaceRuntimeMutationHostId(owner, state.projectGroups, ownerHostId)
+        : ownerHostId
+    if (!mutationExecutionHostId) {
+      console.warn('Folder workspace update has ambiguous remote owner provenance')
+      return false
+    }
     const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
     // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
     if (
@@ -2595,12 +3116,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     try {
       const updated =
         target.kind === 'local'
-          ? await window.api.folderWorkspaces.update({ folderWorkspaceId, updates })
+          ? await window.api.folderWorkspaces.update({
+              folderWorkspaceId,
+              updates,
+              executionHostId: mutationExecutionHostId
+            })
           : (
               await callRuntimeRpc<{ folderWorkspace: FolderWorkspace | null }>(
                 target,
                 'folderWorkspace.update',
-                { folderWorkspaceId, updates },
+                { folderWorkspaceId, updates, executionHostId: mutationExecutionHostId },
                 { timeoutMs: 15_000 }
               )
             ).folderWorkspace
@@ -2610,6 +3135,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           folderWorkspaceId,
           updateIdentity,
           ownerHostId,
+          mutationExecutionHostId,
           ticket: updateTicket,
           coordinator: folderWorkspaceUpdates,
           set,
@@ -2623,7 +3149,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
             workspace.id === folderWorkspaceId &&
-            getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
+            folderWorkspaceMatchesMutationOwner(
+              workspace,
+              s.projectGroups,
+              ownerHostId,
+              mutationExecutionHostId
+            )
               ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
                   rejectOlderResponse: catalogChanged
                 })
@@ -2642,6 +3173,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         folderWorkspaceId,
         updateIdentity,
         ownerHostId,
+        mutationExecutionHostId,
         ticket: updateTicket,
         coordinator: folderWorkspaceUpdates,
         set,
@@ -2653,37 +3185,130 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  deleteFolderWorkspace: async (folderWorkspaceId) => {
+  deleteFolderWorkspace: async (folderWorkspaceId, options) => {
     const state = get()
-    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    const owner = findFolderWorkspaceOwner(state, folderWorkspaceId, options?.hostId)
+    if (!owner) {
       return false
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
+    const targetHostId = getFolderWorkspaceHostId(owner, state.projectGroups)
+    if (!targetHostId) {
+      console.warn('Folder workspace deletion has invalid owner authority')
+      return false
+    }
+    const targetHost = parseExecutionHostId(targetHostId)
+    const runtimeEnvironmentId = targetHost?.kind === 'runtime' ? targetHost.environmentId : null
     try {
       // Why: deletion targets the folder's owner; focus may be on a different host.
       const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+      const expectedEnvironmentPairingRevision =
+        target.kind === 'environment'
+          ? captureRuntimeEnvironmentRequestRevision(
+              target.environmentId,
+              options?.expectedEnvironmentPairingRevision
+            )
+          : undefined
+      const legacyTerminalRemoval =
+        target.kind === 'environment'
+          ? snapshotLegacyFolderWorkspaceRuntimeTerminals(
+              state,
+              target.environmentId,
+              [folderWorkspaceKey(folderWorkspaceId)],
+              expectedEnvironmentPairingRevision
+            )
+          : null
+      if (await isLegacyRuntimeFolderWorkspaceDeletionBlocked(legacyTerminalRemoval)) {
+        console.warn('Folder workspace deletion requires backend terminal teardown support.')
+        toast.error(
+          translate(
+            'auto.components.sidebar.DeleteWorktreeDialog.4f6750ca7b',
+            'Failed to delete workspace'
+          ),
+          {
+            description: translate(
+              'auto.components.sidebar.sleep.worktree.flow.legacy.unverified',
+              'The older host runtime could not confirm terminal shutdown. The workspace was kept open; update the host and try again.'
+            ),
+            duration: ERROR_TOAST_DURATION
+          }
+        )
+        return false
+      }
+      const deleteExecutionHostId =
+        target.kind === 'environment'
+          ? getFolderWorkspaceRuntimeMutationHostId(owner, state.projectGroups, targetHostId)
+          : targetHostId
+      const supportsOwnerQualifiedDelete =
+        target.kind !== 'environment' ||
+        (await runtimeEnvironmentSupportsCapability(
+          target.environmentId,
+          FOLDER_WORKSPACE_OWNER_QUALIFIED_DELETE_RUNTIME_CAPABILITY,
+          { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
+        ))
+      if (supportsOwnerQualifiedDelete && !deleteExecutionHostId) {
+        console.warn('Folder workspace deletion has ambiguous remote owner provenance')
+        return false
+      }
+      const deleteState = get()
+      const preserveRendererWorkspaceKey = deleteState.folderWorkspaces.some(
+        (workspace) =>
+          workspace.id === folderWorkspaceId &&
+          getFolderWorkspaceHostId(workspace, deleteState.projectGroups) !== targetHostId
+      )
       const deleted =
         target.kind === 'local'
-          ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
+          ? await window.api.folderWorkspaces.delete({
+              folderWorkspaceId,
+              executionHostId: targetHostId,
+              ...(preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+            })
           : (
               await callRuntimeRpc<{ deleted: boolean }>(
                 target,
                 'folderWorkspace.delete',
-                { folderWorkspaceId },
-                { timeoutMs: 15_000 }
+                {
+                  folderWorkspaceId,
+                  ...(supportsOwnerQualifiedDelete
+                    ? { executionHostId: deleteExecutionHostId }
+                    : {}),
+                  ...(preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+                },
+                { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
               )
             ).deleted
       if (!deleted) {
         return false
       }
-      const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-      set((s) => ({
-        folderWorkspaces: s.folderWorkspaces.filter(
-          (workspace) => workspace.id !== folderWorkspaceId
-        ),
-        folderWorkspacePathStatuses: {}
-      }))
-      get().purgeWorktreeTerminalState([workspaceKey])
+      if (
+        target.kind === 'environment' &&
+        expectedEnvironmentPairingRevision !== undefined &&
+        getRuntimeEnvironmentRevision(target.environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return false
+      }
+      claimHostCatalogFence(get, 'folder-workspaces', target)
+      let teardownSnapshots: FolderWorkspaceRendererTeardownSnapshot[] = []
+      set((s) => {
+        const folderWorkspaces = s.folderWorkspaces.filter(
+          (workspace) =>
+            workspace.id !== folderWorkspaceId ||
+            getFolderWorkspaceHostId(workspace, s.projectGroups) !== targetHostId
+        )
+        teardownSnapshots = snapshotFolderWorkspaceRendererTeardown(
+          s,
+          getRemovedFolderWorkspaceKeys(s.folderWorkspaces, folderWorkspaces),
+          getFolderWorkspaceRendererOwnerRemoval(
+            targetHostId,
+            getRemovedFolderWorkspaceKeysForHost(s, folderWorkspaces, targetHostId, true),
+            false,
+            expectedEnvironmentPairingRevision
+          )
+        )
+        return { folderWorkspaces, folderWorkspacePathStatuses: {} }
+      })
+      await teardownDeletedFolderWorkspaceRendererState(set, get, teardownSnapshots, {
+        isCurrent: (snapshot) => isFolderWorkspaceRendererTeardownCurrent(get(), snapshot)
+      })
       return true
     } catch (err) {
       console.error('Failed to delete folder workspace:', err)
@@ -2691,18 +3316,56 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  updateProjectGroup: async (groupId, updates) => {
+  updateProjectGroup: async (groupId, updates, options) => {
     try {
-      // Why: project groups are focused-host-scoped by design; all CRUD routes by the focused host and the list is replaced, not merged.
-      const target = getActiveRuntimeTarget(get().settings)
+      const state = get()
+      const requestedTarget = getRuntimeTargetForExecutionHost(state, options?.hostId)
+      const requestedHostId = options?.hostId ?? getRuntimeTargetHostId(requestedTarget)
+      const exactHost = options?.hostId !== undefined
+      const matchingGroups = state.projectGroups.filter(
+        (group) =>
+          group.id === groupId &&
+          projectGroupMatchesRequestedOwner(
+            group,
+            requestedHostId,
+            exactHost,
+            options?.sourceExecutionHostId
+          )
+      )
+      if (matchingGroups.length !== 1) {
+        return false
+      }
+      const owner = matchingGroups[0]!
+      const ownerHostId = getProjectGroupHostId(owner)
+      if (!ownerHostId) {
+        return false
+      }
+      const target = getRuntimeTargetForExecutionHost(state, ownerHostId)
+      const mutationExecutionHostId =
+        target.kind === 'environment'
+          ? getProjectGroupRuntimeMutationHostId(owner, ownerHostId)
+          : ownerHostId
+      if (!mutationExecutionHostId) {
+        return false
+      }
+      if (
+        options?.sourceExecutionHostId &&
+        mutationExecutionHostId !== options.sourceExecutionHostId
+      ) {
+        return false
+      }
       const updated =
         target.kind === 'local'
-          ? await window.api.projectGroups.update({ groupId, updates })
+          ? await window.api.projectGroups.update({
+              groupId,
+              updates,
+              executionHostId: mutationExecutionHostId
+            })
           : (
               await callRuntimeRpc<{ group: ProjectGroup | null }>(
                 target,
                 'projectGroup.update',
-                { groupId, updates },
+                { groupId, updates, executionHostId: mutationExecutionHostId },
                 { timeoutMs: 15_000 }
               )
             ).group
@@ -2710,8 +3373,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return false
       }
       const ownedGroup = projectGroupWithFetchedOwner(updated, target)
+      if (!ownedGroup) {
+        return false
+      }
       set((s) => ({
-        projectGroups: s.projectGroups.map((group) => (group.id === groupId ? ownedGroup : group)),
+        projectGroups: s.projectGroups.map((group) =>
+          group.id === groupId &&
+          projectGroupMatchesMutationOwner(group, ownerHostId, mutationExecutionHostId)
+            ? ownedGroup
+            : group
+        ),
         folderWorkspacePathStatuses: {}
       }))
       return true
@@ -2721,38 +3392,227 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  deleteProjectGroup: async (groupId) => {
+  deleteProjectGroup: async (groupId, options) => {
     try {
-      // Why: project groups are focused-host-scoped by design (see updateProjectGroup).
-      const target = getActiveRuntimeTarget(get().settings)
+      const initialState = get()
+      const target = getRuntimeTargetForExecutionHost(initialState, options?.hostId)
+      const targetHostId = options?.hostId ?? getRuntimeTargetHostId(target)
+      const exactHost = options?.hostId !== undefined
+      const matchingRootGroups = initialState.projectGroups.filter(
+        (group) =>
+          group.id === groupId &&
+          projectGroupMatchesRequestedOwner(
+            group,
+            targetHostId,
+            exactHost,
+            options?.sourceExecutionHostId
+          )
+      )
+      if (matchingRootGroups.length !== 1) {
+        return false
+      }
+      const selectedRootGroup = matchingRootGroups[0]!
+      const initialDeletedGroupIds = getProjectGroupSubtreeIdsForHost(
+        initialState.projectGroups,
+        groupId,
+        targetHostId,
+        exactHost,
+        options?.sourceExecutionHostId
+      )
+      if (initialDeletedGroupIds.size === 0) {
+        return false
+      }
+      const targetWorkspaceKeys = [
+        ...new Set(
+          initialState.folderWorkspaces
+            .filter(
+              (workspace) =>
+                initialDeletedGroupIds.has(workspace.projectGroupId) &&
+                folderWorkspaceMatchesRequestedOwner(
+                  workspace,
+                  initialState.projectGroups,
+                  targetHostId,
+                  exactHost,
+                  options?.sourceExecutionHostId
+                )
+            )
+            .map((workspace) => folderWorkspaceKey(workspace.id))
+        )
+      ]
+      const expectedEnvironmentPairingRevision =
+        target.kind === 'environment'
+          ? captureRuntimeEnvironmentRequestRevision(
+              target.environmentId,
+              options?.expectedEnvironmentPairingRevision
+            )
+          : undefined
+      const legacyTerminalRemoval =
+        target.kind === 'environment'
+          ? snapshotLegacyFolderWorkspaceRuntimeTerminals(
+              initialState,
+              target.environmentId,
+              targetWorkspaceKeys,
+              expectedEnvironmentPairingRevision
+            )
+          : null
+      if (await isLegacyRuntimeFolderWorkspaceDeletionBlocked(legacyTerminalRemoval)) {
+        console.warn('Project group deletion requires backend terminal teardown support.')
+        return false
+      }
+      const deleteExecutionHostId =
+        target.kind === 'environment'
+          ? getProjectGroupRuntimeMutationHostId(selectedRootGroup, targetHostId)
+          : targetHostId
+      if (
+        options?.sourceExecutionHostId &&
+        deleteExecutionHostId !== options.sourceExecutionHostId
+      ) {
+        return false
+      }
+      const supportsOwnerQualifiedDelete =
+        target.kind !== 'environment' ||
+        (await runtimeEnvironmentSupportsCapability(
+          target.environmentId,
+          FOLDER_WORKSPACE_OWNER_QUALIFIED_DELETE_RUNTIME_CAPABILITY,
+          { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
+        ))
+      if (supportsOwnerQualifiedDelete && !deleteExecutionHostId) {
+        console.warn('Project group deletion has ambiguous remote owner provenance')
+        return false
+      }
+      const deleteState = get()
+      const deletedGroupIds = new Set([
+        ...initialDeletedGroupIds,
+        ...getProjectGroupSubtreeIdsForHost(
+          deleteState.projectGroups,
+          groupId,
+          targetHostId,
+          exactHost,
+          options?.sourceExecutionHostId
+        )
+      ])
+      const targetWorkspaceIds = new Set(
+        deleteState.folderWorkspaces
+          .filter(
+            (workspace) =>
+              deletedGroupIds.has(workspace.projectGroupId) &&
+              folderWorkspaceMatchesRequestedOwner(
+                workspace,
+                deleteState.projectGroups,
+                targetHostId,
+                exactHost,
+                options?.sourceExecutionHostId
+              )
+          )
+          .map((workspace) => workspace.id)
+      )
+      const preserveRendererWorkspaceIds = [...targetWorkspaceIds].filter((workspaceId) =>
+        deleteState.folderWorkspaces.some(
+          (workspace) =>
+            workspace.id === workspaceId &&
+            !folderWorkspaceMatchesRequestedOwner(
+              workspace,
+              deleteState.projectGroups,
+              targetHostId,
+              exactHost,
+              options?.sourceExecutionHostId
+            )
+        )
+      )
       const deleted =
         target.kind === 'local'
-          ? await window.api.projectGroups.delete({ groupId })
+          ? await window.api.projectGroups.delete({
+              groupId,
+              executionHostId: targetHostId,
+              ...(preserveRendererWorkspaceIds.length > 0 ? { preserveRendererWorkspaceIds } : {})
+            })
           : (
               await callRuntimeRpc<{ deleted: boolean }>(
                 target,
                 'projectGroup.delete',
-                { groupId },
-                { timeoutMs: 15_000 }
+                {
+                  groupId,
+                  ...(supportsOwnerQualifiedDelete
+                    ? { executionHostId: deleteExecutionHostId }
+                    : {}),
+                  ...(preserveRendererWorkspaceIds.length > 0
+                    ? { preserveRendererWorkspaceIds }
+                    : {})
+                },
+                { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
               )
             ).deleted
       if (!deleted) {
         return false
       }
+      if (
+        target.kind === 'environment' &&
+        expectedEnvironmentPairingRevision !== undefined &&
+        getRuntimeEnvironmentRevision(target.environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return false
+      }
+      claimHostCatalogFence(get, 'project-groups', target)
+      claimHostCatalogFence(get, 'folder-workspaces', target)
+      let teardownSnapshots: FolderWorkspaceRendererTeardownSnapshot[] = []
       set((s) => {
-        const deletedGroupIds = getProjectGroupSubtreeIds(s.projectGroups, groupId)
+        const deletedGroupIds = new Set([
+          ...initialDeletedGroupIds,
+          ...getProjectGroupSubtreeIdsForHost(
+            s.projectGroups,
+            groupId,
+            targetHostId,
+            exactHost,
+            options?.sourceExecutionHostId
+          )
+        ])
+        const folderWorkspaces = s.folderWorkspaces.filter(
+          (workspace) =>
+            !deletedGroupIds.has(workspace.projectGroupId) ||
+            !folderWorkspaceMatchesRequestedOwner(
+              workspace,
+              s.projectGroups,
+              targetHostId,
+              exactHost,
+              options?.sourceExecutionHostId
+            )
+        )
+        teardownSnapshots = snapshotFolderWorkspaceRendererTeardown(
+          s,
+          getRemovedFolderWorkspaceKeys(s.folderWorkspaces, folderWorkspaces),
+          getFolderWorkspaceRendererOwnerRemoval(
+            targetHostId,
+            getRemovedFolderWorkspaceKeysForHost(s, folderWorkspaces, targetHostId, exactHost),
+            false,
+            expectedEnvironmentPairingRevision
+          )
+        )
         return {
-          projectGroups: s.projectGroups.filter((group) => !deletedGroupIds.has(group.id)),
-          folderWorkspaces: s.folderWorkspaces.filter(
-            (workspace) => !deletedGroupIds.has(workspace.projectGroupId)
+          projectGroups: s.projectGroups.filter(
+            (group) =>
+              !deletedGroupIds.has(group.id) ||
+              !projectGroupMatchesRequestedOwner(
+                group,
+                targetHostId,
+                exactHost,
+                options?.sourceExecutionHostId
+              )
           ),
+          folderWorkspaces,
           repos: s.repos.map((repo) =>
-            repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)
+            repo.projectGroupId &&
+            deletedGroupIds.has(repo.projectGroupId) &&
+            deletionTargetOwnsHost(targetHostId, getRepoExecutionHostId(repo), exactHost) &&
+            (!options?.sourceExecutionHostId ||
+              resolveRepoPathStatusSourceHostId(repo) === options.sourceExecutionHostId)
               ? { ...repo, projectGroupId: null }
               : repo
           ),
           folderWorkspacePathStatuses: {}
         }
+      })
+      await teardownDeletedFolderWorkspaceRendererState(set, get, teardownSnapshots, {
+        isCurrent: (snapshot) => isFolderWorkspaceRendererTeardownCurrent(get(), snapshot)
       })
       return true
     } catch (err) {
@@ -2762,8 +3622,38 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   deleteProjectGroupWithContainedProjects: async (groupId, options) => {
-    const targets = selectProjectGroupRemovalTargets(get().projectGroups, get().repos, groupId)
-    const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
+    const state = get()
+    const target = getRuntimeTargetForExecutionHost(state, options.hostId)
+    const targetHostId = options.hostId ?? getRuntimeTargetHostId(target)
+    const expectedEnvironmentPairingRevision =
+      target.kind === 'environment'
+        ? captureRuntimeEnvironmentRequestRevision(
+            target.environmentId,
+            options.expectedEnvironmentPairingRevision
+          )
+        : undefined
+    const exactHost = options.hostId !== undefined
+    const hostProjectGroups = state.projectGroups.filter((group) =>
+      projectGroupMatchesRequestedOwner(
+        group,
+        targetHostId,
+        exactHost,
+        options.sourceExecutionHostId
+      )
+    )
+    const hostRepos = state.repos.filter(
+      (repo) =>
+        deletionTargetOwnsHost(targetHostId, getRepoExecutionHostId(repo), exactHost) &&
+        (!options.sourceExecutionHostId ||
+          resolveRepoPathStatusSourceHostId(repo) === options.sourceExecutionHostId)
+    )
+    const targets = selectProjectGroupRemovalTargets(hostProjectGroups, hostRepos, groupId)
+    const containedProjectTargets = hostRepos.filter(
+      (repo) => repo.projectGroupId && targets.deletedGroupIds.has(repo.projectGroupId)
+    )
+    const requestedProjectIds = options.removeContainedProjects
+      ? containedProjectTargets.map((repo) => repo.id)
+      : []
     if (!targets.groupExists) {
       return {
         status: 'missing-group',
@@ -2774,7 +3664,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
     }
 
-    const deleted = await get().deleteProjectGroup(groupId)
+    const deleted = await get().deleteProjectGroup(groupId, {
+      ...(options.hostId ? { hostId: options.hostId } : {}),
+      ...(options.sourceExecutionHostId
+        ? { sourceExecutionHostId: options.sourceExecutionHostId }
+        : {}),
+      expectedEnvironmentPairingRevision
+    })
     if (!deleted) {
       return {
         status: 'group-delete-failed',
@@ -2797,16 +3693,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
     const removedProjectIds: string[] = []
     const failedProjectRemovals: ProjectRemovalFailure[] = []
-    for (const projectId of targets.projectIds) {
-      const existedBeforeRemoval = get().repos.some((repo) => repo.id === projectId)
+    for (const target of containedProjectTargets) {
+      const projectId = target.id
+      const projectHostId = getRepoExecutionHostId(target)
+      const existedBeforeRemoval = get().repos.some((repo) =>
+        repoMatchesHostIdentity(repo, projectId, projectHostId)
+      )
       try {
         if (existedBeforeRemoval) {
-          await get().removeProject(projectId)
+          await get().removeProject(projectId, {
+            hostId: projectHostId,
+            expectedEnvironmentPairingRevision
+          })
         }
       } catch (err) {
         console.error('Failed to remove contained project:', err)
       }
-      const stillExists = get().repos.some((repo) => repo.id === projectId)
+      const stillExists = get().repos.some((repo) =>
+        repoMatchesHostIdentity(repo, projectId, projectHostId)
+      )
       if (stillExists) {
         failedProjectRemovals.push({
           projectId,
@@ -2828,7 +3733,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   moveProjectToGroup: async (projectId, groupId, order) => {
     try {
-      if (!findRepoForHost(get().repos, projectId, { settings: get().settings })) {
+      const repo = findRepoForHost(get().repos, projectId, { settings: get().settings })
+      if (!repo) {
         return false
       }
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId))
@@ -2837,7 +3743,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           ? await window.api.projectGroups.moveProject({
               projectId,
               groupId,
-              order
+              order,
+              executionHostId: getRepoExecutionHostId(repo)
             })
           : (
               await callRuntimeRpc<{ repo: Repo | null }>(
@@ -3299,15 +4206,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         return
       }
       const ownerHostId = getRepoExecutionHostId(ownerRepo)
-      // Why: an SSH per-workspace-env's workspace is the repo's main worktree, so removal routes here; tear down its ephemeral runtime first so it doesn't leak.
-      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
-        await cleanupEphemeralVmRuntimesForDeleted({
-          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
-          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
-        })
-      }
-      // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
+      // Why: derive the target from the owner so SSH removal never routes to the focused runtime.
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
+      const expectedEnvironmentPairingRevision =
+        target.kind === 'environment'
+          ? captureRuntimeEnvironmentRequestRevision(
+              target.environmentId,
+              options?.expectedEnvironmentPairingRevision
+            )
+          : undefined
       // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
@@ -3317,12 +4224,34 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           ? idExistsOnOtherHost
             ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
             : window.api.repos.remove({ repoId: projectId })
-          : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+          : callRuntimeRpc(
+              target,
+              'repo.rm',
+              { repo: projectId },
+              {
+                timeoutMs: 15_000,
+                expectedEnvironmentPairingRevision
+              }
+            ))
       } catch (err) {
         // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
         if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
           throw err
         }
+      }
+      if (
+        target.kind === 'environment' &&
+        expectedEnvironmentPairingRevision !== undefined &&
+        getRuntimeEnvironmentRevision(target.environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return
+      }
+      // Why: ambiguous repo selectors must fail before any sibling-owned ephemeral runtime is torn down.
+      if (isRuntimeOwnedSshTargetId(ownerRepo.connectionId)) {
+        await cleanupEphemeralVmRuntimesForDeleted({
+          workspaceIds: getKnownRepoWorktreeIds(get(), projectId, ownerHostId),
+          runtimeOwnedSshTargetIds: [ownerRepo.connectionId as string]
+        })
       }
 
       get().clearOrcaHookTrustForRepo(projectId)
@@ -3343,10 +4272,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               target,
               'terminal.stop',
               { worktree: toRuntimeWorktreeSelector(worktreeId) },
-              { timeoutMs: 15_000 }
+              { timeoutMs: 15_000, expectedEnvironmentPairingRevision }
             )
           )
         )
+        if (
+          expectedEnvironmentPairingRevision !== undefined &&
+          getRuntimeEnvironmentRevision(target.environmentId) !== expectedEnvironmentPairingRevision
+        ) {
+          return
+        }
       }
       for (const wId of worktreeIds) {
         const tabs = get().tabsByWorktree[wId] ?? []

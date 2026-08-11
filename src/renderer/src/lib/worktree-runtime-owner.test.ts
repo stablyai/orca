@@ -142,6 +142,21 @@ describe('getSettingsForWorktreeRuntimeOwner', () => {
     )
   })
 
+  it('keeps an explicit-local folder local under an SSH group', () => {
+    const explicitLocalState: WorktreeRuntimeOwnerState = {
+      ...state,
+      projectGroups: [
+        { id: 'ssh-group', connectionId: 'group-remote', executionHostId: 'ssh:group-remote' }
+      ],
+      folderWorkspaces: [{ id: 'local-folder', projectGroupId: 'ssh-group', connectionId: null }]
+    }
+
+    expect(getSettingsForWorktreeRuntimeOwner(explicitLocalState, 'folder:local-folder')).toEqual({
+      activeRuntimeEnvironmentId: null
+    })
+    expect(getExecutionHostIdForWorktree(explicitLocalState, 'folder:local-folder')).toBe('local')
+  })
+
   it('prefers project group runtime ownership over stale folder SSH targets', () => {
     const staleFolderConnectionState: WorktreeRuntimeOwnerState = {
       ...state,

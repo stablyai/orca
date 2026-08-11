@@ -44,6 +44,8 @@ const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 const uiSet = vi.fn()
+const ephemeralVmListRuntimes = vi.fn()
+const ephemeralVmCleanup = vi.fn()
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -80,6 +82,8 @@ beforeEach(() => {
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   uiSet.mockReset()
+  ephemeralVmListRuntimes.mockReset()
+  ephemeralVmCleanup.mockReset()
   uiSet.mockResolvedValue(undefined)
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
     return createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
@@ -95,6 +99,10 @@ beforeEach(() => {
       },
       pty: { kill: ptyKill },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
+      ephemeralVm: {
+        listRuntimes: ephemeralVmListRuntimes,
+        cleanup: ephemeralVmCleanup
+      },
       ui: { set: uiSet }
     }
   })
@@ -401,6 +409,32 @@ describe('repo slice host identity routing', () => {
     expect(reposRemove).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([localDuplicate])
     expect(store.getState().worktreesByRepo['same-repo']).toEqual([localWorktree])
+  })
+
+  it('does not tear down an ephemeral runtime when repo removal is ambiguous', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-ambiguous-remove',
+      ok: false,
+      error: { code: 'selector_ambiguous', message: 'selector_ambiguous' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const runtimeOwnedRepo = {
+      ...remoteDuplicate,
+      connectionId: 'runtime-ssh-owner'
+    }
+    const store = createTestStore()
+    store.setState({ repos: [runtimeOwnedRepo] })
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await store.getState().removeProject('same-repo', { hostId: 'runtime:env-1' })
+    } finally {
+      error.mockRestore()
+    }
+
+    expect(ephemeralVmListRuntimes).not.toHaveBeenCalled()
+    expect(ephemeralVmCleanup).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([runtimeOwnedRepo])
   })
 
   it('removeProject of an SSH host row routes local even when a runtime is focused', async () => {

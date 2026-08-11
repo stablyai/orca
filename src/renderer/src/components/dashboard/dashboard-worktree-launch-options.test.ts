@@ -129,4 +129,128 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
 
     expect(options).toEqual({ [worktreeId]: ['codex', 'goose'] })
   })
+
+  it('uses local detection for an explicit-local folder under an SSH group', () => {
+    const worktreeId = folderWorkspaceKey('folder-1')
+    const options = buildDashboardWorktreeLaunchOptions(
+      state({
+        folderWorkspaces: [
+          { id: 'folder-1', projectGroupId: 'group-1', connectionId: null }
+        ] as LaunchState['folderWorkspaces'],
+        projectGroups: [
+          { id: 'group-1', connectionId: 'ssh-folder', executionHostId: 'ssh:ssh-folder' }
+        ] as LaunchState['projectGroups'],
+        detectedAgentIds: ['claude'],
+        remoteDetectedAgentIds: { 'ssh-folder': ['goose'] }
+      }),
+      [],
+      [
+        {
+          repoId: 'folder-workspace:group-1',
+          worktreeId,
+          repoName: 'Folder',
+          worktreeName: 'Folder',
+          hostKind: 'local',
+          executionHostId: 'local',
+          workspaceKind: 'folder'
+        }
+      ]
+    )
+
+    expect(options).toEqual({ [worktreeId]: ['claude'] })
+  })
+
+  it.each([false, true])(
+    'withholds launch choices for same-id folders across direct hosts (reversed=%s)',
+    (reversed) => {
+      const worktreeId = folderWorkspaceKey('folder-1')
+      const localFolder = {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const sshFolder = {
+        id: 'folder-1',
+        projectGroupId: 'group-1',
+        connectionId: 'ssh-folder',
+        executionHostId: 'ssh:ssh-folder' as const
+      }
+      const options = buildDashboardWorktreeLaunchOptions(
+        state({
+          folderWorkspaces: (reversed
+            ? [sshFolder, localFolder]
+            : [localFolder, sshFolder]) as LaunchState['folderWorkspaces'],
+          projectGroups: [
+            { id: 'group-1', connectionId: null, executionHostId: 'local' },
+            {
+              id: 'group-1',
+              connectionId: 'ssh-folder',
+              executionHostId: 'ssh:ssh-folder'
+            }
+          ] as LaunchState['projectGroups'],
+          detectedAgentIds: ['claude'],
+          remoteDetectedAgentIds: { 'ssh-folder': ['goose'] }
+        }),
+        [],
+        [
+          {
+            repoId: 'folder-workspace:group-1',
+            worktreeId,
+            repoName: 'Folder',
+            worktreeName: 'Folder',
+            hostKind: 'local',
+            executionHostId: 'local',
+            workspaceKind: 'folder'
+          }
+        ]
+      )
+
+      expect(options).toEqual({ [worktreeId]: [] })
+    }
+  )
+
+  it('does not infer launch choices for same-runtime physical-owner collisions', () => {
+    const worktreeId = folderWorkspaceKey('folder-1')
+    const options = buildDashboardWorktreeLaunchOptions(
+      state({
+        folderWorkspaces: [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            executionHostId: 'runtime:hub',
+            runtimeSourceExecutionHostId: 'local'
+          },
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            executionHostId: 'runtime:hub',
+            runtimeSourceExecutionHostId: 'ssh:ssh-folder'
+          }
+        ] as unknown as LaunchState['folderWorkspaces'],
+        projectGroups: [
+          {
+            id: 'group-1',
+            executionHostId: 'runtime:hub',
+            runtimeSourceExecutionHostId: 'local'
+          },
+          {
+            id: 'group-1',
+            executionHostId: 'runtime:hub',
+            runtimeSourceExecutionHostId: 'ssh:ssh-folder'
+          }
+        ] as LaunchState['projectGroups'],
+        runtimeDetectedAgentIds: { hub: ['goose'] }
+      }),
+      [
+        card({
+          repoId: 'folder-workspace:group-1',
+          worktreeId,
+          executionHostId: 'runtime:hub'
+        })
+      ]
+    )
+
+    expect(options).toEqual({ [worktreeId]: [] })
+  })
 })

@@ -3503,6 +3503,159 @@ describe('registerWorktreeHandlers', () => {
     expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { label: 'local-first catalogs', reversed: false },
+    { label: 'SSH-first catalogs', reversed: true }
+  ])('host-qualifies same-ID folder lineage catalogs for $label', async (testCase) => {
+    const localChildKey = 'folder:local-child'
+    const sshChildKey = 'folder:ssh-child'
+    const localLineage = {
+      childWorkspaceKey: localChildKey,
+      parentWorkspaceKey: 'folder:local-parent',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    const sshLineage = {
+      childWorkspaceKey: sshChildKey,
+      parentWorkspaceKey: 'folder:ssh-parent',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 2
+    }
+    const ordered = <T>(local: T, ssh: T): T[] => (testCase.reversed ? [ssh, local] : [local, ssh])
+    store.getRepos.mockReturnValue(
+      ordered(
+        {
+          id: 'same-repo',
+          path: '/local/group/repo',
+          displayName: 'local',
+          badgeColor: '#000',
+          addedAt: 0,
+          projectGroupId: 'same-group'
+        },
+        {
+          id: 'same-repo',
+          path: '/remote/group/repo',
+          displayName: 'ssh',
+          badgeColor: '#000',
+          addedAt: 0,
+          projectGroupId: 'same-group',
+          connectionId: 'target-a'
+        }
+      )
+    )
+    store.getProjectGroups.mockReturnValue(
+      ordered(
+        { id: 'same-group', connectionId: null },
+        { id: 'same-group', connectionId: 'target-a' }
+      )
+    )
+    store.getFolderWorkspaces.mockReturnValue([
+      {
+        id: 'local-child',
+        projectGroupId: 'same-group',
+        folderPath: '/local/group/child',
+        connectionId: null
+      },
+      {
+        id: 'local-parent',
+        projectGroupId: 'same-group',
+        folderPath: '/local/group',
+        connectionId: null
+      },
+      {
+        id: 'ssh-child',
+        projectGroupId: 'same-group',
+        folderPath: '/remote/group/child',
+        connectionId: 'target-a'
+      },
+      {
+        id: 'ssh-parent',
+        projectGroupId: 'same-group',
+        folderPath: '/remote/group',
+        connectionId: 'target-a'
+      }
+    ])
+    store.getAllWorkspaceLineage.mockReturnValue({
+      [localChildKey]: localLineage,
+      [sshChildKey]: sshLineage
+    })
+    getSshGitProviderMock.mockReturnValue({ listWorktrees: vi.fn() })
+
+    const localResult = await handlers['worktrees:listLineageForHost'](ipcEvent, {
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const sshResult = await handlers['worktrees:listLineageForHost'](ipcEvent, {
+      executionHostId: toSshExecutionHostId('target-a'),
+      expectedAuthority: getSshProviderAuthority('target-a')
+    })
+
+    expect(localResult).toMatchObject({
+      authoritative: true,
+      workspaceLineageByChildKey: { [localChildKey]: localLineage }
+    })
+    expect(sshResult).toMatchObject({
+      authoritative: true,
+      workspaceLineageByChildKey: { [sshChildKey]: sshLineage }
+    })
+    expect(
+      (localResult as { workspaceLineageByChildKey: Record<string, unknown> })
+        .workspaceLineageByChildKey
+    ).not.toHaveProperty(sshChildKey)
+    expect(
+      (sshResult as { workspaceLineageByChildKey: Record<string, unknown> })
+        .workspaceLineageByChildKey
+    ).not.toHaveProperty(localChildKey)
+  })
+
+  it('honors an explicit-local folder owner over its SSH project group', async () => {
+    const childKey = 'folder:local-child'
+    const lineage = {
+      childWorkspaceKey: childKey,
+      parentWorkspaceKey: 'folder:local-parent',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    }
+    store.getRepos.mockReturnValue([
+      {
+        id: 'ssh-repo',
+        path: '/remote/group/repo',
+        displayName: 'ssh',
+        badgeColor: '#000',
+        addedAt: 0,
+        projectGroupId: 'ssh-group',
+        connectionId: 'target-a'
+      }
+    ])
+    store.getProjectGroups.mockReturnValue([{ id: 'ssh-group', connectionId: 'target-a' }])
+    store.getFolderWorkspaces.mockReturnValue([
+      {
+        id: 'local-child',
+        projectGroupId: 'ssh-group',
+        folderPath: '/local/group/child',
+        connectionId: null
+      },
+      {
+        id: 'local-parent',
+        projectGroupId: 'ssh-group',
+        folderPath: '/local/group',
+        connectionId: null
+      }
+    ])
+    store.getAllWorkspaceLineage.mockReturnValue({ [childKey]: lineage })
+
+    await expect(
+      handlers['worktrees:listLineageForHost'](ipcEvent, {
+        executionHostId: LOCAL_EXECUTION_HOST_ID
+      })
+    ).resolves.toMatchObject({
+      authoritative: true,
+      workspaceLineageByChildKey: { [childKey]: lineage }
+    })
+  })
+
   it('snapshots lineage catalogs once and memoizes repeated owner resolution', async () => {
     const worktreeIds = Array.from(
       { length: 101 },

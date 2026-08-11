@@ -5,6 +5,7 @@ import {
   buildAiVaultResumeStartupForWorktree,
   getAiVaultResumePlatform
 } from './ai-vault-resume-command'
+import { getAiVaultResumeWorkspacePath } from './ai-vault-resume-shell'
 
 vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
@@ -434,6 +435,31 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("claude '--resume' 'session one'")
+  })
+
+  it('selects the active folder owner path independent of catalog order', () => {
+    const state = {
+      activeWorktreeId: 'folder:folder-1',
+      activeWorkspaceExecutionHostId: 'ssh:folder-ssh',
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath: 'C:\\Users\\alice\\platform',
+          executionHostId: 'local'
+        },
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath: '/home/alice/platform',
+          executionHostId: 'ssh:folder-ssh',
+          connectionId: 'folder-ssh'
+        }
+      ],
+      worktreesByRepo: {}
+    } as unknown as AppState
+
+    expect(getAiVaultResumeWorkspacePath(state, 'folder:folder-1')).toBe('/home/alice/platform')
   })
 
   it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {

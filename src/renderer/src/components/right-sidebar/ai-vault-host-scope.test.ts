@@ -3,7 +3,6 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { AppState } from '@/store/types'
 import type { AiVaultSessionResumeTargetState } from './ai-vault-session-resume'
 import {
   buildAiVaultHostScopeOptions,
@@ -65,8 +64,10 @@ function stateForWorktree(args: {
           hostId: args.hostId ?? null
         }
       ]
-    }
-  } as unknown as Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'>
+    },
+    activeWorktreeId: args.worktreeId,
+    activeWorkspaceExecutionHostId: null
+  } as unknown as AiVaultSessionResumeTargetState
 }
 
 afterEach(() => {

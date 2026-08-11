@@ -71,6 +71,7 @@ describe('openAiVaultSessionLogInOrca', () => {
       relativePath: LOG_PATH,
       worktreeId: 'wt-1',
       runtimeEnvironmentId: null,
+      workspaceExecutionHostId: 'local',
       language: 'jsonl',
       mode: 'edit',
       readOnly: true,

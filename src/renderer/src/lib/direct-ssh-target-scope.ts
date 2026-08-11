@@ -1,68 +1,31 @@
 import {
-  getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
-import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import type {
-  DirectSshFolderOwner as FolderOwner,
   DirectSshGitRepoRef,
-  DirectSshGroupOwner as GroupOwner,
   DirectSshRepoOwner as RepoOwner,
   DirectSshTargetScope,
   DirectSshTargetScopeInput,
   DirectSshWorktreeOwner as WorktreeOwner
 } from './direct-ssh-target-scope-types'
 import { indexDirectSshOwnerRows } from './direct-ssh-target-owner-index'
+import { resolveFolderWorkspaceExecutionHostId } from './folder-workspace-execution-host'
+import { resolveDirectSshFolderEvidence } from './direct-ssh-folder-target-evidence'
+import {
+  addDirectSshHostEvidence,
+  newDirectSshHostEvidence,
+  resolveDirectSshRepoEvidence,
+  type DirectSshHostEvidence
+} from './direct-ssh-owner-host-evidence'
 export type {
   DirectSshGitRepoRef,
   DirectSshTargetScope,
   DirectSshTargetScopeInput
 } from './direct-ssh-target-scope-types'
-
-type HostEvidence = {
-  hosts: Set<ExecutionHostId>
-  ambiguous: boolean
-  contradictory: boolean
-}
-
-function newHostEvidence(): HostEvidence {
-  return { hosts: new Set(), ambiguous: false, contradictory: false }
-}
-
-function addHostEvidence(evidence: HostEvidence, rawHostId: string | null | undefined): void {
-  if (!rawHostId?.trim()) {
-    return
-  }
-  const host = parseExecutionHostId(rawHostId)
-  if (!host) {
-    evidence.ambiguous = true
-    return
-  }
-  if (host.kind === 'runtime' && host.environmentId === 'unresolved-owner') {
-    evidence.ambiguous = true
-    return
-  }
-  evidence.hosts.add(host.id)
-}
-
-function resolveRepoEvidence(repo: RepoOwner): HostEvidence {
-  const evidence = newHostEvidence()
-  addHostEvidence(evidence, repo.executionHostId)
-  if (repo.connectionId?.trim()) {
-    evidence.hosts.add(toSshExecutionHostId(repo.connectionId.trim()))
-  }
-  evidence.hosts =
-    evidence.hosts.size === 0 && !evidence.ambiguous
-      ? new Set([getRepoExecutionHostId(repo)])
-      : evidence.hosts
-  evidence.contradictory = evidence.hosts.size > 1
-  return evidence
-}
 
 function collectWorktreeRows(input: DirectSshTargetScopeInput): Map<string, WorktreeOwner[]> {
   return indexDirectSshOwnerRows([
@@ -72,7 +35,7 @@ function collectWorktreeRows(input: DirectSshTargetScopeInput): Map<string, Work
 }
 
 function addRepoDerivedEvidence(
-  evidence: HostEvidence,
+  evidence: DirectSshHostEvidence,
   repoRows: readonly RepoOwner[],
   explicitHosts: ReadonlySet<ExecutionHostId>
 ): void {
@@ -80,7 +43,7 @@ function addRepoDerivedEvidence(
   const repoHostCounts = new Map<ExecutionHostId, number>()
   let hasInvalidRepo = false
   for (const repo of repoRows) {
-    const repoEvidence = resolveRepoEvidence(repo)
+    const repoEvidence = resolveDirectSshRepoEvidence(repo)
     hasInvalidRepo ||= repoEvidence.ambiguous
     evidence.contradictory ||= repoEvidence.contradictory
     for (const host of repoEvidence.hosts) {
@@ -114,8 +77,8 @@ function resolveWorktreeEvidence(
   input: DirectSshTargetScopeInput,
   rows: readonly WorktreeOwner[],
   repoRowsById: ReadonlyMap<string, readonly RepoOwner[]>
-): HostEvidence {
-  const evidence = newHostEvidence()
+): DirectSshHostEvidence {
+  const evidence = newDirectSshHostEvidence()
   const repoIds = new Set(rows.map((row) => row.repoId))
   evidence.ambiguous ||= repoIds.size !== 1
   const explicitHosts = new Set<ExecutionHostId>()
@@ -143,88 +106,8 @@ function resolveWorktreeEvidence(
     }
   }
   const restored = input.restoredRuntimeHostIdByWorkspaceSessionKey
-  addHostEvidence(evidence, restored?.[rows[0].id])
-  addHostEvidence(evidence, restored?.[worktreeWorkspaceKey(rows[0].id)])
-  evidence.contradictory ||= evidence.hosts.size > 1
-  return evidence
-}
-
-function getFolderCandidateRepos(
-  folder: FolderOwner,
-  groups: readonly GroupOwner[],
-  repos: readonly RepoOwner[],
-  scopeConnectionId: string | null
-): RepoOwner[] {
-  const groupIds = getProjectGroupSubtreeIds(groups, folder.projectGroupId)
-  const groupRepos = repos.filter(
-    (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
-  )
-  const pathRepos = repos.filter(
-    (repo) =>
-      !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
-      isPathInsideOrEqual(folder.folderPath, repo.path)
-  )
-  if (scopeConnectionId) {
-    return [
-      ...groupRepos,
-      ...pathRepos.filter((repo) => (repo.connectionId ?? null) === scopeConnectionId)
-    ]
-  }
-  if (groupRepos.length === 0) {
-    return pathRepos
-  }
-  const groupConnections = new Set(groupRepos.map((repo) => repo.connectionId ?? null))
-  return [
-    ...groupRepos,
-    ...pathRepos.filter((repo) => groupConnections.has(repo.connectionId ?? null))
-  ]
-}
-
-function resolveFolderEvidence(
-  input: DirectSshTargetScopeInput,
-  folder: FolderOwner,
-  group: GroupOwner | undefined
-): HostEvidence {
-  const evidence = newHostEvidence()
-  const folderConnection = folder.connectionId?.trim() || null
-  const groupConnection = group?.connectionId?.trim() || null
-  if (folderConnection) {
-    evidence.hosts.add(toSshExecutionHostId(folderConnection))
-  }
-  if (groupConnection) {
-    evidence.hosts.add(toSshExecutionHostId(groupConnection))
-  }
-  addHostEvidence(evidence, group?.executionHostId)
-  addHostEvidence(
-    evidence,
-    input.restoredRuntimeHostIdByWorkspaceSessionKey?.[folderWorkspaceKey(folder.id)]
-  )
-
-  const scopeConnection = folderConnection ?? groupConnection
-  const candidateRepos = getFolderCandidateRepos(
-    folder,
-    input.projectGroups ?? [],
-    input.repos,
-    scopeConnection
-  )
-  const repoOwnerKeys = new Set<string>()
-  for (const repo of candidateRepos) {
-    const repoEvidence = resolveRepoEvidence(repo)
-    evidence.ambiguous ||= repoEvidence.ambiguous
-    evidence.contradictory ||= repoEvidence.contradictory
-    for (const host of repoEvidence.hosts) {
-      const ownerKey = JSON.stringify([repo.id, host])
-      evidence.ambiguous ||= repoOwnerKeys.has(ownerKey)
-      repoOwnerKeys.add(ownerKey)
-      evidence.hosts.add(host)
-    }
-  }
-  const hasSshOwner = [...evidence.hosts].some(
-    (hostId) => parseExecutionHostId(hostId)?.kind === 'ssh'
-  )
-  const hasConnectionOwner =
-    Boolean(scopeConnection) || candidateRepos.some((repo) => Boolean(repo.connectionId?.trim()))
-  evidence.ambiguous ||= !group || (hasSshOwner && !hasConnectionOwner)
+  addDirectSshHostEvidence(evidence, restored?.[rows[0].id])
+  addDirectSshHostEvidence(evidence, restored?.[worktreeWorkspaceKey(rows[0].id)])
   evidence.contradictory ||= evidence.hosts.size > 1
   return evidence
 }
@@ -240,7 +123,7 @@ export function resolveDirectSshTargetScope(
 
   for (const [repoId, rows] of repoRowsById) {
     const matchingRows = rows.filter((repo) => {
-      const evidence = resolveRepoEvidence(repo)
+      const evidence = resolveDirectSshRepoEvidence(repo)
       if (evidence.contradictory) {
         contradictoryOwnerCount++
         return false
@@ -282,11 +165,27 @@ export function resolveDirectSshTargetScope(
       continue
     }
     const groupRows = groupRowsById.get(rows[0].projectGroupId) ?? []
+    let group = groupRows[0]
     if (groupRows.length > 1) {
-      ambiguousOwnerCount++
-      continue
+      const folderHostId = resolveFolderWorkspaceExecutionHostId({
+        folderWorkspace: rows[0]
+      })
+      const matchingGroups = folderHostId
+        ? groupRows.filter(
+            (candidate) =>
+              resolveFolderWorkspaceExecutionHostId({
+                folderWorkspace: {},
+                projectGroup: candidate
+              }) === folderHostId
+          )
+        : []
+      if (matchingGroups.length !== 1) {
+        ambiguousOwnerCount++
+        continue
+      }
+      group = matchingGroups[0]
     }
-    const evidence = resolveFolderEvidence(input, rows[0], groupRows[0])
+    const evidence = resolveDirectSshFolderEvidence(input, rows[0], group)
     if (evidence.contradictory) {
       contradictoryOwnerCount++
     } else if (evidence.ambiguous || evidence.hosts.size === 0) {

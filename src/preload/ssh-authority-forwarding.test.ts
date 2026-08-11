@@ -92,6 +92,27 @@ describe('native preload SSH authority forwarding', () => {
     expect(invoke).toHaveBeenCalledWith('worktrees:forgetRemovedForExecutionHost', args)
   })
 
+  it('forwards host-qualified folder workspace and project group deletion', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const folderArgs = {
+      folderWorkspaceId: 'shared-folder',
+      executionHostId: 'ssh:ssh-1' as const,
+      preserveRendererWorkspaceKey: true
+    }
+    const groupArgs = {
+      groupId: 'shared-group',
+      executionHostId: 'ssh:ssh-1' as const,
+      preserveRendererWorkspaceIds: ['shared-folder']
+    }
+
+    await api.folderWorkspaces.delete(folderArgs)
+    await api.projectGroups.delete(groupArgs)
+
+    expect(invoke).toHaveBeenCalledWith('folderWorkspaces:delete', folderArgs)
+    expect(invoke).toHaveBeenCalledWith('projectGroups:delete', groupArgs)
+  })
+
   it('forwards full-pair get and push states without cloning away authority', async () => {
     const state: SshConnectionState = {
       targetId: 'ssh-1',

@@ -8,11 +8,13 @@ import {
 } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { findIndexedFolderWorkspaceOwner } from '@/lib/worktree-runtime-owner-index'
 
 export type NativeChatSkillStateInputs = Pick<
   AppState,
   | 'activeRepoId'
   | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
   | 'folderWorkspaces'
   | 'projectGroups'
   | 'projects'
@@ -42,6 +44,7 @@ export function selectNativeChatSkillStateInputs(state: AppState): NativeChatSki
   return {
     activeRepoId: state.activeRepoId,
     activeWorktreeId: state.activeWorktreeId,
+    activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
     folderWorkspaces: state.folderWorkspaces,
     projectGroups: state.projectGroups,
     projects: state.projects,
@@ -85,20 +88,35 @@ export function resolveNativeChatSkillDiscoveryContext(
     return null
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
+  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
+  const indexedFolderOwner =
+    workspaceScope?.type === 'folder'
+      ? (findIndexedFolderWorkspaceOwner(
+          state.folderWorkspaces,
+          workspaceScope.folderWorkspaceId,
+          hostId
+        ) ??
+        findIndexedFolderWorkspaceOwner(state.folderWorkspaces, workspaceScope.folderWorkspaceId))
+      : null
+  const folderWorkspace = state.folderWorkspaces.find(
+    (workspace) => workspace === indexedFolderOwner
+  )
+  if (
+    workspaceScope?.type === 'folder' &&
+    (!folderWorkspace || hostId === 'runtime:unresolved-owner')
+  ) {
+    return null
+  }
   const cwd =
     resolveNativeChatSkillDiscoveryCwd(state, terminalTabId) ??
-    (workspaceScope?.type === 'folder'
-      ? state.folderWorkspaces.find(
-          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-        )?.folderPath
-      : null)
+    (workspaceScope?.type === 'folder' ? folderWorkspace?.folderPath : null)
   if (!cwd) {
     return null
   }
 
-  const hostId = getExecutionHostIdForWorktree(state, worktreeId)
+  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
   const parsedHost = parseExecutionHostId(hostId)
-  if (parsedHost?.kind === 'ssh') {
+  if (!runtimeEnvironmentId && parsedHost?.kind === 'ssh') {
     return {
       key: JSON.stringify(['ssh', hostId, cwd]),
       cwd,
@@ -108,7 +126,6 @@ export function resolveNativeChatSkillDiscoveryContext(
     }
   }
 
-  const runtimeEnvironmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
   // Why: a selected global runtime is not proof that it owns this pane. Modern
   // panes carry an owner stamp; ambiguous legacy panes stay not-ready.
   if (parsedHost?.kind === 'runtime' && !runtimeEnvironmentId) {

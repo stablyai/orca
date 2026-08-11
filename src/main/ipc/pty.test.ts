@@ -5875,6 +5875,34 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
       })
 
+      it('fails exact SSH stop without terminating the lease when its provider is absent', async () => {
+        const store = { markSshRemotePtyLease: vi.fn() }
+        const runtime = {
+          setPtyController: vi.fn(),
+          onPtyExit: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(
+          mainWindow as never,
+          runtime as never,
+          undefined,
+          undefined,
+          undefined,
+          store as never
+        )
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
+          stopAndWait: (ptyId: string) => Promise<boolean>
+        }
+
+        await expect(controller.stopAndWait('ssh:ssh-1@@relay-pty')).resolves.toBe(false)
+
+        expect(store.markSshRemotePtyLease).not.toHaveBeenCalled()
+        expect(runtime.onPtyExit).not.toHaveBeenCalled()
+        expect(
+          mainWindow.webContents.send.mock.calls.filter((call) => call[0] === 'pty:exit')
+        ).toEqual([])
+      })
+
       it('splits the teardown budget so the liveness RPC gets only what shutdown left', async () => {
         // Why: sequential RPCs must share one absolute deadline; otherwise both get
         // the full ~9.5s bound and their sum overruns the 10s sweep deadline (Finding 1).

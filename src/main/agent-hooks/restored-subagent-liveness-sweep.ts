@@ -1,9 +1,9 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { resolveDeclaredFolderScopeOwner } from '../../shared/folder-workspace-owner-resolution'
 import type { FolderWorkspace, ProjectGroup } from '../../shared/types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
@@ -80,9 +80,10 @@ export function indexPersistedPaneKeyPtyIds(
 type AgentWorkspaceExecutionHostDeps = {
   getRepo: (repoId: string) => ExecutionHostOwner | null | undefined
   getWorktreeMeta: (worktreeId: string) => { hostId?: string | null } | null | undefined
-  getFolderWorkspace: (
-    folderWorkspaceId: string
-  ) => Pick<FolderWorkspace, 'projectGroupId' | 'connectionId'> | null | undefined
+  getFolderWorkspaces: () => readonly Pick<
+    FolderWorkspace,
+    'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+  >[]
   getProjectGroups: () => readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
 }
 
@@ -92,11 +93,26 @@ type ExecutionHostOwner = {
 }
 
 function resolveDeclaredExecutionHost(owner: ExecutionHostOwner): ExecutionHostId | null {
-  if (owner.executionHostId?.trim()) {
-    return parseExecutionHostId(owner.executionHostId)?.id ?? null
+  const resolved = resolveDeclaredFolderScopeOwner(owner)
+  return resolved.status === 'owned'
+    ? resolved.executionHostId
+    : resolved.status === 'unknown'
+      ? LOCAL_EXECUTION_HOST_ID
+      : null
+}
+
+function resolveFolderWorkspaceExecutionHost(
+  workspace: Pick<FolderWorkspace, 'projectGroupId' | 'connectionId' | 'executionHostId'>,
+  projectGroups: readonly Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>[]
+): ExecutionHostId | null {
+  const groups = projectGroups.filter((candidate) => candidate.id === workspace.projectGroupId)
+  if (groups.length === 0) {
+    return null
   }
-  const connectionId = owner.connectionId?.trim()
-  return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+  if (workspace.executionHostId?.trim() || workspace.connectionId !== undefined) {
+    return resolveDeclaredExecutionHost(workspace)
+  }
+  return groups.length === 1 ? resolveDeclaredExecutionHost(groups[0]!) : null
 }
 
 /** Resolve persisted workspace ownership; unknown provenance is not local authority. */
@@ -109,17 +125,29 @@ export function resolveAgentWorkspaceExecutionHostId(
   }
   const scope = parseWorkspaceKey(workspaceId)
   if (scope?.type === 'folder') {
-    const workspace = deps.getFolderWorkspace(scope.folderWorkspaceId)
-    const group = workspace
-      ? deps.getProjectGroups().find((candidate) => candidate.id === workspace.projectGroupId)
-      : undefined
-    if (!workspace || !group) {
+    const workspaces = deps
+      .getFolderWorkspaces()
+      .filter((workspace) => workspace.id === scope.folderWorkspaceId)
+    if (workspaces.length === 0) {
       return null
     }
-    return resolveDeclaredExecutionHost({
-      connectionId: workspace.connectionId ?? group.connectionId,
-      executionHostId: group.executionHostId
-    })
+    const projectGroups = deps.getProjectGroups()
+    const owners = new Set<ExecutionHostId>()
+    let localOwnerCount = 0
+    for (const workspace of workspaces) {
+      const owner = resolveFolderWorkspaceExecutionHost(workspace, projectGroups)
+      if (!owner) {
+        return null
+      }
+      owners.add(owner)
+      if (owner === LOCAL_EXECUTION_HOST_ID) {
+        localOwnerCount += 1
+      }
+    }
+    if (localOwnerCount === 1) {
+      return LOCAL_EXECUTION_HOST_ID
+    }
+    return localOwnerCount === 0 && owners.size === 1 ? [...owners][0]! : null
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   const declaredWorktreeHost = deps.getWorktreeMeta(worktreeId)?.hostId?.trim()

@@ -110,11 +110,13 @@ import {
   getFolderWorkspacePathStatus,
   getFolderWorkspacePathStatusForPath
 } from '../project-groups/folder-workspace-path-status'
+import { resolveDeclaredFolderScopeOwner } from '../../shared/folder-workspace-owner-resolution'
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import { isAdmissibleDirectSshAuthority } from '../../shared/ssh-retained-payload-admission'
 import { isCurrentSshProviderAuthority } from '../ssh/ssh-provider-authority'
+import { findProjectGroupForConnection } from '../../shared/project-groups'
 
 // Why: `method` is the IPC entry point the user took, not what they added (never path/URL/name); repos:create → 'folder_picker'.
 // Why: `isGitRepo` is a non-identifying git-vs-folder signal from the caller's detection; pass undefined when unknown, never default false.
@@ -800,6 +802,11 @@ const ProjectGroupCreateArgs = z.object({
 
 const ProjectGroupUpdateArgs = z.object({
   groupId: z.string().min(1),
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+    )
+    .optional(),
   updates: z.object({
     name: z.string().optional(),
     isCollapsed: z.boolean().optional(),
@@ -809,13 +816,24 @@ const ProjectGroupUpdateArgs = z.object({
 })
 
 const ProjectGroupSelectorArgs = z.object({
-  groupId: z.string().min(1)
+  groupId: z.string().min(1),
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+    )
+    .optional(),
+  preserveRendererWorkspaceIds: z.array(z.string().min(1)).optional()
 })
 
 const ProjectGroupMoveProjectArgs = z.object({
   projectId: z.string().min(1),
   groupId: z.string().nullable(),
-  order: z.number().finite().optional()
+  order: z.number().finite().optional(),
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+    )
+    .optional()
 })
 
 const ProjectHostSetupExistingFolderIpcArgs = z.object({
@@ -926,6 +944,11 @@ const FolderWorkspaceCreateArgs = z
 
 const FolderWorkspaceUpdateArgs = z.object({
   folderWorkspaceId: z.string().min(1),
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+    )
+    .optional(),
   updates: z
     .object({
       name: z.string().optional(),
@@ -948,17 +971,33 @@ const FolderWorkspaceUpdateArgs = z.object({
 })
 
 const FolderWorkspaceSelectorArgs = z.object({
-  folderWorkspaceId: z.string().min(1)
+  folderWorkspaceId: z.string().min(1),
+  executionHostId: z
+    .custom<ExecutionHostId>(
+      (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+    )
+    .optional(),
+  preserveRendererWorkspaceKey: z.boolean().optional()
 })
 
 const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('folder-workspace'),
-    folderWorkspaceId: z.string().min(1)
+    folderWorkspaceId: z.string().min(1),
+    executionHostId: z
+      .custom<ExecutionHostId>(
+        (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+      )
+      .optional()
   }),
   z.object({
     scope: z.literal('project-group'),
-    projectGroupId: z.string().min(1)
+    projectGroupId: z.string().min(1),
+    executionHostId: z
+      .custom<ExecutionHostId>(
+        (value) => typeof value === 'string' && parseExecutionHostId(value) !== null
+      )
+      .optional()
   }),
   z.object({
     scope: z.literal('path'),
@@ -1260,7 +1299,11 @@ async function runNestedRepoScanForIpc(
   }
 }
 
-export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): void {
+export function registerRepoHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime?: OrcaRuntimeService
+): void {
   // Remove previously registered handlers so we can re-register on macOS app re-activation (new window).
   ipcMain.removeHandler('repos:list')
   ipcMain.removeHandler('repos:listForExecutionHost')
@@ -1488,7 +1531,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         'invalid_folder_workspace_create_args'
       )
       const projectGroups = store.getProjectGroups()
-      const group = projectGroups.find((entry) => entry.id === args.projectGroupId)
+      const group = findProjectGroupForConnection(
+        projectGroups,
+        args.projectGroupId,
+        args.connectionId
+      )
       const folderPath =
         typeof args.folderPath === 'string' && args.folderPath.trim().length > 0
           ? args.folderPath
@@ -1496,11 +1543,15 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       if (!group || !folderPath) {
         throw new Error('folder_workspace_project_group_not_found')
       }
+      const connectionIdIsAuthoritative =
+        args.connectionId !== undefined || group.connectionId !== undefined
       const status = await getFolderWorkspacePathStatusForPath(
         {
           folderPath,
           projectGroupId: group.id,
-          connectionId: args.connectionId ?? group.connectionId ?? null,
+          connectionId:
+            args.connectionId !== undefined ? args.connectionId : (group.connectionId ?? null),
+          connectionIdIsAuthoritative,
           projectGroups,
           repos: store.getRepos()
         },
@@ -1521,23 +1572,57 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+      if (runtime) {
+        const updated = await runtime.updateFolderWorkspace(args.folderWorkspaceId, args.updates, {
+          notify: false,
+          ...(args.executionHostId ? { executionHostId: args.executionHostId } : {})
+        })
+        if (updated) {
+          notifyReposChanged(mainWindow)
+        }
+        return updated
+      }
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0
       ) {
-        const workspace = store.getFolderWorkspace(args.folderWorkspaceId)
+        const workspace = args.executionHostId
+          ? store.getFolderWorkspace(args.folderWorkspaceId, {
+              executionHostId: args.executionHostId
+            })
+          : store.getFolderWorkspace(args.folderWorkspaceId)
         if (!workspace) {
           return null
         }
         const projectGroups = store.getProjectGroups()
+        const candidateGroups = projectGroups.filter(
+          (entry) => entry.id === workspace.projectGroupId
+        )
+        const workspaceOwner = resolveDeclaredFolderScopeOwner(workspace)
+        const executionHostId =
+          args.executionHostId ??
+          (workspaceOwner.status === 'owned' ? workspaceOwner.executionHostId : null)
+        const matchingGroups = executionHostId
+          ? candidateGroups.filter((candidate) => {
+              const owner = resolveDeclaredFolderScopeOwner(candidate)
+              return owner.status === 'owned' && owner.executionHostId === executionHostId
+            })
+          : candidateGroups
+        const group = matchingGroups.length === 1 ? matchingGroups[0] : undefined
+        if (!group) {
+          return null
+        }
+        const connectionIdIsAuthoritative =
+          workspace.connectionId !== undefined || group.connectionId !== undefined
         const status = await getFolderWorkspacePathStatusForPath(
           {
             folderPath: args.updates.folderPath,
             projectGroupId: workspace.projectGroupId,
             connectionId:
-              workspace.connectionId ??
-              projectGroups.find((entry) => entry.id === workspace.projectGroupId)?.connectionId ??
-              null,
+              workspace.connectionId !== undefined
+                ? workspace.connectionId
+                : (group.connectionId ?? null),
+            connectionIdIsAuthoritative,
             projectGroups,
             repos: store.getRepos()
           },
@@ -1545,7 +1630,11 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         )
         assertFolderWorkspacePathUsable(status)
       }
-      const updated = store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)
+      const updated = args.executionHostId
+        ? store.updateFolderWorkspace(args.folderWorkspaceId, args.updates, {
+            executionHostId: args.executionHostId
+          })
+        : store.updateFolderWorkspace(args.folderWorkspaceId, args.updates)
       if (updated) {
         notifyReposChanged(mainWindow)
       }
@@ -1553,13 +1642,26 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     }
   )
 
-  ipcMain.handle('folderWorkspaces:delete', (_event, rawArgs: unknown): boolean => {
+  ipcMain.handle('folderWorkspaces:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
       FolderWorkspaceSelectorArgs,
       rawArgs,
       'invalid_folder_workspace_delete_args'
     )
-    const deleted = store.removeFolderWorkspace(args.folderWorkspaceId)
+    const deleted = runtime
+      ? (
+          await runtime.deleteFolderWorkspace(args.folderWorkspaceId, {
+            notify: false,
+            ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+            ...(args.preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+          })
+        ).deleted
+      : args.preserveRendererWorkspaceKey || args.executionHostId
+        ? store.removeFolderWorkspace(args.folderWorkspaceId, {
+            ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+            ...(args.preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+          })
+        : store.removeFolderWorkspace(args.folderWorkspaceId)
     if (deleted) {
       notifyReposChanged(mainWindow)
     }
@@ -1583,26 +1685,60 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
     return group
   })
 
-  ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {
+  ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown) => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupUpdateArgs,
       rawArgs,
       'invalid_project_group_update_args'
     )
-    const updated = store.updateProjectGroup(args.groupId, args.updates)
+    if (runtime) {
+      return runtime
+        .updateProjectGroup(args.groupId, args.updates, {
+          notify: false,
+          ...(args.executionHostId ? { executionHostId: args.executionHostId } : {})
+        })
+        .then((updated) => {
+          if (updated) {
+            notifyReposChanged(mainWindow)
+          }
+          return updated
+        })
+    }
+    const updated = args.executionHostId
+      ? store.updateProjectGroup(args.groupId, args.updates, {
+          executionHostId: args.executionHostId
+        })
+      : store.updateProjectGroup(args.groupId, args.updates)
     if (updated) {
       notifyReposChanged(mainWindow)
     }
     return updated
   })
 
-  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+  ipcMain.handle('projectGroups:delete', async (_event, rawArgs: unknown): Promise<boolean> => {
     const args = parseProjectGroupIpcArgs(
       ProjectGroupSelectorArgs,
       rawArgs,
       'invalid_project_group_delete_args'
     )
-    const deleted = store.deleteProjectGroup(args.groupId)
+    const deleted = runtime
+      ? (
+          await runtime.deleteProjectGroup(args.groupId, {
+            notify: false,
+            ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+            ...(args.preserveRendererWorkspaceIds
+              ? { preserveRendererWorkspaceIds: args.preserveRendererWorkspaceIds }
+              : {})
+          })
+        ).deleted
+      : args.preserveRendererWorkspaceIds || args.executionHostId
+        ? store.deleteProjectGroup(args.groupId, {
+            ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+            ...(args.preserveRendererWorkspaceIds
+              ? { preserveRendererWorkspaceIds: args.preserveRendererWorkspaceIds }
+              : {})
+          })
+        : store.deleteProjectGroup(args.groupId)
     if (deleted) {
       notifyReposChanged(mainWindow)
     }
@@ -1615,7 +1751,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       rawArgs,
       'invalid_project_group_move_repo_args'
     )
-    const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order)
+    const moved = store.moveProjectToGroup(args.projectId, args.groupId, args.order, {
+      executionHostId: args.executionHostId
+    })
     if (moved) {
       notifyReposChanged(mainWindow)
     }
@@ -1726,7 +1864,9 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const group = groupResolver.getGroupForRepo(repoPath)
           if (existing) {
             if (group) {
-              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder)
+              store.moveProjectToGroup(existing.id, group.id, projectGroupOrder, {
+                executionHostId: getRepoExecutionHostId(existing)
+              })
             }
             importedProjectIdsByRepoPath.set(normalizedImportRepoPath, existing.id)
             results.push({ path: repoPath, projectId: existing.id, status: 'already-known' })
@@ -1781,7 +1921,18 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
       const failedCount = results.filter((entry) => entry.status === 'failed').length
       if (importedCount + alreadyKnownCount === 0) {
         for (const group of groupResolver.getCreatedGroups().toReversed()) {
-          store.deleteProjectGroup(group.id)
+          try {
+            if (runtime) {
+              await runtime.deleteProjectGroup(group.id, { notify: false })
+            } else {
+              store.deleteProjectGroup(group.id)
+            }
+          } catch (error) {
+            console.warn('[repos] failed to roll back nested-import project group', {
+              groupId: group.id,
+              error
+            })
+          }
         }
       }
       invalidateAuthorizedRootsCache()

@@ -6,6 +6,7 @@ import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
 } from '@/lib/folder-workspace-path-status'
+import { getProjectGroupPathStatusRequest } from '@/lib/folder-workspace-path-status-request'
 import { isConfirmedStaleFolderPathStatus } from '../../../../shared/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../shared/types'
 
@@ -31,8 +32,7 @@ export function useFolderWorkspaceComposerPathStatus(
     }))
   )
   const pathStatusRequest = useMemo(
-    () =>
-      projectGroup ? { scope: 'project-group' as const, projectGroupId: projectGroup.id } : null,
+    () => (projectGroup ? getProjectGroupPathStatusRequest(projectGroup) : null),
     [projectGroup]
   )
   const cacheExpiryTick = useFolderWorkspacePathStatusCacheExpiryTick(folderWorkspacePathStatuses)
@@ -86,7 +86,7 @@ export function useFolderWorkspaceComposerPathStatus(
       return next
     })
     void Promise.resolve(
-      fetchFolderWorkspacePathStatus(pathStatusRequest, { force: true, runtimeEnvironmentId })
+      fetchFolderWorkspacePathStatus(pathStatusRequest, { force: true, ...pathStatusRouteOptions })
     ).finally(() => {
       if (activePathStatusRefreshIdRef.current !== refreshId) {
         return
@@ -103,7 +103,7 @@ export function useFolderWorkspaceComposerPathStatus(
     open,
     pathStatusRefreshKey,
     pathStatusRequest,
-    runtimeEnvironmentId
+    pathStatusRouteOptions
   ])
 
   const pathStatusRefreshPending =

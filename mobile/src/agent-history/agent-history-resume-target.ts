@@ -2,7 +2,6 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   parseExecutionHostId,
-  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../src/shared/execution-host'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
@@ -12,6 +11,11 @@ import {
   canResumeInMobileSessionWorktree,
   resolveMobileAgentHistorySessionWorktree
 } from './agent-history-session-worktree'
+import {
+  getMobileFolderScopeDeclaredHostId,
+  resolveMobileFolderOwner,
+  resolveMobileProjectGroupOwner
+} from './mobile-folder-resume-owner'
 
 export type MobileAiVaultResumeTargetStatus = 'local' | 'ssh' | 'runtime' | 'unknown'
 
@@ -34,6 +38,7 @@ export type MobileAiVaultResumeFolderWorkspace = {
   projectGroupId: string
   folderPath: string
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
 }
 
 export type MobileAiVaultResumeProjectGroup = {
@@ -72,10 +77,11 @@ export function getMobileAiVaultResumeWorktreeTargetStatus(args: {
   if (!args.worktreeId) {
     return 'unknown'
   }
-  const worktree = args.worktrees.find((candidate) => candidate.worktreeId === args.worktreeId)
-  if (!worktree) {
+  const matches = args.worktrees.filter(({ worktreeId }) => worktreeId === args.worktreeId)
+  if (matches.length !== 1) {
     return 'unknown'
   }
+  const worktree = matches[0]!
   if (worktree.workspaceKind === 'folder-workspace') {
     return getMobileAiVaultResumeFolderTargetStatus({
       worktreeId: args.worktreeId,
@@ -181,32 +187,35 @@ function getMobileAiVaultResumeFolderTargetStatus(args: {
   const folderWorkspaceId = args.worktreeId.startsWith('folder:')
     ? args.worktreeId.slice('folder:'.length)
     : null
-  const folderWorkspace = folderWorkspaceId
-    ? args.folderWorkspaces.find((workspace) => workspace.id === folderWorkspaceId)
-    : null
+  const preferredHostId = normalizeExecutionHostId(args.worktree.hostId)
+  const folderCandidates = folderWorkspaceId
+    ? args.folderWorkspaces.filter((workspace) => workspace.id === folderWorkspaceId)
+    : []
+  const folderWorkspace = resolveMobileFolderOwner(
+    folderCandidates,
+    args.projectGroups,
+    preferredHostId
+  )
   if (!folderWorkspace) {
     return 'unknown'
   }
+  const folderHostId = getMobileFolderScopeDeclaredHostId(folderWorkspace)
+  if (folderHostId) {
+    return getMobileAiVaultResumeExecutionHostTargetStatus(folderHostId)
+  }
   const projectGroupId =
     folderWorkspace.projectGroupId ?? parseFolderWorkspaceRepoId(args.worktree.repoId)
-  const projectGroup = projectGroupId
-    ? args.projectGroups.find((group) => group.id === projectGroupId)
-    : null
-
-  const groupHostId = normalizeExecutionHostId(projectGroup?.executionHostId)
-  if (groupHostId) {
-    return getMobileAiVaultResumeExecutionHostTargetStatus(groupHostId)
+  const projectGroupCandidates = projectGroupId
+    ? args.projectGroups.filter((group) => group.id === projectGroupId)
+    : []
+  const projectGroup = resolveMobileProjectGroupOwner(projectGroupCandidates, preferredHostId)
+  if (projectGroupCandidates.length > 0 && !projectGroup) {
+    return 'unknown'
   }
 
-  const explicitConnectionId = (
-    folderWorkspace?.connectionId ??
-    projectGroup?.connectionId ??
-    ''
-  ).trim()
-  if (explicitConnectionId) {
-    return getMobileAiVaultResumeExecutionHostTargetStatus(
-      toSshExecutionHostId(explicitConnectionId)
-    )
+  const groupHostId = projectGroup ? getMobileFolderScopeDeclaredHostId(projectGroup) : null
+  if (groupHostId) {
+    return getMobileAiVaultResumeExecutionHostTargetStatus(groupHostId)
   }
 
   return mergeMobileAiVaultResumeExecutionHostTargetStatuses(
@@ -214,7 +223,8 @@ function getMobileAiVaultResumeFolderTargetStatus(args: {
       folderWorkspace,
       projectGroupId,
       projectGroups: args.projectGroups,
-      repos: args.repos
+      repos: args.repos,
+      executionHostId: preferredHostId
     }).map(getRepoExecutionHostId)
   )
 }
@@ -239,16 +249,25 @@ function getMobileFolderWorkspaceCandidateRepos(args: {
   projectGroupId: string | null
   projectGroups: readonly MobileAiVaultResumeProjectGroup[]
   repos: readonly MobileAiVaultResumeRepo[]
+  executionHostId: ExecutionHostId | null
 }): MobileAiVaultResumeRepo[] {
   if (!args.folderWorkspace || !args.projectGroupId) {
     return []
   }
   const folderWorkspace = args.folderWorkspace
-  const groupIds = getMobileProjectGroupSubtreeIds(args.projectGroups, args.projectGroupId)
-  const groupRepos = args.repos.filter(
+  const projectGroups = args.executionHostId
+    ? args.projectGroups.filter(
+        (group) => getMobileFolderScopeDeclaredHostId(group) === args.executionHostId
+      )
+    : args.projectGroups
+  const repos = args.executionHostId
+    ? args.repos.filter((repo) => getRepoExecutionHostId(repo) === args.executionHostId)
+    : args.repos
+  const groupIds = getMobileProjectGroupSubtreeIds(projectGroups, args.projectGroupId)
+  const groupRepos = repos.filter(
     (repo) => typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)
   )
-  const pathRepos = args.repos.filter(
+  const pathRepos = repos.filter(
     (repo) =>
       !(typeof repo.projectGroupId === 'string' && groupIds.has(repo.projectGroupId)) &&
       typeof repo.path === 'string' &&

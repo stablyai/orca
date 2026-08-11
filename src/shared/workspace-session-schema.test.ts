@@ -40,6 +40,58 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves local editor workspace ownership across session parsing', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/repo/local.ts',
+            relativePath: 'local.ts',
+            worktreeId: 'wt',
+            language: 'typescript',
+            workspaceExecutionHostId: 'local'
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt?.[0]?.workspaceExecutionHostId).toBe('local')
+    }
+  })
+
+  it('drops an open file with invalid workspace ownership, keeping the session', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        wt: [
+          {
+            filePath: '/repo/local.ts',
+            relativePath: 'local.ts',
+            worktreeId: 'wt',
+            language: 'typescript',
+            workspaceExecutionHostId: 'unknown-host'
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.openFilesByWorktree?.wt).toEqual([])
+    }
+  })
+
   it('drops an open file with blank external SSH ownership, keeping the session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -118,8 +170,27 @@ describe('parseWorkspaceSession', () => {
           {
             id: 'browser-1',
             worktreeId: 'wt',
+            workspaceExecutionHostId: 'ssh:ssh-owner',
             sessionProfileId: 'iso-profile',
             sessionPartition: 'persist:orca-browser-session-iso-profile',
+            url: 'https://example.com',
+            title: 'Example',
+            loading: false,
+            faviconUrl: null,
+            canGoBack: false,
+            canGoForward: false,
+            loadError: null,
+            createdAt: 1
+          }
+        ]
+      },
+      browserPagesByWorkspace: {
+        'browser-1': [
+          {
+            id: 'page-1',
+            workspaceId: 'browser-1',
+            worktreeId: 'wt',
+            workspaceExecutionHostId: 'ssh:ssh-owner',
             url: 'https://example.com',
             title: 'Example',
             loading: false,
@@ -138,6 +209,12 @@ describe('parseWorkspaceSession', () => {
     }
     expect(result.value.browserTabsByWorktree?.wt?.[0]?.sessionPartition).toBe(
       'persist:orca-browser-session-iso-profile'
+    )
+    expect(result.value.browserTabsByWorktree?.wt?.[0]?.workspaceExecutionHostId).toBe(
+      'ssh:ssh-owner'
+    )
+    expect(result.value.browserPagesByWorkspace?.['browser-1']?.[0]?.workspaceExecutionHostId).toBe(
+      'ssh:ssh-owner'
     )
   })
 

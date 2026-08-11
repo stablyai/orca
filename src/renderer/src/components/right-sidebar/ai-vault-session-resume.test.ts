@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Repo, Worktree } from '../../../../shared/types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
+import {
+  resolveAiVaultSessionLaunchTarget,
+  resolveAiVaultTargetWorkspacePath
+} from './ai-vault-session-launch-actions'
 import {
   aiVaultSessionResumeLabel,
   aiVaultSessionRowResumeGating,
@@ -53,6 +56,8 @@ function makeTargetState(
     projectGroups: [],
     repos: [],
     worktreesByRepo: {},
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
     ...overrides
   } as AiVaultSessionResumeTargetState
 }
@@ -518,6 +523,33 @@ describe('resolveAiVaultSessionLaunchTarget', () => {
       worktreeId: folderWorkspaceKey('folder-1')
     })
   })
+
+  it.each([['local-first' as const], ['ssh-first' as const]])(
+    'resolves the active folder path with %s catalog order',
+    (order) => {
+      const local = {
+        ...makeFolderTargetState({}).folderWorkspaces[0]!,
+        folderPath: '/local/platform',
+        connectionId: null,
+        executionHostId: 'local' as const
+      }
+      const ssh = {
+        ...local,
+        folderPath: '/remote/platform',
+        connectionId: 'ssh-1',
+        executionHostId: 'ssh:ssh-1' as const
+      }
+      const targetState = makeTargetState({
+        activeWorktreeId: folderWorkspaceKey('folder-1'),
+        activeWorkspaceExecutionHostId: 'ssh:ssh-1',
+        folderWorkspaces: order === 'local-first' ? [local, ssh] : [ssh, local]
+      })
+
+      expect(resolveAiVaultTargetWorkspacePath(targetState, folderWorkspaceKey('folder-1'))).toBe(
+        '/remote/platform'
+      )
+    }
+  )
 
   it('blocks direct resume of a host-stored session into an SSH folder workspace', () => {
     expect(

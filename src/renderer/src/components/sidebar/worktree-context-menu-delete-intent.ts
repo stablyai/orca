@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { runWorktreeBatchDelete, runWorktreeDelete } from './delete-worktree-flow'
 import type { WorktreeDeleteIdentity } from './worktree-delete-request'
@@ -6,7 +7,7 @@ import type { WorktreeDeleteIdentity } from './worktree-delete-request'
 export type WorktreeContextMenuDeleteIntent =
   | { kind: 'worktree'; worktree: WorktreeDeleteIdentity }
   | { kind: 'batch'; worktrees: readonly WorktreeDeleteIdentity[] }
-  | { kind: 'folder'; folderWorkspaceId: string }
+  | { kind: 'folder'; folderWorkspaceId: string; executionHostId?: ExecutionHostId }
 
 export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDeleteIntent): void {
   if (intent.kind === 'batch') {
@@ -18,12 +19,18 @@ export function runWorktreeContextMenuDeleteIntent(intent: WorktreeContextMenuDe
     return
   }
   const state = useAppStore.getState()
-  void state.deleteFolderWorkspace(intent.folderWorkspaceId).then((deleted) => {
-    const current = useAppStore.getState()
-    if (deleted && current.activeWorktreeId === folderWorkspaceKey(intent.folderWorkspaceId)) {
-      current.setActiveWorktree(null)
-    }
-  })
+  void state
+    .deleteFolderWorkspace(intent.folderWorkspaceId, { hostId: intent.executionHostId })
+    .then((deleted) => {
+      const current = useAppStore.getState()
+      if (
+        deleted &&
+        current.activeWorktreeId === folderWorkspaceKey(intent.folderWorkspaceId) &&
+        current.activeWorkspaceExecutionHostId === (intent.executionHostId ?? null)
+      ) {
+        current.setActiveWorktree(null)
+      }
+    })
 }
 
 export function deferWorktreeContextMenuDeleteIntent(

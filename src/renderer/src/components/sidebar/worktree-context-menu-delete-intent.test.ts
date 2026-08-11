@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ runDelete: vi.fn(), runBatchDelete: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  getState: vi.fn(),
+  runDelete: vi.fn(),
+  runBatchDelete: vi.fn()
+}))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
+vi.mock('@/store', () => ({ useAppStore: { getState: mocks.getState } }))
 vi.mock('./delete-worktree-flow', () => ({
   runWorktreeDelete: mocks.runDelete,
   runWorktreeBatchDelete: mocks.runBatchDelete
@@ -55,6 +59,56 @@ describe('deferWorktreeContextMenuDeleteIntent', () => {
     deferWorktreeContextMenuDeleteIntent(intent, undefined, (callback) => callback())
 
     expect(mocks.runBatchDelete).toHaveBeenCalledWith(intent.worktrees)
+  })
+
+  it('preserves folder ownership through deferred deletion', async () => {
+    const deleteFolderWorkspace = vi.fn().mockResolvedValue(true)
+    const setActiveWorktree = vi.fn()
+    mocks.getState.mockReturnValue({
+      activeWorkspaceExecutionHostId: 'ssh:target-1',
+      activeWorktreeId: 'folder:folder-1',
+      deleteFolderWorkspace,
+      setActiveWorktree
+    })
+
+    deferWorktreeContextMenuDeleteIntent(
+      {
+        kind: 'folder',
+        folderWorkspaceId: 'folder-1',
+        executionHostId: 'ssh:target-1'
+      },
+      undefined,
+      (callback) => callback()
+    )
+
+    expect(deleteFolderWorkspace).toHaveBeenCalledWith('folder-1', {
+      hostId: 'ssh:target-1'
+    })
+    await vi.waitFor(() => expect(setActiveWorktree).toHaveBeenCalledWith(null))
+  })
+
+  it('keeps an active same-ID folder owned by another host', async () => {
+    const deleteFolderWorkspace = vi.fn().mockResolvedValue(true)
+    const setActiveWorktree = vi.fn()
+    mocks.getState.mockReturnValue({
+      activeWorkspaceExecutionHostId: 'ssh:target-2',
+      activeWorktreeId: 'folder:folder-1',
+      deleteFolderWorkspace,
+      setActiveWorktree
+    })
+
+    deferWorktreeContextMenuDeleteIntent(
+      {
+        kind: 'folder',
+        folderWorkspaceId: 'folder-1',
+        executionHostId: 'ssh:target-1'
+      },
+      undefined,
+      (callback) => callback()
+    )
+
+    await vi.waitFor(() => expect(deleteFolderWorkspace).toHaveBeenCalledOnce())
+    expect(setActiveWorktree).not.toHaveBeenCalled()
   })
 
   it('dispatches on the next macrotask by default', () => {

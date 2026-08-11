@@ -120,6 +120,7 @@ export async function openAiVaultSessionLogInOrca(session: AiVaultLogSession): P
         // Why: the path was discovered on the client-local host — pin local
         // ownership so an active runtime can't reinterpret it as a remote path.
         runtimeEnvironmentId: null,
+        workspaceExecutionHostId: 'local',
         language: detectLanguage(filePath),
         mode: 'edit',
         readOnly: true,

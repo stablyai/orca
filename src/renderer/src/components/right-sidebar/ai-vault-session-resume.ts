@@ -19,7 +19,12 @@ import {
 
 export type AiVaultSessionResumeTargetState = Pick<
   AppState,
-  'folderWorkspaces' | 'projectGroups' | 'repos' | 'worktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'repos'
+  | 'worktreesByRepo'
+  | 'activeWorktreeId'
+  | 'activeWorkspaceExecutionHostId'
 >
 
 export type AiVaultSessionResumeState = {
@@ -198,7 +203,9 @@ function resolveAiVaultResumeTargetState(args: {
     folderWorkspaces: [],
     projectGroups: [],
     repos: [...args.repos],
-    worktreesByRepo
+    worktreesByRepo,
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null
   }
 }
 

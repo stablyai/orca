@@ -3750,6 +3750,7 @@ export default function ChecksPanel(): React.JSX.Element {
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this workspace instead of the ambiguous lookup.
       repoId: activeWorktree.repoId,
+      executionHostId: activeWorktree.hostId,
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,

@@ -890,8 +890,7 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
         resolveAgentWorkspaceExecutionHostId(worktreeId, {
           getRepo: (repoId) => currentStore.getRepo(repoId),
           getWorktreeMeta: (resolvedWorktreeId) => currentStore.getWorktreeMeta(resolvedWorktreeId),
-          getFolderWorkspace: (folderWorkspaceId) =>
-            currentStore.getFolderWorkspace(folderWorkspaceId),
+          getFolderWorkspaces: () => currentStore.getFolderWorkspaces(),
           getProjectGroups: () => currentStore.getProjectGroups()
         })
       ),

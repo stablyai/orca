@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
 import {
+  filterFolderWorkspacesForVisibleHosts,
+  filterProjectGroupsForVisibleHosts,
   getFolderPathStatusRouteOptionsForRows,
   getFolderWorkspaceExecutionHostIdForRows,
   getProjectGroupExecutionHostIdForRows,
@@ -85,9 +87,7 @@ describe('WorktreeList host filtering ownership', () => {
     const runtimeGroup = group({ executionHostId: 'runtime:env-1' })
     expect(
       getFolderPathStatusRouteOptionsForRows({
-        request: { scope: 'project-group', projectGroupId: runtimeGroup.id },
-        projectGroupsById: new Map([[runtimeGroup.id, runtimeGroup]]),
-        folderWorkspacesById: new Map()
+        projectGroup: runtimeGroup
       })
     ).toEqual({ runtimeEnvironmentId: 'env-1' })
   })
@@ -97,9 +97,8 @@ describe('WorktreeList host filtering ownership', () => {
     const workspace = folderWorkspace({ connectionId: 'ssh-builder' })
     expect(
       getFolderPathStatusRouteOptionsForRows({
-        request: { scope: 'folder-workspace', folderWorkspaceId: workspace.id },
-        projectGroupsById: new Map([[runtimeGroup.id, runtimeGroup]]),
-        folderWorkspacesById: new Map([[workspace.id, workspace]])
+        projectGroup: runtimeGroup,
+        folderWorkspace: workspace
       })
     ).toEqual({ runtimeEnvironmentId: 'env-1' })
   })
@@ -108,9 +107,7 @@ describe('WorktreeList host filtering ownership', () => {
     const localGroup = group()
     expect(
       getFolderPathStatusRouteOptionsForRows({
-        request: { scope: 'project-group', projectGroupId: localGroup.id },
-        projectGroupsById: new Map([[localGroup.id, localGroup]]),
-        folderWorkspacesById: new Map()
+        projectGroup: localGroup
       })
     ).toEqual({ runtimeEnvironmentId: null })
   })
@@ -119,10 +116,86 @@ describe('WorktreeList host filtering ownership', () => {
     const sshGroup = group({ connectionId: 'ssh-builder' })
     expect(
       getFolderPathStatusRouteOptionsForRows({
-        request: { scope: 'project-group', projectGroupId: sshGroup.id },
-        projectGroupsById: new Map([[sshGroup.id, sshGroup]]),
-        folderWorkspacesById: new Map()
+        projectGroup: sshGroup
       })
     ).toEqual({ runtimeEnvironmentId: null })
+  })
+
+  it('routes same-ID rows from the concrete row instead of an ID-only lookup', () => {
+    const localGroup = group({ id: 'shared', executionHostId: 'local' })
+    const runtimeGroup = group({ id: 'shared', executionHostId: 'runtime:env-1' })
+
+    expect(getFolderPathStatusRouteOptionsForRows({ projectGroup: localGroup })).toEqual({
+      runtimeEnvironmentId: null
+    })
+    expect(getFolderPathStatusRouteOptionsForRows({ projectGroup: runtimeGroup })).toEqual({
+      runtimeEnvironmentId: 'env-1'
+    })
+  })
+
+  it('filters local, direct SSH, and paired runtime rows by transport owner', () => {
+    const localGroup = group({ id: 'local', executionHostId: 'local' })
+    const sshGroup = group({
+      id: 'ssh',
+      connectionId: 'builder',
+      executionHostId: 'ssh:builder'
+    })
+    const pairedGroup = group({
+      id: 'paired',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const groups = [localGroup, sshGroup, pairedGroup]
+
+    expect(filterProjectGroupsForVisibleHosts(groups, new Set(['local']), 'local')).toEqual([
+      localGroup
+    ])
+    expect(filterProjectGroupsForVisibleHosts(groups, new Set(['ssh:builder']), 'local')).toEqual([
+      sshGroup
+    ])
+    expect(filterProjectGroupsForVisibleHosts(groups, new Set(['runtime:env-1']), 'local')).toEqual(
+      [pairedGroup]
+    )
+  })
+
+  it('keeps same-ID paired folders matched to their concrete physical group', () => {
+    const localGroup = group({
+      id: 'shared',
+      name: 'Local',
+      connectionId: null,
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'local'
+    })
+    const sshGroup = group({
+      id: 'shared',
+      name: 'SSH',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+    const localFolder = folderWorkspace({
+      id: 'shared-folder',
+      projectGroupId: 'shared',
+      name: 'Local folder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'local'
+    })
+    const sshFolder = folderWorkspace({
+      id: 'shared-folder',
+      projectGroupId: 'shared',
+      name: 'SSH folder',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'ssh:builder'
+    })
+
+    expect(
+      filterFolderWorkspacesForVisibleHosts(
+        [sshFolder, localFolder],
+        [sshGroup, localGroup],
+        new Set(['runtime:env-1']),
+        'local'
+      )
+    ).toEqual([sshFolder, localFolder])
   })
 })

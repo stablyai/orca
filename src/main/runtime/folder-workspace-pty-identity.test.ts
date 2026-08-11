@@ -4,6 +4,7 @@ import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import type { WorkspaceSessionState } from '../../shared/types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree-id'
+import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import { OrcaRuntimeService } from './orca-runtime'
 
 // Folder projects back several workspaces with ONE directory; only the
@@ -108,6 +109,17 @@ async function raceAgainstMicrotaskDrain(pending: Promise<unknown>): Promise<str
 }
 
 describe('folder workspaces sharing one directory', () => {
+  it('does not treat an omitted optional folder catalog as proof of deletion', async () => {
+    const internals = createRuntimeInternals()
+
+    const release = await internals.acquireWorktreeTerminalSpawn(
+      folderWorkspaceKey('legacy-narrow-store')
+    )
+
+    expect(release).toEqual(expect.any(Function))
+    release()
+  })
+
   it('keeps each workspace instance bound to its own controller PTY', async () => {
     const internals = createRuntimeInternals()
     const resolvedWorktrees = [WORKSPACE_A, WORKSPACE_B].map((id) =>

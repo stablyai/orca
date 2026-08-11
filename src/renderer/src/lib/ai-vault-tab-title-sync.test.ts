@@ -12,6 +12,7 @@ import {
 } from './ai-vault-tab-title-batches'
 import { startAiVaultTabTitleSync } from './ai-vault-tab-title-sync'
 import type { AppState } from '@/store/types'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 
 function terminalTab(worktreeId: string, aiVaultTitle?: TerminalTab['aiVaultTitle']): TerminalTab {
   return {
@@ -41,6 +42,7 @@ function makeState(args: {
 }) {
   const agent = args.agent ?? 'codex'
   const tab = terminalTab(args.worktreeId, args.aiVaultTitle)
+  const workspaceScope = parseWorkspaceKey(args.worktreeId)
   const listeners = new Set<(state: AppState, previous: AppState) => void>()
   const providerSession = {
     key: 'session_id' as const,
@@ -90,7 +92,20 @@ function makeState(args: {
     },
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
-    folderWorkspaces: [],
+    folderWorkspaces:
+      workspaceScope?.type === 'folder'
+        ? [
+            {
+              id: workspaceScope.folderWorkspaceId,
+              projectGroupId: 'group-1',
+              executionHostId: args.executionHostId
+            }
+          ]
+        : [],
+    projectGroups:
+      workspaceScope?.type === 'folder'
+        ? [{ id: 'group-1', executionHostId: args.executionHostId }]
+        : [],
     getKnownWorktreeById: () => ({ path: args.path }),
     setAiVaultTabTitle: (tabId: string, aiVaultTitle: TerminalTab['aiVaultTitle'] | null) => {
       const previous = state

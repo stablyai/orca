@@ -273,4 +273,33 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     expect(result.lineageChildrenByParentId.size).toBe(0)
     expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
   })
+
+  it('selects the physical owner when paired folders share an ID', () => {
+    const localFolder = {
+      ...makeFolder('shared-folder'),
+      name: 'Local folder',
+      connectionId: null,
+      executionHostId: 'runtime:env-1' as const,
+      runtimeSourceExecutionHostId: 'local' as const
+    }
+    const sshFolder = {
+      ...makeFolder('shared-folder'),
+      name: 'SSH folder',
+      connectionId: 'builder',
+      executionHostId: 'runtime:env-1' as const,
+      runtimeSourceExecutionHostId: 'ssh:builder' as const
+    }
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey(localFolder.id),
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: 'ssh:builder',
+      folderWorkspaces: [localFolder, sshFolder],
+      workspaceLineageByChildKey: {},
+      worktreeLineageById: {},
+      worktreesByRepo: {}
+    })
+
+    expect(result.folderWorkspace).toBe(sshFolder)
+  })
 })

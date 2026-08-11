@@ -239,6 +239,16 @@ describe('attachMainWindowServices', () => {
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
+  it('passes the current runtime to repo IPC handlers', () => {
+    const mainWindow = createMainWindow()
+    const store = createStore()
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, store, runtime as never)
+
+    expect(registerRepoHandlersMock).toHaveBeenCalledWith(mainWindow, store, runtime)
+  })
+
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
     const onBeforeRendererReload = vi.fn()
     const mainWindow = createMainWindow()

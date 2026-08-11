@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   clearMissingProjectGroupMemberships,
   createProjectGroup,
+  findProjectGroupForConnection,
   getEffectiveProjectGroupManualRank,
   getNextProjectGroupOrder,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName,
   normalizeProjectGroups
 } from './project-groups'
-import type { Repo } from './types'
+import type { ProjectGroup, Repo } from './types'
 
 function repo(overrides: Partial<Repo>): Repo {
   return {
@@ -84,6 +85,16 @@ describe('project-groups', () => {
     expect(groups.find((group) => group.id === 'invalid')?.executionHostId).toBeUndefined()
   })
 
+  it('preserves the distinction between omitted and explicitly local connection ownership', () => {
+    const groups = normalizeProjectGroups([
+      { id: 'legacy', name: 'Legacy' },
+      { id: 'local', name: 'Local', connectionId: null }
+    ])
+
+    expect(groups.find((group) => group.id === 'legacy')).not.toHaveProperty('connectionId')
+    expect(groups.find((group) => group.id === 'local')).toHaveProperty('connectionId', null)
+  })
+
   it('clears repo memberships whose group no longer exists', () => {
     const groups = [createProjectGroup({ name: 'Known', createdFrom: 'manual', tabOrder: 0 })]
     const repos = clearMissingProjectGroupMemberships(
@@ -96,6 +107,101 @@ describe('project-groups', () => {
 
     expect(repos.find((entry) => entry.id === 'known')?.projectGroupId).toBe(groups[0].id)
     expect(repos.find((entry) => entry.id === 'missing')?.projectGroupId).toBeNull()
+  })
+
+  it('keeps memberships only when the group exists on the repo execution host', () => {
+    const localGroup = {
+      ...createProjectGroup({ name: 'Local', createdFrom: 'manual', tabOrder: 0 }),
+      id: 'shared-group',
+      connectionId: null
+    }
+    const sshGroup = { ...localGroup, name: 'SSH', connectionId: 'ssh-1' }
+    const repos = clearMissingProjectGroupMemberships(
+      [
+        repo({ id: 'local', projectGroupId: localGroup.id, connectionId: null }),
+        repo({ id: 'ssh', projectGroupId: sshGroup.id, connectionId: 'ssh-1' }),
+        repo({
+          id: 'runtime',
+          projectGroupId: localGroup.id,
+          executionHostId: 'runtime:env-1'
+        })
+      ],
+      [localGroup, sshGroup]
+    )
+
+    expect(repos.find((entry) => entry.id === 'local')?.projectGroupId).toBe('shared-group')
+    expect(repos.find((entry) => entry.id === 'ssh')?.projectGroupId).toBe('shared-group')
+    expect(repos.find((entry) => entry.id === 'runtime')?.projectGroupId).toBeNull()
+  })
+
+  it('retains unique legacy group membership until ownership backfill', () => {
+    const legacyGroup = createProjectGroup({ name: 'Legacy', createdFrom: 'manual', tabOrder: 0 })
+    delete legacyGroup.connectionId
+
+    expect(
+      clearMissingProjectGroupMemberships(
+        [repo({ projectGroupId: legacyGroup.id, connectionId: 'ssh-1' })],
+        [legacyGroup]
+      )[0]?.projectGroupId
+    ).toBe(legacyGroup.id)
+  })
+
+  it('selects same-id groups by connection and requires uniqueness when omitted', () => {
+    const localGroup = {
+      ...createProjectGroup({ name: 'Local', createdFrom: 'manual', tabOrder: 0 }),
+      id: 'shared-group',
+      connectionId: null
+    }
+    const sshGroup = { ...localGroup, name: 'SSH', connectionId: 'ssh-1' }
+
+    for (const groups of [
+      [localGroup, sshGroup],
+      [sshGroup, localGroup]
+    ]) {
+      expect(findProjectGroupForConnection(groups, localGroup.id, 'ssh-1')).toBe(sshGroup)
+      expect(findProjectGroupForConnection(groups, localGroup.id, null)).toBe(localGroup)
+      expect(findProjectGroupForConnection(groups, localGroup.id)).toBeUndefined()
+    }
+    expect(findProjectGroupForConnection([sshGroup], sshGroup.id)).toBe(sshGroup)
+    expect(findProjectGroupForConnection([sshGroup], sshGroup.id, null)).toBeUndefined()
+    expect(
+      findProjectGroupForConnection(
+        [{ ...sshGroup, connectionId: null, executionHostId: 'ssh:ssh-1' }],
+        sshGroup.id,
+        null
+      )
+    ).toBeUndefined()
+
+    const legacyGroup: ProjectGroup = { ...localGroup }
+    delete legacyGroup.connectionId
+    expect(findProjectGroupForConnection([legacyGroup], legacyGroup.id, null)).toBe(legacyGroup)
+    for (const groups of [
+      [legacyGroup, sshGroup],
+      [sshGroup, legacyGroup]
+    ]) {
+      expect(findProjectGroupForConnection(groups, legacyGroup.id, null)).toBe(legacyGroup)
+      expect(findProjectGroupForConnection(groups, legacyGroup.id, 'ssh-1')).toBe(sshGroup)
+      expect(findProjectGroupForConnection(groups, legacyGroup.id)).toBeUndefined()
+      const memberships = clearMissingProjectGroupMemberships(
+        [
+          repo({ id: 'legacy-local', projectGroupId: legacyGroup.id, connectionId: null }),
+          repo({ id: 'legacy-ssh', projectGroupId: legacyGroup.id, connectionId: 'ssh-1' }),
+          repo({
+            id: 'legacy-runtime',
+            projectGroupId: legacyGroup.id,
+            executionHostId: 'runtime:env-1'
+          })
+        ],
+        groups
+      )
+      expect(memberships.find((entry) => entry.id === 'legacy-local')?.projectGroupId).toBe(
+        legacyGroup.id
+      )
+      expect(memberships.find((entry) => entry.id === 'legacy-ssh')?.projectGroupId).toBe(
+        legacyGroup.id
+      )
+      expect(memberships.find((entry) => entry.id === 'legacy-runtime')?.projectGroupId).toBeNull()
+    }
   })
 
   it('falls back to global repo order when projectGroupOrder is unset', () => {

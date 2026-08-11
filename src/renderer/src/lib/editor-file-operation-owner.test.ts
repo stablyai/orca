@@ -5,6 +5,7 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from './editor-file-operation-owner'
+import { resolveWorktreeOperationRoute } from './worktree-operation-route'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 const worktreeId = 'repo::/remote/repo'
@@ -273,7 +274,107 @@ describe('editor file operation owner', () => {
       expect(context.worktreePath).toBe('/workspace/folder')
     })
 
+    it.each([['local-first' as const], ['ssh-first' as const]])(
+      'uses the authorized folder root with %s catalog order',
+      (order) => {
+        const local = {
+          id: folderWorkspaceId,
+          projectGroupId: 'group-1',
+          connectionId: null,
+          executionHostId: 'local',
+          folderPath: '/local/folder'
+        } as never
+        const ssh = {
+          id: folderWorkspaceId,
+          projectGroupId: 'group-1',
+          connectionId: 'ssh-1',
+          executionHostId: 'ssh:ssh-1',
+          folderPath: '/remote/folder'
+        } as never
+        useAppStore.setState({
+          activeWorktreeId: folderKey,
+          activeWorkspaceExecutionHostId: 'local',
+          folderWorkspaces: order === 'local-first' ? [local, ssh] : [ssh, local]
+        })
+
+        const context = getEditorFileOperationContext(
+          useAppStore.getState(),
+          { worktreeId: folderKey },
+          ''
+        )
+
+        expect(context.expectedExecutionHostId).toBe('local')
+        expect(context.worktreePath).toBe('/local/folder')
+      }
+    )
+
+    it('uses the paired physical owner path through its runtime transport', () => {
+      useAppStore.setState({
+        activeWorktreeId: folderKey,
+        activeWorkspaceExecutionHostId: 'ssh:builder',
+        folderWorkspaces: [
+          {
+            id: folderWorkspaceId,
+            projectGroupId: 'group-1',
+            folderPath: '/local/folder',
+            executionHostId: 'runtime:hub-a',
+            runtimeSourceExecutionHostId: 'local'
+          } as never,
+          {
+            id: folderWorkspaceId,
+            projectGroupId: 'group-1',
+            folderPath: '/remote/folder',
+            executionHostId: 'runtime:hub-a',
+            runtimeSourceExecutionHostId: 'ssh:builder',
+            connectionId: 'builder'
+          } as never
+        ],
+        projectGroups: [],
+        sshStateByEnvironment: new Map([
+          [
+            'hub-a',
+            {
+              targetsHydrated: true,
+              targetLabels: new Map([['builder', 'builder']]),
+              removedTargetLabels: new Map(),
+              connectionStates: new Map([
+                [
+                  'builder',
+                  {
+                    targetId: 'builder',
+                    status: 'connected',
+                    error: null,
+                    reconnectAttempt: 0,
+                    connectionGeneration: 7
+                  }
+                ]
+              ])
+            }
+          ]
+        ])
+      })
+
+      const context = getEditorFileOperationContext(
+        useAppStore.getState(),
+        { worktreeId: folderKey },
+        ''
+      )
+
+      expect(context).toMatchObject({
+        worktreePath: '/remote/folder',
+        expectedExecutionHostId: 'ssh:builder',
+        expectedSshTargetId: 'builder',
+        expectedSshConnectionGeneration: 7
+      })
+      expect(context.settings?.activeRuntimeEnvironmentId).toBe('hub-a')
+    })
+
     it('fails closed when folder ownership changes between capture and assert', () => {
+      useAppStore.setState({
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null,
+        folderWorkspaces: [{ id: folderWorkspaceId, projectGroupId: 'group-1' } as never]
+      })
       const provenance = captureEditorFileOperationProvenance(
         useAppStore.getState(),
         folderKey,
@@ -284,6 +385,10 @@ describe('editor file operation owner', () => {
         projectGroups: [
           { id: 'group-1', connectionId: null, executionHostId: 'runtime:hub-a' } as never
         ]
+      })
+      expect(resolveWorktreeOperationRoute(useAppStore.getState(), folderKey)).toEqual({
+        executionHostId: 'runtime:hub-a',
+        runtimeEnvironmentId: 'hub-a'
       })
       expect(() =>
         assertEditorFileOperationCurrent(useAppStore.getState(), folderKey, provenance)

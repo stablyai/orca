@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../shared/types'
 import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
+import { getExecutionHostIdForWorktree } from './worktree-runtime-owner'
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'
 
@@ -388,13 +389,39 @@ describe('resolveWorktreeOperationRouteResult', () => {
       })
     })
 
+    it.each([['local-first' as const], ['ssh-first' as const]])(
+      'keeps paired physical folder ownership with %s catalog order',
+      (order) => {
+        const local = {
+          ...folderWorkspace(),
+          executionHostId: 'runtime:hub-a' as const,
+          runtimeSourceExecutionHostId: 'local' as const
+        }
+        const ssh = {
+          ...folderWorkspace('builder'),
+          executionHostId: 'runtime:hub-a' as const,
+          runtimeSourceExecutionHostId: 'ssh:builder' as const
+        }
+        const state = {
+          activeWorktreeId: FOLDER_KEY,
+          activeWorkspaceExecutionHostId: 'ssh:builder' as const,
+          folderWorkspaces: order === 'local-first' ? [local, ssh] : [ssh, local]
+        }
+
+        expect(resolveWorktreeOperationRouteResult(state, FOLDER_KEY)).toEqual({
+          kind: 'resolved',
+          route: { executionHostId: 'ssh:builder', runtimeEnvironmentId: 'hub-a' }
+        })
+      }
+    )
+
     it('scopes an ownerless folder workspace to the single focused runtime', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
             settings: { activeRuntimeEnvironmentId: 'hub-a' } as never,
             runtimeEnvironments: [{ id: 'hub-a' }],
-            folderWorkspaces: [folderWorkspace()]
+            folderWorkspaces: [{ ...folderWorkspace(), connectionId: undefined }]
           },
           FOLDER_KEY
         )
@@ -427,7 +454,7 @@ describe('resolveWorktreeOperationRouteResult', () => {
       expect(
         resolveWorktreeOperationRouteResult(
           {
-            folderWorkspaces: [folderWorkspace()],
+            folderWorkspaces: [{ ...folderWorkspace(), connectionId: undefined }],
             restoredRuntimeHostIdByWorkspaceSessionKey: { [FOLDER_KEY]: 'runtime:hub-a' }
           },
           FOLDER_KEY
@@ -436,6 +463,24 @@ describe('resolveWorktreeOperationRouteResult', () => {
         kind: 'resolved',
         route: { executionHostId: 'runtime:hub-a', runtimeEnvironmentId: 'hub-a' }
       })
+    })
+
+    it('fails contradictory active folder authority closed', () => {
+      const state = {
+        activeWorktreeId: FOLDER_KEY,
+        activeWorkspaceExecutionHostId: 'ssh:selected-host' as const,
+        folderWorkspaces: [
+          {
+            ...folderWorkspace('ssh-target-1'),
+            executionHostId: 'local' as const
+          }
+        ]
+      }
+
+      expect(resolveWorktreeOperationRouteResult(state, FOLDER_KEY)).toEqual({
+        kind: 'ambiguous'
+      })
+      expect(getExecutionHostIdForWorktree(state, FOLDER_KEY)).toBe('runtime:unresolved-owner')
     })
 
     it('fails an unknown folder workspace id closed', () => {

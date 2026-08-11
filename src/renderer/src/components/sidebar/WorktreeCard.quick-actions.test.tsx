@@ -1,6 +1,8 @@
+// @vitest-environment happy-dom
 import { renderToStaticMarkup } from 'react-dom/server'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   GitConflictOperation,
   GlobalSettings,
@@ -9,12 +11,16 @@ import type {
   WorktreeCardProperty
 } from '../../../../shared/types'
 import type WorktreeCardComponent from './WorktreeCard'
+import type * as WorktreeCardMeta from './WorktreeCardMeta'
 import type * as WorkspaceDeleteQuickAction from './workspace-delete-quick-action'
+import type { WorktreeCardDetailsHoverProps } from './worktree-card-meta-types'
 
 const fetchHostedReviewForBranch = vi.fn()
 const fetchIssue = vi.fn()
 const openModal = vi.fn()
 const updateWorktreeMeta = vi.fn()
+const deleteFolderWorkspace = vi.fn()
+const setActiveWorktree = vi.fn()
 
 let worktreeCardProperties: WorktreeCardProperty[] = ['status']
 let tabsByWorktree: Record<string, { id: string }[]> = {}
@@ -24,30 +30,41 @@ let settings: Partial<GlobalSettings> | null = null
 let projectGroups: unknown[] = []
 let workspaceDeleteModifierPressed = false
 let gitConflictOperationByWorktree: Record<string, GitConflictOperation> = {}
+let activeWorktreeId: string | null = null
+let activeWorkspaceExecutionHostId: string | null = null
+let capturedUnlinkReview: (() => void) | undefined
 let WorktreeCard: typeof WorktreeCardComponent
 
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({
-      deleteStateByWorktreeId: {},
-      fetchHostedReviewForBranch,
-      fetchIssue,
-      gitConflictOperationByWorktree,
-      hostedReviewCache: {},
-      issueCache: {},
-      openModal,
-      projectGroups,
-      remoteBranchConflictByWorktreeId: {},
-      settings,
-      sshConnectionStates: new Map(),
-      sshTargetLabels: new Map(),
-      browserTabsByWorktree,
-      ptyIdsByTabId,
-      tabsByWorktree,
-      updateWorktreeMeta,
-      worktreeCardProperties
+vi.mock('@/store', () => {
+  const getState = () => ({
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId,
+    deleteStateByWorktreeId: {},
+    deleteFolderWorkspace,
+    fetchHostedReviewForBranch,
+    fetchIssue,
+    gitConflictOperationByWorktree,
+    hostedReviewCache: {},
+    issueCache: {},
+    openModal,
+    projectGroups,
+    remoteBranchConflictByWorktreeId: {},
+    settings,
+    sshConnectionStates: new Map(),
+    sshTargetLabels: new Map(),
+    browserTabsByWorktree,
+    ptyIdsByTabId,
+    setActiveWorktree,
+    tabsByWorktree,
+    updateWorktreeMeta,
+    worktreeCardProperties
+  })
+  return {
+    useAppStore: Object.assign((selector: (state: unknown) => unknown) => selector(getState()), {
+      getState
     })
-}))
+  }
+})
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -78,6 +95,19 @@ vi.mock('./WorktreeContextMenu', () => ({
   WORKTREE_CONTEXT_MENU_SCOPE_ATTR: 'data-orca-context-menu-scope',
   WORKTREE_NATIVE_CONTEXT_MENU_ATTR: 'data-worktree-native-context-menu'
 }))
+
+vi.mock('./WorktreeCardMeta', async (importOriginal) => {
+  const actual = await importOriginal<typeof WorktreeCardMeta>()
+  return {
+    ...actual,
+    WorktreeCardDetailsHover: ({ children, onUnlinkReview }: WorktreeCardDetailsHoverProps) => {
+      if (onUnlinkReview) {
+        capturedUnlinkReview = onUnlinkReview
+      }
+      return <>{children}</>
+    }
+  }
+})
 
 vi.mock('./workspace-delete-quick-action', async (importOriginal) => {
   const actual = await importOriginal<typeof WorkspaceDeleteQuickAction>()
@@ -144,7 +174,12 @@ describe('WorktreeCard quick actions', () => {
     projectGroups = []
     workspaceDeleteModifierPressed = false
     gitConflictOperationByWorktree = {}
+    activeWorktreeId = null
+    activeWorkspaceExecutionHostId = null
+    capturedUnlinkReview = undefined
   })
+
+  afterEach(cleanup)
 
   it('marks the unread toggle as a workspace-board-preserving action', () => {
     const markup = renderToStaticMarkup(
@@ -153,6 +188,52 @@ describe('WorktreeCard quick actions', () => {
 
     expect(markup).toContain('aria-label="Mark as read"')
     expect(markup).toContain('data-workspace-board-preserve-open=""')
+  })
+
+  it('routes folder quick metadata actions to the clicked owner', async () => {
+    const worktree = makeWorktree({
+      id: 'folder:folder-1',
+      hostId: 'ssh:builder',
+      path: '/workspace/folder-1'
+    })
+    const { container } = render(
+      <WorktreeCard worktree={worktree} repo={undefined} isActive={false} />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as read' }))
+    fireEvent.doubleClick(container.querySelector('[data-worktree-title-inline-rename]')!)
+    const renameInput = screen.getByRole('textbox', { name: 'Rename workspace' })
+    fireEvent.change(renameInput, { target: { value: 'Remote folder' } })
+    fireEvent.keyDown(renameInput, { key: 'Enter' })
+
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(2))
+    expect(updateWorktreeMeta).toHaveBeenNthCalledWith(
+      1,
+      worktree.id,
+      { isUnread: false },
+      { executionHostId: 'ssh:builder' }
+    )
+    expect(updateWorktreeMeta).toHaveBeenNthCalledWith(
+      2,
+      worktree.id,
+      { displayName: 'Remote folder' },
+      { executionHostId: 'ssh:builder' }
+    )
+  })
+
+  it('routes linked-review unlinking to the clicked owner', () => {
+    worktreeCardProperties = ['pr']
+    const worktree = makeWorktree({ linkedPR: 456, hostId: 'ssh:builder' })
+    render(<WorktreeCard worktree={worktree} repo={makeRepo()} isActive={false} />)
+
+    expect(capturedUnlinkReview).toBeTypeOf('function')
+    capturedUnlinkReview?.()
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      worktree.id,
+      { linkedPR: null },
+      { executionHostId: 'ssh:builder' }
+    )
   })
 
   it('renders repo identity in the detailed metadata row', () => {
@@ -453,6 +534,33 @@ describe('WorktreeCard quick actions', () => {
     )
 
     expect(markup).toContain('aria-label="Delete workspace"')
+  })
+
+  it('routes folder deletion to the clicked host without clearing an active sibling', async () => {
+    workspaceDeleteModifierPressed = true
+    deleteFolderWorkspace.mockResolvedValue(true)
+    activeWorktreeId = 'folder:folder-1'
+    activeWorkspaceExecutionHostId = 'runtime:env-a'
+
+    render(
+      <WorktreeCard
+        worktree={makeWorktree({
+          id: 'folder:folder-1',
+          hostId: 'runtime:env-b',
+          path: '/workspace/folder-1'
+        })}
+        repo={undefined}
+        isActive={false}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete workspace' }))
+    await Promise.resolve()
+
+    expect(deleteFolderWorkspace).toHaveBeenCalledWith('folder-1', {
+      hostId: 'runtime:env-b'
+    })
+    expect(setActiveWorktree).not.toHaveBeenCalled()
   })
 
   it('shows delete for a current workspace while Option/Alt is held', () => {

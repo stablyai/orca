@@ -24,6 +24,48 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
 }
 
 describe('folderWorkspaceToWorktree', () => {
+  it.each([
+    [{ connectionId: null }, { hostId: 'local' }],
+    [{ connectionId: 'builder' }, { hostId: 'ssh:builder' }],
+    [{ executionHostId: 'local' as const }, { hostId: 'local' }],
+    [{ executionHostId: 'ssh:builder' as const }, { hostId: 'ssh:builder' }]
+  ])('preserves direct physical ownership for %#', (owner, expected) => {
+    expect(folderWorkspaceToWorktree(makeFolderWorkspace(owner))).toMatchObject(expected)
+  })
+
+  it.each([
+    ['local' as const, null],
+    ['ssh:builder' as const, 'builder']
+  ])('separates paired %s ownership from its runtime transport', (sourceHostId, connectionId) => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({
+        connectionId,
+        executionHostId: 'runtime:hub',
+        runtimeSourceExecutionHostId: sourceHostId
+      })
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: sourceHostId,
+      runtimeOwnerEnvironmentId: 'hub'
+    })
+  })
+
+  it.each([
+    { executionHostId: 'local' as const, connectionId: 'builder' },
+    {
+      executionHostId: 'runtime:hub' as const,
+      runtimeSourceExecutionHostId: 'local' as const,
+      connectionId: 'builder'
+    },
+    { executionHostId: 'invalid-owner' as never }
+  ])('fails closed for contradictory or invalid owner stamps', (owner) => {
+    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace(owner))
+
+    expect(worktree.hostId).toBeUndefined()
+    expect(worktree.runtimeOwnerEnvironmentId).toBeUndefined()
+  })
+
   it('projects attached issue tasks without creating linked PR metadata', () => {
     const githubIssue = folderWorkspaceToWorktree(
       makeFolderWorkspace({

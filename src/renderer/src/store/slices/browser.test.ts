@@ -491,6 +491,24 @@ describe('createBrowserSlice floating tabs', () => {
 })
 
 describe('createBrowserSlice closed browser workspaces', () => {
+  it('restores the saved workspace host after selecting a same-key sibling', () => {
+    const store = createTestStore()
+    store.setState({ activeWorkspaceExecutionHostId: 'runtime:owner-a' } as Partial<AppState>)
+    const tab = store.getState().createBrowserTab('wt-1', 'https://owner-a.example')
+
+    store.getState().closeBrowserTab(tab.id)
+    store.setState({ activeWorkspaceExecutionHostId: 'runtime:owner-b' } as Partial<AppState>)
+    const restored = store.getState().reopenClosedBrowserTab('wt-1')
+    if (!restored) {
+      throw new Error('Expected a reopened browser workspace')
+    }
+
+    expect(restored.workspaceExecutionHostId).toBe('runtime:owner-a')
+    expect(
+      store.getState().browserPagesByWorkspace[restored.id]?.[0]?.workspaceExecutionHostId
+    ).toBe('runtime:owner-a')
+  })
+
   it('reopens duplicate-URL browser pages on the originally active page', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com/dashboard', {

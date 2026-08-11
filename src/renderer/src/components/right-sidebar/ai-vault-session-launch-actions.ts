@@ -29,6 +29,7 @@ import {
 import { prepareAiVaultSessionContinuation } from './ai-vault-session-continuation'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 
 export function useAiVaultSessionLaunchActions({
   activeWorktree,
@@ -214,16 +215,16 @@ function notifyAiVaultSessionPreparationFailure(error: unknown): void {
   )
 }
 
-function resolveAiVaultTargetWorkspacePath(
+export function resolveAiVaultTargetWorkspacePath(
   state: AiVaultSessionResumeTargetState,
   workspaceId: string
 ): string | null {
   const scope = parseWorkspaceKey(workspaceId)
   if (scope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === scope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
+    const workspace = findFolderWorkspaceOwner(state, scope.folderWorkspaceId) as
+      | AiVaultSessionResumeTargetState['folderWorkspaces'][number]
+      | null
+    return workspace?.folderPath ?? null
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   return findWorktreeById(state.worktreesByRepo, worktreeId)?.path ?? null

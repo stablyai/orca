@@ -7,6 +7,8 @@ import type {
 } from '../../../../shared/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 import { getProjectedWorktreeLineageChildrenByParentId } from '../sidebar/worktree-lineage-projection'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { buildCatalogOwnerIndex } from '@/lib/catalog-owner-index'
 
 export type AttachedWorktreeResolution = {
   folderWorkspace: FolderWorkspace | null
@@ -18,6 +20,7 @@ export type AttachedWorktreeResolution = {
 type AttachedWorktreeResolverArgs = {
   activeWorkspaceKey: string | null
   activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId?: ExecutionHostId | null
   folderWorkspaces: readonly FolderWorkspace[]
   workspaceLineageByChildKey: Record<string, WorkspaceLineage>
   worktreeLineageById: Record<string, WorktreeLineage>
@@ -31,6 +34,7 @@ export function getWorktreeActivityTime(worktree: Worktree): number {
 export function getAttachedWorktreesForFolderWorkspace({
   activeWorkspaceKey,
   activeWorktreeId,
+  activeWorkspaceExecutionHostId,
   folderWorkspaces,
   workspaceLineageByChildKey,
   worktreeLineageById,
@@ -39,8 +43,14 @@ export function getAttachedWorktreesForFolderWorkspace({
   const activeScope = parseWorkspaceKey(activeWorkspaceKey ?? activeWorktreeId ?? '')
   const folderWorkspace =
     activeScope?.type === 'folder'
-      ? (folderWorkspaces.find((workspace) => workspace.id === activeScope.folderWorkspaceId) ??
-        null)
+      ? (() => {
+          const resolution = buildCatalogOwnerIndex(folderWorkspaces).get(
+            activeWorkspaceExecutionHostId
+              ? `${activeScope.folderWorkspaceId}\0${activeWorkspaceExecutionHostId}`
+              : activeScope.folderWorkspaceId
+          )
+          return resolution?.kind === 'resolved' ? resolution.owner : null
+        })()
       : null
 
   if (!folderWorkspace) {

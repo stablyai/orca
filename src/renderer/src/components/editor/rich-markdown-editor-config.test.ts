@@ -37,6 +37,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
       sourceOwner: { kind: 'local' }
     }),
     content: '',
+    fileId: 'file-1',
     filePath: '/repo/README.md',
     worktreeId: 'worktree-1',
     worktreeRoot: '/repo',

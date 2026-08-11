@@ -2,9 +2,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: vi.fn()
+}))
+
+vi.mock('@/lib/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: vi.fn((state, file, worktreePath) => ({
+    settings: file.runtimeEnvironmentId
+      ? { activeRuntimeEnvironmentId: file.runtimeEnvironmentId }
+      : state.settings,
+    worktreeId: file.worktreeId,
+    worktreePath:
+      worktreePath ?? (file.worktreeId === 'folder:folder-1' ? '/folder-workspace' : null),
+    expectedExecutionHostId: 'local'
+  }))
 }))
 
 vi.mock('@/lib/connection-context', () => ({
@@ -42,9 +55,18 @@ describe('insertRichMarkdownImageFromPath', () => {
     vi.mocked(useAppStore.getState).mockReturnValue({
       settings: { activeRuntimeEnvironmentId: null },
       folderWorkspaces: [],
+      openFiles: [{ id: 'file-1', worktreeId: 'wt-1' }],
+      repos: [],
       worktreesByRepo: {
-        repo1: [{ id: 'wt-1', path: '/repo' }]
-      }
+        repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/repo', hostId: 'local' }]
+      },
+      detectedWorktreesByRepo: {},
+      projectGroups: [],
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogHydrated: true,
+      removedRuntimeEnvironmentIds: new Set(),
+      sshConnectionStates: new Map(),
+      sshStateByEnvironment: new Map()
     } as never)
     vi.mocked(importExternalPathsToRuntime).mockResolvedValue({
       results: [{ status: 'imported', destPath: '/repo/image.png' }]
@@ -56,6 +78,7 @@ describe('insertRichMarkdownImageFromPath', () => {
 
     await insertRichMarkdownImageFromPath({
       editor: editor as never,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       sourcePath: '/tmp/image.png',
       worktreeId: 'wt-1',
@@ -69,13 +92,30 @@ describe('insertRichMarkdownImageFromPath', () => {
     const { useAppStore } = await import('@/store')
     vi.mocked(useAppStore.getState).mockReturnValue({
       settings: { activeRuntimeEnvironmentId: 'env-1' },
-      folderWorkspaces: [{ id: 'folder-1', folderPath: '/folder-workspace' }],
-      worktreesByRepo: {}
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          executionHostId: 'runtime:env-1',
+          folderPath: '/folder-workspace'
+        }
+      ],
+      openFiles: [{ id: 'file-1', worktreeId: 'folder:folder-1', runtimeEnvironmentId: 'env-1' }],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {},
+      detectedWorktreesByRepo: {},
+      runtimeEnvironments: [],
+      runtimeEnvironmentCatalogHydrated: true,
+      removedRuntimeEnvironmentIds: new Set(),
+      sshConnectionStates: new Map(),
+      sshStateByEnvironment: new Map()
     } as never)
     const { editor } = editorWithRunResult(true)
 
     await insertRichMarkdownImageFromPath({
       editor: editor as never,
+      fileId: 'file-1',
       filePath: '/folder-workspace/note.md',
       sourcePath: '/tmp/image.png',
       worktreeId: 'folder:folder-1',
@@ -83,6 +123,11 @@ describe('insertRichMarkdownImageFromPath', () => {
       insertPos: 4
     })
 
+    expect(getEditorFileOperationContext).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ id: 'file-1', worktreeId: 'folder:folder-1' }),
+      null
+    )
     expect(importExternalPathsToRuntime).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'folder:folder-1',
@@ -106,6 +151,7 @@ describe('insertRichMarkdownImageFromPath', () => {
 
     await insertRichMarkdownImageFromPath({
       editor: editor as never,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       sourcePath: '/tmp/image.png',
       worktreeId: 'wt-1',
@@ -125,6 +171,7 @@ describe('insertRichMarkdownImageFromPath', () => {
 
     await insertRichMarkdownImageFromPath({
       editor: editor as never,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       sourcePath: '/tmp/image.png',
       worktreeId: 'wt-1',
@@ -134,5 +181,24 @@ describe('insertRichMarkdownImageFromPath', () => {
 
     expect(chain).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('rejects image import after the owning file tab disappears', async () => {
+    const { useAppStore } = await import('@/store')
+    const current = useAppStore.getState()
+    vi.mocked(useAppStore.getState).mockReturnValue({ ...current, openFiles: [] } as never)
+    const { editor } = editorWithRunResult(true)
+
+    await insertRichMarkdownImageFromPath({
+      editor: editor as never,
+      fileId: 'file-1',
+      filePath: '/repo/note.md',
+      sourcePath: '/tmp/image.png',
+      worktreeId: 'wt-1',
+      insertPos: 4
+    })
+
+    expect(importExternalPathsToRuntime).not.toHaveBeenCalled()
+    expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('Reopen the file'))
   })
 })

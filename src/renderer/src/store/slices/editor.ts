@@ -84,6 +84,7 @@ import {
 } from './worktree-helpers'
 import {
   getExplicitRuntimeEnvironmentIdForWorktree,
+  getExecutionHostIdForWorktree,
   getSettingsForWorktreeRuntimeOwner
 } from '@/lib/worktree-runtime-owner'
 import { loadGitLabJobLogDetails } from '@/runtime/gitlab-job-trace-client'
@@ -102,6 +103,7 @@ import {
   captureEditorFileOperationProvenance,
   getEditorFileOperationContext
 } from '@/lib/editor-file-operation-owner'
+import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { pruneTabGroupLayoutForGroups } from './tabs-hydration'
 import { sanitizeRecentTabIds } from './tab-group-state'
@@ -242,6 +244,8 @@ export type OpenFile = {
   runtimeEnvironmentId?: string | null
   /** SSH target that owns an absolute path outside the worktree. */
   externalSshTargetId?: string
+  /** Workspace host captured when this surface opened; durable across session restore. */
+  workspaceExecutionHostId?: ExecutionHostId
   /** Host provenance captured when the tab opened; mutations reject replacement owners. */
   operationProvenance?: EditorFileOperationProvenance
   /** Why: preview tabs mirror a source file's live draft; storing its ID lets the preview follow unsaved edits without becoming editable. */
@@ -333,6 +337,69 @@ function resolveDiffRuntimeEnvironmentId(
   }
   // Why: route diffs by explicit worktree owner; null forces LOCAL, undefined would inherit the focused runtime → wrong host (#6957, #8484).
   return getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null
+}
+
+type EditorSurfaceOwnership = Pick<
+  OpenFile,
+  | 'externalSshTargetId'
+  | 'operationProvenance'
+  | 'runtimeEnvironmentId'
+  | 'workspaceExecutionHostId'
+>
+
+function hasPublishedEditorWorktree(state: AppState, worktreeId: string): boolean {
+  return (
+    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
+      worktrees.some((worktree) => worktree.id === worktreeId)
+    ) ||
+    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
+      result.worktrees.some((worktree) => worktree.id === worktreeId)
+    )
+  )
+}
+
+function captureEditorSurfaceOwnership(
+  state: AppState,
+  worktreeId: string,
+  explicitRuntimeEnvironmentId?: string | null
+): EditorSurfaceOwnership | null {
+  const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
+    state,
+    worktreeId,
+    explicitRuntimeEnvironmentId
+  )
+  try {
+    const operationProvenance = captureEditorFileOperationProvenance(
+      state,
+      worktreeId,
+      runtimeEnvironmentId,
+      true
+    )
+    const route = operationProvenance.generation.route
+    const host = parseExecutionHostId(route.executionHostId)
+    return {
+      runtimeEnvironmentId: route.runtimeEnvironmentId,
+      externalSshTargetId:
+        host?.kind === 'ssh' && route.runtimeEnvironmentId === null ? host.targetId : undefined,
+      workspaceExecutionHostId: host?.id,
+      operationProvenance
+    }
+  } catch {
+    if (
+      hasPublishedEditorWorktree(state, worktreeId) ||
+      resolveExplicitWorktreeOperationRouteResult(state, worktreeId).kind !== 'missing'
+    ) {
+      return null
+    }
+    const host = parseExecutionHostId(getExecutionHostIdForWorktree(state, worktreeId))
+    return {
+      runtimeEnvironmentId,
+      externalSshTargetId:
+        host?.kind === 'ssh' && runtimeEnvironmentId === null ? host.targetId : undefined,
+      workspaceExecutionHostId: host?.id,
+      operationProvenance: undefined
+    }
+  }
 }
 
 export type PendingEditorReveal = {
@@ -514,6 +581,8 @@ export type EditorSlice = {
       | 'language'
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
+      | 'workspaceExecutionHostId'
+      | 'operationProvenance'
     >,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
@@ -1014,36 +1083,51 @@ function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): strin
   return runtimeEnvironmentId?.trim() || null
 }
 
+function workspaceOwnerKey(workspaceExecutionHostId: ExecutionHostId | undefined): string | null {
+  return parseExecutionHostId(workspaceExecutionHostId)?.id ?? null
+}
+
 function isSameEditorOwner(
-  file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId'>,
+  file: Pick<OpenFile, 'worktreeId' | 'runtimeEnvironmentId' | 'workspaceExecutionHostId'>,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  workspaceExecutionHostId?: ExecutionHostId
 ): boolean {
-  return (
-    file.worktreeId === worktreeId &&
-    runtimeOwnerKey(file.runtimeEnvironmentId) === runtimeOwnerKey(runtimeEnvironmentId)
-  )
+  if (
+    file.worktreeId !== worktreeId ||
+    runtimeOwnerKey(file.runtimeEnvironmentId) !== runtimeOwnerKey(runtimeEnvironmentId)
+  ) {
+    return false
+  }
+  const fileHost = workspaceOwnerKey(file.workspaceExecutionHostId)
+  const targetHost = workspaceOwnerKey(workspaceExecutionHostId)
+  return fileHost === null || targetHost === null || fileHost === targetHost
 }
 
 export function buildOwnedEditorFileId(
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  workspaceExecutionHostId?: ExecutionHostId
 ): string {
-  const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId) ?? 'local'
-  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
+  const ownerKey =
+    runtimeOwnerKey(runtimeEnvironmentId) ?? workspaceOwnerKey(workspaceExecutionHostId) ?? 'local'
+  return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(ownerKey)}:${encodeURIComponent(filePath)}`
 }
 
 export function buildDiffEditorFileId(
   worktreeId: string,
   diffSource: DiffSource,
   relativePath: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  workspaceExecutionHostId?: ExecutionHostId
 ): string {
   const legacyId = `${worktreeId}::diff::${diffSource}::${relativePath}`
   const runtimeKey = runtimeOwnerKey(runtimeEnvironmentId)
-  return runtimeKey
-    ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
+  const hostKey = workspaceOwnerKey(workspaceExecutionHostId)
+  const ownerKey = runtimeKey ?? (hostKey && hostKey !== 'local' ? hostKey : null)
+  return ownerKey
+    ? `editor-diff:${encodeURIComponent(worktreeId)}:${encodeURIComponent(ownerKey)}:${encodeURIComponent(diffSource)}:${encodeURIComponent(relativePath)}`
     : legacyId
 }
 
@@ -1070,13 +1154,18 @@ function shouldRequestExistingFileContentReload(
 function isEditorFileIdOccupiedByOtherOwner(
   file: Pick<
     OpenFile,
-    'id' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
+    | 'id'
+    | 'worktreeId'
+    | 'runtimeEnvironmentId'
+    | 'workspaceExecutionHostId'
+    | 'markdownPreviewSourceFileId'
   >,
   filePath: string,
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  workspaceExecutionHostId?: ExecutionHostId
 ): boolean {
-  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)) {
+  if (isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, workspaceExecutionHostId)) {
     return false
   }
   return file.id === filePath || file.markdownPreviewSourceFileId === filePath
@@ -1099,22 +1188,29 @@ export function resolveEditorFileIdForOwner(
   filePath: string,
   worktreeId: string,
   runtimeEnvironmentId: string | null | undefined,
-  modes?: readonly OpenFile['mode'][]
+  modes?: readonly OpenFile['mode'][],
+  workspaceExecutionHostId?: ExecutionHostId
 ): string {
   const existing = state.openFiles.find(
     (file) =>
       file.filePath === filePath &&
       matchesEditorMode(file, modes) &&
-      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId)
+      isSameEditorOwner(file, worktreeId, runtimeEnvironmentId, workspaceExecutionHostId)
   )
   if (existing) {
     return existing.id
   }
   // Why: preview-only markdown tabs reserve their source id too; treat it like an open editor id so same-path owners don't collapse.
   return state.openFiles.some((file) =>
-    isEditorFileIdOccupiedByOtherOwner(file, filePath, worktreeId, runtimeEnvironmentId)
+    isEditorFileIdOccupiedByOtherOwner(
+      file,
+      filePath,
+      worktreeId,
+      runtimeEnvironmentId,
+      workspaceExecutionHostId
+    )
   )
-    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId)
+    ? buildOwnedEditorFileId(filePath, worktreeId, runtimeEnvironmentId, workspaceExecutionHostId)
     : filePath
 }
 
@@ -1143,10 +1239,14 @@ function getOpenedEditFileIdAfterOpen(
 
 function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
-  runtimeEnvironmentId: string | null | undefined
+  runtimeEnvironmentId: string | null | undefined,
+  workspaceExecutionHostId?: ExecutionHostId
 ): boolean {
+  const host = parseExecutionHostId(workspaceExecutionHostId)
   return (
-    worktreeId === FLOATING_TERMINAL_WORKTREE_ID || runtimeOwnerKey(runtimeEnvironmentId) !== null
+    worktreeId === FLOATING_TERMINAL_WORKTREE_ID ||
+    runtimeOwnerKey(runtimeEnvironmentId) !== null ||
+    (host !== null && host.kind !== 'local')
   )
 }
 
@@ -1166,7 +1266,12 @@ function addEditorFileIdMigration(
 
 type LegacyHydratedEditorFile = Pick<
   OpenFile,
-  'id' | 'filePath' | 'worktreeId' | 'runtimeEnvironmentId' | 'markdownPreviewSourceFileId'
+  | 'id'
+  | 'filePath'
+  | 'worktreeId'
+  | 'runtimeEnvironmentId'
+  | 'workspaceExecutionHostId'
+  | 'markdownPreviewSourceFileId'
 >
 
 function resolveLegacyHydratedEditorFileId(
@@ -1177,7 +1282,12 @@ function resolveLegacyHydratedEditorFileId(
   const existing = files.find(
     (file) =>
       file.filePath === persistedFile.filePath &&
-      isSameEditorOwner(file, worktreeId, persistedFile.runtimeEnvironmentId)
+      isSameEditorOwner(
+        file,
+        worktreeId,
+        persistedFile.runtimeEnvironmentId,
+        persistedFile.workspaceExecutionHostId
+      )
   )
   if (existing) {
     return existing.id
@@ -1187,10 +1297,16 @@ function resolveLegacyHydratedEditorFileId(
       file,
       persistedFile.filePath,
       worktreeId,
-      persistedFile.runtimeEnvironmentId
+      persistedFile.runtimeEnvironmentId,
+      persistedFile.workspaceExecutionHostId
     )
   )
-    ? buildOwnedEditorFileId(persistedFile.filePath, worktreeId, persistedFile.runtimeEnvironmentId)
+    ? buildOwnedEditorFileId(
+        persistedFile.filePath,
+        worktreeId,
+        persistedFile.runtimeEnvironmentId,
+        persistedFile.workspaceExecutionHostId
+      )
     : persistedFile.filePath
 }
 
@@ -1732,21 +1848,55 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           // Why: mirrored tabs can arrive before their graph row; allow convergence while mutation paths still fail closed without provenance.
         }
       }
+      const readOnlyOwnership =
+        file.readOnly === true
+          ? captureEditorSurfaceOwnership(
+              s,
+              worktreeId,
+              options?.suppressActiveRuntimeFallback ? null : file.runtimeEnvironmentId
+            )
+          : null
+      const explicitWorkspaceHost = parseExecutionHostId(file.workspaceExecutionHostId)
+      const readOnlyRuntimeEnvironmentId = explicitWorkspaceHost
+        ? explicitWorkspaceHost.kind === 'runtime'
+          ? explicitWorkspaceHost.environmentId
+          : null
+        : readOnlyOwnership?.runtimeEnvironmentId
       const runtimeEnvironmentId = operationProvenance
         ? operationProvenance.generation.route.runtimeEnvironmentId
-        : file.runtimeEnvironmentId === null
-          ? null
-          : (file.runtimeEnvironmentId ??
-            (options?.suppressActiveRuntimeFallback
-              ? null
-              : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+        : file.readOnly === true && readOnlyRuntimeEnvironmentId !== undefined
+          ? readOnlyRuntimeEnvironmentId
+          : file.runtimeEnvironmentId === null
+            ? null
+            : (file.runtimeEnvironmentId ??
+              (options?.suppressActiveRuntimeFallback
+                ? null
+                : (s.settings?.activeRuntimeEnvironmentId?.trim() ?? undefined)))
+      const workspaceExecutionHostId =
+        parseExecutionHostId(operationProvenance?.generation.route.executionHostId)?.id ??
+        explicitWorkspaceHost?.id ??
+        readOnlyOwnership?.workspaceExecutionHostId
       const reusableOpenFileModes = getReusableOpenFileModes(file.mode)
-      const existing = s.openFiles.find(
-        (f) =>
-          f.filePath === file.filePath &&
-          matchesEditorMode(f, reusableOpenFileModes) &&
-          isSameEditorOwner(f, worktreeId, runtimeEnvironmentId)
+      const exactOwnerMatch = s.openFiles.find(
+        (candidate) =>
+          candidate.filePath === file.filePath &&
+          matchesEditorMode(candidate, reusableOpenFileModes) &&
+          isSameEditorOwner(candidate, worktreeId, runtimeEnvironmentId, workspaceExecutionHostId)
       )
+      // Why: explicit external-file opens intentionally migrate between SSH targets; local reopens must remain separate.
+      const existing =
+        exactOwnerMatch ??
+        (file.externalSshTargetId
+          ? s.openFiles.find(
+              (candidate) =>
+                candidate.filePath === file.filePath &&
+                candidate.externalSshTargetId !== undefined &&
+                matchesEditorMode(candidate, reusableOpenFileModes) &&
+                candidate.worktreeId === worktreeId &&
+                runtimeOwnerKey(candidate.runtimeEnvironmentId) ===
+                  runtimeOwnerKey(runtimeEnvironmentId)
+            )
+          : undefined)
       // Why: a snapshot's reopenId can be a stale shape — the same path is bare in whichever worktree opened it first and namespaced elsewhere — so honoring it while this owner's tab is already open would strand activeFileId and the unified tab on an id no OpenFile has.
       const id = existing
         ? existing.id
@@ -1757,7 +1907,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               file.filePath,
               worktreeId,
               runtimeEnvironmentId,
-              reusableOpenFileModes
+              reusableOpenFileModes,
+              workspaceExecutionHostId
             )
       editorItemFileId = id
       const isPreview = options?.preview ?? false
@@ -1771,6 +1922,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         // If opening as non-preview, also pin the existing tab
         const updatedPreview = isPreview ? existing.isPreview : false
         const nextExternalSshTargetId = file.externalSshTargetId ?? existing.externalSshTargetId
+        const nextWorkspaceExecutionHostId =
+          workspaceExecutionHostId ?? existing.workspaceExecutionHostId
         const refreshExternalSshProvenance = file.externalSshTargetId !== undefined
         const fileContentReloadNonce = shouldRequestExistingFileContentReload(
           existing,
@@ -1794,6 +1947,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.worktreeId !== file.worktreeId ||
           existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
           existing.externalSshTargetId !== nextExternalSshTargetId ||
+          existing.workspaceExecutionHostId !== nextWorkspaceExecutionHostId ||
           refreshExternalSshProvenance ||
           existing.fileContentReloadNonce !== fileContentReloadNonce
         if (!needsExistingUpdate) {
@@ -1810,6 +1964,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   language: file.language,
                   runtimeEnvironmentId,
                   externalSshTargetId: nextExternalSshTargetId,
+                  workspaceExecutionHostId: nextWorkspaceExecutionHostId,
                   operationProvenance: refreshExternalSshProvenance
                     ? operationProvenance
                     : f.operationProvenance,
@@ -1858,6 +2013,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   isDirty: false,
                   isPreview: true,
                   runtimeEnvironmentId,
+                  workspaceExecutionHostId,
                   operationProvenance
                 }
               : f
@@ -1948,6 +2104,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             isDirty: false,
             isPreview: isPreview || undefined,
             runtimeEnvironmentId,
+            workspaceExecutionHostId,
             operationProvenance
           }
         ],
@@ -2023,30 +2180,41 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openMarkdownPreview: (file, options) => {
     const initialState = get()
-    const resolvedRuntimeEnvironmentId =
+    const sourceLookupRuntimeEnvironmentId =
       file.runtimeEnvironmentId === null
         ? null
         : (file.runtimeEnvironmentId ??
           initialState.settings?.activeRuntimeEnvironmentId?.trim() ??
           undefined)
+    const sourceLookupExecutionHostId =
+      parseExecutionHostId(file.operationProvenance?.generation.route.executionHostId)?.id ??
+      file.workspaceExecutionHostId
     const sourceFileId =
       options?.sourceFileId ??
       resolveEditorFileIdForOwner(
         initialState,
         file.filePath,
         file.worktreeId,
-        resolvedRuntimeEnvironmentId,
-        ['edit']
+        sourceLookupRuntimeEnvironmentId,
+        ['edit'],
+        sourceLookupExecutionHostId
       )
     const id = `markdown-preview::${sourceFileId}`
-    const externalSshTargetId =
-      file.externalSshTargetId ??
-      initialState.openFiles.find((openFile) => openFile.id === sourceFileId)?.externalSshTargetId
+    const sourceFile = initialState.openFiles.find((openFile) => openFile.id === sourceFileId)
+    const runtimeEnvironmentId =
+      sourceFile?.runtimeEnvironmentId !== undefined
+        ? sourceFile.runtimeEnvironmentId
+        : sourceLookupRuntimeEnvironmentId
+    const externalSshTargetId = sourceFile?.externalSshTargetId ?? file.externalSshTargetId
+    const operationProvenance = sourceFile?.operationProvenance ?? file.operationProvenance
+    const workspaceExecutionHostId =
+      sourceFile?.workspaceExecutionHostId ??
+      parseExecutionHostId(operationProvenance?.generation.route.executionHostId)?.id ??
+      file.workspaceExecutionHostId
     const anchor = options?.anchor || undefined
     set((s) => {
       const existing = s.openFiles.find((openFile) => openFile.id === id)
       const worktreeId = file.worktreeId
-      const runtimeEnvironmentId = resolvedRuntimeEnvironmentId
       const activeResult = buildEditorActiveResult(s, worktreeId, id)
 
       if (existing) {
@@ -2054,7 +2222,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           existing.relativePath !== file.relativePath ||
           existing.filePath !== file.filePath ||
           existing.language !== file.language ||
+          existing.runtimeEnvironmentId !== runtimeEnvironmentId ||
           existing.externalSshTargetId !== externalSshTargetId ||
+          existing.workspaceExecutionHostId !== workspaceExecutionHostId ||
+          existing.operationProvenance !== operationProvenance ||
           existing.markdownPreviewSourceFileId !== sourceFileId ||
           existing.markdownPreviewAnchor !== anchor ||
           existing.mode !== 'markdown-preview'
@@ -2070,6 +2241,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                       language: file.language,
                       runtimeEnvironmentId,
                       externalSshTargetId,
+                      workspaceExecutionHostId,
+                      operationProvenance,
                       markdownPreviewSourceFileId: sourceFileId,
                       markdownPreviewAnchor: anchor,
                       mode: 'markdown-preview' as const
@@ -2090,6 +2263,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         isDirty: false,
         runtimeEnvironmentId,
         externalSshTargetId,
+        workspaceExecutionHostId,
+        operationProvenance,
         markdownPreviewSourceFileId: sourceFileId,
         markdownPreviewAnchor: anchor,
         mode: 'markdown-preview'
@@ -2765,12 +2940,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           file.id !== source.id &&
           file.filePath === source.filePath &&
           file.worktreeId === args.targetWorktreeId &&
-          (file.runtimeEnvironmentId?.trim() || null) === args.targetRuntimeEnvironmentId
+          (file.runtimeEnvironmentId?.trim() || null) === args.targetRuntimeEnvironmentId &&
+          workspaceOwnerKey(file.workspaceExecutionHostId) === args.targetExecutionHostId
       )
       const newFileId = buildOwnedEditorFileId(
         source.filePath,
         args.targetWorktreeId,
-        args.targetRuntimeEnvironmentId
+        args.targetRuntimeEnvironmentId,
+        args.targetExecutionHostId
       )
       const dependentPreviews = s.openFiles.filter(
         (file) => file.markdownPreviewSourceFileId === source.id
@@ -2942,6 +3119,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   relativePath: args.targetRelativePath,
                   runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
                   externalSshTargetId,
+                  workspaceExecutionHostId: args.targetExecutionHostId,
                   operationProvenance,
                   pendingOwnerMigration: undefined,
                   mirroredFromRuntimeSession: undefined
@@ -2954,6 +3132,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                     relativePath: args.targetRelativePath,
                     runtimeEnvironmentId: args.targetRuntimeEnvironmentId,
                     externalSshTargetId,
+                    workspaceExecutionHostId: args.targetExecutionHostId,
                     operationProvenance,
                     markdownPreviewSourceFileId: newFileId,
                     pendingOwnerMigration: undefined,
@@ -3166,16 +3345,25 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openDiff: (worktreeId, filePath, relativePath, language, staged, options) => {
     const isPreview = options?.preview ?? false
+    const ownership = captureEditorSurfaceOwnership(
+      get(),
+      worktreeId,
+      options?.runtimeEnvironmentId
+    )
+    if (!ownership) {
+      return
+    }
     let editorItemTargetGroupId = options?.targetGroupId
     let editorItemFileId = ''
     set((s) => {
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-        s,
-        worktreeId,
-        options?.runtimeEnvironmentId
-      )
       const diffSource: DiffSource = staged ? 'staged' : 'unstaged'
-      const id = buildDiffEditorFileId(worktreeId, diffSource, relativePath, runtimeEnvironmentId)
+      const id = buildDiffEditorFileId(
+        worktreeId,
+        diffSource,
+        relativePath,
+        ownership.runtimeEnvironmentId,
+        ownership.workspaceExecutionHostId
+      )
       editorItemFileId = id
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
@@ -3191,7 +3379,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: updatedPreview,
-          runtimeEnvironmentId
+          ...ownership
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -3214,7 +3402,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -3257,16 +3445,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::diff::branch::${compare.baseRef}::${branchCompare.compareVersion}::${entry.path}`
     const isPreview = options?.preview ?? false
+    const ownership = captureEditorSurfaceOwnership(
+      get(),
+      worktreeId,
+      options?.runtimeEnvironmentId
+    )
+    if (!ownership) {
+      return
+    }
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-        s,
-        worktreeId,
-        options?.runtimeEnvironmentId
-      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -3280,7 +3471,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: updatedPreview,
-          runtimeEnvironmentId
+          ...ownership
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -3305,7 +3496,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -3348,16 +3539,19 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const commitCompare = toCommitCompareSnapshot(compare)
     const id = `${worktreeId}::diff::commit::${commitCompare.compareVersion}::${entry.path}`
     const isPreview = options?.preview ?? false
+    const ownership = captureEditorSurfaceOwnership(
+      get(),
+      worktreeId,
+      options?.runtimeEnvironmentId
+    )
+    if (!ownership) {
+      return
+    }
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const targetGroupId =
         resolveEditorOpenTargetGroupId(s, worktreeId, options?.targetGroupId) ?? undefined
       editorItemTargetGroupId = targetGroupId
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(
-        s,
-        worktreeId,
-        options?.runtimeEnvironmentId
-      )
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         const updatedPreview = isPreview ? existing.isPreview : false
@@ -3371,7 +3565,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           skippedConflicts: undefined,
           conflictReview: undefined,
           isPreview: updatedPreview,
-          runtimeEnvironmentId
+          ...ownership
         })
         return {
           openFiles: s.openFiles.map((f) => (f.id === id ? reopenedDiff : f)),
@@ -3396,7 +3590,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts: undefined,
         conflictReview: undefined,
         isPreview: isPreview || undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       if (isPreview) {
         const replaceablePreviewId = getReplaceablePreviewFileId(s, worktreeId, targetGroupId)
@@ -3444,6 +3638,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           areaFilter
         ] ?? 'All Changes')
       : 'All Changes'
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     set((s) => {
       const branchSummary = s.gitBranchCompareSummaryByWorktree[worktreeId]
       const branchCompare =
@@ -3475,7 +3673,6 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             areaFilter
           ] ?? 'All Changes')
         : 'All Changes'
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -3492,7 +3689,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   skippedConflicts,
                   conflictReview: undefined,
                   conflict: undefined,
-                  runtimeEnvironmentId
+                  ...ownership
                 }
               : f
           ),
@@ -3519,7 +3716,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         skippedConflicts,
         conflictReview: undefined,
         conflict: undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -3535,6 +3732,14 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   openConflictFile: (worktreeId, worktreePath, entry, language, options) => {
     const absolutePath = joinPath(worktreePath, entry.path)
     const isPreview = options?.preview ?? false
+    const ownership = captureEditorSurfaceOwnership(
+      get(),
+      worktreeId,
+      options?.runtimeEnvironmentId
+    )
+    if (!ownership) {
+      return
+    }
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const id = absolutePath
@@ -3570,7 +3775,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   diffSource: undefined,
                   skippedConflicts: undefined,
                   conflictReview: undefined,
-                  isPreview: updatedPreview
+                  isPreview: updatedPreview,
+                  ...ownership
                 }
               : f
           ),
@@ -3594,7 +3800,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         isDirty: false,
         mode: 'edit',
         conflict,
-        isPreview: isPreview || undefined
+        isPreview: isPreview || undefined,
+        ...ownership
       }
 
       if (isPreview) {
@@ -3645,6 +3852,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
 
   openConflictReviewFile: (reviewFileId, worktreeId, worktreePath, entry, language) => {
     const absolutePath = joinPath(worktreePath, entry.path)
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     const reviewTab = (get().unifiedTabsByWorktree?.[worktreeId] ?? []).find(
       (tab) => tab.entityId === reviewFileId && tab.contentType === 'conflict-review'
     )
@@ -3675,7 +3886,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict,
                   diffSource: undefined,
                   skippedConflicts: undefined,
-                  conflictReview: undefined
+                  conflictReview: undefined,
+                  ...ownership
                 }
               : f.id === reviewFileId && f.conflictReview
                 ? {
@@ -3707,7 +3919,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
               language,
               isDirty: false,
               mode: 'edit' as const,
-              conflict
+              conflict,
+              ...ownership
             }
           ]
 
@@ -3742,6 +3955,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   // Why: renders from a stored snapshot (entries + timestamp), not live status, so the list stays stable across polls while reviewing.
   openConflictReview: (worktreeId, worktreePath, entries, source) => {
     const id = `${worktreeId}::conflict-review`
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     set((s) => {
       const conflictReview: ConflictReviewState = {
         source,
@@ -3762,7 +3979,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   language: 'plaintext',
                   conflictReview,
                   conflict: undefined,
-                  skippedConflicts: undefined
+                  skippedConflicts: undefined,
+                  ...ownership
                 }
               : f
           ),
@@ -3781,7 +3999,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: 'plaintext',
         isDirty: false,
         mode: 'conflict-review',
-        conflictReview
+        conflictReview,
+        ...ownership
       }
 
       return {
@@ -3807,6 +4026,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
       error: state.error,
       gitlabProjectRef: state.gitlabProjectRef ?? null
     }
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     set((s) => {
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -3818,7 +4041,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   mode: 'check-details' as const,
                   relativePath: label,
                   language: 'plaintext',
-                  checkRunDetails
+                  checkRunDetails,
+                  ...ownership
                 }
               : f
           ),
@@ -3837,7 +4061,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         language: 'plaintext',
         isDirty: false,
         mode: 'check-details',
-        checkRunDetails
+        checkRunDetails,
+        ...ownership
       }
 
       return {
@@ -3959,8 +4184,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
   openBranchAllDiffs: (worktreeId, worktreePath, compare, alternate) => {
     const branchCompare = toBranchCompareSnapshot(compare)
     const id = `${worktreeId}::all-diffs::branch::${compare.baseRef}::${branchCompare.compareVersion}`
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     set((s) => {
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const branchEntriesSnapshot = s.gitBranchChangesByWorktree[worktreeId] ?? []
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
@@ -3975,7 +4203,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: undefined,
                   skippedConflicts: undefined,
                   conflictReview: undefined,
-                  runtimeEnvironmentId
+                  ...ownership
                 }
               : f
           ),
@@ -4000,7 +4228,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -4025,8 +4253,11 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     const label = subject
       ? `Commit ${commitCompare.compareRef}: ${subject}`
       : `Commit ${commitCompare.compareRef}`
+    const ownership = captureEditorSurfaceOwnership(get(), worktreeId)
+    if (!ownership) {
+      return
+    }
     set((s) => {
-      const runtimeEnvironmentId = resolveDiffRuntimeEnvironmentId(s, worktreeId, undefined)
       const existing = s.openFiles.find((f) => f.id === id)
       if (existing) {
         return {
@@ -4040,7 +4271,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
                   conflict: undefined,
                   skippedConflicts: undefined,
                   conflictReview: undefined,
-                  runtimeEnvironmentId
+                  ...ownership
                 }
               : f
           ),
@@ -4065,7 +4296,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
         conflict: undefined,
         skippedConflicts: undefined,
         conflictReview: undefined,
-        runtimeEnvironmentId
+        ...ownership
       }
       return {
         openFiles: [...s.openFiles, newFile],
@@ -4998,10 +5229,18 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             worktreeId
           )
           // Why: floating/runtime-owned files need IDs that survive peers disappearing between restarts; collision-based IDs drift when the path is no longer open elsewhere.
-          const ownedId = buildOwnedEditorFileId(pf.filePath, worktreeId, pf.runtimeEnvironmentId)
+          const ownedId = buildOwnedEditorFileId(
+            pf.filePath,
+            worktreeId,
+            pf.runtimeEnvironmentId,
+            pf.workspaceExecutionHostId
+          )
           const id =
-            shouldHydrateWithOwnedEditorFileId(worktreeId, pf.runtimeEnvironmentId) ||
-            usedOpenFileIds.has(pf.filePath)
+            shouldHydrateWithOwnedEditorFileId(
+              worktreeId,
+              pf.runtimeEnvironmentId,
+              pf.workspaceExecutionHostId
+            ) || usedOpenFileIds.has(pf.filePath)
               ? ownedId
               : pf.filePath
           usedOpenFileIds.add(id)
@@ -5011,7 +5250,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             id: legacyId,
             filePath: pf.filePath,
             worktreeId,
-            runtimeEnvironmentId: pf.runtimeEnvironmentId
+            runtimeEnvironmentId: pf.runtimeEnvironmentId,
+            workspaceExecutionHostId: pf.workspaceExecutionHostId
           })
           // Why: read-only tabs (AI Vault View Log) must restore clean — ignore any persisted dirty draft/baseline so they can't come back writable.
           const isReadOnly = pf.readOnly === true
@@ -5027,6 +5267,7 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             language: detectLanguage(pf.relativePath || pf.filePath),
             isDirty: !isReadOnly && pf.dirtyDraftContent !== undefined,
             isPreview: pf.isPreview,
+            workspaceExecutionHostId: pf.workspaceExecutionHostId,
             runtimeEnvironmentId: pf.runtimeEnvironmentId,
             externalSshTargetId: pf.externalSshTargetId,
             ...(isReadOnly ? { readOnly: true } : {}),

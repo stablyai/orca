@@ -59,6 +59,10 @@ import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/na
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
+import {
+  findFolderWorkspacePathStatusProjectGroup,
+  getFolderWorkspacePathStatusRequest
+} from './folder-workspace-path-status-request'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -229,11 +233,12 @@ export function activateAndRevealFolderWorkspace(
     opts && 'runtimeEnvironmentId' in opts
       ? (opts.runtimeEnvironmentId ?? null)
       : getRuntimeEnvironmentIdForWorktree(state, folderWorkspaceKey(folderWorkspaceId))
+  const projectGroup = findFolderWorkspacePathStatusProjectGroup(
+    folderWorkspace,
+    state.projectGroups
+  )
   const pathStatus = state.getFreshFolderWorkspacePathStatus(
-    {
-      scope: 'folder-workspace',
-      folderWorkspaceId
-    },
+    getFolderWorkspacePathStatusRequest(folderWorkspace, projectGroup),
     { runtimeEnvironmentId }
   )
   if (folderWorkspaceActivationBlocked(pathStatus)) {

@@ -19,6 +19,7 @@ import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
@@ -128,10 +129,10 @@ function locateCodexPane(state: AppState, ptyId: string): LocatedCodexPane | nul
 function getWorkspacePath(state: AppState, worktreeId: string): string | null {
   const parsed = parseWorkspaceKey(worktreeId)
   if (parsed?.type === 'folder') {
-    return (
-      (state.folderWorkspaces ?? []).find((workspace) => workspace.id === parsed.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
+    const owner = findFolderWorkspaceOwner(state, parsed.folderWorkspaceId) as
+      | AppState['folderWorkspaces'][number]
+      | null
+    return owner?.folderPath ?? null
   }
   return getWorktreeMapFromState(state).get(worktreeId)?.path ?? null
 }
@@ -145,7 +146,9 @@ function buildPaneIdentityEnv(
   const parsed = parseWorkspaceKey(worktreeId)
   const folderWorkspace =
     parsed?.type === 'folder'
-      ? state.folderWorkspaces.find((workspace) => workspace.id === parsed.folderWorkspaceId)
+      ? (findFolderWorkspaceOwner(state, parsed.folderWorkspaceId) as
+          | AppState['folderWorkspaces'][number]
+          | null)
       : null
   return {
     ORCA_WORKSPACE_ID: worktreeId,
@@ -185,6 +188,9 @@ async function executeDetachedCodexPaneRestart(
   const { worktreeId, tab, leafId } = located
 
   const workspacePath = getWorkspacePath(state, worktreeId)
+  if (parseWorkspaceKey(worktreeId)?.type === 'folder' && !workspacePath) {
+    throw new Error('Folder workspace owner is ambiguous')
+  }
   const cwd = tab.startupCwd ?? workspacePath ?? undefined
   const capabilities = hasCachedWindowsTerminalCapabilities()
     ? getCachedWindowsTerminalCapabilities()

@@ -1,10 +1,19 @@
 import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import {
+  OptionalExecutionHostId,
+  OptionalFiniteNumber,
+  OptionalString,
+  requiredString
+} from '../schemas'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import {
+  FolderCatalogListParams,
+  projectFolderWorkspaceCatalogForClient
+} from './folder-catalog-publication'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -42,6 +51,7 @@ const FolderWorkspaceCreate = z
 
 const FolderWorkspaceUpdate = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id'),
+  executionHostId: OptionalExecutionHostId,
   updates: z
     .object({
       name: OptionalString,
@@ -64,17 +74,21 @@ const FolderWorkspaceUpdate = z.object({
 })
 
 const FolderWorkspaceSelector = z.object({
-  folderWorkspaceId: requiredString('Missing folder workspace id')
+  folderWorkspaceId: requiredString('Missing folder workspace id'),
+  executionHostId: OptionalExecutionHostId,
+  preserveRendererWorkspaceKey: z.boolean().optional()
 })
 
 const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('folder-workspace'),
-    folderWorkspaceId: requiredString('Missing folder workspace id')
+    folderWorkspaceId: requiredString('Missing folder workspace id'),
+    executionHostId: OptionalExecutionHostId
   }),
   z.object({
     scope: z.literal('project-group'),
-    projectGroupId: requiredString('Missing project group id')
+    projectGroupId: requiredString('Missing project group id'),
+    executionHostId: OptionalExecutionHostId
   }),
   z.object({
     scope: z.literal('path'),
@@ -86,9 +100,13 @@ const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
 export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'folderWorkspace.list',
-    params: null,
-    handler: (_params, { runtime }) => ({
-      folderWorkspaces: runtime.listFolderWorkspaces()
+    params: FolderCatalogListParams,
+    handler: (params, { runtime }) => ({
+      folderWorkspaces: projectFolderWorkspaceCatalogForClient(
+        runtime.listFolderWorkspaces(),
+        runtime.listProjectGroups(),
+        params?.ownerQualified === true
+      )
     })
   }),
   defineMethod({
@@ -102,13 +120,23 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
     name: 'folderWorkspace.update',
     params: FolderWorkspaceUpdate,
     handler: async (params, { runtime }) => ({
-      folderWorkspace: await runtime.updateFolderWorkspace(params.folderWorkspaceId, params.updates)
+      folderWorkspace: params.executionHostId
+        ? await runtime.updateFolderWorkspace(params.folderWorkspaceId, params.updates, {
+            executionHostId: params.executionHostId
+          })
+        : await runtime.updateFolderWorkspace(params.folderWorkspaceId, params.updates)
     })
   }),
   defineMethod({
     name: 'folderWorkspace.delete',
     params: FolderWorkspaceSelector,
-    handler: async (params, { runtime }) => runtime.deleteFolderWorkspace(params.folderWorkspaceId)
+    handler: async (params, { runtime }) =>
+      params.executionHostId || params.preserveRendererWorkspaceKey
+        ? runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
+            ...(params.executionHostId ? { executionHostId: params.executionHostId } : {}),
+            ...(params.preserveRendererWorkspaceKey ? { preserveRendererWorkspaceKey: true } : {})
+          })
+        : runtime.deleteFolderWorkspace(params.folderWorkspaceId)
   }),
   defineMethod({
     name: 'folderWorkspace.getPathStatus',

@@ -166,13 +166,13 @@ export function getExecutionHostIdForWorktree(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'local'
   }
-  const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
-  if (activeHostId) {
-    return activeHostId
-  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
+  }
+  const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
+  if (activeHostId) {
+    return activeHostId
   }
   const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {

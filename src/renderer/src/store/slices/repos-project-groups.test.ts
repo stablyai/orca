@@ -12,7 +12,6 @@ import {
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const remoteRepo: Repo = {
@@ -166,7 +165,11 @@ describe('project group store routing', () => {
     await store.getState().fetchProjectGroups()
 
     expect(store.getState().projectGroups).toEqual([
-      { ...folderGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...folderGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'ssh:ssh-1'
+      }
     ])
   })
 
@@ -184,12 +187,16 @@ describe('project group store routing', () => {
     await store.getState().fetchProjectGroups()
 
     expect(store.getState().projectGroups).toEqual([
-      { ...folderGroup, executionHostId: 'runtime:env-1' }
+      {
+        ...folderGroup,
+        executionHostId: 'runtime:env-1',
+        runtimeSourceExecutionHostId: 'local'
+      }
     ])
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
       method: 'projectGroup.list',
-      params: undefined,
+      params: { ownerQualified: true },
       timeoutMs: 15_000
     })
     expect(projectGroupsList).not.toHaveBeenCalled()
@@ -202,14 +209,23 @@ describe('project group store routing', () => {
       result: { status: { path: '/workspace/platform', exists: true } },
       _meta: { runtimeId: 'runtime-remote' }
     })
-    const folderGroup = { ...projectGroup, parentPath: '/workspace/platform' }
+    const folderGroup = {
+      ...projectGroup,
+      parentPath: '/workspace/platform',
+      executionHostId: 'runtime:env-1' as const,
+      runtimeSourceExecutionHostId: 'local' as const
+    }
     const store = createTestStore()
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'wrong-env' } as never,
       projectGroups: [folderGroup]
     })
 
-    const request = { scope: 'project-group' as const, projectGroupId: folderGroup.id }
+    const request = {
+      scope: 'project-group' as const,
+      projectGroupId: folderGroup.id,
+      executionHostId: 'local' as const
+    }
 
     await expect(
       store.getState().fetchFolderWorkspacePathStatus(request, {
@@ -219,13 +235,13 @@ describe('project group store routing', () => {
     ).resolves.toEqual({ path: '/workspace/platform', exists: true })
 
     expect(store.getState().getFolderWorkspacePathStatusCacheKey(request)).toBe(
-      `environment:wrong-env:project-group:${folderGroup.id}`
+      `environment:wrong-env:project-group:local:${folderGroup.id}`
     )
     expect(
       store
         .getState()
         .getFolderWorkspacePathStatusCacheKey(request, { runtimeEnvironmentId: 'env-1' })
-    ).toBe(`environment:env-1:project-group:${folderGroup.id}`)
+    ).toBe(`environment:env-1:project-group:local:${folderGroup.id}`)
     expect(
       store.getState().getFreshFolderWorkspacePathStatus(request, { runtimeEnvironmentId: 'env-1' })
     ).toEqual({ path: '/workspace/platform', exists: true })
@@ -236,6 +252,112 @@ describe('project group store routing', () => {
       params: request,
       timeoutMs: 15_000
     })
+  })
+
+  it('isolates same-ID local and SSH path-status cache entries by source owner', async () => {
+    const localGroup = {
+      ...projectGroup,
+      parentPath: '/local/platform',
+      connectionId: null,
+      executionHostId: 'local' as const
+    }
+    const sshGroup = {
+      ...projectGroup,
+      parentPath: '/remote/platform',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1' as const
+    }
+    folderWorkspacesGetPathStatus.mockImplementation(async (request) => ({
+      path: request.executionHostId === 'local' ? localGroup.parentPath : sshGroup.parentPath,
+      exists: request.executionHostId === 'local'
+    }))
+    const store = createTestStore()
+    store.setState({ projectGroups: [localGroup, sshGroup] })
+    const localRequest = {
+      scope: 'project-group' as const,
+      projectGroupId: projectGroup.id,
+      executionHostId: 'local' as const
+    }
+    const sshRequest = {
+      scope: 'project-group' as const,
+      projectGroupId: projectGroup.id,
+      executionHostId: 'ssh:ssh-1' as const
+    }
+
+    await store.getState().fetchFolderWorkspacePathStatus(localRequest)
+    await store.getState().fetchFolderWorkspacePathStatus(sshRequest)
+
+    expect(store.getState().getFolderWorkspacePathStatusCacheKey(localRequest)).not.toBe(
+      store.getState().getFolderWorkspacePathStatusCacheKey(sshRequest)
+    )
+    expect(store.getState().getFreshFolderWorkspacePathStatus(localRequest)).toEqual({
+      path: '/local/platform',
+      exists: true
+    })
+    expect(store.getState().getFreshFolderWorkspacePathStatus(sshRequest)).toEqual({
+      path: '/remote/platform',
+      exists: false
+    })
+  })
+
+  it('isolates paired-runtime same-source requests by outer transport', async () => {
+    const request = {
+      scope: 'project-group' as const,
+      projectGroupId: projectGroup.id,
+      executionHostId: 'local' as const
+    }
+    runtimeEnvironmentCall.mockImplementation(async (call: RuntimeEnvironmentCallRequest) => {
+      const selector = (call as RuntimeEnvironmentCallRequest & { selector: string }).selector
+      return {
+        id: `status-${selector}`,
+        ok: true,
+        result: { status: { path: `/${selector}/platform`, exists: selector === 'env-1' } },
+        _meta: { runtimeId: `runtime-${selector}` }
+      }
+    })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [
+        {
+          ...projectGroup,
+          parentPath: '/env-1/platform',
+          executionHostId: 'runtime:env-1',
+          runtimeSourceExecutionHostId: 'local'
+        },
+        {
+          ...projectGroup,
+          parentPath: '/env-2/platform',
+          executionHostId: 'runtime:env-2',
+          runtimeSourceExecutionHostId: 'local'
+        }
+      ]
+    })
+    const envOne = { runtimeEnvironmentId: 'env-1' }
+    const envTwo = { runtimeEnvironmentId: 'env-2' }
+
+    await store.getState().fetchFolderWorkspacePathStatus(request, envOne)
+    await store.getState().fetchFolderWorkspacePathStatus(request, envTwo)
+
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request, envOne)).toEqual({
+      path: '/env-1/platform',
+      exists: true
+    })
+    expect(store.getState().getFreshFolderWorkspacePathStatus(request, envTwo)).toEqual({
+      path: '/env-2/platform',
+      exists: false
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        params: request
+      })
+    )
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-2',
+        params: request
+      })
+    )
   })
 
   it('routes folder workspace creation through an explicit runtime owner when provided', async () => {
@@ -270,7 +392,11 @@ describe('project group store routing', () => {
           { projectGroupId: projectGroup.id, name: 'Runtime folder' },
           { runtimeEnvironmentId: 'env-1' }
         )
-    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'runtime:env-1' })
+    ).resolves.toEqual({
+      ...folderWorkspace,
+      executionHostId: 'runtime:env-1',
+      runtimeSourceExecutionHostId: 'local'
+    })
 
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
       selector: 'env-1',
@@ -313,63 +439,6 @@ describe('project group store routing', () => {
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
     expect(folderWorkspacesCreate).not.toHaveBeenCalled()
-  })
-
-  it('creates, updates, and deletes local folder workspaces', async () => {
-    const linkedTask: FolderWorkspace['linkedTask'] = {
-      provider: 'linear',
-      type: 'issue',
-      number: 0,
-      title: 'Refund fix',
-      url: 'https://linear.app/acme/issue/ENG-123',
-      linearIdentifier: 'ENG-123'
-    }
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      folderPath: '/workspace/platform',
-      linkedTask,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    folderWorkspacesCreate.mockResolvedValue(folderWorkspace)
-    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })
-    folderWorkspacesDelete.mockResolvedValue(true)
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Refund fix',
-        linkedTask
-      })
-    ).resolves.toEqual({ ...folderWorkspace, executionHostId: 'local' })
-    await expect(
-      store.getState().updateFolderWorkspace(folderWorkspace.id, { comment: 'Ready' })
-    ).resolves.toBe(true)
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    expect(folderWorkspacesCreate).toHaveBeenCalledWith({
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      linkedTask
-    })
-    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id,
-      updates: { comment: 'Ready' }
-    })
-    expect(folderWorkspacesDelete).toHaveBeenCalledWith({
-      folderWorkspaceId: folderWorkspace.id
-    })
-    expect(store.getState().folderWorkspaces).toEqual([])
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
   it('caches local folder workspace path status by scope', async () => {
@@ -551,122 +620,6 @@ describe('project group store routing', () => {
     })
   })
 
-  it('purges renderer session state when deleting a local folder workspace', async () => {
-    const folderWorkspace: FolderWorkspace = {
-      id: 'folder-workspace-1',
-      projectGroupId: projectGroup.id,
-      name: 'Refund fix',
-      folderPath: '/workspace/platform',
-      linkedTask: null,
-      comment: '',
-      isArchived: false,
-      isUnread: false,
-      isPinned: false,
-      sortOrder: 1,
-      lastActivityAt: 0,
-      createdAt: 1,
-      updatedAt: 1
-    }
-    const workspaceKey = folderWorkspaceKey(folderWorkspace.id)
-    folderWorkspacesDelete.mockResolvedValue(true)
-    const store = createTestStore()
-    store.setState({
-      folderWorkspaces: [folderWorkspace],
-      activeWorktreeId: workspaceKey,
-      activeWorkspaceKey: workspaceKey,
-      activeTabId: 'terminal-tab-1',
-      activeBrowserTabId: 'browser-tab-1',
-      activeTabType: 'browser',
-      tabsByWorktree: {
-        [workspaceKey]: [
-          {
-            id: 'terminal-tab-1',
-            worktreeId: workspaceKey,
-            title: 'Terminal',
-            customTitle: null,
-            color: null,
-            sortOrder: 0,
-            createdAt: 1,
-            ptyId: 'pty-1'
-          }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        'terminal-tab-1': {
-          root: { type: 'leaf', leafId: 'leaf-1' },
-          activeLeafId: 'leaf-1',
-          expandedLeafId: null
-        }
-      },
-      browserTabsByWorktree: {
-        [workspaceKey]: [
-          {
-            id: 'browser-tab-1',
-            worktreeId: workspaceKey,
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      browserPagesByWorkspace: {
-        'browser-tab-1': [
-          {
-            id: 'page-1',
-            workspaceId: 'browser-tab-1',
-            worktreeId: workspaceKey,
-            url: 'https://example.com',
-            title: 'Example',
-            loading: false,
-            faviconUrl: null,
-            canGoBack: false,
-            canGoForward: false,
-            loadError: null,
-            createdAt: 1
-          }
-        ]
-      },
-      openFiles: [
-        {
-          id: 'file-1',
-          worktreeId: workspaceKey,
-          filePath: '/workspace/platform/notes.md',
-          relativePath: 'notes.md',
-          language: 'markdown',
-          isDirty: true,
-          isPreview: false,
-          mode: 'edit'
-        }
-      ],
-      editorDrafts: { 'file-1': 'draft' },
-      activeFileIdByWorktree: { [workspaceKey]: 'file-1' },
-      activeTabTypeByWorktree: { [workspaceKey]: 'browser' },
-      activeBrowserTabIdByWorktree: { [workspaceKey]: 'browser-tab-1' },
-      lastVisitedAtByWorktreeId: { [workspaceKey]: 10 }
-    })
-
-    await expect(store.getState().deleteFolderWorkspace(folderWorkspace.id)).resolves.toBe(true)
-
-    const state = store.getState()
-    expect(state.folderWorkspaces).toEqual([])
-    expect(state.activeWorktreeId).toBeNull()
-    expect(state.activeWorkspaceKey).toBeNull()
-    expect(state.tabsByWorktree[workspaceKey]).toBeUndefined()
-    expect(state.terminalLayoutsByTabId['terminal-tab-1']).toBeUndefined()
-    expect(state.browserTabsByWorktree[workspaceKey]).toBeUndefined()
-    expect(state.browserPagesByWorkspace['browser-tab-1']).toBeUndefined()
-    expect(state.openFiles).toEqual([])
-    expect(state.editorDrafts).toEqual({})
-    expect(state.activeFileIdByWorktree[workspaceKey]).toBeUndefined()
-    expect(state.activeBrowserTabIdByWorktree[workspaceKey]).toBeUndefined()
-    expect(state.lastVisitedAtByWorktreeId[workspaceKey]).toBeUndefined()
-  })
-
   it('refreshes local repos and groups after importing nested repos', async () => {
     const importedRepo: Repo = {
       ...remoteRepo,
@@ -845,24 +798,11 @@ describe('project group store routing', () => {
     expect(projectGroupsMoveProject).toHaveBeenCalledWith({
       projectId: remoteRepo.id,
       groupId: projectGroup.id,
-      order: 3
+      order: 3,
+      executionHostId: 'local'
     })
     // Why: the repos slice stamps updated repos with their owning execution
     // host so multi-host routing never has to guess (multi-host design).
     expect(store.getState().repos).toEqual([{ ...movedRepo, executionHostId: 'local' }])
-  })
-
-  it('propagates specific folder workspace create failures to callers', async () => {
-    folderWorkspacesCreate.mockRejectedValue(new Error('folder_workspace_path_missing:/srv/app'))
-    const store = createTestStore()
-
-    await expect(
-      store.getState().createFolderWorkspace({
-        projectGroupId: projectGroup.id,
-        name: 'Broken folder'
-      })
-    ).rejects.toThrow(
-      'Folder not found. Orca cannot find /srv/app. Remove and re-import the folder.'
-    )
   })
 })

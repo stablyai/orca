@@ -29,7 +29,9 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.ps',
     params: WorktreePsParams,
     handler: async (params, { runtime }) => {
-      const result = await runtime.getWorktreePs(params.limit)
+      const result = await (params.ownerQualified === true
+        ? runtime.getWorktreePs(params.limit, { ownerQualified: true })
+        : runtime.getWorktreePs(params.limit))
       // Why: callers that never send the field get the byte-exact legacy response.
       if (params.afterSnapshotId === undefined) {
         return result

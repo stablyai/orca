@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../shared/skills'
 import {
   isNativeChatSkillForAgent,
+  resolveNativeChatSkillDiscoveryContext,
   resolveNativeChatSkillDiscoveryCwd
 } from './use-native-chat-skills'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -156,5 +158,67 @@ describe('resolveNativeChatSkillDiscoveryCwd', () => {
         'tab-1'
       )
     ).toBe('/repo/worktree/packages/app')
+  })
+})
+
+describe('resolveNativeChatSkillDiscoveryContext folder ownership', () => {
+  const workspaceKey = folderWorkspaceKey('folder-1')
+  const localFolder = {
+    id: 'folder-1',
+    projectGroupId: 'group-1',
+    connectionId: null,
+    executionHostId: 'local' as const,
+    folderPath: '/workspace/local'
+  }
+  const sshFolder = {
+    ...localFolder,
+    connectionId: 'builder',
+    executionHostId: 'ssh:builder' as const,
+    folderPath: '/workspace/remote'
+  }
+
+  function folderState(reversed: boolean, active = true) {
+    return {
+      activeRepoId: null,
+      activeWorktreeId: active ? workspaceKey : null,
+      activeWorkspaceExecutionHostId: active ? 'ssh:builder' : null,
+      folderWorkspaces: reversed ? [sshFolder, localFolder] : [localFolder, sshFolder],
+      projectGroups: [],
+      projects: [],
+      repos: [],
+      restoredRuntimeHostIdByWorkspaceSessionKey: {},
+      settings: { activeRuntimeEnvironmentId: null },
+      tabsByWorktree: { [workspaceKey]: [{ id: 'tab-1' }] },
+      worktreesByRepo: {}
+    } as never
+  }
+
+  it.each([false, true])('uses the active folder owner path (reversed=%s)', (reversed) => {
+    expect(resolveNativeChatSkillDiscoveryContext(folderState(reversed), 'tab-1')).toMatchObject({
+      cwd: '/workspace/remote',
+      executionHostKind: 'ssh'
+    })
+  })
+
+  it('fails closed for an inactive same-id folder collision', () => {
+    expect(resolveNativeChatSkillDiscoveryContext(folderState(false, false), 'tab-1')).toBeNull()
+  })
+
+  it('routes paired SSH-source folders through their owning runtime', () => {
+    const pairedFolder = {
+      ...sshFolder,
+      executionHostId: 'runtime:hub' as const,
+      runtimeSourceExecutionHostId: 'ssh:builder' as const
+    }
+    const state = {
+      ...(folderState(false, false) as unknown as Record<string, unknown>),
+      folderWorkspaces: [pairedFolder]
+    } as never
+
+    expect(resolveNativeChatSkillDiscoveryContext(state, 'tab-1')).toMatchObject({
+      cwd: '/workspace/remote',
+      executionHostKind: 'runtime',
+      runtimeTarget: { kind: 'environment', environmentId: 'hub' }
+    })
   })
 })

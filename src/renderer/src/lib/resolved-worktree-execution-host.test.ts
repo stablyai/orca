@@ -77,4 +77,24 @@ describe('getResolvedExecutionHostIdForWorktree', () => {
       )
     ).toBe('runtime:runtime-1')
   })
+
+  it('does not inherit an SSH group for an explicit-local folder', () => {
+    expect(
+      getResolvedExecutionHostIdForWorktree(
+        {
+          folderWorkspaces: [
+            { id: 'local-folder', projectGroupId: 'ssh-group', connectionId: null }
+          ],
+          projectGroups: [
+            {
+              id: 'ssh-group',
+              connectionId: 'target-1',
+              executionHostId: 'ssh:target-1'
+            }
+          ]
+        },
+        'folder:local-folder'
+      )
+    ).toBe('local')
+  })
 })

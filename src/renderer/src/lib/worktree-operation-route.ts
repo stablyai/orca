@@ -15,6 +15,7 @@ import {
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace,
   type FolderWorkspaceRuntimeOwnerState
 } from './folder-workspace-runtime-owner'
 
@@ -123,16 +124,16 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
-  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
-  if (activeRoute) {
-    return { kind: 'resolved', route: activeRoute }
-  }
   // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
   // catalogs scanned below, so without this branch a plain local folder workspace reads as an
   // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
+  }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return { kind: 'resolved', route: activeRoute }
   }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind !== 'missing') {
@@ -180,19 +181,25 @@ function resolveFolderWorkspaceOperationRoute(
   folderWorkspaceId: string
 ): WorktreeOperationRouteResolution {
   if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
-    // Why: deleted/stale folder ids keep failing closed like unknown worktrees.
-    return { kind: 'missing' }
+    return state.folderWorkspaces?.some((workspace) => workspace.id === folderWorkspaceId)
+      ? { kind: 'ambiguous' }
+      : { kind: 'missing' }
   }
   // Why: a found folder record is positive identity evidence, so keep terminal-owner parity;
   // the worktree legacy hydration gates would fail local folders closed whenever unrelated
   // runtimes exist — the exact #10251 symptom.
   const executionHostId = getExecutionHostIdForFolderWorkspace(state, folderWorkspaceId)
+  if (executionHostId === 'runtime:unresolved-owner') {
+    return { kind: 'ambiguous' }
+  }
   const parsedHost = parseExecutionHostId(executionHostId)
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
   return {
     kind: 'resolved',
     route: {
       executionHostId,
-      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+      runtimeEnvironmentId:
+        runtimeEnvironmentId ?? (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
     }
   }
 }

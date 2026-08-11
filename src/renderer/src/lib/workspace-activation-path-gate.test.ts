@@ -67,12 +67,14 @@ async function seedFolderWorkspace(
   mocks.getPathStatus.mockResolvedValue({ path: folderWorkspace.folderPath, ...status })
   // Why the real fetch: it writes the cache under the exact key + request snapshot
   // that the activation guard reads back, so the fixture can't drift from production.
-  await store
-    .getState()
-    .fetchFolderWorkspacePathStatus(
-      { scope: 'folder-workspace', folderWorkspaceId: folderWorkspace.id },
-      { force: true }
-    )
+  await store.getState().fetchFolderWorkspacePathStatus(
+    {
+      scope: 'folder-workspace',
+      folderWorkspaceId: folderWorkspace.id,
+      executionHostId: 'local'
+    },
+    { force: true }
+  )
 }
 
 describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {

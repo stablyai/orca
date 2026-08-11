@@ -32,6 +32,7 @@ describe('rich markdown paste handler', () => {
       handleRichMarkdownPaste({
         editor,
         event,
+        fileId: 'file-1',
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'
       })
@@ -40,6 +41,7 @@ describe('rich markdown paste handler', () => {
     expect(handleRichMarkdownImagePaste).toHaveBeenCalledWith({
       editor,
       event,
+      fileId: 'file-1',
       filePath: '/repo/note.md',
       worktreeId: 'wt-1',
       runtimeEnvironmentId: undefined
@@ -58,6 +60,7 @@ describe('rich markdown paste handler', () => {
       handleRichMarkdownPaste({
         editor,
         event,
+        fileId: 'file-1',
         filePath: '/repo/note.md',
         worktreeId: 'wt-1'
       })
@@ -78,6 +81,7 @@ describe('rich markdown paste handler', () => {
       handleRichMarkdownPaste({
         editor,
         event,
+        fileId: 'file-1',
         filePath: '/repo/note.md',
         worktreeId: 'wt-1',
         runtimeEnvironmentId: 'env-1'

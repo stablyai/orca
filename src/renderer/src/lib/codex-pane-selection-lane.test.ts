@@ -488,4 +488,26 @@ describe('isForeignMachineCodexPtyId', () => {
       ).toBe(!isForeignMachineCodexPtyId(ptyId))
     }
   })
+
+  it('does not assign an ambiguous folder path to a local account lane', () => {
+    const state = laneState()
+    state.folderWorkspaces = [
+      { id: 'fw1', projectGroupId: 'group', folderPath: '/local', executionHostId: 'local' },
+      {
+        id: 'fw1',
+        projectGroupId: 'group',
+        folderPath: '/remote',
+        executionHostId: 'ssh:builder',
+        connectionId: 'builder'
+      }
+    ] as never
+
+    expect(
+      resolveCodexPaneSelectionLaneKey({
+        state,
+        tab: { worktreeId: 'folder:fw1', startupCwd: undefined, shellOverride: undefined },
+        ptyId: 'local-pty'
+      })
+    ).toBe('unattributed-workspace')
+  })
 })

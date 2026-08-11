@@ -745,7 +745,7 @@ describe('removeWorktree cascade', () => {
     expect(s.fileSearchStateByWorktree[wt1]).toBeUndefined()
   })
 
-  it('shuts down terminals after the backend confirms worktree removal', async () => {
+  it('does not re-kill terminals after the backend confirms worktree removal', async () => {
     const store = createTestStore()
     const worktreeId = 'repo1::/path/wt1'
     const callOrder: string[] = []
@@ -775,7 +775,8 @@ describe('removeWorktree cascade', () => {
     const result = await store.getState().removeWorktree(worktreeId)
 
     expect(result).toEqual({ ok: true })
-    expect(callOrder).toEqual(['remove', 'kill'])
+    expect(callOrder).toEqual(['remove'])
+    expect(mockApi.pty.kill).not.toHaveBeenCalled()
   })
 })
 

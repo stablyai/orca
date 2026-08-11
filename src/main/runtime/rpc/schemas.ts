@@ -4,6 +4,7 @@
 // target envelope, etc.). Methods compose these to declare their real
 // contract without repeating the same `typeof` gymnastics 90 times.
 import { z } from 'zod'
+import { normalizeExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 
 // Why: the original handlers treated non-numeric/NaN limit values as "no
 // limit" rather than as errors. Preserve that forgiving behavior so CLI
@@ -40,6 +41,18 @@ export const OptionalBoolean = z
   .unknown()
   .transform((value) => (typeof value === 'boolean' ? value : undefined))
   .pipe(z.union([z.boolean(), z.undefined()]))
+  .optional()
+
+export const OptionalExecutionHostId = z
+  .string()
+  .transform((value, ctx): ExecutionHostId => {
+    const hostId = normalizeExecutionHostId(value)
+    if (!hostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid execution host id' })
+      return z.NEVER
+    }
+    return hostId
+  })
   .optional()
 
 // Why: runtime handlers accept `linkedIssue: number | null | undefined` with

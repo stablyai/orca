@@ -28,7 +28,7 @@ export type WorktreeTeardownDeps = {
   /** Authoritative id for callers whose selector no longer resolves (orphaned workspace). */
   resolvedWorktreeId?: string
   /** SSH connection owning `resolvedWorktreeId`; prevents same-id cross-host graph matches. */
-  resolvedConnectionId?: string
+  resolvedConnectionId?: string | null
   /** Runtime environment owning a mirrored `resolvedWorktreeId`. */
   resolvedRuntimeEnvironmentId?: string
   localProvider: IPtyProvider
@@ -56,10 +56,11 @@ export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
 
 // Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
-// path; each RPC leaf converts it to the remaining time when it actually issues,
-// so sequential RPCs share one budget without any relative-timeout bookkeeping.
+// path; short sweeps reserve half their remaining budget instead of expiring
+// the RPC before it starts.
 export function teardownRpcDeadline(sweepDeadline: number): number {
-  return sweepDeadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS
+  const remainingMs = Math.max(0, sweepDeadline - Date.now())
+  return sweepDeadline - Math.min(WORKTREE_TEARDOWN_RPC_MARGIN_MS, Math.floor(remainingMs / 2))
 }
 
 /**
@@ -130,7 +131,7 @@ export async function killAllProcessesForWorktree(
             deadline,
             stopPty,
             ...(deps.resolvedWorktreeId ? { resolvedWorktreeId: deps.resolvedWorktreeId } : {}),
-            ...(deps.resolvedConnectionId
+            ...(deps.resolvedConnectionId !== undefined
               ? { resolvedConnectionId: deps.resolvedConnectionId }
               : {}),
             ...(deps.resolvedRuntimeEnvironmentId

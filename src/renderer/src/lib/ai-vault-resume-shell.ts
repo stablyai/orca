@@ -9,6 +9,7 @@ import {
 } from '../../../shared/tui-agent-startup-shell'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 
 type AiVaultResumeShellState = Pick<
   AppState,
@@ -49,7 +50,8 @@ export function resolveAiVaultResumeStartupShell(args: {
 }
 
 export function getAiVaultResumeWorkspacePath(
-  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,
+  state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'> &
+    Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>,
   worktreeId: string | null | undefined
 ): string | null {
   if (!worktreeId) {
@@ -57,10 +59,10 @@ export function getAiVaultResumeWorkspacePath(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    return (
-      state.folderWorkspaces.find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
-        ?.folderPath ?? null
-    )
+    const owner = findFolderWorkspaceOwner(state, workspaceScope.folderWorkspaceId) as
+      | AppState['folderWorkspaces'][number]
+      | null
+    return owner?.folderPath ?? null
   }
   const targetWorktreeId =
     workspaceScope?.type === 'worktree' ? workspaceScope.worktreeId : worktreeId

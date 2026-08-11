@@ -57,4 +57,18 @@ describe('worktree.ps catalog snapshots', () => {
     })
     expect(runtime.getWorktreePs).toHaveBeenCalledTimes(2)
   })
+
+  it('opts into owner-qualified worktree summaries only when requested', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch({
+      id: 'owner-qualified',
+      authToken: 'token',
+      method: 'worktree.ps',
+      params: { limit: 10_000, ownerQualified: true }
+    })
+
+    expect(runtime.getWorktreePs).toHaveBeenCalledWith(10_000, { ownerQualified: true })
+  })
 })

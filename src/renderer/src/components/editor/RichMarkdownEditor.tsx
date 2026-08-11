@@ -68,8 +68,8 @@ export default function RichMarkdownEditor({
     selectWorktreeDiffComments(s, worktreeId)
   )
   const { codec, htmlSuperscriptLinkContext, worktreeRoot } = useRichMarkdownSuperscriptLinkSetup({
+    fileId,
     filePath,
-    runtimeEnvironmentId,
     worktreeId
   })
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -193,6 +193,7 @@ export default function RichMarkdownEditor({
     codec,
     htmlSuperscriptLinkContext,
     content,
+    fileId,
     filePath,
     worktreeId,
     worktreeRoot,
@@ -303,7 +304,13 @@ export default function RichMarkdownEditor({
     worktreeRoot
   })
 
-  const handleLocalImagePick = useLocalImagePick(editor, filePath, worktreeId, runtimeEnvironmentId)
+  const handleLocalImagePick = useLocalImagePick(
+    editor,
+    fileId,
+    filePath,
+    worktreeId,
+    runtimeEnvironmentId
+  )
   handleLocalImagePickRef.current = handleLocalImagePick
 
   const {
