@@ -73,7 +73,6 @@ export class PaneManager {
   private destroyed = false
   private renderingSuspended: boolean
   private atlasRecoveryVisible: boolean
-  /** Set when a shared-atlas wipe skipped this manager for being hidden. */
   private atlasInvalidatedWhileHidden = false
   private identities = new PaneIdentityRegistry()
   private pendingPaneReparentFrameIds = new Set<number>()
@@ -373,10 +372,8 @@ export class PaneManager {
   setAtlasRecoveryVisible(visible: boolean): void {
     const wasHidden = !this.atlasRecoveryVisible
     this.atlasRecoveryVisible = visible
-    // Why: a shared-atlas wipe that ran while this manager was hidden left its
-    // panes holding stale glyph coordinates. Becoming visible is the first
-    // point they can be measured and repainted, so consume the debt here —
-    // otherwise the reveal paints garbled glyphs until some later refresh.
+    // Why: reveal is the first point a skipped manager can be measured, so the
+    // deferred atlas repaint is consumed here.
     if (visible && wasHidden && this.atlasInvalidatedWhileHidden) {
       this.atlasInvalidatedWhileHidden = false
       this.refreshAllPanes()

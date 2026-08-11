@@ -11,7 +11,6 @@ type RegisteredPaneManager = {
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
   scheduleRevealPresent?: () => void
-  /** Records that a shared-atlas wipe ran while this manager was hidden. */
   markAtlasInvalidatedWhileHidden?: () => void
 }
 
@@ -52,14 +51,8 @@ export function resetAllTerminalWebglAtlases(): void {
 
 /**
  * Reasons where the GPU context itself died, not just a surface being hidden.
- *
- * Why they cannot skip hidden managers: the visibility filter assumes a hidden
- * pane's texture survives until it is revealed, which holds for tab switches.
- * A system resume destroys every context at once, so a skipped manager keeps a
- * glyph renderer pointing at a generation its rebuilt atlas no longer has —
- * captured in the field as clearModelGeneration=undefined against
- * glyphLastSeenClearModelGeneration=17, painting a blank canvas with a full
- * vertex buffer (#7951).
+ * Skipping hidden managers assumes their texture survives until reveal, which
+ * a context loss breaks — so these rebuild every manager (#7951).
  */
 const CONTEXT_LOSS_REASONS = new Set(['system-resume', 'render-desync'])
 
@@ -76,12 +69,9 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
       recoveryManagers.push(manager)
     }
   }
-  // Why: the atlas is module-global across same-font terminals, so this wipe
-  // invalidates the glyph coordinates of the hidden managers too — but skipping
-  // their repaint is deliberate (they cannot be measured while hidden). Mark
-  // them instead so their reveal repaints from the rebuilt atlas; without this
-  // they paint garbled glyphs with stale coordinates. Field logs showed 96% of
-  // resets are partial, so this is the common case, not an edge case.
+  // Why: the atlas is module-global, so this wipe invalidates hidden managers'
+  // glyph coordinates too. They cannot be measured while hidden, so defer the
+  // repaint to their reveal rather than skipping it outright.
   for (const manager of skippedManagers) {
     manager.markAtlasInvalidatedWhileHidden?.()
   }

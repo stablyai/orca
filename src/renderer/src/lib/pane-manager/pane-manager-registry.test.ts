@@ -114,10 +114,8 @@ describe('pane manager registry', () => {
   })
 
   it('marks skipped hidden managers so their reveal can repaint', () => {
-    // Why: the atlas is module-global, so a wipe invalidates hidden managers'
-    // glyph coordinates too. Skipping their repaint is correct (they cannot be
-    // measured while hidden), but leaving no record made them paint garbled
-    // glyphs on reveal — 96% of field resets were partial like this.
+    // Why: skipping the repaint is correct, but leaving no record made the
+    // reveal paint stale coordinates.
     const visible = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
@@ -145,11 +143,8 @@ describe('pane manager registry', () => {
   })
 
   it('rebuilds hidden managers too after a context loss', () => {
-    // Why: the visibility filter assumes a hidden pane's GPU texture survives
-    // until reveal, which holds for tab switches but not for a system resume —
-    // that destroys every context at once. A skipped manager then keeps a glyph
-    // renderer pointed at a generation its rebuilt atlas no longer has and
-    // paints a blank canvas (field capture: 1949/1998 cells blank, #7951).
+    // Why: a system resume destroys every context at once, so the visibility
+    // filter's survives-until-reveal assumption does not hold here.
     const visible = {
       resetWebglTextureAtlases: vi.fn<() => void>(),
       refreshAllPanes: vi.fn<() => void>(),
