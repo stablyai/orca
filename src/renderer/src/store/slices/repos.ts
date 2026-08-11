@@ -899,7 +899,7 @@ function mergeByIdentity<T>(
   base: readonly T[],
   overlay: readonly T[],
   getIdentity: (entry: T) => string
-): T[] {
+): readonly T[] {
   const merged = [...base]
   const indexById = new Map(merged.map((entry, index) => [getIdentity(entry), index]))
   let changed = false
@@ -918,7 +918,7 @@ function mergeByIdentity<T>(
     merged[index] = entry
     changed = true
   }
-  return changed ? merged : (base as T[])
+  return changed ? merged : base
 }
 
 // Why: `preserved` keeps `previous`'s order and element refs, so an equal-length no-op
@@ -926,9 +926,9 @@ function mergeByIdentity<T>(
 function unchangedMergeSource<T>(
   previous: readonly T[],
   preserved: readonly T[],
-  merged: T[]
-): T[] {
-  return merged === preserved && preserved.length === previous.length ? (previous as T[]) : merged
+  merged: readonly T[]
+): readonly T[] {
+  return merged === preserved && preserved.length === previous.length ? previous : merged
 }
 
 // Why: the sidebar effect watching these catalog arrays is the only thing that refills the
@@ -1037,7 +1037,7 @@ function mergeFetchedProjectGroupsForHost(
   previous: readonly ProjectGroup[],
   fetched: ProjectGroup[],
   hostId: string
-): ProjectGroup[] {
+): readonly ProjectGroup[] {
   const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
   const preserved = previous.filter((group) => {
     const existingHostId = getProjectGroupHostId(group)
@@ -1098,7 +1098,7 @@ function mergeFetchedFolderWorkspacesForHost({
   fetched: FolderWorkspace[]
   projectGroups: readonly ProjectGroup[]
   hostId: string
-}): FolderWorkspace[] {
+}): readonly FolderWorkspace[] {
   const fetchedIdentities = new Set(
     fetched.map((workspace) => getFolderWorkspaceHostIdentity(workspace, projectGroups))
   )
@@ -1309,7 +1309,7 @@ async function fetchProjectGroupCatalogForTarget(
 function mergeFetchedProjectGroupCatalog(
   catalog: FetchedProjectGroupCatalog,
   currentProjectGroups: readonly ProjectGroup[]
-): { projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
+): { projectGroups: readonly ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
   return {
     projectGroups: mergeFetchedProjectGroupsForHost(
       currentProjectGroups,
@@ -1362,7 +1362,7 @@ function mergeFetchedFolderWorkspaceCatalog(
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): {
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
   return {
@@ -1692,8 +1692,8 @@ export type RepoSlice = {
   repos: readonly Repo[]
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
-  projectGroups: ProjectGroup[]
-  folderWorkspaces: FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
