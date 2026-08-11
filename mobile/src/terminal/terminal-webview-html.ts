@@ -16,7 +16,7 @@ import { TERMINAL_MOUSE_CLICK_DRAG_JS } from './terminal-webview-mouse-click-dra
 import { TERMINAL_MOUSE_REPORT_CELL_JS } from './terminal-webview-mouse-report-cell-injected'
 import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
-const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
+export const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
   foreground: '#c0caf5',
   cursor: '#c0caf5',
