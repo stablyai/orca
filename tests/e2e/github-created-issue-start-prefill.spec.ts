@@ -119,11 +119,17 @@ function configureGitHubRemote(repoPath: string): void {
   })
 }
 
-test('starting a just-created GitHub issue launches Claude with its URL prefilled', async ({
-  orcaPage,
-  testRepoPath
-}) => {
+// Why: the remote must exist before Electron launches. `repos.add` probes the
+// remote once, and a settled "no remote" both makes the repo ineligible for the
+// tasks page (disabling "New GitHub issue") and suppresses re-probes for five
+// minutes — so adding origin inside the test body can never recover.
+test.beforeAll(({ testRepoPath }) => {
   configureGitHubRemote(testRepoPath)
+})
+
+test('starting a just-created GitHub issue launches Claude with its URL prefilled', async ({
+  orcaPage
+}) => {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
 
