@@ -409,7 +409,7 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expectCanaryUnchanged()
 
-    // Case 3: running release retires; PTY-exit-first release cannot retire after ownership loss.
+    // Case 3: both running and PTY-exit-first release retire exact resume authority.
     seedWorkspace()
     recordCompletedWorker()
     await releaseCompletedWorker('running')
@@ -429,11 +429,11 @@ describe('completed background-worker retirement resume matrix', () => {
       providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
     })
     await releaseCompletedWorker('exited')
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeDefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
 
     const staleRestart = persistAndParseCurrentSession()
     expect(staleRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
-    expect(staleRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeDefined()
+    expect(staleRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
 
     // Case 4: legacy rollback preserves a fenced record; exited resolution clears it.
     seedWorkspace()
@@ -518,7 +518,7 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
     expectCanaryUnchanged()
 
-    // Case 7: restart preserves an owned working or completed pane, and also the stale orphan.
+    // Case 7: restart preserves owned panes, while post-retirement restart keeps authority absent.
     seedWorkspace()
     const workingProviderSession = recordWorkingWorker()
     const beforeCompletion = persistAndParseCurrentSession()
@@ -564,14 +564,7 @@ describe('completed background-worker retirement resume matrix', () => {
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
-    expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
-      paneKey: ORIGINAL_PANE_KEY,
-      tabId: ORIGINAL_TAB_ID,
-      worktreeId: WORKTREE_ID,
-      providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID },
-      state: 'working',
-      origin: 'live'
-    })
+    expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(Object.keys(beforeActivation.pendingStartupByTabId)).toEqual([])
     const tabCountBeforeActivation = beforeActivation.tabsByWorktree[WORKTREE_ID]?.length ?? 0
     activateAndRevealWorktree(WORKTREE_ID, { notifyHostRuntime: false })
@@ -606,22 +599,10 @@ describe('completed background-worker retirement resume matrix', () => {
     )
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
-    expect(coldSpawnRequests).toEqual([
-      expect.objectContaining({
-        providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID },
-        command: `codex '--dangerously-bypass-approvals-and-sandbox' 'resume' '${PROVIDER_SESSION_ID}'`,
-        argv: [
-          'codex',
-          '--dangerously-bypass-approvals-and-sandbox',
-          'resume',
-          PROVIDER_SESSION_ID
-        ],
-        restoredBannerCount: 1
-      })
-    ])
+    expect(coldSpawnRequests).toEqual([])
     expectCanaryUnchanged()
-    expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(1)
-    expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(1)
+    expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(0)
+    expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
 
     // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
     expect(coldSpawnRequests).toEqual([])

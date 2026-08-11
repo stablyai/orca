@@ -1998,7 +1998,7 @@
         {
           "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
           "assertions": [
-            "explicit close revokes the exact live recovery record when the tab exists, while PTY-exit-first plus a missing-tab close leaves it stale"
+            "explicit close revokes the exact live recovery record both before and after PTY exit removes the tab, while PTY exit alone preserves interrupted-session recovery"
           ]
         },
         {
@@ -7898,7 +7898,7 @@
         {
           "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
           "assertions": [
-            "an already-exited succeeded Dispatch reaches released while its late exact close cannot revoke a missing tab's stale resume record"
+            "an already-exited succeeded Dispatch reaches released while its late exact close revokes the missing tab's stale resume record"
           ]
         },
         {
