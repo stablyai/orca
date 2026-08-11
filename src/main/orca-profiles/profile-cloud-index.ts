@@ -55,6 +55,19 @@ function toLocalProfile(profile: OrcaProfileSummary, now: number): OrcaProfileSu
   }
 }
 
+function reconcileCurrentArtifactCloudCleanup(
+  profileId: string,
+  userDataPath: string,
+  currentCloud: OrcaProfileCloudSummary | undefined
+): void {
+  completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentCloud)
+  if (!artifactCloudCleanupNeedsCommit(profileId, userDataPath, currentCloud)) {
+    return
+  }
+  commitArtifactCloudCleanup(profileId, userDataPath, currentCloud)
+  completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentCloud)
+}
+
 export function createCloudLinkedOrcaProfileRecord(
   cloud: OrcaProfileCloudSummary,
   args: { name?: string },
@@ -98,7 +111,7 @@ export function linkOrcaProfileToCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-  completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentProfile?.cloud)
+  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile?.cloud)
   const cleanupNeedsCommit = artifactCloudCleanupNeedsCommit(profileId, userDataPath, cloud)
   const now = Date.now()
   let found = false
@@ -143,7 +156,7 @@ export function unlinkOrcaProfileFromCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-  completeArtifactCloudCleanupIfCommitted(profileId, userDataPath, currentProfile?.cloud)
+  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile?.cloud)
   const now = Date.now()
   let found = false
   const profiles = index.profiles.map((profile) => {

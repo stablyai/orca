@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles'
 import type * as ArtifactCreateIntentStore from '../artifacts/artifact-create-intent-store'
+import type * as ProfileArtifactCloudCleanup from './profile-artifact-cloud-cleanup'
 import type * as ProfileIndexStore from './profile-index-store'
 
 vi.mock('../artifacts/artifact-create-intent-store', async () => {
@@ -18,6 +19,16 @@ vi.mock('./profile-index-store', async () => {
   return { ...actual, writeProfileIndex: vi.fn(actual.writeProfileIndex) }
 })
 
+vi.mock('./profile-artifact-cloud-cleanup', async () => {
+  const actual = await vi.importActual<typeof ProfileArtifactCloudCleanup>(
+    './profile-artifact-cloud-cleanup'
+  )
+  return {
+    ...actual,
+    commitArtifactCloudCleanup: vi.fn(actual.commitArtifactCloudCleanup)
+  }
+})
+
 import {
   clearArtifactCreateIntents,
   getArtifactCreateIntent,
@@ -25,10 +36,11 @@ import {
 } from '../artifacts/artifact-create-intent-store'
 import type { ArtifactShareScope } from '../artifacts/artifact-share-record-store'
 import {
+  commitArtifactCloudCleanup,
   prepareArtifactCloudCleanup,
   prepareArtifactCloudUse
 } from './profile-artifact-cloud-cleanup'
-import { linkOrcaProfileToCloud } from './profile-cloud-index'
+import { linkOrcaProfileToCloud, unlinkOrcaProfileFromCloud } from './profile-cloud-index'
 import {
   getOrcaProfileIndexPath,
   loadOrCreateProfileIndex,
@@ -79,6 +91,58 @@ describe('profile artifact cloud cleanup', () => {
     expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).not.toBeNull()
 
     linkOrcaProfileToCloud(profileId, cloud('org-b'), userDataPath)
+    expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).toBeNull()
+  })
+
+  it('reconciles an interrupted transition before linking again', async () => {
+    const userDataPath = await createLinkedProfile(cloud('org-a'))
+    const scope = shareScope('org-a')
+    createIntent(userDataPath, scope)
+    interruptNextCleanupCommit()
+
+    expect(() => linkOrcaProfileToCloud(profileId, cloud('org-b'), userDataPath)).toThrow(
+      'cleanup commit interrupted'
+    )
+    expect(currentCloud(userDataPath)?.activeOrgId).toBe('org-b')
+    vi.mocked(writeProfileIndex).mockClear()
+    vi.mocked(clearArtifactCreateIntents).mockImplementationOnce(() => {
+      throw new Error('cleanup failed')
+    })
+
+    expect(() => linkOrcaProfileToCloud(profileId, cloud('org-c'), userDataPath)).toThrow(
+      'cleanup failed'
+    )
+    expect(writeProfileIndex).not.toHaveBeenCalled()
+    expect(currentCloud(userDataPath)?.activeOrgId).toBe('org-b')
+    expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).not.toBeNull()
+
+    linkOrcaProfileToCloud(profileId, cloud('org-c'), userDataPath)
+    expect(currentCloud(userDataPath)?.activeOrgId).toBe('org-c')
+    expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).toBeNull()
+  })
+
+  it('reconciles an interrupted transition before unlinking', async () => {
+    const userDataPath = await createLinkedProfile(cloud('org-a'))
+    const scope = shareScope('org-a')
+    createIntent(userDataPath, scope)
+    interruptNextCleanupCommit()
+
+    expect(() => linkOrcaProfileToCloud(profileId, cloud('org-b'), userDataPath)).toThrow(
+      'cleanup commit interrupted'
+    )
+    expect(currentCloud(userDataPath)?.activeOrgId).toBe('org-b')
+    vi.mocked(writeProfileIndex).mockClear()
+    vi.mocked(clearArtifactCreateIntents).mockImplementationOnce(() => {
+      throw new Error('cleanup failed')
+    })
+
+    expect(() => unlinkOrcaProfileFromCloud(profileId, userDataPath)).toThrow('cleanup failed')
+    expect(writeProfileIndex).not.toHaveBeenCalled()
+    expect(currentCloud(userDataPath)?.activeOrgId).toBe('org-b')
+    expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).not.toBeNull()
+
+    unlinkOrcaProfileFromCloud(profileId, userDataPath)
+    expect(currentCloud(userDataPath)).toBeUndefined()
     expect(getArtifactCreateIntent(profileId, userDataPath, '/report.md', scope)).toBeNull()
   })
 
@@ -143,4 +207,10 @@ function currentCloud(userDataPath: string): OrcaProfileCloudSummary | undefined
   return readProfileIndex(getOrcaProfileIndexPath(userDataPath))?.profiles.find(
     (profile) => profile.id === profileId
   )?.cloud
+}
+
+function interruptNextCleanupCommit(): void {
+  vi.mocked(commitArtifactCloudCleanup).mockImplementationOnce(() => {
+    throw new Error('cleanup commit interrupted')
+  })
 }
