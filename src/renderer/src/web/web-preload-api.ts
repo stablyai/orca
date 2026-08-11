@@ -3163,6 +3163,7 @@ function createAccountsApi(): never {
   return {
     list: () => Promise.resolve(empty),
     add: () => Promise.resolve(empty),
+    importExistingHome: () => Promise.resolve(empty),
     cancelPendingLogin: () => Promise.resolve(false),
     reauthenticate: () => Promise.resolve(empty),
     remove: () => Promise.resolve(empty),

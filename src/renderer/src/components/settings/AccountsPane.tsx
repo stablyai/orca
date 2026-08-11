@@ -383,7 +383,12 @@ export function AccountsPane({
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    | 'idle'
+    | 'adding'
+    | 'importing'
+    | `reauth:${string}`
+    | `remove:${string}`
+    | `select:${string | 'system'}`
   >('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
@@ -725,6 +730,7 @@ export function AccountsPane({
       const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
       const shouldPromptRestart =
         action === 'adding' ||
+        action === 'importing' ||
         (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
         (action.startsWith('reauth:') &&
           nextActiveAccountId !== null &&
@@ -1219,34 +1225,73 @@ export function AccountsPane({
                     )}
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() =>
-                void runCodexAccountAction('adding', () =>
-                  window.api.codexAccounts.add({
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
-                )
-              }
-              disabled={
-                // Why: interactive `codex login` needs a desktop browser and
-                // would authenticate against this device, not the server.
-                isRemoteAccountScope ||
-                codexAction !== 'idle' ||
-                wslCapabilitiesLoading ||
-                accountRuntimeUnavailable
-              }
-              className="gap-1.5"
-            >
-              {codexAction === 'adding' ? (
-                <Loader2 className="size-3 animate-spin" />
-              ) : (
-                <Plus className="size-3" />
-              )}
-              {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
-            </Button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() =>
+                  void runCodexAccountAction('adding', () =>
+                    window.api.codexAccounts.add({
+                      runtime: accountRuntime.runtime,
+                      wslDistro: accountRuntime.wslDistro
+                    })
+                  )
+                }
+                disabled={
+                  // Why: interactive `codex login` needs a desktop browser and
+                  // would authenticate against this device, not the server.
+                  isRemoteAccountScope ||
+                  codexAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {codexAction === 'adding' ? (
+                  <Loader2 className="size-3 animate-spin" />
+                ) : (
+                  <Plus className="size-3" />
+                )}
+                {translate('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+              </Button>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => {
+                  void (async () => {
+                    // Why: folder pick is separate from the mutation so canceling
+                    // the dialog does not flash an error toast.
+                    const sourceHomePath = await window.api.shell.pickDirectory({})
+                    if (!sourceHomePath) {
+                      return
+                    }
+                    await runCodexAccountAction('importing', () =>
+                      window.api.codexAccounts.importExistingHome({
+                        sourceHomePath,
+                        runtime: accountRuntime.runtime,
+                        wslDistro: accountRuntime.wslDistro
+                      })
+                    )
+                  })()
+                }}
+                disabled={
+                  // Why: import copies a host-visible CODEX_HOME into managed
+                  // storage; remote scopes and WSL slots are not supported yet.
+                  isRemoteAccountScope ||
+                  accountRuntime.runtime === 'wsl' ||
+                  codexAction !== 'idle' ||
+                  wslCapabilitiesLoading ||
+                  accountRuntimeUnavailable
+                }
+                className="gap-1.5"
+              >
+                {codexAction === 'importing' ? <Loader2 className="size-3 animate-spin" /> : null}
+                {translate(
+                  'auto.components.settings.AccountsPane.importCodexHome',
+                  'Import CODEX_HOME'
+                )}
+              </Button>
+            </div>
           </div>
           {remoteAccountScopeNotice}
 

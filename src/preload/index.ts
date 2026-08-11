@@ -2092,6 +2092,11 @@ const api = {
     list: (): Promise<unknown> => ipcRenderer.invoke('codexAccounts:list'),
     add: (args?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:add', args),
+    importExistingHome: (args: {
+      sourceHomePath: string
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('codexAccounts:importExistingHome', args),
     reauthenticate: (args: { accountId: string }): Promise<unknown> =>
       ipcRenderer.invoke('codexAccounts:reauthenticate', args),
     remove: (args: { accountId: string }): Promise<unknown> =>

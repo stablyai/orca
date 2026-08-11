@@ -57,6 +57,12 @@ import {
   type CodexAccountSelectionTarget
 } from './runtime-selection'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
+import {
+  assertSourceHomeIsNotManagedStorage,
+  copyExistingCodexHomeIntoManaged,
+  readRawAuthJsonFromHome,
+  resolveImportableCodexHomePath
+} from './import-existing-codex-home'
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
@@ -295,6 +301,15 @@ export class CodexAccountService {
     target?: CodexAccountAddTarget
   ): Promise<CodexRateLimitAccountsState> {
     return this.serializeMutation(() => this.doAddAccountFromHome(sourceHome, target))
+  }
+
+  async importAccountFromExistingHome(
+    sourceHomePath: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() =>
+      this.doImportAccountFromExistingHome(sourceHomePath, target)
+    )
   }
 
   async reauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -722,7 +737,7 @@ export class CodexAccountService {
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
-      this.assertOAuthAccountAddAllowed(canonicalConfig)
+      this.assertOAuthAccountAddAllowed(canonicalConfig?.contents ?? null)
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
       await this.runCodexLogin(managedHomePath)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
@@ -741,9 +756,70 @@ export class CodexAccountService {
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
-      this.assertOAuthAccountAddAllowed(canonicalConfig)
+      this.assertOAuthAccountAddAllowed(canonicalConfig?.contents ?? null)
       this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
       this.importCodexAuthFromHome(sourceHome, managedHomePath, accountId)
+      return await this.persistCapturedCodexAccount(accountId, managedHome)
+    } catch (error) {
+      this.safeRemoveManagedHome(managedHomePath, accountId)
+      throw error
+    }
+  }
+
+  /**
+   * Import an already-authenticated external CODEX_HOME into Orca managed storage
+   * without running `codex login` again (Option B from issue #10366).
+   */
+  private async doImportAccountFromExistingHome(
+    sourceHomePath: string,
+    target?: CodexAccountAddTarget
+  ): Promise<CodexRateLimitAccountsState> {
+    if (target?.runtime === 'wsl') {
+      throw new Error(
+        'Importing an existing CODEX_HOME into a WSL account slot is not supported yet. Switch Account location to this device, or use Add Account for WSL.'
+      )
+    }
+
+    const resolvedSource = resolveImportableCodexHomePath(sourceHomePath)
+    assertSourceHomeIsNotManagedStorage(resolvedSource, this.getManagedAccountsRoot())
+
+    // Why: resolve identity from the external home before allocating storage so a
+    // missing email / corrupt auth fails cleanly without leaving empty managed dirs.
+    const sourceIdentity = this.resolveIdentityFromCredentials(
+      this.extractOAuthCredentials(readRawAuthJsonFromHome(resolvedSource))
+    )
+    if (!sourceIdentity.email) {
+      throw new Error(
+        'Could not resolve an account email from the selected CODEX_HOME. Orca only imports OAuth-authenticated Codex homes (auth.json with an id_token email claim).'
+      )
+    }
+
+    // Why: when the canonical home has no config, the import copy is the config
+    // Codex will use. Apply the same OAuth provider policy before copying it.
+    const sourceConfig = this.readImportConfigForOAuthPolicy(resolvedSource)
+
+    const accountId = randomUUID()
+    const managedHome = this.createManagedHome(accountId, target)
+    const { managedHomePath } = managedHome
+
+    try {
+      const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
+      this.assertOAuthAccountAddAllowed(canonicalConfig?.contents ?? sourceConfig)
+      await copyExistingCodexHomeIntoManaged({
+        sourceHomePath: resolvedSource,
+        managedHomePath,
+        accountId
+      })
+      // Why: after copying user config/auth, re-seed Orca-managed hooks/settings
+      // so the imported home matches other managed accounts for sandbox defaults.
+      this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, canonicalConfig, accountId)
+      const identity = this.readIdentityFromHome(managedHomePath, accountId)
+      if (!identity.email) {
+        throw new Error(
+          'Import copied auth.json, but Orca could not resolve the account email from the managed home.'
+        )
+      }
+
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
       this.safeRemoveManagedHome(managedHomePath, accountId)
@@ -1303,6 +1379,19 @@ export class CodexAccountService {
     }
   }
 
+  private readImportConfigForOAuthPolicy(sourceHomePath: string): string | null {
+    const configPath = join(sourceHomePath, 'config.toml')
+    if (!existsSync(configPath)) {
+      return null
+    }
+
+    try {
+      return readFileSync(configPath, 'utf-8')
+    } catch (error) {
+      throw new Error(`Could not read imported CODEX_HOME config: ${configPath}`, { cause: error })
+    }
+  }
+
   private readCanonicalConfigForManagedHome(managedHomePath: string): CanonicalCodexConfig | null {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (!wslInfo) {
@@ -1334,10 +1423,8 @@ export class CodexAccountService {
     }
   }
 
-  private assertOAuthAccountAddAllowed(canonicalConfig: CanonicalCodexConfig | null): void {
-    const modelProvider = canonicalConfig
-      ? readCodexTopLevelModelProvider(canonicalConfig.contents)
-      : null
+  private assertOAuthAccountAddAllowed(configContents: string | null): void {
+    const modelProvider = configContents ? readCodexTopLevelModelProvider(configContents) : null
     if (!modelProvider || modelProvider === 'openai') {
       return
     }
@@ -1345,7 +1432,7 @@ export class CodexAccountService {
     // Why: mirroring a custom-provider pin into an OAuth managed home makes
     // the new OAuth credentials inert; fail before login and leave user config intact.
     throw new Error(
-      `Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
+      `Orca cannot add a Codex OAuth account while the active Codex config pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
     )
   }
 
