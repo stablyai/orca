@@ -78,9 +78,16 @@ export async function readNativeChatTranscriptTailFile(
   let ignoreNextMalformedRecord = false
   try {
     signal?.throwIfAborted()
+    // Why: the path can rotate or truncate between the opening `stat` and this
+    // `open`. Cap `end` to the handle's live size so we never seek past EOF and
+    // invent a cursor from an unchecked short read.
+    const liveEnd = Math.min(end, (await handle.stat()).size)
+    if (liveEnd === 0) {
+      return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
+    }
     const consumedTo = includeTrailingLine
-      ? end
-      : await findLastCompleteLineEnd(handle, end, signal)
+      ? liveEnd
+      : await findLastCompleteLineEnd(handle, liveEnd, signal)
     if (consumedTo === 0) {
       return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
     }
@@ -102,7 +109,7 @@ export async function readNativeChatTranscriptTailFile(
     const completedTo =
       !includeTrailingLine || endsWithNewline
         ? consumedTo
-        : await findLastCompleteLineEnd(handle, end, signal)
+        : await findLastCompleteLineEnd(handle, liveEnd, signal)
     let cursor = consumedTo - (endsWithNewline ? 1 : 0)
     while (cursor > 0 && newestFirst.length <= limit) {
       signal?.throwIfAborted()
@@ -141,7 +148,7 @@ export async function readNativeChatTranscriptTailFile(
       consumedTo,
       completedTo,
       hasMore: limit > 0 && chronological.length > limit,
-      beforeOffset: selected[0]?.offset ?? end,
+      beforeOffset: selected[0]?.offset ?? liveEnd,
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
     }

@@ -40,10 +40,15 @@ type TranscriptStamp = { size: number; identity: string; generation: string }
 export async function readRelayNativeChatTranscript(
   params: SshNativeChatRelayReadParams,
   /** `resolveOptions` isolates a test from this machine's real agent homes; the
-   *  relay itself always resolves against its own runtime home. */
-  options: { signal?: AbortSignal; resolveOptions?: ResolveSessionFileOptions } = {}
+   *  relay itself always resolves against its own runtime home.
+   *  `generationRetry` is an internal budget when the file rotates under a read. */
+  options: {
+    signal?: AbortSignal
+    resolveOptions?: ResolveSessionFileOptions
+    generationRetry?: number
+  } = {}
 ): Promise<SshNativeChatRelayReadResult> {
-  const { signal } = options
+  const { signal, generationRetry = 0 } = options
   const agent = params.agent as AgentType
   const filePath = await resolveSessionFilePath(
     agent,
@@ -93,6 +98,20 @@ export async function readRelayNativeChatTranscript(
   // identity, not content boundaries, and stamping it before the read made a
   // plain append look like a same-size replacement on the next poll.
   const after = (await transcriptStamp(filePath)) ?? stamp
+  // Why: if the file was replaced while we read, `window` describes the old
+  // inode and `after.generation` the new one. Publishing that mix lets a
+  // same-length replacement answer `unchanged` forever and never deliver the
+  // new transcript. One retry against the live file; a second flip falls back
+  // to a miss so the poller keeps trying instead of locking on a mixed stamp.
+  if (after.generation !== stamp.generation) {
+    if (generationRetry >= 1) {
+      return { error: 'Transcript unavailable', notFound: true }
+    }
+    return readRelayNativeChatTranscript(params, {
+      ...options,
+      generationRetry: generationRetry + 1
+    })
+  }
   // `filePath` lets a live poller name the file it already resolved, so the next
   // tick costs one access() instead of another walk of the remote agent home.
   return { ...window, fileSize: completedTo, filePath, generation: after.generation }
@@ -127,6 +146,16 @@ async function liveTailAnswer(
     if (delta) {
       // Stamp after the read for the same reason the window path does.
       const after = (await transcriptStamp(filePath)) ?? stamp
+      // Why: an identity flip mid-append means the bytes we decoded are from a
+      // file the caller must not keep a cursor into. Force a full re-window.
+      // A same-size generation flip is the truncate-and-rewrite case: the
+      // append delta is stale against the replacement, so fall through too.
+      if (
+        after.identity !== stamp.identity ||
+        (after.generation !== stamp.generation && after.size === stamp.size)
+      ) {
+        return null
+      }
       return { ...delta, filePath, generation: after.generation }
     }
   }
