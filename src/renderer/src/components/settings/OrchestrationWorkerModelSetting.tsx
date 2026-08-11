@@ -138,7 +138,7 @@ export function OrchestrationWorkerModelSetting(props: {
       )
     : translate(
         'auto.components.settings.OrchestrationWorkerModelSetting.modelPlaceholder',
-        'Select provider'
+        'Pick provider'
       )
   const effortPlaceholder = !selectedAgent
     ? translate(

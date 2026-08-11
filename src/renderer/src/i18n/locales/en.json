@@ -10296,7 +10296,7 @@
           "defaultWorkerSelectLabel": "Default worker provider",
           "requireAgent": "No default worker",
           "modelSelectLabel": "{{value0}} model",
-          "modelPlaceholder": "Select provider",
+          "modelPlaceholder": "Pick provider",
           "modelUnavailable": "Not available",
           "agentDefault": "Agent default",
           "effortSelectLabel": "{{value0}} effort",

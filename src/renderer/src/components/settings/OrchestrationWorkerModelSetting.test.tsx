@@ -63,6 +63,9 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Worker model"/)
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Worker effort"/)
     expect(markup).toMatch(
+      /<button[^>]*aria-label="Worker model"[^>]*>.*?Pick provider.*?<\/button>/s
+    )
+    expect(markup).toMatch(
       /<button[^>]*aria-label="Worker effort"[^>]*>.*?Pick provider.*?<\/button>/s
     )
   })
