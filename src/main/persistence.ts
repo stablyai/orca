@@ -4917,6 +4917,7 @@ export class Store {
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+      defaultBrowserSessionProfileId?: Repo['defaultBrowserSessionProfileId'] | null
     },
     hostId?: ExecutionHostId
   ): Repo | null {
@@ -4976,6 +4977,13 @@ export class Store {
     ) {
       delete repo.externalWorktreeDiscoverySuppressedAt
       delete sanitizedUpdates.externalWorktreeDiscoverySuppressedAt
+    }
+    if (
+      'defaultBrowserSessionProfileId' in sanitizedUpdates &&
+      !sanitizedUpdates.defaultBrowserSessionProfileId
+    ) {
+      delete repo.defaultBrowserSessionProfileId
+      delete sanitizedUpdates.defaultBrowserSessionProfileId
     }
     if (
       'sourceControlAi' in sanitizedUpdates &&

@@ -1194,6 +1194,7 @@ export type PreloadApi = {
       > & {
         sourceControlAi?: Repo['sourceControlAi'] | null
         externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+        defaultBrowserSessionProfileId?: Repo['defaultBrowserSessionProfileId'] | null
       }
     }) => Promise<Repo>
     pickFolder: () => Promise<string | null>

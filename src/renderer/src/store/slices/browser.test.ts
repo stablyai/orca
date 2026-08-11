@@ -19,6 +19,9 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   createWebRuntimeSessionBrowserTab: createWebRuntimeSessionBrowserTabMock
 }))
 
+const toastWarning = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({ toast: { warning: toastWarning } }))
+
 const mockApi = {
   browser: {
     sessionListProfiles: vi.fn().mockResolvedValue([]),
@@ -1376,5 +1379,65 @@ describe('createBrowserSlice runtime guard', () => {
         timeoutMs: 15_000
       })
     })
+  })
+  it('clears project overrides when their profile is deleted', async () => {
+    const store = createTestStore()
+    const updateRepo = vi.fn().mockResolvedValue(true)
+    mockApi.browser.sessionDeleteProfile.mockResolvedValueOnce(true)
+    store.setState({
+      updateRepo,
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo-1',
+          displayName: 'Repo 1',
+          badgeColor: '#000000',
+          addedAt: 1,
+          executionHostId: 'local',
+          defaultBrowserSessionProfileId: 'doomed'
+        },
+        {
+          id: 'repo-2',
+          path: '/repo-2',
+          displayName: 'Repo 2',
+          badgeColor: '#000000',
+          addedAt: 2,
+          executionHostId: 'local',
+          defaultBrowserSessionProfileId: 'kept'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().deleteBrowserSessionProfile('doomed')
+
+    expect(updateRepo).toHaveBeenCalledTimes(1)
+    expect(updateRepo).toHaveBeenCalledWith(
+      'repo-1',
+      { defaultBrowserSessionProfileId: null },
+      { hostId: 'local' }
+    )
+  })
+
+  it('warns when a project override survives a failed cleanup write', async () => {
+    const store = createTestStore()
+    mockApi.browser.sessionDeleteProfile.mockResolvedValueOnce(true)
+    store.setState({
+      updateRepo: vi.fn().mockResolvedValue(false),
+      repos: [
+        {
+          id: 'repo-1',
+          path: '/repo-1',
+          displayName: 'Repo 1',
+          badgeColor: '#000000',
+          addedAt: 1,
+          executionHostId: 'local',
+          defaultBrowserSessionProfileId: 'doomed'
+        }
+      ]
+    } as unknown as Partial<AppState>)
+
+    await store.getState().deleteBrowserSessionProfile('doomed')
+
+    expect(toastWarning).toHaveBeenCalledWith(expect.stringContaining('Repo 1'))
   })
 })

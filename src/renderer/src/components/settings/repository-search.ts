@@ -120,6 +120,26 @@ export function getRepositoryPaneSearchEntries(
           }
         ]
       : []),
+    {
+      title: translate(
+        'auto.components.settings.repository.search.browserProfileTitle',
+        'Browser Profile'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.browserProfileDescription',
+        'Choose the browser profile for new tabs opened in this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.browserProfile',
+          'browser profile'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.session', 'session'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.cookies', 'cookies'),
+        ...translateSearchKeyword('auto.components.settings.repository.search.account', 'account')
+      ]
+    },
     ...(isFolder || !isLocalWindowsProject
       ? []
       : [

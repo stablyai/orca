@@ -57,6 +57,8 @@ export function createRepoUpdateSchema<T extends z.ZodRawShape>(
       externalWorktreeDiscoverySuppressedAt: z.number().finite().nullable().optional(),
       projectGroupId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber,
+      // Why: null is the wire sentinel for "inherit the global default" — undefined vanishes in JSON.
+      defaultBrowserSessionProfileId: OptionalString.nullable().optional(),
       sourceControlAi: RepoSourceControlAiOverrides
     })
   }) as z.ZodObject<T & { updates: z.ZodObject<z.ZodRawShape> }>

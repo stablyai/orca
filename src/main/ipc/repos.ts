@@ -2113,6 +2113,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
+          defaultBrowserSessionProfileId?: Repo['defaultBrowserSessionProfileId'] | null
         }
       }
     ) => {
@@ -2214,6 +2215,14 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         if (!Array.isArray(value) || !value.every((entry) => typeof entry === 'string')) {
           delete updates.importedExternalWorktreePaths
         }
+      }
+      // Why: a non-string id would silently route new tabs to a profile that does not exist.
+      if (
+        'defaultBrowserSessionProfileId' in updates &&
+        typeof updates.defaultBrowserSessionProfileId !== 'string' &&
+        updates.defaultBrowserSessionProfileId !== null
+      ) {
+        delete updates.defaultBrowserSessionProfileId
       }
       // Why: null is the transport sentinel for clearing Source Control AI, so flow it through as undefined instead of deleting.
       if ('sourceControlAi' in updates && updates.sourceControlAi === null) {

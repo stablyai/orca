@@ -303,6 +303,8 @@ export type Repo = {
   sourceControlAi?: RepoSourceControlAiOverrides
   /** Transitional source for ProjectHostSetup.setupMethod while Repo remains compatibility storage. */
   projectHostSetupMethod?: RepoProjectHostSetupMethod
+  /** Browser profile for new tabs opened in this project. Absent = inherit the global default. */
+  defaultBrowserSessionProfileId?: string
 }
 
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'

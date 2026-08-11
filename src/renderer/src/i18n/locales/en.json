@@ -247,7 +247,8 @@
         "browser": {
           "d175274b6d": "New Browser Tab",
           "08fc23631d": "Browser",
-          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active."
+          "remoteCookieImportUnavailable": "Manual cookie file import is unavailable while a remote runtime is active.",
+          "projectProfileCleanupFailed": "Profile removed, but {{projects}} could not be updated. Pick a browser profile for them in project settings."
         },
         "editor": {
           "dcb521ed29": "This file is in a conflict state, but no working-tree file is available to edit.",
@@ -9110,7 +9111,9 @@
             "keepForkUpToDate": "Keep Fork Up to Date",
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
-            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
+            "browserProfileTitle": "Browser Profile",
+            "browserProfileDescription": "Choose the browser profile for new tabs opened in this project."
           }
         },
         "runtime": {
@@ -10581,6 +10584,12 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "RepositoryBrowserProfileSection": {
+          "title": "Browser Profile",
+          "description": "Choose the browser profile for new tabs opened in this project.",
+          "longDescription": "New browser tabs opened in this project use this profile instead of the app-wide default. Per-tab switching still works from the ··· toolbar menu.",
+          "inherit": "Use app default"
         },
         "AgentAwakeSetting": {
           "on": "On",

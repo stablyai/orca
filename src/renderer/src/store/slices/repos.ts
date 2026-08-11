@@ -138,6 +138,7 @@ export type RepoUpdate = Partial<
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  defaultBrowserSessionProfileId?: Repo['defaultBrowserSessionProfileId'] | null
 }
 
 type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -3661,9 +3662,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             const {
               sourceControlAi,
               externalWorktreeDiscoverySuppressedAt,
+              defaultBrowserSessionProfileId,
               ...updatesWithoutClearSentinels
             } = sanitizedUpdates
             mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
+            if ('defaultBrowserSessionProfileId' in sanitizedUpdates) {
+              mergedRepo = {
+                ...mergedRepo,
+                defaultBrowserSessionProfileId: defaultBrowserSessionProfileId ?? undefined
+              }
+            }
             if (sourceControlAi === null) {
               const { sourceControlAi: _sourceControlAi, ...repoWithoutSourceControlAi } =
                 mergedRepo

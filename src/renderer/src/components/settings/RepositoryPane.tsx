@@ -30,14 +30,19 @@ import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './RepositoryForkSyncSection'
 import { translate } from '@/i18n/i18n'
 import { RepositoryWindowsRuntimeSection } from './RepositoryWindowsRuntimeSection'
+import { RepositoryBrowserProfileSection } from './RepositoryBrowserProfileSection'
 import { matchesRepositoryIdentitySearch } from './repository-identity-search'
 import { RepositoryWorktreeDefaultsSection } from './RepositoryWorktreeDefaultsSection'
 import { getProjectRuntimeSessionSummary } from './repository-runtime-session-summary'
 export { getRepositoryPaneSearchEntries }
 export { matchesRepositoryIdentitySearch } from './repository-identity-search'
 
-type RepositoryPaneRepoUpdate = Omit<Partial<Repo>, 'sourceControlAi'> & {
+type RepositoryPaneRepoUpdate = Omit<
+  Partial<Repo>,
+  'sourceControlAi' | 'defaultBrowserSessionProfileId'
+> & {
   sourceControlAi?: Repo['sourceControlAi'] | null
+  defaultBrowserSessionProfileId?: Repo['defaultBrowserSessionProfileId'] | null
 }
 
 const EMPTY_WSL_DISTROS: string[] = []
@@ -171,6 +176,7 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
     translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
     translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
+    translate('auto.components.settings.repository.search.browserProfileTitle', 'Browser Profile'),
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
@@ -357,6 +363,12 @@ export function RepositoryPane({
             />
           </>
         ) : null}
+
+        <RepositoryBrowserProfileSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
       </section>
     ) : null,
     hooksSection,
