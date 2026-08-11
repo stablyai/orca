@@ -94,6 +94,7 @@ import { resolveAuthorizedPath, authorizeExternalPath } from './filesystem-auth'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { validateGitRelativeFilePath, isENOENT } from './filesystem-path-containment'
 import { listQuickOpenFiles } from './filesystem-list-files'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
 import {
@@ -1126,12 +1127,22 @@ export function registerFilesystemHandlers(
             return []
           }
           // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
+          // Why: bound the result count so a workspace with 100k+ (often
+          // gitignored) files doesn't overflow the relay's per-response frame
+          // cap, which would replace the whole list with a capacity error.
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
-            signal: controller?.signal
+            signal: controller?.signal,
+            maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
           })
         }
-        return await listQuickOpenFiles(args.rootPath, store, args.excludePaths, controller?.signal)
+        return await listQuickOpenFiles(
+          args.rootPath,
+          store,
+          args.excludePaths,
+          controller?.signal,
+          QUICK_OPEN_LISTING_MAX_RESULTS
+        )
       } finally {
         listFilesCancellations.finish(event, args.requestToken, controller)
       }

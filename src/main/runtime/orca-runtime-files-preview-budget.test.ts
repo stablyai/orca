@@ -11,6 +11,7 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { RUNTIME_PREVIEWABLE_BINARY_MAX_BYTES } from './orca-runtime-files'
 import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../shared/remote-rpc-content-budget'
 import { FileReadCapExceededError, StreamProtocolError } from '../ssh/ssh-filesystem-stream-reader'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 
 vi.mock('fs', async () => (await import('./orca-runtime-files-mock-registry')).fsModuleMock())
 vi.mock('fs/promises', async () =>
@@ -228,6 +229,29 @@ describe('RuntimeFileCommands', () => {
       await expect(commands.readFileExplorerPreview('id:wt-1', 'logo.png', 128)).rejects.toThrow(
         'file_too_large'
       )
+    })
+  })
+
+  // Why: over the relay a single fs.listFiles response frame is capped (2 MiB
+  // producer queue). A workspace that vendors gitignored repo clones enumerates
+  // 100k+ paths; the unbounded array overflows the cap and the relay replaces
+  // the whole list with a capacity error, so the Files panel and Quick Open
+  // list nothing. Bounding the scan to QUICK_OPEN_LISTING_MAX_RESULTS keeps the
+  // response inside the frame. This test fails if listRuntimeFiles stops
+  // forwarding the cap.
+  describe('remote listing budget', () => {
+    it('bounds a remote runtime file listing to the quick-open result cap', async () => {
+      const listFiles = vi.fn().mockResolvedValue([])
+      const { commands, store } = createRuntimeFileCommands({ path: '/remote/repo' })
+      store.getRepo.mockReturnValue({ connectionId: 'ssh-1' })
+      vi.mocked(getSshFilesystemProvider).mockReturnValue({ listFiles } as never)
+
+      await commands.listRuntimeFiles('id:wt-1', { excludePaths: ['/remote/repo/nested'] })
+
+      expect(listFiles).toHaveBeenCalledWith('/remote/repo', {
+        excludePaths: ['/remote/repo/nested'],
+        maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
+      })
     })
   })
 })

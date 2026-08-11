@@ -73,6 +73,7 @@ import {
   registerWorktreeRootsForRepo,
   invalidateAuthorizedRootsCache
 } from './registered-worktree-roots-cache'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 
 describe('registerFilesystemHandlers', () => {
   beforeEach(() => {
@@ -542,7 +543,10 @@ describe('registerFilesystemHandlers', () => {
   // provider saw them. This test guards the second half: regardless of
   // relay behavior, a new linked worktree under the root must be forwarded
   // so the remote scan can prune it. See docs/design/share-quick-open-file-listing.md.
-  it('fs:listFiles forwards excludePaths to the SSH filesystem provider', async () => {
+  // It also guards the result cap: an unbounded listing over the relay overflows
+  // the 2 MiB per-response frame on workspaces that vendor 100k+ gitignored
+  // files, so the handler bounds the scan to QUICK_OPEN_LISTING_MAX_RESULTS.
+  it('fs:listFiles forwards excludePaths and the result cap to the SSH filesystem provider', async () => {
     const listFilesMock = vi.fn().mockResolvedValue([])
     getSshFilesystemProviderMock.mockReturnValue({ listFiles: listFilesMock })
 
@@ -555,7 +559,8 @@ describe('registerFilesystemHandlers', () => {
     })
 
     expect(listFilesMock).toHaveBeenCalledWith('/home/user/repo', {
-      excludePaths: ['/home/user/repo/worktrees/feature']
+      excludePaths: ['/home/user/repo/worktrees/feature'],
+      maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
     })
   })
 

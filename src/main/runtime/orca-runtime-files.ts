@@ -54,6 +54,7 @@ import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
 import { isENOENT } from '../ipc/filesystem-path-containment'
 import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../shared/quick-open-listing-limits'
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
@@ -2051,9 +2052,24 @@ export class RuntimeFileCommands {
       if (!provider) {
         return []
       }
-      return provider.listFiles(target.worktree.path, { excludePaths: options.excludePaths })
+      // Why: unlike local IPC, the relay caps a single response frame (2 MiB
+      // producer queue). A workspace that vendors ignored repo clones enumerates
+      // 100k+ paths (the --no-ignore-vcs pass is deliberate — users open ignored
+      // files), overflowing the cap so the relay substitutes a ResponseOverCapacity
+      // error and the Files panel/Quick Open list nothing. Bound the scan to the
+      // limit the readdir fallback and mobile listing already use.
+      return provider.listFiles(target.worktree.path, {
+        excludePaths: options.excludePaths,
+        maxResults: QUICK_OPEN_LISTING_MAX_RESULTS
+      })
     }
-    return listQuickOpenFiles(target.worktree.path, this.host.requireStore(), options.excludePaths)
+    return listQuickOpenFiles(
+      target.worktree.path,
+      this.host.requireStore(),
+      options.excludePaths,
+      undefined,
+      QUICK_OPEN_LISTING_MAX_RESULTS
+    )
   }
 
   async listRuntimeMarkdownDocuments(worktreeSelector: string): Promise<MarkdownDocument[]> {
