@@ -167,6 +167,7 @@ import {
   getGitHubSourceRuntimeHost
 } from '@/lib/github-source-runtime-context'
 import { presentGitHubPRMergeState } from '@/components/github-pr-merge-state'
+import { PullRequestChangeSummary } from '@/components/PullRequestChangeSummary'
 import {
   GITHUB_PR_MERGE_METHOD_LABELS,
   resolveGitHubPRMergeMethods
@@ -5332,6 +5333,8 @@ export default function PullRequestPage({
     }
     return { ...workItem, ...details.item, repoId: workItem.repoId }
   }, [details?.item, workItem])
+  const summaryAdditions = displayWorkItem?.additions ?? workItem?.additions
+  const summaryDeletions = displayWorkItem?.deletions ?? workItem?.deletions
 
   useEffect(() => {
     if (!workItem || details?.item.reviewRequests === undefined) {
@@ -5704,6 +5707,7 @@ export default function PullRequestPage({
               </span>
             )}
           </span>
+          <PullRequestChangeSummary additions={summaryAdditions} deletions={summaryDeletions} />
           <span className="text-muted-foreground/40">·</span>
           <span className="text-muted-foreground/80">
             {translate('auto.components.PullRequestPage.dd5d9a4f17', 'updated {{value0}}', {
