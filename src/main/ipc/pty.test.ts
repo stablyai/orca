@@ -238,6 +238,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
   registerPtyHandlers,
+  buildPtyHostEnv,
   registerSshPtyProvider,
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
@@ -257,6 +258,8 @@ import {
   restorePtyIncarnation,
   type PrepareCodexSessionResume
 } from './pty'
+import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
@@ -1952,6 +1955,65 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      __setWindowsPathRegistryLoaderForTests(() => ({
+        HK: { LM: 1, CU: 2 },
+        getRegistryKey: (root) => ({
+          Path: {
+            type: 1,
+            value:
+              root === 1
+                ? 'C:\\Windows\\System32'
+                : 'C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+          }
+        })
+      }))
+      __resetPersistedWindowsPathCacheForTests()
+
+      try {
+        const provider = new LocalPtyProvider({
+          buildSpawnEnv: (id, baseEnv, context) =>
+            buildPtyHostEnv(id, baseEnv, {
+              isPackaged: true,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              githubAttributionEnabled: false,
+              agentStatusHooksEnabled: false,
+              isWsl: context?.isWsl,
+              wslDistro: context?.wslDistro
+            })
+        })
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Ubuntu',
+          env: {
+            PATH: 'C:\\Orca\\bin;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps',
+            WSLENV: 'ORCA_TERMINAL_HANDLE/u'
+          }
+        })
+        const [file, , options] = spawnMock.mock.calls.at(-1)!
+
+        expect(file).toBe('wsl.exe')
+        expect(options.env.PATH).toBe(
+          'C:\\Orca\\bin;C:\\Windows\\System32;C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+        )
+        const forwardedKeys = options.env.WSLENV.split(':').map((entry) =>
+          entry.split('/')[0]!.toLowerCase()
+        )
+        expect(options.env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
+        expect(forwardedKeys).not.toContain('path')
+      } finally {
+        __resetPersistedWindowsPathCacheForTests()
+        __setWindowsPathRegistryLoaderForTests()
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      }
+    })
+
     it('publishes a lifecycle signal after a successful renderer spawn', async () => {
       await spawnAndGetEnv()
 
