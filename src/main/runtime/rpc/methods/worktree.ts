@@ -271,13 +271,15 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.rm',
     params: WorktreeRemove,
     handler: async (params, { runtime }) => {
-      const result = await runtime.removeManagedWorktree(
+      const removalArgs = [
         params.worktree,
         params.force === true,
         params.runHooks === true,
-        params.allowUnverifiedPtyStop === true,
-        params.hostId
-      )
+        params.allowUnverifiedPtyStop === true
+      ] as const
+      const result = params.hostId
+        ? await runtime.removeManagedWorktree(...removalArgs, params.hostId)
+        : await runtime.removeManagedWorktree(...removalArgs)
       return { removed: true, ...result }
     }
   }),
@@ -285,11 +287,17 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     name: 'worktree.forceDeleteBranch',
     params: WorktreeForceDeleteBranch,
     handler: async (params, { runtime }) =>
-      runtime.forceDeletePreservedBranch(
-        params.worktree,
-        params.branchName,
-        params.expectedHead,
-        params.hostId
-      )
+      params.hostId
+        ? runtime.forceDeletePreservedBranch(
+            params.worktree,
+            params.branchName,
+            params.expectedHead,
+            params.hostId
+          )
+        : runtime.forceDeletePreservedBranch(
+            params.worktree,
+            params.branchName,
+            params.expectedHead
+          )
   })
 ]
