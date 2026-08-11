@@ -43,7 +43,9 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => mocks.state.allWorktrees()
+  useAllWorktrees: () => mocks.state.allWorktrees(),
+  getWorktreeMapFromState: () =>
+    new Map(mocks.state.allWorktrees().map((worktree) => [worktree.id, worktree]))
 }))
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -91,7 +93,12 @@ vi.mock('./active-worktree-focus-after-delete', () => ({
   prepareActiveWorktreeFocusAfterDelete: () => vi.fn()
 }))
 
+vi.mock('./stale-workspace-list-toast', () => ({
+  showWorkspaceListChangedToast: vi.fn()
+}))
+
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
+import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
 
 function makeWorktree(id: string, path: string): Worktree {
   return {
@@ -153,7 +160,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
   it('shows child-delete copy and only a delete-all action when the workspace has children', async () => {
     const parent = makeWorktree('Parent workspace', '/workspaces/parent')
     const child = makeWorktree('Child workspace', '/workspaces/child')
-    mocks.state.modalData = { worktreeId: parent.id }
+    mocks.state.modalData = {
+      worktreeId: parent.id,
+      worktreeDeleteIdentities: [{ id: parent.id, instanceId: parent.instanceId }],
+      lineageDeleteIdentities: [child, parent].map(({ id, instanceId }) => ({ id, instanceId }))
+    }
     mocks.state.allWorktrees.mockReturnValue([parent, child])
     mocks.state.worktreeLineageById = {
       [child.id]: makeLineage(child, parent)
@@ -295,7 +306,11 @@ describe('DeleteWorktreeDialog lineage copy', () => {
   it('notifies the dialog caller after a toast force delete succeeds', async () => {
     const workspace = makeWorktree('Workspace', '/workspaces/workspace')
     const onDeleted = vi.fn()
-    mocks.state.modalData = { worktreeId: workspace.id, onDeleted }
+    mocks.state.modalData = {
+      worktreeId: workspace.id,
+      worktreeDeleteIdentities: [{ id: workspace.id, instanceId: workspace.instanceId }],
+      onDeleted
+    }
     mocks.state.allWorktrees.mockReturnValue([workspace])
 
     const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
@@ -317,5 +332,58 @@ describe('DeleteWorktreeDialog lineage copy', () => {
     options?.onForceDeleted?.(workspace.id)
 
     expect(onDeleted).toHaveBeenCalledWith([workspace.id])
+  })
+
+  it('rejects confirmation when the workspace instance changed after the dialog opened', async () => {
+    const original = makeWorktree('Workspace', '/workspaces/original')
+    const replacement = { ...original, instanceId: 'replacement-instance' }
+    mocks.state.modalData = {
+      worktreeId: original.id,
+      worktreeDeleteIdentities: [{ id: original.id, instanceId: original.instanceId }]
+    }
+    mocks.state.allWorktrees.mockReturnValue([original])
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    renderToStaticMarkup(<DeleteWorktreeDialog />)
+    mocks.state.allWorktrees.mockReturnValue([replacement])
+
+    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
+      | { onClick?: (event: never) => void }
+      | undefined
+    deleteButton?.onClick?.(undefined as never)
+
+    expect(showWorkspaceListChangedToast).toHaveBeenCalledOnce()
+    expect(mocks.state.closeModal).toHaveBeenCalledOnce()
+    expect(runWorktreeDeletesInParallel).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('rejects lineage confirmation when a descendant instance changed', async () => {
+    const parent = makeWorktree('Parent workspace', '/workspaces/parent')
+    const child = makeWorktree('Child workspace', '/workspaces/child')
+    const replacement = { ...child, instanceId: 'replacement-instance' }
+    mocks.state.modalData = {
+      worktreeId: parent.id,
+      worktreeDeleteIdentities: [{ id: parent.id, instanceId: parent.instanceId }],
+      lineageDeleteIdentities: [child, parent].map(({ id, instanceId }) => ({ id, instanceId }))
+    }
+    mocks.state.allWorktrees.mockReturnValue([parent, child])
+    mocks.state.worktreeLineageById = {
+      [child.id]: makeLineage(child, parent)
+    }
+
+    const { default: DeleteWorktreeDialog } = await import('./DeleteWorktreeDialog')
+    renderToStaticMarkup(<DeleteWorktreeDialog />)
+    mocks.state.allWorktrees.mockReturnValue([parent, replacement])
+
+    const deleteButton = mocks.buttonProps.find((props) => props.variant === 'destructive') as
+      | { onClick?: () => void }
+      | undefined
+    deleteButton?.onClick?.()
+
+    expect(showWorkspaceListChangedToast).toHaveBeenCalledOnce()
+    expect(mocks.state.closeModal).toHaveBeenCalledOnce()
+    expect(runWorktreeDeletesInParallel).not.toHaveBeenCalled()
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 })

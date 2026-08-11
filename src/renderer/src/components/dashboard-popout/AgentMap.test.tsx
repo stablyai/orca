@@ -1,137 +1,16 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  DashboardCard,
-  DashboardSleepWorkspaceArgs,
-  DashboardSpawnAgentArgs
-} from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { AgentMap } from './AgentMap'
 import { agentMapAttentionMarkerScale } from './AgentMapWorktreeRingNode'
 import type { AgentMapState } from './agent-map-filter'
 import { AGENT_MAP_AGENT_RADIUS } from './agent-map-layout'
-
-const NOW = 2_000_000_000
-
-function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
-  return {
-    paneKey: 'pane-1',
-    ptyId: 'pty-1',
-    agentType: 'codex',
-    bucket: 'working',
-    dotState: 'working',
-    task: 'Build map',
-    repoId: 'repo-1',
-    worktreeId: 'worktree-1',
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    repoName: 'Orca',
-    worktreeName: 'Agent map',
-    conversationName: 'Agent alpha',
-    startedAt: NOW - 10 * 60_000,
-    finishedAt: null,
-    stateChangedAt: NOW - 1_000,
-    unseen: false,
-    hostKind: 'local',
-    workspaceKind: 'worktree',
-    ...overrides
-  }
-}
-
-function renderMap(
-  cards: DashboardCard[],
-  {
-    onOpenTerminal = vi.fn(),
-    selectedPaneKey = null,
-    compact = false,
-    workspaceContextMenusEnabled = false,
-    enabledStates,
-    showOrchestrationLinks,
-    launchableAgentsByWorktreeId,
-    onSpawnAgent,
-    onSleepWorkspace
-  }: {
-    onOpenTerminal?: (card: DashboardCard) => void
-    selectedPaneKey?: string | null
-    compact?: boolean
-    workspaceContextMenusEnabled?: boolean
-    enabledStates?: ReadonlySet<AgentMapState>
-    showOrchestrationLinks?: boolean
-    launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
-    onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
-    onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
-  } = {}
-): ReturnType<typeof render> {
-  return render(
-    <AgentMap
-      cards={cards}
-      now={NOW}
-      onOpenTerminal={onOpenTerminal}
-      selectedPaneKey={selectedPaneKey}
-      compact={compact}
-      workspaceContextMenusEnabled={workspaceContextMenusEnabled}
-      enabledStates={enabledStates}
-      showOrchestrationLinks={showOrchestrationLinks}
-      launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
-      onSpawnAgent={onSpawnAgent}
-      onSleepWorkspace={onSleepWorkspace}
-    />
-  )
-}
+import { card, installAgentMapEnvironment, NOW, renderMap } from './agent-map-render-test-harness'
 
 describe('AgentMap', () => {
-  const originalUserAgent = navigator.userAgent
-  let boundsSpy: ReturnType<typeof vi.spyOn>
-
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Linux' })
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
-    )
-    boundsSpy = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function getBounds(this: Element) {
-        if (this.classList.contains('agent-map-canvas') || this instanceof SVGSVGElement) {
-          return {
-            x: 0,
-            y: 0,
-            left: 0,
-            top: 0,
-            right: 400,
-            bottom: 300,
-            width: 400,
-            height: 300,
-            toJSON: () => ({})
-          }
-        }
-        return {
-          x: 0,
-          y: 0,
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 0,
-          height: 0,
-          toJSON: () => ({})
-        }
-      })
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.clearAllMocks()
-    vi.unstubAllGlobals()
-    boundsSpy.mockRestore()
-    Object.defineProperty(navigator, 'userAgent', {
-      configurable: true,
-      value: originalUserAgent
-    })
-  })
+  const environment = installAgentMapEnvironment()
 
   it('renders the amber marker only for unread agents', () => {
     const finished = card({
@@ -192,9 +71,15 @@ describe('AgentMap', () => {
       name: /Open Finished worktree worktree details/
     })
 
-    expect(workingNode.querySelector('[data-agent-map-agent-working-glow]')).toBeInTheDocument()
-    expect(waitingNode.querySelector('[data-agent-map-agent-working-glow]')).not.toBeInTheDocument()
-    expect(doneNode.querySelector('[data-agent-map-agent-working-glow]')).not.toBeInTheDocument()
+    expect(workingNode.querySelector('[data-agent-map-agent-status-glow]')).toHaveAttribute(
+      'data-agent-active-status',
+      'working'
+    )
+    expect(waitingNode.querySelector('[data-agent-map-agent-status-glow]')).toHaveAttribute(
+      'data-agent-active-status',
+      'waiting'
+    )
+    expect(doneNode.querySelector('[data-agent-map-agent-status-glow]')).not.toBeInTheDocument()
     expect(workingRing).toHaveClass('is-waiting')
     expect(workingRing).not.toHaveClass('is-working')
     expect(doneRing).not.toHaveClass('is-working')
@@ -221,7 +106,7 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap(cards, { selectedPaneKey: 'pane-0' })
 
-    expect(container.querySelectorAll('[data-agent-map-agent-working-glow]')).toHaveLength(60)
+    expect(container.querySelectorAll('[data-agent-map-agent-status-glow]')).toHaveLength(60)
     expect(container.querySelectorAll('[data-agent-map-worktree-status-glow]')).toHaveLength(1)
     expect(container.querySelectorAll('filter')).toHaveLength(0)
   })
@@ -361,11 +246,13 @@ describe('AgentMap', () => {
     expect(workerLink).toHaveClass('agent-map-lineage-link')
     expect(workerLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
     expect(workerLink).toHaveAttribute('data-parent-pane-key', 'parent')
+    expect(workerLink?.getAttribute('d')?.match(/\bM\b/g)?.length).toBeGreaterThan(1)
     // Why orchestration, not subagent: `nested` is a card, and in-process subagents
     // never become cards — so a grandchild dispatch is still an orchestration edge.
     expect(nestedLink).toHaveClass('agent-map-lineage-link')
     expect(nestedLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
     expect(nestedLink).toHaveAttribute('data-parent-pane-key', 'child')
+    expect(nestedLink?.getAttribute('d')?.match(/\bM\b/g)?.length).toBeGreaterThan(1)
   })
 
   it('connects spawned workers across worktree rings', () => {
@@ -606,13 +493,13 @@ describe('AgentMap', () => {
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
 
-    const readsBeforeZoom = boundsSpy.mock.calls.length
+    const readsBeforeZoom = environment.boundsSpy.mock.calls.length
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
 
     const zoomedScale = Number(
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeZoom)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeZoom)
     expect(zoomedScale).toBeGreaterThan(initialScale)
   })
 
@@ -631,18 +518,18 @@ describe('AgentMap', () => {
       releasePointerCapture: vi.fn()
     })
 
-    const readsBeforeHover = boundsSpy.mock.calls.length
+    const readsBeforeHover = environment.boundsSpy.mock.calls.length
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 20, clientY: 20 })
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeHover)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeHover)
 
     fireEvent.pointerDown(svg, { pointerId: 1, clientX: 20, clientY: 20 })
     expect(svg.setPointerCapture).toHaveBeenCalledWith(1)
-    const readsAfterPointerDown = boundsSpy.mock.calls.length
+    const readsAfterPointerDown = environment.boundsSpy.mock.calls.length
     const initialViewBox = svg.getAttribute('viewBox')
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 30, clientY: 20 })
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 40, clientY: 20 })
 
-    expect(boundsSpy).toHaveBeenCalledTimes(readsAfterPointerDown)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsAfterPointerDown)
     expect(requestFrame).toHaveBeenCalledOnce()
     expect(svg).toHaveAttribute('viewBox', initialViewBox)
 
@@ -650,7 +537,7 @@ describe('AgentMap', () => {
     expect(svg.getAttribute('viewBox')).not.toBe(initialViewBox)
 
     requestFrame.mockClear()
-    const readsBeforeWheel = boundsSpy.mock.calls.length
+    const readsBeforeWheel = environment.boundsSpy.mock.calls.length
     const wheel = (): void => {
       const event = new Event('wheel', { bubbles: true, cancelable: true })
       Object.defineProperties(event, {
@@ -663,7 +550,7 @@ describe('AgentMap', () => {
     }
     wheel()
     wheel()
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeWheel + 1)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeWheel + 1)
     expect(requestFrame).toHaveBeenCalledOnce()
   })
 

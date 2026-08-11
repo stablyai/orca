@@ -7,7 +7,7 @@ import { canEditComment, isResolvableComment } from '../../session/pr-comment-ac
 import { ConfirmModal } from '../ConfirmModal'
 import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentComposer } from './PRCommentComposer'
-import { formatPrCommentRelativeTime } from './pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../src/shared/pr-comment-time'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 
 export type PRCommentRepoSlug = { owner: string; repo: string; host?: string }

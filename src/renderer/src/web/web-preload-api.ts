@@ -92,6 +92,10 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode
+} from '../../../shared/computer-awake-mode'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
@@ -680,6 +684,24 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       set: async (updates) => {
         const sanitizedUpdates = { ...updates }
         delete sanitizedUpdates.activeRuntimeEnvironmentId
+        if ('computerAwakeMode' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              normalizeComputerAwakeMode(
+                sanitizedUpdates.computerAwakeMode,
+                sanitizedUpdates.keepComputerAwakeWhileAgentsRun
+              )
+            )
+          )
+        } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              sanitizedUpdates.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off'
+            )
+          )
+        }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
         }
@@ -704,6 +726,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    agentAwake: {
+      getStatus: async () => {
+        const settings = getStoredSettings()
+        return {
+          mode: normalizeComputerAwakeMode(
+            settings.computerAwakeMode,
+            settings.keepComputerAwakeWhileAgentsRun
+          ),
+          active: false
+        }
+      },
+      onChanged: () => noopUnsubscribe
+    },
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {
@@ -1796,10 +1831,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
+    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...(hostId ? { hostId } : {}),
         force,
         // Why (#11960): the web client renders the same Force Delete affordances, so
         // dropping this field here would leave paired clients permanently wedged.
@@ -1811,11 +1847,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     forgetLocal: () => {
       throw new Error('Forgetting a workspace is unavailable in paired web clients.')
     },
-    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead, hostId }) =>
       callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         branchName,
-        expectedHead
+        expectedHead,
+        ...(hostId ? { hostId } : {})
       }),
     updateMeta: async ({ worktreeId, updates }) => {
       const rpcUpdates =

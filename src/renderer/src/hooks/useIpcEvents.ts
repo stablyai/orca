@@ -86,6 +86,7 @@ import {
   setDriverForBrowserPage
 } from '@/lib/pane-manager/browser-mobile-driver-state'
 import { destroyPersistentWebview } from '@/components/browser-pane/webview-registry'
+import { rememberLiveBrowserUrl } from '@/components/browser-pane/browser-runtime'
 import {
   acquireBrowserAutomationVisibility,
   releaseBrowserAutomationVisibility
@@ -156,6 +157,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
 import { translate } from '@/i18n/i18n'
+import { redactKagiSessionToken } from '../../../shared/browser-url'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -2086,6 +2088,7 @@ export function useIpcEvents(): void {
           return
         }
         const store = useAppStore.getState()
+        rememberLiveBrowserUrl(browserPageId, redactKagiSessionToken(url))
         store.setBrowserPageUrl(browserPageId, url)
         store.updateBrowserPageState(browserPageId, { title, loading: false })
       })

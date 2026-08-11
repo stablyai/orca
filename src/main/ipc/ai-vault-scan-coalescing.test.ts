@@ -226,14 +226,22 @@ describe('Agent Session History scan coalescing', () => {
     expect(result).not.toHaveProperty('cancelled')
   })
 
-  it('still rejects the handler when a scan fails for a non-cancellation reason', async () => {
+  it('reports a failed local scan as a host issue rather than rejecting', async () => {
     mocks.scanAiVaultSessionsInWorker.mockRejectedValue(new Error('transcript root is unreadable'))
     registerAiVaultHandlers()
     const list = ipcHandler('aiVault:listSessions')
 
-    await expect(
-      list({ sender: { id: 1 } }, { executionHostScope: 'local', requestToken: 'scan' })
-    ).rejects.toThrow('transcript root is unreadable')
+    // The local leg degrades like the SSH legs above: a rejection reaches the
+    // renderer as a raw string painted over the list instead of an issue row.
+    const result = await list(
+      { sender: { id: 1 } },
+      { executionHostScope: 'local', requestToken: 'scan' }
+    )
+    expect(result).toMatchObject({
+      sessions: [],
+      issues: [expect.objectContaining({ message: 'transcript root is unreadable', kind: 'host' })]
+    })
+    expect(result).not.toHaveProperty('cancelled')
   })
 
   it('re-joins a preempted same-scope caller onto the forced refresh', async () => {

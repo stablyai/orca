@@ -232,6 +232,53 @@ describe('SshRelaySession relay loss during setup', () => {
     expect(unregisterSshFilesystemProvider).toHaveBeenCalledWith('target-1')
   })
 
+  // #13548 follow-up: cancelling the in-flight port scan emits rpc.cancel on the control
+  // lane, which a saturated writer turns into mux.dispose('connection_lost'). That fires
+  // during our own teardown, so it must not be reported as a lost relay.
+  it.each([
+    ['detach', (session: SshRelaySession) => session.beginShutdownDetach()],
+    ['dispose', (session: SshRelaySession) => session.dispose()]
+  ])(
+    'does not report relay loss when the port-scan cancel kills the mux on %s',
+    async (_path, teardown) => {
+      const { session, onRelayLost } = createSession()
+      // Mirrors SshChannelMultiplexer.request: an in-flight request whose signal aborts
+      // emits rpc.cancel, and the mock mux dies on that notify like a saturated writer.
+      muxRequestMock.mockImplementation(
+        async (method: string, _params?: unknown, options?: { signal?: AbortSignal }) => {
+          if (method !== 'ports.detect') {
+            return []
+          }
+          const mux = session.getMux() as unknown as {
+            failNotifyMethod: string | null
+            notify: (method: string, params?: unknown) => void
+          }
+          mux.failNotifyMethod = 'rpc.cancel'
+          return new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener(
+              'abort',
+              () => {
+                mux.notify('rpc.cancel', { id: 1 })
+                reject(new Error('cancelled'))
+              },
+              { once: true }
+            )
+          })
+        }
+      )
+
+      await session.establish({} as SshConnection)
+      expect(session.getState()).toBe('ready')
+      expect(muxRequestMock).toHaveBeenCalledWith('ports.detect', undefined, expect.anything())
+      const mux = session.getMux() as unknown as { notify: ReturnType<typeof vi.fn> }
+
+      teardown(session)
+
+      expect(mux.notify).toHaveBeenCalledWith('rpc.cancel', { id: 1 })
+      expect(onRelayLost).not.toHaveBeenCalled()
+    }
+  )
+
   // #11953: reattachKnownPtys swallows every per-PTY failure, so a mux killed by the
   // reattach burst itself never reaches the catch — the post-reattach gate has to notice.
   it('routes a mux that dies during PTY reattach into relay-loss recovery', async () => {

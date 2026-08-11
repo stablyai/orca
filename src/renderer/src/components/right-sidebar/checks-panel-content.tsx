@@ -60,14 +60,20 @@ import { CheckJobLogTail } from './check-job-log-tail'
 import {
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
   isBotPRComment,
-  normalizePRCommentAuthorLogin,
-  getPrCommentAudienceFilters,
   type PRCommentAudienceFilter
-} from '@/lib/pr-comment-audience'
+} from '../../../../shared/pr-comment-audience'
+import { normalizePRCommentAuthorLogin } from '../../../../shared/pr-bot-author-overrides'
+import {
+  getPRCommentAudienceEmptyLabel,
+  getPrCommentAudienceFilters
+} from '@/lib/pr-comment-audience-labels'
 import { setPRBotAuthorOverride, usePRBotAuthorOverrides } from '@/lib/pr-bot-author-overrides'
-import { getPRCommentGroupId, groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import {
+  getPRCommentGroupId,
+  groupPRComments,
+  type PRCommentGroup
+} from '../../../../shared/pr-comment-groups'
 import {
   getPRCommentGroupActionState,
   isPRCommentGroupQueueableForAI,
@@ -75,7 +81,7 @@ import {
   sortPRCommentGroupsForTimeline,
   type PRCommentGroupActionState
 } from '@/lib/pr-comment-action-state'
-import { formatPrCommentRelativeTime } from '@/lib/pr-comment-time'
+import { formatPrCommentRelativeTime } from '../../../../shared/pr-comment-time'
 import {
   getPRCommentPresentationClasses,
   getPRCommentGroupSurfaceClasses,
@@ -1756,7 +1762,7 @@ function CommentRow({
     comment: PRComment,
     content: GitHubReactionContent,
     reacted: boolean
-  ) => Promise<void>
+  ) => Promise<boolean>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   const automated = isBotPRComment(comment, botAuthorOverrides)
@@ -2070,7 +2076,7 @@ function PRCommentGroupView({
     comment: PRComment,
     content: GitHubReactionContent,
     reacted: boolean
-  ) => Promise<void>
+  ) => Promise<boolean>
   onQueueForAgent?: () => void
 }): React.JSX.Element {
   // Reply targets a specific comment id so any comment in a thread — root or
@@ -2219,7 +2225,7 @@ function ResolvedCommentGroupsSection({
     comment: PRComment,
     content: GitHubReactionContent,
     reacted: boolean
-  ) => Promise<void>
+  ) => Promise<boolean>
 }): React.JSX.Element | null {
   if (groups.length === 0) {
     return null
@@ -2344,7 +2350,7 @@ export function PRCommentsList({
     comment: PRComment,
     content: GitHubReactionContent,
     reacted: boolean
-  ) => Promise<void>
+  ) => Promise<boolean>
 }): React.JSX.Element {
   const presentation = React.useMemo(() => getPRCommentPresentationClasses(), [])
   const [commentFilter, setCommentFilter] = useState<PRCommentAudienceFilter>('all')

@@ -42,6 +42,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
+import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
   PullRequestIcon,
   prStateColor,
@@ -191,7 +192,7 @@ import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { groupPRComments, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   openChecksPanelHostedReviewUrl,
   resolveChecksPanelHostedReviewModifierDestination,
@@ -2945,10 +2946,14 @@ export default function ChecksPanel(): React.JSX.Element {
   )
 
   const handleSetReaction = useCallback(
-    async (comment: PRComment, content: GitHubReactionContent, reacted: boolean): Promise<void> => {
+    async (
+      comment: PRComment,
+      content: GitHubReactionContent,
+      reacted: boolean
+    ): Promise<boolean> => {
       const reactionSubjectId = comment.reactionSubjectId
       if (!repo || !prNumber || !pr?.prRepo || !reactionSubjectId) {
-        return
+        return false
       }
       const requestKey = checksPanelAsyncResultKey(
         prCacheKey,
@@ -2968,7 +2973,7 @@ export default function ChecksPanel(): React.JSX.Element {
         { repoId: repo.id, prRepo: pr.prRepo }
       )
       if (!isCurrentAsyncResult(requestKey) || ok) {
-        return
+        return ok
       }
       setComments((current) =>
         restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
@@ -2979,6 +2984,7 @@ export default function ChecksPanel(): React.JSX.Element {
           'Failed to update reaction.'
         )
       )
+      return false
     },
     [branch, isCurrentAsyncResult, pr, prCacheKey, prNumber, repo, setPRCommentReaction]
   )
@@ -3729,6 +3735,18 @@ export default function ChecksPanel(): React.JSX.Element {
     [activeReview, activeWorktreeId]
   )
 
+  const handleOpenStackPR = useCallback(
+    (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => {
+      openChecksPanelHostedReviewUrl({
+        url,
+        event: modifiers,
+        isMac: isMacPlatform(),
+        worktreeId: activeWorktreeId
+      })
+    },
+    [activeWorktreeId]
+  )
+
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
       return
@@ -4431,6 +4449,14 @@ export default function ChecksPanel(): React.JSX.Element {
         />
 
         {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
+
+        {activeReview.provider === 'github' && pr?.stack ? (
+          <GitHubPRStackMap
+            stack={pr.stack}
+            currentPRNumber={pr.number}
+            onOpenPullRequest={handleOpenStackPR}
+          />
+        ) : null}
 
         {/* Review title */}
         {editingTitle ? (

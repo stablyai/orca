@@ -1,7 +1,6 @@
 import { resolve } from 'node:path'
 import { getAiVaultWslHomeDirs } from '../ai-vault/cached-session-list'
-import { listClaudeSubagentSessions } from '../ai-vault/session-scanner-claude-subagents'
-import { listOmpSubagentSessions } from '../ai-vault/session-scanner-omp-subagent-listing'
+import { listAiVaultSubagentSessionsInBackground } from '../ai-vault/session-scanner-background'
 import { claudeProjectsRootDirs, ompSessionsRootDirs } from '../ai-vault/session-scanner-roots'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -45,7 +44,5 @@ export async function listAiVaultSubagentSessions(
   if (!roots.some((root) => isPathInsideOrEqual(resolve(root), parentFilePath))) {
     return { sessions: [], issues: [] }
   }
-  return args.agent === 'claude'
-    ? listClaudeSubagentSessions({ parentFilePath })
-    : listOmpSubagentSessions({ parentFilePath })
+  return listAiVaultSubagentSessionsInBackground({ agent: args.agent, parentFilePath })
 }

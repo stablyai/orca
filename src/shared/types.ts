@@ -53,6 +53,7 @@ import type { CodexResetCreditAttemptLedger } from './codex-reset-credit-attempt
 import type { TaskSourceContext } from './task-source-context'
 import type { SetupRunnerShell } from './setup-runner-command'
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { ComputerAwakeMode } from './computer-awake-mode'
 
 // Re-exported for backward compat with renderer call sites that import
 // `WorkspaceCreateTelemetrySource` from '../../../shared/types'.
@@ -252,8 +253,9 @@ export type Repo = {
   badgeColor: string
   repoIcon?: RepoIcon | null
   /** Set when the repo is a fork: the upstream/parent owner/repo. Drives the
-   *  default avatar (upstream owner, not the personal fork) and the fork
-   *  indicator. Absent = not a fork, or fork status not yet resolved. */
+   *  fork indicator and the default avatar of same-name forks (renamed forks
+   *  keep their own owner). Absent = not a fork, or fork status not yet
+   *  resolved. */
   upstream?: GitHubRepositoryIdentity | null
   addedAt: number
   kind?: RepoKind
@@ -1243,6 +1245,30 @@ export type GitHubPRMergeMethodSettings = {
   allowedMethods: Record<GitHubPRMergeMethod, boolean>
 }
 
+export type GitHubPRStackEntry = {
+  position: number
+  number: number
+  title: string
+  url: string
+  updatedAt?: string
+  state: PRState
+  checksStatus: CheckStatus
+  mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  mergeStateStatus?: string | null
+  headRefName?: string
+  headSha?: string
+}
+
+export type GitHubPRStack = {
+  number: number
+  position: number
+  size: number
+  baseRefName: string
+  baseSha?: string
+  entries?: GitHubPRStackEntry[]
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -1257,6 +1283,8 @@ export type PRInfo = {
   mergeQueueRequired?: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
+  /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */
+  stack?: GitHubPRStack
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
@@ -3050,6 +3078,8 @@ export type GlobalSettings = {
   confirmClosePinnedTab: boolean
   /** When true, Orca requests local awake assertions while hook-reported agents are working. */
   keepComputerAwakeWhileAgentsRun: boolean
+  /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
+  computerAwakeMode?: ComputerAwakeMode
   /** macOS Option key: compose layout chars (@ German, € French) vs act as Meta/Esc for readline.
    *  'auto' (default) = layout-aware via navigator.keyboard.getLayoutMap() (US → Meta, else compose);
    *  'false' = compose; 'true' = Meta on both Option keys; 'left'/'right' = only that key is Meta.

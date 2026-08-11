@@ -2709,15 +2709,6 @@
         },
         "sheet": {
           "1189e9fe0a": "Close"
-        },
-        "team": {
-          "multi": {
-            "combobox": {
-              "de83523bf9": "No teams match your search.",
-              "301f2a796e": "All teams",
-              "18ec58881e": "Search teams..."
-            }
-          }
         }
       },
       "terminal": {
@@ -3635,6 +3626,18 @@
                 }
               }
             }
+          },
+          "CaffeinateStatusSegment": {
+            "on": "On",
+            "auto": "Auto",
+            "off": "Off",
+            "active": "Active",
+            "inactive": "Inactive",
+            "ariaLabel": "Caffeinate, {{status}}",
+            "title": "Caffeinate",
+            "onDescription": "Keep this computer awake continuously",
+            "autoDescription": "Stay awake while an agent is working",
+            "offDescription": "Allow normal system sleep behavior"
           }
         }
       },
@@ -4898,7 +4901,8 @@
               "ae57cbf6e4": "Failed to delete workspace",
               "7488ed8711": "View",
               "2b20ce87b3": "Force Delete",
-              "4f3876c0f5": "Force delete failed"
+              "4f3876c0f5": "Force delete failed",
+              "workspaceListChanged": "Workspace list changed"
             },
             "toast": {
               "1d0fa5c0a5": "Failed to delete workspace {{value0}}",
@@ -5321,6 +5325,45 @@
           "connectName": "Connect to SSH host {{value0}}",
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
+        },
+        "preserved": {
+          "branch": {
+            "batch": {
+              "toast": {
+                "a3cdd9d9e6": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "a3cdd9d9e6_one": "Git kept {{count}} local branch because it may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "a3cdd9d9e6_other": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "6310412304": "Review {{count}} Branches",
+                "6310412304_one": "Review {{count}} Branch",
+                "6310412304_other": "Review {{count}} Branches",
+                "cea24c2b7d": "{{count}} workspaces removed",
+                "cea24c2b7d_one": "{{count}} workspace removed",
+                "cea24c2b7d_other": "{{count}} workspaces removed",
+                "0e0379f24a": "{{count}} branches kept",
+                "0e0379f24a_one": "{{count}} branch kept",
+                "0e0379f24a_other": "{{count}} branches kept",
+                "4cf75caab7": "{{value0}}, {{value1}}",
+                "e61d78054f": "Deleting local branches: {{value0}}",
+                "1e1a5f6763": "Local branches deleted: {{value0}}",
+                "43d9395605": "{{value0}} deleted, {{value1}} not deleted",
+                "d42f1f14e0": "Retry {{count}} Branches",
+                "d42f1f14e0_one": "Retry {{count}} Branch",
+                "d42f1f14e0_other": "Retry {{count}} Branches"
+              }
+            }
+          }
+        },
+        "PreservedBranchBatchReviewDialog": {
+          "c4bf8e7eaf": "Review kept branches",
+          "f21976c9a8": "Select the local branches you want to force delete. Unselected branches stay in their repositories.",
+          "38c947f7c5": "Select all",
+          "9602129d38": "{{value0}} of {{value1}} selected",
+          "ee39e872d5": "May be unmerged",
+          "676db406fd": "Head unavailable",
+          "285e1e4882": "Cancel",
+          "a0f9863597": "Force Delete {{count}} Branches",
+          "a0f9863597_one": "Force Delete {{count}} Branch",
+          "a0f9863597_other": "Force Delete {{count}} Branches"
         }
       },
       "shared": {
@@ -9455,7 +9498,10 @@
         "agent-awake-copy": {
           "e5995ce268": "Keep computer awake while agents are working",
           "95d3031db2": "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings.",
-          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
+          "a42f6fbdd8": "Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.",
+          "modeTitle": "Keep computer awake",
+          "modeDescriptionWindows": "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings.",
+          "modeDescriptionDefault": "Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy."
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent status hooks",
@@ -10514,6 +10560,11 @@
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
+        },
+        "AgentAwakeSetting": {
+          "on": "On",
+          "auto": "Auto",
+          "off": "Off"
         }
       },
       "right": {
@@ -10693,7 +10744,13 @@
             "b25f63edd7": "open",
             "d2ca293f3d": "Working...",
             "ef064cb7c3": "default",
-            "59b4dccf70": "destructive"
+            "59b4dccf70": "destructive",
+            "9a41a687b7": "Queue through #{{pr}} · {{count}} PR",
+            "38a1bccb14": "Queue through #{{pr}} · {{count}} PRs",
+            "3de88351c5": "GitHub will add this pull request and every pull request below it to the merge queue.",
+            "a32fe6dba6": "GitHub will merge this pull request and every pull request below it in the stack.",
+            "73e0e1819d": "Queueing stack...",
+            "e555a41d32": "Merging stack..."
           },
           "PortsPanel": {
             "3ea4a02a8f": "Cancel",
@@ -11857,6 +11914,34 @@
                   "d9dd7c6687": "Couldn't refresh from GitHub. Showing the last known status."
                 }
               }
+            },
+            "pr": {
+              "stack": {
+                "confirmation": {
+                  "84f6f5b9eb": "Included: {{numbers}}. ",
+                  "541984b2eb": "Queue through #{{pr}}?",
+                  "4809f55cdb": "{{included}}GitHub will add {{count}} pull request to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+                  "be8f2621be": "{{included}}GitHub will add {{count}} pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+                  "92ca033e72": "Queue {{count}} PR",
+                  "478a527b15": "Queue {{count}} PRs",
+                  "1feef35ca4": "Merge through #{{pr}}?",
+                  "c3e036c99f": "{{included}}GitHub will merge {{count}} pull request atomically using {{method}}. If it cannot merge, nothing will be merged.",
+                  "369aba4b32": "{{included}}GitHub will merge {{count}} pull requests atomically using {{method}}. If any cannot merge, none will.",
+                  "493c78f521": "Merge {{count}} PR",
+                  "eb7051d268": "Merge {{count}} PRs"
+                },
+                "merge": {
+                  "55ae29b907": "Merge through #{{pr}} · {{count}} PR",
+                  "b8446f6ec2": "Merge through #{{pr}} · {{count}} PRs",
+                  "189d0ec614": "#{{pr}} is still a draft.",
+                  "640fb50d9c": "#{{pr}} is closed.",
+                  "46ffcbda75": "#{{pr}} has merge conflicts.",
+                  "6dabefd63e": "#{{pr}} has requested changes.",
+                  "2bb21fc326": "#{{pr}} still needs review approval.",
+                  "c23faf74df": "#{{pr}} must be updated.",
+                  "f561e80968": "#{{pr}} is blocked."
+                }
+              }
             }
           },
           "PluginPanel": {
@@ -11875,6 +11960,23 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "GitHubPRStackMap": {
+            "3511405914": "closed",
+            "8a9bdc36c0": "merged",
+            "568c647ccd": "draft",
+            "bea9ade223": "conflicts",
+            "838aadf512": "checks failed",
+            "316039b5db": "checks pending",
+            "4b1e5ee9d3": "changes requested",
+            "9a17b5255c": "review needed",
+            "d3d97cf3f2": "approved",
+            "e6cb964305": "open",
+            "7737bd66be": "Collapse stack #{{value0}}",
+            "0c1645ebd0": "Expand stack #{{value0}}",
+            "e3ee2daa32": "Stack #{{value0}}",
+            "cb440931b7": "{{value0}} of {{value1}} · {{value2}}",
+            "525259fa17": "Stack details are temporarily unavailable."
           }
         }
       },
@@ -11944,17 +12046,6 @@
           "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
           "yoloPermissionsInfo": "Agent permission info",
           "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
-        },
-        "FeatureSetupChecklist": {
-          "77f74946f5": "Agents can message each other, take tasks, and coordinate handoffs.",
-          "399cf885c0": "Agent Orchestration",
-          "c5292c409d": "Agents can inspect app windows and operate local apps when you ask.",
-          "1ecfb490ac": "Computer Use",
-          "01426f3a23": "Agents can navigate sites, inspect pages, and work through browser tasks.",
-          "ea85d9e628": "Agent Browser Use",
-          "linearTicketsTitle": "Linear agent skill",
-          "linearTicketsDescription": "Agents can use linked Linear tasks for richer ticket-aware handoffs.",
-          "linearTicketsSetupSummary": "Recommended for Linear workspaces; does not affect Linear connection setup."
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
@@ -12041,37 +12132,6 @@
           "9f47f345a4": "It won't take long!",
           "e4726b2d50": "Skip onboarding?"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "Take the tour",
-          "60c5576353": "Exit tour"
-        },
-        "RepoStep": {
-          "e8fdb36338": "Scanning repositories. Click to stop.",
-          "b7c4da0504": "SSH? Set hosts up in Settings",
-          "c33b190ca3": "Host paths only",
-          "7b679207e4": "Workspace",
-          "24c7c8696c": "Clone into host path",
-          "7932e95f68": "Clone",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "Paste an HTTPS or SSH URL.",
-          "132425a3e3": "Clone a repo",
-          "6558d50c69": "Want to import many repos at once? Select the parent folder.",
-          "831524961f": "Choose any local directory, git repo or not.",
-          "f4e9c8dcf8": "Browse for a folder",
-          "e8214aa632": "Open as Folder",
-          "3863747c56": "Add Git Project",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "Enter a path that exists on the selected host.",
-          "8cab104e3c": "Open a project on this host",
-          "2d20200346": "Import repositories",
-          "27ca610db1": "Back",
-          "cecd6593fa": "Scanned folder:",
-          "c7af322fc3": "Stop scanning",
-          "c3d9d44ca2": "Stop scan",
-          "cf23006ba7": "Selected host",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}Found {{value1}} {{value2}} in this folder."
-        },
         "ThemeStep": {
           "a4b254779d": "macOS Option key",
           "6c51398942": "Mouse",
@@ -12099,14 +12159,9 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "Could not open SSH settings",
-              "fd74e7558e": "Clone failed",
               "52acfbef51": "Could not save progress"
             }
           }
-        },
-        "AgentFeatureSetupStep": {
-          "97dcdc010f": "Enable capabilities"
         },
         "WindowsTerminalStep": {
           "powerShell": "PowerShell",
@@ -12207,10 +12262,6 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
-          },
-          "ProjectHostSetupCombobox": {
-            "empty": "No hosts are ready for this project.",
-            "placeholder": "Choose host"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -12613,43 +12664,6 @@
             "cda56c5915": "notes / launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "Thinking...",
-            "ef8b164dd1": "review src/auth",
-            "952d3ddd9a": "session started",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "Running 12 tests",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "Splittable terminal",
-            "2a7cfc82c8": "Linked to GH #1842",
-            "3822d8d14b": "fix/worktree-picker-truncates",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "Start",
-            "c1f28c03b2": "Worktree picker truncates",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "GitHub & Linear tasks",
-            "5171768676": "orchestrating 3 agents",
-            "cebc7769cd": "redesign auth flow",
-            "e44269e97d": "Agent orchestration",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "refactor billing webhook",
-            "9c812e0d7c": "speed up CI pipeline",
-            "3c4adfd821": "fix login race condition",
-            "56a0271428": "Isolated workspaces",
-            "ef737dcee1": "GitHub & Linear tasks",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "Ship several things at once. Each workspace keeps its branch, terminal, and agent activity together.",
-            "70aa182266": "Hand off a goal and walk away. A coordinator agent fans out and ships parallel PRs.",
-            "f10c14dd9d": "Skip the tab-switching. Pick from your GitHub or Linear backlog and start a workspace in one click.",
-            "5d6ee181b6": "Open any workspace to return to its terminal, then split panes for tests, logs, and agents."
-          },
           "FeatureWallBody": {
             "25ec5356d6": "Setup"
           },
@@ -12892,11 +12906,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "working"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",
@@ -14331,7 +14340,17 @@
           "usageUnavailable": "Usage unavailable",
           "noRunUsageYet": "No run usage yet",
           "noWorkspace": "No workspace",
-          "latestSavedOutput": "Latest saved output"
+          "latestSavedOutput": "Latest saved output",
+          "backToList": "All automations",
+          "tableName": "Name",
+          "tableProject": "Project",
+          "tableStatus": "Status",
+          "tableActions": "Actions",
+          "newAutomation": "New Automation",
+          "rowActions": "Automation actions"
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "Loading automations"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Search repo branches...",
@@ -14448,9 +14467,12 @@
         "AutomationListSearchField": {
           "tooLong": "Search text is too long — list is unfiltered",
           "label": "Search automations",
-          "placeholder": "Search by name, project, or prompt",
+          "placeholder": "Search...",
           "tooLongShort": "Too long",
           "clear": "Clear search"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "Automation actions"
         }
       },
       "agent": {
@@ -14712,159 +14734,12 @@
       },
       "orca": {
         "profiles": {
-          "switcher": {
-            "cloud": {
-              "unavailable": "Orca sign-in unavailable"
-            },
-            "account": "Account",
-            "reconnect": "Reconnect profile",
-            "connect": "Connect profile",
-            "organization": "Organization",
-            "create": {
-              "profile": {
-                "for": {
-                  "org": "Create profile for org"
-                }
-              }
-            },
-            "signout": "Sign out",
-            "16e3681072": "New local profile",
-            "e3b91a3d90": "Create an empty profile for separate projects and worktrees.",
-            "f322e1f4d6": "Profile name",
-            "cfa59f8ad1": "Create and Switch",
-            "b4f9d1125d": "Local",
-            "4815f7d163": "Switch profile",
-            "d00d853e2a": "Manage profiles",
-            "c106c674fe": "New local profile",
-            "org": {
-              "members": "Organization members"
-            },
-            "signInWaiting": "Waiting for sign-in…",
-            "signInAgain": "Sign in again",
-            "signIn": "Sign in to Orca",
-            "accountTitle": "Orca account",
-            "accountSignedIn": "Signed in",
-            "accountSignInRequired": "Sign-in required",
-            "accountSignedOut": "Signed out"
-          },
-          "management": {
-            "04e7bd2a23": "Transfer",
-            "128c7dfe64": "Copy to",
-            "df8b7d876b": "Move to",
-            "9aa26347b3": "Project moved",
-            "816ce624b6": "Project copied",
-            "2c45bda8d3": "Manage profiles",
-            "2db945e4a0": "Copy or move projects from the active profile to another local profile.",
-            "8668cb2946": "No projects in this profile.",
-            "93034915ab": "Create another profile before copying projects.",
-            "projectCountSingular": "{{count}} project",
-            "projectCountPlural": "{{count}} projects"
-          },
-          "project": {
-            "transfer": {
-              "confirm": {
-                "move": {
-                  "title": "Move project?",
-                  "description": "Move {{repoName}} to {{targetName}}. Orca removes it from {{activeProfileName}}, keeps files in place, and relaunches into {{targetName}}.",
-                  "action": "Move project"
-                },
-                "copy": {
-                  "title": "Copy project?",
-                  "description": "Copy {{repoName}} to {{targetName}}. Both profiles will point at the same files with separate Orca metadata.",
-                  "action": "Copy project"
-                },
-                "live": {
-                  "work": "Live work in this project"
-                },
-                "cancel": "Cancel",
-                "terminalSingular": "{{count}} live terminal tab",
-                "terminalPlural": "{{count}} live terminal tabs",
-                "agentSingular": "{{count}} active agent",
-                "agentPlural": "{{count}} active agents",
-                "browserSingular": "{{count}} browser workspace",
-                "browserPlural": "{{count}} browser workspaces"
-              }
-            }
-          },
           "signout": {
             "confirm": {
               "title": "Sign out of Orca?",
               "description": "Artifacts and Orca Relay will be unavailable until you sign in again. Your local projects and worktrees won't be affected.",
               "cancel": "Cancel",
               "action": "Sign out"
-            }
-          },
-          "switch": {
-            "confirm": {
-              "target": "the selected profile",
-              "title": "Switch profiles?",
-              "description": "Switching to {{targetName}} will relaunch Orca and reload the workspace for {{activeProfileName}}.",
-              "live": {
-                "work": "Live work in this profile"
-              },
-              "cancel": "Cancel",
-              "switch": "Switch profile",
-              "terminalSingular": "{{count}} live terminal tab",
-              "terminalPlural": "{{count}} live terminal tabs",
-              "agentSingular": "{{count}} active agent",
-              "agentPlural": "{{count}} active agents",
-              "browserSingular": "{{count}} browser workspace",
-              "browserPlural": "{{count}} browser workspaces"
-            }
-          },
-          "org": {
-            "members": {
-              "role": {
-                "label": "Role",
-                "owner": "Owner",
-                "admin": "Admin",
-                "member": "Member"
-              },
-              "not": {
-                "signed": {
-                  "in": "They haven't signed in to Orca yet."
-                }
-              },
-              "remove": {
-                "confirm": "Remove",
-                "cancel": "Cancel",
-                "label": "Remove teammate"
-              },
-              "title": "Organization members",
-              "load": {
-                "error": "Couldn't load organization members."
-              },
-              "retry": "Try again",
-              "pending": {
-                "title": "Pending invites",
-                "revoke": "Revoke"
-              },
-              "invite": {
-                "title": "Invite",
-                "placeholder": "teammate@example.com",
-                "role": "Invite role",
-                "submit": "Send"
-              },
-              "error": {
-                "forbidden": "Your role can't do that.",
-                "conflict": "Already a member or invited.",
-                "remove": {
-                  "self": "You can't remove yourself."
-                },
-                "own": {
-                  "role": "You can't change your own role."
-                },
-                "not": {
-                  "found": "That teammate is no longer in this organization."
-                },
-                "reconnect": "Reconnect your profile to manage members.",
-                "unconfigured": "Organization management is unavailable in this build.",
-                "failed": "Something went wrong. Please try again."
-              },
-              "subtitle": {
-                "named": "People in {{orgName}} who can collaborate on Orca.",
-                "default": "People in your organization who can collaborate on Orca."
-              }
             }
           }
         }

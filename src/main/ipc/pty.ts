@@ -1513,6 +1513,7 @@ function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiAgentKin
   }
   if (kind === 'prime-agent') {
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
     return
   }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
@@ -1543,6 +1544,11 @@ function exposePiManagedExtensionEnv(
       baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = managedEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
     } else {
       delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    }
+    if (managedEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION) {
+      baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION = managedEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
+    } else {
+      delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
     }
     return
   }
@@ -1686,6 +1692,8 @@ export function buildPtyHostEnv(
   })
 
   const shouldPrepareOmpShadow = piAgentKind === 'omp' || !hasLaunchCommand
+  const shouldPreparePrimeStatus =
+    piAgentKind === 'prime-agent' || (opts.isWsl && !hasLaunchCommand)
   // Why: source shadows are agent-scoped; trusting the other kind's source reintroduces Pi/OMP extension-state shadowing.
   const preexistingPiAgentDir = resolvePiAgentSourceDir(baseEnv, 'pi')
   const preexistingOmpAgentDir =
@@ -1744,6 +1752,12 @@ export function buildPtyHostEnv(
     if (opts.isWsl === true) {
       // Why: hook POSTs to 127.0.0.1 die inside WSL's NAT namespace; use the guest-resident relay's endpoint instead of the Windows one.
       const distro = opts.wslDistro ?? null
+      const hookInstance = wslHookRelayManager.getInstanceKey()
+      if (hookInstance) {
+        baseEnv.ORCA_WSL_HOOK_INSTANCE = hookInstance
+      } else {
+        delete baseEnv.ORCA_WSL_HOOK_INSTANCE
+      }
       wslHookRelayManager.ensureForDistro(distro)
       const guestEndpoint = wslHookRelayManager.getGuestEndpointFilePath(distro)
       if (guestEndpoint) {
@@ -1790,13 +1804,14 @@ export function buildPtyHostEnv(
       exposePiManagedExtensionEnv(baseEnv, 'omp', ompEnv)
     }
 
-    if (piAgentKind === 'prime-agent' && !opts.isWsl) {
-      const primeEnv = piTitlebarExtensionService.buildPtyEnv(
-        id,
-        preexistingPrimeAgentDir,
-        'prime-agent',
-        { materializeDefaultHome: explicitPiAgentKind === 'prime-agent' }
-      )
+    if (shouldPreparePrimeStatus) {
+      // Why: the Windows host cannot safely resolve or write Prime's guest
+      // config root; WSL loads the host-managed status file explicitly.
+      const primeEnv = opts.isWsl
+        ? piTitlebarExtensionService.buildStatusOnlyPtyEnv('prime-agent')
+        : piTitlebarExtensionService.buildPtyEnv(id, preexistingPrimeAgentDir, 'prime-agent', {
+            materializeDefaultHome: explicitPiAgentKind === 'prime-agent'
+          })
       Object.assign(baseEnv, primeEnv)
       exposePiManagedExtensionEnv(baseEnv, 'prime-agent', primeEnv)
     }
@@ -1814,6 +1829,7 @@ export function buildPtyHostEnv(
     })
     delete baseEnv.ORCA_OMP_STATUS_EXTENSION
     delete baseEnv.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR
+    delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
   }
 
   // Why: keep the Codex home override PTY-scoped so dev/prod Orcas don't share hooks through ~/.codex.
@@ -5656,6 +5672,7 @@ export function registerPtyHandlers(
       args: { id?: unknown; opts?: { scrollbackRows?: unknown } }
     ): Promise<{
       data: string
+      frameRestoreAnsi?: string
       cols: number
       rows: number
       cwd?: string | null

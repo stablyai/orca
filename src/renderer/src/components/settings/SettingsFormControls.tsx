@@ -8,6 +8,7 @@ import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { Switch } from '../ui/switch'
 import { Check, ChevronsUpDown, CircleX } from 'lucide-react'
 import { normalizeColor, type TerminalThemeOption } from '@/lib/terminal-theme'
 import { MAX_THEME_RESULTS } from './SettingsConstants'
@@ -36,26 +37,13 @@ export function SettingsSwitch({
   disabled
 }: SettingsSwitchProps): React.JSX.Element {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
+    <Switch
+      checked={checked}
       aria-label={ariaLabel}
       aria-labelledby={ariaLabelledBy}
       disabled={disabled}
-      onClick={onChange}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-foreground' : 'bg-muted-foreground/30'
-      )}
-    >
-      <span
-        className={cn(
-          'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-          checked ? 'translate-x-4.5' : 'translate-x-0.5'
-        )}
-      />
-    </button>
+      onCheckedChange={onChange}
+    />
   )
 }
 
