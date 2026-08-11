@@ -13816,7 +13816,27 @@
           "a21f6c33ad": "Origen de automatización actualizado.",
           "53f06f0ad5": "Reintentar origen",
           "pendingAutomationMissing": "La automatización ya no está disponible.",
-          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible."
+          "pendingAutomationRunMissing": "El historial de ejecuciones ya no está disponible.",
+          "noSearchMatches": "Ninguna automatización coincide con tu búsqueda.",
+          "paused": "Pausada",
+          "runCount": "{{count}} ejecuciones",
+          "runCount_one": "{{count}} ejecución",
+          "runCount_other": "{{count}} ejecuciones",
+          "projectDefaultBaseRef": "predeterminado del proyecto",
+          "createFromBaseRef": "Crear desde {{baseRef}}",
+          "missingWorkspace": "Espacio de trabajo ausente",
+          "runUsageSummary": "{{cost}} est. · {{tokens}} tokens",
+          "usageUnavailable": "Uso no disponible",
+          "noRunUsageYet": "Aún no hay uso de ejecución",
+          "noWorkspace": "Sin espacio de trabajo",
+          "latestSavedOutput": "Última salida guardada",
+          "backToList": "Todas las automatizaciones",
+          "tableName": "Nombre",
+          "tableProject": "Proyecto",
+          "tableStatus": "Estado",
+          "tableActions": "Acciones",
+          "newAutomation": "Nueva automatización",
+          "rowActions": "Acciones de automatización"
         },
         "CreateFromPicker": {
           "f061f49e3f": "Buscar ramas del repositorio...",
@@ -13929,6 +13949,19 @@
           "5a7863909c": "Ejecutar la configuración para cada espacio de trabajo nuevo",
           "18f000ad4e": "Avanzado",
           "874b72195b": "Cuando esta automatización crea un workspace, lo prepara igual que al crear un worktree manualmente: ejecuta la configuración del proyecto y abre sus pestañas de terminal."
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "Cargando automatizaciones"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "El texto de búsqueda es demasiado largo — la lista no está filtrada",
+          "label": "Buscar automatizaciones",
+          "placeholder": "Buscar...",
+          "tooLongShort": "Demasiado largo",
+          "clear": "Borrar búsqueda"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "Acciones de automatización"
         }
       },
       "agent": {

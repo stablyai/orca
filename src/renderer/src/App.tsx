@@ -361,6 +361,9 @@ const AddProjectFromFolderDialog = lazy(
 )
 const ProjectAddedDialog = lazy(() => import('./components/sidebar/ProjectAddedDialog'))
 const DeleteWorktreeDialog = lazy(() => import('./components/sidebar/DeleteWorktreeDialog'))
+const PreservedBranchBatchReviewModal = lazy(
+  () => import('./components/sidebar/PreservedBranchBatchReviewModal')
+)
 const DictationController = lazy(() =>
   import('./components/dictation/DictationController').then((module) => ({
     default: module.DictationController
@@ -2347,7 +2350,8 @@ function App(): React.JSX.Element {
                       )
                     ) : null}
                     <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
-                      {stackedSidebarOpen ? (
+                      {/* Why: automations owns its page header; the stacked titlebar would be an empty 36px stripe. */}
+                      {stackedSidebarOpen && activeView !== 'automations' ? (
                         <div className="titlebar">{titlebarMainStrip}</div>
                       ) : null}
                       <div className="relative flex flex-1 min-w-0 min-h-0 overflow-hidden">
@@ -2701,6 +2705,16 @@ function App(): React.JSX.Element {
                   compact
                 >
                   <DeleteWorktreeDialog />
+                </RecoverableRenderErrorBoundary>
+              ) : null}
+              {activeModal === 'preserved-branch-review' ? (
+                <RecoverableRenderErrorBoundary
+                  boundaryId="modal.preserved-branch-review"
+                  surface="modal"
+                  resetKey
+                  compact
+                >
+                  <PreservedBranchBatchReviewModal />
                 </RecoverableRenderErrorBoundary>
               ) : null}
             </Suspense>

@@ -13816,7 +13816,27 @@
           "a21f6c33ad": "オートメーションのソースを更新しました。",
           "53f06f0ad5": "ソースを再試行",
           "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
+          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。",
+          "noSearchMatches": "検索に一致する自動化がありません。",
+          "paused": "一時停止中",
+          "runCount": "{{count}} 回の実行",
+          "runCount_one": "{{count}} 回の実行",
+          "runCount_other": "{{count}} 回の実行",
+          "projectDefaultBaseRef": "プロジェクトのデフォルト",
+          "createFromBaseRef": "{{baseRef}} から作成",
+          "missingWorkspace": "ワークスペースがありません",
+          "runUsageSummary": "約 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "使用量を利用できません",
+          "noRunUsageYet": "まだ実行の使用量がありません",
+          "noWorkspace": "ワークスペースなし",
+          "latestSavedOutput": "最新の保存済み出力",
+          "backToList": "すべての自動化",
+          "tableName": "名前",
+          "tableProject": "プロジェクト",
+          "tableStatus": "ステータス",
+          "tableActions": "操作",
+          "newAutomation": "新しい自動化",
+          "rowActions": "自動化の操作"
         },
         "CreateFromPicker": {
           "f061f49e3f": "リポジトリブランチを検索…",
@@ -13929,6 +13949,19 @@
           "5a7863909c": "新規ワークスペースごとにセットアップを実行",
           "18f000ad4e": "詳細設定",
           "874b72195b": "このオートメーションがワークスペースを作成するときに、手動でワークツリーを作成する場合と同じ準備を行います。プロジェクトのセットアップを実行し、ターミナルタブを開きます。"
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "自動化を読み込み中"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "検索テキストが長すぎます — リストは未フィルタです",
+          "label": "自動化を検索",
+          "placeholder": "検索...",
+          "tooLongShort": "長すぎます",
+          "clear": "検索をクリア"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "自動化の操作"
         }
       },
       "agent": {

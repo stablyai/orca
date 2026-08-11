@@ -11,6 +11,8 @@ import type { Worktree } from '../../../../shared/types'
 import { prepareActiveWorktreeFocusAfterDelete } from './active-worktree-focus-after-delete'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 import { showWorkspaceListChangedToast } from './stale-workspace-list-toast'
+import { showPreservedBranchBatchToast } from './preserved-branch-batch-toast'
+import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 import type { WorktreeDeleteWithToastOptions } from './worktree-delete-request'
 
 // A failed delete usually means unresolved changes, so land on the diff panel.
@@ -55,6 +57,8 @@ export async function runWorktreeDeletesInParallel(
     // Children must leave first or Git rejects their registered ancestor.
     group.sort((a, b) => b.path.length - a.path.length)
   }
+  const preservedBranches: PreservedBranchCleanup[] = []
+  const aggregatePreservedBranches = uniqueTargets.length > 1
   let listChanged = false
   const groupResults = await Promise.all(
     Array.from(groups.values()).map(async (group) => {
@@ -74,7 +78,12 @@ export async function runWorktreeDeletesInParallel(
         }
         const deleted = await runWorktreeDeleteWithToast(target.id, target.displayName, {
           ...options,
-          focusSuccessorOnDelete: false
+          focusSuccessorOnDelete: false,
+          suppressPreservedBranchToast: aggregatePreservedBranches,
+          onPreservedBranch: (branch) => {
+            preservedBranches.push(branch)
+            options.onPreservedBranch?.(branch)
+          }
         })
         if (deleted) {
           deletedInGroup.push(target.id)
@@ -94,6 +103,15 @@ export async function runWorktreeDeletesInParallel(
   if (activeWorktreeIdBefore && deletedSet.has(activeWorktreeIdBefore)) {
     commitBatchFocus?.()
   }
+  if (aggregatePreservedBranches && preservedBranches.length > 0) {
+    const targetOrder = new Map(uniqueTargets.map((target, index) => [target.id, index]))
+    preservedBranches.sort(
+      (left, right) =>
+        (targetOrder.get(left.worktreeId) ?? Number.MAX_SAFE_INTEGER) -
+        (targetOrder.get(right.worktreeId) ?? Number.MAX_SAFE_INTEGER)
+    )
+    showPreservedBranchBatchToast(deletedSet.size, preservedBranches)
+  }
   return uniqueTargets.filter((target) => deletedSet.has(target.id)).map((target) => target.id)
 }
 
@@ -107,9 +125,23 @@ export function runWorktreeDeleteWithToast(
   const commitFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
   const focusSuccessor = options.focusSuccessorOnDelete !== false
 
-  return removeWorktree(worktreeId, options.force === true)
+  const removal = options.suppressPreservedBranchToast
+    ? removeWorktree(worktreeId, options.force === true, { suppressPreservedBranchToast: true })
+    : removeWorktree(worktreeId, options.force === true)
+  return removal
     .then((result) => {
       if (result.ok) {
+        if (result.preservedBranch) {
+          options.onPreservedBranch?.({
+            worktreeId,
+            branchName: result.preservedBranch.branchName,
+            expectedHead: result.preservedBranch.head,
+            ...(result.preservedBranch.hostId ? { hostId: result.preservedBranch.hostId } : {}),
+            ...(result.preservedBranch.runtimeEnvironmentId
+              ? { runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId }
+              : {})
+          })
+        }
         if (focusSuccessor) {
           commitFocus()
         }

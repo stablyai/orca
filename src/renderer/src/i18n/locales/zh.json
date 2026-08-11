@@ -13836,7 +13836,27 @@
           "a21f6c33ad": "自动化来源已刷新。",
           "53f06f0ad5": "重试来源",
           "pendingAutomationMissing": "自动化已不可用。",
-          "pendingAutomationRunMissing": "运行历史已不可用。"
+          "pendingAutomationRunMissing": "运行历史已不可用。",
+          "noSearchMatches": "没有匹配的自动化。",
+          "paused": "已暂停",
+          "runCount": "{{count}} 次运行",
+          "runCount_one": "{{count}} 次运行",
+          "runCount_other": "{{count}} 次运行",
+          "projectDefaultBaseRef": "项目默认",
+          "createFromBaseRef": "从 {{baseRef}} 创建",
+          "missingWorkspace": "缺少工作区",
+          "runUsageSummary": "约 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "用量不可用",
+          "noRunUsageYet": "尚无运行用量",
+          "noWorkspace": "无工作区",
+          "latestSavedOutput": "最近保存的输出",
+          "backToList": "全部自动化",
+          "tableName": "名称",
+          "tableProject": "项目",
+          "tableStatus": "状态",
+          "tableActions": "操作",
+          "newAutomation": "新建自动化",
+          "rowActions": "自动化操作"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索仓库分支...",
@@ -13949,6 +13969,19 @@
           "5a7863909c": "为每个新工作区运行设置",
           "18f000ad4e": "高级",
           "874b72195b": "当此自动化创建工作区时，使用与手动创建工作树相同的方式准备——运行项目的设置并打开其终端标签页。"
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "正在加载自动化"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "搜索文本过长 — 列表未筛选",
+          "label": "搜索自动化",
+          "placeholder": "搜索...",
+          "tooLongShort": "过长",
+          "clear": "清除搜索"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "自动化操作"
         }
       },
       "agent": {

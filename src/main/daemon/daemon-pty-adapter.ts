@@ -831,10 +831,9 @@ export class DaemonPtyAdapter implements IPtyProvider {
     }
 
     const isAltScreen = result.snapshot.modes.alternateScreen
-    const snapshotPayload =
-      result.snapshot.scrollbackAnsi +
-      result.snapshot.rehydrateSequences +
-      result.snapshot.snapshotAnsi
+    const snapshotPrefix = result.snapshot.scrollbackAnsi + result.snapshot.rehydrateSequences
+    const snapshotFrame = result.snapshot.snapshotAnsi
+    const snapshotPayload = snapshotPrefix + snapshotFrame
     // Why kitty flags ride beside the payload, not inside it: the snapshot reaches renderer xterms where POST_REPLAY_REATTACH_RESET's kitty reset must win (terminal-query-authority.md §kitty).
     const kittyKeyboardFlags = result.snapshot.modes.kittyKeyboardFlags
     return {
@@ -847,6 +846,14 @@ export class DaemonPtyAdapter implements IPtyProvider {
       snapshot: snapshotPayload,
       snapshotCols: result.snapshot.cols,
       snapshotRows: result.snapshot.rows,
+      // Why only for an alt frame: normal history remains safe to replay at its capture grid.
+      ...(isAltScreen && snapshotFrame && result.snapshot.frameRestoreAnsi
+        ? {
+            snapshotPrefixAnsi: snapshotPrefix,
+            snapshotFrameAnsi: snapshotFrame,
+            snapshotFrameRestoreAnsi: result.snapshot.frameRestoreAnsi
+          }
+        : {}),
       ...(providerSequence ? { providerSequence } : {}),
       ...(typeof kittyKeyboardFlags === 'number' && kittyKeyboardFlags > 0
         ? { snapshotKittyKeyboardFlags: kittyKeyboardFlags }
@@ -1216,6 +1223,7 @@ export class DaemonPtyAdapter implements IPtyProvider {
       }
       return {
         data: snapshot.rehydrateSequences + snapshot.snapshotAnsi,
+        frameRestoreAnsi: snapshot.frameRestoreAnsi,
         scrollbackAnsi: snapshot.scrollbackAnsi,
         cols: snapshot.cols,
         rows: snapshot.rows,
