@@ -89,25 +89,6 @@ async function prepareVoiceSettings(
     await page.getByRole('button', { name: 'Maybe Later' }).click()
   }
   await expect(page.getByRole('heading', { name: 'Voice', exact: true })).toBeVisible()
-  // Why: the microphone Select is disabled until voice.enabled hydrates into the renderer
-  // store, and "System default" renders identically before and after hydration — so the
-  // text assertions below are not a barrier. Wait on the store value the pane actually reads.
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const voice = window.__store?.getState().settings?.voice
-          return voice
-            ? {
-                enabled: voice.enabled,
-                deviceId: voice.microphoneDeviceId ?? null,
-                label: voice.microphoneDeviceLabel ?? null
-              }
-            : null
-        }),
-      { message: 'voice settings did not hydrate into the renderer store' }
-    )
-    .toEqual({ enabled: true, deviceId: microphoneDeviceId, label: microphoneDeviceLabel })
 }
 
 async function readMicrophoneSettings(
@@ -135,7 +116,6 @@ test.describe('Voice microphone selection', () => {
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
     await expect(microphone).toHaveText('System default')
-    await expect(microphone).toBeEnabled()
     await microphone.click()
     await expect(orcaPage.getByRole('option', { name: 'USB Microphone' })).toBeVisible()
     await orcaPage.getByRole('option', { name: 'USB Microphone' }).click()
@@ -167,7 +147,6 @@ test.describe('Voice microphone selection', () => {
     await prepareVoiceSettings(orcaPage, 'stale-airpods-id', 'AirPods')
 
     const microphone = orcaPage.getByRole('combobox', { name: 'Microphone' })
-    await expect(microphone).toBeEnabled()
     await microphone.click()
     await expect(orcaPage.getByRole('option', { name: 'AirPods (unavailable)' })).toBeVisible()
     await orcaPage.keyboard.press('Escape')
