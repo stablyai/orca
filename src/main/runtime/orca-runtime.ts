@@ -18666,6 +18666,7 @@ export class OrcaRuntimeService {
         }
         if (shouldPromoteToGit) {
           updates.kind = 'git'
+          updates.externalWorktreeVisibility = existing.externalWorktreeVisibility ?? 'hide'
         }
         const adopted =
           this.store.updateRepo(existing.id, updates) ?? ({ ...existing, ...updates } as Repo)

@@ -160,13 +160,14 @@ describe('repos:add with git worktrees', () => {
       ...trackedMainRepo(),
       id: 'folder-repo-id',
       path: '/Users/dev/projects/promoted',
-      kind: 'folder'
+      kind: 'folder',
+      projectHostSetupMethod: 'cloned'
     } as Repo
     mockStore.getRepos.mockReturnValue([folderRepo])
     mockStore.updateRepo.mockReturnValue({
       ...folderRepo,
       kind: 'git',
-      projectHostSetupMethod: 'imported-existing-folder'
+      externalWorktreeVisibility: 'hide'
     })
 
     const result = await callAdd({ path: folderRepo.path, kind: 'git' })
@@ -177,7 +178,8 @@ describe('repos:add with git worktrees', () => {
     })
     expect(mockStore.updateRepo).toHaveBeenCalledWith(folderRepo.id, {
       kind: 'git',
-      projectHostSetupMethod: 'imported-existing-folder'
+      externalWorktreeVisibility: 'hide',
+      projectHostSetupMethod: 'cloned'
     })
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })

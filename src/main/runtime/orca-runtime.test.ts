@@ -7333,13 +7333,27 @@ describe('OrcaRuntimeService', () => {
 
     try {
       const folder = await runtime.addRepo(tempRoot, 'folder')
+      runtimeStore.updateRepo(folder.id, {
+        badgeColor: '#123456',
+        projectHostSetupMethod: 'cloned'
+      })
+      runtimeStore.updateRepo.mockClear()
       execFileSync('git', ['init', '-q'], { cwd: tempRoot })
       const readded = await runtime.addRepo(tempRoot, 'git')
 
       expect(folder.kind).toBe('folder')
-      expect(readded).toMatchObject({ id: folder.id, kind: 'git' })
+      expect(readded).toMatchObject({
+        id: folder.id,
+        kind: 'git',
+        badgeColor: '#123456',
+        projectHostSetupMethod: 'cloned',
+        externalWorktreeVisibility: 'hide'
+      })
       expect(repos).toHaveLength(1)
-      expect(runtimeStore.updateRepo).toHaveBeenCalledWith(folder.id, { kind: 'git' })
+      expect(runtimeStore.updateRepo).toHaveBeenCalledWith(
+        folder.id,
+        expect.objectContaining({ kind: 'git' })
+      )
       expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenLastCalledWith(
         runtimeStore,
         expect.objectContaining({ id: folder.id, kind: 'git' })

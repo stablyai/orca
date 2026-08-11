@@ -296,6 +296,7 @@ async function addLocalRepoFromPath(
     if (repoKind === 'git' && isFolderRepo(existing)) {
       const updated = store.updateRepo(existing.id, {
         kind: 'git',
+        externalWorktreeVisibility: existing.externalWorktreeVisibility ?? 'hide',
         projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
       })
       if (updated) {
