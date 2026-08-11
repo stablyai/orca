@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { PullRequestChangeSummary } from './PullRequestChangeSummary'
+import { getIntlLocale } from '@/i18n/i18n'
 
 function renderSummary(props: {
   readonly additions?: number
@@ -33,6 +34,20 @@ describe('PullRequestChangeSummary', () => {
 
     expect(markup).toContain('+12')
     expect(markup).not.toContain('git-decoration-deleted')
+  })
+
+  it('renders a deletion-only total without the added decoration', () => {
+    const markup = renderSummary({ deletions: 12 })
+
+    expect(markup).toContain('-12')
+    expect(markup).not.toContain('git-decoration-added')
+  })
+
+  it('formats large totals with the current locale', () => {
+    const additions = 12_345
+    const markup = renderSummary({ additions })
+
+    expect(markup).toContain(`+${additions.toLocaleString(getIntlLocale())}`)
   })
 
   it('renders nothing when GitHub provides no change totals', () => {
