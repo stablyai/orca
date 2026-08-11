@@ -69,13 +69,33 @@ async function callRuntime<TResult>(page: Page, method: string, params: unknown)
   ) as Promise<TResult>
 }
 
+async function waitForRuntimeReady(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async () => {
+          try {
+            const response = await window.api.runtime.call({ method: 'status.get' })
+            return response.ok ? response._meta.runtimeId : null
+          } catch {
+            return null
+          }
+        }),
+      {
+        timeout: 30_000,
+        message: 'Paired Web client runtime RPC never became callable'
+      }
+    )
+    .not.toBeNull()
+}
+
 async function createTerminal(
   page: Page,
   worktreeId: string,
   label: string
-): Promise<{ webTabId: string }> {
+): Promise<{ hostTabId: string; terminal: string; webTabId: string }> {
   const created = await callRuntime<{
-    tab: { parentTabId: string; terminal: string | null }
+    tab: { id: string; parentTabId: string; terminal: string | null }
   }>(page, 'session.tabs.createTerminal', {
     worktree: `id:${worktreeId}`,
     command: fixtureCommand(label),
@@ -87,8 +107,46 @@ async function createTerminal(
     throw new Error(`Headless serve did not publish the ${label} terminal`)
   }
   return {
+    hostTabId: created.tab.parentTabId,
+    terminal: created.tab.terminal,
     webTabId: toWebTerminalSurfaceTabId(created.tab.parentTabId)
   }
+}
+
+async function readHostPtyId(page: Page, terminal: string): Promise<string> {
+  const shown = await callRuntime<{ terminal: { ptyId: string | null } }>(page, 'terminal.show', {
+    terminal
+  })
+  if (!shown.terminal.ptyId) {
+    throw new Error(`Headless serve terminal ${terminal} did not expose its daemon PTY id`)
+  }
+  return shown.terminal.ptyId
+}
+
+async function findHostTerminalHandle(
+  page: Page,
+  worktreeId: string,
+  hostTabId: string
+): Promise<string> {
+  let terminal: string | null = null
+  await expect
+    .poll(
+      async () => {
+        const snapshot = await callRuntime<{
+          tabs: { parentTabId?: string; terminal?: string | null; type: string }[]
+        }>(page, 'session.tabs.list', { worktree: `id:${worktreeId}` })
+        terminal =
+          snapshot.tabs.find((tab) => tab.type === 'terminal' && tab.parentTabId === hostTabId)
+            ?.terminal ?? null
+        return terminal
+      },
+      { timeout: 30_000, message: `Headless serve did not republish terminal tab ${hostTabId}` }
+    )
+    .not.toBeNull()
+  if (!terminal) {
+    throw new Error(`Headless serve did not republish terminal tab ${hostTabId}`)
+  }
+  return terminal
 }
 
 async function clickTerminalTab(page: Page, webTabId: string): Promise<void> {
@@ -133,12 +191,14 @@ test('reattaches a hidden terminal in the same browser document after headless s
       throw new Error('Paired Web client did not receive the headless serve worktree')
     }
     await page.evaluate((id) => window.__store?.getState().setActiveWorktree(id), worktreeId)
+    await waitForRuntimeReady(page)
 
     const target = await createTerminal(page, worktreeId, 'target')
     const decoy = await createTerminal(page, worktreeId, 'decoy')
     await clickTerminalTab(page, target.webTabId)
     await expect.poll(() => getTerminalContent(page), { timeout: 30_000 }).toContain('READY:target')
-    const originalPtyId = await waitForActivePanePtyId(page, 30_000)
+    await waitForActivePanePtyId(page, 30_000)
+    const originalHostPtyId = await readHostPtyId(page, target.terminal)
     const beforeRestart = await page.evaluate(() => {
       const state = window.__store?.getState()
       const environmentId =
@@ -236,7 +296,7 @@ test('reattaches a hidden terminal in the same browser document after headless s
       .toBeGreaterThan(beforeRestart.connectionGeneration)
 
     await clickTerminalTab(page, target.webTabId)
-    expect(await waitForActivePanePtyId(page, 30_000)).toBe(originalPtyId)
+    await waitForActivePanePtyId(page, 30_000)
     const marker = `after-restart-${Date.now()}`
     const textarea = page.locator('.xterm-helper-textarea:visible').first()
     await textarea.focus()
@@ -245,6 +305,8 @@ test('reattaches a hidden terminal in the same browser document after headless s
     await expect
       .poll(() => getTerminalContent(page), { timeout: 30_000 })
       .toContain(`LIVE:target:${marker}`)
+    const currentTargetHandle = await findHostTerminalHandle(page, worktreeId, target.hostTabId)
+    expect(await readHostPtyId(page, currentTargetHandle)).toBe(originalHostPtyId)
   } finally {
     await context.close().catch(() => undefined)
     await session.dispose()
