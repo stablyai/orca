@@ -14,6 +14,10 @@ import {
   resolveOrchestrationAskClientTimeoutMs
 } from '../../shared/orchestration-ask-timeout'
 import { abbreviateOrchestrationTasks } from '../../shared/orchestration-task-summary'
+import {
+  isTerminalSubmitDelivered,
+  type TerminalSubmitVerdict
+} from '../../shared/terminal-submit-verdict'
 import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
 import type {
   OrchestrationWorkerReadResult,
@@ -1068,6 +1072,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const result = await callMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
+      submitVerdict?: TerminalSubmitVerdict
       dryRun?: boolean
       preamble?: string
     }>(client, flags, 'orchestration.dispatch', {
@@ -1085,7 +1090,14 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return r.preamble ?? ''
       }
       const base = `Dispatched ${r.dispatch?.task_id} -> ${r.dispatch?.id} [${r.dispatch?.status}]`
-      return r.preamble ? `${base}\n\n--- Preamble ---\n${r.preamble}` : base
+      // Why: an unproven submit is the one outcome a coordinator must not read as delivered work.
+      const verdictNote =
+        r.submitVerdict && !isTerminalSubmitDelivered(r.submitVerdict)
+          ? `\nPreamble NOT confirmed submitted (${r.submitVerdict.status}: ${r.submitVerdict.reason}). Check the worker terminal before waiting on it.`
+          : ''
+      return r.preamble
+        ? `${base}${verdictNote}\n\n--- Preamble ---\n${r.preamble}`
+        : `${base}${verdictNote}`
     })
   },
 

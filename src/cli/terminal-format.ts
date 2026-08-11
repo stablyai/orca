@@ -14,6 +14,7 @@ import type {
   RuntimeTerminalSplit,
   RuntimeTerminalWait
 } from '../shared/runtime-types'
+import type { TerminalSubmitVerdictStatus } from '../shared/terminal-submit-verdict'
 
 export function formatTerminalList(result: RuntimeTerminalListResult): string {
   if (result.terminals.length === 0) {
@@ -142,8 +143,21 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
   return 'warning: output limited'
 }
 
+const SUBMIT_VERDICT_SUMMARY: Record<TerminalSubmitVerdictStatus, string> = {
+  submitted: 'the agent started a turn with it',
+  queued: 'accepted, but it runs after the current turn',
+  pending: 'the text is in the composer and was not submitted',
+  unknown: 'no trustworthy evidence either way'
+}
+
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  const sent = `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  const verdict = result.send.submitVerdict
+  if (!verdict) {
+    return sent
+  }
+  const retried = verdict.resubmitted ? ' after one submit retry' : ''
+  return `${sent}\nSubmit verdict: ${verdict.status}${retried} — ${SUBMIT_VERDICT_SUMMARY[verdict.status]} (${verdict.reason}, waited ${verdict.waitedMs}ms).`
 }
 
 export function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {

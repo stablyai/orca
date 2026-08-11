@@ -90,6 +90,13 @@ Existing-terminal handoff:
 ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
 ```
 
+**Check the send verdict.** With `--text` and `--enter`, the JSON result carries `send.submitVerdict.status`:
+
+- `submitted` — the agent started a turn with the text. Only this one means the work was handed off.
+- `queued` — the harness accepted the text but runs it after the current turn.
+- `pending` — the text sits unsubmitted in the composer. Orca already re-sent the submit key once; read the terminal before assuming anything ran.
+- `unknown`, or no `submitVerdict` field at all — no trustworthy evidence, which is not success. Confirm with `terminal read`.
+
 ## Worktrees
 
 An Orca worktree is Orca's tracked view of a repo checkout, its metadata, terminals, browser tabs, and UI state.
