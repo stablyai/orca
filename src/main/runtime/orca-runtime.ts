@@ -432,10 +432,8 @@ import {
   isTuiAgentEnabled,
   pickTuiAgent
 } from '../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../shared/tui-agent-launch-defaults'
+import { resolveTuiAgentLaunchArgs } from '../../shared/tui-agent-launch-defaults'
+import { resolveAgentLaunchEnv } from '../deepseek/deepseek-agent-env'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import {
   getTuiAgentLaunchCommand,
@@ -21290,7 +21288,7 @@ export class OrcaRuntimeService {
       draft: content,
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote
@@ -21314,7 +21312,7 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(agent, settings.agentDefaultEnv),
       platform: agentLaunchPlatform,
       shell: queuedShell,
       isRemote,
@@ -21365,7 +21363,7 @@ export class OrcaRuntimeService {
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(agent, settings.agentDefaultEnv),
       sessionOptions,
       sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
       platform: agentLaunchPlatform,
@@ -25071,7 +25069,7 @@ export class OrcaRuntimeService {
       prompt: '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(agent, settings.agentDefaultEnv),
       sessionOptions,
       sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
       platform,
@@ -25216,7 +25214,7 @@ export class OrcaRuntimeService {
         request.agentArgs !== undefined
           ? request.agentArgs
           : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
       ompResumeFilePath: request.ompResumeFilePath,
       sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
       platform,
@@ -25379,7 +25377,7 @@ export class OrcaRuntimeService {
           request.agentArgs !== undefined
             ? request.agentArgs
             : resolveTuiAgentLaunchArgs(request.agent, settings.agentDefaultArgs),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
+        agentEnv: resolveAgentLaunchEnv(request.agent, settings.agentDefaultEnv),
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         platform,
         shell,
@@ -26423,7 +26421,7 @@ export class OrcaRuntimeService {
       prompt: opts.agentPrompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
       agentArgs: resolveTuiAgentLaunchArgs(opts.agent, settings.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
+      agentEnv: resolveAgentLaunchEnv(opts.agent, settings.agentDefaultEnv),
       platform,
       shell: queuedShell,
       isRemote,
