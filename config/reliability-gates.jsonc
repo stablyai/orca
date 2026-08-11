@@ -1969,7 +1969,7 @@
       "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
       "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests keep a naturally exited id reserved without re-killing its PID or signalling its captured tree, upgrade pending and post-snapshot graceful kills to immediate, force ps into the C locale, coalesce each bounded bulk-shutdown batch, share duplicate teardown completion, coalesce 20 same-turn process-table requests, start one shared successor without waiting for the prior scan, terminate cyclic-looking traversal, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
       "commands": [
-        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
@@ -1989,11 +1989,18 @@
         "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "tests/e2e/terminal-parked-close-retirement.spec.ts",
         "tests/e2e/agent-descendant-process-kill.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "explicit close revokes the exact live recovery record both before and after PTY exit removes the tab, while PTY exit alone preserves interrupted-session recovery"
+          ]
+        },
         {
           "file": "tests/e2e/terminal-parked-close-retirement.spec.ts",
           "assertions": [
@@ -2711,11 +2718,13 @@
       "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/main/providers/local-pty-provider.test.ts",
         "src/main/daemon/terminal-host.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -2727,6 +2736,13 @@
         "tests/e2e/live-background-terminal-mount-authority.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "completed and explicitly retired workers retain no provider-resume authority on first workspace activation",
+            "the original tab, leaf, PTY, provider session, release state, replacement count, queued resume argv, emitted restored banner, and unrelated canary remain exact across restart"
+          ]
+        },
         {
           "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
           "assertions": [
@@ -3656,9 +3672,7 @@
         },
         {
           "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
-          "assertions": [
-            "risky-output atlas recovery is bounded, coalesced, and survives a throwing manager"
-          ]
+          "assertions": ["continues recovery when a manager throws after scheduling"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
@@ -7906,16 +7920,24 @@
       "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
       "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose"
       ],
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
         "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
         "src/main/runtime/orchestration/worker-transcript-read.test.ts",
-        "src/renderer/src/lib/worker-terminal-takeover-report.test.ts"
+        "src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "an already-exited succeeded Dispatch reaches released while its late exact close revokes the missing tab's stale resume record"
+          ]
+        },
         {
           "file": "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
           "assertions": [
@@ -9020,7 +9042,7 @@
     },
     {
       "id": "terminal-render.atlas-recovery-fanout",
-      "title": "Terminal atlas recovery stays bounded to visible renderers",
+      "title": "Ordinary terminal output avoids shared atlas recovery fanout",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-rendering",
@@ -9029,31 +9051,33 @@
         "WebGL rendering",
         "document visibility",
         "hidden terminal output",
+        "alternate-screen redraws",
         "paired terminal traffic"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local"],
-      "coverageNotes": "A deterministic renderer contract models one visible manager plus 64 mounted hidden managers, hidden synchronized/TUI output, and five minutes of sustained streaming recovery requests. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels. Production v1.4.163 evidence linked the same 49-manager fanout to paired traffic, but the candidate has not been rerun against an isolated live paired server.",
+      "coverageNotes": "Deterministic renderer contracts require foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output to stay on pane-local repaint paths without a global atlas reset. Separate contracts preserve explicit paste, reveal, visibility-resume, system-resume, and confirmed-desync recovery. A macOS Electron run verifies that a document visibility cycle preserves real WebGL atlases and terminal pixels; the candidate has not been rerun against an isolated live paired server.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/7054",
         "https://github.com/stablyai/orca/pull/7604",
         "https://github.com/stablyai/orca/issues/12094"
       ],
-      "invariant": "Ordinary document visibility transitions and hidden terminal output must not clear the shared WebGL glyph atlas. Heavy reset-and-refresh recovery may touch only managers with visible terminal surfaces; hidden managers recover when revealed. Sustained streaming recovery requests must keep resets rate-bounded without starving repair. Genuine OS resume remains a heavy recovery trigger.",
-      "oracle": "Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require exactly one reset and one refresh; parse hidden synchronized and high-confidence TUI output and require zero global atlas-recovery schedules. Across five minutes of 300ms streaming recovery requests, require more than one but at most 75 resets, no internal or trailing repair gap above 6.5 seconds, atlas-preserving presentation while a reset is suppressed, and one delayed wipe for a final suppressed settle. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
+      "invariant": "Ordinary PTY output must never clear the shared WebGL glyph atlas, including synchronized frames, hidden output, renderer-risk glyphs, and alternate-screen entry, redraw, or exit. Affected visible panes still receive pane-local refresh after parsing. Explicit paste, reveal, visibility-resume, system-resume, context-loss, and confirmed-desync recovery remain available and may reset visible renderers.",
+      "oracle": "Parse foreground renderer-risk, synchronized, hidden, and alternate-screen PTY output and require pane-local refresh where needed with zero calls to shared reset-and-refresh recovery. Require the atlas-recovery module to expose only explicit lifecycle entry points, then verify paste and tab reveal still perform their recovery bursts. Dispatch a visible document visibilitychange and require atlas-preserving wake recovery; register one visible manager and 64 hidden managers and require heavy recovery to reset and refresh only the visible manager. Separately, drive an Electron visibility cycle with two real WebGL panes, require zero atlas clears, and retain at least 85% of each pane's baseline ink pixels.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm run ensure:electron-runtime && pnpm exec playwright test tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts",
-        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
         "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
+        "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
         "tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts"
       ],
@@ -9069,22 +9093,28 @@
           ]
         },
         {
-          "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
-          "assertions": [
-            "sustained streaming requests keep atlas resets rate-bounded with no repair starvation",
-            "suppressed resets present live buffers, cancel repair during resumed output, receive a trailing repair after settle, and clean up pending timers"
-          ]
+          "file": "src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts",
+          "assertions": ["limits atlas recovery to explicit renderer lifecycle events"]
         },
         {
           "file": "src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts",
           "assertions": ["bounds atlas recovery to visible managers"]
         },
         {
+          "file": "src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts",
+          "assertions": ["persists and recovers after the same cells stay missing twice"]
+        },
+        {
+          "file": "src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts",
+          "assertions": ["recovers a context-lost pane on the next rendering resume"]
+        },
+        {
           "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
           "assertions": [
-            "defers hidden synchronized-output atlas recovery until reveal",
-            "defers hidden high-confidence TUI redraw recovery until reveal",
-            "advances hidden rewrite state without scheduling atlas recovery"
+            "keeps hidden synchronized output off the global atlas recovery path",
+            "refreshes renderer-risk output without clearing the shared glyph atlas",
+            "refreshes alternate-screen redraws without clearing the shared glyph atlas",
+            "avoids atlas clears when one chunk enters and exits alternate screen"
           ]
         },
         {
@@ -9096,22 +9126,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-04",
+          "date": "2026-08-10",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery-rate.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/components/terminal-pane/terminal-webgl-atlas-recovery.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/terminal-render-desync-sentinel.test.ts src/renderer/src/lib/pane-manager/pane-webgl-context-recovery.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
           "result": "passed",
-          "durationSeconds": 0.5,
-          "summary": "Seven deterministic tests passed for sustained reset cadence, bounded repair gaps, suppressed presentation with trailing repair, clock rollback, one-shot bypasses, and pending-timer cleanup."
-        },
-        {
-          "date": "2026-08-01",
-          "runner": "local",
-          "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/use-terminal-window-wake-recovery.test.ts src/renderer/src/components/terminal-pane/use-terminal-pane-global-effects.test.ts src/renderer/src/lib/pane-manager/pane-manager-registry.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts",
-          "result": "passed",
-          "durationSeconds": 26,
-          "summary": "All 577 focused renderer contracts passed, including atlas-preserving visibility, visible-only recovery fanout, and hidden-output rewrite-state coverage."
+          "durationSeconds": 47,
+          "summary": "All 625 focused renderer contracts passed on the final head for atlas-preserving visibility, visible-only heavy recovery fanout, confirmed-desync and context-loss recovery, explicit lifecycle recovery, pane-local foreground redraws, and zero ordinary-output atlas resets."
         },
         {
           "date": "2026-08-01",
@@ -9142,15 +9163,15 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "With the fix disabled, the byte-identical unit oracle observed clearGlyphAtlases=true, reset/refreshed all 65 managers, and scheduled hidden synchronized/TUI recovery one to three times. Restoring the fix made every assertion pass."
+        "evidence": "Before the change, foreground renderer-risk and alternate-screen PTY writes requested terminal-output atlas recovery after parsing; hidden synchronized/TUI output also drove the same path. The updated oracle spies on that request before its removed 200ms debounce and on the eventual shared reset, while explicit lifecycle recovery remains required."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "A recovery with one visible and 64 hidden managers performs one reset and one refresh instead of 65 of each. Hidden synchronized/TUI output schedules zero global recovery work. Sustained 300ms recovery requests keep full atlas resets at or below 75 over five minutes while preserving a 6.5-second maximum repair gap. A final suppressed settle schedules one cancelable repair at the next budget boundary; resumed streaming cancels it. The rate budget adds no polling, recurring timer, provider call, or parking change."
+        "evidence": "A 120-frame foreground redraw at 300ms cadence produced 13 terminal-output atlas reset cycles before the change and zero afterward over 37.470 seconds. Ordinary PTY output now adds no atlas debounce, retry timer, buffer-switch listener, global manager traversal, provider call, or recurring work; pane-local refresh remains for renderer-risk output. Explicit heavy recovery still touches visible managers only."
       },
       "promotionCriteria": [
         "Accumulate stable macOS Electron runs with real BrowserWindow visibility transitions.",
-        "Run an isolated headed paired-server terminal flood and verify bounded renderer CPU and atlas diagnostics.",
+        "Run an isolated headed paired-server terminal flood and verify renderer CPU and atlas diagnostics remain flat under ordinary output.",
         "Add Linux and Windows WebGL visibility evidence before claiming cross-platform visual coverage."
       ],
       "knownGaps": [
@@ -9158,7 +9179,7 @@
         "No isolated live paired-server candidate run is recorded; remote-runtime coverage is a provider-agnostic renderer contract plus production incident evidence.",
         "The gate counts recovery fanout and pixel retention but does not impose an end-to-end renderer frame-latency threshold."
       ],
-      "demotionRule": "Demote if hidden managers re-enter reset/refresh recovery, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
+      "demotionRule": "Demote if ordinary PTY output re-enters shared reset/refresh recovery, pane-local redraw coverage regresses, ordinary visibility clears the atlas, real WebGL pixels regress, or the focused Electron test cannot remain deterministic."
     },
     {
       "id": "terminal-render.atlas-identity-invalidation",

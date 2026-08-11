@@ -5,6 +5,10 @@ import {
   makeDiff,
   makePatches
 } from '@sanity/diff-match-patch'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../../shared/utf8-byte-limits'
 
 // Why: cap document size in UTF-16 code units (`.length`) since re-parse cost scales with length — the per-commit throwaway TipTap safety re-parse (~50-67ms here) must stay under the 300ms serialize debounce so it can't stall the main thread on slow/SSH hosts.
 const RECONCILE_SIZE_CAP_CODE_UNITS = 50_000
@@ -146,29 +150,13 @@ function getUtf8OffsetsAtCodeUnitIndices(
   for (const target of targets) {
     const boundedTarget = Math.max(0, Math.min(target, text.length))
     while (codeUnitIndex < boundedTarget) {
-      const codePoint = text.codePointAt(codeUnitIndex)
-      if (codePoint === undefined) {
-        break
-      }
-      byteOffset += utf8CodePointLength(codePoint)
+      const codePoint = readUtf8CodePointAt(text, codeUnitIndex)
+      byteOffset += getUtf8ByteLengthForCodePoint(codePoint)
       codeUnitIndex += codePoint > 0xffff ? 2 : 1
     }
     offsets.set(target, byteOffset)
   }
   return offsets
-}
-
-function utf8CodePointLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }
 
 function hasRepeatedHalfMatchSeed(textA: string, textB: string): boolean {

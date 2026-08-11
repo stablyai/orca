@@ -88,9 +88,7 @@ export function resumeTerminalVisibility({
       // overlay's delayed geometry fit. Still request hidden-output recovery:
       // agent TUIs can suppress hidden bytes until the pane is foregrounded.
       requestLightTabBacklogRecovery(manager)
-      // Why: reveal recovery must be immediate, not the terminal-output debounce
-      // — a background agent streaming in another pane must not defer this tab's
-      // atlas rebuild.
+      // Why: reveal is the lifecycle boundary that owns hidden renderer repair.
       scheduleTabRevealWebglAtlasRecovery()
       if (flushedDeferredMetrics) {
         // Why: the light path normally skips fitting, but flushed metrics changed

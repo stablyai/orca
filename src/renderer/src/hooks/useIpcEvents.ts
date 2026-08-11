@@ -101,11 +101,12 @@ import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/term
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
   applyRuntimeEnvironmentSshStateChanged,
-  hydrateRuntimeEnvironmentSshState
+  hydrateRuntimeEnvironmentSshState,
+  refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
 import {
   createRuntimeProjectRefreshScheduler,
-  refreshRuntimeProjectWorktrees
+  refreshRuntimeProjectWorktreesAndLineage
 } from './runtime-project-refresh-scheduler'
 import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
 import { detectLanguage } from '@/lib/language-detect'
@@ -800,7 +801,10 @@ export function useIpcEvents(): void {
         options?.forceLocalOwner
           ? { forceLocalOwner: true }
           : options?.executionHostId
-            ? { executionHostId: options.executionHostId }
+            ? {
+                executionHostId: options.executionHostId,
+                suppressRemoteLineageRefresh: true
+              }
             : undefined
       )
       await useAppStore
@@ -904,15 +908,15 @@ export function useIpcEvents(): void {
 
     const runtimeProjectRefreshScheduler = createRuntimeProjectRefreshScheduler({
       refresh: async (environmentId) => {
-        // Why: refresh the env's SSH bucket on (re)connect so a pre-drop snapshot can't keep a reconnect overlay stale.
-        void hydrateRuntimeEnvironmentSshState(environmentId, { force: true }).catch(() => {})
+        // Why: project events can reveal target CRUD, but known target states already arrive by push.
+        void refreshRuntimeEnvironmentSshTargetMetadata(environmentId).catch(() => {})
         const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
-        await refreshRuntimeProjectWorktrees(environmentId, repos, (repoId, options) =>
-          useAppStore.getState().fetchWorktrees(repoId, options)
+        await refreshRuntimeProjectWorktreesAndLineage(
+          environmentId,
+          repos,
+          (repoId, options) => useAppStore.getState().fetchWorktrees(repoId, options),
+          (options) => useAppStore.getState().fetchWorktreeLineage(options)
         )
-        await useAppStore.getState().fetchWorktreeLineage({
-          executionHostId: toRuntimeExecutionHostId(environmentId)
-        })
       },
       onError: (error) => {
         console.error('Failed to refresh runtime projects:', error)

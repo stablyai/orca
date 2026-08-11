@@ -31,7 +31,13 @@
   vector-effect: non-scaling-stroke;
 }
 
-.agent-map-project-ring:hover {
+/* Group hover includes nested contents; held state bridges pointer capture. */
+:where(
+    .agent-map-project-node:hover,
+    .agent-map-project-node:focus-within,
+    .agent-map-project-node.is-held
+  )
+  .agent-map-project-ring {
   fill: color-mix(in srgb, var(--card) 42%, transparent);
   stroke: var(--ring);
   transform: scale(1.018);
@@ -154,7 +160,12 @@
   stroke: color-mix(in srgb, var(--color-yellow-500) 28%, transparent);
 }
 
-.agent-map-worktree-ring:hover {
+:where(
+    .agent-map-worktree-group:hover,
+    .agent-map-worktree-group:focus-within,
+    .agent-map-worktree-group.is-held
+  )
+  .agent-map-worktree-ring {
   fill: color-mix(in srgb, var(--card) 72%, transparent);
   stroke: var(--ring);
   transform: scale(1.035);
@@ -201,6 +212,11 @@
 .agent-map-worktree-count {
   font-size: 11px;
   text-anchor: middle;
+}
+
+.agent-map-worktree-label-layer,
+.agent-map-worktree-hover-label-layer {
+  pointer-events: none;
 }
 
 .agent-map-worktree-label-group {
@@ -480,8 +496,18 @@
     transition: none;
   }
 
-  .agent-map-project-ring:hover,
-  .agent-map-worktree-ring:hover,
+  :where(
+      .agent-map-project-node:hover,
+      .agent-map-project-node:focus-within,
+      .agent-map-project-node.is-held
+    )
+    .agent-map-project-ring,
+  :where(
+      .agent-map-worktree-group:hover,
+      .agent-map-worktree-group:focus-within,
+      .agent-map-worktree-group.is-held
+    )
+    .agent-map-worktree-ring,
   .agent-map-agent-node:hover .agent-map-agent-visual,
   .agent-map-agent-node:focus-visible .agent-map-agent-visual {
     transform: none;

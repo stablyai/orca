@@ -6636,6 +6636,24 @@ describe('OrcaRuntimeService', () => {
     )
   })
 
+  it('forwards check-details cancellation without local Git overrides', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const signal = new AbortController().signal
+
+    await runtime.getRepoPRCheckDetails('id:repo-1', { checkRunId: 9 }, signal)
+
+    expect(getGitHubPRCheckDetailsMock).toHaveBeenCalledWith(
+      TEST_REPO_PATH,
+      {
+        checkRunId: 9,
+        prRepo: null
+      },
+      null,
+      {},
+      signal
+    )
+  })
+
   it('routes runtime GitHub PR details and actions through the selected WSL project runtime', async () => {
     setPlatform('win32')
     const runtimeStore = {
@@ -6659,6 +6677,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(runtimeStore as never)
     const localGitOptions = { wslDistro: 'Ubuntu' }
     const prRepo = { owner: 'acme', repo: 'orca', host: 'github.acme.test' }
+    const checkDetailsSignal = new AbortController().signal
 
     await runtime.getRepoPRForBranch('id:repo-1', 'feature/wsl', 42, 43)
     await runtime.getRepoWorkItem('id:repo-1', 42, 'pr')
@@ -6670,13 +6689,17 @@ describe('OrcaRuntimeService', () => {
       failedOnly: true,
       prRepo
     })
-    await runtime.getRepoPRCheckDetails('id:repo-1', {
-      checkRunId: 9,
-      workflowRunId: 8,
-      checkName: 'lint',
-      url: 'https://example.com/check',
-      prRepo
-    })
+    await runtime.getRepoPRCheckDetails(
+      'id:repo-1',
+      {
+        checkRunId: 9,
+        workflowRunId: 8,
+        checkName: 'lint',
+        url: 'https://example.com/check',
+        prRepo
+      },
+      checkDetailsSignal
+    )
     await runtime.getRepoPRComments('id:repo-1', 42, prRepo, { noCache: true })
     await runtime.getRepoPRFileContents('id:repo-1', {
       prNumber: 42,
@@ -6778,7 +6801,8 @@ describe('OrcaRuntimeService', () => {
         prRepo
       },
       null,
-      localGitOptions
+      localGitOptions,
+      checkDetailsSignal
     )
     expect(getGitHubPRCommentsMock).toHaveBeenCalledWith(
       TEST_REPO_PATH,
@@ -11041,6 +11065,19 @@ describe('OrcaRuntimeService', () => {
     ).serializeHeadlessTerminalBuffer('pty-ssh', { includeEmpty: true })
 
     expect(snapshot?.cwd).toBe('/home/me/repo/src')
+  })
+
+  it('projects frame-independent live state through main buffer snapshots', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-frame-state', TEST_WORKTREE_ID)
+    runtime.onPtyData('pty-frame-state', '\x1b[?1049h\x1b[?1004h\x1b[?25lSTATIC-FRAME', 123)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-frame-state')
+
+    expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?1004h')
+    expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?25l')
+    expect(snapshot?.frameRestoreAnsi).not.toContain('STATIC-FRAME')
+    expect(snapshot?.data).toContain('STATIC-FRAME')
   })
 
   it('keeps Windows SSH OSC7 cwd as a drive path when the desktop runtime is POSIX', () => {
