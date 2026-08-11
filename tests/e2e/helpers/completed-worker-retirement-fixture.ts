@@ -84,7 +84,13 @@ export function readCompletedWorkerLedger(): LifecycleEvent[] {
   if (!existsSync(lifecycleLedgerPath)) {
     return []
   }
-  return readFileSync(lifecycleLedgerPath, 'utf8')
+  const contents = readFileSync(lifecycleLedgerPath, 'utf8')
+  const lastCompleteLine = contents.lastIndexOf('\n')
+  if (lastCompleteLine < 0) {
+    return []
+  }
+  return contents
+    .slice(0, lastCompleteLine)
     .split(/\r?\n/)
     .filter(Boolean)
     .map((line) => JSON.parse(line) as LifecycleEvent)

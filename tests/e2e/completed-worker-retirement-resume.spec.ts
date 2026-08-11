@@ -18,7 +18,7 @@ import {
   terminalIdentity
 } from './helpers/completed-worker-retirement-fixture'
 import { RuntimeClient } from '../../src/cli/runtime-client'
-import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../src/shared/runtime-types'
 import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree-id'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'
@@ -134,12 +134,15 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
 
     let worker: RuntimeTerminalSummary | undefined
     await expect
-      .poll(async () => {
-        worker = (await listRuntimeTerminals(client)).find(
-          (terminal) => terminal.handle === workerHandle
-        )
-        return worker?.ptyId ?? null
-      })
+      .poll(
+        async () => {
+          worker = (await listRuntimeTerminals(client)).find(
+            (terminal) => terminal.handle === workerHandle
+          )
+          return worker?.ptyId ?? null
+        },
+        { timeout: 30_000, message: 'background worker never published its PTY identity' }
+      )
       .not.toBeNull()
     if (!worker?.ptyId || !worker.incarnationId) {
       throw new Error('Background worker did not publish exact PTY identity')
@@ -189,14 +192,14 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     )
 
     await orcaPage.evaluate(
-      ({ paneKey, tabId, terminalHandle, transcriptPath, worktreeId }) => {
+      ({ paneKey, providerSessionId, tabId, terminalHandle, transcriptPath, worktreeId }) => {
         const state = window.__store?.getState()
         if (!state) {
           throw new Error('Renderer store unavailable')
         }
         const providerSession = {
           key: 'session_id' as const,
-          id: '019feb51-2269-71c2-89c6-faa8dc65c8dc',
+          id: providerSessionId,
           transcriptPath
         }
         const metadata = { tabId, worktreeId, terminalHandle }
@@ -227,6 +230,7 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
       },
       {
         paneKey: workerPaneKey,
+        providerSessionId: PROVIDER_SESSION_ID,
         tabId: worker.tabId,
         terminalHandle: workerHandle,
         transcriptPath,
@@ -286,22 +290,25 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     )
     expect(completed.result.message.type).toBe('worker_done')
     await expect
-      .poll(async () => {
-        const dispatch = await client.call<{ dispatch: { status: string } | null }>(
-          'orchestration.dispatchShow',
-          { task: task.result.task.id }
-        )
-        const tasks = await client.call<{ tasks: { id: string; status: string }[] }>(
-          'orchestration.taskList',
-          { run: run.result.run.id }
-        )
-        return {
-          dispatch: dispatch.result.dispatch?.status ?? null,
-          task:
-            tasks.result.tasks.find((candidate) => candidate.id === task.result.task.id)?.status ??
-            null
-        }
-      })
+      .poll(
+        async () => {
+          const dispatch = await client.call<{ dispatch: { status: string } | null }>(
+            'orchestration.dispatchShow',
+            { task: task.result.task.id }
+          )
+          const tasks = await client.call<{ tasks: { id: string; status: string }[] }>(
+            'orchestration.taskList',
+            { run: run.result.run.id }
+          )
+          return {
+            dispatch: dispatch.result.dispatch?.status ?? null,
+            task:
+              tasks.result.tasks.find((candidate) => candidate.id === task.result.task.id)
+                ?.status ?? null
+          }
+        },
+        { timeout: 30_000, message: 'worker completion never settled its task and dispatch' }
+      )
       .toEqual({ dispatch: 'completed', task: 'completed' })
 
     await client.call('terminal.send', {
@@ -451,7 +458,26 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
       .toBe(targetWorktreeId)
-    await orcaPage.waitForTimeout(1_000)
+    await waitForActiveTerminalManager(orcaPage)
+    await waitForActivePanePtyId(orcaPage)
+    const activatedPane = await waitForActivePaneHookDescriptor(orcaPage)
+    expect(activatedPane.worktreeId).toBe(targetWorktreeId)
+    const activatedResolved = await client.call<{ terminal: { handle: string } }>(
+      'terminal.resolvePane',
+      { paneKey: activatedPane.paneKey }
+    )
+    await expect
+      .poll(
+        async () => {
+          const read = await client.call<{ terminal: RuntimeTerminalRead }>('terminal.read', {
+            terminal: activatedResolved.result.terminal.handle,
+            limit: 50
+          })
+          return read.result.terminal.tail.join('\n')
+        },
+        { timeout: 30_000, message: 'activated fallback terminal never produced output' }
+      )
+      .not.toBe('')
 
     const spawnEvents = readCompletedWorkerLedger().filter((event) => event.event === 'spawn')
     expect(spawnEvents).toHaveLength(1)
