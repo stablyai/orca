@@ -383,23 +383,6 @@ export type DaemonSessionInfo = SessionInfo & {
 // existing importers keep one types entry point.
 export * from './daemon-stream-events'
 
-// ─── Binary Frame Protocol (Daemon ↔ PTY Subprocess) ────────────────
-//
-// 5-byte header: [type:1][length:4 big-endian]
-// Followed by `length` bytes of payload.
-
-export const enum FrameType {
-  Data = 0x01,
-  Resize = 0x02,
-  Exit = 0x03,
-  Error = 0x04,
-  Kill = 0x05,
-  Signal = 0x06
-}
-
-export const FRAME_HEADER_SIZE = 5
-export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
-
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:
 // the daemon processes them but does not send a response.

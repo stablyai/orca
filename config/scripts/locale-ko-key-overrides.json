@@ -1502,12 +1502,6 @@
   "auto.components.new.workspace.ProjectCombobox.search": {
     "ko": "프로젝트 검색..."
   },
-  "auto.components.new.workspace.ProjectHostSetupCombobox.empty": {
-    "ko": "이 프로젝트에 준비된 호스트가 없습니다."
-  },
-  "auto.components.new.workspace.ProjectHostSetupCombobox.placeholder": {
-    "ko": "호스트 선택"
-  },
   "auto.components.notification.sound.options.0acd3d384e": {
     "ko": "클랙"
   },
@@ -1519,9 +1513,6 @@
   },
   "auto.components.notification.sound.options.86af8d938c": {
     "ko": "봉 소리"
-  },
-  "auto.components.onboarding.AgentFeatureSetupStep.97dcdc010f": {
-    "ko": "기능 활성화"
   },
   "auto.components.onboarding.AgentStep.1eee1c7bd8": {
     "ko": "PATH에서 agents를 찾지 못했습니다. 나중에 설치할 항목을 선택하거나 빈 terminal로 계속 진행하세요."
@@ -1537,12 +1528,6 @@
   },
   "auto.components.onboarding.AgentStep.yoloPermissionsTooltip": {
     "ko": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
-  },
-  "auto.components.onboarding.FeatureSetupChecklist.01426f3a23": {
-    "ko": "Agents가 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 처리할 수 있습니다."
-  },
-  "auto.components.onboarding.FeatureSetupChecklist.c5292c409d": {
-    "ko": "Agents는 요청 시 앱 창을 검사하고 로컬 앱을 작동할 수 있습니다."
   },
   "auto.components.onboarding.IntegrationsStep.0b4a7d23ab": {
     "ko": "로그인 중"
@@ -4975,9 +4960,6 @@
   },
   "auto.components.ui.color.picker.faa855a582": {
     "ko": "Hex"
-  },
-  "auto.components.ui.team.multi.combobox.18ec58881e": {
-    "ko": "팀 검색..."
   },
   "auto.components.workspace.cleanup.WorkspaceCleanupDialog.1b18868569": {
     "ko": "리뷰 필요"

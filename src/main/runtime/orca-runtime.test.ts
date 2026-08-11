@@ -11043,6 +11043,19 @@ describe('OrcaRuntimeService', () => {
     expect(snapshot?.cwd).toBe('/home/me/repo/src')
   })
 
+  it('projects frame-independent live state through main buffer snapshots', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.registerPty('pty-frame-state', TEST_WORKTREE_ID)
+    runtime.onPtyData('pty-frame-state', '\x1b[?1049h\x1b[?1004h\x1b[?25lSTATIC-FRAME', 123)
+
+    const snapshot = await runtime.serializeMainTerminalBuffer('pty-frame-state')
+
+    expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?1004h')
+    expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?25l')
+    expect(snapshot?.frameRestoreAnsi).not.toContain('STATIC-FRAME')
+    expect(snapshot?.data).toContain('STATIC-FRAME')
+  })
+
   it('keeps Windows SSH OSC7 cwd as a drive path when the desktop runtime is POSIX', () => {
     setPlatform('darwin')
     const runtime = new OrcaRuntimeService(store)

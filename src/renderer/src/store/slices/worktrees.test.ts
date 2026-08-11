@@ -6183,11 +6183,13 @@ describe('worktree remote runtime mutations', () => {
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
+        hostId: 'runtime:env-1',
         force: undefined,
         allowUnverifiedPtyStop: false,
         runHooks: true
       },
-      timeoutMs: 60_000
+      timeoutMs: 60_000,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
     expect(store.getState().shutdownWorktreeTerminals).toHaveBeenCalledWith(wt.id, {
@@ -6206,12 +6208,21 @@ describe('worktree remote runtime mutations', () => {
       hostId: 'ssh:hub-private-target',
       runtimeOwnerEnvironmentId: 'owner-hub'
     })
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-rm-nested',
-      ok: true,
-      result: { removed: true },
-      _meta: { runtimeId: 'runtime-owner-hub' }
-    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-rm-nested',
+        ok: true,
+        result: {
+          preservedBranch: { branchName: 'feature/nested', head: 'saved-head' }
+        },
+        _meta: { runtimeId: 'runtime-owner-hub' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-force-delete-branch',
+        ok: true,
+        result: { deleted: true },
+        _meta: { runtimeId: 'runtime-owner-hub' }
+      })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'different-hub' } as never,
       worktreesByRepo: { 'repo-ssh': [wt] }
@@ -6219,12 +6230,21 @@ describe('worktree remote runtime mutations', () => {
 
     const result = await store.getState().removeWorktree(wt.id)
 
-    expect(result).toEqual({ ok: true })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+    expect(result).toEqual({
+      ok: true,
+      preservedBranch: {
+        branchName: 'feature/nested',
+        head: 'saved-head',
+        hostId: 'ssh:hub-private-target',
+        runtimeEnvironmentId: 'owner-hub'
+      }
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
+        hostId: 'ssh:hub-private-target',
         force: undefined,
         allowUnverifiedPtyStop: false,
         runHooks: true
@@ -6232,6 +6252,96 @@ describe('worktree remote runtime mutations', () => {
       timeoutMs: 60_000
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
+
+    const forceResult = await store
+      .getState()
+      .forceDeletePreservedBranch(wt.id, 'feature/nested', 'saved-head')
+
+    expect(forceResult).toEqual({ ok: true, deleted: true })
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'owner-hub',
+      method: 'worktree.forceDeleteBranch',
+      params: {
+        worktree: `id:${wt.id}`,
+        branchName: 'feature/nested',
+        expectedHead: 'saved-head',
+        hostId: 'ssh:hub-private-target'
+      },
+      timeoutMs: 15_000
+    })
+  })
+
+  it('retains separate preserved-branch cleanup routes for sequential same-id hosts', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const localWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      path: '/same/path',
+      hostId: 'local'
+    })
+    const remoteWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      path: '/same/path',
+      hostId: 'ssh:shared-target',
+      runtimeOwnerEnvironmentId: 'shared-hub'
+    })
+    mockApi.worktrees.remove.mockResolvedValueOnce({
+      preservedBranch: { branchName: 'feature/local', head: 'local-head' }
+    })
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) =>
+      Promise.resolve({
+        id: `rpc-${method}`,
+        ok: true,
+        result:
+          method === 'repo.hooksCheck'
+            ? { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            : method === 'worktree.rm'
+              ? {
+                  preservedBranch: { branchName: 'feature/remote', head: 'remote-head' }
+                }
+              : { deleted: true },
+        _meta: { runtimeId: 'runtime-shared-hub' }
+      })
+    )
+    store.setState({
+      worktreesByRepo: { 'repo-shared': [localWorktree] }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree(worktreeId)
+    store.setState({
+      worktreesByRepo: { 'repo-shared': [remoteWorktree] }
+    } as Partial<AppState>)
+    await store.getState().removeWorktree(worktreeId)
+
+    await store
+      .getState()
+      .forceDeletePreservedBranch(worktreeId, 'feature/local', 'local-head', { hostId: 'local' })
+    await store.getState().forceDeletePreservedBranch(worktreeId, 'feature/remote', 'remote-head', {
+      hostId: 'ssh:shared-target',
+      runtimeEnvironmentId: 'shared-hub'
+    })
+
+    expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
+      worktreeId,
+      branchName: 'feature/local',
+      expectedHead: 'local-head',
+      hostId: 'local'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'shared-hub',
+        method: 'worktree.forceDeleteBranch',
+        params: {
+          worktree: `id:${worktreeId}`,
+          branchName: 'feature/remote',
+          expectedHead: 'remote-head',
+          hostId: 'ssh:shared-target'
+        }
+      })
+    )
   })
 
   it('fails HUB-owned SSH removal closed when the exact id has two HUB owners', async () => {
@@ -6523,6 +6633,22 @@ describe('worktree remote runtime mutations', () => {
       timeoutMs: 15_000
     })
     expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
+  })
+
+  it('suppresses per-branch feedback for an aggregate delete', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    store.setState({ worktreesByRepo: { repo1: [wt] } } as Partial<AppState>)
+    vi.mocked(toast.success).mockClear()
+    vi.mocked(toast.error).mockClear()
+
+    const result = await store
+      .getState()
+      .forceDeletePreservedBranch(wt.id, 'feature/test', 'abc123', { suppressToast: true })
+
+    expect(result).toEqual({ ok: true, deleted: true })
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('fails preserved branch deletion closed for two HUB owners', async () => {

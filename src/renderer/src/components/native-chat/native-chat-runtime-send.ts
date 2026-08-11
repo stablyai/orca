@@ -19,6 +19,7 @@ import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
 } from './native-chat-send'
+import { typeAgentTuiCommand } from '../../../../shared/agent-tui-command-typing'
 import {
   cancelNativeChatPtySends,
   enqueueNativeChatPtySend,
@@ -211,6 +212,24 @@ export async function sendNativeChatMessageVerified(
     return false
   }
   return sendRuntimePtyInputVerified(settings, ptyId, NATIVE_CHAT_SUBMIT)
+}
+
+/** Types a slash command as individual keys so Codex opens its command palette. */
+export async function typeNativeChatCommand(
+  settings: RuntimeSettings,
+  ptyId: string,
+  command: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  cancelNativeChatPtySends(ptyId)
+  await waitForNativeChatPtyIdle(ptyId)
+  const outcome = await typeAgentTuiCommand({
+    command,
+    signal,
+    write: async (key) =>
+      (await sendRuntimePtyInputVerified(settings, ptyId, key)) ? 'accepted' : 'rejected'
+  })
+  return outcome === 'accepted'
 }
 
 export function sendNativeChatMessageWithImageAttachments(

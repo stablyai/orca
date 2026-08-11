@@ -224,7 +224,11 @@ describe('delete worktree flow', () => {
     )
 
     const deletion = runWorktreeDeletesInParallel(targets)
-    await vi.waitFor(() => expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false))
+    await vi.waitFor(() =>
+      expect(mocks.state.removeWorktree).toHaveBeenCalledWith('wt-1', false, {
+        suppressPreservedBranchToast: true
+      })
+    )
     setWorktrees([
       { id: 'wt-1', instanceId: 'instance-1', path: '/workspaces/first-longer' },
       { id: 'wt-2', instanceId: 'replacement-instance', path: '/workspaces/second' }
@@ -232,7 +236,9 @@ describe('delete worktree flow', () => {
     finishFirst({ ok: true })
 
     await expect(deletion).resolves.toEqual(['wt-1'])
-    expect(mocks.state.removeWorktree).not.toHaveBeenCalledWith('wt-2', false)
+    expect(mocks.state.removeWorktree).not.toHaveBeenCalledWith('wt-2', false, {
+      suppressPreservedBranchToast: true
+    })
     expect(toast.info).toHaveBeenCalledWith(
       'Workspace list changed',
       expect.objectContaining({

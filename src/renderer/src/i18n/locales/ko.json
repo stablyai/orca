@@ -2604,15 +2604,6 @@
         },
         "sheet": {
           "1189e9fe0a": "닫기"
-        },
-        "team": {
-          "multi": {
-            "combobox": {
-              "de83523bf9": "검색어와 일치하는 팀이 없습니다.",
-              "301f2a796e": "모든 팀",
-              "18ec58881e": "팀 검색..."
-            }
-          }
         }
       },
       "terminal": {
@@ -11493,17 +11484,6 @@
           "yoloPermissionsInfo": "Agent 권한 정보",
           "yoloPermissionsTooltip": "중단을 줄이기 위해 agents 권한 확인을 건너뜁니다."
         },
-        "FeatureSetupChecklist": {
-          "77f74946f5": "Agents는 서로 메시지를 보내고, 작업을 수행하고, 핸드오프를 조정할 수 있습니다.",
-          "399cf885c0": "Agent 오케스트레이션",
-          "c5292c409d": "Agents는 요청 시 앱 창을 검사하고 로컬 앱을 작동할 수 있습니다.",
-          "1ecfb490ac": "컴퓨터 사용",
-          "01426f3a23": "Agents가 사이트를 탐색하고, 페이지를 검사하고, 브라우저 작업을 처리할 수 있습니다.",
-          "ea85d9e628": "Agent 브라우저 사용",
-          "linearTicketsTitle": "Linear agent 스킬",
-          "linearTicketsDescription": "Agents는 연결된 Linear 작업을 사용해 티켓 맥락을 반영한 더 풍부한 인계를 할 수 있습니다.",
-          "linearTicketsSetupSummary": "Linear 워크스페이스에 권장됩니다. Linear 연결 설정에는 영향을 주지 않습니다."
-        },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter를 눌러 명령을 실행하고 요청 시 npx를 확인합니다. 나중에 설정에서 설정할 수도 있습니다.",
           "47fc6cc6dc": "스킬 설정 명령어",
@@ -11653,9 +11633,6 @@
             }
           }
         },
-        "AgentFeatureSetupStep": {
-          "97dcdc010f": "기능 활성화"
-        },
         "WindowsTerminalStep": {
           "powerShell": "PowerShell",
           "powerShellPwsh": "사용할 수 있으면 PowerShell 7+를 사용하고, 없으면 Windows PowerShell을 사용합니다.",
@@ -11755,10 +11732,6 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
             "emoji": "Emoji"
-          },
-          "ProjectHostSetupCombobox": {
-            "empty": "이 프로젝트에 준비된 호스트가 없습니다.",
-            "placeholder": "호스트 선택"
           },
           "ProjectCombobox": {
             "empty": "검색과 일치하는 프로젝트가 없습니다.",
@@ -13827,7 +13800,27 @@
           "a21f6c33ad": "자동화 소스를 새로 고쳤습니다.",
           "53f06f0ad5": "소스 다시 시도",
           "pendingAutomationMissing": "자동화를 더 이상 사용할 수 없습니다.",
-          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다."
+          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
+          "noSearchMatches": "검색과 일치하는 자동화가 없습니다.",
+          "paused": "일시 중지됨",
+          "runCount": "실행 {{count}}회",
+          "runCount_one": "실행 {{count}}회",
+          "runCount_other": "실행 {{count}}회",
+          "projectDefaultBaseRef": "프로젝트 기본값",
+          "createFromBaseRef": "{{baseRef}}에서 만들기",
+          "missingWorkspace": "워크스페이스 없음",
+          "runUsageSummary": "약 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "사용량을 사용할 수 없음",
+          "noRunUsageYet": "아직 실행 사용량 없음",
+          "noWorkspace": "워크스페이스 없음",
+          "latestSavedOutput": "최근 저장된 출력",
+          "backToList": "모든 자동화",
+          "tableName": "이름",
+          "tableProject": "프로젝트",
+          "tableStatus": "상태",
+          "tableActions": "작업",
+          "newAutomation": "새 자동화",
+          "rowActions": "자동화 작업"
         },
         "CreateFromPicker": {
           "f061f49e3f": "repo 브랜치 검색...",
@@ -13940,6 +13933,19 @@
           "5a7863909c": "새 워크스페이스마다 설정 실행",
           "18f000ad4e": "고급",
           "874b72195b": "이 자동화가 워크스페이스를 만들 때, 워크트리를 직접 만들 때와 같은 방식으로 준비합니다 — 프로젝트 설정을 실행하고 터미널 탭을 엽니다."
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "자동화 로딩 중"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "검색 텍스트가 너무 깁니다 — 목록이 필터링되지 않음",
+          "label": "자동화 검색",
+          "placeholder": "검색...",
+          "tooLongShort": "너무 김",
+          "clear": "검색 지우기"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "자동화 작업"
         }
       },
       "agent": {
@@ -14192,159 +14198,12 @@
       },
       "orca": {
         "profiles": {
-          "switcher": {
-            "cloud": {
-              "unavailable": "Orca 로그인 사용 불가"
-            },
-            "reconnect": "프로필 다시 연결",
-            "connect": "프로필 연결",
-            "organization": "조직",
-            "create": {
-              "profile": {
-                "for": {
-                  "org": "조직용 프로필 생성"
-                }
-              }
-            },
-            "signout": "로그아웃",
-            "16e3681072": "새 로컬 프로필",
-            "e3b91a3d90": "프로젝트와 워크트리를 분리할 빈 프로필을 만듭니다.",
-            "f322e1f4d6": "프로필 이름",
-            "cfa59f8ad1": "만들고 전환",
-            "b4f9d1125d": "로컬",
-            "4815f7d163": "프로필 전환",
-            "d00d853e2a": "프로필 관리",
-            "c106c674fe": "새 로컬 프로필",
-            "account": "계정",
-            "org": {
-              "members": "조직 구성원"
-            },
-            "signInWaiting": "로그인 대기 중…",
-            "signInAgain": "다시 로그인",
-            "signIn": "Orca에 로그인",
-            "accountTitle": "Orca 계정",
-            "accountSignedIn": "로그인됨",
-            "accountSignInRequired": "로그인 필요",
-            "accountSignedOut": "로그아웃됨"
-          },
-          "management": {
-            "04e7bd2a23": "전송",
-            "128c7dfe64": "복사 대상",
-            "df8b7d876b": "이동 대상",
-            "9aa26347b3": "프로젝트를 이동했습니다",
-            "816ce624b6": "프로젝트를 복사했습니다",
-            "2c45bda8d3": "프로필 관리",
-            "2db945e4a0": "활성 프로필의 프로젝트를 다른 로컬 프로필로 복사하거나 이동합니다.",
-            "8668cb2946": "이 프로필에는 프로젝트가 없습니다.",
-            "93034915ab": "프로젝트를 복사하려면 먼저 다른 프로필을 만드세요.",
-            "projectCountSingular": "{{count}}개의 프로젝트",
-            "projectCountPlural": "{{count}}개의 프로젝트"
-          },
-          "project": {
-            "transfer": {
-              "confirm": {
-                "move": {
-                  "title": "프로젝트를 이동하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 이동합니다. Orca가 해당 프로젝트를 {{activeProfileName}}에서 제거한 뒤 파일은 유지하고 {{targetName}}(으)로 다시 시작합니다.",
-                  "action": "프로젝트 이동"
-                },
-                "copy": {
-                  "title": "프로젝트를 복사하시겠습니까?",
-                  "description": "{{repoName}}을(를) {{targetName}}(으)로 복사합니다. 두 프로필 모두 동일한 파일을 별도의 Orca 메타데이터와 함께 가리킵니다.",
-                  "action": "프로젝트 복사"
-                },
-                "live": {
-                  "work": "이 프로젝트의 활성 작업"
-                },
-                "cancel": "취소",
-                "terminalSingular": "활성 터미널 탭 {{count}}개",
-                "terminalPlural": "활성 터미널 탭 {{count}}개",
-                "agentSingular": "활성 에이전트 {{count}}개",
-                "agentPlural": "활성 에이전트 {{count}}개",
-                "browserSingular": "브라우저 작업 공간 {{count}}개",
-                "browserPlural": "브라우저 작업 공간 {{count}}개"
-              }
-            }
-          },
           "signout": {
             "confirm": {
               "title": "Orca에서 로그아웃할까요?",
               "description": "이 기기의 Orca에서 로그아웃됩니다. 로컬 프로젝트와 워크트리에는 영향을 주지 않습니다.",
               "cancel": "취소",
               "action": "로그아웃"
-            }
-          },
-          "switch": {
-            "confirm": {
-              "target": "선택된 프로필",
-              "title": "프로필을 전환하시겠습니까?",
-              "description": "{{targetName}}(으)로 전환하면 Orca가 다시 시작되고 {{activeProfileName}}의 작업 공간이 다시 로드됩니다.",
-              "live": {
-                "work": "이 프로필의 활성 작업"
-              },
-              "cancel": "취소",
-              "switch": "프로필 전환",
-              "terminalSingular": "활성 터미널 탭 {{count}}개",
-              "terminalPlural": "활성 터미널 탭 {{count}}개",
-              "agentSingular": "활성 에이전트 {{count}}개",
-              "agentPlural": "활성 에이전트 {{count}}개",
-              "browserSingular": "브라우저 작업 공간 {{count}}개",
-              "browserPlural": "브라우저 작업 공간 {{count}}개"
-            }
-          },
-          "org": {
-            "members": {
-              "role": {
-                "label": "역할",
-                "owner": "소유자",
-                "admin": "관리자",
-                "member": "구성원"
-              },
-              "not": {
-                "signed": {
-                  "in": "아직 Orca에 로그인하지 않았습니다."
-                }
-              },
-              "remove": {
-                "confirm": "제거",
-                "cancel": "취소",
-                "label": "팀원 제거"
-              },
-              "title": "조직 구성원",
-              "load": {
-                "error": "조직 구성원을 로드할 수 없습니다."
-              },
-              "retry": "다시 시도",
-              "pending": {
-                "title": "대기 중인 초대",
-                "revoke": "취소"
-              },
-              "invite": {
-                "title": "초대",
-                "placeholder": "teammate@example.com",
-                "role": "초대 역할",
-                "submit": "보내기"
-              },
-              "error": {
-                "forbidden": "이 작업을 수행할 권한이 없습니다.",
-                "conflict": "이미 구성원이거나 초대되었습니다.",
-                "remove": {
-                  "self": "자신을 제거할 수 없습니다."
-                },
-                "own": {
-                  "role": "자신의 역할을 변경할 수 없습니다."
-                },
-                "not": {
-                  "found": "해당 팀원은 이 조직에 없습니다."
-                },
-                "reconnect": "구성원을 관리하려면 프로필을 다시 연결하세요.",
-                "unconfigured": "이 빌드에서 조직 관리를 사용할 수 없습니다.",
-                "failed": "문제가 발생했습니다. 다시 시도해 주세요."
-              },
-              "subtitle": {
-                "named": "{{orgName}}에서 Orca에 협업할 수 있는 사람들.",
-                "default": "조직에서 Orca에 협업할 수 있는 사람들."
-              }
             }
           }
         }

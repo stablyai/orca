@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendWithOutcome = vi.fn()
 const clearInputWrite = vi.fn()
+const typeCommandWithOutcome = vi.fn()
 vi.mock('./mobile-native-chat-send', () => ({
   sendMobileNativeChatMessageWithOutcome: (...args: unknown[]) => sendWithOutcome(...args),
+  typeMobileNativeChatCommandWithOutcome: (...args: unknown[]) => typeCommandWithOutcome(...args),
   clearMobileNativeChatInput: (...args: unknown[]) => clearInputWrite(...args),
   openMobileNativeChatSendBudget: () => Date.now() + 15_000,
   MOBILE_NATIVE_CHAT_SEND_TIMEOUT_MS: 15_000,
@@ -84,6 +86,8 @@ describe('useMobileNativeChatMessageSend', () => {
     sendWithOutcome.mockResolvedValue('accepted')
     clearInputWrite.mockReset()
     clearInputWrite.mockResolvedValue(true)
+    typeCommandWithOutcome.mockReset()
+    typeCommandWithOutcome.mockResolvedValue('accepted')
     acceptSend.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
@@ -258,6 +262,19 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(acceptSend).not.toHaveBeenCalled()
     expect(onCommandSend).not.toHaveBeenCalled()
     expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+  })
+
+  it('routes typed picker commands around the pasted composer-text send', async () => {
+    mount(() => null, 'codex')
+    let outcome: string | undefined
+    await act(async () => {
+      outcome = await api!.dispatchCommand('/model', { delivery: 'type' })
+    })
+    expect(outcome).toBe('accepted')
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
   })
 
   it('binds classification to the agent that started the send', async () => {

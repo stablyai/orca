@@ -8,9 +8,7 @@ import type { StatsCollector } from '../stats/collector'
 import { registerFilesystemHandlers } from './filesystem'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from './filesystem-watcher'
-import { registerClaudeUsageHandlers } from './claude-usage'
-import { registerCodexUsageHandlers } from './codex-usage'
-import { registerOpenCodeUsageHandlers } from './opencode-usage'
+import { registerUsageProviderHandlers } from './usage-provider-handlers'
 import { registerGitHubHandlers } from './github'
 import { registerGitLabHandlers } from './gitlab'
 import { registerHostedReviewHandlers } from './hosted-review'
@@ -143,9 +141,7 @@ export function registerCoreHandlers(
   registerAppHandlers(store, { onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch })
   registerCliHandlers()
   registerPreflightHandlers()
-  registerClaudeUsageHandlers(claudeUsage)
-  registerCodexUsageHandlers(codexUsage)
-  registerOpenCodeUsageHandlers(openCodeUsage)
+  registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)

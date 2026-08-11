@@ -252,6 +252,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
+import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { getRegisteredSshState } from '../ipc/ssh'
 import type {
   AgentProviderSessionMetadata,
@@ -1597,6 +1598,8 @@ type ProviderBufferAcquisition = {
 
 type RuntimeTerminalBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   cols: number
   rows: number
   seq?: number
@@ -2121,6 +2124,8 @@ type RuntimeWorktreeRemovalInFlight = {
 }
 
 type PreservedBranchCleanupTarget = {
+  worktreeId: string
+  hostId?: ExecutionHostId
   branchName: string
   head: string
   pushTarget?: GitPushTarget
@@ -3188,7 +3193,7 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
-  private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
+  private preservedBranchCleanupByScope = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
   private readonly onPtyStopped: ((ptyId: string) => void) | null
@@ -11090,6 +11095,7 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
+    frameRestoreAnsi?: string
     cols: number
     rows: number
     seq?: number
@@ -11108,6 +11114,7 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
+    frameRestoreAnsi?: string
     cols: number
     rows: number
     cwd?: string | null
@@ -11558,6 +11565,7 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
+    frameRestoreAnsi?: string
     cols: number
     rows: number
     cwd?: string | null
@@ -11608,6 +11616,7 @@ export class OrcaRuntimeService {
     opts: { scrollbackRows?: number } = {}
   ): Promise<{
     data: string
+    frameRestoreAnsi?: string
     cols: number
     rows: number
     seq?: number
@@ -12028,6 +12037,7 @@ export class OrcaRuntimeService {
     return data.length > 0 || opts.includeEmpty === true
       ? this.preferTrackedLastTitle(ptyId, {
           data,
+          frameRestoreAnsi: snapshot.frameRestoreAnsi,
           cols: snapshot.cols,
           rows: snapshot.rows,
           cwd: snapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
@@ -24102,6 +24112,7 @@ export class OrcaRuntimeService {
 
   private rememberPreservedBranchCleanupTarget(
     worktreeId: string,
+    hostId: ExecutionHostId | undefined,
     result: RemoveWorktreeResult | undefined,
     fallbackHead: string | undefined,
     pushTarget: GitPushTarget | undefined
@@ -24113,14 +24124,21 @@ export class OrcaRuntimeService {
           `Cannot safely offer force-delete for preserved branch "${result.preservedBranch.branchName}" without its saved commit.`
         )
       }
-      this.preservedBranchCleanupByWorktreeId.set(worktreeId, {
-        branchName: result.preservedBranch.branchName,
-        head,
-        ...(pushTarget ? { pushTarget } : {})
-      })
+      this.preservedBranchCleanupByScope.set(
+        preservedBranchCleanupScopeKey({ worktreeId, hostId }),
+        {
+          worktreeId,
+          ...(hostId ? { hostId } : {}),
+          branchName: result.preservedBranch.branchName,
+          head,
+          ...(pushTarget ? { pushTarget } : {})
+        }
+      )
       return
     }
-    this.preservedBranchCleanupByWorktreeId.delete(worktreeId)
+    this.preservedBranchCleanupByScope.delete(
+      preservedBranchCleanupScopeKey({ worktreeId, hostId })
+    )
   }
 
   private preserveBranchHeadFallback(
@@ -24142,15 +24160,29 @@ export class OrcaRuntimeService {
   async forceDeletePreservedBranch(
     worktreeSelector: string,
     branchName: string,
-    expectedHead: string
+    expectedHead: string,
+    hostId?: string
   ): Promise<ForceDeleteWorktreeBranchResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const removalTarget = parseExactWorktreeIdSelector(worktreeSelector)
-    const cleanupTarget = removalTarget
-      ? this.preservedBranchCleanupByWorktreeId.get(removalTarget.id)
+    const normalizedHostId = parseExecutionHostId(hostId)?.id
+    const exactTarget = removalTarget
+      ? this.preservedBranchCleanupByScope.get(
+          preservedBranchCleanupScopeKey({ worktreeId: removalTarget.id, hostId: normalizedHostId })
+        )
       : undefined
+    const legacyMatches =
+      removalTarget && !hostId
+        ? [...this.preservedBranchCleanupByScope.values()].filter(
+            (target) =>
+              target.worktreeId === removalTarget.id &&
+              target.branchName === branchName &&
+              target.head === expectedHead
+          )
+        : []
+    const cleanupTarget = exactTarget ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
     if (
       !removalTarget ||
       !cleanupTarget ||
@@ -24204,7 +24236,12 @@ export class OrcaRuntimeService {
       )
     }
 
-    this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+    this.preservedBranchCleanupByScope.delete(
+      preservedBranchCleanupScopeKey({
+        worktreeId: removalTarget.id,
+        hostId: cleanupTarget.hostId
+      })
+    )
     return { deleted: true }
   }
 
@@ -24214,13 +24251,19 @@ export class OrcaRuntimeService {
     runHooks = false,
     // Why (#11960): only an explicit Force Delete waives PTY-stop proof; `force`
     // alone is already set by the ordinary delete confirmation.
-    allowUnverifiedPtyStop = false
+    allowUnverifiedPtyStop = false,
+    hostId?: string
   ): Promise<RemoveWorktreeResult & { warning?: string }> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
     const store = this.store
+    const cleanupHostId = parseExecutionHostId(hostId)?.id
     const removalTarget = await this.resolveWorktreeRemovalTarget(worktreeSelector)
+    const cleanupScopeKey = preservedBranchCleanupScopeKey({
+      worktreeId: removalTarget.id,
+      hostId: cleanupHostId
+    })
     const optionsKey = getRuntimeWorktreeRemovalOptionsKey(force, runHooks, allowUnverifiedPtyStop)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(removalTarget.id)
     if (inFlightRemoval) {
@@ -24284,7 +24327,7 @@ export class OrcaRuntimeService {
           }
           this.clearOptimisticReconcileToken(removalTarget.id)
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+          this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
           this.invalidateResolvedWorktreeCache()
           this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
           invalidateAuthorizedRootsCache()
@@ -24327,7 +24370,7 @@ export class OrcaRuntimeService {
             })
           }
           this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-          this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+          this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
           this.invalidateResolvedWorktreeCache()
           this.notifyWorktreesChanged(repo.id)
           return {}
@@ -24432,7 +24475,7 @@ export class OrcaRuntimeService {
             }
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
             this.invalidateResolvedWorktreeCache()
             this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
             invalidateAuthorizedRootsCache()
@@ -24481,7 +24524,7 @@ export class OrcaRuntimeService {
               )
               this.clearOptimisticReconcileToken(removalTarget.id)
               this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-              this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+              this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
               this.invalidateResolvedWorktreeCache()
               this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
               invalidateAuthorizedRootsCache()
@@ -24517,7 +24560,7 @@ export class OrcaRuntimeService {
                 ))
             this.clearOptimisticReconcileToken(removalTarget.id)
             this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-            this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+            this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
             this.invalidateResolvedWorktreeCache()
             this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
             invalidateAuthorizedRootsCache()
@@ -24564,6 +24607,7 @@ export class OrcaRuntimeService {
           )
           this.rememberPreservedBranchCleanupTarget(
             removalTarget.id,
+            cleanupHostId,
             removalResult,
             registeredWorktree.head,
             removedPushTarget
@@ -24609,6 +24653,7 @@ export class OrcaRuntimeService {
           )
           this.rememberPreservedBranchCleanupTarget(
             removalTarget.id,
+            cleanupHostId,
             removalResult,
             registeredWorktree.head,
             removedPushTarget
@@ -24771,7 +24816,7 @@ export class OrcaRuntimeService {
               )
               this.clearOptimisticReconcileToken(removalTarget.id)
               this.removeWorktreeMetadataAndHistory(store, removalTarget.id)
-              this.preservedBranchCleanupByWorktreeId.delete(removalTarget.id)
+              this.preservedBranchCleanupByScope.delete(cleanupScopeKey)
               this.invalidateResolvedWorktreeCache()
               this.invalidateWorktreeScanCacheForRepo(removalTarget.repoId)
               invalidateAuthorizedRootsCache()
@@ -24798,6 +24843,7 @@ export class OrcaRuntimeService {
         )
         this.rememberPreservedBranchCleanupTarget(
           removalTarget.id,
+          cleanupHostId,
           removalResult,
           refreshedRegisteredWorktree.head,
           removedPushTarget
@@ -29324,6 +29370,7 @@ export class OrcaRuntimeService {
     for (const ptyId of ambiguousControllerPtyIds) {
       controllerIdentityByPtyId.delete(ptyId)
     }
+    const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
     const persistedIndexesByHostId = new Map<
       ExecutionHostId,
       {
@@ -29355,14 +29402,12 @@ export class OrcaRuntimeService {
       )
       const controllerIdentity = controllerIdentityByPtyId.get(session.id)
       const persistedWorktreeId = persistedIndexes.worktreeIdByPtyId.get(session.id)
-      const providerWorktree = resolvedWorktrees.find(
-        (worktree) => session.worktreeId && runtimeWorktreeIdsEqual(worktree.id, session.worktreeId)
-      )
+      const providerWorktree = session.worktreeId
+        ? findResolvedWorktree(session.worktreeId)
+        : undefined
       const inferredWorktreeId = inferWorktreeIdFromPtyId(session.id)
       const persistedWorktree = persistedWorktreeId
-        ? resolvedWorktrees.find((worktree) =>
-            runtimeWorktreeIdsEqual(worktree.id, persistedWorktreeId)
-          )
+        ? findResolvedWorktree(persistedWorktreeId)
         : undefined
       const hasMigrationEvidence =
         Boolean(session.worktreeId) &&
@@ -36882,6 +36927,42 @@ function runtimeWorktreeIdentityKey(worktreeId: string): string {
   return parsed
     ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
     : worktreeId
+}
+
+function runtimeWorktreeLookupKey(worktreeId: string): string {
+  const parsed = splitWorktreeId(worktreeId)
+  return JSON.stringify(
+    parsed
+      ? ['parsed', parsed.repoId, normalizeRuntimePathForComparison(parsed.worktreePath)]
+      : ['raw', worktreeId]
+  )
+}
+
+function createIncrementalResolvedWorktreeLookup(
+  resolvedWorktrees: ResolvedWorktree[]
+): (worktreeId: string) => ResolvedWorktree | undefined {
+  const worktreeByIdentity = new Map<string, ResolvedWorktree>()
+  let indexedCount = 0
+  return (worktreeId) => {
+    const lookupKey = runtimeWorktreeLookupKey(worktreeId)
+    const indexed = worktreeByIdentity.get(lookupKey)
+    if (indexed) {
+      return indexed
+    }
+    while (indexedCount < resolvedWorktrees.length) {
+      const worktree = resolvedWorktrees[indexedCount]
+      indexedCount += 1
+      const key = runtimeWorktreeLookupKey(worktree.id)
+      // Why: preserve Array.find's first match when normalized identities collide.
+      if (!worktreeByIdentity.has(key)) {
+        worktreeByIdentity.set(key, worktree)
+      }
+      if (key === lookupKey) {
+        return worktreeByIdentity.get(key)
+      }
+    }
+    return undefined
+  }
 }
 
 function resolveTerminalSessionWorktreeId(

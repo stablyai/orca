@@ -113,6 +113,11 @@ import {
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
 import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess
+} from '../../shared/ripgrep-process-availability'
+import {
   getSshFilesystemProvider,
   requireSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
@@ -980,32 +985,35 @@ export function registerFilesystemHandlers(
         Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
       )
       const searchKey = `${event.sender.id}:${rootPath}`
+      // Why: WSL's bash exit 127 is ambiguous with a real executable returning 127.
+      const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
 
-      // Why: probe rg upfront; on some platforms spawn emits 'close' before 'error', resolving empty before the git-grep fallback runs.
-      const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro)
-      if (!rgAvailable) {
+      if (wslDistroForOutput && !(await checkRgAvailable(rootPath, localGitOptions.wslDistro))) {
         return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
       }
 
-      return new Promise((resolvePromise) => {
+      return new Promise<SearchResult>((resolvePromise) => {
         const rgArgs = buildRgArgs(args.query, rootPath, args)
 
         // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
-        activeTextSearches.get(searchKey)?.kill()
+        const previousChild = activeTextSearches.get(searchKey)
+        if (previousChild) {
+          killSpawnedRipgrepProcess(previousChild)
+        }
 
         const acc = createAccumulator()
         let stdoutBuffer = ''
         let resolved = false
+        let processErrorObserved = false
+        let unavailableExitObserved = false
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
 
-        // Why: WSL-routed rg emits Linux paths; UNC repos carry the distro in the path, Windows-path repos in project runtime.
-        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
         const transformAbsPath = wslDistroForOutput
           ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
           : undefined
 
-        const resolveOnce = (): void => {
+        const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
           if (resolved) {
             return
           }
@@ -1019,13 +1027,22 @@ export function registerFilesystemHandlers(
           child?.stderr?.off('data', handleStderrData)
           child?.off('error', handleError)
           child?.off('close', handleClose)
-          resolvePromise(finalize(acc))
+          if (child) {
+            absorbPendingRipgrepSpawnError(child, {
+              errorObserved: processErrorObserved,
+              unavailableExitObserved
+            })
+          }
+          resolvePromise(result)
         }
+        const resolveOnce = (): void => finish(finalize(acc))
+        const resolveWithoutRipgrep = (): void =>
+          finish(searchWithGitGrep(rootPath, args, maxResults, localGitOptions))
 
         const processLine = (line: string): void => {
           const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
-          if (verdict === 'stop') {
-            child?.kill()
+          if (verdict === 'stop' && child) {
+            killSpawnedRipgrepProcess(child)
           }
         }
 
@@ -1049,9 +1066,24 @@ export function registerFilesystemHandlers(
           // Drain stderr so rg cannot block on a full pipe.
         }
         const handleError = (): void => {
+          processErrorObserved = true
+          if (child && isRipgrepUnavailableExit(child, null, null)) {
+            resolveWithoutRipgrep()
+            return
+          }
           resolveOnce()
         }
-        const handleClose = (): void => {
+        const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+          if (
+            child &&
+            isRipgrepUnavailableExit(child, code, signal, {
+              classifyNativeLauncherExit: !wslDistroForOutput
+            })
+          ) {
+            unavailableExitObserved = true
+            resolveWithoutRipgrep()
+            return
+          }
           if (stdoutBuffer) {
             processLine(stdoutBuffer)
           }
@@ -1067,7 +1099,9 @@ export function registerFilesystemHandlers(
         // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
         killTimeout = setTimeout(() => {
           acc.truncated = true
-          child?.kill()
+          if (child) {
+            killSpawnedRipgrepProcess(child)
+          }
           resolveOnce()
         }, SEARCH_TIMEOUT_MS)
       })

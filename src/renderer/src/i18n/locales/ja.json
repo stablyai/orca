@@ -2604,15 +2604,6 @@
         },
         "sheet": {
           "1189e9fe0a": "閉じる"
-        },
-        "team": {
-          "multi": {
-            "combobox": {
-              "de83523bf9": "検索に一致するチームはありません。",
-              "301f2a796e": "全チーム",
-              "18ec58881e": "チームを検索…"
-            }
-          }
         }
       },
       "terminal": {
@@ -11493,17 +11484,6 @@
           "yoloPermissionsInfo": "Agent 権限情報",
           "yoloPermissionsTooltip": "Agent の権限チェックをスキップして割り込みを減らす"
         },
-        "FeatureSetupChecklist": {
-          "77f74946f5": "Agent は相互にメッセージを送信し、タスクを実行し、引き継ぎを調整できます。",
-          "399cf885c0": "Agent オーケストレーション",
-          "c5292c409d": "Agent は、要求に応じてアプリウィンドウを検査し、ローカルアプリを操作できます。",
-          "1ecfb490ac": "コンピュータ操作",
-          "01426f3a23": "Agent はサイトを移動し、ページを検査し、ブラウザのタスクを実行できます。",
-          "ea85d9e628": "Agent ブラウザの使用",
-          "linearTicketsTitle": "Linear Agent スキル",
-          "linearTicketsDescription": "Agent はリンクされた Linear タスクを使って、チケットを踏まえたより詳しい引き継ぎができます。",
-          "linearTicketsSetupSummary": "Linear ワークスペースに推奨。Linear 接続設定には影響しません。"
-        },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Enter キーを押してコマンドを実行し、要求されたら npx を確認します。これは、後で [設定] で設定することもできます。",
           "47fc6cc6dc": "スキルセットアップコマンド",
@@ -11653,9 +11633,6 @@
             }
           }
         },
-        "AgentFeatureSetupStep": {
-          "97dcdc010f": "CLI とスキルをインストール"
-        },
         "WindowsTerminalStep": {
           "powerShell": "PowerShell",
           "powerShellPwsh": "利用可能な場合は PowerShell 7+ を使い、代わりに Windows PowerShell を使用します。",
@@ -11755,10 +11732,6 @@
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "この Jira Issue をリンクできませんでした。該当するサイトを選択するか Jira に再接続してから、もう一度お試しください。",
             "emoji": "絵文字"
-          },
-          "ProjectHostSetupCombobox": {
-            "empty": "このプロジェクトで準備が整ったホストはありません。",
-            "placeholder": "ホストを選択"
           },
           "ProjectCombobox": {
             "empty": "検索条件に一致するプロジェクトはありません。",
@@ -13816,7 +13789,27 @@
           "a21f6c33ad": "オートメーションのソースを更新しました。",
           "53f06f0ad5": "ソースを再試行",
           "pendingAutomationMissing": "自動化は利用できなくなりました。",
-          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。"
+          "pendingAutomationRunMissing": "実行履歴は利用できなくなりました。",
+          "noSearchMatches": "検索に一致する自動化がありません。",
+          "paused": "一時停止中",
+          "runCount": "{{count}} 回の実行",
+          "runCount_one": "{{count}} 回の実行",
+          "runCount_other": "{{count}} 回の実行",
+          "projectDefaultBaseRef": "プロジェクトのデフォルト",
+          "createFromBaseRef": "{{baseRef}} から作成",
+          "missingWorkspace": "ワークスペースがありません",
+          "runUsageSummary": "約 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "使用量を利用できません",
+          "noRunUsageYet": "まだ実行の使用量がありません",
+          "noWorkspace": "ワークスペースなし",
+          "latestSavedOutput": "最新の保存済み出力",
+          "backToList": "すべての自動化",
+          "tableName": "名前",
+          "tableProject": "プロジェクト",
+          "tableStatus": "ステータス",
+          "tableActions": "操作",
+          "newAutomation": "新しい自動化",
+          "rowActions": "自動化の操作"
         },
         "CreateFromPicker": {
           "f061f49e3f": "リポジトリブランチを検索…",
@@ -13929,6 +13922,19 @@
           "5a7863909c": "新規ワークスペースごとにセットアップを実行",
           "18f000ad4e": "詳細設定",
           "874b72195b": "このオートメーションがワークスペースを作成するときに、手動でワークツリーを作成する場合と同じ準備を行います。プロジェクトのセットアップを実行し、ターミナルタブを開きます。"
+        },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "自動化を読み込み中"
+        },
+        "AutomationListSearchField": {
+          "tooLong": "検索テキストが長すぎます — リストは未フィルタです",
+          "label": "自動化を検索",
+          "placeholder": "検索...",
+          "tooLongShort": "長すぎます",
+          "clear": "検索をクリア"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "自動化の操作"
         }
       },
       "agent": {
@@ -14181,159 +14187,12 @@
       },
       "orca": {
         "profiles": {
-          "switcher": {
-            "cloud": {
-              "unavailable": "Orca へのサインインは利用できません"
-            },
-            "reconnect": "プロファイルを再接続",
-            "connect": "プロファイルを接続",
-            "organization": "組織",
-            "create": {
-              "profile": {
-                "for": {
-                  "org": "組織用のプロファイルを作成"
-                }
-              }
-            },
-            "signout": "サインアウト",
-            "16e3681072": "新規ローカルプロファイル",
-            "e3b91a3d90": "プロジェクトとワークツリーを分けるための空のプロファイルを作成します。",
-            "f322e1f4d6": "プロファイル名",
-            "cfa59f8ad1": "作成して切り替え",
-            "b4f9d1125d": "ローカル",
-            "4815f7d163": "プロファイルを切り替え",
-            "d00d853e2a": "プロファイルを管理",
-            "c106c674fe": "新規ローカルプロファイル",
-            "account": "アカウント",
-            "org": {
-              "members": "組織メンバー"
-            },
-            "signInWaiting": "サインインを待機中…",
-            "signInAgain": "もう一度サインイン",
-            "signIn": "Orca にサインイン",
-            "accountTitle": "Orca アカウント",
-            "accountSignedIn": "サインイン済み",
-            "accountSignInRequired": "サインインが必要です",
-            "accountSignedOut": "サインアウト済み"
-          },
-          "management": {
-            "04e7bd2a23": "転送",
-            "128c7dfe64": "コピー先",
-            "df8b7d876b": "移動先",
-            "9aa26347b3": "プロジェクトを移動しました",
-            "816ce624b6": "プロジェクトをコピーしました",
-            "2c45bda8d3": "プロファイルを管理",
-            "2db945e4a0": "アクティブなプロファイルから別のローカルプロファイルへプロジェクトをコピーまたは移動します。",
-            "8668cb2946": "このプロファイルにはプロジェクトがありません。",
-            "93034915ab": "プロジェクトをコピーする前に、別のプロファイルを作成してください。",
-            "projectCountSingular": "{{count}} 件のプロジェクト",
-            "projectCountPlural": "{{count}} 件のプロジェクト"
-          },
-          "project": {
-            "transfer": {
-              "confirm": {
-                "move": {
-                  "title": "プロジェクトを移動しますか？",
-                  "description": "{{repoName}}を{{targetName}}に移動します。Orca は{{activeProfileName}}から削除し、ファイルはそのまま保持し、{{targetName}}に再起動します。",
-                  "action": "プロジェクトを移動"
-                },
-                "copy": {
-                  "title": "プロジェクトをコピーしますか？",
-                  "description": "{{repoName}}を{{targetName}}にコピーします。両方のプロファイルが同じファイルを別の Orca メタデータで参照します。",
-                  "action": "プロジェクトをコピー"
-                },
-                "live": {
-                  "work": "このプロジェクトのアクティブな作業"
-                },
-                "cancel": "キャンセル",
-                "terminalSingular": "{{count}}個のアクティブなターミナルタブ",
-                "terminalPlural": "{{count}}個のアクティブなターミナルタブ",
-                "agentSingular": "{{count}}個のアクティブな Agent",
-                "agentPlural": "{{count}}個のアクティブな Agent",
-                "browserSingular": "{{count}}個のブラウザワークスペース",
-                "browserPlural": "{{count}}個のブラウザワークスペース"
-              }
-            }
-          },
           "signout": {
             "confirm": {
               "title": "Orca からログアウトしますか？",
               "description": "このデバイスで Orca からログアウトします。ローカルのプロジェクトとワークツリーには影響しません。",
               "cancel": "キャンセル",
               "action": "サインアウト"
-            }
-          },
-          "switch": {
-            "confirm": {
-              "target": "選択されたプロファイル",
-              "title": "プロファイルを切り替えますか？",
-              "description": "{{targetName}}に切り替えると、Orca が再起動され、{{activeProfileName}}のワークスペースが再読み込みされます。",
-              "live": {
-                "work": "このプロファイルのアクティブな作業"
-              },
-              "cancel": "キャンセル",
-              "switch": "プロファイルを切り替え",
-              "terminalSingular": "{{count}}個のアクティブなターミナルタブ",
-              "terminalPlural": "{{count}}個のアクティブなターミナルタブ",
-              "agentSingular": "{{count}}個のアクティブな Agent",
-              "agentPlural": "{{count}}個のアクティブな Agent",
-              "browserSingular": "{{count}}個のブラウザワークスペース",
-              "browserPlural": "{{count}}個のブラウザワークスペース"
-            }
-          },
-          "org": {
-            "members": {
-              "role": {
-                "label": "役割",
-                "owner": "オーナー",
-                "admin": "管理者",
-                "member": "メンバー"
-              },
-              "not": {
-                "signed": {
-                  "in": "まだ Orca にサインインしていません。"
-                }
-              },
-              "remove": {
-                "confirm": "削除",
-                "cancel": "キャンセル",
-                "label": "チームメンバーを削除"
-              },
-              "title": "組織メンバー",
-              "load": {
-                "error": "組織メンバーを読み込めませんでした。"
-              },
-              "retry": "再試行",
-              "pending": {
-                "title": "保留中の招待",
-                "revoke": "取り消し"
-              },
-              "invite": {
-                "title": "招待",
-                "placeholder": "teammate@example.com",
-                "role": "招待役割",
-                "submit": "送信"
-              },
-              "error": {
-                "forbidden": "この役割では実行できません。",
-                "conflict": "既にメンバーまたは招待済みです。",
-                "remove": {
-                  "self": "自分自身を削除することはできません。"
-                },
-                "own": {
-                  "role": "自分の役割を変更することはできません。"
-                },
-                "not": {
-                  "found": "そのチームメンバーはこの組織にいません。"
-                },
-                "reconnect": "メンバーを管理するには、プロファイルを再接続してください。",
-                "unconfigured": "このビルドでは組織管理が利用できません。",
-                "failed": "問題が発生しました。もう一度お試しください。"
-              },
-              "subtitle": {
-                "named": "{{orgName}} で Orca を共同利用できるメンバーです。",
-                "default": "組織内で Orca を共同利用できるメンバーです。"
-              }
             }
           }
         }

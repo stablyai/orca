@@ -103,4 +103,23 @@ describe('automation run output snapshot queue equivalence', () => {
 
     expect(candidate.snapshot()).toEqual(reference.snapshot())
   })
+
+  it('matches the shift reference across oversized and subsequent appends', () => {
+    const retained = `\ude00${'A'.repeat(MAX_OUTPUT_SNAPSHOT_CHARS - 2)}\ud83d`
+    const chunks = [
+      'older output',
+      `discarded\u001b[31m prefix${retained}`,
+      'TAIL',
+      `${'B'.repeat(MAX_OUTPUT_SNAPSHOT_CHARS)}extra`,
+      '\u001b[0mDone\r\n'
+    ]
+    const reference = createShiftReferenceBuffer()
+    const candidate = createAutomationRunOutputSnapshotBuffer()
+
+    for (const chunk of chunks) {
+      reference.append(chunk)
+      candidate.append(chunk)
+      expect(candidate.snapshot()).toEqual(reference.snapshot())
+    }
+  })
 })
