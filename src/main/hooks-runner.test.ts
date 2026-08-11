@@ -246,69 +246,88 @@ describe('createSetupRunnerScript', () => {
     }
   )
 
+  /** Write the generated runner for `script` and run it under a minimal PATH. */
+  async function runPosixRunner(
+    script: string
+  ): Promise<{ status: number | null; stdout: string; stderr: string }> {
+    const { buildPosixRunnerScript } = await import('./hooks')
+    const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
+    const { spawnSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+
+    const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
+    try {
+      const runnerPath = join(dir, 'setup-runner.sh')
+      writeFileSync(runnerPath, buildPosixRunnerScript(script), 'utf-8')
+      const result = spawnSync('bash', [runnerPath], {
+        encoding: 'utf-8',
+        env: { PATH: '/usr/bin:/bin' },
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      return { status: result.status, stdout: result.stdout, stderr: result.stderr }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+
+  const countReports = (stderr: string): number =>
+    stderr.split('\n').filter((line) => line.startsWith('Orca setup: command failed')).length
+
   it.skipIf(process.platform === 'win32')(
     'reports the failing command and the PATH it ran with when a command is missing',
     async () => {
       // Regression: a version-manager tool that resolves in the user's terminal is absent in the
       // runner, and the bare `command not found` says nothing about the PATH the runner had.
-      const { buildPosixRunnerScript } = await import('./hooks')
-      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
-      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+      const result = await runPosixRunner('orca-missing-tool install\necho NEVER\n')
 
-      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
-      try {
-        const runnerPath = join(dir, 'setup-runner.sh')
-        writeFileSync(
-          runnerPath,
-          buildPosixRunnerScript('orca-missing-tool install\necho NEVER\n'),
-          'utf-8'
-        )
+      expect(result.status).toBe(127)
+      expect(result.stderr).toContain('Orca setup: command failed with status 127')
+      expect(result.stderr).toContain('orca-missing-tool install')
+      expect(result.stderr).toContain('/usr/bin:/bin')
+      expect(result.stdout).not.toContain('NEVER')
+      expect(countReports(result.stderr)).toBe(1)
+    }
+  )
 
-        const failure = (() => {
-          try {
-            execFileSync('bash', [runnerPath], {
-              encoding: 'utf-8',
-              env: { PATH: '/usr/bin:/bin' }
-            })
-            return null
-          } catch (error) {
-            return error as { status?: number; stdout?: string; stderr?: string }
-          }
-        })()
+  it.skipIf(process.platform === 'win32')(
+    'reports a failure raised inside a script function exactly once',
+    async () => {
+      // Regression: bash does not inherit an ERR trap into a function, so a script that wraps its
+      // work in one used to fail with no report at all.
+      const result = await runPosixRunner(
+        'install_tools() { orca-missing-tool install; }\ninstall_tools\necho NEVER\n'
+      )
 
-        expect(failure?.status).toBe(127)
-        expect(failure?.stderr).toContain('Orca setup: command failed with status 127')
-        expect(failure?.stderr).toContain('orca-missing-tool install')
-        expect(failure?.stderr).toContain('/usr/bin:/bin')
-        expect(failure?.stdout).not.toContain('NEVER')
-      } finally {
-        rmSync(dir, { recursive: true, force: true })
-      }
+      expect(result.status).toBe(127)
+      expect(result.stderr).toContain('Orca setup: command failed with status 127')
+      expect(result.stderr).toContain('orca-missing-tool install')
+      expect(result.stdout).not.toContain('NEVER')
+      expect(countReports(result.stderr)).toBe(1)
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'reports a failing command substitution once, not once per shell',
+    async () => {
+      // Regression: `set -E` would report this twice, once in the substitution subshell and once
+      // in the parent.
+      const result = await runPosixRunner('value=$(orca-missing-tool print)\necho NEVER\n')
+
+      expect(result.status).toBe(127)
+      expect(result.stderr).toContain('orca-missing-tool print')
+      expect(result.stdout).not.toContain('NEVER')
+      expect(countReports(result.stderr)).toBe(1)
     }
   )
 
   it.skipIf(process.platform === 'win32')(
     'stays silent while a runner script succeeds',
     async () => {
-      const { buildPosixRunnerScript } = await import('./hooks')
-      const { mkdtempSync, rmSync, writeFileSync } = await vi.importActual<typeof NodeFs>('node:fs')
-      const { execFileSync } = await vi.importActual<typeof NodeChildProcess>('node:child_process')
+      const result = await runPosixRunner('echo SETUP_RAN\n')
 
-      const dir = mkdtempSync(join(tmpdir(), 'orca-posix-runner-'))
-      try {
-        const runnerPath = join(dir, 'setup-runner.sh')
-        writeFileSync(runnerPath, buildPosixRunnerScript('echo SETUP_RAN\n'), 'utf-8')
-
-        const output = execFileSync('bash', [runnerPath], {
-          encoding: 'utf-8',
-          stdio: ['ignore', 'pipe', 'pipe']
-        })
-
-        expect(output).toContain('SETUP_RAN')
-        expect(output).not.toContain('Orca setup:')
-      } finally {
-        rmSync(dir, { recursive: true, force: true })
-      }
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('SETUP_RAN')
+      expect(result.stdout).not.toContain('Orca setup:')
+      expect(result.stderr).not.toContain('Orca setup:')
     }
   )
 
