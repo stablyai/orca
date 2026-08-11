@@ -36,7 +36,7 @@ export function writeEncryptedCredential(
 
 // Why: writeFileSync's `mode` only applies when it creates the file, so
 // rewriting an existing credential would silently keep looser permissions.
-// Windows has no POSIX modes, where chmod is a documented no-op.
+// Best-effort: Windows has no POSIX modes, so chmod is a documented no-op there.
 export function restrictCredentialFileToOwner(path: string): void {
   try {
     chmodSync(path, 0o600)

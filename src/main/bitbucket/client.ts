@@ -69,6 +69,9 @@ async function requestJson<T>(
   // transport/auth failure from an accepted "no PR". When true, a failed request
   // throws instead of collapsing to null so callers never report false not_found.
   throwOnFailure = false,
+  // Why: a linked PR number can be stale (deleted PR, wrong repo). A 404 there
+  // must fall through to the branch lookup rather than throw and hide the
+  // branch's real review, so only that caller opts into it.
   notFoundIsNull = false
 ): Promise<T | null> {
   const config = resolveBitbucketAuthConfig()
