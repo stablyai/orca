@@ -114,6 +114,25 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     await expect(publishedLink(userDataPath)).resolves.toBeNull()
   })
 
+  it('keeps the durable mapping when a delete receives an unrelated 404', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    vi.stubGlobal('fetch', server.fetch)
+    await service(userDataPath).publish(writeRequest)
+
+    server.rejectNextDeleteCode = 'not_found'
+    await expect(
+      service(userDataPath).unshare({
+        sourceKey: writeRequest.sourceKey,
+        apiUrl,
+        authToken: 'token-a'
+      })
+    ).rejects.toMatchObject({ statusCode: 404, errorCode: 'not_found' })
+    expect(server.deleteMutations).toBe(0)
+    expect(server.artifactSlugs()).toEqual(['artifact-1'])
+    await expect(publishedLink(userDataPath)).resolves.toBe('https://share.onorca.dev/a/artifact-1')
+  })
+
   it('drops an uncommitted validation failure so corrected content can create', async () => {
     const userDataPath = await createUserDataPath()
     const server = new ArtifactFaultServer()
@@ -159,6 +178,7 @@ class ArtifactFaultServer {
   loseNextCreateResponse = false
   loseNextDeleteResponse = false
   rejectNextCreateStatus: number | null = null
+  rejectNextDeleteCode: string | null = null
   private readonly artifacts = new Map<string, string>()
   private readonly createsByKey = new Map<string, { body: string; response: object }>()
 
@@ -220,6 +240,11 @@ class ArtifactFaultServer {
   }
 
   private delete(url: string): Response {
+    if (this.rejectNextDeleteCode !== null) {
+      const code = this.rejectNextDeleteCode
+      this.rejectNextDeleteCode = null
+      return jsonResponse({ code }, 404)
+    }
     const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
     if (!this.artifacts.delete(slug)) {
       return jsonResponse({ code: 'artifact_not_found' }, 404)

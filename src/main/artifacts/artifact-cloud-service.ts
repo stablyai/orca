@@ -48,7 +48,11 @@ async function deleteArtifactRequest(
       ...(editToken ? { editToken } : {})
     })
   } catch (error) {
-    if (!(error instanceof OrcaCloudRequestError) || error.statusCode !== 404) {
+    if (
+      !(error instanceof OrcaCloudRequestError) ||
+      error.statusCode !== 404 ||
+      error.errorCode !== 'artifact_not_found'
+    ) {
       throw error
     }
   }
