@@ -16,7 +16,6 @@ import {
   isSafeDescendCandidate as sharedIsSafeDescendCandidate,
   safeRemoveOverlay
 } from '../pty/overlay-mirror'
-import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
 import type { PiAgentKind } from '../../shared/pi-agent-kind'
 
 // Why: the Pi test suite imports `isSafeDescendCandidate` from this module's
@@ -78,12 +77,6 @@ function withOrcaManagedExtensionMarker(source: string): string {
 export class PiTitlebarExtensionService {
   private getOverlayRoot(kind: LegacyOverlayAgentKind): string {
     return join(app.getPath('userData'), OVERLAY_ROOT_DIR_NAME[kind])
-  }
-
-  private getSourceOverlayDir(sourceAgentDir: string, kind: LegacyOverlayAgentKind): string {
-    // Why: builds before managed extensions stored Pi/OMP state in source-scoped
-    // overlays. Resolve the old path so OMP upgrades can rescue stranded state.
-    return join(this.getOverlayRoot(kind), toSafeOverlayDirName(`source:${sourceAgentDir}`))
   }
 
   private getPtyOverlayDir(ptyId: string, kind: LegacyOverlayAgentKind): string {
@@ -205,10 +198,6 @@ export class PiTitlebarExtensionService {
         return statusExtensionPath ? { ORCA_OMP_STATUS_EXTENSION: statusExtensionPath } : {}
       }
       return {}
-    }
-
-    if (kind === 'omp') {
-      migrateLegacyOmpOverlayState(sourceAgentDir, this.getSourceOverlayDir(sourceAgentDir, 'omp'))
     }
 
     const installed = this.installManagedExtensions(sourceAgentDir, kind)
