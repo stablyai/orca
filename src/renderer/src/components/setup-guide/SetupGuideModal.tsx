@@ -39,10 +39,16 @@ export default function SetupGuideModal(): JSX.Element | null {
   if (!open && !lingering) {
     return null
   }
-  return <SetupGuideModalContent open={open} />
+  return <SetupGuideModalContent open={open} lingering={lingering} />
 }
 
-function SetupGuideModalContent({ open }: { open: boolean }): JSX.Element {
+function SetupGuideModalContent({
+  open,
+  lingering
+}: {
+  open: boolean
+  lingering: boolean
+}): JSX.Element {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const setSetupGuideSidebarDismissed = useAppStore((s) => s.setSetupGuideSidebarDismissed)
@@ -50,8 +56,11 @@ function SetupGuideModalContent({ open }: { open: boolean }): JSX.Element {
   const [userSelectedStep, setUserSelectedStep] = useState(false)
   const [orchestrationSkillInstalled, setOrchestrationSkillInstalled] = useState(false)
   const [browserUseSkillInstalled, setBrowserUseSkillInstalled] = useState(false)
+  // Why: keep progress inputs live through the close-animation linger; dropping
+  // them mid-fade flips completed rows back to "not done yet" on screen.
+  const progressInputsActive = open || lingering
   const progress = useSetupGuideProgress(
-    open,
+    progressInputsActive,
     orchestrationSkillInstalled,
     browserUseSkillInstalled
   )
@@ -116,8 +125,8 @@ function SetupGuideModalContent({ open }: { open: boolean }): JSX.Element {
     setActiveStepId(id)
   }
 
-  const handleOpenChange = (open: boolean): void => {
-    if (!open) {
+  const handleOpenChange = (nextOpen: boolean): void => {
+    if (!nextOpen) {
       closeModal()
     }
   }

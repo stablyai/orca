@@ -13,7 +13,8 @@ const contentProbe = vi.hoisted(() => ({
   storeNotifications: vi.fn(),
   subscriptions: vi.fn(),
   unsubscriptions: vi.fn(),
-  telemetryOpenStates: vi.fn()
+  telemetryOpenStates: vi.fn(),
+  refreshEnabledStates: vi.fn()
 }))
 
 const progress: FeatureWallSetupProgress = {
@@ -35,8 +36,9 @@ const progress: FeatureWallSetupProgress = {
 vi.mock('./use-setup-guide-progress', async () => {
   const React = await import('react')
   return {
-    useSetupGuideProgress: () => {
+    useSetupGuideProgress: (shouldRefreshCoreState: boolean) => {
       contentProbe.renders()
+      contentProbe.refreshEnabledStates(shouldRefreshCoreState)
       useAppStore((state) => state.activeWorktreeId)
       React.useEffect(() => {
         contentProbe.subscriptions()
@@ -113,6 +115,7 @@ describe('SetupGuideModal mount gating', () => {
     contentProbe.subscriptions.mockClear()
     contentProbe.unsubscriptions.mockClear()
     contentProbe.telemetryOpenStates.mockClear()
+    contentProbe.refreshEnabledStates.mockClear()
     useAppStore.setState(initialAppState, true)
     useAppStore.setState({ activeModal: 'none', activeWorktreeId: null })
     testContainer = document.createElement('div')
@@ -149,9 +152,12 @@ describe('SetupGuideModal mount gating', () => {
     expect(testContainer.querySelector('[data-setup-guide-dialog="true"]')).toBeNull()
     expect(activeContentSubscriptions()).toBe(1)
     expect(contentProbe.telemetryOpenStates).toHaveBeenLastCalledWith(false)
+    // Why: dropping progress inputs mid-fade would flip completed rows back to "not done yet".
+    expect(contentProbe.refreshEnabledStates).toHaveBeenLastCalledWith(true)
 
     await act(async () => vi.advanceTimersByTimeAsync(299))
     expect(activeContentSubscriptions()).toBe(1)
+    expect(contentProbe.refreshEnabledStates).toHaveBeenLastCalledWith(true)
 
     await act(async () => vi.advanceTimersByTimeAsync(1))
     expect(activeContentSubscriptions()).toBe(0)
@@ -176,5 +182,15 @@ describe('SetupGuideModal mount gating', () => {
 
     expect(testContainer.querySelector('[data-setup-guide-dialog="true"]')).not.toBeNull()
     expect(activeContentSubscriptions()).toBe(1)
+
+    // Why: an uncancelled timer from the first close would have already cleared the
+    // linger flag, collapsing this second close into a synchronous unmount that
+    // reports 'interrupted' instead of 'dismissed'.
+    await act(async () => useAppStore.getState().closeModal())
+    expect(activeContentSubscriptions()).toBe(1)
+    await act(async () => vi.advanceTimersByTimeAsync(299))
+    expect(activeContentSubscriptions()).toBe(1)
+    await act(async () => vi.advanceTimersByTimeAsync(1))
+    expect(activeContentSubscriptions()).toBe(0)
   })
 })
