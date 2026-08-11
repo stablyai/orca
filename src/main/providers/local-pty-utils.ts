@@ -1,5 +1,12 @@
 import { basename, isAbsolute, join } from 'node:path'
-import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
+import {
+  existsSync,
+  accessSync,
+  statSync,
+  chmodSync,
+  constants as fsConstants,
+  type Stats
+} from 'node:fs'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
@@ -124,10 +131,29 @@ export function validateWorkingDirectory(cwd: string): void {
     }
   }
 
-  if (!existsSync(cwd)) {
-    throwMissingWorkingDirectory(cwd)
+  let stats: Stats
+  try {
+    stats = statSync(cwd)
+  } catch (error) {
+    // Why: existsSync folds every stat failure into "missing", so a directory
+    // Orca merely cannot traverse (EACCES on external volumes, FUSE mounts,
+    // sandbox-hidden paths) was misreported as deleted or unmounted (#13760).
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'EACCES' || code === 'EPERM') {
+      throw new Error(
+        `Working directory "${cwd}" cannot be accessed (${code}). ` +
+          `Check its permissions and the permissions of its parent directories.`
+      )
+    }
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      throwMissingWorkingDirectory(cwd)
+    }
+    throw new Error(
+      `Working directory "${cwd}" could not be verified: ` +
+        `${error instanceof Error ? error.message : String(error)}`
+    )
   }
-  if (!statSync(cwd).isDirectory()) {
+  if (!stats.isDirectory()) {
     throw new Error(`Working directory "${cwd}" is not a directory.`)
   }
 }

@@ -444,9 +444,27 @@ describe('LocalPtyProvider', () => {
 
     it('throws when cwd does not exist', async () => {
       existsSyncMock.mockImplementation((p: string) => p !== '/nonexistent')
+      statSyncMock.mockImplementation((p: string) => {
+        if (p === '/nonexistent') {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+        }
+        return { isDirectory: () => true, mode: 0o755 }
+      })
       await expect(provider.spawn({ cols: 80, rows: 24, cwd: '/nonexistent' })).rejects.toThrow(
         'does not exist'
       )
+    })
+
+    it('reports an unreadable cwd as inaccessible rather than deleted (#13760)', async () => {
+      statSyncMock.mockImplementation((p: string) => {
+        if (p === '/media/user/volume/repo') {
+          throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
+        }
+        return { isDirectory: () => true, mode: 0o755 }
+      })
+      await expect(
+        provider.spawn({ cols: 80, rows: 24, cwd: '/media/user/volume/repo' })
+      ).rejects.toThrow('cannot be accessed (EACCES)')
     })
 
     it('allows an explicitly requested plain shell at POSIX root', async () => {

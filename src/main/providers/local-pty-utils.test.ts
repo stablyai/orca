@@ -25,6 +25,12 @@ function dirStats(isDirectory: boolean): Stats {
   return { isDirectory: () => isDirectory } as Stats
 }
 
+function fsError(code: string): NodeJS.ErrnoException {
+  const error = new Error(`${code}: fake fs failure`) as NodeJS.ErrnoException
+  error.code = code
+  return error
+}
+
 vi.mock('../wsl', () => ({
   wslUncDirectoryExists: wslUncDirectoryExistsMock
 }))
@@ -57,52 +63,92 @@ describe('validateWorkingDirectory', () => {
     // Why: the Win32 9P stat is the exact path that falsely reported ENOENT and
     // broke opening WSL worktrees. The distro answer must win.
     wslUncDirectoryExistsMock.mockReturnValue(true)
-    existsSyncMock.mockReturnValue(false)
+    statSyncMock.mockImplementation(() => {
+      throw fsError('ENOENT')
+    })
 
     expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
     expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
     // The fs fallback must not run when the distro confirmed existence.
-    expect(existsSyncMock).not.toHaveBeenCalled()
+    expect(statSyncMock).not.toHaveBeenCalled()
   })
 
   it('rejects a WSL UNC worktree that does not exist inside the distro', () => {
     wslUncDirectoryExistsMock.mockReturnValue(false)
 
     expect(() => validateWorkingDirectory(WSL_UNC_DIR)).toThrow(/does not exist/)
-    expect(existsSyncMock).not.toHaveBeenCalled()
+    expect(statSyncMock).not.toHaveBeenCalled()
   })
 
   it('falls back to the fs check when the distro answer is inconclusive', () => {
     wslUncDirectoryExistsMock.mockReturnValue(null)
-    existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(true))
 
     expect(() => validateWorkingDirectory(WSL_UNC_DIR)).not.toThrow()
     expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith(WSL_UNC_DIR)
-    expect(existsSyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
+    expect(statSyncMock).toHaveBeenCalledWith(WSL_UNC_DIR)
   })
 
   it('validates native Windows paths via fs without consulting the distro', () => {
-    existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(true))
 
     expect(() => validateWorkingDirectory(NATIVE_DIR)).not.toThrow()
     expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
-    expect(existsSyncMock).toHaveBeenCalledWith(NATIVE_DIR)
+    expect(statSyncMock).toHaveBeenCalledWith(NATIVE_DIR)
   })
 
   it('rejects a missing native Windows path', () => {
-    existsSyncMock.mockReturnValue(false)
+    statSyncMock.mockImplementation(() => {
+      throw fsError('ENOENT')
+    })
 
     expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/does not exist/)
     expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
   })
 
   it('rejects a native Windows path that exists but is not a directory', () => {
-    existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue(dirStats(false))
 
     expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/is not a directory/)
+  })
+
+  it('reports a permission failure as inaccessible, never as deleted/unmounted (#13760)', () => {
+    // Why: existsSync folded EACCES into "missing", telling users their existing
+    // external-volume worktree had been deleted.
+    statSyncMock.mockImplementation(() => {
+      throw fsError('EACCES')
+    })
+
+    expect(() => validateWorkingDirectory('/media/user/volume/repo')).toThrow(
+      /cannot be accessed \(EACCES\)/
+    )
+    expect(() => validateWorkingDirectory('/media/user/volume/repo')).not.toThrow(/does not exist/)
+  })
+
+  it('reports EPERM the same way as EACCES', () => {
+    statSyncMock.mockImplementation(() => {
+      throw fsError('EPERM')
+    })
+
+    expect(() => validateWorkingDirectory(NATIVE_DIR)).toThrow(/cannot be accessed \(EPERM\)/)
+  })
+
+  it('treats ENOTDIR like a missing directory', () => {
+    statSyncMock.mockImplementation(() => {
+      throw fsError('ENOTDIR')
+    })
+
+    expect(() => validateWorkingDirectory('/work/file.txt/child')).toThrow(/does not exist/)
+  })
+
+  it('surfaces unexpected stat failures verbatim instead of claiming deletion', () => {
+    statSyncMock.mockImplementation(() => {
+      throw fsError('EIO')
+    })
+
+    expect(() => validateWorkingDirectory('/media/user/dying-disk')).toThrow(
+      /could not be verified: EIO/
+    )
   })
 })
 
