@@ -62,7 +62,8 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
     const promptIndex = args.indexOf('--prompt')
     expect(promptIndex).toBeGreaterThanOrEqual(0)
     expect(args[promptIndex + 1]).toBe('Name a branch for adding login')
-    expect(args).toContain('--quiet')
+    // Why: kimi-code 0.34 rejects --quiet (residual after #11674).
+    expect(args).not.toContain('--quiet')
     expect(args).toContain('--thinking')
     expect(args).toEqual(expect.arrayContaining(['--model', 'kimi-code/kimi-for-coding']))
   })
