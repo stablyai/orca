@@ -44,7 +44,12 @@ import { isWorkspaceLinkedItemSourceContextMatch } from '../../shared/workspace-
 import { invalidateAuthorizedRootsCache } from './filesystem-auth'
 import type { ChildProcess } from 'node:child_process'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
-import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
+import {
+  awaitWindowsHostGitEnvironmentReady,
+  gitExecFileAsync,
+  gitSpawnAfterWindowsEnvironmentReady,
+  nonInteractiveGitEnv
+} from '../git/runner'
 import { isAbsolute, join, posix } from 'node:path'
 import {
   cleanupClaimedCloneTarget,
@@ -283,6 +288,9 @@ async function addLocalRepoFromPath(
   kind: 'git' | 'folder' = 'git'
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
+  if (repoKind === 'git') {
+    await awaitWindowsHostGitEnvironmentReady({ cwd: path })
+  }
   if (repoKind === 'git' && !isGitRepo(path)) {
     return { error: `Not a valid git repository: ${path}` }
   }
@@ -762,6 +770,7 @@ export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier):
 
 // Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
 let activeClone: ActiveCloneMetadata | null = null
+let pendingLocalCloneController: AbortController | null = null
 let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
@@ -1169,6 +1178,10 @@ async function scanNestedReposForIpc(args: {
 }): Promise<NestedRepoScanResult> {
   validateNestedRepoScanRoot(args.path, args.connectionId)
   if (!args.connectionId) {
+    await awaitWindowsHostGitEnvironmentReady({
+      cwd: args.path,
+      ...(args.signal ? { signal: args.signal } : {})
+    })
     return scanNestedRepos({
       path: args.path,
       options: args.options,
@@ -1702,10 +1715,16 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
               continue
             }
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
-          } else if (!isGitRepo(repoPath)) {
-            results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
-            continue
           } else {
+            await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
+            if (!isGitRepo(repoPath)) {
+              results.push({
+                path: repoPath,
+                status: 'failed',
+                error: 'Not a valid git repository'
+              })
+              continue
+            }
             importRepoPath = await importTargetResolver.resolveLocal(repoPath)
           }
           const normalizedImportRepoPath = normalizeRuntimePathForComparison(importRepoPath)
@@ -2325,6 +2344,8 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:cloneAbort', async () => {
+    pendingLocalCloneController?.abort()
+    pendingLocalCloneController = null
     if (activeClone) {
       const clone = activeClone
       clone.abortRequested = true
@@ -2361,24 +2382,32 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         // Why: spawn (not execFile) avoids the maxBuffer limit — clone progress on stderr can exceed Node's 1 MB default.
         // Why: --progress forces git to emit progress even when stderr isn't a TTY.
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
-        await new Promise<void>((resolve, reject) => {
+        let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+        const pendingController = new AbortController()
+        pendingLocalCloneController = pendingController
+        try {
           // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
           // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
-          let proc: ReturnType<typeof gitSpawn>
-          try {
-            proc = gitSpawn(['clone', '--progress', '--', args.url, clonePath], {
+          proc = await gitSpawnAfterWindowsEnvironmentReady(
+            ['clone', '--progress', '--', args.url, clonePath],
+            {
               cwd: args.destination,
               // Why: without this, an auth-needing clone pops Git Credential Manager's OAuth window on Windows, unclosable in a restricted env (issue #7652).
               env: nonInteractiveGitEnv(),
+              signal: pendingController.signal,
               stdio: ['ignore', 'ignore', 'pipe']
-            })
-          } catch (err) {
-            void cleanupClaimedCloneTarget(clonePath, claimedTarget).finally(() => {
-              const message = err instanceof Error ? err.message : String(err)
-              reject(new Error(`Clone failed: ${message}`))
-            })
-            return
+            }
+          )
+        } catch (err) {
+          await cleanupClaimedCloneTarget(clonePath, claimedTarget)
+          const message = err instanceof Error ? err.message : String(err)
+          throw new Error(`Clone failed: ${message}`)
+        } finally {
+          if (pendingLocalCloneController === pendingController) {
+            pendingLocalCloneController = null
           }
+        }
+        await new Promise<void>((resolve, reject) => {
           const generation = nextCloneGeneration++
           latestCloneGenerationByPath.set(clonePathKey, generation)
           const metadata: ActiveCloneMetadata = {

@@ -26,15 +26,20 @@ describe('startup ordering', () => {
     expect(attachBlock).toContain(
       'awaitLocalPtyProviderStartup: () => localPtyProviderStartupReady'
     )
-    expect(source).toContain('firstWindowStartupServicesReady = startupServices.firstWindowReady')
-    expect(source).toContain('localPtyStartupReady = startupServices.localPtyReady')
+    expect(source).toContain(
+      'firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)'
+    )
+    expect(source).toContain('localPtyStartupReady = services.then((value) => value.localPtyReady)')
 
-    const windowIndex = desktopStartup.indexOf('Promise.resolve(openMainWindow())')
+    const windowIndex = desktopStartup.indexOf('Promise.resolve(desktopWindow ?? openMainWindow())')
     const rpcStartIndex = desktopStartup.indexOf('desktopRuntimeRpc.start()')
     const legacyRpcStartIndex = desktopStartup.indexOf('runtimeRpc.start()')
 
     expect(windowIndex).toBeGreaterThanOrEqual(0)
     expect(Math.max(rpcStartIndex, legacyRpcStartIndex)).toBeGreaterThanOrEqual(0)
+    expect(desktopStartup).toMatch(
+      /shellPathReady\s*\.then\(\(\) => (?:desktopRuntimeRpc|runtimeRpc)\.start\(\)\)/
+    )
     expect(desktopStartup).toContain('recordRuntimeRpcStartFailure(')
     // Why: `void`, not `await` — awaiting the dialog would park the rest of startup behind a modal.
     expect(desktopStartup).toMatch(/void showRuntimeRpcStartupFailureDialog\(\s*win,/)
@@ -68,22 +73,38 @@ describe('startup ordering', () => {
     const serveStart = source.indexOf('if (serveOptions) {', reconciliationStart)
     const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
     const serveEnd = source.indexOf('return', serveReady)
-    const desktopWindowStart = source.indexOf('Promise.resolve(openMainWindow())')
+    const desktopWindowStart = source.indexOf(
+      'const desktopStartup = startWindowsDesktopBeforeShellPathReady('
+    )
+    const desktopWindowJoin = source.indexOf(
+      'Promise.resolve(desktopWindow ?? openMainWindow())',
+      serveEnd
+    )
     const serveStartup = source.slice(serveStart, serveEnd)
-    const desktopStartup = source.slice(serveEnd, desktopWindowStart)
+    const desktopStartup = source.slice(reconciliationStart, serveStart)
 
     expect(reconciliationStart).toBeGreaterThanOrEqual(0)
     expect(serveStart).toBeGreaterThan(reconciliationStart)
     expect(serveEnd).toBeGreaterThan(serveStart)
     // Why: bound against serveEnd, not reconciliationStart — an earlier openMainWindow() call
     // would steal this anchor, collapse desktopStartup to '', and pass the negative check below.
-    expect(desktopWindowStart).toBeGreaterThan(serveEnd)
+    expect(desktopWindowStart).toBeGreaterThan(reconciliationStart)
+    expect(desktopWindowStart).toBeLessThan(serveStart)
+    expect(desktopWindowJoin).toBeGreaterThan(serveEnd)
     expect(serveStartup).toContain('await managedWslCliStartupBarrierReady')
     expect(serveStartup).not.toContain('await managedWslCliReconciliationReady')
     expect(serveStartup.indexOf('await managedWslCliStartupBarrierReady')).toBeLessThan(
       serveStartup.indexOf('await runtimeRpc.start()')
     )
     expect(desktopStartup).not.toContain('await managedWslCliReconciliationReady')
+    expect(desktopStartup).toContain(
+      "process.platform === 'win32' && app.isPackaged && !serveOptions"
+    )
+    expect(desktopStartup).toContain(
+      'openWindow: () => openMainWindow({ revealOnDidFinishLoad: true })'
+    )
+    expect(desktopStartup).toContain('shellPathReady,')
+    expect(desktopStartup).toContain('startServices: startTerminalRuntimeStartupServices')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
     expect(barrier).not.toContain('managedWslCliReconciliationReady')
     expect(barrier).toContain("ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup'")
@@ -110,7 +131,10 @@ describe('startup ordering', () => {
       inventoryIndex
     )
     const serveIndex = source.indexOf('if (serveOptions) {', reconciliationIndex)
-    const desktopIndex = source.indexOf('Promise.resolve(openMainWindow())', serveIndex)
+    const desktopIndex = source.indexOf(
+      'Promise.resolve(desktopWindow ?? openMainWindow())',
+      serveIndex
+    )
 
     expect(daemonInitIndex).toBeGreaterThanOrEqual(0)
     expect(retainedPaneGateIndex).toBeGreaterThan(daemonInitIndex)

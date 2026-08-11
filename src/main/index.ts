@@ -164,6 +164,10 @@ import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
 import {
+  startWindowsDesktopBeforeShellPathReady,
+  type WindowsDesktopStartupServices
+} from './startup/windows-desktop-shell-path-startup'
+import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure,
@@ -257,7 +261,10 @@ import { maybeAutoRenameBranchOnFirstWork } from './agent-hooks/first-work-branc
 import { rememberBranchRenameFailureOutput } from './agent-hooks/branch-rename-failure-output'
 import { renameWorktreeFolderOnFirstWork } from './agent-hooks/first-work-folder-rename'
 import { moveWorktree } from './git/worktree'
-import { setDefaultWslDistroOverride } from './git/runner'
+import {
+  configureWindowsHostGitEnvironmentReadiness,
+  setDefaultWslDistroOverride
+} from './git/runner'
 import { getRepoIdFromWorktreeId } from '../shared/worktree-id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
@@ -923,7 +930,7 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
   })
 }
 
-function startTerminalRuntimeStartupServices(): Promise<void> {
+function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
   logStartupMilestone('first-window-startup-services-start')
   const startupServices = startFirstWindowStartupServices({
     // Why: both desktop and headless serve must adopt the same persistent provider before creating terminals or a renderer.
@@ -980,19 +987,24 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       console.error('[agent-hooks] Failed to start local hook server:', error)
     }
   })
-  firstWindowStartupServicesReady = startupServices.firstWindowReady
-  localPtyStartupReady = startupServices.localPtyReady
-  localPtyProviderStartupReady = startupServices.localPtyProviderReady
-  void firstWindowStartupServicesReady.then(() => {
+  void startupServices.firstWindowReady.then(() => {
     logStartupMilestone('first-window-startup-services-ready')
   })
-  void localPtyStartupReady.then(() => {
+  void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
     void reapRestoredSubagentsWithoutLiveAgent().catch((error) => {
       console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
     })
   })
-  return firstWindowStartupServicesReady
+  return startupServices
+}
+
+function bindTerminalRuntimeStartupServices(
+  services: Promise<WindowsDesktopStartupServices>
+): void {
+  firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
+  localPtyStartupReady = services.then((value) => value.localPtyReady)
+  localPtyProviderStartupReady = services.then((value) => value.localPtyProviderReady)
 }
 
 function prepareCodexRuntimeHomeForLaunch(
@@ -1248,7 +1260,7 @@ function syncMacMenuBarIcon(showMenuBarIcon: boolean): Tray | null {
   return options ? setMacMenuBarIconVisible(showMenuBarIcon, options) : null
 }
 
-function openMainWindow(): BrowserWindow {
+function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
   if (!store) {
     throw new Error('Store must be initialized before opening the main window')
@@ -1337,6 +1349,7 @@ function openMainWindow(): BrowserWindow {
       void presentRendererRecoveryPrompt(recentRecoveryCount)
     },
     deferLoad: true,
+    ...(options.revealOnDidFinishLoad === true ? { revealOnDidFinishLoad: true } : {}),
     title: devInstanceIdentity.name,
     getKeybindings: () => keybindings?.getOverrides(),
     onBeforeReload: ({ ignoreCache, webContentsId }) => {
@@ -1375,6 +1388,9 @@ function openMainWindow(): BrowserWindow {
   window.once('ready-to-show', () => {
     logStartupMilestone('ready-to-show')
     setImmediate(createSystemTrayDeferred)
+  })
+  window.once('show', () => {
+    logStartupMilestone('window-shown')
   })
   const trayCreateFallback = setTimeout(createSystemTrayDeferred, TRAY_CREATE_FALLBACK_MS)
   trayCreateFallback.unref?.()
@@ -2153,6 +2169,9 @@ void app.whenReady().then(async () => {
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
   const windowsShellPathHydration = createWindowsShellPathHydration()
+  configureWindowsHostGitEnvironmentReadiness(
+    process.platform === 'win32' ? windowsShellPathHydration.whenReady : null
+  )
   if (process.platform === 'win32') {
     const settings = store.getSettings()
     if (app.isPackaged) {
@@ -2980,9 +2999,20 @@ void app.whenReady().then(async () => {
     }
   })
 
-  // Why: Git hooks inherit process.env, so Source Control must not open before profile PATH settles.
-  await windowsShellPathHydration.whenReady()
-  startTerminalRuntimeStartupServices()
+  const shellPathReady = windowsShellPathHydration.whenReady()
+  let desktopWindow: BrowserWindow | null = null
+  if (process.platform === 'win32' && app.isPackaged && !serveOptions) {
+    const desktopStartup = startWindowsDesktopBeforeShellPathReady({
+      openWindow: () => openMainWindow({ revealOnDidFinishLoad: true }),
+      shellPathReady,
+      startServices: startTerminalRuntimeStartupServices
+    })
+    desktopWindow = desktopStartup.window
+    bindTerminalRuntimeStartupServices(desktopStartup.services)
+  } else {
+    await shellPathReady
+    bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
+  }
   app.on('activate', handleMacAppActivation)
 
   if (serveOptions) {
@@ -3066,15 +3096,21 @@ void app.whenReady().then(async () => {
   }
 
   // Why: window and RPC startup run in parallel; registerPtyHandlers gates PTY spawns so RPC binds without racing the daemon provider swap.
+  const desktopRuntimeRpc = runtimeRpc
+  if (!desktopRuntimeRpc) {
+    throw new Error('runtime_rpc_unavailable')
+  }
   const [win, runtimeRpcStartResult] = await Promise.all([
-    Promise.resolve(openMainWindow()),
-    runtimeRpc.start().then(
-      () => ({ ok: true as const }),
-      (error: unknown) => {
-        recordRuntimeRpcStartFailure(error)
-        return { ok: false as const, error }
-      }
-    )
+    Promise.resolve(desktopWindow ?? openMainWindow()),
+    shellPathReady
+      .then(() => desktopRuntimeRpc.start())
+      .then(
+        () => ({ ok: true as const }),
+        (error: unknown) => {
+          recordRuntimeRpcStartFailure(error)
+          return { ok: false as const, error }
+        }
+      )
   ])
   if (!runtimeRpcStartResult.ok) {
     void showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)

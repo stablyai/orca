@@ -10,7 +10,7 @@ const { gitSpawnMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../git/runner', () => ({
-  gitSpawn: gitSpawnMock
+  gitSpawnAfterWindowsEnvironmentReady: gitSpawnMock
 }))
 
 import { listFilesWithGit } from './filesystem-list-files-git-fallback'
@@ -56,11 +56,13 @@ describe('main Quick Open git directory expansion', () => {
     const primary = createMockProcess()
     const ignored = createMockProcess()
     gitSpawnMock
-      .mockReturnValueOnce(revParse)
-      .mockReturnValueOnce(primary)
-      .mockReturnValueOnce(ignored)
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockResolvedValueOnce(ignored)
 
     const promise = listFilesWithGit(root, [], {})
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
     revParse.emit('close', 0, null)
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     ;(primary.stdout as unknown as EventEmitter).emit(
@@ -86,12 +88,14 @@ describe('main Quick Open git directory expansion', () => {
     const primary = createMockProcess()
     const ignored = createMockProcess()
     gitSpawnMock
-      .mockReturnValueOnce(revParse)
-      .mockReturnValueOnce(primary)
-      .mockReturnValueOnce(ignored)
+      .mockResolvedValueOnce(revParse)
+      .mockResolvedValueOnce(primary)
+      .mockResolvedValueOnce(ignored)
 
     const controller = new AbortController()
     const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
     revParse.emit('close', 0, null)
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
     controller.abort()
