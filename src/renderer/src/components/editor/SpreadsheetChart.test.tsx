@@ -191,3 +191,230 @@ describe('SpreadsheetChart gradients', () => {
     expect(html).toContain('fill-opacity="0.1"')
   })
 })
+
+function countTags(html: string, tagName: string): number {
+  return (html.match(new RegExp(`<${tagName}[\\s>]`, 'g')) ?? []).length
+}
+
+function polylines(html: string): { x: number; y: number }[][] {
+  return [...html.matchAll(/<polyline[^>]*points="([^"]*)"/g)].map((match) =>
+    match[1]!.split(' ').map((pair) => {
+      const [x, y] = pair.split(',')
+      return { x: Number(x), y: Number(y) }
+    })
+  )
+}
+
+describe('SpreadsheetChart with overlaid series', () => {
+  it('draws the marks of an area series and of a scatter series laid over it', () => {
+    const html = render(
+      chart({
+        kind: 'area',
+        categories: [],
+        series: [
+          { kind: 'area', name: 'Sombreado', values: [176, 177, 176.5] },
+          {
+            kind: 'scatter',
+            name: 'Objetivo',
+            values: [172, 172],
+            showsLine: true
+          }
+        ]
+      })
+    )
+
+    expect(countTags(html, 'polygon')).toBe(1)
+    expect(countTags(html, 'polyline')).toBe(2)
+  })
+
+  it('draws each series with the marks of its own kind, not the chart kind', () => {
+    const html = render(
+      chart({
+        kind: 'line',
+        showLegend: false,
+        categories: [],
+        series: [
+          { kind: 'column', name: 'Sesiones', values: [3, 4] },
+          { kind: 'line', name: 'Media', values: [3.5, 3.5] }
+        ]
+      })
+    )
+
+    expect(countTags(html, 'rect')).toBe(2)
+    expect(countTags(html, 'polyline')).toBe(1)
+  })
+
+  it('draws markers only for the series that asks for them', () => {
+    const html = render(
+      chart({
+        kind: 'line',
+        categories: [],
+        series: [
+          {
+            kind: 'line',
+            name: 'Progreso',
+            values: [176, 177, 176.5],
+            showsMarkers: true
+          },
+          {
+            kind: 'scatter',
+            name: 'Objetivo',
+            values: [172, 172],
+            showsMarkers: false
+          }
+        ]
+      })
+    )
+
+    expect(countTags(html, 'circle')).toBe(3)
+  })
+
+  it('draws a scatter series without a line as bare markers', () => {
+    const html = render(
+      chart({
+        kind: 'scatter',
+        categories: [],
+        series: [
+          {
+            kind: 'scatter',
+            name: 'Pesadas',
+            values: [176, 177],
+            showsLine: false
+          }
+        ]
+      })
+    )
+
+    expect(html).not.toContain('<polyline')
+    expect(countTags(html, 'circle')).toBe(2)
+  })
+
+  it('anchors the axis at zero when any overlaid series is a column', () => {
+    const html = render(
+      chart({
+        kind: 'line',
+        series: [
+          { kind: 'line', name: 'Peso', values: [172, 178] },
+          { kind: 'column', name: 'Sesiones', values: [3, 4] }
+        ]
+      })
+    )
+
+    expect(html).toContain('>0</text>')
+  })
+
+  it('lets the axis frame its own range when every series is a line', () => {
+    const html = render(
+      chart({
+        kind: 'column',
+        series: [
+          { kind: 'line', name: 'Peso', values: [172, 178] },
+          { kind: 'line', name: 'Objetivo', values: [174, 174] }
+        ]
+      })
+    )
+
+    expect(html).not.toContain('>0</text>')
+  })
+})
+
+describe('SpreadsheetChart series positions', () => {
+  const spread = (count: number): number[] =>
+    Array.from({ length: count }, (_unused, index) => index * 10)
+
+  it('spans a two-point series across the plot when its positions say so', () => {
+    const html = render(
+      chart({
+        kind: 'scatter',
+        categories: [],
+        series: [
+          {
+            kind: 'scatter',
+            name: 'Progreso',
+            values: spread(11).map((step) => 172 + step / 10),
+            positions: spread(11),
+            showsLine: true
+          },
+          {
+            kind: 'scatter',
+            name: 'Objetivo',
+            values: [174, 174],
+            positions: [0, 100],
+            showsLine: true
+          }
+        ]
+      })
+    )
+    const [progress, target] = polylines(html)
+
+    expect(progress).toHaveLength(11)
+    expect(target).toHaveLength(2)
+    expect(target![0]!.x).toBeCloseTo(progress![0]!.x)
+    expect(target!.at(-1)!.x).toBeCloseTo(progress!.at(-1)!.x)
+    expect(target!.at(-1)!.x).toBeGreaterThan(target![0]!.x + 1)
+  })
+
+  it('keeps a series with no positions on its category steps beside one that has them', () => {
+    const html = render(
+      chart({
+        kind: 'line',
+        categories: [],
+        series: [
+          { kind: 'line', name: 'Peso', values: [176, 177, 178] },
+          {
+            kind: 'scatter',
+            name: 'Objetivo',
+            values: [174, 174],
+            positions: [0, 100],
+            showsLine: true
+          }
+        ]
+      })
+    )
+    const [byIndex] = polylines(html)
+
+    expect(html).not.toContain('NaN')
+    expect(byIndex).toHaveLength(3)
+    expect(byIndex![1]!.x - byIndex![0]!.x).toBeCloseTo(byIndex![2]!.x - byIndex![1]!.x)
+  })
+
+  it('spaces a chart whose series declare no positions evenly by category', () => {
+    const html = render(
+      chart({
+        kind: 'line',
+        categories: [],
+        series: [{ name: 'S', values: [1, 2, 3, 4] }]
+      })
+    )
+    const [byIndex] = polylines(html)
+
+    expect(byIndex).toHaveLength(4)
+    const steps = byIndex!.slice(1).map((point, index) => point.x - byIndex![index]!.x)
+    for (const step of steps) {
+      expect(step).toBeCloseTo(steps[0]!)
+    }
+  })
+
+  it('falls back to category steps when every position is the same value', () => {
+    const html = render(
+      chart({
+        kind: 'scatter',
+        categories: [],
+        series: [
+          {
+            kind: 'scatter',
+            name: 'Objetivo',
+            values: [172, 172],
+            positions: [5, 5],
+            showsLine: true
+          }
+        ]
+      })
+    )
+    const [byIndex] = polylines(html)
+
+    expect(html).not.toContain('NaN')
+    expect(byIndex).toHaveLength(2)
+    expect(byIndex![1]!.x).toBeGreaterThan(byIndex![0]!.x)
+  })
+})

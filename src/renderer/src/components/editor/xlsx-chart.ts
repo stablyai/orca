@@ -1,4 +1,12 @@
-import { resolveXlsxColor, resolveXlsxSchemeColor } from './xlsx-color'
+import { readSeries } from './xlsx-chart-series'
+import {
+  countElements,
+  hasElement,
+  readAttributeValue,
+  readElementInner,
+  readElementText,
+  readStringCache
+} from './xlsx-chart-xml'
 import { formatXlsxDate } from './xlsx-date-format'
 import { isXlsxDateFormatCode } from './xlsx-number-formats'
 import type { XlsxThemePalette } from './xlsx-theme-palette'
@@ -11,6 +19,12 @@ export type XlsxChartKind = 'column' | 'bar' | 'line' | 'area' | 'pie' | 'doughn
 export type XlsxChartGradientStop = { position: number; color: string }
 
 export type XlsxChartSeries = {
+  /**
+   * The plot this series belongs to. Excel overlays plots of different types in
+   * one chart — a target line over an area, most commonly — so the mark type is
+   * a property of the series, not of the chart. Absent means the chart's own kind.
+   */
+  kind?: XlsxChartKind
   name?: string
   color?: string
   /**
@@ -20,10 +34,28 @@ export type XlsxChartSeries = {
   gradient?: XlsxChartGradientStop[]
   /** Values by category index; null for a gap the author left blank. */
   values: (number | null)[]
+  /**
+   * X positions from a scatter series' `c:xVal`, on the same axis as the other
+   * series. A target line spans the whole plot with two points, so it can only be
+   * placed by its values and not by their index.
+   */
+  positions?: (number | null)[]
+  /**
+   * Whether the series joins its points. A scatter plot decides this with
+   * `c:scatterStyle`: `lineMarker` and its siblings draw a line, plain `marker`
+   * draws points only.
+   */
+  showsLine?: boolean
+  /** False when the series sets `c:symbol` to `none`, as a plain line does. */
+  showsMarkers?: boolean
 }
 
 export type XlsxChart = {
-  /** Null when the part parsed but declares a plot type the viewer cannot draw. */
+  /**
+   * The first plot's type, which sets the axis orientation and the circular
+   * layouts. Null when the part parsed but declares a plot the viewer cannot
+   * draw. Individual series carry their own kind.
+   */
   kind: XlsxChartKind | null
   /** The plot element found, so an unsupported chart can say what it is. */
   declaredType?: string
@@ -59,9 +91,6 @@ const UNSUPPORTED_PLOT_ELEMENTS = [
   'c:surface3DChart',
   'c:ofPieChart'
 ] as const
-// Why: a chart with thousands of points is a rendering cost with no readable
-// payoff at the size a spreadsheet anchors it.
-const MAX_CHART_CATEGORIES = 500
 const MAX_CHART_SERIES = 24
 
 export type ParseXlsxChartOptions = {
@@ -83,13 +112,35 @@ export function parseXlsxChart(
     return null
   }
 
-  const plot = findPlot(plotAreaXml)
-  const series = plot === null ? [] : readSeries(plot.xml, themePalette)
+  const plots = findPlots(plotAreaXml)
+  const primaryPlot = plots[0] ?? null
+  const series: XlsxChartSeries[] = []
+  for (const plot of plots) {
+    if (plot.kind === null) {
+      continue
+    }
+    // Why: the scatter subtype lives on the plot, not the series, and decides
+    // whether its series are lines or bare points. Only a scatter plot needs to
+    // say so — every other kind already implies its own answer.
+    const showsLine =
+      plot.kind === 'scatter'
+        ? readAttributeValue(plot.xml, 'c:scatterStyle') !== 'marker'
+        : undefined
+    for (const plotSeries of readSeries(plot.xml, themePalette)) {
+      if (series.length >= MAX_CHART_SERIES) {
+        break
+      }
+      series.push({ ...plotSeries, kind: plot.kind, showsLine })
+    }
+  }
+  // Why: categories are declared per plot, and an overlaid scatter plot often
+  // omits them. The first plot that names them speaks for the chart.
+  const categoriesPlot = plots.find((plot) => readCategories(plot.xml, locale).length > 0)
   return {
-    kind: plot?.kind ?? null,
-    declaredType: plot?.element,
+    kind: primaryPlot?.kind ?? null,
+    declaredType: primaryPlot?.element,
     title: readChartTitle(chartXml),
-    categories: plot === null ? [] : readCategories(plot.xml, locale),
+    categories: categoriesPlot === undefined ? [] : readCategories(categoriesPlot.xml, locale),
     series,
     showLegend: hasElement(chartXml, 'c:legend'),
     // Why: Excel allows a second value axis; the viewer plots everything on one
@@ -100,125 +151,40 @@ export function parseXlsxChart(
 
 type XlsxChartPlot = { element: string; kind: XlsxChartKind | null; xml: string }
 
-function findPlot(plotAreaXml: string): XlsxChartPlot | null {
-  for (const [element, kind] of Object.entries(PLOT_ELEMENTS)) {
+/**
+ * Every plot in the plot area, ordered as the document lists them.
+ *
+ * Why all of them: a chart may overlay plots of different types — Excel draws a
+ * target line as a `scatterChart` on top of an `areaChart` — and reading only the
+ * first silently dropped the line the author added.
+ */
+function findPlots(plotAreaXml: string): XlsxChartPlot[] {
+  const found: (XlsxChartPlot & { position: number })[] = []
+
+  const consider = (element: string, kind: XlsxChartKind | null): void => {
     const xml = readElementInner(plotAreaXml, element)
-    if (xml !== null) {
-      return {
-        element,
-        kind: kind === 'column' && readAttributeValue(xml, 'c:barDir') === 'bar' ? 'bar' : kind,
-        xml
-      }
+    if (xml === null) {
+      return
     }
+    found.push({
+      element,
+      kind: kind === 'column' && readAttributeValue(xml, 'c:barDir') === 'bar' ? 'bar' : kind,
+      xml,
+      position: plotAreaXml.indexOf(`<${element}`)
+    })
+  }
+
+  for (const [element, kind] of Object.entries(PLOT_ELEMENTS)) {
+    consider(element, kind)
   }
   for (const element of UNSUPPORTED_PLOT_ELEMENTS) {
-    const xml = readElementInner(plotAreaXml, element)
-    if (xml !== null) {
-      return { element, kind: null, xml }
-    }
-  }
-  return null
-}
-
-function readSeries(plotXml: string, themePalette: XlsxThemePalette): XlsxChartSeries[] {
-  const series: XlsxChartSeries[] = []
-
-  forEachXlsxXmlElement(plotXml, 'c:ser', (element) => {
-    if (series.length >= MAX_CHART_SERIES) {
-      return false
-    }
-    const shapeXml = readElementInner(element.inner, 'c:spPr')
-    series.push({
-      name: readSeriesName(element.inner),
-      color: readSeriesColor(element.inner, themePalette),
-      gradient: shapeXml === null ? undefined : readGradientStops(shapeXml, themePalette),
-      values: readNumericCache(readElementInner(element.inner, 'c:val') ?? '')
-    })
-    return true
-  })
-
-  return series
-}
-
-function readSeriesName(seriesXml: string): string | undefined {
-  const nameXml = readElementInner(seriesXml, 'c:tx')
-  if (nameXml === null) {
-    return undefined
-  }
-  const cached = readStringCache(nameXml)
-  return cached[0] ?? readFirstValue(nameXml) ?? undefined
-}
-
-// Why: an area series usually carries a gradient rather than a flat colour, and it
-// is the chart's dominant visual — dropping it leaves the plot looking unfilled.
-function readGradientStops(
-  shapeXml: string,
-  themePalette: XlsxThemePalette
-): XlsxChartGradientStop[] | undefined {
-  const gradientXml = readElementInner(shapeXml, 'a:gradFill')
-  if (gradientXml === null) {
-    return undefined
+    consider(element, null)
   }
 
-  const stops: XlsxChartGradientStop[] = []
-  forEachXlsxXmlElement(gradientXml, 'a:gs', (stop) => {
-    const position = Number.parseInt(stop.attributes.pos ?? '', 10)
-    const color = readShapeColor(stop.inner, themePalette)
-    if (Number.isFinite(position) && color !== undefined) {
-      // Why: positions are in thousandths of a percent.
-      stops.push({ position: Math.min(1, Math.max(0, position / 100_000)), color })
-    }
-  })
-
-  return stops.length >= 2 ? stops.sort((a, b) => a.position - b.position) : undefined
-}
-
-function readShapeColor(xml: string, themePalette: XlsxThemePalette): string | undefined {
-  let color: string | undefined
-  forEachXlsxXmlElement(xml, 'a:srgbClr', (element) => {
-    color = resolveXlsxColor({ rgb: element.attributes.val }, themePalette) ?? undefined
-    return false
-  })
-  if (color !== undefined) {
-    return color
-  }
-  forEachXlsxXmlElement(xml, 'a:schemeClr', (element) => {
-    const scheme = element.attributes.val
-    color =
-      scheme === undefined ? undefined : (resolveXlsxSchemeColor(scheme, themePalette) ?? undefined)
-    return false
-  })
-  return color
-}
-
-// Why: a series may set its colour explicitly or leave it to the theme. When it
-// leaves it, Excel walks accent1..6 — reproducing that is faithful to the file,
-// not a palette choice of ours.
-function readSeriesColor(seriesXml: string, themePalette: XlsxThemePalette): string | undefined {
-  const shapeXml = readElementInner(seriesXml, 'c:spPr')
-  if (shapeXml === null) {
-    return undefined
-  }
-  const fillXml = readElementInner(shapeXml, 'a:solidFill')
-  if (fillXml === null) {
-    return undefined
-  }
-
-  let color: string | undefined
-  forEachXlsxXmlElement(fillXml, 'a:srgbClr', (element) => {
-    color = resolveXlsxColor({ rgb: element.attributes.val }, themePalette) ?? undefined
-    return false
-  })
-  if (color !== undefined) {
-    return color
-  }
-  forEachXlsxXmlElement(fillXml, 'a:schemeClr', (element) => {
-    const scheme = element.attributes.val
-    color =
-      scheme === undefined ? undefined : (resolveXlsxSchemeColor(scheme, themePalette) ?? undefined)
-    return false
-  })
-  return color
+  // Why: the document's own order decides which plot is the primary one and the
+  // painting order of the overlays, so the lookup order above must not leak out.
+  found.sort((left, right) => left.position - right.position)
+  return found.map((plot) => ({ element: plot.element, kind: plot.kind, xml: plot.xml }))
 }
 
 // Why: categories are shared by every series, so the first series that declares
@@ -262,58 +228,6 @@ function readCategoryCache(categoryXml: string, locale: string): string[] {
   })
 }
 
-function readElementText(xml: string, tagName: string): string | undefined {
-  let text: string | undefined
-  forEachXlsxXmlElement(xml, tagName, (element) => {
-    text = decodeXlsxXmlText(element.inner).trim()
-    return false
-  })
-  return text
-}
-
-/** Reads `<c:pt idx>` string values, placed by index rather than document order. */
-function readStringCache(xml: string): string[] {
-  const values: string[] = []
-  forEachXlsxXmlElement(xml, 'c:pt', (element) => {
-    const index = Number.parseInt(element.attributes.idx ?? '', 10)
-    if (!Number.isInteger(index) || index < 0 || index >= MAX_CHART_CATEGORIES) {
-      return true
-    }
-    while (values.length < index) {
-      values.push('')
-    }
-    values[index] = readFirstValue(element.inner) ?? ''
-    return true
-  })
-  return values
-}
-
-function readNumericCache(xml: string): (number | null)[] {
-  const values: (number | null)[] = []
-  forEachXlsxXmlElement(xml, 'c:pt', (element) => {
-    const index = Number.parseInt(element.attributes.idx ?? '', 10)
-    if (!Number.isInteger(index) || index < 0 || index >= MAX_CHART_CATEGORIES) {
-      return true
-    }
-    while (values.length < index) {
-      values.push(null)
-    }
-    const parsed = Number(readFirstValue(element.inner) ?? '')
-    values[index] = Number.isFinite(parsed) ? parsed : null
-    return true
-  })
-  return values
-}
-
-function readFirstValue(xml: string): string | undefined {
-  let value: string | undefined
-  forEachXlsxXmlElement(xml, 'c:v', (element) => {
-    value = decodeXlsxXmlText(element.inner).trim()
-    return false
-  })
-  return value
-}
-
 // Why: an auto-generated title is marked deleted rather than removed, so a chart
 // that shows no title in Excel must not grow one here.
 function readChartTitle(chartXml: string): string | undefined {
@@ -329,34 +243,4 @@ function readChartTitle(chartXml: string): string | undefined {
     title += decodeXlsxXmlText(element.inner)
   })
   return title === '' ? undefined : title
-}
-
-function readElementInner(xml: string, tagName: string): string | null {
-  let inner: string | null = null
-  forEachXlsxXmlElement(xml, tagName, (element) => {
-    inner = element.inner
-    return false
-  })
-  return inner
-}
-
-function readAttributeValue(xml: string, tagName: string): string | undefined {
-  let value: string | undefined
-  forEachXlsxXmlElement(xml, tagName, (element) => {
-    value = element.attributes.val
-    return false
-  })
-  return value
-}
-
-function hasElement(xml: string, tagName: string): boolean {
-  return countElements(xml, tagName) > 0
-}
-
-function countElements(xml: string, tagName: string): number {
-  let count = 0
-  forEachXlsxXmlElement(xml, tagName, () => {
-    count += 1
-  })
-  return count
 }

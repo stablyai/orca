@@ -12,7 +12,7 @@ import {
   CHART_SURFACE_GAP
 } from './spreadsheet-chart-geometry'
 import { projectOntoScale, type SpreadsheetChartScale } from './spreadsheet-chart-scale'
-import type { XlsxChart } from './xlsx-chart'
+import type { XlsxChart, XlsxChartKind, XlsxChartSeries } from './xlsx-chart'
 
 export function CartesianPlot({
   chart,
@@ -38,6 +38,15 @@ export function CartesianPlot({
   const valueAt = (fraction: number): number =>
     isHorizontal ? left + fraction * width : top + height - fraction * height
   const bandSize = (isHorizontal ? height : width) / categoryCount
+  const seriesKind = (series: XlsxChartSeries): XlsxChartKind | null => series.kind ?? chart.kind
+  const barSeries = chart.series.filter((series) => {
+    const kind = seriesKind(series)
+    return kind === 'column' || kind === 'bar'
+  })
+  const pointSeries = chart.series.filter((series) => {
+    const kind = seriesKind(series)
+    return kind !== 'column' && kind !== 'bar'
+  })
 
   return (
     <>
@@ -66,9 +75,13 @@ export function CartesianPlot({
           </g>
         )
       })}
-      {chart.kind === 'column' || chart.kind === 'bar' ? (
+      {/* Why: a chart may overlay plots of different types — Excel draws a target
+      line as a scatter plot over an area plot — so the series are split by their
+      own kind and each group is drawn with its own marks. Bars go down first so
+      an overlaid line stays legible on top of them. */}
+      {barSeries.length > 0 && (
         <BarMarks
-          chart={chart}
+          chart={{ ...chart, series: barSeries }}
           scale={scale}
           left={left}
           top={top}
@@ -77,17 +90,16 @@ export function CartesianPlot({
           bandSize={bandSize}
           isHorizontal={isHorizontal}
         />
-      ) : (
+      )}
+      {pointSeries.length > 0 && (
         <PointMarks
-          chart={chart}
+          chart={{ ...chart, series: pointSeries }}
           scale={scale}
           left={left}
           top={top}
           width={width}
           height={height}
           categoryCount={categoryCount}
-          filled={chart.kind === 'area'}
-          showLine={chart.kind !== 'scatter'}
         />
       )}
       {!isHorizontal &&
@@ -180,9 +192,7 @@ function PointMarks({
   top,
   width,
   height,
-  categoryCount,
-  filled,
-  showLine
+  categoryCount
 }: {
   chart: XlsxChart
   scale: SpreadsheetChartScale
@@ -191,22 +201,40 @@ function PointMarks({
   width: number
   height: number
   categoryCount: number
-  filled: boolean
-  showLine: boolean
 }): React.JSX.Element {
   const stepWidth = categoryCount > 1 ? width / (categoryCount - 1) : 0
-  const pointAt = (value: number, index: number): { x: number; y: number } => ({
-    x: categoryCount > 1 ? left + stepWidth * index : left + width / 2,
-    y: top + height - projectOntoScale(value, scale) * height
-  })
+  // Why: a scatter series states where each point sits on the shared x axis, and
+  // an overlaid target line says so with only two points at the far ends. Placing
+  // those by index would squeeze the line into the first step of the plot.
+  const positionDomain = buildPositionDomain(chart.series)
+  const xAt = (index: number, position: number | null | undefined): number => {
+    if (position !== null && position !== undefined && positionDomain !== null) {
+      return left + positionDomain.fractionOf(position) * width
+    }
+    return categoryCount > 1 ? left + stepWidth * index : left + width / 2
+  }
+  const yAt = (value: number): number => top + height - projectOntoScale(value, scale) * height
 
   return (
     <>
       {chart.series.map((series, seriesIndex) => {
         const color = resolveSeriesColor(series, seriesIndex)
+        // Why: an area series is filled and a scatter series is points only, and
+        // both may sit in the same chart, so each series answers for itself.
+        const kind = series.kind ?? chart.kind
+        const filled = kind === 'area'
+        const showLine = series.showsLine ?? kind !== 'scatter'
+        const showMarkers = series.showsMarkers ?? true
         const points = series.values
           .map((value, index) =>
-            value === null ? null : { ...pointAt(value, index), value, index }
+            value === null
+              ? null
+              : {
+                  x: xAt(index, series.positions?.[index]),
+                  y: yAt(value),
+                  value,
+                  index
+                }
           )
           .filter(
             (point): point is { x: number; y: number; value: number; index: number } =>
@@ -253,21 +281,24 @@ function PointMarks({
                 strokeLinecap="round"
               />
             )}
-            {points.map((point) => (
-              <circle
-                key={point.index}
-                cx={point.x}
-                cy={point.y}
-                r={CHART_MARKER_RADIUS}
-                fill={color}
-                // Why: a surface ring keeps a marker legible where it crosses its
-                // own line or another series.
-                className="stroke-spreadsheet-surface"
-                strokeWidth={CHART_SURFACE_GAP}
-              >
-                <title>{describePoint(chart, series, seriesIndex, point.index, point.value)}</title>
-              </circle>
-            ))}
+            {showMarkers &&
+              points.map((point) => (
+                <circle
+                  key={point.index}
+                  cx={point.x}
+                  cy={point.y}
+                  r={CHART_MARKER_RADIUS}
+                  fill={color}
+                  // Why: a surface ring keeps a marker legible where it crosses its
+                  // own line or another series.
+                  className="stroke-spreadsheet-surface"
+                  strokeWidth={CHART_SURFACE_GAP}
+                >
+                  <title>
+                    {describePoint(chart, series, seriesIndex, point.index, point.value)}
+                  </title>
+                </circle>
+              ))}
           </g>
         )
       })}
@@ -336,4 +367,29 @@ export function CircularPlot({
       })}
     </>
   )
+}
+
+type SpreadsheetChartPositionDomain = { fractionOf: (position: number) => number }
+
+/**
+ * The x domain shared by every series that states its own positions.
+ *
+ * Returns null when no series does, so category-indexed plots keep their even
+ * spacing, and when the domain has no width, which would divide by zero.
+ */
+function buildPositionDomain(
+  series: readonly XlsxChartSeries[]
+): SpreadsheetChartPositionDomain | null {
+  const positions = series
+    .flatMap((entry) => entry.positions ?? [])
+    .filter((position): position is number => position !== null)
+  if (positions.length === 0) {
+    return null
+  }
+  const minimum = Math.min(...positions)
+  const maximum = Math.max(...positions)
+  if (maximum === minimum) {
+    return null
+  }
+  return { fractionOf: (position) => (position - minimum) / (maximum - minimum) }
 }

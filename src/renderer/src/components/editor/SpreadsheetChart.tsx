@@ -45,7 +45,11 @@ export function SpreadsheetChart({
   // Why: Excel starts a column or bar at zero, but auto-scales a line or area to
   // its own data — a weight chart between 172 and 178 is drawn over that range,
   // not from zero, and forcing zero flattens it into a straight line.
-  const usesBaseline = chart.kind === 'column' || chart.kind === 'bar'
+  // Any bar series anchors the axis, even when it is overlaid on a line plot.
+  const usesBaseline = chart.series.some((series) => {
+    const kind = series.kind ?? chart.kind
+    return kind === 'column' || kind === 'bar'
+  })
   const scale = useMemo(
     () => buildSpreadsheetChartScale(allValues, { includeZero: usesBaseline }),
     [allValues, usesBaseline]
