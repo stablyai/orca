@@ -13292,7 +13292,8 @@
             "4a9568f773": "戻る",
             "4f86e2a10b": "ツアーをスキップ",
             "d974f32a83": "ツアーを閉じる",
-            "ffa4412b66": "次"
+            "ffa4412b66": "次",
+            "d74ca948aa": "次へ"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "の",
@@ -13300,9 +13301,11 @@
           },
           "contextual": {
             "tour": {
-              "overlay": {
-                "measurement": {
-                  "38b3155418": "次へ"
+              "step": {
+                "localized": {
+                  "copy": {
+                    "012036e8ca": "次へ"
+                  }
                 }
               }
             }

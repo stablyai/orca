@@ -104,7 +104,7 @@ export default function PRFilterDropdowns({
     const meOption: PickerOption = {
       key: '@me',
       primary: '@me',
-      secondary: translate('auto.components.github.PRFilterDropdowns.currentUser', 'Current user')
+      secondary: translate('auto.components.github.PRFilterDropdowns.2c923c1711', 'Current user')
     }
     return [meOption, ...userOptions(hasPrimarySlug ? assigneesState.data : [])]
   }, [assigneesState.data, hasPrimarySlug])
@@ -113,7 +113,7 @@ export default function PRFilterDropdowns({
     options.set('@me', {
       key: '@me',
       primary: '@me',
-      secondary: translate('auto.components.github.PRFilterDropdowns.currentUser', 'Current user')
+      secondary: translate('auto.components.github.PRFilterDropdowns.2c923c1711', 'Current user')
     })
     // Why: the Author filter should reflect actual visible item authors.
     // Assignable-user metadata is repo-collaborator scoped and can omit outside

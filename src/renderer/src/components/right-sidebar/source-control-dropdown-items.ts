@@ -501,7 +501,10 @@ export function resolveDropdownItems(inputs: DropdownActionInputs): DropdownEntr
       case 'default_branch':
         return switchToFeatureBranchHint()
       case 'no_upstream':
-        return 'Publish Branch'
+        return translate(
+          'auto.components.right.sidebar.source.control.dropdown.items.03b0948e17',
+          'Publish Branch'
+        )
       case 'needs_push':
         return pushFirstTitle()
       case 'needs_sync':

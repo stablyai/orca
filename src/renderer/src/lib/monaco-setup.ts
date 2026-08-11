@@ -4,7 +4,7 @@ import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
 import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
 import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-import { loadMonacoNlsForUiLocale } from './monaco-nls'
+import { monacoNlsBootstrap } from './monaco-nls'
 
 globalThis.MonacoEnvironment = {
   getWorker(_workerId, label) {
@@ -30,7 +30,9 @@ globalThis.MonacoEnvironment = {
 
 // Why: nls.messages.* must land on globalThis before monaco-editor evaluates
 // contribution modules that call localize() for action/context-menu labels.
-await loadMonacoNlsForUiLocale()
+// The bootstrap also waits for the persisted uiLanguage, since i18n boots in
+// 'en' before settings arrive over IPC.
+await monacoNlsBootstrap()
 
 const monaco = await import('monaco-editor')
 const { typescript: monacoTS } = monaco

@@ -1,6 +1,8 @@
 /* eslint-disable max-lines -- Why: this hook owns Monaco view-zone lifecycle, inline React roots, range selection, and scroll coordination in one place. */
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import * as monaco from 'monaco-editor'
+// Why: never import 'monaco-editor' directly — monaco-setup gates evaluation
+// on the NLS bootstrap so action labels localize on first editor open.
+import { monaco } from '@/lib/monaco-setup'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
 import type { DiffComment } from '../../../../shared/types'

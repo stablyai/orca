@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   getEffectiveKeybindingsForDefinition,
   getKeybindingDefinition,
@@ -66,6 +67,12 @@ export function ShortcutsPane(): React.JSX.Element {
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
   const pluginCommands = useEditablePluginCommands()
+  // Why: the catalog memo stores localized labels and conflict warnings; a
+  // language change must rebuild it or warnings keep the previous language.
+  // useTranslation() re-renders after the lazy catalog finishes loading, when
+  // i18n.language reflects the newly active locale.
+  const { i18n: activeI18n } = useTranslation()
+  const activeLanguage = activeI18n.language
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
@@ -97,7 +104,8 @@ export function ShortcutsPane(): React.JSX.Element {
           keybindings,
           platform
         }),
-      [disabledTuiAgents, keybindings, pluginCommands]
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- activeLanguage retriggers localization
+      [disabledTuiAgents, keybindings, pluginCommands, activeLanguage]
     )
   const definitionForAction = (actionId: KeybindingActionId): KeybindingDefinition | undefined =>
     definitionsByAction.get(actionId) ?? getKeybindingDefinition(actionId) ?? undefined

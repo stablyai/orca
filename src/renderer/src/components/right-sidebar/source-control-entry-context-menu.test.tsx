@@ -37,7 +37,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('@/lib/local-file-manager-label', () => ({
-  getLocalFileManagerLabel: () => 'Finder'
+  getLocalFileManagerLabel: () => 'Finder',
+  getOpenInLocalFileManagerLabel: () => 'Open in Finder'
 }))
 
 vi.mock('@/lib/open-in-app-catalog', () => ({

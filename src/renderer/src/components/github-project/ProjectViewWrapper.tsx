@@ -1302,27 +1302,27 @@ function ErrorState({
   const copy =
     error.type === 'too_large'
       ? translate(
-          'auto.components.github.project.ProjectViewWrapper.viewTooLarge',
+          'auto.components.github.project.ProjectViewWrapper.a435c479d5',
           "This view has {{value0}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
           {
             value0:
               totalCount ??
-              translate('auto.components.github.project.ProjectViewWrapper.many', 'many')
+              translate('auto.components.github.project.ProjectViewWrapper.6f5c52db05', 'many')
           }
         )
       : error.type === 'unsupported_layout'
         ? translate(
-            'auto.components.github.project.ProjectViewWrapper.unsupportedLayout',
+            'auto.components.github.project.ProjectViewWrapper.228ec54838',
             'Orca only renders table views yet. This is a Board or Roadmap view.'
           )
         : error.type === 'not_found'
           ? translate(
-              'auto.components.github.project.error.couldNotFindProjectOrView',
+              'auto.components.github.project.ProjectViewWrapper.768f6f3014',
               'Could not find this project or view.'
             )
           : error.type === 'schema_drift'
             ? translate(
-                'auto.components.github.project.ProjectViewWrapper.schemaDrift',
+                'auto.components.github.project.ProjectViewWrapper.e8f5b063b4',
                 'Could not read this project view.'
               )
             : formatGitHubProjectErrorMessage(error.message)

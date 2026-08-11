@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
-import * as monaco from 'monaco-editor'
+// Why: never import 'monaco-editor' directly — monaco-setup gates evaluation
+// on the NLS bootstrap so action labels localize on first editor open.
+import { monaco } from '@/lib/monaco-setup'
 import type { OpenFile } from '@/store/slices/editor'
 import {
   cursorPositionCache,

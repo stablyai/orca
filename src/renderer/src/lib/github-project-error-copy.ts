@@ -28,7 +28,7 @@ export function formatGitHubProjectErrorMessage(raw: string | null | undefined):
     raw.includes('Could not find this project or view.')
   ) {
     return translate(
-      'auto.components.github.project.error.couldNotFindProjectOrView',
+      'auto.lib.github.project.error.copy.7ef26724e4',
       'Could not find this project or view.'
     )
   }

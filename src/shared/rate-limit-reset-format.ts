@@ -5,13 +5,17 @@
 /**
  * Compact human duration for a rate-limit window, flooring to whole units:
  * "47m", "3h 54m", "6d 7h". Returns "now" for a non-positive delta so callers
- * can special-case the "already reset" copy.
+ * can special-case the "already reset" copy, and "<1m" for sub-minute deltas
+ * so countdowns never render a misleading "0m".
  */
 export function formatResetDuration(ms: number): string {
   if (ms <= 0) {
     return 'now'
   }
   const totalMins = Math.floor(ms / 60_000)
+  if (totalMins < 1) {
+    return '<1m'
+  }
   if (totalMins < 60) {
     return `${totalMins}m`
   }

@@ -16,6 +16,12 @@ describe('formatResetDuration', () => {
     expect(formatResetDuration(-1)).toBe('now')
   })
 
+  it('reports sub-minute deltas as "<1m" instead of "0m"', () => {
+    expect(formatResetDuration(1)).toBe('<1m')
+    expect(formatResetDuration(59_000)).toBe('<1m')
+    expect(formatResetCountdown(59_000)).toBe('Resets in <1m')
+  })
+
   it('floors to whole units and drops zero remainders', () => {
     expect(formatResetDuration(47 * MIN)).toBe('47m')
     expect(formatResetDuration(3 * HOUR + 54 * MIN)).toBe('3h 54m')

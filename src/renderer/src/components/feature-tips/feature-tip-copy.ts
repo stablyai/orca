@@ -11,46 +11,46 @@ const FEATURE_TIP_COPY: Record<
   }
 > = {
   'orca-cli': {
-    eyebrow: () => translate('auto.components.feature.tips.copy.eyebrow', 'Tip'),
+    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     title: () =>
       translate(
-        'auto.components.feature.tips.copy.orcaCli.title',
+        'auto.components.feature.tips.feature.tip.copy.3eacedec93',
         'Let agents drive Orca with the Orca CLI'
       ),
     description: () =>
       translate(
-        'auto.components.feature.tips.copy.orcaCli.description',
+        'auto.components.feature.tips.feature.tip.copy.8d54d0ff53',
         'Enable agents to coordinate child worktrees and communicate between worktrees.'
       ),
     ctaLabel: () =>
-      translate('auto.components.feature.tips.copy.orcaCli.cta', 'Install CLI & Skills')
+      translate('auto.components.feature.tips.feature.tip.copy.0080bc86eb', 'Install CLI & Skills')
   },
   'cmd-j-palette': {
-    eyebrow: () => translate('auto.components.feature.tips.copy.eyebrow', 'Tip'),
+    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     // Keep "<shortcut>" so CmdJPaletteTipDialog can inline the live keybinding.
     title: () =>
       translate(
-        'auto.components.feature.tips.copy.cmdJPalette.title',
+        'auto.components.feature.tips.feature.tip.copy.9b58bc5d7a',
         'Jump to a worktree with <shortcut>'
       ),
     description: () =>
       translate(
-        'auto.components.feature.tips.copy.cmdJPalette.description',
+        'auto.components.feature.tips.feature.tip.copy.655fc3cb5a',
         'Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.'
       ),
-    ctaLabel: () => translate('auto.components.feature.tips.copy.cmdJPalette.cta', 'Got it')
+    ctaLabel: () => translate('auto.components.feature.tips.feature.tip.copy.eb5e9e90ec', 'Got it')
   },
   'voice-dictation': {
-    eyebrow: () => translate('auto.components.feature.tips.copy.eyebrow', 'Tip'),
+    eyebrow: () => translate('auto.components.feature.tips.feature.tip.copy.52e9e84809', 'Tip'),
     title: () =>
-      translate('auto.components.feature.tips.copy.voiceDictation.title', 'Dictate into any pane'),
+      translate('auto.components.feature.tips.feature.tip.copy.5221facada', 'Dictate into any pane'),
     description: () =>
       translate(
-        'auto.components.feature.tips.copy.voiceDictation.description',
+        'auto.components.feature.tips.feature.tip.copy.5d69275490',
         'Start voice dictation in any focused pane, then use the shortcut again to stop.'
       ),
     ctaLabel: () =>
-      translate('auto.components.feature.tips.copy.voiceDictation.cta', 'Set up voice dictation')
+      translate('auto.components.feature.tips.feature.tip.copy.24aaad376f', 'Set up voice dictation')
   }
 }
 

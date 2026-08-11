@@ -6,7 +6,6 @@ import { i18n, setRendererPluginLanguagePacks } from './i18n'
 import { resolveUiLocale } from './supported-languages'
 import { isPluginUiLanguage } from '../../../shared/ui-language'
 import { usePluginLanguagePacks } from '../store/plugin-language-packs'
-import { loadMonacoNlsForUiLocale } from '@/lib/monaco-nls'
 
 export function I18nProvider({ children }: { children: ReactNode }): React.JSX.Element {
   // Why: settings arrive async over IPC; until they load we must not apply any
@@ -37,11 +36,8 @@ export function I18nProvider({ children }: { children: ReactNode }): React.JSX.E
     }
     requestedLocale.current = locale
     void i18n.changeLanguage(locale)
-    // Why: Monaco action/context-menu labels are localized only when
-    // `_VSCODE_NLS_MESSAGES` is set before `monaco-editor` evaluates. Prefetch
-    // the matching pack as soon as UI locale is known so a later editor open
-    // does not bake English labels from the default `en` boot language.
-    void loadMonacoNlsForUiLocale(locale)
+    // Monaco NLS is handled by monacoNlsBootstrap() (see monaco-nls.ts), which
+    // gates the first runtime `monaco-editor` import on the persisted locale.
   }, [locale, pluginLanguagePacks])
 
   return <I18nextProvider i18n={i18n}>{children}</I18nextProvider>

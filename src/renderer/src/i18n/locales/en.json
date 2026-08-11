@@ -729,6 +729,17 @@
               "edc1908653": "Opening remote paths in the local OS is not available."
             }
           }
+        },
+        "file": {
+          "manager": {
+            "label": {
+              "eb052ab0f6": "Finder",
+              "f2aa906c95": "File Explorer",
+              "8247848395": "File Manager",
+              "85cc2c844c": "Open in {{name}}",
+              "57b632c0bd": "Open in "
+            }
+          }
         }
       },
       "open": {
@@ -1074,6 +1085,15 @@
           "codexResetIdempotencyRequired": "Codex reset idempotency key is required",
           "noSubscriptionApiKeyBilling": "No subscription plan — API key billing",
           "claudeWaitingCredentialRotate": "Claude usage refresh is waiting for the live Claude terminal to rotate its credentials."
+        }
+      },
+      "github": {
+        "project": {
+          "error": {
+            "copy": {
+              "7ef26724e4": "Could not find this project or view."
+            }
+          }
         }
       }
     },
@@ -1564,10 +1584,7 @@
         "createWorkspaceAction": "Create workspace",
         "createWorktreeAction": "Create worktree",
         "moveUpWorkspace": "Move up workspace",
-        "moveDownWorkspace": "Move down workspace",
-        "installGit": "Install Git",
-        "installGitHubCli": "Install GitHub CLI",
-        "learnMore": "Learn more"
+        "moveDownWorkspace": "Move down workspace"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -2588,10 +2605,11 @@
             "f352abf7c3": "Repository list is updating.",
             "1ce21b8cff": "This item is outside the selected repositories.",
             "030de75bc5": "This item matches multiple selected repositories.",
-            "viewTooLarge": "This view has {{value0}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
-            "many": "many",
-            "unsupportedLayout": "Orca only renders table views yet. This is a Board or Roadmap view.",
-            "schemaDrift": "Could not read this project view."
+            "a435c479d5": "This view has {{value0}} items — too large to render in Orca. Narrow the view's filter on GitHub.",
+            "6f5c52db05": "many",
+            "228ec54838": "Orca only renders table views yet. This is a Board or Roadmap view.",
+            "768f6f3014": "Could not find this project or view.",
+            "e8f5b063b4": "Could not read this project view."
           },
           "slug": {
             "dialog": {
@@ -2628,7 +2646,6 @@
             }
           },
           "error": {
-            "couldNotFindProjectOrView": "Could not find this project or view.",
             "projectOrViewNotFound": "Project or view not found.",
             "projectNotFound": "Project not found.",
             "selectedViewNotFound": "Could not find the selected view.",
@@ -2664,7 +2681,7 @@
           "79c54552f7": "Filters",
           "8a2ffbf9b3": "Remove {{value0}} filter",
           "19bb6f115f": "reviewed-by",
-          "currentUser": "Current user"
+          "2c923c1711": "Current user"
         },
         "PRFilterPickers": {
           "fdf387297c": "Clear (",
@@ -2698,8 +2715,8 @@
           "7bf3a6e5ac": "author",
           "66256a73b3": "status",
           "3ce4d5e96e": "prs",
-          "filterOrTypeLogin": "Filter or type a login...",
-          "filterLabels": "Filter labels..."
+          "89eb415545": "Filter or type a login...",
+          "a6912d12b1": "Filter labels..."
         },
         "github": {
           "rate": {
@@ -4358,9 +4375,9 @@
           "e9283eb171": "1 directory",
           "69c020eddc": "Edit preset",
           "bd6cec2056": "new",
-          "nameRequired": "Name is required.",
-          "nameTooLong": "Name must be 80 characters or fewer.",
-          "nameExists": "\"{{name}}\" already exists."
+          "e28dd2f0e9": "Name is required.",
+          "42742b6c47": "Name must be 80 characters or fewer.",
+          "2106b565ae": "\"{{name}}\" already exists."
         }
       },
       "source": {
@@ -5182,12 +5199,12 @@
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
           "deleteWithDescendants": "Delete with Descendants…",
-          "sleepOneWorkspace": "Sleep 1 Workspace",
-          "sleepManyWorkspaces": "Sleep {{count}} Workspaces",
-          "sleep": "Sleep",
-          "deleteOneWorkspace": "Delete 1 Workspace",
-          "deleteManyWorkspaces": "Delete {{count}} Workspaces",
-          "deleteSelected": "Delete Selected"
+          "b50091a3e1": "Sleep 1 Workspace",
+          "f28bf93f81": "Sleep {{count}} Workspaces",
+          "ad9068e91a": "Sleep",
+          "59bb2e3856": "Delete 1 Workspace",
+          "fc5d59429d": "Delete {{count}} Workspaces",
+          "287b12a639": "Delete Selected"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -5460,6 +5477,12 @@
               "7c2f009786": "In progress",
               "6798dc7c94": "In review",
               "5076efc3d2": "Done"
+            }
+          },
+          "count": {
+            "label": {
+              "50b2484c91": "1 worktree",
+              "5c8151ceba": "{{count}} worktrees"
             }
           }
         },
@@ -5767,10 +5790,6 @@
           "openingProject": "Opening project...",
           "openingFolder": "Opening folder...",
           "chooseAFolder": "Choose a folder..."
-        },
-        "worktreeCount": {
-          "one": "1 worktree",
-          "other": "{{count}} worktrees"
         },
         "workspaceBoardStatus": {
           "todo": "Todo",
@@ -9657,6 +9676,13 @@
             "d4bcd497c7": "remote",
             "74c6d90d78": "Manage remote SSH targets",
             "380a788da7": "SSH Connections"
+          },
+          "pane": {
+            "host": {
+              "actions": {
+                "7a266605eb": "Could not refresh SSH targets"
+              }
+            }
           }
         },
         "tasks": {
@@ -12079,7 +12105,8 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "Fetch from remote without merging"
+                  "04d709801d": "Fetch from remote without merging",
+                  "03b0948e17": "Publish Branch"
                 }
               },
               "primary": {
@@ -12809,13 +12836,7 @@
             "searchJira": "Search Jira issues or paste an issue URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "Couldn’t link this Jira issue. Pick the matching site or reconnect Jira, then try again.",
-            "emoji": "Emoji",
-            "emptyHintSmart": "Start typing to create a name or find a source.",
-            "emptyHintGithub": "Start typing to search GitHub PRs and issues.",
-            "emptyHintGitlab": "Start typing to search GitLab MRs and issues.",
-            "emptyHintBranches": "No matching branches.",
-            "emptyHintLinear": "Start typing to search Linear issues.",
-            "emptyHintJira": "Start typing to search Jira issues, or paste an issue URL."
+            "emoji": "Emoji"
           },
           "ProjectCombobox": {
             "empty": "No projects match your search.",
@@ -12829,6 +12850,20 @@
             "listLabel": "Run targets",
             "label": "Run on",
             "browse": "Browse run targets"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "42997fb707": "Start typing to create a name or find a source.",
+                  "b2bc38e7d7": "Start typing to search GitHub PRs and issues.",
+                  "b1418294ea": "Start typing to search GitLab MRs and issues.",
+                  "80e7791c93": "No matching branches.",
+                  "b4e65d98a6": "Start typing to search Linear issues.",
+                  "5ba5d3e516": "Start typing to search Jira issues, or paste an issue URL."
+                }
+              }
+            }
           }
         }
       },
@@ -13570,8 +13605,8 @@
           },
           "FeatureTipActions": {
             "eb04abece8": "Maybe Later",
-            "installing": "Installing...",
-            "working": "Working..."
+            "21edf9eddf": "Installing...",
+            "57068c83ef": "Working..."
           },
           "FeatureTipsModal": {
             "c169298e4d": "Done",
@@ -13593,22 +13628,20 @@
             "379d776971": "typing",
             "0418f9becc": "open"
           },
-          "copy": {
-            "eyebrow": "Tip",
-            "orcaCli": {
-              "title": "Let agents drive Orca with the Orca CLI",
-              "description": "Enable agents to coordinate child worktrees and communicate between worktrees.",
-              "cta": "Install CLI & Skills"
-            },
-            "cmdJPalette": {
-              "title": "Jump to a worktree with <shortcut>",
-              "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.",
-              "cta": "Got it"
-            },
-            "voiceDictation": {
-              "title": "Dictate into any pane",
-              "description": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
-              "cta": "Set up voice dictation"
+          "feature": {
+            "tip": {
+              "copy": {
+                "52e9e84809": "Tip",
+                "3eacedec93": "Let agents drive Orca with the Orca CLI",
+                "8d54d0ff53": "Enable agents to coordinate child worktrees and communicate between worktrees.",
+                "0080bc86eb": "Install CLI & Skills",
+                "9b58bc5d7a": "Jump to a worktree with <shortcut>",
+                "655fc3cb5a": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard.",
+                "eb5e9e90ec": "Got it",
+                "5221facada": "Dictate into any pane",
+                "5d69275490": "Start voice dictation in any focused pane, then use the shortcut again to stop.",
+                "24aaad376f": "Set up voice dictation"
+              }
             }
           }
         }
@@ -14500,7 +14533,8 @@
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
             "ffa4412b66": "next",
-            "complete": "Done"
+            "complete": "Done",
+            "d74ca948aa": "Next"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "of",
@@ -14508,60 +14542,34 @@
           },
           "contextual": {
             "tour": {
-              "overlay": {
-                "measurement": {
-                  "38b3155418": "Next",
-                  "automations": {
-                    "intro": {
-                      "title": "What is an automation?",
-                      "body": "Automations run agent work on a schedule. Add an automation by clicking this button."
-                    },
-                    "results": {
-                      "title": "Find the results",
-                      "body": "Runs show when automations ran, what happened, and where to inspect their output."
-                    }
+              "step": {
+                "localized": {
+                  "copy": {
+                    "dc2d7ebbfa": "What is an automation?",
+                    "1a9ac96bc5": "Automations run agent work on a schedule. Add an automation by clicking this button.",
+                    "e69e126045": "Find the results",
+                    "65a7cf9b63": "Runs show when automations ran, what happened, and where to inspect their output.",
+                    "c1fc08cd8f": "Split a terminal pane",
+                    "0376fb14f8": "Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.",
+                    "6170819178": "Start another task in parallel",
+                    "2342da9c9f": "Each worktree gets its own branch, so parallel work stays separate.",
+                    "67991d08bb": "Pick a project",
+                    "3995148eb8": "Orca isolates each task in its own worktree, branched off your base.",
+                    "128db835f5": "Name it, or start from existing work",
+                    "6976d66061": "Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.",
+                    "f780b45969": "Choose what agent starts the work",
+                    "0314261987": "Pick the agent that should be opened when this worktree is created.",
+                    "7cf856f55d": "Choose the work source",
+                    "78aa70314e": "Switch between connected providers and project filters without changing pages.",
+                    "f392edd975": "Filter to the work you need",
+                    "15ea06d23f": "Use presets and search to narrow issues, reviews, merge requests, or tasks.",
+                    "819bcf6f00": "Start from work items",
+                    "be99666806": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.",
+                    "31ca5cb3e0": "Split terminal",
+                    "012036e8ca": "Next"
                   }
                 }
               }
-            }
-          },
-          "workspaceAgentSessions": {
-            "splitPane": {
-              "title": "Split a terminal pane",
-              "body": "Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.",
-              "action": "Split terminal"
-            },
-            "parallelTask": {
-              "title": "Start another task in parallel",
-              "body": "Each worktree gets its own branch, so parallel work stays separate."
-            }
-          },
-          "workspaceCreation": {
-            "project": {
-              "title": "Pick a project",
-              "body": "Orca isolates each task in its own worktree, branched off your base."
-            },
-            "name": {
-              "title": "Name it, or start from existing work",
-              "body": "Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message."
-            },
-            "agent": {
-              "title": "Choose what agent starts the work",
-              "body": "Pick the agent that should be opened when this worktree is created."
-            }
-          },
-          "tasks": {
-            "workSource": {
-              "title": "Choose the work source",
-              "body": "Switch between connected providers and project filters without changing pages."
-            },
-            "filterWork": {
-              "title": "Filter to the work you need",
-              "body": "Use presets and search to narrow issues, reviews, merge requests, or tasks."
-            },
-            "startFromItems": {
-              "title": "Start from work items",
-              "body": "Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace."
             }
           }
         }
@@ -15254,6 +15262,14 @@
             "70035652d7": "Password",
             "c50abbf340": "Jira account password",
             "d8737db691": "Use your Jira Server or Data Center account username and password."
+          },
+          "credential": {
+            "storage": {
+              "copy": {
+                "f92c2e5edc": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
+                "32a65d29fa": "Your token is stored locally and encrypted when local runtime storage supports it."
+              }
+            }
           }
         }
       },
@@ -15344,7 +15360,7 @@
           "thisBranch": "this branch",
           "forcePushOlderRemote": "Remote only has older copies of local commits. Force push {{countText}} with lease to update {{remoteTarget}}.",
           "localCommit": {
-            "one": "1 local commit",
+            "one": "{{count}} local commit",
             "other": "{{count}} local commits"
           },
           "forcePushReplaceRemote": "Force push {{commitText}} with lease to update {{remoteTarget}} and replace remote-only commits.",
@@ -15746,16 +15762,7 @@
       "osReveal": {
         "revealInFinder": "Reveal in Finder",
         "openContainingFolder": "Open Containing Folder",
-        "revealInFileExplorer": "Reveal in File Explorer",
-        "fileManagerFinder": "Finder",
-        "fileManagerExplorer": "File Explorer",
-        "fileManagerGeneric": "File Manager",
-        "openInFileManager": "Open in {{name}}",
-        "openInPrefix": "Open in "
-      },
-      "jiraConnectDialog": {
-        "tokenStoredRemote": "Your token is sent to the selected remote runtime and stored there with runtime-supported encryption.",
-        "tokenStoredLocal": "Your token is stored locally and encrypted when local runtime storage supports it."
+        "revealInFileExplorer": "Reveal in File Explorer"
       },
       "statusBar": {
         "workspaceSpaceFormat": {
@@ -15780,6 +15787,15 @@
           "needsPermission": "Needs permission",
           "done": "Done",
           "inactive": "Inactive"
+        }
+      },
+      "landing": {
+        "preflight": {
+          "issues": {
+            "100fa23656": "Install Git",
+            "903015746b": "Install GitHub CLI",
+            "806efa166b": "Learn more"
+          }
         }
       }
     },

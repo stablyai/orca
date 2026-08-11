@@ -295,7 +295,7 @@ export function SectionDetail({
           loading={false}
           error={null}
           searchPlaceholder={translate(
-            'auto.components.github.PRFilterSections.filterOrTypeLogin',
+            'auto.components.github.PRFilterSections.89eb415545',
             'Filter or type a login...'
           )}
           emptyText={translate('auto.components.github.PRFilterSections.458ea3602b', 'No authors')}
@@ -311,7 +311,7 @@ export function SectionDetail({
           loading={usersLoading}
           error={usersError}
           searchPlaceholder={translate(
-            'auto.components.github.PRFilterSections.filterOrTypeLogin',
+            'auto.components.github.PRFilterSections.89eb415545',
             'Filter or type a login...'
           )}
           emptyText={translate('auto.components.github.PRFilterSections.a00830d3f7', 'No users')}
@@ -327,7 +327,7 @@ export function SectionDetail({
           loading={labelsLoading}
           error={labelsError}
           searchPlaceholder={translate(
-            'auto.components.github.PRFilterSections.filterLabels',
+            'auto.components.github.PRFilterSections.a6912d12b1',
             'Filter labels...'
           )}
           emptyText={translate('auto.components.github.PRFilterSections.de26e2eb06', 'No labels')}
@@ -368,7 +368,7 @@ export function SectionDetail({
             loading={usersLoading}
             error={usersError}
             searchPlaceholder={translate(
-              'auto.components.github.PRFilterSections.filterOrTypeLogin',
+              'auto.components.github.PRFilterSections.89eb415545',
               'Filter or type a login...'
             )}
             emptyText={translate('auto.components.github.PRFilterSections.a00830d3f7', 'No users')}

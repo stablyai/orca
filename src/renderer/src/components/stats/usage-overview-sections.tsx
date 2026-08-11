@@ -8,8 +8,8 @@ import {
   type UsageOverviewModel,
   type UsageProviderOverview
 } from './usage-overview-model'
-import { translate } from '@/i18n/i18n'
-import { formatUsageProjectLabel, resolveUiLocaleTag } from './usage-formatters'
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import { formatUsageProjectLabel } from './usage-formatters'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
   0: 'border-border/60 bg-muted/40',
@@ -31,7 +31,7 @@ function formatDayLabel(day: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
-  return parsed.toLocaleDateString(resolveUiLocaleTag(), {
+  return parsed.toLocaleDateString(getIntlLocale(), {
     month: 'short',
     day: 'numeric'
   })

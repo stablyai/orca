@@ -56,7 +56,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({})
     expect(document.body.textContent).toContain('Add SSH host')
     expect(document.body.textContent).toContain(
-      'Add a persistent machine you can log into over SSH.'
+      'Add a persistent machine you can log into over SSH'
     )
     expect(document.querySelector('#ssh-target-host')).not.toBeNull()
     expect(document.querySelector('#ssh-target-label')).not.toBeNull()

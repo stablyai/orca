@@ -1,4 +1,4 @@
-import { i18n, translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 
 export function formatTokens(value: number): string {
   if (value >= 1_000_000) {
@@ -7,7 +7,7 @@ export function formatTokens(value: number): string {
   if (value >= 1_000) {
     return `${(value / 1_000).toFixed(1)}k`
   }
-  return value.toLocaleString(resolveUiLocaleTag())
+  return value.toLocaleString(getIntlLocale())
 }
 
 export function formatCost(value: number | null): string {
@@ -22,7 +22,7 @@ export function formatUpdatedAt(timestamp: number | null): string {
     return translate('auto.components.stats.usage.notScannedYet', 'Not scanned yet')
   }
   return translate('auto.components.stats.usage.updatedAt', 'Updated {{when}}', {
-    when: new Date(timestamp).toLocaleString(resolveUiLocaleTag())
+    when: new Date(timestamp).toLocaleString(getIntlLocale())
   })
 }
 
@@ -42,27 +42,10 @@ export function formatSessionTime(timestamp: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return timestamp
   }
-  return parsed.toLocaleString(resolveUiLocaleTag(), {
+  return parsed.toLocaleString(getIntlLocale(), {
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit'
   })
-}
-
-export function resolveUiLocaleTag(): string | undefined {
-  const language = i18n.language
-  if (language === 'zh') {
-    return 'zh-CN'
-  }
-  if (language === 'ja') {
-    return 'ja-JP'
-  }
-  if (language === 'ko') {
-    return 'ko-KR'
-  }
-  if (language === 'es') {
-    return 'es'
-  }
-  return undefined
 }

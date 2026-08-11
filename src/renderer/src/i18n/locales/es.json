@@ -13292,7 +13292,8 @@
             "4a9568f773": "Atrás",
             "4f86e2a10b": "Saltar recorrido",
             "d974f32a83": "Descartar recorrido",
-            "ffa4412b66": "próximo"
+            "ffa4412b66": "próximo",
+            "d74ca948aa": "Próximo"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "de",
@@ -13300,9 +13301,11 @@
           },
           "contextual": {
             "tour": {
-              "overlay": {
-                "measurement": {
-                  "38b3155418": "Próximo"
+              "step": {
+                "localized": {
+                  "copy": {
+                    "012036e8ca": "Próximo"
+                  }
                 }
               }
             }

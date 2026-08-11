@@ -7,120 +7,120 @@ export const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: ()
   'automations-intro': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.dc2d7ebbfa',
         'What is an automation?'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.1a9ac96bc5',
         'Automations run agent work on a schedule. Add an automation by clicking this button.'
       )
   },
   'automations-results': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.e69e126045',
         'Find the results'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.65a7cf9b63',
         'Runs show when automations ran, what happened, and where to inspect their output.'
       )
   },
   'workspace-agent-sessions-split-pane': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.c1fc08cd8f',
         'Split a terminal pane'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.splitPane.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.0376fb14f8',
         'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.'
       )
   },
   'workspace-agent-sessions-parallel-task': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.6170819178',
         'Start another task in parallel'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.workspaceAgentSessions.parallelTask.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.2342da9c9f',
         'Each worktree gets its own branch, so parallel work stays separate.'
       )
   },
   'workspace-creation-project': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.project.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.67991d08bb',
         'Pick a project'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.project.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.3995148eb8',
         'Orca isolates each task in its own worktree, branched off your base.'
       )
   },
   'workspace-creation-name': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.name.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.128db835f5',
         'Name it, or start from existing work'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.name.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.6976d66061',
         'Start from a linked task for a short issue or PR name. Or leave it blank to auto-name it from your first agent message.'
       )
   },
   'workspace-creation-agent': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.agent.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.f780b45969',
         'Choose what agent starts the work'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.workspaceCreation.agent.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.0314261987',
         'Pick the agent that should be opened when this worktree is created.'
       )
   },
   'tasks-work-source': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.tasks.workSource.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.7cf856f55d',
         'Choose the work source'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.tasks.workSource.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.78aa70314e',
         'Switch between connected providers and project filters without changing pages.'
       )
   },
   'tasks-filter-work': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.tasks.filterWork.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.f392edd975',
         'Filter to the work you need'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.tasks.filterWork.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.15ea06d23f',
         'Use presets and search to narrow issues, reviews, merge requests, or tasks.'
       )
   },
   'tasks-start-from-items': {
     title: () =>
       translate(
-        'auto.components.contextual.tours.tasks.startFromItems.title',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.819bcf6f00',
         'Start from work items'
       ),
     body: () =>
       translate(
-        'auto.components.contextual.tours.tasks.startFromItems.body',
+        'auto.components.contextual.tours.contextual.tour.step.localized.copy.be99666806',
         'Use Start or Open on a task, issue, review, or merge request to bring its context into a workspace.'
       )
   }
@@ -129,13 +129,13 @@ export const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: ()
 export function localizeTourActionLabel(label: string): string {
   if (label === 'Split terminal') {
     return translate(
-      'auto.components.contextual.tours.workspaceAgentSessions.splitPane.action',
+      'auto.components.contextual.tours.contextual.tour.step.localized.copy.31ca5cb3e0',
       'Split terminal'
     )
   }
   if (label === 'Next') {
     return translate(
-      'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+      'auto.components.contextual.tours.contextual.tour.step.localized.copy.012036e8ca',
       'Next'
     )
   }

@@ -110,7 +110,7 @@ export function ContextualTourOverlaySurface({
     label: renderState.isLastStep
       ? translate('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
       : translate(
-          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+          'auto.components.contextual.tours.ContextualTourOverlaySurface.d74ca948aa',
           'Next'
         )
   } satisfies ContextualTourStepAction

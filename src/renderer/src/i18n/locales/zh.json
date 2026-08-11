@@ -701,6 +701,17 @@
               "edc1908653": "无法在本地操作系统中打开远程路径。"
             }
           }
+        },
+        "file": {
+          "manager": {
+            "label": {
+              "eb052ab0f6": "Finder",
+              "f2aa906c95": "文件资源管理器",
+              "8247848395": "文件管理器",
+              "85cc2c844c": "在 {{name}} 中打开",
+              "57b632c0bd": "在以下位置打开："
+            }
+          }
         }
       },
       "open": {
@@ -1046,6 +1057,15 @@
           "codexResetIdempotencyRequired": "需要 Codex 重置幂等键",
           "noSubscriptionApiKeyBilling": "无订阅套餐 — API key 计费",
           "claudeWaitingCredentialRotate": "Claude 用量刷新正在等待实时 Claude 终端轮换凭据"
+        }
+      },
+      "github": {
+        "project": {
+          "error": {
+            "copy": {
+              "7ef26724e4": "找不到此项目或视图。"
+            }
+          }
         }
       }
     },
@@ -1533,10 +1553,7 @@
         "createWorkspaceAction": "创建工作区",
         "createWorktreeAction": "创建工作树",
         "moveUpWorkspace": "上移工作区",
-        "moveDownWorkspace": "下移工作区",
-        "installGit": "安装 Git",
-        "installGitHubCli": "安装 GitHub CLI",
-        "learnMore": "了解更多"
+        "moveDownWorkspace": "下移工作区"
       },
       "LinearIssueMarkdownDescriptionEditor": {
         "d9c47069ef": "Markdown",
@@ -2554,10 +2571,11 @@
             "f352abf7c3": "仓库列表正在更新。",
             "1ce21b8cff": "此项目不在选中的仓库中。",
             "030de75bc5": "此项目匹配多个选中的仓库。",
-            "viewTooLarge": "此视图有 {{value0}} 项 — 过大，无法在 Orca 中渲染。请在 GitHub 上缩小该视图的筛选条件。",
-            "many": "很多",
-            "unsupportedLayout": "Orca 目前仅支持表格视图。这是看板或路线图视图。",
-            "schemaDrift": "无法读取此项目视图。"
+            "a435c479d5": "此视图有 {{value0}} 项 — 过大，无法在 Orca 中渲染。请在 GitHub 上缩小该视图的筛选条件。",
+            "6f5c52db05": "很多",
+            "228ec54838": "Orca 目前仅支持表格视图。这是看板或路线图视图。",
+            "768f6f3014": "找不到此项目或视图。",
+            "e8f5b063b4": "无法读取此项目视图。"
           },
           "slug": {
             "dialog": {
@@ -2594,7 +2612,6 @@
             }
           },
           "error": {
-            "couldNotFindProjectOrView": "找不到此项目或视图。",
             "projectOrViewNotFound": "找不到项目或视图。",
             "projectNotFound": "找不到项目。",
             "selectedViewNotFound": "找不到所选视图。",
@@ -2630,7 +2647,7 @@
           "79c54552f7": "筛选条件",
           "8a2ffbf9b3": "删除 {{value0}} 筛选条件",
           "19bb6f115f": "reviewed-by",
-          "currentUser": "当前用户"
+          "2c923c1711": "当前用户"
         },
         "PRFilterPickers": {
           "fdf387297c": "清除 (",
@@ -2664,8 +2681,8 @@
           "7bf3a6e5ac": "作者",
           "66256a73b3": "状态",
           "3ce4d5e96e": "PR",
-          "filterOrTypeLogin": "筛选或输入登录名...",
-          "filterLabels": "筛选标签..."
+          "89eb415545": "筛选或输入登录名...",
+          "a6912d12b1": "筛选标签..."
         },
         "github": {
           "rate": {
@@ -4324,9 +4341,9 @@
           "e9283eb171": "1 个目录",
           "69c020eddc": "编辑预设",
           "bd6cec2056": "新的",
-          "nameRequired": "名称为必填项。",
-          "nameTooLong": "名称不得超过 80 个字符。",
-          "nameExists": "\"{{name}}\" 已存在。"
+          "e28dd2f0e9": "名称为必填项。",
+          "42742b6c47": "名称不得超过 80 个字符。",
+          "2106b565ae": "\"{{name}}\" 已存在。"
         }
       },
       "source": {
@@ -5096,12 +5113,12 @@
           "sleepWithDescendants": "连同后代一起休眠 ({{value0}})",
           "sleepWithDescendantsDescription": "关闭此工作区及所有嵌套后代中的活动面板，以释放内存和 CPU",
           "deleteWithDescendants": "连同后代一起删除…",
-          "sleepOneWorkspace": "休眠 1 个工作区",
-          "sleepManyWorkspaces": "休眠 {{count}} 个工作区",
-          "sleep": "休眠",
-          "deleteOneWorkspace": "删除 1 个工作区",
-          "deleteManyWorkspaces": "删除 {{count}} 个工作区",
-          "deleteSelected": "删除所选"
+          "b50091a3e1": "休眠 1 个工作区",
+          "f28bf93f81": "休眠 {{count}} 个工作区",
+          "ad9068e91a": "休眠",
+          "59bb2e3856": "删除 1 个工作区",
+          "fc5d59429d": "删除 {{count}} 个工作区",
+          "287b12a639": "删除所选"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中。",
@@ -5373,6 +5390,12 @@
               "7c2f009786": "进行中",
               "6798dc7c94": "评审中",
               "5076efc3d2": "完成"
+            }
+          },
+          "count": {
+            "label": {
+              "50b2484c91": "1 个工作树",
+              "5c8151ceba": "{{count}} 个工作树"
             }
           }
         },
@@ -5730,10 +5753,6 @@
           "openingProject": "正在打开项目…",
           "openingFolder": "正在打开文件夹…",
           "chooseAFolder": "选择文件夹…"
-        },
-        "worktreeCount": {
-          "one": "1 个工作树",
-          "other": "{{count}} 个工作树"
         },
         "workspaceBoardStatus": {
           "todo": "待办",
@@ -9529,6 +9548,13 @@
             "d4bcd497c7": "远程",
             "74c6d90d78": "管理远程 SSH 目标",
             "380a788da7": "SSH 连接"
+          },
+          "pane": {
+            "host": {
+              "actions": {
+                "7a266605eb": "无法刷新 SSH 目标列表"
+              }
+            }
           }
         },
         "tasks": {
@@ -11996,7 +12022,8 @@
                   "226b85a3a7": "Fetch",
                   "323bb614aa": "Commit & Sync",
                   "2b8e6595fd": "Commit",
-                  "04d709801d": "从远程获取但不合并"
+                  "04d709801d": "从远程获取但不合并",
+                  "03b0948e17": "发布分支"
                 }
               },
               "primary": {
@@ -12723,13 +12750,7 @@
             "searchJira": "搜索 Jira 议题或粘贴议题 URL",
             "jiraMode": "Jira",
             "jiraSelectBindFailed": "无法关联此 Jira 议题。请选择匹配的站点或重新连接 Jira，然后重试",
-            "emoji": "Emoji",
-            "emptyHintSmart": "开始输入以创建名称或查找来源。",
-            "emptyHintGithub": "开始输入以搜索 GitHub PR 和 Issue",
-            "emptyHintGitlab": "开始输入以搜索 GitLab MR 和 Issue",
-            "emptyHintBranches": "没有匹配的分支。",
-            "emptyHintLinear": "开始输入以搜索 Linear Issue",
-            "emptyHintJira": "开始输入以搜索 Jira Issue，或粘贴 Issue URL"
+            "emoji": "Emoji"
           },
           "ProjectCombobox": {
             "empty": "没有匹配搜索的项目。",
@@ -12743,6 +12764,20 @@
             "listLabel": "运行目标",
             "label": "运行在",
             "browse": "浏览运行目标"
+          },
+          "smart": {
+            "workspace": {
+              "empty": {
+                "hint": {
+                  "42997fb707": "开始输入以创建名称或查找来源。",
+                  "b2bc38e7d7": "开始输入以搜索 GitHub PR 和 Issue",
+                  "b1418294ea": "开始输入以搜索 GitLab MR 和 Issue",
+                  "80e7791c93": "没有匹配的分支。",
+                  "b4e65d98a6": "开始输入以搜索 Linear Issue",
+                  "5ba5d3e516": "开始输入以搜索 Jira Issue，或粘贴 Issue URL"
+                }
+              }
+            }
           }
         }
       },
@@ -13521,8 +13556,8 @@
           },
           "FeatureTipActions": {
             "eb04abece8": "也许稍后",
-            "installing": "正在安装…",
-            "working": "处理中…"
+            "21edf9eddf": "正在安装…",
+            "57068c83ef": "处理中…"
           },
           "FeatureTipsModal": {
             "c169298e4d": "完成",
@@ -13544,22 +13579,20 @@
             "379d776971": "打字",
             "0418f9becc": "打开"
           },
-          "copy": {
-            "eyebrow": "提示",
-            "orcaCli": {
-              "title": "用 Orca CLI 让智能体驱动 Orca",
-              "description": "让智能体协调子工作树，并在工作树之间通信。",
-              "cta": "安装 CLI 与技能"
-            },
-            "cmdJPalette": {
-              "title": "使用 <shortcut> 跳转到工作树",
-              "description": "搜索工作树、切换标签、调整设置或新建工作树，全程不必离开键盘。",
-              "cta": "知道了"
-            },
-            "voiceDictation": {
-              "title": "在任意窗格中听写",
-              "description": "在当前聚焦的窗格开始语音听写，再次使用快捷键即可停止。",
-              "cta": "设置语音听写"
+          "feature": {
+            "tip": {
+              "copy": {
+                "52e9e84809": "提示",
+                "3eacedec93": "用 Orca CLI 让智能体驱动 Orca",
+                "8d54d0ff53": "让智能体协调子工作树，并在工作树之间通信。",
+                "0080bc86eb": "安装 CLI 与技能",
+                "9b58bc5d7a": "使用 <shortcut> 跳转到工作树",
+                "655fc3cb5a": "搜索工作树、切换标签、调整设置或新建工作树，全程不必离开键盘。",
+                "eb5e9e90ec": "知道了",
+                "5221facada": "在任意窗格中听写",
+                "5d69275490": "在当前聚焦的窗格开始语音听写，再次使用快捷键即可停止。",
+                "24aaad376f": "设置语音听写"
+              }
             }
           }
         }
@@ -14451,7 +14484,8 @@
             "4f86e2a10b": "跳过导览",
             "d974f32a83": "关闭导览",
             "ffa4412b66": "下一步",
-            "complete": "完成"
+            "complete": "完成",
+            "d74ca948aa": "下一步"
           },
           "ContextualTourProgressDots": {
             "7734cb8ad3": "的",
@@ -14459,60 +14493,34 @@
           },
           "contextual": {
             "tour": {
-              "overlay": {
-                "measurement": {
-                  "38b3155418": "下一步",
-                  "automations": {
-                    "intro": {
-                      "title": "什么是自动化？",
-                      "body": "自动化按计划运行代理工作。点击此按钮添加自动化"
-                    },
-                    "results": {
-                      "title": "查找结果",
-                      "body": "运行记录显示自动化何时执行、结果如何，以及在何处查看输出"
-                    }
+              "step": {
+                "localized": {
+                  "copy": {
+                    "dc2d7ebbfa": "什么是自动化？",
+                    "1a9ac96bc5": "自动化按计划运行代理工作。点击此按钮添加自动化",
+                    "e69e126045": "查找结果",
+                    "65a7cf9b63": "运行记录显示自动化何时执行、结果如何，以及在何处查看输出",
+                    "c1fc08cd8f": "拆分终端窗格",
+                    "0376fb14f8": "使用 {terminal.splitRight} 打开第二个终端窗格，或右键窗格查看拆分选项。",
+                    "6170819178": "并行开始另一项任务",
+                    "2342da9c9f": "每个工作树都有自己的分支，因此并行工作可以彼此隔离。",
+                    "67991d08bb": "选择项目",
+                    "3995148eb8": "Orca 会把每个任务隔离到独立的工作树中，并从你的基线分支创建。",
+                    "128db835f5": "命名，或从现有工作开始",
+                    "6976d66061": "从关联任务开始可得到简短的议题或 PR 名称。也可留空，以便根据你的第一条代理消息自动命名。",
+                    "f780b45969": "选择启动工作的代理",
+                    "0314261987": "选择创建此工作树时要打开的代理。",
+                    "7cf856f55d": "选择工作来源",
+                    "78aa70314e": "可在不切换页面的情况下，在已连接的提供方与项目筛选之间切换。",
+                    "f392edd975": "筛选你需要的工作",
+                    "15ea06d23f": "使用预设和搜索缩小议题、评审、合并请求或任务范围。",
+                    "819bcf6f00": "从工作项开始",
+                    "be99666806": "在任务、议题、评审或合并请求上使用「开始」或「打开」，将其上下文带入工作区。",
+                    "31ca5cb3e0": "拆分终端",
+                    "012036e8ca": "下一步"
                   }
                 }
               }
-            }
-          },
-          "workspaceAgentSessions": {
-            "splitPane": {
-              "title": "拆分终端窗格",
-              "body": "使用 {terminal.splitRight} 打开第二个终端窗格，或右键窗格查看拆分选项。",
-              "action": "拆分终端"
-            },
-            "parallelTask": {
-              "title": "并行开始另一项任务",
-              "body": "每个工作树都有自己的分支，因此并行工作可以彼此隔离。"
-            }
-          },
-          "workspaceCreation": {
-            "project": {
-              "title": "选择项目",
-              "body": "Orca 会把每个任务隔离到独立的工作树中，并从你的基线分支创建。"
-            },
-            "name": {
-              "title": "命名，或从现有工作开始",
-              "body": "从关联任务开始可得到简短的议题或 PR 名称。也可留空，以便根据你的第一条代理消息自动命名。"
-            },
-            "agent": {
-              "title": "选择启动工作的代理",
-              "body": "选择创建此工作树时要打开的代理。"
-            }
-          },
-          "tasks": {
-            "workSource": {
-              "title": "选择工作来源",
-              "body": "可在不切换页面的情况下，在已连接的提供方与项目筛选之间切换。"
-            },
-            "filterWork": {
-              "title": "筛选你需要的工作",
-              "body": "使用预设和搜索缩小议题、评审、合并请求或任务范围。"
-            },
-            "startFromItems": {
-              "title": "从工作项开始",
-              "body": "在任务、议题、评审或合并请求上使用「开始」或「打开」，将其上下文带入工作区。"
             }
           }
         }
@@ -15205,6 +15213,14 @@
             "70035652d7": "Password",
             "c50abbf340": "Jira 账户密码",
             "d8737db691": "使用你的 Jira Server 或 Data Center 账户用户名和密码。"
+          },
+          "credential": {
+            "storage": {
+              "copy": {
+                "f92c2e5edc": "你的令牌会发送到所选远程运行时，并由该运行时支持的加密方式存储。",
+                "32a65d29fa": "你的令牌保存在本地，并在本地运行时存储支持时加密。"
+              }
+            }
           }
         }
       },
@@ -15295,7 +15311,7 @@
           "thisBranch": "此分支",
           "forcePushOlderRemote": "远程仅有较旧的本地提交副本。Force push {{countText}}(带 lease)以更新 {{remoteTarget}}",
           "localCommit": {
-            "one": "1 个本地提交",
+            "one": "{{count}} 个本地提交",
             "other": "{{count}} 个本地提交"
           },
           "forcePushReplaceRemote": "Force push {{commitText}}(带 lease)以更新 {{remoteTarget}} 并替换仅存在于远程的提交",
@@ -15844,16 +15860,7 @@
       "osReveal": {
         "revealInFinder": "在 Finder 中显示",
         "openContainingFolder": "打开所在文件夹",
-        "revealInFileExplorer": "在文件资源管理器中显示",
-        "fileManagerFinder": "Finder",
-        "fileManagerExplorer": "文件资源管理器",
-        "fileManagerGeneric": "文件管理器",
-        "openInFileManager": "在 {{name}} 中打开",
-        "openInPrefix": "在以下位置打开："
-      },
-      "jiraConnectDialog": {
-        "tokenStoredRemote": "你的令牌会发送到所选远程运行时，并由该运行时支持的加密方式存储。",
-        "tokenStoredLocal": "你的令牌保存在本地，并在本地运行时存储支持时加密。"
+        "revealInFileExplorer": "在文件资源管理器中显示"
       },
       "statusBar": {
         "workspaceSpaceFormat": {
@@ -15878,6 +15885,15 @@
           "needsPermission": "需要权限",
           "done": "已完成",
           "inactive": "未活动"
+        }
+      },
+      "landing": {
+        "preflight": {
+          "issues": {
+            "100fa23656": "安装 Git",
+            "903015746b": "安装 GitHub CLI",
+            "806efa166b": "了解更多"
+          }
         }
       }
     },

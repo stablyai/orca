@@ -53,7 +53,10 @@ export async function ensureOnboardingCliRegistration(deps: OnboardingCliEnsureD
   } catch (error) {
     warnings.push({
       featureId: 'cli',
-      message: error instanceof Error ? error.message : String(error)
+      message:
+        error instanceof Error
+          ? formatCliUserFacingDetail(error.message) || error.message
+          : String(error)
     })
   }
   return { cliTouched, warnings }

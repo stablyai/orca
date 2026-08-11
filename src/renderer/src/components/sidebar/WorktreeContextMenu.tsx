@@ -448,28 +448,28 @@ const WorktreeContextMenu = React.memo(function WorktreeContextMenu({
     isMultiContext && sleepableWorktrees.length > 0
       ? sleepableWorktrees.length === 1
         ? translate(
-            'auto.components.sidebar.WorktreeContextMenu.sleepOneWorkspace',
+            'auto.components.sidebar.WorktreeContextMenu.b50091a3e1',
             'Sleep 1 Workspace'
           )
         : translate(
-            'auto.components.sidebar.WorktreeContextMenu.sleepManyWorkspaces',
+            'auto.components.sidebar.WorktreeContextMenu.f28bf93f81',
             'Sleep {{count}} Workspaces',
             { count: sleepableWorktrees.length }
           )
-      : translate('auto.components.sidebar.WorktreeContextMenu.sleep', 'Sleep')
+      : translate('auto.components.sidebar.WorktreeContextMenu.ad9068e91a', 'Sleep')
   const deleteLabel =
     isMultiContext && batchDeleteWorktrees.length > 0
       ? batchDeleteWorktrees.length === 1
         ? translate(
-            'auto.components.sidebar.WorktreeContextMenu.deleteOneWorkspace',
+            'auto.components.sidebar.WorktreeContextMenu.59bb2e3856',
             'Delete 1 Workspace'
           )
         : translate(
-            'auto.components.sidebar.WorktreeContextMenu.deleteManyWorkspaces',
+            'auto.components.sidebar.WorktreeContextMenu.fc5d59429d',
             'Delete {{count}} Workspaces',
             { count: batchDeleteWorktrees.length }
           )
-      : translate('auto.components.sidebar.WorktreeContextMenu.deleteSelected', 'Delete Selected')
+      : translate('auto.components.sidebar.WorktreeContextMenu.287b12a639', 'Delete Selected')
   const hasParentLink = hasWorktreeParentLink(
     worktree,
     worktreeLineageById,

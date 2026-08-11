@@ -88,7 +88,11 @@ export function formatManualForcePushTitle(
     translate('auto.components.rightSidebar.sourceControl.theRemoteBranch', 'the remote branch')
   const commitText =
     ahead === 1
-      ? translate('auto.components.rightSidebar.sourceControl.localCommit.one', '1 local commit')
+      ? translate(
+          'auto.components.rightSidebar.sourceControl.localCommit.one',
+          '{{count}} local commit',
+          { count: ahead }
+        )
       : translate(
           'auto.components.rightSidebar.sourceControl.localCommit.other',
           '{{count}} local commits',

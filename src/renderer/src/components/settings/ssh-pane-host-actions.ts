@@ -8,6 +8,26 @@ import { formatSshErrorOrFallback, formatSshUserFacingError } from './ssh-user-f
 
 type MountedRef = MutableRefObject<boolean>
 
+// Why: a target-list refresh failure after a successful action must not surface
+// as the action's own error toast (e.g. "Failed to remove target").
+async function refreshSshTargetsBestEffort(
+  loadTargets: () => Promise<void>,
+  mountedRef: MountedRef
+): Promise<void> {
+  try {
+    await loadTargets()
+  } catch {
+    if (mountedRef.current) {
+      toast.error(
+        translate(
+          'auto.components.settings.ssh.pane.host.actions.7a266605eb',
+          'Could not refresh SSH targets'
+        )
+      )
+    }
+  }
+}
+
 export async function removeSshPaneTarget(args: {
   id: string
   mountedRef: MountedRef
@@ -22,7 +42,6 @@ export async function removeSshPaneTarget(args: {
     if (args.mountedRef.current) {
       toast.success(translate('auto.components.settings.SshPane.a0237eb1ca', 'Target removed'))
     }
-    await args.loadTargets()
   } catch (err) {
     if (args.mountedRef.current) {
       toast.error(
@@ -32,7 +51,9 @@ export async function removeSshPaneTarget(args: {
         )
       )
     }
+    return
   }
+  await refreshSshTargetsBestEffort(args.loadTargets, args.mountedRef)
 }
 
 export async function connectSshPaneTarget(
@@ -95,7 +116,6 @@ export async function resetSshPaneRelay(args: {
     if (args.mountedRef.current) {
       toast.success(translate('auto.components.settings.SshPane.db2e48975e', 'Remote relay reset'))
     }
-    await args.loadTargets()
   } catch (err) {
     if (args.mountedRef.current) {
       toast.error(
@@ -105,7 +125,9 @@ export async function resetSshPaneRelay(args: {
         )
       )
     }
+    return
   }
+  await refreshSshTargetsBestEffort(args.loadTargets, args.mountedRef)
 }
 
 export async function testSshPaneConnection(args: {
@@ -181,7 +203,6 @@ export async function importSshPaneConfig(args: {
         )
       }
     }
-    await args.loadTargets()
   } catch (err) {
     if (args.mountedRef.current) {
       toast.error(
@@ -191,5 +212,7 @@ export async function importSshPaneConfig(args: {
         )
       )
     }
+    return
   }
+  await refreshSshTargetsBestEffort(args.loadTargets, args.mountedRef)
 }

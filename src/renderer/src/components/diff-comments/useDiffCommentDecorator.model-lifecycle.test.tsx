@@ -12,6 +12,22 @@ vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof storeFixture) => unknown) => selector(storeFixture)
 }))
 
+// Why: the real monaco-setup top-level-awaits monaco-editor plus worker/css
+// assets, which vitest cannot evaluate; the hook only needs these two APIs.
+vi.mock('@/lib/monaco-setup', () => ({
+  monaco: {
+    editor: { EditorOption: { lineHeight: 66 } },
+    Range: class {
+      constructor(
+        public startLineNumber: number,
+        public startColumn: number,
+        public endLineNumber: number,
+        public endColumn: number
+      ) {}
+    }
+  }
+}))
+
 import { useDiffCommentDecorator } from './useDiffCommentDecorator'
 
 afterEach(() => {

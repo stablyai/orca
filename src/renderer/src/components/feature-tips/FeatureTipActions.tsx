@@ -6,9 +6,9 @@ import { translate } from '@/i18n/i18n'
 
 function getPrimaryBusyLabel(action: FeatureTipAction): string {
   if (action === 'setup-cli') {
-    return translate('auto.components.feature.tips.FeatureTipActions.installing', 'Installing...')
+    return translate('auto.components.feature.tips.FeatureTipActions.21edf9eddf', 'Installing...')
   }
-  return translate('auto.components.feature.tips.FeatureTipActions.working', 'Working...')
+  return translate('auto.components.feature.tips.FeatureTipActions.57068c83ef', 'Working...')
 }
 
 export function FeatureTipActions({

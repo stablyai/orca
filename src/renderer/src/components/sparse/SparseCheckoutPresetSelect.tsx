@@ -63,17 +63,17 @@ export default function SparseCheckoutPresetSelect({
   const nameError =
     draft && trimmedName.length === 0
       ? translate(
-          'auto.components.sparse.SparseCheckoutPresetSelect.nameRequired',
+          'auto.components.sparse.SparseCheckoutPresetSelect.e28dd2f0e9',
           'Name is required.'
         )
       : trimmedName.length > 80
         ? translate(
-            'auto.components.sparse.SparseCheckoutPresetSelect.nameTooLong',
+            'auto.components.sparse.SparseCheckoutPresetSelect.42742b6c47',
             'Name must be 80 characters or fewer.'
           )
         : nameCollision
           ? translate(
-              'auto.components.sparse.SparseCheckoutPresetSelect.nameExists',
+              'auto.components.sparse.SparseCheckoutPresetSelect.2106b565ae',
               '"{{name}}" already exists.',
               { name: nameCollision.name }
             )
