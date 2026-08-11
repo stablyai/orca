@@ -68,7 +68,8 @@ async function requestJson<T>(
   // Why: the existing-review lookup behind Create must distinguish a real
   // transport/auth failure from an accepted "no PR". When true, a failed request
   // throws instead of collapsing to null so callers never report false not_found.
-  throwOnFailure = false
+  throwOnFailure = false,
+  notFoundIsNull = false
 ): Promise<T | null> {
   const config = resolveBitbucketAuthConfig()
   try {
@@ -81,6 +82,9 @@ async function requestJson<T>(
     })
     if (!response.ok) {
       await cancelUnreadResponseBody(response)
+      if (response.status === 404 && notFoundIsNull) {
+        return null
+      }
       if (throwOnFailure) {
         throw new Error(`Bitbucket request failed: HTTP ${response.status}`)
       }
@@ -209,7 +213,8 @@ export async function getBitbucketPullRequestForBranch(
     const raw = await requestJson<RawBitbucketPullRequest>(
       `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
       {},
-      throwOnFailure
+      throwOnFailure,
+      true
     )
     if (raw) {
       return normalizePullRequest(repo, raw)

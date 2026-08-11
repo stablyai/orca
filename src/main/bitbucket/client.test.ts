@@ -164,6 +164,31 @@ describe('Bitbucket client', () => {
     )
   })
 
+  it('falls back to the branch index when a linked PR number is stale', async () => {
+    const branchPR = bitbucketPr(7)
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/pullrequests/99')) {
+        return new Response('not found', { status: 404 })
+      }
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      return Response.json({
+        values: [{ ...branchPR, source: { ...branchPR.source, branch: { name: 'feature/login' } } }]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/login', 99)
+    ).resolves.toMatchObject({ number: 7, state: 'open' })
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      expect.stringContaining('/pullrequests/99'),
+      expect.stringContaining('/pullrequests?'),
+      expect.stringContaining('/statuses/build')
+    ])
+  })
+
   it('fetches a branch pull request and commit build status', async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.includes('/statuses/build')) {
