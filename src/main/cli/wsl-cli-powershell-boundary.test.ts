@@ -18,28 +18,38 @@ const FORWARDED_ARGS = [
   'forwarded-orca-value',
   '--debug',
   'forwarded-debug-value',
+  '--deps',
+  '["task_907c556bfed6"]',
+  '--quoted-text',
+  'tell me "what is next"',
+  '--empty',
+  '',
+  '--trailing-backslash',
+  'C:\\path with spaces\\',
   '--',
   'tail'
 ]
 
-describe('WSL CLI PowerShell parameter boundary', () => {
-  it('keeps forwarded argv outside bridge parameter binding', () => {
+describe('WSL CLI PowerShell boundary', () => {
+  it('keeps forwarded argv outside PowerShell parsing', () => {
     const launcher = buildWslLauncher('C:\\Program Files\\Orca\\orca.exe')
     const bridge = buildWslBridgeScript()
 
     expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
     expect(bridge).not.toContain('[CmdletBinding')
-    expect(bridge).not.toContain('param(')
+    expect(bridge).not.toMatch(/^param\(/m)
     expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
+    expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
+    expect(bridge).toContain('$StartInfo.UseShellExecute = $false')
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'preserves prefix-colliding flags through Windows PowerShell 5.1',
+    'preserves native argv and exit status through Windows PowerShell 5.1',
     async () => {
       const root = await mkdtemp(join(tmpdir(), 'orca-wsl-powershell-boundary-'))
       const fixtureDir = join(root, 'fixture with spaces')
       const bridgePath = join(fixtureDir, 'orca-wsl-bridge.ps1')
-      const targetPath = join(fixtureDir, 'argv-target.ps1')
+      const targetPath = join(fixtureDir, 'argv-target.cjs')
       const wslCwd = join(root, 'WSL cwd with spaces')
 
       try {
@@ -47,20 +57,20 @@ describe('WSL CLI PowerShell parameter boundary', () => {
         await writeFile(bridgePath, buildWslBridgeScript(), 'utf8')
         await writeFile(
           targetPath,
-          '[pscustomobject]@{ argv = @($args); cwd = $env:ORCA_CLI_CWD } | ConvertTo-Json -Compress\n',
+          'process.stdout.write(JSON.stringify({ argv: process.argv.slice(2), cwd: process.env.ORCA_CLI_CWD ?? null }))\n',
           'utf8'
         )
         const invocations = [
           {
-            bridgeArgs: [targetPath, '-WslCwd', wslCwd, ...FORWARDED_ARGS],
+            bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath, ...FORWARDED_ARGS],
             expected: { argv: FORWARDED_ARGS, cwd: wslCwd }
           },
           {
-            bridgeArgs: [targetPath, '-WslCwd', wslCwd],
+            bridgeArgs: [process.execPath, '-WslCwd', wslCwd, targetPath],
             expected: { argv: [], cwd: wslCwd }
           },
           {
-            bridgeArgs: [targetPath, ...FORWARDED_ARGS],
+            bridgeArgs: [process.execPath, targetPath, ...FORWARDED_ARGS],
             expected: { argv: FORWARDED_ARGS, cwd: null }
           }
         ]
@@ -84,6 +94,24 @@ describe('WSL CLI PowerShell parameter boundary', () => {
           expect(result.status).toBe(0)
           expect(JSON.parse(result.stdout.trim())).toEqual(expected)
         }
+
+        const exitResult = spawnSync(
+          'powershell.exe',
+          [
+            '-NoProfile',
+            '-NonInteractive',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            bridgePath,
+            process.execPath,
+            '-e',
+            'process.exit(23)'
+          ],
+          { encoding: 'utf8' }
+        )
+        expect(exitResult.error).toBeUndefined()
+        expect(exitResult.status).toBe(23)
       } finally {
         await rm(root, { recursive: true, force: true })
       }

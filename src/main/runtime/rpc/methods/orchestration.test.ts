@@ -1765,19 +1765,6 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
-    it('creates a task when --deps arrives quote-stripped (WSL bridge form)', async () => {
-      setup()
-      const t1 = db.createTask({ spec: 'first' })
-
-      const result = (await call('orchestration.taskCreate', {
-        spec: 'second',
-        deps: `[${t1.id}]`
-      })) as { task: { id: string; status: string } }
-
-      expect(result.task.status).toBe('pending')
-      expect(db.getTask(result.task.id)?.deps).toBe(JSON.stringify([t1.id]))
-    })
-
     it('records the caller pane, process, and Run generation when creating a task', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
@@ -1801,10 +1788,13 @@ describe('orchestration RPC methods', () => {
       })
     })
 
-    it('rejects invalid deps JSON', async () => {
+    it('rejects non-JSON deps', async () => {
       setup()
       await expect(
         call('orchestration.taskCreate', { spec: 'bad', deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+      await expect(
+        call('orchestration.taskCreate', { spec: 'bad', deps: '[task_example]' })
       ).rejects.toThrow('Invalid --deps')
     })
   })
