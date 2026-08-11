@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { Check, Copy, ExternalLink, Globe, Settings } from 'lucide-react'
 import { toast } from 'sonner'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
@@ -52,6 +52,7 @@ export function TerminalLinkActionPopover({
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const copyableDestination = request?.kind === 'url' ? request.destination : ''
   const { copyText, status: copyStatus } = useClipboardTextCopyFeedback(copyableDestination)
+  const copyInFlightRef = useRef(false)
   const virtualRef = useMemo(
     () => ({
       current: {
@@ -77,21 +78,29 @@ export function TerminalLinkActionPopover({
       : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
 
   const copyDestination = async (): Promise<void> => {
-    if (await copyText()) {
-      toast.success(
-        translate(
-          'auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink',
-          'Copied link'
-        )
-      )
+    if (copyInFlightRef.current) {
       return
     }
-    toast.error(
-      translate(
-        'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
-        'Failed to copy link'
+    copyInFlightRef.current = true
+    try {
+      if (await copyText()) {
+        toast.success(
+          translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink',
+            'Copied link'
+          )
+        )
+        return
+      }
+      toast.error(
+        translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
+          'Failed to copy link'
+        )
       )
-    )
+    } finally {
+      copyInFlightRef.current = false
+    }
   }
 
   const openTerminalLinkSettings = (): void => {

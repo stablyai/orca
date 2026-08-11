@@ -174,6 +174,55 @@ describe('TerminalLinkActionPopover', () => {
     expect(focusTerminal).not.toHaveBeenCalled()
   })
 
+  it('ignores duplicate copy clicks while the clipboard write is in flight', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    let resolveWrite: (() => void) | undefined
+    mocks.writeClipboardText.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveWrite = resolve
+      })
+    )
+    const request: TerminalLinkActionRequest = {
+      paneId: 1,
+      anchorX: 100,
+      anchorY: 200,
+      destination: 'https://example.com/hidden-destination',
+      kind: 'url',
+      primary: { label: 'Open link', run: vi.fn() },
+      focusTerminal: vi.fn()
+    }
+
+    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    const copyButton = screen.getByRole('button', { name: 'Copy link' })
+    fireEvent.click(copyButton)
+    fireEvent.click(copyButton)
+
+    expect(mocks.writeClipboardText).toHaveBeenCalledOnce()
+    resolveWrite?.()
+    await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledOnce())
+  })
+
+  it('shows a failure toast when copying fails', async () => {
+    vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
+    Object.assign(window, { api: { ui: { writeClipboardText: mocks.writeClipboardText } } })
+    mocks.writeClipboardText.mockRejectedValue(new Error('denied'))
+    const request: TerminalLinkActionRequest = {
+      paneId: 1,
+      anchorX: 100,
+      anchorY: 200,
+      destination: 'https://example.com/hidden-destination',
+      kind: 'url',
+      primary: { label: 'Open link', run: vi.fn() },
+      focusTerminal: vi.fn()
+    }
+
+    render(<TerminalLinkActionPopover request={request} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+
+    await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Failed to copy link'))
+  })
+
   it('does not offer copy link for non-URL destinations', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const request: TerminalLinkActionRequest = {
