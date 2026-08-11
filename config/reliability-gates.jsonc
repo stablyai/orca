@@ -2740,7 +2740,7 @@
           "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
           "assertions": [
             "completed and explicitly retired workers retain no provider-resume authority on first workspace activation",
-            "the original tab, leaf, PTY, provider session, release state, replacement count, resume argv, restored banner, and unrelated canary remain exact across restart"
+            "the original tab, leaf, PTY, provider session, release state, replacement count, queued resume argv, emitted restored banner, and unrelated canary remain exact across restart"
           ]
         },
         {
