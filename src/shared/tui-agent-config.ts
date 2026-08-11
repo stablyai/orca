@@ -111,6 +111,17 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Trae subcommand or flag — `--` stops both in its Cobra parser.
     argvPromptSeparator: '--'
   },
+  qodercli: {
+    detectCmd: 'qodercli',
+    // Why: the CN build ships the identical CLI under its own binary name (`qoderclicn`).
+    detectCmdAliases: ['qoderclicn'],
+    launchCmd: 'qodercli',
+    expectedProcess: 'qodercli',
+    // Why: `-i/--prompt-interactive <text>` runs the prompt and stays in the TUI. A bare positional
+    // also stays interactive, but prints a "positional arguments now default to interactive mode"
+    // banner and rides on a default the CLI has already migrated once.
+    promptInjectionMode: 'flag-prompt-interactive'
+  },
   opencode: {
     detectCmd: 'opencode',
     launchCmd: 'opencode',

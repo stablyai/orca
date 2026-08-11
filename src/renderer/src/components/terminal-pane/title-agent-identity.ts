@@ -1,7 +1,8 @@
 import {
   detectAgentStatusFromTitle,
   isGeminiTerminalTitle,
-  isPiTerminalTitle
+  isPiTerminalTitle,
+  isQoderCliTerminalTitle
 } from '../../../../shared/agent-detection'
 import {
   AGY_AGENT_NAME_RE,
@@ -22,6 +23,7 @@ export function titleHasExplicitAgentIdentity(title: string): boolean {
     title.startsWith('* ') ||
     title.startsWith('\u2733') ||
     isGeminiTerminalTitle(title) ||
+    isQoderCliTerminalTitle(title) ||
     isPiTerminalTitle(title)
   ) {
     return true

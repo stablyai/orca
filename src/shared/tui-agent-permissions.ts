@@ -28,7 +28,9 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   grok: '--permission-mode bypassPermissions',
   devin: '--permission-mode bypass',
   ante: '--yolo',
-  trae: '--yolo'
+  trae: '--yolo',
+  // Why: the public documented bypass flag; qodercli's `--yolo` alias is `.hideHelp()` and not a contract.
+  qodercli: '--dangerously-skip-permissions'
 }
 
 export const YOLO_TUI_AGENT_ENV: Partial<Record<TuiAgent, Record<string, string>>> = {

@@ -166,6 +166,44 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('recognizes Qoder CLI by both the global and CN binary names', () => {
+    expect(recognizeAgentProcess('qodercli')).toEqual({
+      agent: 'qodercli',
+      processName: 'qodercli'
+    })
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/qodercli')).toEqual({
+      agent: 'qodercli',
+      processName: 'qodercli'
+    })
+    // Why: the China build ships the same CLI as `qoderclicn` (brand.ts BRAND_CLI_BIN).
+    expect(recognizeAgentProcess('qoderclicn')).toEqual({
+      agent: 'qodercli',
+      processName: 'qoderclicn'
+    })
+    expect(isRecognizedAgentType('qodercli')).toBe(true)
+    // Why: `qoder` alone is the product/config-dir name, not a CLI on PATH.
+    expect(recognizeAgentProcess('qoder')).toBeNull()
+  })
+
+  it('does not recognize Qoder CLI headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('qodercli -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('qodercli --print "review this"')).toBeNull()
+    expect(
+      recognizeAgentProcessFromCommandLine('qodercli --output-format json "review this"')
+    ).toBeNull()
+    // Why: qodercli also accepts the short `-o` alias and `--input-format stream-json`.
+    expect(recognizeAgentProcessFromCommandLine('qodercli -o stream-json review')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('qodercli --input-format stream-json')).toBeNull()
+    // Why: interactive launches Orca itself performs must stay recognized.
+    expect(
+      recognizeAgentProcessFromCommandLine("qodercli --prompt-interactive 'fix the tests'")
+    ).toEqual({ agent: 'qodercli', processName: 'qodercli' })
+    expect(recognizeAgentProcessFromCommandLine('qodercli --resume abc123')).toEqual({
+      agent: 'qodercli',
+      processName: 'qodercli'
+    })
+  })
+
   it('recognizes Mistral Vibe by its installed executable and legacy alias', () => {
     expect(recognizeAgentProcess('/home/dev/.local/bin/vibe')).toEqual({
       agent: 'mistral-vibe',

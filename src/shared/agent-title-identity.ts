@@ -8,6 +8,8 @@ import {
   isCursorAgentTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
+  isQoderCliTerminalTitle,
+  QODERCLI_LABEL,
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
@@ -61,6 +63,10 @@ export function getAgentLabel(title: string): string | null {
     title.startsWith('* ')
   ) {
     return 'Claude Code'
+  }
+  // Why: must precede the Gemini branch — qodercli reuses Gemini's status glyphs.
+  if (isQoderCliTerminalTitle(title)) {
+    return QODERCLI_LABEL
   }
   if (isGeminiTerminalTitle(title)) {
     return 'Gemini CLI'

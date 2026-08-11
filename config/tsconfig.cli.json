@@ -73,6 +73,7 @@
     "../src/main/kimi/hook-service.ts",
     "../src/main/kimi/kimi-hook-config-toml.ts",
     "../src/main/openclaude/hook-service.ts",
+    "../src/main/qodercli/hook-service.ts",
     "../src/main/rolling-file-backup.ts",
     "../src/main/startup/hydrate-shell-path.ts",
     // Why: serve-electron-flag-parity.test.ts checks the Electron-side serve argv rewrite against this

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentLabel as getSharedAgentLabel } from './agent-title-identity'
+import {
+  clearWorkingIndicators,
+  detectAgentStatusFromTitle,
+  normalizeTerminalTitle
+} from './agent-title-status'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import {
   isClaudeAgent,
@@ -165,5 +170,123 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('Cursor ready')).toBe(false)
     expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
+  })
+})
+
+describe('qodercli vs Gemini terminal titles', () => {
+  // Fixtures below are qodercli's own expected titles, copied from its suite
+  // (packages/cli/src/utils/windowTitle.test.ts). qodercli forked gemini-cli and kept Gemini's
+  // ✦/◇ glyphs, so these are the regression guard for the collision.
+  const QODERCLI_IDLE = '◇ Fix terminal titles | Ready'
+  const QODERCLI_WORKING = '✦ Fix terminal titles | Working'
+  const QODERCLI_CONFIRM = '▲ Fix terminal titles | Action Required'
+
+  it('identifies qodercli titles as qodercli, not gemini', () => {
+    expect(resolveExplicitTerminalTitleAgentType(QODERCLI_IDLE)).toBe('qodercli')
+    expect(resolveExplicitTerminalTitleAgentType(QODERCLI_WORKING)).toBe('qodercli')
+    expect(resolveExplicitTerminalTitleAgentType(QODERCLI_CONFIRM)).toBe('qodercli')
+    expect(getSharedAgentLabel(QODERCLI_WORKING)).toBe('Qoder CLI')
+  })
+
+  // Why: the resolvers above read the STORED title, and normalizeTerminalTitle rewrites it on the
+  // way to storage (terminal-output-side-effects.ts:167,265). Asserting only on raw titles passed
+  // while the app still showed Gemini, so pin the normalized value too.
+  it('survives normalizeTerminalTitle on the storage path', () => {
+    expect(normalizeTerminalTitle(QODERCLI_WORKING)).toBe('\u2726 Qoder CLI')
+    expect(normalizeTerminalTitle(QODERCLI_IDLE)).toBe('\u25c7 Qoder CLI')
+    expect(normalizeTerminalTitle(QODERCLI_CONFIRM)).toBe('\u25b2 Qoder CLI')
+    expect(normalizeTerminalTitle(QODERCLI_WORKING.padEnd(80, ' '))).toBe('\u2726 Qoder CLI')
+    // Why: Gemini's own collapse must be untouched.
+    expect(normalizeTerminalTitle('\u2726  Working\u2026 (repo)')).toBe('\u2726 Gemini CLI')
+  })
+
+  // Why: normalizeTerminalTitle runs on every title update, so its own output must re-identify as
+  // qodercli — otherwise the second pass hands the collapsed label back to Gemini.
+  it('re-identifies its own collapsed label (idempotent)', () => {
+    for (const collapsed of ['\u2726 Qoder CLI', '\u25c7 Qoder CLI', '\u25b2 Qoder CLI']) {
+      expect(resolveExplicitTerminalTitleAgentType(collapsed)).toBe('qodercli')
+      expect(normalizeTerminalTitle(collapsed)).toBe(collapsed)
+    }
+  })
+
+  // Why: ▲ is ordinary text (deploy output, charts, log markers), unlike the dingbats Gemini uses.
+  // An unanchored includes() turned any title containing it into a spurious attention badge, which
+  // feeds the sidebar attention count and the status-tracker transitions.
+  it('only treats ▲ as permission when it is the leading status glyph', () => {
+    expect(detectAgentStatusFromTitle('\u280b fix \u25b2 deploy timeout')).not.toBe('permission')
+    expect(detectAgentStatusFromTitle('\u2733 chart shows \u25b2 12% growth')).not.toBe(
+      'permission'
+    )
+    expect(detectAgentStatusFromTitle(QODERCLI_CONFIRM)).toBe('permission')
+    expect(detectAgentStatusFromTitle('\u25b2 Qoder CLI')).toBe('permission')
+  })
+
+  // Why: clearWorkingIndicators strips ✦ from stale exit titles. Gemini's collapsed label survives
+  // that through its name token; qodercli's must too, or the pane loses identity on exit.
+  it('keeps qodercli identity after working indicators are cleared', () => {
+    expect(clearWorkingIndicators('\u2726 Qoder CLI')).toBe('Qoder CLI')
+    expect(resolveExplicitTerminalTitleAgentType(clearWorkingIndicators('\u2726 Qoder CLI'))).toBe(
+      'qodercli'
+    )
+    expect(resolveExplicitTerminalTitleAgentType(clearWorkingIndicators('\u2726 Gemini CLI'))).toBe(
+      'gemini'
+    )
+  })
+
+  // Why: the collapsed matcher accepts a bare "Qoder CLI", so pin that it stays anchored to the
+  // whole title and never claims a task title that merely mentions the product.
+  it('does not claim titles that only mention Qoder CLI', () => {
+    expect(resolveExplicitTerminalTitleAgentType('Qoder CLI')).toBe('qodercli')
+    expect(resolveExplicitTerminalTitleAgentType('fix the Qoder CLI bug')).toBeNull()
+    expect(resolveExplicitTerminalTitleAgentType('\u2733 compare Qoder CLI and Codex')).toBeNull()
+  })
+
+  it('reports a status for every qodercli state', () => {
+    expect(detectAgentStatusFromTitle(QODERCLI_WORKING)).toBe('working')
+    expect(detectAgentStatusFromTitle(QODERCLI_IDLE)).toBe('idle')
+    // Why: qodercli uses \u25b2 where Gemini uses \u270b; without an explicit case this returned null.
+    expect(detectAgentStatusFromTitle(QODERCLI_CONFIRM)).toBe('permission')
+  })
+
+  it('identifies qodercli titles padded to their native 80-char width', () => {
+    // Why: computeTerminalTitle pads with trailing spaces, so ` | status` is not at end-of-string.
+    expect(resolveExplicitTerminalTitleAgentType(QODERCLI_WORKING.padEnd(80, ' '))).toBe('qodercli')
+    expect(
+      resolveExplicitTerminalTitleAgentType('Qoder CLI (Fix terminal titles)'.padEnd(80, ' '))
+    ).toBe('qodercli')
+    expect(resolveExplicitTerminalTitleAgentType('Qoder CLI CN (Fix terminal titles)')).toBe(
+      'qodercli'
+    )
+  })
+
+  it('identifies qodercli titles whose status vocabulary differs across versions', () => {
+    // Why: qodercli 7bdec7d7a put an arbitrary thought subject where the status word goes, and
+    // 4df4be61d reverted it. Matching structure (not vocabulary) must cover binaries from both.
+    expect(resolveExplicitTerminalTitleAgentType('✦ Fix titles | Analyzing the parser')).toBe(
+      'qodercli'
+    )
+    // Why: a pipe inside the session title must not push the status segment out of reach.
+    expect(resolveExplicitTerminalTitleAgentType('✦ fix a | b | Working')).toBe('qodercli')
+  })
+
+  it('still identifies upstream Gemini titles as gemini', () => {
+    // Why: upstream emits `<glyph>  <Status> (context)` — two spaces, parenthesized, no pipe.
+    expect(resolveExplicitTerminalTitleAgentType('✦  Working… (repo)')).toBe('gemini')
+    expect(resolveExplicitTerminalTitleAgentType('◇  Ready (repo)')).toBe('gemini')
+    expect(resolveExplicitTerminalTitleAgentType('✋  Action Required (repo)')).toBe('gemini')
+    expect(resolveExplicitTerminalTitleAgentType('✦ Gemini CLI')).toBe('gemini')
+  })
+
+  it('does not claim a Gemini title whose status text contains a pipe', () => {
+    // Why: the ` | ` test alone would match this. The one-space lookahead is what rejects it —
+    // upstream Gemini always emits two spaces after the glyph.
+    expect(resolveExplicitTerminalTitleAgentType('✦  Running ls | grep foo (repo)')).toBe('gemini')
+  })
+
+  it('does not claim multiplexer- or OpenCode-wrapped titles', () => {
+    expect(resolveExplicitTerminalTitleAgentType('tmux | ✦ Fix titles | Working')).not.toBe(
+      'qodercli'
+    )
+    expect(resolveExplicitTerminalTitleAgentType('OC | ✦ Gemini CLI')).toBe('opencode')
   })
 })

@@ -39,9 +39,9 @@ describe('managed-hook local filesystem', () => {
     const cold = await installRemoteManagedAgentHooks(filesystem, home, options)
     const warm = await installRemoteManagedAgentHooks(filesystem, home, options)
 
-    expect(cold).toHaveLength(14)
+    expect(cold).toHaveLength(15)
     expect(cold.filter((result) => result.state === 'error')).toEqual([])
-    expect(warm).toHaveLength(14)
+    expect(warm).toHaveLength(15)
     expect(warm.filter((result) => result.state === 'error')).toEqual([])
     const files = await listFiles(home)
     expect(files.filter((path) => path.endsWith('.tmp'))).toEqual([])
@@ -64,10 +64,13 @@ describe('managed-hook local filesystem', () => {
       grokHomeDir: join(home, '.grok')
     })
 
-    expect(results).toHaveLength(14)
+    expect(results).toHaveLength(15)
     expect(results.find((result) => result.agent === 'claude')?.state).toBe('error')
     expect(results.find((result) => result.agent === 'openclaude')?.state).toBe('installed')
     expect(results.find((result) => result.agent === 'kimi')?.state).toBe('installed')
+    // Why: qodercli reuses ClaudeHookService against its own ~/.qoder root, so a malformed
+    // ~/.claude/settings.json must not take it down with Claude.
+    expect(results.find((result) => result.agent === 'qodercli')?.state).toBe('installed')
     expect(await readFile(claudeConfig, 'utf8')).toBe('{"hooks": }')
   })
 })

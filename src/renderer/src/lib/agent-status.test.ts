@@ -868,6 +868,10 @@ describe('formatAgentTypeLabel', () => {
     expect(formatAgentTypeLabel('prime-agent')).toBe('Prime Agent')
   })
 
+  it("maps 'qodercli' to 'Qoder CLI'", () => {
+    expect(formatAgentTypeLabel('qodercli')).toBe('Qoder CLI')
+  })
+
   it('passes through arbitrary custom agent names as-is', () => {
     expect(formatAgentTypeLabel('weirdo')).toBe('weirdo')
   })
@@ -894,6 +898,7 @@ describe('agentTypeToIconAgent', () => {
     expect(agentTypeToIconAgent('ante')).toBe('ante')
     expect(agentTypeToIconAgent('trae')).toBe('trae')
     expect(agentTypeToIconAgent('prime-agent')).toBe('prime-agent')
+    expect(agentTypeToIconAgent('qodercli')).toBe('qodercli')
   })
 
   it('returns null for arbitrary non-iconable strings', () => {
