@@ -40,8 +40,11 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
   // writers are async (key status probe, save/clear key). Merging onto the render-time
   // snapshot would resurrect settings that changed while the IPC was in flight — e.g.
   // reverting `enabled` to false and leaving the microphone picker permanently disabled.
+  // Written in an effect, not during render: the async writers all run post-commit.
   const voiceSettingsRef = useRef(voiceSettings)
-  voiceSettingsRef.current = voiceSettings
+  useEffect(() => {
+    voiceSettingsRef.current = voiceSettings
+  }, [voiceSettings])
 
   const handlePaneRef = useCallback((node: HTMLDivElement | null): void => {
     mountedRef.current = node !== null
