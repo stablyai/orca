@@ -89,6 +89,9 @@ async function isInsideGitWorkTree(
       child.kill()
       finish(false)
     }, 10_000)
+    if (signal?.aborted) {
+      cancel()
+    }
   })
 }
 
@@ -248,6 +251,10 @@ export async function listFilesWithGit(
         child.kill()
         rejectPass(new Error('git ls-files timed out'))
       }, 10000)
+      if (signal?.aborted) {
+        child.kill()
+        rejectPass(fileListingCancellationError(signal))
+      }
     })
   }
 

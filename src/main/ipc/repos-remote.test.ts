@@ -2431,6 +2431,49 @@ describe('repos:add + repos:clone', () => {
     expect(existsSync(clonePath)).toBe(false)
   })
 
+  it('cancels every concurrent local clone waiting for environment readiness', async () => {
+    const firstDestination = await createTempRoot()
+    const secondDestination = await createTempRoot()
+    gitSpawnAfterWindowsEnvironmentReadyMock.mockImplementation(
+      (_args: string[], options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          if (options.signal?.aborted) {
+            abort()
+          } else {
+            options.signal?.addEventListener('abort', abort, { once: true })
+          }
+        })
+    )
+
+    const firstClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/first.git',
+        destination: firstDestination
+      })
+    )
+    const secondClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/second.git',
+        destination: secondDestination
+      })
+    )
+    const firstRejection = expect(firstClone).rejects.toThrow('Clone failed')
+    const secondRejection = expect(secondClone).rejects.toThrow('Clone failed')
+    await waitForAssertion(() =>
+      expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledTimes(2)
+    )
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    await Promise.all([firstRejection, secondRejection])
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(existsSync(join(firstDestination, 'first'))).toBe(false)
+    expect(existsSync(join(secondDestination, 'second'))).toBe(false)
+  })
+
   it('does not remove an existing target directory when aborting a pending clone', async () => {
     const destination = await createTempRoot()
     const clonePath = join(destination, 'orca')

@@ -770,7 +770,7 @@ export function setRepoRemoteClientNotifier(notifier: RepoRemoteClientNotifier):
 
 // Why: module-scoped so the abort handle survives macOS window re-creation, when registerRepoHandlers re-runs.
 let activeClone: ActiveCloneMetadata | null = null
-let pendingLocalCloneController: AbortController | null = null
+const pendingLocalCloneControllers = new Set<AbortController>()
 let activeRemoteClone: ActiveRemoteCloneMetadata | null = null
 let nextCloneGeneration = 1
 const latestCloneGenerationByPath = new Map<string, number>()
@@ -2344,8 +2344,10 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
   })
 
   ipcMain.handle('repos:cloneAbort', async () => {
-    pendingLocalCloneController?.abort()
-    pendingLocalCloneController = null
+    for (const controller of pendingLocalCloneControllers) {
+      controller.abort()
+    }
+    pendingLocalCloneControllers.clear()
     if (activeClone) {
       const clone = activeClone
       clone.abortRequested = true
@@ -2384,7 +2386,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
         const cloneMetadataRef: { current: ActiveCloneMetadata | null } = { current: null }
         let proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
         const pendingController = new AbortController()
-        pendingLocalCloneController = pendingController
+        pendingLocalCloneControllers.add(pendingController)
         try {
           // Why: use the parent destination as cwd so the runner detects a WSL path and routes through wsl.exe.
           // Why: '--' isolates the URL so a malicious URL can't be read as git flags (command injection).
@@ -2403,9 +2405,7 @@ export function registerRepoHandlers(mainWindow: BrowserWindow, store: Store): v
           const message = err instanceof Error ? err.message : String(err)
           throw new Error(`Clone failed: ${message}`)
         } finally {
-          if (pendingLocalCloneController === pendingController) {
-            pendingLocalCloneController = null
-          }
+          pendingLocalCloneControllers.delete(pendingController)
         }
         await new Promise<void>((resolve, reject) => {
           const generation = nextCloneGeneration++

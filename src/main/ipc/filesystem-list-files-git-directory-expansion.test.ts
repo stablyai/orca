@@ -104,4 +104,61 @@ describe('main Quick Open git directory expansion', () => {
     expect(primary.kill).toHaveBeenCalled()
     expect(ignored.kill).toHaveBeenCalled()
   })
+
+  it('kills a repository probe returned after cancellation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-probe-race-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    let resolveRevParse!: (child: ChildProcess) => void
+    gitSpawnMock.mockReturnValueOnce(
+      new Promise<ChildProcess>((resolve) => {
+        resolveRevParse = resolve
+      })
+    )
+
+    const controller = new AbortController()
+    const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledOnce())
+    controller.abort()
+    resolveRevParse(revParse)
+
+    await expect(promise).rejects.toSatisfy(isFileListingCancellation)
+    expect(revParse.kill).toHaveBeenCalled()
+    expect(revParse.listenerCount('close')).toBe(0)
+  })
+
+  it('kills file scans returned after cancellation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-main-git-scan-race-'))
+    tempDirs.push(root)
+    const revParse = createMockProcess()
+    const primary = createMockProcess()
+    const ignored = createMockProcess()
+    let resolvePrimary!: (child: ChildProcess) => void
+    let resolveIgnored!: (child: ChildProcess) => void
+    gitSpawnMock
+      .mockResolvedValueOnce(revParse)
+      .mockReturnValueOnce(
+        new Promise<ChildProcess>((resolve) => {
+          resolvePrimary = resolve
+        })
+      )
+      .mockReturnValueOnce(
+        new Promise<ChildProcess>((resolve) => {
+          resolveIgnored = resolve
+        })
+      )
+
+    const controller = new AbortController()
+    const promise = listFilesWithGit(root, [], {}, controller.signal)
+    await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
+    revParse.emit('close', 0, null)
+    await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(3))
+    controller.abort()
+    resolvePrimary(primary)
+    resolveIgnored(ignored)
+
+    await expect(promise).rejects.toSatisfy(isFileListingCancellation)
+    expect(primary.kill).toHaveBeenCalled()
+    expect(ignored.kill).toHaveBeenCalled()
+  })
 })
