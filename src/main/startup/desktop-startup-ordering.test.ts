@@ -65,7 +65,7 @@ describe('startup ordering', () => {
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const barrierStart = source.indexOf("ipcMain.handle('app:awaitFirstWindowStartupServices'")
-    const barrierEnd = source.indexOf("ipcMain.handle(\n  'app:startupDiagnostic'", barrierStart)
+    const barrierEnd = source.indexOf("'app:startupDiagnostic'", barrierStart)
     const barrier = source.slice(barrierStart, barrierEnd)
     const reconciliationStart = source.indexOf(
       'managedWslCliReconciliationReady = reconcileManagedWslCliRegistrations('
@@ -83,6 +83,8 @@ describe('startup ordering', () => {
     const serveStartup = source.slice(serveStart, serveEnd)
     const desktopStartup = source.slice(reconciliationStart, serveStart)
 
+    expect(barrierStart).toBeGreaterThanOrEqual(0)
+    expect(barrierEnd).toBeGreaterThan(barrierStart)
     expect(reconciliationStart).toBeGreaterThanOrEqual(0)
     expect(serveStart).toBeGreaterThan(reconciliationStart)
     expect(serveEnd).toBeGreaterThan(serveStart)
