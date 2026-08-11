@@ -23,6 +23,7 @@ type ArtifactCreateResponse = ArtifactListItem & { editToken: string }
 
 type ArtifactCreateOutcome = {
   editToken: string
+  intent: ArtifactCreateIntent
   result: ArtifactPublishResult
 }
 
@@ -90,12 +91,16 @@ export class ArtifactPublisher {
         auth.scope
       )
       const created = await this.create(request, token, apiUrl, auth, idempotencyKey, pending)
-      return pending && !artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))
-        ? this.updateExisting(request, token, apiUrl, auth, {
-            slug: created.result.item.artifact.slug,
-            editToken: created.editToken
-          })
-        : created.result.item
+      if (pending && !artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))) {
+        const item = await this.updateExisting(request, token, apiUrl, auth, {
+          slug: created.result.item.artifact.slug,
+          editToken: created.editToken
+        })
+        this.removeCreateIntent(request, auth, created.intent)
+        return item
+      }
+      this.removeCreateIntent(request, auth, created.intent)
+      return created.result.item
     })
   }
 
@@ -117,12 +122,14 @@ export class ArtifactPublisher {
       if (pending) {
         const created = await this.create(request, token, apiUrl, auth, idempotencyKey, pending)
         if (artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))) {
+          this.removeCreateIntent(request, auth, created.intent)
           return created.result
         }
         const item = await this.updateExisting(request, token, apiUrl, auth, {
           slug: created.result.item.artifact.slug,
           editToken: created.editToken
         })
+        this.removeCreateIntent(request, auth, created.intent)
         return { change: 'created', item }
       }
       const record = getArtifactShareRecord(
@@ -146,7 +153,9 @@ export class ArtifactPublisher {
           })
         }
       }
-      return (await this.create(request, token, apiUrl, auth, idempotencyKey, null)).result
+      const created = await this.create(request, token, apiUrl, auth, idempotencyKey, null)
+      this.removeCreateIntent(request, auth, created.intent)
+      return created.result
     })
   }
 
@@ -240,6 +249,21 @@ export class ArtifactPublisher {
       expiresAt: response.artifact.expiresAt,
       ...auth.scope
     })
+    return {
+      editToken: response.editToken,
+      intent,
+      result: {
+        change: 'created',
+        item: { artifact: response.artifact, shareUrl: response.shareUrl }
+      }
+    }
+  }
+
+  private removeCreateIntent(
+    request: ArtifactWriteRequest,
+    auth: ArtifactPublishAuthContext,
+    intent: ArtifactCreateIntent
+  ): void {
     removeArtifactCreateIntent(
       auth.profileId,
       this.userDataPath,
@@ -247,13 +271,6 @@ export class ArtifactPublisher {
       auth.scope,
       intent.idempotencyKey
     )
-    return {
-      editToken: response.editToken,
-      result: {
-        change: 'created',
-        item: { artifact: response.artifact, shareUrl: response.shareUrl }
-      }
-    }
   }
 
   private async runSerialized<T>(key: string, operation: () => Promise<T>): Promise<T> {

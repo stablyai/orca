@@ -84,6 +84,25 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.artifactContent('artifact-1')).toBe('<h1>Changed share</h1>')
   })
 
+  it('retains recovery until a changed-content update succeeds', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    server.loseNextCreateResponse = true
+    vi.stubGlobal('fetch', server.fetch)
+
+    await expect(service(userDataPath).share(writeRequest)).rejects.toThrow('response lost')
+    server.rejectNextUpdateStatus = 503
+    const changed = { ...writeRequest, content: '<h1>Changed after update failure</h1>' }
+    await expect(service(userDataPath).share(changed)).rejects.toMatchObject({ statusCode: 503 })
+    await expect(service(userDataPath).share(changed)).resolves.toMatchObject({
+      status: 'ok',
+      value: { artifact: { slug: 'artifact-1' } }
+    })
+    expect(server.createMutations).toBe(1)
+    expect(server.artifactSlugs()).toEqual(['artifact-1'])
+    expect(server.artifactContent('artifact-1')).toBe(changed.content)
+  })
+
   it('clears the durable mapping when a committed delete retry returns 404', async () => {
     const userDataPath = await createUserDataPath()
     const server = new ArtifactFaultServer()
@@ -179,6 +198,7 @@ class ArtifactFaultServer {
   loseNextDeleteResponse = false
   rejectNextCreateStatus: number | null = null
   rejectNextDeleteCode: string | null = null
+  rejectNextUpdateStatus: number | null = null
   private readonly artifacts = new Map<string, string>()
   private readonly createsByKey = new Map<string, { body: string; response: object }>()
 
@@ -258,6 +278,11 @@ class ArtifactFaultServer {
   }
 
   private update(url: string, init?: RequestInit): Response {
+    if (this.rejectNextUpdateStatus !== null) {
+      const status = this.rejectNextUpdateStatus
+      this.rejectNextUpdateStatus = null
+      return jsonResponse({ code: 'artifact_update_failed' }, status)
+    }
     const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
     if (!this.artifacts.has(slug)) {
       return jsonResponse({ code: 'artifact_not_found' }, 404)

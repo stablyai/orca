@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -226,6 +226,48 @@ describe('artifact create intent store', () => {
         body
       )
     ).toThrow(/could not be read safely/)
+  })
+
+  it('removes an unreadable intent after its mutation completes', async () => {
+    const userDataPath = await createUserDataPath()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+    getOrCreateArtifactCreateIntent(
+      'local-profile',
+      userDataPath,
+      '/repo/report.html',
+      scope,
+      'key-a',
+      body
+    )
+    const [fileName] = await readdir(directory)
+    await writeFile(join(directory, fileName), '{broken-json')
+
+    expect(() =>
+      removeArtifactCreateIntent('local-profile', userDataPath, '/repo/report.html', scope, 'key-a')
+    ).not.toThrow()
+    expect(await readdir(directory)).toEqual([])
+  })
+
+  it('rejects a persisted content type outside the artifact allowlist', async () => {
+    const userDataPath = await createUserDataPath()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+    getOrCreateArtifactCreateIntent(
+      'local-profile',
+      userDataPath,
+      '/repo/report.html',
+      scope,
+      'key-a',
+      body
+    )
+    const [fileName] = await readdir(directory)
+    const path = join(directory, fileName)
+    const intent = JSON.parse(await readFile(path, 'utf8')) as { body: { contentType: string } }
+    intent.body.contentType = 'application/octet-stream'
+    await writeFile(path, JSON.stringify(intent))
+
+    expect(() =>
+      getArtifactCreateIntent('local-profile', userDataPath, '/repo/report.html', scope)
+    ).toThrow(/unsupported format/)
   })
 
   it('persists a valid artifact request near the RPC limit', async () => {

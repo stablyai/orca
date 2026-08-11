@@ -238,7 +238,7 @@ export function clearArtifactShareRecords(profileId: string, userDataPath: strin
   } catch {
     // Clearing must recover sign-out from an unreadable token index.
   }
-  writeSecureJsonFile(recordPath(profileId, userDataPath), {
+  writeDurableSecureJsonFile(recordPath(profileId, userDataPath), {
     version: 2,
     lifecycleGeneration: lifecycleGeneration + 1,
     lifecycleNonce: randomUUID(),

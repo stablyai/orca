@@ -118,7 +118,7 @@ function isWriteBody(value: unknown): value is ArtifactWriteBody {
   const body = value as Partial<ArtifactWriteBody>
   return (
     typeof body.content === 'string' &&
-    typeof body.contentType === 'string' &&
+    (body.contentType === 'text/html' || body.contentType === 'text/markdown') &&
     typeof body.fileName === 'string' &&
     (body.title === undefined || typeof body.title === 'string')
   )
@@ -231,7 +231,13 @@ export function removeArtifactCreateIntent(
   if (!existsSync(path)) {
     return
   }
-  if (readIntent(path).idempotencyKey === expectedIdempotencyKey) {
+  let matches = true
+  try {
+    matches = readIntent(path).idempotencyKey === expectedIdempotencyKey
+  } catch {
+    // An unreadable record cannot be replayed, so a completed mutation may discard it safely.
+  }
+  if (matches) {
     rmSync(path, { force: true })
     if (process.platform !== 'win32') {
       bestEffortFsyncDirectorySync(intentDirectory(profileId, userDataPath))

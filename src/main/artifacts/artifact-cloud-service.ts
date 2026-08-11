@@ -12,6 +12,7 @@ import type {
 import { assertArtifactSharingAllowed } from '../../shared/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
+import { prepareArtifactCloudUse } from '../orca-profiles/profile-artifact-cloud-cleanup'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import {
   allowsArtifactCloudAuthOverride,
@@ -278,6 +279,7 @@ export class ArtifactCloudService {
   ): Promise<ArtifactCloudOperation<T>> {
     const apiUrl = resolveArtifactCloudApiUrl(options.apiUrl)
     const active = ensureActiveOrcaProfile(this.userDataPath)
+    prepareArtifactCloudUse(active.profile, this.userDataPath)
     if (options.authToken?.trim()) {
       if (!allowsArtifactCloudAuthOverride()) {
         throw new Error(

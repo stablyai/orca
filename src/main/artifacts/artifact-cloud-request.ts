@@ -3,7 +3,7 @@ import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 
 export type ArtifactWriteBody = {
   content: string
-  contentType: string
+  contentType: ArtifactWriteRequest['contentType']
   fileName: string
   title?: string
 }
