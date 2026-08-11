@@ -2044,7 +2044,8 @@ describe('orchestration RPC methods', () => {
 
       expect(send).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('orca-dev orchestration send')
+        expect.stringContaining('orca-dev orchestration send'),
+        { verifySubmission: true }
       )
     })
 
@@ -2085,7 +2086,8 @@ describe('orchestration RPC methods', () => {
 
       expect(agentPrompt).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('line one\nline two')
+        expect.stringContaining('line one\nline two'),
+        { verifySubmission: true }
       )
       expect(rawSend).not.toHaveBeenCalled()
     })
@@ -2233,7 +2235,8 @@ describe('orchestration RPC methods', () => {
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
-        expect.stringContaining('--dispatch-capability dcap_')
+        expect.stringContaining('--dispatch-capability dcap_'),
+        { verifySubmission: true }
       )
     })
 

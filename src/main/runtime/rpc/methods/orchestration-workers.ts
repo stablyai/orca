@@ -231,7 +231,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           devMode: params.devMode,
           cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
+        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble, { verifySubmission: true })
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',

@@ -206,7 +206,8 @@ describe('orchestration federation', () => {
     expect([create.activate, create.runHooks]).toEqual([false, false])
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
-      expect.stringContaining(`Your task ID is: ${task.id}`)
+      expect.stringContaining(`Your task ID is: ${task.id}`),
+      { verifySubmission: true }
     )
   })
 

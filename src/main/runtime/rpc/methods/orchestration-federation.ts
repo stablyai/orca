@@ -236,7 +236,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             dispatchCapability: capability,
             devMode: params.devMode,
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-          })
+          }),
+          { verifySubmission: true }
         )
         effects.push({
           kind: 'dispatch_input',

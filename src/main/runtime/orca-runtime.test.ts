@@ -77,6 +77,7 @@ import {
   HEADLESS_RUNTIME_WINDOW_ID,
   type RuntimeMobileSessionTabsResult,
   type RuntimeSyncWindowGraph,
+  type RuntimeTerminalRead,
   type RuntimeTerminalCreate
 } from '../../shared/runtime-types'
 import type { TerminalSideEffectBatch } from '../../shared/terminal-side-effect-facts'
@@ -15945,6 +15946,389 @@ describe('OrcaRuntimeService', () => {
         bytesWritten: Buffer.byteLength(`${pasted}\r`, 'utf8')
       })
       expect(writes).toEqual([pasted, '\r'])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers a stuck agent prompt with one bare Enter and verifies terminal activity', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read([], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['Codex submitted task'], '2'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({ handle, accepted: true })
+      expect(rawSend).toHaveBeenCalledWith(
+        handle,
+        { enter: true },
+        expect.objectContaining({ beforeWrite: expect.any(Function) })
+      )
+      expect(rawSend).toHaveBeenCalledOnce()
+      expect(writes.at(-1)).toBe('\r')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not send a recovery Enter when no new paste marker is observed', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read(['[Pasted Content 123 chars]'], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 123 chars]', 'Codex is working'], '1'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({ handle, accepted: true })
+      expect(rawSend).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips recovery when the marker clears before the recovery Enter', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read([], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read([], '2'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({ handle, accepted: true })
+      expect(rawSend).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('detects a new marker when an older marker scrolls out of the read window', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      const marker = '[Pasted Content 4898 chars]'
+      const baselineTail = Array.from({ length: 119 }, (_, index) => `old output ${index}`)
+      baselineTail[0] = marker
+      const afterInjectTail = Array.from({ length: 119 }, (_, index) => `new output ${index}`)
+      afterInjectTail[afterInjectTail.length - 1] = marker
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read(baselineTail, '120'))
+        .mockResolvedValueOnce(read(afterInjectTail, '121'))
+        .mockResolvedValueOnce(read(afterInjectTail, '121'))
+        .mockResolvedValueOnce(read(afterInjectTail, '121'))
+        .mockResolvedValueOnce(read(afterInjectTail, '121'))
+        .mockResolvedValueOnce(read(['Codex submitted task'], '122'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({ handle, accepted: true })
+      expect(rawSend).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not accept marker removal without terminal activity', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read([], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValue(read([], '1'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_prompt_submission_unverified')
+      await vi.runAllTimersAsync()
+
+      await rejection
+      expect(rawSend).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips recovery when the final write check sees the marker has cleared', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read([], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read([], '2'))
+      const rawSend = vi
+        .spyOn(runtime, 'sendTerminal')
+        .mockImplementation(async (sendHandle, _action, options) => {
+          await options?.beforeWrite?.('pty-bg')
+          return { handle: sendHandle, accepted: true, bytesWritten: 1 }
+        })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      await vi.runAllTimersAsync()
+
+      await expect(sendPromise).resolves.toMatchObject({ handle, accepted: true })
+      expect(rawSend).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails when the recovery Enter is refused', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const read = (tail: string[], cursor: string): RuntimeTerminalRead => ({
+        handle,
+        status: 'running',
+        tail,
+        truncated: false,
+        nextCursor: cursor,
+        latestCursor: cursor
+      })
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce(read([], '0'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+        .mockResolvedValueOnce(read(['[Pasted Content 4898 chars]'], '1'))
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: false,
+        bytesWritten: 0
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_prompt_submission_unverified')
+      await vi.runAllTimersAsync()
+
+      await rejection
+      expect(rawSend).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('serializes concurrent agent prompt injections for one terminal', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: (_ptyId, data) => {
+          writes.push(data)
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+
+      const first = runtime.sendTerminalAgentPrompt(handle, 'first')
+      const second = runtime.sendTerminalAgentPrompt(handle, 'second')
+      await vi.runAllTimersAsync()
+      await Promise.all([first, second])
+
+      expect(writes).toHaveLength(4)
+      expect(writes[0]).toContain('first')
+      expect(writes[1]).toBe('\r')
+      expect(writes[2]).toContain('second')
+      expect(writes[3]).toBe('\r')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails after one recovery Enter when the paste marker remains stuck', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = new OrcaRuntimeService(store)
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
+      const stuckRead: RuntimeTerminalRead = {
+        handle,
+        status: 'running',
+        tail: ['[Pasted Content 4898 chars]'],
+        truncated: false,
+        nextCursor: '1',
+        latestCursor: '1'
+      }
+      vi.spyOn(runtime, 'readTerminal')
+        .mockResolvedValueOnce({ ...stuckRead, tail: [], nextCursor: '0', latestCursor: '0' })
+        .mockResolvedValue(stuckRead)
+      const rawSend = vi.spyOn(runtime, 'sendTerminal').mockResolvedValue({
+        handle,
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'task', {
+        verifySubmission: true
+      })
+      const rejection = expect(sendPromise).rejects.toThrow('terminal_prompt_submission_unverified')
+      await vi.runAllTimersAsync()
+
+      await rejection
+      expect(rawSend).toHaveBeenCalledOnce()
     } finally {
       vi.useRealTimers()
     }

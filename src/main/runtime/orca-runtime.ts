@@ -92,7 +92,9 @@ import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_SUBMIT,
   AGENT_PROMPT_SUBMIT_DELAY_MS,
-  buildAgentPromptPasteBytes
+  buildAgentPromptPasteBytes,
+  countAgentPromptPasteMarkers,
+  stripAgentPromptPasteMarkers
 } from '../../shared/agent-prompt-injection'
 import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
@@ -2783,6 +2785,8 @@ export class OrcaRuntimeService {
   // ptyId keeps active TUI redraws independent of the total open terminal count.
   private leavesByPtyId = new Map<string, RuntimeLeafRecord[]>()
   private handles = new Map<string, TerminalHandleRecord>()
+  // Why: prompt paste, submit, and verification must stay ordered per terminal.
+  private terminalAgentPromptTailsByHandle = new Map<string, Promise<void>>()
   private handleByLeafKey = new Map<string, string>()
   private handleByPtyId = new Map<string, string>()
   // Why: pointer state is process-local; one harmless replay after restart avoids a wire or schema change.
@@ -16678,8 +16682,42 @@ export class OrcaRuntimeService {
     options: {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      verifySubmission?: boolean
     } = {}
   ): Promise<RuntimeTerminalSend> {
+    const previous = this.terminalAgentPromptTailsByHandle.get(handle) ?? Promise.resolve()
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    // Why: a failed send must not strand later prompt attempts behind the queue.
+    const tail = previous.then(
+      () => current,
+      () => current
+    )
+    this.terminalAgentPromptTailsByHandle.set(handle, tail)
+
+    try {
+      await previous
+      return await this.sendTerminalAgentPromptAfterLock(handle, prompt, options)
+    } finally {
+      release()
+      if (this.terminalAgentPromptTailsByHandle.get(handle) === tail) {
+        this.terminalAgentPromptTailsByHandle.delete(handle)
+      }
+    }
+  }
+
+  private async sendTerminalAgentPromptAfterLock(
+    handle: string,
+    prompt: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+      verifySubmission?: boolean
+    }
+  ): Promise<RuntimeTerminalSend> {
+    const baselineRead = options.verifySubmission ? await this.readTerminal(handle) : null
     const payload = buildAgentPromptPasteBytes(prompt)
     const bytesWritten = Buffer.byteLength(`${payload}${AGENT_PROMPT_SUBMIT}`, 'utf8')
     const pty = this.getLivePtyForHandle(handle)
@@ -16689,21 +16727,99 @@ export class OrcaRuntimeService {
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       await this.writeTerminalAgentPrompt(pty.pty.ptyId, payload, options)
-      return { handle, accepted: true, bytesWritten }
+    } else {
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      if (!leaf.writable || !leaf.ptyId) {
+        throw new Error('terminal_not_writable')
+      }
+      await assertTerminalInputWithinLimitWithYield(payload)
+      // Why: a stale graph mirror must not accept a prompt into a void; unknown liveness still proceeds.
+      if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
+        throw new Error('terminal_not_writable')
+      }
+      await this.writeTerminalAgentPrompt(leaf.ptyId, payload, options)
     }
 
-    const { leaf } = this.getLiveLeafForHandle(handle)
-    if (!leaf.writable || !leaf.ptyId) {
-      throw new Error('terminal_not_writable')
+    if (baselineRead) {
+      await this.verifyTerminalAgentPromptSubmission(handle, baselineRead)
     }
-    await assertTerminalInputWithinLimitWithYield(payload)
-    // Why: same absence gate as sendTerminal — a stale graph mirror must not
-    // accept a prompt into a void; unknown liveness still proceeds.
-    if (await this.isLeafPtyProvenAbsent(leaf.ptyId)) {
-      throw new Error('terminal_not_writable')
-    }
-    await this.writeTerminalAgentPrompt(leaf.ptyId, payload, options)
     return { handle, accepted: true, bytesWritten }
+  }
+
+  private async verifyTerminalAgentPromptSubmission(
+    handle: string,
+    baselineRead: RuntimeTerminalRead
+  ): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, AGENT_PROMPT_SUBMISSION_SETTLE_MS))
+    const afterInjectRead = await this.readTerminal(handle)
+    const baselineMarkerCount = countAgentPromptPasteMarkers(baselineRead.tail)
+    // Why: terminal activity alone is not proof of an unsent paste; a new marker is the safe recovery signal.
+    let newMarkerObserved = terminalReadHasNewPasteMarker(
+      baselineRead,
+      afterInjectRead,
+      baselineMarkerCount
+    )
+    if (!newMarkerObserved) {
+      return
+    }
+
+    // Why: the paste may submit during settle; recheck before Enter to avoid targeting a later composer.
+    const beforeRecoveryRead = await this.readTerminal(handle, { limit: MAX_TERMINAL_READ_LIMIT })
+    if (!terminalReadHasNewPasteMarker(baselineRead, beforeRecoveryRead, baselineMarkerCount)) {
+      return
+    }
+
+    // Why: one recovery Enter is enough to submit the current composer without duplicating the task.
+    let recovery: RuntimeTerminalSend
+    try {
+      recovery = await this.sendTerminal(
+        handle,
+        { enter: true },
+        {
+          beforeWrite: async () => {
+            const finalRead = await this.readTerminal(handle, {
+              limit: MAX_TERMINAL_READ_LIMIT
+            })
+            if (!terminalReadHasNewPasteMarker(baselineRead, finalRead, baselineMarkerCount)) {
+              throw new Error(AGENT_PROMPT_RECOVERY_NOT_NEEDED_ERROR)
+            }
+          }
+        }
+      )
+    } catch (error) {
+      if (error instanceof Error && error.message === AGENT_PROMPT_RECOVERY_NOT_NEEDED_ERROR) {
+        return
+      }
+      throw error
+    }
+    if (!recovery.accepted) {
+      throw new Error('terminal_prompt_submission_unverified')
+    }
+
+    const deadline = Date.now() + AGENT_PROMPT_SUBMISSION_VERIFY_TIMEOUT_MS
+    let previousRead = beforeRecoveryRead
+    while (true) {
+      const currentRead = await this.readTerminal(handle, { limit: MAX_TERMINAL_READ_LIMIT })
+      const markerGone = !terminalReadHasNewPasteMarker(
+        baselineRead,
+        currentRead,
+        baselineMarkerCount
+      )
+      if (markerGone && terminalReadHasActivity(previousRead, currentRead)) {
+        return
+      }
+      if (Date.now() >= deadline) {
+        throw new Error('terminal_prompt_submission_unverified')
+      }
+      previousRead = currentRead
+      const remainingMs = deadline - Date.now()
+      await new Promise((resolve) =>
+        setTimeout(
+          resolve,
+          Math.max(0, Math.min(AGENT_PROMPT_SUBMISSION_POLL_INTERVAL_MS, remainingMs))
+        )
+      )
+    }
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
@@ -36533,6 +36649,59 @@ function readTerminalTail(args: {
   }
 }
 
+function terminalReadHasActivity(
+  previous: RuntimeTerminalRead,
+  current: RuntimeTerminalRead
+): boolean {
+  if (
+    previous.latestCursor !== current.latestCursor ||
+    previous.nextCursor !== current.nextCursor
+  ) {
+    return true
+  }
+  const previousTail = terminalReadTailWithoutPasteMarkers(previous.tail)
+  const currentTail = terminalReadTailWithoutPasteMarkers(current.tail)
+  if (previousTail.length !== currentTail.length) {
+    return true
+  }
+  return previousTail.some((line, index) => line !== currentTail[index])
+}
+
+function terminalReadCursor(read: RuntimeTerminalRead): number | null {
+  const cursor = Number(read.latestCursor)
+  return Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : null
+}
+
+function terminalReadHasNewPasteMarker(
+  baseline: RuntimeTerminalRead,
+  current: RuntimeTerminalRead,
+  baselineMarkerCount: number
+): boolean {
+  if (countAgentPromptPasteMarkers(current.tail) > baselineMarkerCount) {
+    return true
+  }
+  const baselineCursor = terminalReadCursor(baseline)
+  const currentCursor = terminalReadCursor(current)
+  if (baselineCursor === null || currentCursor === null || currentCursor <= baselineCursor) {
+    return false
+  }
+  const lastTailLine = current.tail.at(-1)
+  return lastTailLine !== undefined && isStandaloneAgentPromptPasteMarker(lastTailLine)
+}
+
+function isStandaloneAgentPromptPasteMarker(line: string): boolean {
+  return (
+    countAgentPromptPasteMarkers([line]) > 0 && stripAgentPromptPasteMarkers(line).trim() === ''
+  )
+}
+
+function terminalReadTailWithoutPasteMarkers(lines: readonly string[]): string[] {
+  return lines.flatMap((line) => {
+    const stripped = stripAgentPromptPasteMarkers(line)
+    return stripped.trim().length === 0 && stripped !== line ? [] : [stripped]
+  })
+}
+
 function shouldFallbackToVisibleTerminalSnapshot(
   read: RuntimeTerminalRead,
   opts: { cursor?: number; limit?: number }
@@ -36613,6 +36782,10 @@ async function assertTerminalInputWithinLimitWithYield(text: string | undefined)
 const TUI_IDLE_DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
 const TUI_IDLE_POLL_INTERVAL_MS = 2000
 const TUI_IDLE_QUIESCENCE_MS = 3000
+const AGENT_PROMPT_SUBMISSION_SETTLE_MS = 3_000
+const AGENT_PROMPT_SUBMISSION_VERIFY_TIMEOUT_MS = 5_000
+const AGENT_PROMPT_SUBMISSION_POLL_INTERVAL_MS = 150
+const AGENT_PROMPT_RECOVERY_NOT_NEEDED_ERROR = 'terminal_prompt_recovery_not_needed'
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
 const GEMINI_IDLE_PREFIX = '\u25c7'

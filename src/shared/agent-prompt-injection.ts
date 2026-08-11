@@ -4,6 +4,8 @@ export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
 
+const AGENT_PROMPT_PASTE_MARKER_RE = /\[Pasted Content \d+ chars?\]/g
+
 const DEFAULT_AGENT_PROMPT_SUBMIT_DELAY_MS = 500
 const WINDOWS_AGENT_PROMPT_SUBMIT_DELAY_MS = 1_500
 
@@ -41,6 +43,17 @@ export function buildAgentPromptPasteBytes(prompt: string): string {
 
 export function buildAgentPromptSubmitBytes(): string {
   return AGENT_PROMPT_SUBMIT
+}
+
+export function countAgentPromptPasteMarkers(lines: readonly string[]): number {
+  return lines.reduce(
+    (count, line) => count + (line.match(AGENT_PROMPT_PASTE_MARKER_RE)?.length ?? 0),
+    0
+  )
+}
+
+export function stripAgentPromptPasteMarkers(line: string): string {
+  return line.replace(AGENT_PROMPT_PASTE_MARKER_RE, '')
 }
 
 export function* iterateAgentPromptPasteChunks(
