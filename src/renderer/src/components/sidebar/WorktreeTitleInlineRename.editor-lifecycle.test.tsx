@@ -49,8 +49,8 @@ type HarnessProps = {
   showUnreadEmphasis?: boolean
 }
 
-// Why: mirrors WorktreeCard — the shortcut raises the trigger and the card clears it
-// as soon as the title consumes it, so the editor stays open on its own state.
+// Mirrors WorktreeCard: the card clears the trigger as soon as the title consumes it,
+// so from then on the editor stays open on its own state.
 function ShortcutRenameHarness({
   onRename = vi.fn(),
   onEditingChange,
@@ -112,8 +112,8 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
     await waitFor(() => expect(renameEditor()).toBeNull())
   })
 
-  // Why: the parent re-enables drag and the hover surface off this callback, so a
-  // close that skips it leaves the card wedged even though the editor disappeared.
+  // The parent re-enables drag off this callback, so a close that skips it leaves the
+  // card wedged even though the editor disappeared.
   it('reports both edit-mode transitions to the parent exactly once', () => {
     const onEditingChange = vi.fn()
     const { input } = openEditorByShortcut({ onEditingChange })
@@ -158,9 +158,11 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
 
     markUnread()
 
-    // Remounting the input would re-run focus + select, so the next keystroke
-    // would replace the half-typed name instead of appending to it.
+    // A remount re-runs focus + select and the next keystroke replaces the name; the
+    // value and focus assertions catch the same loss arriving without one.
     expect(renameEditor()).toBe(input)
+    expect(input.value).toBe('Half typed name')
+    expect(document.activeElement).toBe(input)
     expect(selectAfterOpen).not.toHaveBeenCalled()
   })
 })

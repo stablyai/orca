@@ -122,9 +122,8 @@ export function WorktreeTitleInlineRename({
     [editing, measureTitleTruncated, wrapTitle]
   )
 
-  // Why: remount the rendered title when its text or weight changes so truncation is
-  // measured again. The editor must not share this key — an unread flip mid-edit would
-  // remount the input and re-run focus + select over what the user just typed.
+  // Why: remounts the rendered title so truncation is measured again. The editor must
+  // not share it — an unread flip would remount the input and reselect what was typed.
   const titleElementKey = `${displayName}:${showUnreadEmphasis ? 'unread' : 'read'}`
   // Why: the sidebar row needs a text-only editor to avoid layout jumps; the
   // hovercard can use a compact field that reads more like native rename UI.
@@ -135,9 +134,8 @@ export function WorktreeTitleInlineRename({
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
-  // Why: the guard reads the rendered `editing`, so every caller must be reachable
-  // only from the branch it belongs to — a call from a timer or subscription could
-  // capture a stale value and silently drop the transition.
+  // Why: the guard reads the rendered `editing`, so callers must be reachable only from
+  // the branch they belong to; a timer or subscription would capture a stale value.
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
       if (editing === nextEditing) {
@@ -153,8 +151,7 @@ export function WorktreeTitleInlineRename({
     [editing, measureTitleTruncated, onEditingChange]
   )
 
-  // Why: both ways in (double-click, the workspace.rename shortcut) open the editor
-  // here, so no caller can put it on screen while skipping part of the transition.
+  // Why: double-click and the shortcut both open here, so neither can skip a step.
   const openRenameEditor = useCallback(() => {
     setValue(displayName)
     setEditingMode(true)
