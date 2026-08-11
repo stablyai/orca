@@ -180,6 +180,55 @@ describe('orchestration.ask self-addressed refusal', () => {
     expect(questionMessages(runId)).toHaveLength(0)
   })
 
+  // Why: resume takes the same explicit targets as a fresh ask, so ignoring them would let a
+  // caller wait on a Question filed under a Run it did not name.
+  it('reports a mismatched explicit target on a resumed Question as dispatch_run_mismatch', async () => {
+    setup()
+    const runId = createRun('term_general')
+    const dispatchId = dispatchTo(runId, 'term_worker')
+    const owned = db.createQuestion({
+      runId,
+      dispatchId,
+      askerHandle: 'term_worker',
+      question: 'proceed?'
+    })
+    const foreignRunId = createRun('term_captain')
+
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, run: foreignRunId })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, to: `run:${foreignRunId}` })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, to: 'term_captain' })
+    ).rejects.toMatchObject({ code: 'dispatch_run_mismatch' })
+  })
+
+  it('accepts an explicit target that agrees with the resumed Question owning Run', async () => {
+    setup()
+    const runId = createRun('term_general')
+    const dispatchId = dispatchTo(runId, 'term_worker')
+    const owned = db.createQuestion({
+      runId,
+      dispatchId,
+      askerHandle: 'term_worker',
+      question: 'proceed?'
+    })
+
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, run: runId })
+    ).resolves.toMatchObject({ timedOut: true })
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, to: `run:${runId}` })
+    ).resolves.toMatchObject({ timedOut: true })
+    await expect(
+      ask({ from: 'term_worker', resume: owned.question.message_id, to: 'term_general' })
+    ).resolves.toMatchObject({ timedOut: true })
+    // Resume must not create a second Question for the same thread.
+    expect(questionMessages(runId)).toHaveLength(1)
+  })
+
   it('leaves the undispatched coordinator error unchanged', async () => {
     setup()
     createRun('term_captain')
