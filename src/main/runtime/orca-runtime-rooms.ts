@@ -8,15 +8,22 @@ import { isAiVaultSessionResumableContent } from '../../shared/ai-vault-types'
 import type { ClaudeStatusLineRateLimits } from '../../shared/claude-statusline-rate-limits'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
 import { AGENT_COMPACT_COMMAND } from '../../shared/agent-compaction'
-import type { RuntimeTerminalClose, RuntimeTerminalSend } from '../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTerminalTab,
+  RuntimeTerminalClose,
+  RuntimeTerminalFocus,
+  RuntimeTerminalSend
+} from '../../shared/runtime-types'
 import {
   ROOM_HARNESS_AGENTS,
   type RoomAttachableAgent,
   type RoomAttachment,
   type RoomEvent,
   type RoomHarnessAgent,
+  type RoomParticipant,
   type RoomProviderSession
 } from '../../shared/rooms'
+import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { listAiVaultSessions } from '../ai-vault/cached-session-list'
 import { isENOENT } from '../ipc/filesystem-auth'
@@ -24,6 +31,8 @@ import { getSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
 import { RoomService } from './rooms/service'
 import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
 import { runtimeWorktreeIdsEqual } from './runtime-worktree-path-identity'
+import { resolveTerminalSessionWorktreeId } from './runtime-worktree-path-identity'
+import { terminalLayoutContainsLeaf } from './headless-terminal-split-layout'
 import { waitForWorktreeStartupDraft } from './runtime-worktree-startup-readiness'
 
 export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
@@ -68,8 +77,9 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     return this.roomService?.currentTurnDeliveryIdForPane(paneKey) ?? undefined
   }
 
-  shouldPublishAgentStatusToRenderer(): boolean {
-    return true
+  shouldPublishAgentStatusToRenderer(paneKey: string): boolean {
+    const participant = this.roomService?.participantForPane(paneKey)
+    return !participant || participant.terminalSurfaceVisible === true
   }
 
   override getAgentStatusTerminalHandleForPaneKey(paneKey: string): string | undefined {
@@ -206,7 +216,8 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
   publishRoomAgentProviderSession(
     handle: string,
     agent: string,
-    providerSession: AgentProviderSessionMetadata
+    providerSession: AgentProviderSessionMetadata,
+    force = false
   ): void {
     const paneKey = this.getTerminalPaneKey(handle)
     const pty = this.getLivePtyForHandle(handle)
@@ -215,7 +226,7 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     }
     const rows = this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? []
     const known = rows.find((row) => row.providerSession?.id === providerSession.id)
-    if (known?.providerSession?.transcriptPath === providerSession.transcriptPath) {
+    if (!force && known?.providerSession?.transcriptPath === providerSession.transcriptPath) {
       return
     }
     const state = rows[0]?.state ?? 'done'
@@ -227,6 +238,7 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
       worktreeId: pty.pty.worktreeId,
       connectionId: pty.pty.connectionId,
       providerSession,
+      ...(force ? { force: true } : {}),
       payload: {
         state,
         prompt: '',
@@ -258,12 +270,76 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
     return this.sendTerminalAgentPrompt(handle, AGENT_COMPACT_COMMAND)
   }
 
+  hasPersistedTerminalSurface(worktreeId: string, paneKey: string): boolean {
+    const pane = parsePaneKey(paneKey)
+    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
+    if (!pane || !session || !sessionWorktreeId) {
+      return false
+    }
+    const tab = session.tabsByWorktree[sessionWorktreeId]?.find(
+      (candidate) =>
+        candidate.id === pane.tabId && runtimeWorktreeIdsEqual(candidate.worktreeId, worktreeId)
+    )
+    const layout = session.terminalLayoutsByTabId?.[pane.tabId]
+    return Boolean(tab && layout && terminalLayoutContainsLeaf(layout.root, pane.leafId))
+  }
+
+  async hideRoomTerminalSurfaceFromRenderer(tabId: string): Promise<void> {
+    const pty = [...this.ptysById.values()].find((candidate) => candidate.tabId === tabId)
+    const participant = pty?.paneKey ? this.roomService?.participantForPane(pty.paneKey) : null
+    if (!participant?.terminalHandle) {
+      return
+    }
+    this.roomService?.hideParticipantTerminal(participant.terminalHandle)
+    await this.removeRoomTerminalSurface({ ...participant, terminalSurfaceVisible: false }, false)
+  }
+
+  protected shouldPreserveTerminalSessionOnClose(handle: string): boolean {
+    return this.roomService?.participantForTerminal(handle) !== null
+  }
+
+  override async focusTerminal(
+    handle: string,
+    options: { navigateHost?: boolean; viewMode?: 'terminal' | 'chat' } = {}
+  ): Promise<RuntimeTerminalFocus> {
+    const participant = this.roomService?.participantForTerminal(handle)
+    const live = this.getLivePtyForHandle(handle)
+    if (participant && !participant.terminalSurfaceVisible && live) {
+      const pane = parsePaneKey(participant.paneKey ?? '')
+      if (!pane) {
+        throw new Error('room_participant_not_ready')
+      }
+      live.pty.tabId = pane.tabId
+      live.pty.paneKey = participant.paneKey
+      const hasPublishedSurface = this.mobileSessionTabsByWorktree
+        .get(live.pty.worktreeId)
+        ?.tabs.some(
+          (candidate) =>
+            candidate.type === 'terminal' &&
+            candidate.parentTabId === pane.tabId &&
+            candidate.leafId === pane.leafId
+        )
+      if (!hasPublishedSurface) {
+        this.publishPtyBackedMobileSessionTerminal(live.pty.worktreeId, live.pty, {
+          tabId: pane.tabId,
+          leafId: pane.leafId,
+          title: null,
+          activate: true,
+          ...(options.viewMode ? { viewMode: options.viewMode } : {})
+        })
+      }
+    }
+    return super.focusTerminal(handle, options)
+  }
+
   override async closeTerminal(
     handle: string,
     options?: { force?: boolean }
   ): Promise<RuntimeTerminalClose> {
     const live = this.getLivePtyForHandle(handle)
     if (!options?.force && live && this.roomService?.participantForTerminal(handle)) {
+      this.roomService.hideParticipantTerminal(handle)
       return { handle, tabId: live.pty.tabId ?? live.record.tabId, ptyKilled: false }
     }
     return super.closeTerminal(handle)
@@ -280,6 +356,50 @@ export class OrcaRuntimeWithRooms extends OrcaRuntimeWithResolveWaiter {
       }
     }
     return super.closeTerminalTab(handle)
+  }
+
+  override getTerminalPaneKey(handle: string): string | null {
+    return super.getTerminalPaneKey(handle) ?? this.roomService?.participantForTerminal(handle)?.paneKey ?? null
+  }
+
+  private async removeRoomTerminalSurface(
+    participant: RoomParticipant,
+    notifyRenderer: boolean
+  ): Promise<void> {
+    if (!participant.worktreeId || !participant.paneKey) {
+      return
+    }
+    const pane = parsePaneKey(participant.paneKey)
+    if (!pane) {
+      return
+    }
+    const snapshot = this.mobileSessionTabsByWorktree.get(participant.worktreeId)
+    const tab = snapshot?.tabs.find(
+      (candidate): candidate is RuntimeMobileSessionTerminalTab =>
+        candidate.type === 'terminal' && candidate.parentTabId === pane.tabId
+    )
+    try {
+      let removedSurface = false
+      if (snapshot && tab) {
+        this.closeHeadlessMobileTerminalTab(participant.worktreeId, snapshot, tab, {
+          allowMissingPersistedTab: true,
+          killPtys: false
+        })
+        removedSurface = true
+      } else if (this.hasPersistedTerminalSurface(participant.worktreeId, participant.paneKey)) {
+        this.commitHeadlessTerminalTabRetirement(participant.worktreeId, pane.tabId, {
+          allowMissing: true
+        })
+        removedSurface = true
+      }
+      if (notifyRenderer && removedSurface) {
+        this.notifyRendererOfHeadlessTerminalClose(pane.tabId, {
+          preserveSessionOnClose: true
+        })
+      }
+    } catch (error) {
+      console.warn('[rooms] failed to hide background participant terminal surface', error)
+    }
   }
 
   private toWslRoomAttachmentPath(distro: string, localPath: string): Promise<string> {

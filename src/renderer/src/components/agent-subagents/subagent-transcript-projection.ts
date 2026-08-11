@@ -10,7 +10,7 @@ export function projectSubagentTranscript(
     (message) =>
       message.subagentEvent?.kind === 'turn-boundary' && message.subagentEvent.triggerTurn
   )
-  if (firstTurn < 0) {
+  if (firstTurn === -1) {
     return messages.filter((message) => !message.subagentEvent)
   }
 

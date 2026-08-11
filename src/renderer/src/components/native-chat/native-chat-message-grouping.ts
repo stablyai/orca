@@ -136,7 +136,7 @@ function buildAssistantTurn(
   id = `assistant-turn:${messages[0]?.id ?? 'empty'}`
 ): Extract<NativeChatConversationItem, { kind: 'assistant-turn' }> {
   const finalIndex = messages.findLastIndex((message) => isFinalCandidate(message, working))
-  const finalMessage = finalIndex >= 0 ? messages[finalIndex]! : null
+  const finalMessage = finalIndex !== -1 ? messages[finalIndex]! : null
   const activityMessages = messages.filter((_, index) => index !== finalIndex)
   const timestamps = messages.flatMap((message) =>
     message.timestamp == null ? [] : [message.timestamp]

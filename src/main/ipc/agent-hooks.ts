@@ -51,6 +51,7 @@ export function registerAgentHookHandlers(
     // live push enrichment in main/index.ts so parent/child rows survive replay.
     return agentHookServer
       .getStatusSnapshot()
+      .filter((entry) => runtime?.shouldPublishAgentStatusToRenderer?.(entry.paneKey) !== false)
       .map((entry) => enrichAgentStatusIpcPayload(entry, runtime))
   })
   ipcMain.handle('agentStatus:inferInterrupt', (_event, request: unknown): boolean => {

@@ -4,7 +4,6 @@ import type { GitFileStatus } from '../../../../shared/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { TopLevelView } from '../../../../shared/ui-chrome-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
@@ -74,7 +73,6 @@ export type TabBarRuntimeModel = {
   showMobileEmulatorIntroCallout: boolean
   unifiedTabs: readonly Tab[]
   roomProjectId: string
-  activeView: TopLevelView
   activeGroupTabId: string | null
   runtimeTarget: RuntimeClientTarget
   pinTab: (tabId: string) => void
@@ -129,7 +127,6 @@ export function useTabBarRuntimeModel({
     }
     return s.getKnownWorktreeById?.(worktreeId)?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
   })
-  const activeView = useAppStore((s) => s.activeView)
   const pinTab = useAppStore((s) => s.pinTab)
   const unpinTab = useAppStore((s) => s.unpinTab)
   const activeGroupIdForWorktree = useAppStore((s) => s.activeGroupIdByWorktree[worktreeId])
@@ -287,7 +284,6 @@ export function useTabBarRuntimeModel({
     showMobileEmulatorIntroCallout,
     unifiedTabs,
     roomProjectId,
-    activeView,
     activeGroupTabId,
     runtimeTarget,
     pinTab,

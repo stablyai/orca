@@ -99,7 +99,13 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
       disposition: 'created'
     })
     expect(runtime.createAgentSession).toHaveBeenCalledWith(
-      expect.objectContaining({ agent, worktree: 'id:worktree-1', viewMode: 'chat' })
+      expect.objectContaining({
+        agent,
+        worktree: 'id:worktree-1',
+        viewMode: 'chat',
+        surfaceOwner: false,
+        persistHostSessionBinding: false
+      })
     )
     await expect(adapter.attach(launched)).resolves.toMatchObject({ disposition: 'attached' })
     await expect(adapter.send(launched, 'review')).resolves.toMatchObject({ accepted: true })
@@ -140,7 +146,13 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
       disposition: 'adopted'
     })
     expect(runtime.ensureAgentSession).toHaveBeenCalledWith(
-      expect.objectContaining({ agent, providerSession, worktree: 'id:worktree-1' })
+      expect.objectContaining({
+        agent,
+        providerSession,
+        worktree: 'id:worktree-1',
+        surfaceOwner: false,
+        persistHostSessionBinding: false
+      })
     )
     await expect(adapter.restore({ ...launched, providerSession })).resolves.toMatchObject({
       providerSession,
@@ -206,6 +218,39 @@ describe.each(ROOM_HARNESS_AGENTS)('%s room harness adapter', (agent: RoomHarnes
     })
     expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
   })
+
+  it.each([true, false])(
+    'restores the participant in its stable pane with persisted surface=%s',
+    async (persisted) => {
+      const runtime = runtimeStub()
+      const paneKey = 'room-tab:11111111-1111-4111-8111-111111111111'
+      const providerSession = {
+        key: 'session_id' as const,
+        id: `session-${agent}`,
+        transcriptPath: `/sessions/${agent}.jsonl`
+      }
+      vi.mocked(runtime.listRoomAttachableAgents).mockResolvedValue([])
+      runtime.hasPersistedTerminalSurface = vi.fn(() => persisted)
+      const adapter = createRoomHarnessAdapters(runtime)[agent]
+
+      await adapter.restore({
+        worktreeId: 'worktree-1',
+        terminalHandle: 'term-stale',
+        paneKey,
+        providerSession
+      })
+
+      expect(runtime.ensureAgentSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          placement: {
+            tabId: 'room-tab',
+            leafId: '11111111-1111-4111-8111-111111111111'
+          },
+          persistHostSessionBinding: persisted
+        })
+      )
+    }
+  )
 
   it('degrades read, subscribe, and context safely before session identity arrives', async () => {
     const adapter = createRoomHarnessAdapters(runtimeStub())[agent]

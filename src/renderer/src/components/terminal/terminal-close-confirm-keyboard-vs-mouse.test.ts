@@ -92,6 +92,30 @@ describe('#10142 close confirmation policy is the same for keyboard and mouse', 
     })
   })
 
+  it('hides a revealed room terminal without closing its busy session', () => {
+    const notifyTerminalSurfaceClosed = vi.fn()
+    const previousWindow = globalThis.window
+    globalThis.window = {
+      api: { ui: { notifyTerminalSurfaceClosed } }
+    } as never
+    getStateMock.mockReturnValue({
+      ...stateWithBusyTerminalTab(closeTab),
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-busy', preserveSessionOnClose: true }, { id: 'tab-other' }]
+      }
+    })
+
+    try {
+      closeTerminalTab('tab-busy')
+    } finally {
+      globalThis.window = previousWindow
+    }
+
+    expect(closeTab).toHaveBeenCalledWith('tab-busy', { preserveSessionOnClose: true })
+    expect(notifyTerminalSurfaceClosed).toHaveBeenCalledWith('tab-busy')
+    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
+  })
+
   // Control: the keyboard entry point does probe for running children.
   it('keyboard Cmd+W path probes for running child processes before closing', () => {
     const source = readFileSync(

@@ -223,7 +223,7 @@ describe('Codex transcript history modes', () => {
           type: 'custom_tool_call',
           id: 'call-1',
           call_id: 'durable-call-1',
-          name: 'exec',
+          name: 'review',
           input: 'pwd'
         }
       }),
@@ -232,7 +232,7 @@ describe('Codex transcript history modes', () => {
     const output = decodeCodexTranscriptLine(
       JSON.stringify({
         type: 'response_item',
-        payload: { type: 'custom_tool_call_output', call_id: 'durable-call-1', output: 'ok' }
+        payload: { type: 'function_call_output', call_id: 'durable-call-1', output: 'ok' }
       }),
       'fallback-output'
     )
@@ -240,7 +240,7 @@ describe('Codex transcript history modes', () => {
     expect(call).toMatchObject({
       id: 'call-1',
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name: 'exec', input: 'pwd' }]
+      blocks: [{ type: 'tool-call', name: 'review', input: 'pwd' }]
     })
     expect(output).toMatchObject({
       id: 'fallback-output',

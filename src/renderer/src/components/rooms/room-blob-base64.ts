@@ -5,7 +5,7 @@ export function roomBlobBase64(blob: Blob): Promise<string> {
     reader.onload = () => {
       const value = typeof reader.result === 'string' ? reader.result : ''
       const separator = value.indexOf(',')
-      if (separator < 0) {
+      if (separator === -1) {
         reject(new Error('room_file_read_failed'))
       } else {
         resolve(value.slice(separator + 1))

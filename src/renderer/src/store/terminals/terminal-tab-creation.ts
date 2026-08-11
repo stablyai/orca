@@ -128,6 +128,7 @@ export function createTerminalTabCreationActions(
           ...(createdShellOverride !== undefined ? { shellOverride: createdShellOverride } : {}),
           ...(startupCwd && startupCwd.length > 0 ? { startupCwd } : {}),
           ...(options?.forceHostRuntime ? { forceHostRuntime: true } : {}),
+          ...(options?.preserveSessionOnClose ? { preserveSessionOnClose: true } : {}),
           ...(options?.launchAgent ? { launchAgent: options.launchAgent } : {}),
           // Why: mark click-caused (not work-caused) spawns so updateTabPtyId skips the activity/sortEpoch bump that would reorder Recent/Smart on click.
           ...(options?.pendingActivationSpawn ? { pendingActivationSpawn: true } : {})

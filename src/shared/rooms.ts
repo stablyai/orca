@@ -78,6 +78,8 @@ export type RoomParticipant = {
   /** Runtime process identity the room last bound to; a mismatch on restore
    *  means the harness process was restarted and must prove readiness again. */
   processIncarnation: string | null
+  /** Whether the agent terminal was explicitly promoted into the user's tab strip. */
+  terminalSurfaceVisible?: boolean
   participation: RoomParticipation
   state: RoomParticipantState
   context: RoomContextSnapshot

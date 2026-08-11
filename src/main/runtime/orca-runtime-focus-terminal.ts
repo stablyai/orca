@@ -78,6 +78,7 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
           const revealed = await notifier.revealTerminalSession(live.pty.worktreeId, {
             ptyId: live.pty.ptyId,
             title: getLatestPtyTitle(live.pty),
+            ...(options.viewMode ? { viewMode: options.viewMode } : {}),
             ...(live.pty.launchConfig
               ? {
                   launchConfig: {
@@ -88,6 +89,9 @@ export class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitForLeafPtyI
               : {}),
             ...(live.pty.launchToken ? { launchToken: live.pty.launchToken } : {}),
             ...(live.pty.launchAgent ? { launchAgent: live.pty.launchAgent } : {}),
+            ...(this.shouldPreserveTerminalSessionOnClose?.(handle)
+              ? { preserveSessionOnClose: true }
+              : {}),
             ...(live.pty.tabId !== null ? { tabId: live.pty.tabId } : {}),
             ...(parsedPaneKey ? { leafId: parsedPaneKey.leafId } : {})
           })

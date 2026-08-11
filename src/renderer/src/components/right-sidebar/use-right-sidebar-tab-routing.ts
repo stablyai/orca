@@ -53,7 +53,9 @@ export function useRightSidebarTabRouting({
       : null
   const effectiveTab = resolveRightSidebarEffectiveTab({
     normalizedActiveTab,
-    visibleItems,
+    visibleItems: visibleItems.filter(
+      (item): item is ActivityBarItem & { id: ActiveRightSidebarTab } => item.id !== 'room'
+    ),
     activeFolderWorkspaceKey,
     rememberedFolderTab: requestedFolderTab ?? rememberedFolderTab
   })

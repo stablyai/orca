@@ -80,6 +80,7 @@ describe('parseWorkspaceSession', () => {
             title: 'bash',
             customTitle: null,
             color: null,
+            preserveSessionOnClose: true,
             sortOrder: 0,
             createdAt: 1_700_000_000_000
           }
@@ -101,6 +102,12 @@ describe('parseWorkspaceSession', () => {
       activeWorktreeIdsOnShutdown: ['repo1::/path/wt1']
     })
     expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.tabsByWorktree['repo1::/path/wt1']?.[0]).toHaveProperty(
+        'preserveSessionOnClose',
+        true
+      )
+    }
   })
 
   it('preserves an isolated browser tab session partition across hydration', () => {
@@ -587,6 +594,37 @@ describe('parseWorkspaceSession', () => {
         structuredSessionId: 'codex-session-1'
       })
       expect(result.value.activeTabTypeByWorktree?.wt).toBe('agent-session')
+    }
+  })
+
+  it('preserves a room tab across session parsing', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: 'wt',
+      activeTabId: 'room-tab',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      unifiedTabs: {
+        wt: [
+          {
+            id: 'room-tab',
+            entityId: 'room-id',
+            groupId: 'group1',
+            worktreeId: 'wt',
+            contentType: 'room',
+            label: 'test4',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 0
+          }
+        ]
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.value.unifiedTabs?.wt[0]?.contentType).toBe('room')
     }
   })
 

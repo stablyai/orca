@@ -60,16 +60,19 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
-          cols: 120,
-          rows: 40,
-          cwd,
-          connectionId: workspace.connectionId,
-          worktreeId: workspace.id,
-          preAllocatedHandle,
-          tabId,
-          leafId
-        })
+        const adoptedBeforeLaunch =
+          launchOpts.agentSessionClaim || launchOpts.agentSessionCreateOperationId
+            ? null
+            : await this.ptyController.adoptStablePane?.({
+                cols: 120,
+                rows: 40,
+                cwd,
+                connectionId: workspace.connectionId,
+                worktreeId: workspace.id,
+                preAllocatedHandle,
+                tabId,
+                leafId
+              })
         const launchToken = launchOpts.launchConfig
           ? (launchOpts.launchToken ?? dependencies.randomUUID())
           : undefined
@@ -122,6 +125,11 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
+        const persistHostSessionBinding =
+          launchOpts.persistHostSessionBinding !== false &&
+          (launchOpts.persistHostSessionBinding === true ||
+            launchOpts.surfaceOwner === false ||
+            this.getAvailableAuthoritativeWindow() === null)
         let result: Awaited<ReturnType<NonNullable<dependencies.RuntimePtyController['spawn']>>>
         try {
           result = await this.ptyController.spawn({
@@ -170,7 +178,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
-            persistHostSessionBinding: true
+            ...(persistHostSessionBinding ? { persistHostSessionBinding: true } : {})
           })
         } finally {
           releaseStablePaneCreate?.()
@@ -239,7 +247,12 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
           pty.paneKey = paneKey
         }
         const handle = pty ? this.issuePtyHandle(pty) : preAllocatedHandle
-        if (pty && !adoptedStablePane && launchOpts.deferMobileSessionPublish !== true) {
+        if (
+          pty &&
+          !adoptedStablePane &&
+          launchOpts.deferMobileSessionPublish !== true &&
+          launchOpts.persistHostSessionBinding !== false
+        ) {
           this.publishPtyBackedMobileSessionTerminal(workspace.id, pty, {
             tabId,
             leafId,

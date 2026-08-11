@@ -87,12 +87,14 @@ describe('RoomDatabase', () => {
       updatedAt: 10,
       anchorSequence: created.message.sequence
     })
+    first.participants.update(agent.id, { terminalSurfaceVisible: true })
     first.close()
 
     const second = new RoomDatabase(path)
     databases.push(second)
     expect(second.core.list('project-1')).toHaveLength(1)
     expect(second.core.get(snapshot.room.id).worktreeId).toBe('worktree-1')
+    expect(second.participants.get(agent.id).terminalSurfaceVisible).toBe(true)
     expect(second.messages.list(snapshot.room.id, null, 20).messages).toMatchObject([
       { id: created.message.id, body: '@claude inspect this', mentions: ['claude'] }
     ])
@@ -457,7 +459,9 @@ describe('RoomDatabase', () => {
 
     database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old'])
     database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old'])
+    expect(database.providerMessages.hasObservedSession(agent.id, 'session-1')).toBe(true)
     database.providerMessages.resetStream(agent.id)
+    expect(database.providerMessages.hasObservedSession(agent.id, 'session-1')).toBe(true)
     database.providerMessages.observeSnapshot(agent.id, 'session-1', ['old', 'archived'])
 
     const delivery = database.messages.create({

@@ -95,6 +95,7 @@ export type RuntimeTerminalAgentStatusEvent = {
   worktreeId?: string
   connectionId?: string | null
   providerSession?: AgentProviderSessionMetadata
+  force?: boolean
   payload: ParsedAgentStatusPayload
 }
 

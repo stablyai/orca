@@ -1,21 +1,15 @@
-/* eslint-disable max-lines -- transcript and activity publication share one pending-turn state */
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
-import type {
-  RoomAgentActivity,
-  RoomCompletedActivity,
-  RoomDelivery,
-  RoomEvent,
-  RoomMessage,
-  RoomParticipant
-} from '../../../shared/rooms'
+import type { RoomDelivery, RoomEvent, RoomMessage, RoomParticipant } from '../../../shared/rooms'
 import type { RoomDatabase } from './database'
-import type {
-  RoomHarnessAdapter,
-  RoomHarnessBinding,
-  RoomHarnessLifecycleEvent
-} from './harness-adapter'
+import type { RoomHarnessAdapter, RoomHarnessLifecycleEvent } from './harness-adapter'
 import type { RoomHarnessTurnUserMessage } from './harness-lifecycle'
 import { extractRoomReplyRecipients } from './mentions'
+import { roomParticipantHarnessBinding } from './participant-harness-binding'
+import {
+  providerMessageId,
+  RoomTranscriptTurnState,
+  selectRoomTranscriptFinal
+} from './transcript-turn-state'
 
 type ActiveWatcher = {
   providerSessionId: string
@@ -23,14 +17,10 @@ type ActiveWatcher = {
   unsubscribe: () => void
 }
 
-type PendingProviderMessage = { message: NativeChatMessage; publishable: boolean }
-
 export class RoomTranscriptBridge {
   private readonly watchers = new Map<string, ActiveWatcher>()
   private readonly generations = new Map<string, number>()
-  private readonly pending = new Map<string, Map<string, PendingProviderMessage>>()
-  private readonly activityStartedAt = new Map<string, number>()
-  private readonly activityAnchorSequence = new Map<string, number | null>()
+  private readonly turnState: RoomTranscriptTurnState
   private readonly suppressedControls = new Set<string>()
   /** Room delivery bound to the participant's current turn (null = direct turn). */
   private readonly activeDeliveries = new Map<string, string | null>()
@@ -44,17 +34,19 @@ export class RoomTranscriptBridge {
       userMessage: RoomHarnessTurnUserMessage
     ) => RoomDelivery | null,
     private readonly onSettled: (message?: RoomMessage) => void
-  ) {}
+  ) {
+    this.turnState = new RoomTranscriptTurnState(db, emit)
+  }
 
   async ensure(participant: RoomParticipant): Promise<void> {
-    const binding = this.binding(participant)
+    const binding = roomParticipantHarnessBinding(participant)
     const adapter = participant.agent ? this.adapters[participant.agent] : undefined
     const session = participant.providerSession
     if (!adapter || !binding || !session) {
       this.disposeParticipant(participant.id)
       return
     }
-    this.restoreActivity(participant)
+    this.turnState.restore(participant)
     const transcriptPath = session.transcriptPath ?? null
     const current = this.watchers.get(participant.id)
     if (current?.providerSessionId === session.id && current.transcriptPath === transcriptPath) {
@@ -63,9 +55,7 @@ export class RoomTranscriptBridge {
     if (current) {
       current.unsubscribe()
       this.watchers.delete(participant.id)
-      this.pending.delete(participant.id)
-      this.activityStartedAt.delete(participant.id)
-      this.activityAnchorSequence.delete(participant.id)
+      this.turnState.disposeParticipant(participant.id)
       this.activeDeliveries.delete(participant.id)
       this.db.activities.remove(participant.id)
       this.emit(participant.roomId, { type: 'activity.cleared', participantId: participant.id })
@@ -92,9 +82,7 @@ export class RoomTranscriptBridge {
     this.generations.set(participantId, (this.generations.get(participantId) ?? 0) + 1)
     this.watchers.get(participantId)?.unsubscribe()
     this.watchers.delete(participantId)
-    this.pending.delete(participantId)
-    this.activityStartedAt.delete(participantId)
-    this.activityAnchorSequence.delete(participantId)
+    this.turnState.disposeParticipant(participantId)
     this.suppressedControls.delete(participantId)
     this.activeDeliveries.delete(participantId)
   }
@@ -105,9 +93,7 @@ export class RoomTranscriptBridge {
     }
     this.watchers.clear()
     this.generations.clear()
-    this.pending.clear()
-    this.activityStartedAt.clear()
-    this.activityAnchorSequence.clear()
+    this.turnState.dispose()
     this.suppressedControls.clear()
     this.activeDeliveries.clear()
   }
@@ -131,7 +117,7 @@ export class RoomTranscriptBridge {
 
   async refreshContext(participant: RoomParticipant): Promise<RoomParticipant> {
     const adapter = participant.agent ? this.adapters[participant.agent] : undefined
-    const binding = this.binding(participant)
+    const binding = roomParticipantHarnessBinding(participant)
     if (!adapter || !binding) {
       return participant
     }
@@ -202,31 +188,27 @@ export class RoomTranscriptBridge {
         void this.refreshContext(participant).catch(() => {})
         return
       }
-      this.remember(participantId, event.messages, !event.replay)
+      this.turnState.remember(participantId, event.messages, !event.replay)
       if (event.type === 'activity') {
-        this.rememberActivityStart(participant, delivery, event)
+        this.turnState.rememberStart(participant, delivery, event)
         participant = this.updateParticipant(participant, 'busy', event.timestamp)
-        this.emitActivity(participant, event)
+        this.turnState.emitActivity(participant, event)
         return
       }
       if (event.type === 'final') {
         this.publishFinal(participant, delivery, session.id, event)
         participant = this.updateParticipant(participant, 'online', event.timestamp)
-        this.db.activities.remove(participant.id)
+        this.turnState.removeActivity(participant.id)
         this.emit(participant.roomId, { type: 'activity.cleared', participantId: participant.id })
-        this.activityStartedAt.delete(participant.id)
-        this.activityAnchorSequence.delete(participant.id)
       } else {
         participant = this.updateParticipant(
           participant,
           event.type === 'failed' ? 'error' : 'online',
           event.timestamp
         )
-        this.emitActivity(participant, event)
-        this.ignorePending(participant.id, session.id)
-        this.db.activities.remove(participant.id)
-        this.activityStartedAt.delete(participant.id)
-        this.activityAnchorSequence.delete(participant.id)
+        this.turnState.emitActivity(participant, event)
+        this.turnState.ignorePending(participant.id, session.id)
+        this.turnState.removeActivity(participant.id)
       }
       void this.refreshContext(participant).catch(() => {})
     })
@@ -247,86 +229,20 @@ export class RoomTranscriptBridge {
     }
   }
 
-  private remember(
-    participantId: string,
-    messages: NativeChatMessage[],
-    publishable: boolean
-  ): void {
-    const pending = this.pending.get(participantId) ?? new Map<string, PendingProviderMessage>()
-    for (const message of messages) {
-      const id = providerMessageId(message)
-      const current = pending.get(id)
-      pending.set(id, {
-        message: current
-          ? { ...message, timestamp: current.message.timestamp ?? message.timestamp }
-          : message,
-        publishable: publishable || current?.publishable === true
-      })
-    }
-    if (pending.size > 0) {
-      this.pending.set(participantId, pending)
-    }
-  }
-
-  private emitActivity(participant: RoomParticipant, event: RoomHarnessLifecycleEvent): void {
-    const pending = [...(this.pending.get(participant.id)?.values() ?? [])]
-    const activity: RoomAgentActivity = {
-      participantId: participant.id,
-      identity: participant.identity,
-      state: event.type === 'failed' || event.type === 'interrupted' ? event.type : 'working',
-      kind: event.activity?.kind ?? 'working',
-      ...(event.activity?.detail ? { detail: event.activity.detail } : {}),
-      messages: pending.map(({ message }) => message),
-      startedAt: this.activityStartedAt.get(participant.id) ?? event.timestamp,
-      updatedAt: event.timestamp,
-      anchorSequence: this.activityAnchorSequence.get(participant.id) ?? null
-    }
-    this.db.activities.upsert(activity)
-    this.emit(participant.roomId, { type: 'activity.updated', activity })
-  }
-
-  private restoreActivity(participant: RoomParticipant): void {
-    if (this.pending.has(participant.id)) {
-      return
-    }
-    const activity = this.db.activities.get(participant.id)
-    if (!activity) {
-      return
-    }
-    this.pending.set(
-      participant.id,
-      new Map(
-        activity.messages.map((message) => [
-          providerMessageId(message),
-          { message, publishable: false }
-        ])
-      )
-    )
-    this.activityStartedAt.set(participant.id, activity.startedAt)
-    this.activityAnchorSequence.set(participant.id, activity.anchorSequence)
-  }
-
   private publishFinal(
     participant: RoomParticipant,
     delivery: RoomDelivery,
     providerSessionId: string,
     event: RoomHarnessLifecycleEvent
   ): void {
-    const pending = [...(this.pending.get(participant.id)?.values() ?? [])]
+    const pending = this.turnState.entries(participant.id)
     const explicitBody = event.text?.trim() || null
-    const matching = explicitBody
-      ? pending.findLast(({ message }) => finalBodyMatches(assistantBody(message), explicitBody))
-      : null
-    const candidate =
-      matching ??
-      (explicitBody ? null : pending.findLast(({ message }) => assistantBody(message) !== null)) ??
-      null
-    const body = candidate ? assistantBody(candidate.message) : explicitBody
+    const { candidate, body } = selectRoomTranscriptFinal(pending, explicitBody)
     const finalProviderMessageId = candidate?.publishable
       ? providerMessageId(candidate.message)
       : `status:${event.turnId ?? event.timestamp}`
-    const completedActivity = this.completedActivity(participant.id, pending, candidate, event)
-    this.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
+    const completedActivity = this.turnState.completed(participant.id, pending, candidate, event)
+    this.turnState.ignorePending(participant.id, providerSessionId, finalProviderMessageId)
     if (candidate?.message.providerError) {
       const failed = this.db.messages.deliveries.failResponse(
         delivery.id,
@@ -375,65 +291,6 @@ export class RoomTranscriptBridge {
     this.onSettled(message)
   }
 
-  private rememberActivityStart(
-    participant: RoomParticipant,
-    delivery: RoomDelivery,
-    event: RoomHarnessLifecycleEvent
-  ): void {
-    const participantId = participant.id
-    const messageStart = event.messages
-      .map((message) => message.timestamp)
-      .filter((timestamp): timestamp is number => timestamp !== null)
-      .reduce((earliest, timestamp) => Math.min(earliest, timestamp), event.timestamp)
-    if (!this.activityStartedAt.has(participantId)) {
-      this.activityStartedAt.set(participantId, messageStart)
-    }
-    if (!this.activityAnchorSequence.has(participantId)) {
-      this.activityAnchorSequence.set(
-        participantId,
-        this.db.messages.get(delivery.messageId).sequence
-      )
-    }
-  }
-
-  private completedActivity(
-    participantId: string,
-    pending: PendingProviderMessage[],
-    finalMessage: PendingProviderMessage | null,
-    event: RoomHarnessLifecycleEvent
-  ): RoomCompletedActivity | null {
-    const messages = pending
-      .map(({ message }) => message)
-      .filter((message) => message !== finalMessage?.message && isActivityMessage(message))
-    const messageStart = messages
-      .map((message) => message.timestamp)
-      .filter((timestamp): timestamp is number => timestamp !== null)
-      .reduce<number | undefined>(
-        (earliest, timestamp) =>
-          earliest === undefined ? timestamp : Math.min(earliest, timestamp),
-        undefined
-      )
-    const startedAt = this.activityStartedAt.get(participantId) ?? messageStart
-    if (startedAt === undefined) {
-      return null
-    }
-    return { state: 'completed', messages, startedAt, completedAt: event.timestamp }
-  }
-
-  private ignorePending(
-    participantId: string,
-    providerSessionId: string,
-    exceptProviderMessageId?: string
-  ): void {
-    for (const { message } of this.pending.get(participantId)?.values() ?? []) {
-      const id = providerMessageId(message)
-      if (id !== exceptProviderMessageId) {
-        this.db.providerMessages.ignore(participantId, providerSessionId, id)
-      }
-    }
-    this.pending.delete(participantId)
-  }
-
   private updateParticipant(
     participant: RoomParticipant,
     state: RoomParticipant['state'],
@@ -456,39 +313,4 @@ export class RoomTranscriptBridge {
       }
     }
   }
-
-  private binding(participant: RoomParticipant): RoomHarnessBinding | null {
-    return participant.terminalHandle && participant.paneKey && participant.worktreeId
-      ? {
-          worktreeId: participant.worktreeId,
-          terminalHandle: participant.terminalHandle,
-          paneKey: participant.paneKey,
-          providerSession: participant.providerSession
-        }
-      : null
-  }
-}
-
-function providerMessageId(message: NativeChatMessage): string {
-  return message.turnId ?? message.id
-}
-
-function assistantBody(message: NativeChatMessage): string | null {
-  if (message.role !== 'assistant') {
-    return null
-  }
-  const body = message.blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => block.text.trim())
-    .filter(Boolean)
-    .join('\n\n')
-  return body || null
-}
-
-function isActivityMessage(message: NativeChatMessage): boolean {
-  return message.role === 'assistant' || message.role === 'reasoning' || message.role === 'tool'
-}
-
-function finalBodyMatches(candidate: string | null, explicit: string): boolean {
-  return candidate === explicit || candidate?.startsWith(explicit) === true
 }

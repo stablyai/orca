@@ -5,9 +5,13 @@ import { roomRpc, subscribeRoom } from '@/runtime/runtime-rooms-client'
 import { EMPTY_ACTIVE_ROOM, reduceRoomEvent } from './room-event-reducer'
 import { useRoomTabs } from './use-room-tabs'
 
-export function useRoomData(target: RuntimeClientTarget, projectId: string | null) {
+export function useRoomData(
+  target: RuntimeClientTarget,
+  projectId: string | null,
+  roomId: string | null
+) {
   const [rooms, setRooms] = useState<Room[]>([])
-  const { roomId } = useRoomTabs(rooms)
+  useRoomTabs(rooms)
   const [state, dispatch] = useReducer(reduceRoomEvent, EMPTY_ACTIVE_ROOM)
   const [hasMore, setHasMore] = useState(false)
   const [loading, setLoading] = useState(false)

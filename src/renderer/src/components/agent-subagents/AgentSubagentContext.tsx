@@ -77,7 +77,7 @@ export function AgentSubagentTurnLink({
       <span className="shrink-0 font-medium">
         {rows.length > 0
           ? translate('agentSubagents.turn.count', '{{count}} subagents', { count: rows.length })
-          : 'Subagents'}
+          : translate('agentSubagents.label', 'Subagents')}
       </span>
       {names ? <span className="truncate">· {names}</span> : null}
       {rows.some((row) => row.active) ? (

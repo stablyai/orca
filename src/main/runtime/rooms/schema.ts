@@ -18,6 +18,7 @@ export function initializeRoomSchema(db: SyncDatabase.Database): void {
     ensureRoomDeliveryReliabilitySchema(db)
     ensureRoomParticipantIncarnationSchema(db)
     ensureRoomParticipantParticipationSchema(db)
+    ensureRoomParticipantTerminalSurfaceSchema(db)
     ensureRoomParticipantSleepingStateSchema(db)
     ensureRoomActivitySchema(db)
     ensureRoomDeliveryConfigurationSchema(db)
@@ -188,6 +189,15 @@ function ensureRoomParticipantIncarnationSchema(db: SyncDatabase.Database): void
   const columns = db.pragma('table_info(room_participants)') as { name: string }[]
   if (!columns.some((column) => column.name === 'process_incarnation')) {
     db.exec('ALTER TABLE room_participants ADD COLUMN process_incarnation TEXT')
+  }
+}
+
+function ensureRoomParticipantTerminalSurfaceSchema(db: SyncDatabase.Database): void {
+  const columns = db.pragma('table_info(room_participants)') as { name: string }[]
+  if (!columns.some((column) => column.name === 'terminal_surface_visible')) {
+    db.exec(
+      'ALTER TABLE room_participants ADD COLUMN terminal_surface_visible INTEGER NOT NULL DEFAULT 0 CHECK(terminal_surface_visible IN (0, 1))'
+    )
   }
 }
 

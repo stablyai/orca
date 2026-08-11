@@ -28,13 +28,15 @@ afterEach(() => {
 function stubWindowApi(): {
   drop: ReturnType<typeof vi.fn>
   dropByTabPrefix: ReturnType<typeof vi.fn>
+  kill: ReturnType<typeof vi.fn>
 } {
   const drop = vi.fn()
   const dropByTabPrefix = vi.fn()
+  const kill = vi.fn()
   ;(globalThis as { window?: unknown }).window = {
-    api: { agentStatus: { drop, dropByTabPrefix } }
+    api: { agentStatus: { drop, dropByTabPrefix }, pty: { kill } }
   }
-  return { drop, dropByTabPrefix }
+  return { drop, dropByTabPrefix, kill }
 }
 
 describe('dropAgentStatus → IPC fan-out', () => {
@@ -75,6 +77,20 @@ describe('dropAgentStatus → IPC fan-out', () => {
     store.getState().dropAgentStatus('tab-1:0')
     store.getState().dropAgentStatus('tab-1:0')
     expect(drop).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps a renderer-only drop out of the main hook lifecycle', () => {
+    const { drop } = stubWindowApi()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus('room-tab:0', { state: 'working', prompt: 'p', agentType: 'claude' })
+
+    store.getState().dropAgentStatus('room-tab:0', { rendererOnly: true })
+
+    expect(store.getState().agentStatusByPaneKey['room-tab:0']).toBeUndefined()
+    expect(store.getState().retentionSuppressedPaneKeys['room-tab:0']).toBeUndefined()
+    expect(drop).not.toHaveBeenCalled()
   })
 })
 
@@ -137,6 +153,27 @@ describe('dropAgentStatusByTabPrefix -> IPC fan-out', () => {
     expect(closed['tab-0']).toBeUndefined()
     expect(closed['tab-4']).toBeUndefined()
     expect(closed[`tab-${cap + 4}`]).toBe(true)
+  })
+
+  it('keeps agent status and PTY alive when closing only a terminal surface', () => {
+    const { dropByTabPrefix, kill } = stubWindowApi()
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'room-tab', worktreeId: 'wt-1', title: 'Room agent' } as TerminalTab]
+      },
+      ptyIdsByTabId: { 'room-tab': ['pty-room'] }
+    })
+    store
+      .getState()
+      .setAgentStatus('room-tab:leaf-1', { state: 'working', prompt: '', agentType: 'codex' })
+
+    store.getState().closeTab('room-tab', { preserveSessionOnClose: true })
+
+    expect(kill).not.toHaveBeenCalled()
+    expect(dropByTabPrefix).not.toHaveBeenCalled()
+    expect(store.getState().agentStatusByPaneKey['room-tab:leaf-1']).toBeDefined()
+    expect(store.getState().recentlyClosedAgentStatusTabIds['room-tab']).toBeUndefined()
   })
 })
 

@@ -90,7 +90,7 @@ export function PeoplePanel({
                 <br />
                 <span className="text-muted-foreground">
                   {participant.actorKind === 'agent'
-                    ? `${participant.agent} · ${participant.participation === 'paused' ? 'paused' : participant.state}`
+                    ? `${participant.agent} · ${participant.participation === 'paused' ? 'Paused' : roomParticipantStateLabel(participant.state)}`
                     : translate('rooms.people.you', 'You')}
                 </span>
               </span>
@@ -262,4 +262,8 @@ export function PeoplePanel({
       </Dialog>
     </div>
   )
+}
+
+function roomParticipantStateLabel(state: string): string {
+  return state === 'online' ? 'Ready' : state[0]!.toUpperCase() + state.slice(1)
 }

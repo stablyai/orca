@@ -173,7 +173,11 @@ export function buildTabCreateMenuOptions(
       id: 'rooms',
       kind: 'rooms',
       label,
-      keywords: [label, 'room', 'multi-agent']
+      keywords: [
+        label,
+        translate('rooms.menu.keywordRoom', 'room'),
+        translate('rooms.menu.keywordMultiAgent', 'multi-agent')
+      ]
     })
   }
 

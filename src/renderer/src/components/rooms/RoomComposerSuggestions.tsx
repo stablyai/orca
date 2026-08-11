@@ -56,7 +56,7 @@ export function getRoomComposerSuggestions(
             )
             .map((participant) => ({
               value: `@${participant.identity}`,
-              label: `@${participant.identity} · ${participant.state}`
+              label: `@${participant.identity} · ${participant.state === 'online' ? 'Ready' : participant.state}`
             }))
         ]
   return values.filter((item) => item.value.slice(1).toLocaleLowerCase().includes(needle))

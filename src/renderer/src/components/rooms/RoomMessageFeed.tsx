@@ -10,14 +10,14 @@ import type {
   RoomParticipant
 } from '../../../../shared/rooms'
 import type { RoomData } from './use-room-data'
-import { RoomActivityCard } from './RoomActivityCard'
+import { RoomActivityStack } from './RoomActivityStack'
 import { RoomMessageRow } from './RoomMessageRow'
 import { showRoomActionError } from './room-action-error'
 import { isRoomDeliveryActive } from './room-delivery-state'
 
 type RoomFeedItem =
   | { kind: 'message'; key: string; message: RoomMessage }
-  | { kind: 'activity'; key: string; activity: RoomAgentActivity }
+  | { kind: 'activities'; key: string; activities: RoomAgentActivity[] }
 
 export function buildRoomFeedItems(
   messages: RoomMessage[],
@@ -36,11 +36,11 @@ export function buildRoomFeedItems(
     (left, right) =>
       left.startedAt - right.startedAt || left.participantId.localeCompare(right.participantId)
   )
-  for (const activity of pending) {
+  if (pending.length > 0) {
     items.push({
-      kind: 'activity',
-      key: `activity:${activity.participantId}:${activity.startedAt}`,
-      activity
+      kind: 'activities',
+      key: 'activities',
+      activities: pending
     })
   }
   return items
@@ -220,11 +220,10 @@ export function RoomMessageFeed({
                 {item.kind === 'message' ? (
                   <RoomMessageRow data={data} message={item.message} onReply={onReply} />
                 ) : (
-                  <RoomActivityCard
-                    activity={item.activity}
-                    participant={data.snapshot?.participants.find(
-                      (participant) => participant.id === item.activity.participantId
-                    )}
+                  <RoomActivityStack
+                    key={item.activities.length > 1 ? 'stack' : 'single'}
+                    activities={item.activities}
+                    participants={participants}
                   />
                 )}
               </div>

@@ -59,6 +59,7 @@ export function AgentSubagentSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         ref={containerRef}
+        data-room-activity-stack-portal
         side="right"
         className="w-auto max-w-[calc(100vw-320px)] sm:max-w-none"
         style={{ width: renderedWidth }}
@@ -120,13 +121,15 @@ function SubagentList({
       ),
     [sourceDatas]
   )
-  const identity = sourceDatas.length === 1 ? `@${sourceDatas[0]!.source.identity} ` : ''
+  const identity = sourceDatas.length === 1 ? sourceDatas[0]!.source.identity : null
   return (
     <>
       <SheetHeader className="border-b border-border pr-12">
         <SheetTitle className="flex items-center gap-2">
           <Bot className="size-4" />
-          {identity ? `${identity}subagents` : 'Subagents'}
+          {identity
+            ? translate('agentSubagents.forAgent', '@{{identity}} subagents', { identity })
+            : translate('agentSubagents.label', 'Subagents')}
         </SheetTitle>
         <SheetDescription>
           {translate(
@@ -137,12 +140,17 @@ function SubagentList({
       </SheetHeader>
       <div className="min-h-0 flex-1 overflow-y-auto p-4 scrollbar-sleek">
         <SubagentSection
-          title="Active"
+          title={translate('agentSubagents.active', 'Active')}
           rows={active}
           loading={sourceDatas.some((sourceData) => sourceData.loading)}
           onOpen={onOpen}
         />
-        <SubagentSection title="Done" rows={done} loading={false} onOpen={onOpen} />
+        <SubagentSection
+          title={translate('agentSubagents.done', 'Done')}
+          rows={done}
+          loading={false}
+          onOpen={onOpen}
+        />
       </div>
     </>
   )
@@ -193,7 +201,10 @@ function SubagentSection({
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{row.title}</span>
                 <span className="block truncate text-xs text-muted-foreground">
-                  {row.subtitle ?? (row.session ? 'Read-only transcript' : 'Transcript starting…')}
+                  {row.subtitle ??
+                    (row.session
+                      ? translate('agentSubagents.readOnlyTranscript', 'Read-only transcript')
+                      : translate('agentSubagents.transcriptStarting', 'Transcript starting…'))}
                 </span>
               </span>
               {row.session?.model ? (
@@ -209,7 +220,9 @@ function SubagentSection({
         </div>
       ) : (
         <div className="rounded-lg border border-dashed border-border px-3 py-5 text-center text-xs text-muted-foreground">
-          {loading ? 'Loading…' : 'None'}
+          {loading
+            ? translate('agentSubagents.loading', 'Loading…')
+            : translate('agentSubagents.none', 'None')}
         </div>
       )}
     </section>
@@ -261,16 +274,24 @@ function SubagentTranscript({
           <div className="min-w-0 flex-1">
             <SheetTitle className="truncate">{displayName}</SheetTitle>
             <SheetDescription className="truncate">
-              @{sourceData.source.identity} · Read-only subagent transcript
+              {translate(
+                'agentSubagents.transcriptDescription',
+                '@{{identity}} · Read-only subagent transcript',
+                { identity: sourceData.source.identity }
+              )}
             </SheetDescription>
           </div>
-          <Badge variant="outline">{working ? 'Active' : 'Done'}</Badge>
+          <Badge variant="outline">
+            {working
+              ? translate('agentSubagents.active', 'Active')
+              : translate('agentSubagents.done', 'Done')}
+          </Badge>
         </div>
       </SheetHeader>
       {nested.sessions.length > 0 ? (
         <div className="border-b border-border px-4 py-2">
           <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Nested agents
+            {translate('agentSubagents.nested', 'Nested agents')}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {nested.sessions.map((child) => (
@@ -367,7 +388,11 @@ function sessionRow(
   return {
     id: session.sessionId,
     title: subagentDisplayName(session.title, session.subagent?.agentType),
-    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${session.messageCount} messages`,
+    subtitle: `${showIdentity ? `@${sourceData.source.identity} · ` : ''}${translate(
+      'agentSubagents.messageCount',
+      '{{count}} messages',
+      { count: session.messageCount }
+    )}`,
     state,
     session,
     sourceData

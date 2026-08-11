@@ -58,12 +58,11 @@ describe('RoomMessageFeed', () => {
       [activity('second', 20, 8), activity('first', 10, 7)]
     )
 
-    expect(items.map((item) => item.key)).toEqual([
-      'message:prompt',
-      'message:later',
-      'activity:first:10',
-      'activity:second:20'
-    ])
+    expect(items.map((item) => item.key)).toEqual(['message:prompt', 'message:later', 'activities'])
+    expect(items.at(-1)).toMatchObject({
+      kind: 'activities',
+      activities: [{ participantId: 'first' }, { participantId: 'second' }]
+    })
   })
 
   it('shows one standard working activity until provider activity arrives', () => {

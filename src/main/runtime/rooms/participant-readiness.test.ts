@@ -3,7 +3,7 @@ import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
 import type { RoomHarnessRuntime } from './harness-adapter'
 import { RoomService } from './service'
 
-it('waits for the fresh composer before delivering to a sleeping participant', async () => {
+it('accepts a fresh composer while restored status still reports working', async () => {
   const unused = async (): Promise<never> => {
     throw new Error('unused')
   }
@@ -15,7 +15,7 @@ it('waits for the fresh composer before delivering to a sleeping participant', a
   }))
   const runtime: RoomHarnessRuntime = {
     createAgentSession,
-    ensureAgentSession: unused,
+    ensureAgentSession: vi.fn(unused),
     sendTerminalAgentPrompt: vi.fn(async (handle, prompt) => ({
       handle,
       accepted: true,
@@ -26,7 +26,7 @@ it('waits for the fresh composer before delivering to a sleeping participant', a
     getTerminalAgentStatus: vi.fn(async (handle: string) => ({
       handle,
       isRunningAgent: handle === 'term-new' && ready,
-      status: handle === 'term-new' && ready ? ('idle' as const) : null
+      status: handle === 'term-new' && ready ? ('working' as const) : null
     })),
     getTerminalProcessIncarnation: () => null,
     closeTerminal: unused,
@@ -59,7 +59,8 @@ it('waits for the fresh composer before delivering to a sleeping participant', a
       agent: 'codex',
       worktreeId: 'worktree-1',
       paneKey: 'tab:old',
-      terminalHandle: 'term-old'
+      terminalHandle: 'term-old',
+      providerSession: { key: 'session_id', id: 'unmaterialized-session' }
     })
     const participant = service.db.participants.update(added.id, { state: 'sleeping' })
 
@@ -72,6 +73,7 @@ it('waits for the fresh composer before delivering to a sleeping participant', a
     await vi.waitFor(() => expect(runtime.waitForTerminal).toHaveBeenCalledTimes(1))
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
     expect(createAgentSession).toHaveBeenCalledTimes(1)
+    expect(runtime.ensureAgentSession).not.toHaveBeenCalled()
 
     releaseReady?.()
     await vi.waitFor(() => expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalled())
@@ -82,6 +84,7 @@ it('waits for the fresh composer before delivering to a sleeping participant', a
       { clearInput: true }
     )
     expect(service.db.participants.get(participant.id).state).toBe('online')
+    expect(service.db.participants.get(participant.id).providerSession).toBeNull()
   } finally {
     service.close()
   }

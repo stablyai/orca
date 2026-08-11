@@ -101,11 +101,14 @@ export class OrcaRuntimeWithCloseStructuredAgentSessionTab extends OrcaRuntimeWi
     }
   }
 
-  protected notifyRendererOfHeadlessTerminalClose(parentTabId: string): void {
+  protected notifyRendererOfHeadlessTerminalClose(
+    parentTabId: string,
+    options?: { preserveSessionOnClose?: boolean }
+  ): void {
     // Why: this relay is advisory after main owns teardown; renderer failure must
     // not prevent the authoritative session flush or turn the close into failure.
     try {
-      this.notifier?.closeTerminal(parentTabId)
+      this.notifier?.closeTerminal(parentTabId, undefined, options)
     } catch (error) {
       console.warn('[runtime] failed to notify renderer after headless terminal close', {
         parentTabId,
