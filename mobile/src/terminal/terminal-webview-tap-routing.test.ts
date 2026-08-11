@@ -280,9 +280,10 @@ describe('terminal WebView tap routing', () => {
     expect(posted.find((m) => m.type === 'terminal-plain-tap-cancelled')).toBeDefined()
   })
 
-  it('does not classify unsupported OSC links as plain terminal taps', async () => {
-    const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'mailto:team@example.com' }]
-    const { posted } = boot('email us', oscLinks)
+  it('does not activate fallback targets for unsupported OSC links', async () => {
+    const label = 'https://fallback.example'
+    const oscLinks = [{ row: 0, startCol: 0, endCol: label.length, uri: 'mailto:team@example.com' }]
+    const { posted } = boot(label, oscLinks)
     await settle()
 
     fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY }])

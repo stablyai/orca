@@ -222,7 +222,7 @@ export const URL_TAP_WEBVIEW_JS = `
       });
       return;
     }
-    var tappedFileUrl = fileUrlAtViewportPoint(originX, originY);
+    var tappedFileUrl = tappedOscLink ? null : fileUrlAtViewportPoint(originX, originY);
     var tappedFileUrlPath = tappedFileUrl ? resolveTerminalFileUrlTap(tappedFileUrl) : null;
     if (tappedFileUrlPath) {
       cancelTerminalPlainTap();
@@ -234,13 +234,17 @@ export const URL_TAP_WEBVIEW_JS = `
       });
       return;
     }
-    var tappedUrl = tappedOscLink && tappedOscLink.kind === 'url' ? tappedOscLink.url : urlAtViewportPoint(originX, originY);
+    var tappedUrl = tappedOscLink && tappedOscLink.kind === 'url'
+      ? tappedOscLink.url
+      : tappedOscLink
+        ? null
+        : urlAtViewportPoint(originX, originY);
     if (tappedUrl) {
       cancelTerminalPlainTap();
       notify({ type: 'open-url', url: tappedUrl });
       return;
     }
-    var tappedPath = filePathAtViewportPoint(originX, originY);
+    var tappedPath = tappedOscLink ? null : filePathAtViewportPoint(originX, originY);
     if (tappedPath) {
       cancelTerminalPlainTap();
       notify({
