@@ -112,6 +112,8 @@ import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
+import { ensureWedgedWorkerMonitor } from './orchestration/wedged-worker-runtime-monitor'
+import type { WorkerPaneSample } from './orchestration/worker-progress-evidence'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
@@ -4510,6 +4512,9 @@ export class OrcaRuntimeService {
     void reconcileRequestedWorkerTerminalReleases(this).catch((error) => {
       console.warn('[orchestration] worker terminal release reconciliation failed', { error })
     })
+    // Why here: workers adopted across a restart are supervised again from this point,
+    // so the progress detector has to re-arm even though no new worker started.
+    ensureWedgedWorkerMonitor(this)
     return result
   }
 
@@ -31461,6 +31466,57 @@ export class OrcaRuntimeService {
     const run = this._orchestrationDb.getCurrentRunForPane?.(`${leaf.tabId}:${leaf.leafId}`)
     if (run) {
       this.deliverPendingMessages(leaf, { mailboxHandle: `run:${run.id}` })
+    }
+  }
+
+  // Why: a parked `ask` or `check --wait` is itself a liveness signal (the dispatch
+  // preamble says so), so the wedged-worker detector must be able to see one.
+  hasOrchestrationMailboxWaiter(address: string): boolean {
+    return (this.messageWaitersByHandle.get(address)?.size ?? 0) > 0
+  }
+
+  /**
+   * Progress evidence this runtime can see for a supervised worker's pane: PTY output
+   * and harness turn boundaries. Null when no pane exists here (a federated worker, a
+   * closed terminal), which the detector reads as unknown rather than as a wedge.
+   */
+  getOrchestrationWorkerPaneActivity(paneKey: string): WorkerPaneSample | null {
+    const pty = this.getPtyRecordForPaneKey(paneKey)
+    if (!pty) {
+      return null
+    }
+    let agentState: string | null = null
+    let agentEventAtEpochMs: number | null = null
+    let agentTurnStartedAtEpochMs: number | null = null
+    const consider = (state: string | undefined, observedAt: unknown, startedAt: unknown): void => {
+      if (
+        !state ||
+        typeof observedAt !== 'number' ||
+        (agentEventAtEpochMs !== null && observedAt <= agentEventAtEpochMs)
+      ) {
+        return
+      }
+      agentState = state
+      agentEventAtEpochMs = observedAt
+      agentTurnStartedAtEpochMs = typeof startedAt === 'number' ? startedAt : null
+    }
+    const retained = this.latestAgentStatusByPaneKey.get(paneKey)
+    consider(retained?.payload.state, retained?.updatedAt, retained?.stateStartedAt)
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      if (entry.paneKey === paneKey) {
+        consider(entry.state, entry.receivedAt, entry.stateStartedAt)
+      }
+    }
+    const handle = this.getTerminalHandleForPaneKey(paneKey)
+    return {
+      connected: pty.connected,
+      // Why resolve through the handle: dispatch rows recorded the incarnation this
+      // same way, so a mismatch really means the pane's process was replaced.
+      processIncarnation: handle ? this.getTerminalProcessIncarnation(handle) : null,
+      lastOutputAtEpochMs: pty.lastOutputAt,
+      agentState,
+      agentEventAtEpochMs,
+      agentTurnStartedAtEpochMs
     }
   }
 

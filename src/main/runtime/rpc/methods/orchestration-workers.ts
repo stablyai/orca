@@ -18,6 +18,7 @@ import {
   persistWorkerReadinessStage,
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
+import { ensureWedgedWorkerMonitor } from '../../orchestration/wedged-worker-runtime-monitor'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
@@ -239,6 +240,9 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           state: 'accepted'
         })
         const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
+        // Why here: this is the first moment a supervised worker can go quiet, and the
+        // detector is a signal only — it never stops, restarts or writes to the worker.
+        ensureWedgedWorkerMonitor(runtime)
         monitorWorkerSetup({
           runtime,
           db,
