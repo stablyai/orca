@@ -14305,6 +14305,8 @@
         "pillAccessibleName": "{{value0}} {{value1}}",
         "valueUnknown": "現在の値が不明です — オンまたはオフを選んでください",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
+        "useCliDefault": "CLI のデフォルトを使用",
+        "useCliDefaultDescription": "新規セッションは Agent CLI で設定されたモデルを使用します",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
         "optionUpdateFailed": "オプションを更新できませんでした",

@@ -15089,7 +15089,9 @@
           "max": "Max",
           "on": "On",
           "off": "Off"
-        }
+        },
+        "useCliDefault": "Use CLI default",
+        "useCliDefaultDescription": "New sessions use the model configured in the agent CLI"
       },
       "tool": {
         "running": "Running…",

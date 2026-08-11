@@ -173,6 +173,7 @@ export function createNativeChatPtySessionOptions(
   })
 
   return {
+    agent: args.agent,
     getSnapshot: () => snapshot,
     setOption: appliers.setOption,
     invokeAction: appliers.invokeAction,

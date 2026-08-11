@@ -14305,6 +14305,8 @@
         "pillAccessibleName": "{{value0}} {{value1}}",
         "valueUnknown": "Valor actual desconocido — elige Activado o Desactivado",
         "sentNotConfirmed": "Enviado al agente — sin confirmar",
+        "useCliDefault": "Usar el valor predeterminado de la CLI",
+        "useCliDefaultDescription": "Las nuevas sesiones usan el modelo configurado en la CLI del agente",
         "setWhenSessionStarts": "Configúralo al iniciar la sesión.",
         "availableAfterSessionStarts": "Disponible después de iniciar la sesión.",
         "optionUpdateFailed": "No se pudo actualizar la opción",

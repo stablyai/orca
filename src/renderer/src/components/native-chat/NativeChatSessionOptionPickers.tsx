@@ -14,6 +14,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '../../store'
+import { clearPersistedNativeChatModel } from './use-native-chat-session-options'
 import { sortNativeChatSessionOptions } from '../../../../shared/native-chat-session-option-snapshot'
 import type {
   SessionOptionDescriptor,
@@ -210,6 +212,11 @@ function NativeChatSessionOptionPickersInner({
   isWorking
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
   const [pendingId, setPendingId] = useState<string | null>(null)
+  // Why: the launch override lives in settings, not the session record — read it
+  // here so the "Use CLI default" row reacts without agent-keyed prop drilling (#13794).
+  const persistedLaunchModelId = useAppStore((store) =>
+    surface ? (store.settings?.nativeChatSessionOptions?.[surface.agent]?.model ?? null) : null
+  )
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const options = sortNativeChatSessionOptions(snapshot)
   if (!surface || !model) {
@@ -282,6 +289,32 @@ function NativeChatSessionOptionPickersInner({
             setValue={(value) => setOption(model, value)}
             invokeAction={() => invokeAction(model)}
           />
+          {/* Why: not a radio choice — the radios state the session's tracked model,
+              while this action deletes the persisted launch override (#13794). */}
+          {persistedLaunchModelId ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={pendingId !== null}
+                onSelect={() =>
+                  runSurfaceCall('model-launch-default', setPendingId, () =>
+                    clearPersistedNativeChatModel(surface.agent)
+                  )
+                }
+              >
+                <ChoiceBody
+                  label={translate(
+                    'components.native-chat.composer.useCliDefault',
+                    'Use CLI default'
+                  )}
+                  description={translate(
+                    'components.native-chat.composer.useCliDefaultDescription',
+                    'New sessions use the model configured in the agent CLI'
+                  )}
+                />
+              </DropdownMenuItem>
+            </>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

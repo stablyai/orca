@@ -14325,6 +14325,8 @@
         "pillAccessibleName": "{{value0}} {{value1}}",
         "valueUnknown": "当前值未知 — 请选择开或关",
         "sentNotConfirmed": "已发送给代理 — 尚未确认",
+        "useCliDefault": "使用 CLI 默认值",
+        "useCliDefaultDescription": "新会话将使用代理 CLI 中配置的模型",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
         "optionUpdateFailed": "无法更新选项",

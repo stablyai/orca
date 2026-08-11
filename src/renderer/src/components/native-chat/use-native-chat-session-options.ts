@@ -83,6 +83,21 @@ export async function retirePersistedModelMissingFromDiscovery(
   })
 }
 
+/**
+ * Why: once persisted, `model` is re-emitted as a launch flag forever and only ever
+ * overwritten by another pick — the user has no way back to the agent CLI's own
+ * configured default. Dropping just `model` keeps the per-model option values for a
+ * later reselect, mirroring probe retirement.
+ */
+export function clearPersistedNativeChatModel(agent: AgentType): Promise<void> {
+  return enqueueSessionOptionSettingsWrite((persisted) => {
+    const modelId = persisted?.[agent]?.model
+    return typeof modelId === 'string' && modelId
+      ? clearNativeChatSessionOptionModel(persisted, agent)
+      : null
+  })
+}
+
 export function useNativeChatSessionOptions(args: {
   agent: AgentType
   terminalTabId: string
