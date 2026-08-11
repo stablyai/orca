@@ -8,8 +8,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 let tempHome = ''
 const decryptStringMock = vi.fn((value: Buffer) => value.toString('utf-8'))
 
-async function loadStore(options: { unlinkError?: NodeJS.ErrnoException } = {}) {
+async function loadStore(
+  options: { unlinkError?: NodeJS.ErrnoException; writeError?: Error } = {}
+) {
   vi.resetModules()
+  // Why: doMock registrations outlive resetModules, so an injected failure from
+  // one case would leak into every later one in this file.
+  vi.doUnmock('node:fs')
   vi.doMock('electron', () => ({
     safeStorage: {
       isEncryptionAvailable: () => true,
@@ -21,6 +26,18 @@ async function loadStore(options: { unlinkError?: NodeJS.ErrnoException } = {}) 
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }
   })
+  if (options.writeError) {
+    const error = options.writeError
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof Fs>('node:fs')
+      return {
+        ...actual,
+        writeSync: () => {
+          throw error
+        }
+      }
+    })
+  }
   if (options.unlinkError) {
     // Why mocked: chmod-based failure injection is not portable — Windows has no
     // POSIX modes and a root/elevated runner can unlink through a 0500 directory.
@@ -61,9 +78,13 @@ describe('Bitbucket credential store', () => {
       email: 'ada@example.com',
       account: 'ada'
     })
-    expect(store.loadStoredBitbucketSecret()).toEqual({
+    expect(store.loadStoredBitbucketSecret()).toMatchObject({
       accessToken: null,
-      apiToken: 'secret-token'
+      apiToken: 'secret-token',
+      // Why (STA-3941): auth fields live in the envelope so a torn write cannot
+      // pair a new secret with a stale email.
+      authMode: 'basic',
+      email: 'ada@example.com'
     })
   })
 
@@ -131,9 +152,10 @@ describe('Bitbucket credential store', () => {
     expect(decryptStringMock).not.toHaveBeenCalled()
 
     // Forcing the load decrypts exactly once, then caches.
-    expect(store.loadStoredBitbucketSecret({ force: true })).toEqual({
+    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
       accessToken: 'access-secret',
-      apiToken: null
+      apiToken: null,
+      authMode: 'token'
     })
     expect(decryptStringMock).toHaveBeenCalledTimes(1)
     expect(store.loadStoredBitbucketSecret()).not.toBeNull()
@@ -163,9 +185,101 @@ describe('Bitbucket credential store', () => {
     store._resetBitbucketCredentialCache()
 
     expect(store.getStoredBitbucketMetadata()).toMatchObject({ email: null, account: null })
-    expect(store.loadStoredBitbucketSecret({ force: true })).toEqual({
+    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
       accessToken: null,
       apiToken: null
+    })
+  })
+
+  it('keeps the previous credential intact when the secret write fails (STA-3941)', async () => {
+    const store = await loadStore()
+    store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'ada@example.com',
+      baseUrl: null,
+      account: 'ada',
+      accessToken: null,
+      apiToken: 'first-token'
+    })
+    const { readFileSync } = await import('node:fs')
+    const before = readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))
+
+    // Why: a direct write truncates in place, so a failure mid-write used to
+    // destroy the only working credential. The temp+rename path cannot.
+    const failing = await loadStore({ writeError: new Error('disk full') })
+    expect(() =>
+      failing.saveBitbucketCredential({
+        authMode: 'basic',
+        email: 'grace@example.com',
+        baseUrl: null,
+        account: 'grace',
+        accessToken: null,
+        apiToken: 'second-token'
+      })
+    ).toThrow(/disk full/)
+
+    expect(readFileSync(join(tempHome, '.orca', 'bitbucket-credential.enc'))).toEqual(before)
+    expect(existsSync(join(tempHome, '.orca', 'bitbucket-credential.enc.tmp'))).toBe(false)
+  })
+
+  it('authenticates from the envelope when metadata is stale (STA-3941)', async () => {
+    const store = await loadStore()
+    store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'grace@example.com',
+      baseUrl: null,
+      account: 'grace',
+      accessToken: null,
+      apiToken: 'second-token'
+    })
+
+    // Simulate an interrupt between publishing the secret and the metadata:
+    // metadata still describes the previous connection.
+    const { writeFileSync } = await import('node:fs')
+    writeFileSync(
+      join(tempHome, '.orca', 'bitbucket-credential.json'),
+      JSON.stringify({
+        version: 1,
+        authMode: 'basic',
+        email: 'ada@example.com',
+        baseUrl: null,
+        account: 'ada',
+        updatedAt: ''
+      })
+    )
+    store._resetBitbucketCredentialCache()
+
+    const { resolveBitbucketAuthConfig } = await import('./resolve-auth')
+    // Auth follows the envelope, so the pair stays usable; only the displayed
+    // account is stale until the next status refresh.
+    expect(resolveBitbucketAuthConfig()).toMatchObject({
+      email: 'grace@example.com',
+      apiToken: 'second-token'
+    })
+  })
+
+  it('still authenticates a credential saved before the envelope carried auth fields', async () => {
+    const store = await loadStore()
+    store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'ada@example.com',
+      baseUrl: null,
+      account: 'ada',
+      accessToken: null,
+      apiToken: 'legacy-token'
+    })
+    const { writeFileSync } = await import('node:fs')
+    // Legacy envelopes held only the two tokens.
+    writeFileSync(
+      join(tempHome, '.orca', 'bitbucket-credential.enc'),
+      JSON.stringify({ accessToken: null, apiToken: 'legacy-token' })
+    )
+    store._resetBitbucketCredentialCache()
+
+    const { resolveBitbucketAuthConfig } = await import('./resolve-auth')
+    expect(resolveBitbucketAuthConfig()).toMatchObject({
+      email: 'ada@example.com',
+      apiToken: 'legacy-token'
     })
   })
 

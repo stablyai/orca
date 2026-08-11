@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, unlinkSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   CredentialDecryptionError,
   credentialFileHasContent,
   readStoredCredentialToken,
-  restrictCredentialFileToOwner,
+  writeCredentialFileAtomic,
   writeEncryptedCredential
 } from '../integration-credential-file'
 import type { BitbucketAuthMode } from '../../shared/bitbucket-credentials'
@@ -22,9 +22,16 @@ export type BitbucketStoredMetadata = {
   updatedAt: string
 }
 
+// Why (STA-3941): the envelope carries everything auth needs, so a torn write
+// between the two files can only leave stale display metadata — never a new
+// secret paired with an old email that cannot authenticate. Fields are optional
+// because credentials saved before this change hold only the two tokens.
 export type BitbucketStoredSecret = {
   accessToken: string | null
   apiToken: string | null
+  authMode?: BitbucketAuthMode
+  email?: string | null
+  baseUrl?: string | null
 }
 
 export type BitbucketCredentialSaveInput = {
@@ -131,7 +138,12 @@ export function loadStoredBitbucketSecret(
     const parsed = JSON.parse(token) as Partial<BitbucketStoredSecret>
     cachedSecret = {
       accessToken: asOptionalString(parsed.accessToken),
-      apiToken: asOptionalString(parsed.apiToken)
+      apiToken: asOptionalString(parsed.apiToken),
+      ...(parsed.authMode === 'token' || parsed.authMode === 'basic'
+        ? { authMode: parsed.authMode }
+        : {}),
+      email: asOptionalString(parsed.email),
+      baseUrl: asOptionalString(parsed.baseUrl)
     }
     credentialError = null
     return cachedSecret
@@ -148,7 +160,10 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
   ensureOrcaDir()
   const secret: BitbucketStoredSecret = {
     accessToken: input.accessToken,
-    apiToken: input.apiToken
+    apiToken: input.apiToken,
+    authMode: input.authMode,
+    email: input.email,
+    baseUrl: input.baseUrl
   }
   writeEncryptedCredential('Bitbucket', getSecretPath(), JSON.stringify(secret))
   const metadata: BitbucketStoredMetadata = {
@@ -159,11 +174,10 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
     account: input.account,
     updatedAt: new Date().toISOString()
   }
-  writeFileSync(getMetadataPath(), JSON.stringify(metadata, null, 2), {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-  restrictCredentialFileToOwner(getMetadataPath())
+  writeCredentialFileAtomic(
+    getMetadataPath(),
+    Buffer.from(JSON.stringify(metadata, null, 2), 'utf-8')
+  )
   cachedMetadata = metadata
   metadataLoadedFromDisk = true
   cachedSecret = secret

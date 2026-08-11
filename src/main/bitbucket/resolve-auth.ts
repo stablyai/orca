@@ -12,17 +12,26 @@ import {
   type BitbucketStoredSecret
 } from './credential-store'
 
+/**
+ * Why (STA-3941): the encrypted envelope is authoritative for auth. Plaintext
+ * metadata is only consulted for credentials written before the envelope
+ * carried these fields, so a torn write between the two files degrades to stale
+ * display data rather than a secret paired with the wrong email.
+ */
 export function storedAuthConfig(
-  metadata: BitbucketStoredMetadata,
+  metadata: BitbucketStoredMetadata | null,
   secret: BitbucketStoredSecret
 ): BitbucketAuthConfig {
+  const authMode = secret.authMode ?? metadata?.authMode ?? null
+  const email = secret.authMode ? (secret.email ?? null) : (metadata?.email ?? null)
+  const baseUrl = secret.authMode ? (secret.baseUrl ?? null) : (metadata?.baseUrl ?? null)
   return {
     // Why: an explicit ORCA_BITBUCKET_API_BASE_URL still wins even when the
     // credential itself is stored — env precedence is per-setting, not all-or-nothing.
-    baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL') ?? metadata.baseUrl ?? DEFAULT_API_BASE_URL,
-    accessToken: metadata.authMode === 'token' ? secret.accessToken : null,
-    email: metadata.authMode === 'basic' ? metadata.email : null,
-    apiToken: metadata.authMode === 'basic' ? secret.apiToken : null
+    baseUrl: envValue('ORCA_BITBUCKET_API_BASE_URL') ?? baseUrl ?? DEFAULT_API_BASE_URL,
+    accessToken: authMode === 'token' ? secret.accessToken : null,
+    email: authMode === 'basic' ? email : null,
+    apiToken: authMode === 'basic' ? secret.apiToken : null
   }
 }
 
@@ -34,13 +43,9 @@ export function resolveBitbucketAuthConfig(): BitbucketAuthConfig {
   if (hasAuth(env)) {
     return env
   }
-  const metadata = getStoredBitbucketMetadata()
-  if (!metadata) {
-    return env
-  }
   try {
     const secret = loadStoredBitbucketSecret({ force: true })
-    return secret ? storedAuthConfig(metadata, secret) : env
+    return secret ? storedAuthConfig(getStoredBitbucketMetadata(), secret) : env
   } catch {
     // Decryption denied or unavailable: fall through as unauthenticated.
     return env

@@ -223,6 +223,28 @@ describe('Bitbucket client', () => {
     ])
   })
 
+  it('does not report an unreachable host as an auth failure (STA-3944)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down')
+      })
+    )
+    await expect(getBitbucketAuthStatus()).resolves.toMatchObject({
+      configured: true,
+      authenticated: true
+    })
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(null, { status: 401 }))
+    )
+    await expect(getBitbucketAuthStatus()).resolves.toMatchObject({
+      configured: true,
+      authenticated: false
+    })
+  })
+
   it('fetches a branch pull request and commit build status', async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.includes('/statuses/build')) {

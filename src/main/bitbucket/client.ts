@@ -15,7 +15,7 @@ import {
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
-import { accountNameFromUser, fetchBitbucketUser } from './user-request'
+import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   getStoredBitbucketCredentialError,
   getStoredBitbucketMetadata,
@@ -154,11 +154,14 @@ async function normalizePullRequest(
 export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
   const env = getEnvAuthConfig()
   if (hasAuth(env)) {
-    const user = await fetchBitbucketUser(env)
+    const result = await fetchBitbucketUserResult(env)
     return {
       configured: true,
-      authenticated: user !== null,
-      account: accountNameFromUser(user)
+      // Why (STA-3944): only a rejection means the credential is bad. An
+      // unreachable host must not render as "Auth failed" and send the user
+      // off to regenerate a token that still works.
+      authenticated: result.ok || result.reason === 'unreachable',
+      account: result.ok ? accountNameFromUser(result.user) : null
     }
   }
   const metadata = getStoredBitbucketMetadata()
@@ -170,11 +173,11 @@ export async function getBitbucketAuthStatus(): Promise<BitbucketAuthStatus> {
     if (!cached) {
       return { configured: true, authenticated: true, account: metadata.account }
     }
-    const user = await fetchBitbucketUser(storedAuthConfig(metadata, cached))
+    const result = await fetchBitbucketUserResult(storedAuthConfig(metadata, cached))
     return {
       configured: true,
-      authenticated: user !== null,
-      account: accountNameFromUser(user) ?? metadata.account
+      authenticated: result.ok || result.reason === 'unreachable',
+      account: (result.ok ? accountNameFromUser(result.user) : null) ?? metadata.account
     }
   }
   return { configured: false, authenticated: false, account: null }

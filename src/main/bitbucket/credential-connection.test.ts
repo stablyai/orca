@@ -95,6 +95,30 @@ describe('Bitbucket credential connection', () => {
     expect(conn.getBitbucketConnectionStatus().source).toBe('none')
   })
 
+  it('separates a rejected credential from an unreachable host (STA-3944)', async () => {
+    const conn = await loadModule()
+
+    globalThis.fetch = vi.fn(
+      async () => new Response(null, { status: 401 })
+    ) as unknown as typeof fetch
+    const rejected = await conn.connectBitbucket({ authMode: 'token', accessToken: 'bad' })
+    expect(!rejected.ok && rejected.error).toMatch(/rejected these credentials/i)
+
+    // Why: a timeout or 5xx says nothing about the token; calling it invalid
+    // sends the user off to regenerate a credential that still works.
+    for (const failure of [
+      async () => {
+        throw new Error('network down')
+      },
+      async () => new Response(null, { status: 503 })
+    ]) {
+      globalThis.fetch = vi.fn(failure) as unknown as typeof fetch
+      const unreachable = await conn.connectBitbucket({ authMode: 'token', accessToken: 'good' })
+      expect(!unreachable.ok && unreachable.error).toMatch(/could not reach bitbucket/i)
+    }
+    expect(conn.getBitbucketConnectionStatus().source).toBe('none')
+  })
+
   it('rejects an incomplete basic-auth credential before making a request', async () => {
     const conn = await loadModule()
     const fetchSpy = vi.fn()
