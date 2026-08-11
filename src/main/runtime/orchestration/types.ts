@@ -159,6 +159,27 @@ export type WorkerDispatchRow = {
   updated_at: string
 }
 
+/** One `ready` supervised worker dispatch plus the DB-side evidence of its progress. */
+export type SupervisedWorkerProgressRow = {
+  dispatch_id: string
+  run_id: string
+  task_id: string
+  dispatch_status: DispatchStatus
+  worker_state: WorkerDispatchState
+  assignee_handle: string | null
+  assignee_pane_key: string | null
+  process_incarnation: string | null
+  agent_terminal_handle: string | null
+  worktree_id: string | null
+  dispatched_at: string | null
+  last_heartbeat_at: string | null
+  last_worker_message_at: string | null
+  last_question_at: string | null
+  pending_question_count: number
+  /** 1 when the worker runs on another Orca server, so local evidence proves nothing. */
+  federated: number
+}
+
 export type LegacyWorkerTerminalRecoveryRow = {
   dispatch_id: string
   task_id: string

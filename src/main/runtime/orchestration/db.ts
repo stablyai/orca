@@ -32,6 +32,7 @@ import type {
   WorkerDispatchRow,
   WorkerDispatchState,
   LegacyWorkerTerminalRecoveryRow,
+  SupervisedWorkerProgressRow,
   FederatedDispatchRow,
   RemoteDispatchAttachmentRow,
   FederationRelayDirection,
@@ -4474,6 +4475,60 @@ export class OrchestrationDb {
          ORDER BY dc.rowid`
       )
       .all() as LegacyWorkerTerminalRecoveryRow[]
+  }
+
+  // Why the inner joins: only a composed supervised worker (`worker-start`) has a
+  // `ready` row here, and a remote attachment on a worker server has no local
+  // dispatch context at all, so both non-candidates fall out for free.
+  listSupervisedWorkerProgressRows(): SupervisedWorkerProgressRow[] {
+    if (!this.hasAnyDispatchContexts()) {
+      return []
+    }
+    return this.db
+      .prepare(
+        `SELECT dc.id AS dispatch_id, dc.run_id, dc.task_id, dc.status AS dispatch_status,
+                dc.assignee_handle, dc.assignee_pane_key, dc.process_incarnation,
+                dc.dispatched_at, dc.last_heartbeat_at,
+                wd.state AS worker_state, wd.agent_terminal_handle, wd.worktree_id,
+                EXISTS (
+                  SELECT 1 FROM federated_dispatches fd WHERE fd.dispatch_id = dc.id
+                ) AS federated,
+                (
+                  SELECT COUNT(*) FROM question_threads q
+                  WHERE q.dispatch_id = dc.id AND q.status = 'pending'
+                ) AS pending_question_count,
+                (
+                  SELECT MAX(q2.created_at) FROM question_threads q2
+                  WHERE q2.dispatch_id = dc.id
+                ) AS last_question_at,
+                (
+                  SELECT MAX(m.created_at) FROM messages m
+                  WHERE m.run_id = dc.run_id
+                    AND (
+                      (dc.assignee_pane_key IS NOT NULL
+                        AND m.sender_pane_key = dc.assignee_pane_key)
+                      OR (dc.assignee_handle IS NOT NULL
+                        AND m.from_handle = dc.assignee_handle)
+                    )
+                ) AS last_worker_message_at
+         FROM dispatch_contexts dc
+         INNER JOIN worker_dispatches wd ON wd.dispatch_id = dc.id
+         WHERE dc.status = 'dispatched' AND wd.state = 'ready'
+         ORDER BY dc.rowid`
+      )
+      .all() as SupervisedWorkerProgressRow[]
+  }
+
+  /** Newest escalation attributed to a Dispatch itself, used to resume a signal's count. */
+  getLatestDispatchEscalation(dispatchId: string): MessageRow | undefined {
+    const row = this.db
+      .prepare(
+        `SELECT * FROM messages
+         WHERE type = 'escalation' AND from_handle = ?
+         ORDER BY sequence DESC LIMIT 1`
+      )
+      .get(`dispatch:${dispatchId}`) as MessageRow | undefined
+    return row ? exposeMessageTimestamps(row) : undefined
   }
 
   reconcileMissingWorkerTerminal(dispatchId: string, reason: string): WorkerDispatchRow {
