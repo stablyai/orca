@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/linear-links'
 import { parseIssueLinkInput, type IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { WorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { WorkspaceLinkedItem, WorktreeMeta } from '../../../../shared/types'
 
 export type WorktreeMetaSavedPayload = {
@@ -46,6 +47,9 @@ export type WorktreeMetaLiveLinks = {
   linkedWorkItemProvider?: WorkspaceSourceProvider | null
   /** `linkedWorkItem` also describes PRs and MRs, which this row does not own. */
   linkedWorkItemType?: WorkspaceLinkedItem['type'] | null
+  /** The Jira key `linkedWorkItem` carries, so a re-save of the same issue is
+   *  recognized rather than displaced. */
+  linkedWorkItemJiraIdentifier?: string | null
 }
 
 export function parseExplicitGitHubIssueUrl(input: string): string | null {
@@ -117,6 +121,9 @@ function issueLinkIdentity(
   if (parsed.provider === 'github') {
     return `github:${parsed.number}`
   }
+  if (parsed.provider === 'jira') {
+    return `jira:${parsed.issueKey.toUpperCase()}`
+  }
   const organizationUrlKey = parsed.organizationUrlKey ?? storedLinearOrganizationUrlKey ?? ''
   return `linear:${parsed.identifier}:${organizationUrlKey.trim().toLowerCase()}`
 }
@@ -153,6 +160,12 @@ function keepsLinkedWorkItem(
   if (parsed.provider === 'github') {
     return live.linkedWorkItemProvider === 'github' && parsed.number === live.linkedIssue
   }
+  if (parsed.provider === 'jira') {
+    return (
+      live.linkedWorkItemProvider === 'jira' &&
+      parsed.issueKey.toUpperCase() === live.linkedWorkItemJiraIdentifier?.trim().toUpperCase()
+    )
+  }
   if (
     live.linkedWorkItemProvider !== 'linear' ||
     parsed.identifier.toUpperCase() !== live.linkedLinearIssue?.trim().toUpperCase()
@@ -183,17 +196,18 @@ function buildIssueLinkUpdates(
 
   const trimmed = draft.issueInput.trim()
   // Why: the linked work item and its source context describe the issue being
-  // replaced. Leaving them would keep a stale title badge and mis-scope Linear
-  // reads — but only when the save names a *different* issue: a value that
-  // re-states the same one, such as a URL adding an org key, must keep its own
-  // title and SSH/runtime routing context. Narrow on purpose: `type` because the
-  // field also records the PR or MR a workspace was created from, and provider
-  // because GitLab and Jira issues have no slot in this row — displacing what it
-  // cannot display would destroy a link the user was never shown and has no
-  // other editor to restore it from.
+  // replaced. Leaving them would keep a stale title badge and mis-scope reads —
+  // but only when the save names a *different* issue: a value that re-states the
+  // same one, such as a URL adding an org key, must keep its own title and
+  // SSH/runtime routing context. Narrow on `type` because the field also records
+  // the PR or MR a workspace was created from. GitLab issues have no editor here,
+  // so they are left untouched; GitHub, Linear and Jira each own a slot in this
+  // field and so displace cleanly.
   const displacedWorkItem: Partial<WorktreeMeta> =
     !keepsLinkedWorkItem(trimmed, draft.issueProvider, live) &&
-    (live.linkedWorkItemProvider === 'github' || live.linkedWorkItemProvider === 'linear') &&
+    (live.linkedWorkItemProvider === 'github' ||
+      live.linkedWorkItemProvider === 'linear' ||
+      live.linkedWorkItemProvider === 'jira') &&
     live.linkedWorkItemType === 'issue'
       ? { linkedWorkItem: null, linkedTaskSourceContext: null }
       : {}
@@ -215,6 +229,14 @@ function buildIssueLinkUpdates(
     }
   }
 
+  // Why: a Jira link carries a title and URL that only an async site lookup can
+  // supply, so the dialog resolves it and writes through
+  // buildResolvedJiraIssueLinkUpdates. The synchronous builder leaves every slot
+  // untouched for a non-empty Jira value rather than persisting a partial link.
+  if (draft.issueProvider === 'jira') {
+    return {}
+  }
+
   const parsed = parseIssueLinkInput(trimmed, draft.issueProvider)
   if (!parsed) {
     // Why: unparseable input leaves every link untouched. `canSave` already
@@ -232,6 +254,25 @@ function buildIssueLinkUpdates(
 
   const linearUpdates = buildLinearIssueLinkUpdates(trimmed)
   return linearUpdates ? { linkedIssue: null, ...linearUpdates, ...displacedWorkItem } : {}
+}
+
+/** Persists a Jira link the dialog resolved asynchronously. Writing the Jira
+ *  work item clears the GitHub and Linear slots so the workspace still tracks
+ *  one issue; the Linear clear is emitted only when a Linear link is live, since
+ *  persistence gates that remote capability on key presence, not value. */
+export function buildResolvedJiraIssueLinkUpdates(
+  resolved: {
+    linkedWorkItem: WorkspaceLinkedItem
+    linkedTaskSourceContext: TaskSourceContext | null
+  },
+  live: WorktreeMetaLiveLinks
+): Partial<WorktreeMeta> {
+  return {
+    linkedIssue: null,
+    ...(live.linkedLinearIssue ? LINEAR_ISSUE_LINK_CLEARED : {}),
+    linkedWorkItem: resolved.linkedWorkItem,
+    linkedTaskSourceContext: resolved.linkedTaskSourceContext
+  }
 }
 
 // Requires the dialog to seed `prInput` from the persisted `linkedPR`: the blank

@@ -5,6 +5,7 @@ import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
 import { buildLinearIssueUrl, parseLinearIssueInput } from '../../../../shared/linear-links'
+import { parseJiraIssueUrl } from '../../../../shared/jira-issue-url'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { parseExplicitGitHubIssueUrl } from './worktree-meta-updates'
@@ -70,6 +71,7 @@ export function useWorktreeIssueLink(args: {
     linearSourceContext
   } = args
   const isLinear = issueProvider === 'linear'
+  const isJira = issueProvider === 'jira'
   const fetchIssue = useAppStore((s) => s.fetchIssue)
   const fetchLinearIssue = useAppStore((s) => s.fetchLinearIssue)
   const [openingIssue, setOpeningIssue] = useState(false)
@@ -92,17 +94,26 @@ export function useWorktreeIssueLink(args: {
   )
 
   const issueNumber = useMemo(
-    () => (isLinear ? null : parseGitHubIssueOrPRNumber(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isLinear || isJira ? null : parseGitHubIssueOrPRNumber(boundedInput)),
+    [isLinear, isJira, boundedInput]
   )
   const issueUrlFromInput = useMemo(
-    () => (isLinear ? null : parseExplicitGitHubIssueUrl(boundedInput)),
-    [isLinear, boundedInput]
+    () => (isLinear || isJira ? null : parseExplicitGitHubIssueUrl(boundedInput)),
+    [isLinear, isJira, boundedInput]
   )
   const issueInputLooksLikeUrl = useMemo(
     () => /^https?:\/\//i.test(boundedInput.trim()),
     [boundedInput]
   )
+  // Why: a bare Jira key can't build a URL without resolving its site, so only a
+  // full Jira issue URL (the stored link seeds one) is directly openable here.
+  const jiraIssueUrl = useMemo(() => {
+    if (!isJira) {
+      return null
+    }
+    const trimmed = boundedInput.trim()
+    return parseJiraIssueUrl(trimmed) ? trimmed : null
+  }, [isJira, boundedInput])
   const parsedLinearIssue = useMemo(
     () => (isLinear ? parseLinearIssueInput(boundedInput) : null),
     [isLinear, boundedInput]
@@ -149,11 +160,13 @@ export function useWorktreeIssueLink(args: {
       ]?.data?.url ?? null
     )
   })
-  const canOpenIssue = isLinear
-    ? Boolean(parsedLinearIssue)
-    : issueInputLooksLikeUrl
-      ? Boolean(issueUrlFromInput)
-      : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
+  const canOpenIssue = isJira
+    ? Boolean(jiraIssueUrl)
+    : isLinear
+      ? Boolean(parsedLinearIssue)
+      : issueInputLooksLikeUrl
+        ? Boolean(issueUrlFromInput)
+        : Boolean(cachedIssueUrl || (issueRepo && issueNumber))
 
   const handleOpenIssue = useCallback(async () => {
     if (openingIssue) {
@@ -168,6 +181,15 @@ export function useWorktreeIssueLink(args: {
       mountedRef.current &&
       openRequestRef.current === generation &&
       latestRequestKeyRef.current === requestKey
+
+    if (isJira) {
+      // Why: opening is synchronous — a valid Jira issue URL is the only openable
+      // shape here, so there is no lookup to race or report a failure for.
+      if (jiraIssueUrl) {
+        void window.api.shell.openUrl(jiraIssueUrl)
+      }
+      return
+    }
 
     if (isLinear) {
       if (!parsedLinearIssue) {
@@ -246,12 +268,14 @@ export function useWorktreeIssueLink(args: {
     cachedIssueUrl,
     fetchIssue,
     fetchLinearIssue,
+    isJira,
     isLinear,
     issueInput,
     issueInputLooksLikeUrl,
     issueNumber,
     issueRepo,
     issueUrlFromInput,
+    jiraIssueUrl,
     linearIssueUrl,
     linearSourceContext,
     mountedRef,

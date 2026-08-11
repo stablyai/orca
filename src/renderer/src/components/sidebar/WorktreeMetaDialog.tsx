@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { getDisplacedLinkLabels } from './worktree-issue-displacement'
 import {
   buildWorktreeMetaUpdates,
+  isIssueFieldDirty,
   parseGitHubWorkItemNumberForMetaField,
   type WorktreeMetaDraft,
   type WorktreeMetaSavedPayload,
@@ -20,6 +21,7 @@ import {
 } from './worktree-meta-updates'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
+import { useWorktreeMetaJiraLink } from './use-worktree-meta-jira-link'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -73,11 +75,17 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedJiraIssue,
     currentIssue,
     currentProvider,
     isFolderWorkspace,
     liveLinks
   } = useWorktreeMetaWorkspace({ worktreeId, ownerRepoId })
+  const { resolveJiraIssueLinkUpdates } = useWorktreeMetaJiraLink({
+    worktreeId,
+    ownerRepoId,
+    worktree
+  })
   // Why: ChecksPanel seeds the PR it is looking at, which may not be linked yet.
   const currentPR =
     typeof modalData.currentPR === 'number'
@@ -199,9 +207,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         snapshot,
         isFolderWorkspace,
         linkedIssue,
-        linkedLinearIssue
+        linkedLinearIssue,
+        linkedJiraIssue
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue, linkedJiraIssue]
   )
 
   const handleOpenChange = useCallback(
@@ -222,7 +231,25 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     // spinner for the whole in-flight save.
     setSaveError(null)
     try {
-      const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
+      let updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
+
+      // Why: a Jira link carries a title and URL that only a connected-site
+      // lookup can supply, so the synchronous builder deferred it to the hook.
+      const jiraOutcome = await resolveJiraIssueLinkUpdates({
+        issueProvider,
+        issueInput,
+        isDirty: isIssueFieldDirty(draft, snapshot),
+        live: liveLinks
+      })
+      if (jiraOutcome.kind === 'error') {
+        if (mountedRef.current) {
+          setSaveError(jiraOutcome.error)
+        }
+        return
+      }
+      if (jiraOutcome.kind === 'updates') {
+        updates = { ...updates, ...jiraOutcome.updates }
+      }
 
       const result = await updateWorktreeMeta(worktreeId, updates)
       // Why: a failed save refetches and reverts the optimistic write. Closing
@@ -253,6 +280,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     draft,
     snapshot,
     liveLinks,
+    issueProvider,
+    issueInput,
+    resolveJiraIssueLinkUpdates,
     updateWorktreeMeta,
     closeModal,
     afterSave,

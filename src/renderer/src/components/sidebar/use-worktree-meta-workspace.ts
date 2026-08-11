@@ -19,6 +19,8 @@ export function useWorktreeMetaWorkspace(args: {
   worktree: Worktree | undefined
   linkedIssue: number | null
   linkedLinearIssue: string | null
+  /** The Jira key of a linked Jira issue, for save-time displacement warnings. */
+  linkedJiraIssue: string | null
   /** The persisted value and its provider, from one source so they cannot drift. */
   currentIssue: string
   currentProvider: IssueLinkProvider
@@ -59,16 +61,34 @@ export function useWorktreeMetaWorkspace(args: {
   )
   const linkedIssue = worktree?.linkedIssue ?? null
   const linkedLinearIssue = worktree?.linkedLinearIssue ?? null
+  const linkedWorkItem = worktree?.linkedWorkItem ?? null
+  // Why: Jira issues live in the shared linkedWorkItem slot, not a dedicated
+  // column, so the provider/type gate keeps a linked PR or MR from seeding the
+  // issue field.
+  const jiraWorkItem =
+    linkedWorkItem?.provider === 'jira' && linkedWorkItem.type === 'issue' ? linkedWorkItem : null
+  const linkedJiraIssue = jiraWorkItem?.jiraIdentifier ?? null
   // Why: `typeof` rather than a null check — an unhydrated projection can leave
   // linkedIssue undefined, which `!== null` would read as a GitHub link.
   const currentProvider: IssueLinkProvider =
-    typeof linkedIssue === 'number' ? 'github' : linkedLinearIssue ? 'linear' : 'github'
+    typeof linkedIssue === 'number'
+      ? 'github'
+      : linkedLinearIssue
+        ? 'linear'
+        : jiraWorkItem
+          ? 'jira'
+          : 'github'
   const currentIssue =
     currentProvider === 'linear'
       ? (linkedLinearIssue ?? '')
-      : typeof linkedIssue === 'number'
-        ? String(linkedIssue)
-        : ''
+      : currentProvider === 'jira'
+        ? // Why: seed the stored URL, not the bare key. It opens directly and pins
+          // the site, so an untouched re-save never re-resolves against the wrong
+          // instance; the identity still normalizes it back to the key.
+          jiraWorkItem?.url || linkedJiraIssue || ''
+        : typeof linkedIssue === 'number'
+          ? String(linkedIssue)
+          : ''
   // Why: displacement is decided against live state, not the frozen snapshot —
   // the dialog's warning reads the same values, so a link added by the CLI while
   // the dialog was open cannot outlive a save that promised to displace it.
@@ -78,7 +98,8 @@ export function useWorktreeMetaWorkspace(args: {
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
       linkedWorkItemProvider: worktree?.linkedWorkItem?.provider ?? null,
-      linkedWorkItemType: worktree?.linkedWorkItem?.type ?? null
+      linkedWorkItemType: worktree?.linkedWorkItem?.type ?? null,
+      linkedWorkItemJiraIdentifier: worktree?.linkedWorkItem?.jiraIdentifier ?? null
     }),
     [
       linkedIssue,
@@ -92,6 +113,7 @@ export function useWorktreeMetaWorkspace(args: {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedJiraIssue,
     currentIssue,
     currentProvider,
     // Why: folder workspaces persist links only through their creation-time

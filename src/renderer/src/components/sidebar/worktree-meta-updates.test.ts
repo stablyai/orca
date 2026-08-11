@@ -153,6 +153,21 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).toHaveProperty('linkedTaskSourceContext', null)
   })
 
+  it('displaces a Jira linked work item when the issue field changes', () => {
+    const updates = buildUpdates(
+      { issueInput: '12' },
+      {},
+      {
+        linkedWorkItemProvider: 'jira',
+        linkedWorkItemType: 'issue',
+        linkedWorkItemJiraIdentifier: 'PROJ-9'
+      }
+    )
+
+    expect(updates).toHaveProperty('linkedWorkItem', null)
+    expect(updates).toHaveProperty('linkedTaskSourceContext', null)
+  })
+
   // linkedWorkItem also records the PR or MR a workspace was created from, which
   // the Issue row does not own and must not drop.
   it('leaves a PR-typed work item alone', () => {
@@ -166,10 +181,10 @@ describe('buildWorktreeMetaUpdates', () => {
     expect(updates).not.toHaveProperty('linkedTaskSourceContext')
   })
 
-  // The row cannot render a GitLab or Jira issue, so clearing one would destroy a
-  // link the user was never shown — and neither has another editor to restore it.
+  // The row cannot render a GitLab issue, so clearing one would destroy a link
+  // the user was never shown, and it has no other editor to restore it from.
   it('leaves work items owned by other providers alone', () => {
-    for (const provider of ['jira', 'gitlab'] as const) {
+    for (const provider of ['gitlab'] as const) {
       const updates = buildUpdates(
         { issueInput: '12' },
         {},

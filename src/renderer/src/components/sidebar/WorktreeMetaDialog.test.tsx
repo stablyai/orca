@@ -184,7 +184,7 @@ function openDialog(
 }
 
 function issueInput(): HTMLInputElement {
-  return screen.getByPlaceholderText('Issue #, or a GitHub or Linear URL')
+  return screen.getByPlaceholderText('Issue #, or a GitHub, Linear, or Jira URL')
 }
 
 function providerChip(): HTMLButtonElement {
@@ -313,6 +313,81 @@ describe('WorktreeMetaDialog issue link row', () => {
     const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
     expect(updates.linkedLinearIssue).toBe('STA-335')
     expect(updates.linkedIssue).toBeNull()
+  })
+
+  // The Jira link's title and URL are resolved from the connected site at save
+  // time, and writing it clears the GitHub slot the workspace held.
+  it('resolves a Jira link against the active site and clears the GitHub link', async () => {
+    const readJiraStatus = vi.fn().mockResolvedValue({
+      connected: true,
+      viewer: null,
+      sites: [
+        {
+          id: 'site-1',
+          siteUrl: 'https://acme.atlassian.net',
+          email: 'a@b.co',
+          displayName: 'Acme',
+          accountId: 'acc'
+        }
+      ],
+      activeSiteId: 'site-1'
+    })
+    const lookupJiraIssueSummary = vi.fn().mockResolvedValue({
+      id: '1',
+      key: 'PROJ-9',
+      title: 'A ticket',
+      url: 'https://acme.atlassian.net/browse/PROJ-9',
+      project: { key: 'PROJ' }
+    })
+    openDialog({ worktree: { linkedIssue: 42 } })
+    useAppStore.setState({
+      readJiraStatus: readJiraStatus as unknown as ReturnType<
+        typeof useAppStore.getState
+      >['readJiraStatus'],
+      lookupJiraIssueSummary: lookupJiraIssueSummary as unknown as ReturnType<
+        typeof useAppStore.getState
+      >['lookupJiraIssueSummary']
+    })
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jira' }))
+    fireEvent.change(issueInput(), { target: { value: 'PROJ-9' } })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() => expect(updateWorktreeMeta).toHaveBeenCalledTimes(1))
+    expect(lookupJiraIssueSummary).toHaveBeenCalledWith(expect.anything(), 'PROJ-9', 'site-1')
+    const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
+    expect(updates.linkedWorkItem).toMatchObject({
+      provider: 'jira',
+      type: 'issue',
+      jiraIdentifier: 'PROJ-9',
+      url: 'https://acme.atlassian.net/browse/PROJ-9'
+    })
+    expect(updates.linkedIssue).toBeNull()
+  })
+
+  // A resolution failure must block the save and explain itself rather than
+  // writing a partial link or silently dropping the existing one.
+  it('shows an error and does not save when Jira is not connected', async () => {
+    const readJiraStatus = vi.fn().mockResolvedValue({ connected: false, viewer: null })
+    openDialog({ worktree: { linkedIssue: 42 } })
+    useAppStore.setState({
+      readJiraStatus: readJiraStatus as unknown as ReturnType<
+        typeof useAppStore.getState
+      >['readJiraStatus']
+    })
+
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Jira' }))
+    fireEvent.change(issueInput(), { target: { value: 'PROJ-9' } })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toContain('Connect Jira in Settings')
+    )
+    expect(updateWorktreeMeta).not.toHaveBeenCalled()
   })
 
   // A GitHub-only save must carry no Linear keys: persistence gates the remote
