@@ -50,6 +50,8 @@ describe('GitHistoryPanel', () => {
         <GitHistoryPanel
           state={{ status: 'ready', result }}
           collapsed={false}
+          viewMode="list"
+          compactFolders={false}
           onToggle={vi.fn()}
           onRefresh={vi.fn()}
           onOpenCommit={vi.fn()}
@@ -67,6 +69,8 @@ describe('GitHistoryPanel', () => {
       <GitHistoryPanel
         state={{ status: 'ready', result: makeHistoryResult() }}
         collapsed={false}
+        viewMode="list"
+        compactFolders={false}
         onToggle={vi.fn()}
         onRefresh={vi.fn()}
         onOpenCommit={vi.fn()}
@@ -89,6 +93,8 @@ describe('GitHistoryPanel', () => {
       <GitHistoryPanel
         state={{ status: 'ready', result }}
         collapsed={false}
+        viewMode="list"
+        compactFolders={false}
         onToggle={vi.fn()}
         onRefresh={vi.fn()}
         onOpenCommit={vi.fn()}

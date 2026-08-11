@@ -32,6 +32,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleOpenComment,
     handleRelinkSuppressedGitHubPR,
     handleSourceControlKeyDown,
+    handleToggleSourceControlCompactFolders,
     handleToggleSourceControlViewMode,
     hostedReview,
     isCreatePrIntentInFlight,
@@ -50,6 +51,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setPendingDiffCommentsClear,
     setSourceControlRoot,
     settings,
+    sourceControlCompactFolders,
     sourceControlViewMode,
     suppressedGitHubPRState,
     visibleCreatePrHeaderAction
@@ -78,6 +80,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           }
           onRelinkSuppressedGitHubPR={handleRelinkSuppressedGitHubPR}
           sourceControlViewMode={sourceControlViewMode}
+          sourceControlCompactFolders={sourceControlCompactFolders}
+          onToggleCompactFolders={handleToggleSourceControlCompactFolders}
           viewModeToggleDisabled={settings === null}
           onToggleViewMode={handleToggleSourceControlViewMode}
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}

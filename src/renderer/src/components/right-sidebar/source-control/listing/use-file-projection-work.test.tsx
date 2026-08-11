@@ -106,6 +106,7 @@ function renderProjection(initialProps: ProjectionProps) {
         expandedSubmoduleKeys: NO_EXPANDED_SUBMODULES,
         submoduleStatusByKey: NO_SUBMODULE_STATUS,
         sourceControlViewMode: props.sourceControlViewMode,
+        sourceControlCompactFolders: true,
         collapsedSections: NO_COLLAPSED_SECTIONS
       }),
     { initialProps }
