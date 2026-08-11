@@ -82,7 +82,10 @@ export function BitbucketCredentialsDialog({
   }, [open])
 
   const remoteRuntime = hasRemoteProviderRuntime(settings)
-  const locked = remoteRuntime || environmentManaged
+  // Why: only an env-managed connection makes saving pointless. A remote runtime
+  // just means the credential is stored on this machine, so the form stays
+  // usable and only the storage note changes (matching the Jira dialog).
+  const locked = environmentManaged
   const connecting = connectState === 'connecting'
   const isTokenMode = authMode === 'token'
   const hasRequiredFields = isTokenMode
@@ -178,15 +181,10 @@ export function BitbucketCredentialsDialog({
         </DialogHeader>
         {locked ? (
           <p className="text-xs text-muted-foreground">
-            {remoteRuntime
-              ? translate(
-                  'auto.components.settings.bitbucket.credentials.dialog.remoteRuntime',
-                  'Bitbucket credentials saved here are stored on this local machine only. Set ORCA_BITBUCKET_* environment variables on the remote runtime instead.'
-                )
-              : translate(
-                  'auto.components.settings.bitbucket.credentials.dialog.environmentManaged',
-                  'Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.'
-                )}
+            {translate(
+              'auto.components.settings.bitbucket.credentials.dialog.environmentManaged',
+              'Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.'
+            )}
           </p>
         ) : (
           <div className="space-y-3">
@@ -353,10 +351,15 @@ export function BitbucketCredentialsDialog({
             </div>
             <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground/70">
               <Lock className="size-3 mt-0.5 shrink-0" />
-              {translate(
-                'auto.components.settings.bitbucket.credentials.dialog.storageNote',
-                'Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.'
-              )}
+              {remoteRuntime
+                ? translate(
+                    'auto.components.settings.bitbucket.credentials.dialog.remoteRuntime',
+                    'Stored on this machine, not on the active remote runtime — set ORCA_BITBUCKET_* there instead. Environment variables always take precedence over what you save here.'
+                  )
+                : translate(
+                    'auto.components.settings.bitbucket.credentials.dialog.storageNote',
+                    'Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.'
+                  )}
             </p>
           </div>
         )}

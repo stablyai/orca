@@ -173,19 +173,24 @@ export function saveBitbucketCredential(input: BitbucketCredentialSaveInput): vo
 // Why: swallowing a non-ENOENT unlink failure would clear memory while the
 // files survive, so the credential silently returns on the next launch.
 export function clearStoredBitbucketCredential(): void {
-  for (const path of [getSecretPath(), getMetadataPath()]) {
-    try {
-      unlinkSync(path)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        throw error
+  try {
+    for (const path of [getSecretPath(), getMetadataPath()]) {
+      try {
+        unlinkSync(path)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
       }
     }
+  } finally {
+    // Why: on a partial delete the caches must still be dropped, or the session
+    // keeps authenticating with a credential the user just disconnected.
+    cachedMetadata = null
+    metadataLoadedFromDisk = true
+    cachedSecret = null
+    credentialError = null
   }
-  cachedMetadata = null
-  metadataLoadedFromDisk = true
-  cachedSecret = null
-  credentialError = null
 }
 
 /** @internal - tests need a clean in-memory cache between cases. */

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBitbucketPullRequest } from './pull-request-creation'
+import {
+  createBitbucketPullRequest,
+  isBitbucketReviewCreationAuthenticated
+} from './pull-request-creation'
 import { _resetBitbucketRepoRefCache } from './repository-ref'
 
 const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
@@ -98,14 +101,24 @@ describe('Bitbucket pull request creation', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('rejects a draft request instead of silently publishing a live PR', async () => {
-    const fetchMock = vi.fn()
+  it('ignores a draft request rather than dead-ending a hidden persisted default', async () => {
+    const fetchMock = vi.fn(async () => createdPullRequestResponse())
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    const result = await createBitbucketPullRequest('/repo', { ...CREATE_INPUT, draft: true })
+    // Why: the composer hides the Draft toggle for Bitbucket, so a `true` here
+    // is an unreachable persisted default the user cannot clear.
+    await expect(
+      createBitbucketPullRequest('/repo', { ...CREATE_INPUT, draft: true })
+    ).resolves.toMatchObject({ ok: true, number: 42 })
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as never[])[1]['body']))).not.toHaveProperty(
+      'draft'
+    )
+  })
 
-    expect(result).toMatchObject({ ok: false, code: 'validation' })
-    expect(fetchMock).not.toHaveBeenCalled()
+  it('reports authenticated only when a credential resolves', async () => {
+    expect(isBitbucketReviewCreationAuthenticated()).toBe(true)
+    delete process.env.ORCA_BITBUCKET_ACCESS_TOKEN
+    expect(isBitbucketReviewCreationAuthenticated()).toBe(false)
   })
 
   it('maps a duplicate-branch rejection to already_exists with the existing review', async () => {

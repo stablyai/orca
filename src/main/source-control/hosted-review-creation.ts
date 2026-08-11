@@ -18,6 +18,7 @@ import {
 } from '../../shared/hosted-review-creation-providers'
 import { isAzureDevOpsReviewCreationAuthenticated } from '../azure-devops/pull-request-creation'
 import { isGiteaReviewCreationAuthenticated } from '../gitea/pull-request-creation'
+import { isBitbucketReviewCreationAuthenticated } from '../bitbucket/pull-request-creation'
 import { getEnterpriseGitHubRepoSlug } from '../github/github-enterprise-repository'
 import { acquire, ghExecFileAsync, gitExecFileAsync, release } from '../github/gh-utils'
 import { isNoUpstreamError, normalizeGitErrorMessage } from '../../shared/git-remote-error'
@@ -291,6 +292,14 @@ function reviewCopy(provider: HostedReviewProvider): {
       authInstruction: 'Set ORCA_GITEA_TOKEN'
     }
   }
+  if (provider === 'bitbucket') {
+    return {
+      shortLabel: 'PR',
+      reviewLabel: 'pull request',
+      providerName: 'Bitbucket',
+      authInstruction: 'Connect Bitbucket in Settings > Integrations'
+    }
+  }
   return {
     shortLabel: 'PR',
     reviewLabel: 'pull request',
@@ -313,6 +322,11 @@ async function isProviderAuthenticated(
   }
   if (provider === 'gitea') {
     return isGiteaReviewCreationAuthenticated()
+  }
+  if (provider === 'bitbucket') {
+    // Why: falling through to the GitHub check made Create PR unusable for
+    // anyone with Bitbucket connected but no `gh auth login`.
+    return isBitbucketReviewCreationAuthenticated()
   }
   return isGitHubAuthenticated(repoPath, connectionId, options)
 }

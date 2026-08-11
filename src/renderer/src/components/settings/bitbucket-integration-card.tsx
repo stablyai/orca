@@ -23,6 +23,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
   const [connection, setConnection] = useState<BitbucketConnectionStatus | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
+  const [disconnectError, setDisconnectError] = useState<string | null>(null)
 
   // Reads plaintext metadata only — never the encrypted secret — so mounting the
   // pane cannot trigger a keychain prompt.
@@ -67,8 +68,22 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
 
   const handleDisconnect = async (): Promise<void> => {
     setDisconnecting(true)
+    setDisconnectError(null)
     try {
       await window.api.bitbucket.disconnect()
+    } catch (error) {
+      // Why: disconnect rethrows when a credential file cannot be deleted.
+      // Unhandled, the card silently re-renders as still connected.
+      if (mountedRef.current) {
+        setDisconnectError(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.settings.bitbucket.integration.card.disconnectFailed',
+                'Could not remove the saved Bitbucket credential.'
+              )
+        )
+      }
     } finally {
       if (mountedRef.current) {
         setDisconnecting(false)
@@ -154,6 +169,7 @@ export function BitbucketIntegrationCard(): React.JSX.Element {
               ) : null}
             </div>
           ) : null}
+          {disconnectError ? <p className="text-xs text-destructive">{disconnectError}</p> : null}
           <BitbucketCardNote
             envManaged={envManaged}
             status={status}

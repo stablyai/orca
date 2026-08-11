@@ -18,6 +18,10 @@ import { getHostedReviewLocalGitOptions } from '../source-control/hosted-review-
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
+export function isBitbucketReviewCreationAuthenticated(): boolean {
+  return hasAuth(resolveBitbucketAuthConfig())
+}
+
 function encodedRepoPath(repo: BitbucketRepoRef): string {
   return `${encodeURIComponent(repo.workspace)}/${encodeURIComponent(repo.repoSlug)}`
 }
@@ -150,17 +154,9 @@ export async function createBitbucketPullRequest(
       error: 'Create PR failed: choose a different base branch before creating a pull request.'
     }
   }
-  // Why: Bitbucket Cloud has no draft pull requests. Failing loudly beats
-  // silently publishing a live PR that the user asked to keep as a draft.
-  if (input.draft) {
-    return {
-      ok: false,
-      code: 'validation',
-      error:
-        'Create PR failed: Bitbucket Cloud does not support draft pull requests. Uncheck Draft and try again.'
-    }
-  }
-
+  // Why: Bitbucket Cloud has no draft pull requests and the composer hides the
+  // toggle, so `draft` here can only be an unreachable persisted default —
+  // rejecting it would dead-end the user with no control to clear.
   const description =
     input.useTemplate && !input.body?.trim()
       ? await readHostedPullRequestTemplate(repoPath, connectionId)

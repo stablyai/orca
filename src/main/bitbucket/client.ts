@@ -8,6 +8,7 @@ import {
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -75,6 +76,15 @@ async function requestJson<T>(
   notFoundIsNull = false
 ): Promise<T | null> {
   const config = resolveBitbucketAuthConfig()
+  // Why: a denied keychain prompt leaves no usable credential. Issuing the
+  // request anyway gets a 404 on private repos, which reads as "no pull
+  // request" and offers Create for a branch that already has one.
+  if (!hasAuth(config)) {
+    if (throwOnFailure) {
+      throw new Error('Bitbucket request failed: no usable credential')
+    }
+    return null
+  }
   try {
     const response = await fetch(apiUrl(config.baseUrl, path, options.searchParams), {
       headers: {
@@ -243,14 +253,24 @@ export async function getBitbucketPullRequestForBranch(
     )
     const raw = list?.values?.[0]
     if (raw) {
-      // Why: a merged or declined PR we only matched by branch name is history,
-      // not review context — the same rule GitHub applies. Keeping it would
-      // report "a pull request already exists" and block the branch's next PR.
-      // An explicitly linked review still resolves through the fallback below.
-      const isImplicitNonOpenMatch =
-        mapBitbucketPullRequestState(raw.state) !== 'open' &&
-        !(typeof linkedPRNumber === 'number' && raw.id === linkedPRNumber)
-      if (!isImplicitNonOpenMatch) {
+      const state = mapBitbucketPullRequestState(raw.state)
+      // Why: a merged PR we only matched by branch name is history, not review
+      // context (GitHub's isMergedImplicitPR rule). Keeping it reported "a pull
+      // request already exists" and blocked the branch's next PR. Scoped to
+      // merged so a declined PR stays visible off the default branch, matching
+      // every other provider; the linked lookup above already returned early
+      // for an explicitly linked review.
+      const isMergedImplicitMatch = state === 'merged'
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state,
+        reviewNumber: raw.id ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!isMergedImplicitMatch && !hideOnDefaultBranch) {
         return normalizePullRequest(repo, raw)
       }
     }

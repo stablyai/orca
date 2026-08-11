@@ -144,6 +144,40 @@ describe('Bitbucket client', () => {
     ).resolves.toBeNull()
   })
 
+  it('keeps a DECLINED PR on a feature branch visible', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      return Response.json({
+        values: [
+          { ...bitbucketPr(9), state: 'DECLINED', source: { branch: { name: 'feature/login' } } }
+        ]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    // Why: only merged matches are hidden. Hiding declined too made a declined
+    // PR permanently invisible off the default branch, unlike every other provider.
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
+    ).resolves.toMatchObject({ number: 9, state: 'closed' })
+  })
+
+  it('returns null instead of querying anonymously when no credential resolves', async () => {
+    delete process.env.ORCA_BITBUCKET_EMAIL
+    delete process.env.ORCA_BITBUCKET_API_TOKEN
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    // Why: an unauthenticated query 404s on private repos, which would read as
+    // "no pull request" and offer Create for a branch that already has one.
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
+    ).resolves.toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('fetches an explicitly linked DECLINED PR before the branch index', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/pullrequests/7')) {
