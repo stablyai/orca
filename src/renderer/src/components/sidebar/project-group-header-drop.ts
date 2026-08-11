@@ -17,7 +17,10 @@ export type ProjectGroupHeaderDragRect = {
   sectionBottom?: number
 }
 
-export type ProjectGroupHeaderDropPreview = WorktreeSidebarHeaderDropPreview
+export type ProjectGroupHeaderDropPreview = Pick<
+  WorktreeSidebarHeaderDropPreview,
+  'dropIndex' | 'dropIndicatorY'
+>
 
 export type ProjectGroupTabOrderUpdate = {
   groupId: string
@@ -187,7 +190,7 @@ export function computeProjectGroupHeaderDropPreview(args: {
   contentBottom?: number
 }): ProjectGroupHeaderDropPreview | null {
   const { rects, sidebarProjectGroupHeaderIds } = args
-  return computeWorktreeSidebarHeaderDropPreview({
+  const preview = computeWorktreeSidebarHeaderDropPreview({
     pointerY: args.pointerY,
     containerTop: args.containerTop,
     scrollTop: args.scrollTop,
@@ -196,4 +199,5 @@ export function computeProjectGroupHeaderDropPreview(args: {
     getId: (rect) => rect.groupId,
     contentBottom: args.contentBottom
   })
+  return preview ? { dropIndex: preview.dropIndex, dropIndicatorY: preview.dropIndicatorY } : null
 }

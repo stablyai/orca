@@ -23,12 +23,14 @@ function makeSession(
   return {
     repoId,
     bucketKey: 'ungrouped',
+    draggedSectionHeight: 0,
     sidebarRepoHeaderIds,
     pointerId: 1,
     headerRects: [],
     handleEl: document.createElement('div'),
     startX: 0,
     startY: 0,
+    startScrollTop: 0,
     latestPointerY: 0,
     promoted: true
   }

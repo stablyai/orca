@@ -14,9 +14,13 @@ export function commitProjectHeaderDragDrop(args: {
   orderedRepoIds: readonly string[]
   repoById: ReadonlyMap<string, Repo>
   usesProjectGroupOrdering: boolean
-  onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (repoId: string, projectGroupId: string | null, order: number) => void
-}): void {
+  onCommitRepoOrder: (orderedIds: string[]) => void | Promise<void>
+  onCommitProjectGroupOrder: (
+    repoId: string,
+    projectGroupId: string | null,
+    order: number
+  ) => void | Promise<void>
+}): void | Promise<void> {
   const draggedRepo = args.repoById.get(args.session.repoId)
   if (!draggedRepo) {
     return
@@ -59,8 +63,11 @@ export function commitProjectHeaderDragDrop(args: {
       dropIndex: siblingDropIndex,
       repoOrderRankById
     })
-    args.onCommitProjectGroupOrder(args.session.repoId, draggedRepo.projectGroupId ?? null, order)
-    return
+    return args.onCommitProjectGroupOrder(
+      args.session.repoId,
+      draggedRepo.projectGroupId ?? null,
+      order
+    )
   }
 
   const insertAt = mapSidebarRepoDropIndexToAllRepoInsertAt(
@@ -72,5 +79,5 @@ export function commitProjectHeaderDragDrop(args: {
   if (!next) {
     return
   }
-  args.onCommitRepoOrder(next)
+  return args.onCommitRepoOrder(next)
 }

@@ -10,6 +10,7 @@ export type WorktreeSidebarHeaderDragRect = {
 export type WorktreeSidebarHeaderDropPreview = {
   dropIndex: number
   dropIndicatorY: number
+  dropSlotY: number
 }
 
 const INDICATOR_GAP_PX = 4
@@ -64,7 +65,8 @@ export function computeWorktreeSidebarHeaderDropPreview<
   if (boundaryDrop.kind === 'drop') {
     return {
       dropIndex: boundaryDrop.dropIndex,
-      dropIndicatorY: Math.max(args.scrollTop, boundaryDrop.indicatorY)
+      dropIndicatorY: Math.max(args.scrollTop, boundaryDrop.indicatorY),
+      dropSlotY: boundaryDrop.dropIndex === 0 ? first.top : lastBoundaryBottom
     }
   }
 
@@ -81,7 +83,10 @@ export function computeWorktreeSidebarHeaderDropPreview<
 
     return {
       dropIndex,
-      dropIndicatorY: Math.max(args.scrollTop, indicatorY)
+      dropIndicatorY: Math.max(args.scrollTop, indicatorY),
+      dropSlotY: nextRect
+        ? nextRect.top
+        : Math.max(hoveredRect.bottom, hoveredRect.sectionBottom ?? hoveredRect.bottom)
     }
   }
 
@@ -95,13 +100,15 @@ export function computeWorktreeSidebarHeaderDropPreview<
   }
   return {
     dropIndex: boundary.dropIndex,
-    dropIndicatorY: Math.max(args.scrollTop, boundary.indicatorY)
+    dropIndicatorY: Math.max(args.scrollTop, boundary.indicatorY),
+    dropSlotY: boundary.slotY
   }
 }
 
 type WorktreeSidebarHeaderBoundarySlot = {
   dropIndex: number
   indicatorY: number
+  slotY: number
 }
 
 function pickNearestHeaderBoundarySlot(
@@ -122,11 +129,16 @@ function pickNearestHeaderBoundarySlot(
     ? {
         dropIndex: prevRect.headerIndex + 1,
         indicatorY:
-          Math.max(prevRect.bottom, prevRect.sectionBottom ?? prevRect.bottom) + INDICATOR_GAP_PX
+          Math.max(prevRect.bottom, prevRect.sectionBottom ?? prevRect.bottom) + INDICATOR_GAP_PX,
+        slotY: Math.max(prevRect.bottom, prevRect.sectionBottom ?? prevRect.bottom)
       }
     : null
   const beforeNext: WorktreeSidebarHeaderBoundarySlot | null = nextRect
-    ? { dropIndex: nextRect.headerIndex, indicatorY: Math.max(0, nextRect.top - INDICATOR_GAP_PX) }
+    ? {
+        dropIndex: nextRect.headerIndex,
+        indicatorY: Math.max(0, nextRect.top - INDICATOR_GAP_PX),
+        slotY: nextRect.top
+      }
     : null
 
   if (!afterPrev) {
@@ -139,4 +151,35 @@ function pickNearestHeaderBoundarySlot(
   return Math.abs(localY - beforeNext.indicatorY) <= Math.abs(localY - afterPrev.indicatorY)
     ? beforeNext
     : afterPrev
+}
+
+/**
+ * Per-project pixel offsets that open a gap at `dropIndex`. A dragged project
+ * stays expanded, so every displaced section moves by its full rendered height.
+ */
+export function buildSidebarHeaderPreviewOffsets(args: {
+  orderedIds: readonly string[]
+  draggedId: string
+  dropIndex: number
+  sectionHeight: number
+}): ReadonlyMap<string, number> {
+  const offsets = new Map<string, number>()
+  const fromIndex = args.orderedIds.indexOf(args.draggedId)
+  if (fromIndex === -1) {
+    return offsets
+  }
+  // Dropping onto its own slot, or the boundary just after it, changes nothing.
+  if (args.dropIndex === fromIndex || args.dropIndex === fromIndex + 1) {
+    return offsets
+  }
+  if (args.dropIndex > fromIndex) {
+    for (let index = fromIndex + 1; index < args.dropIndex; index += 1) {
+      offsets.set(args.orderedIds[index]!, -args.sectionHeight)
+    }
+    return offsets
+  }
+  for (let index = args.dropIndex; index < fromIndex; index += 1) {
+    offsets.set(args.orderedIds[index]!, args.sectionHeight)
+  }
+  return offsets
 }
