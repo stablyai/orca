@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createGitHubPullRequestMock,
+  createBitbucketPullRequestMock,
   createGitLabMergeRequestMock,
   createAzureDevOpsPullRequestMock,
   createGiteaPullRequestMock,
@@ -17,6 +18,7 @@ const {
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
+  createBitbucketPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
   createAzureDevOpsPullRequestMock: vi.fn(),
   createGiteaPullRequestMock: vi.fn(),
@@ -61,6 +63,10 @@ vi.mock('../bitbucket/client', () => ({
   getBitbucketPullRequest: vi.fn()
 }))
 
+vi.mock('../bitbucket/pull-request-creation', () => ({
+  createBitbucketPullRequest: createBitbucketPullRequestMock
+}))
+
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: vi.fn(),
@@ -100,6 +106,7 @@ describe('forge provider interface', () => {
   beforeEach(() => {
     createGitHubPullRequestMock.mockReset()
     createGitLabMergeRequestMock.mockReset()
+    createBitbucketPullRequestMock.mockReset()
     createAzureDevOpsPullRequestMock.mockReset()
     createGiteaPullRequestMock.mockReset()
     getAzureDevOpsRepoSlugMock.mockReset()
@@ -206,6 +213,28 @@ describe('forge provider interface', () => {
       head: 'feature/provider-interface',
       title: 'Add provider interface'
     })
+  })
+
+  it('routes Bitbucket review creation through the shared provider contract', async () => {
+    createBitbucketPullRequestMock.mockResolvedValue({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
+    })
+
+    const provider = getForgeProviderById('bitbucket')
+    const input = {
+      provider: 'bitbucket' as const,
+      base: 'main',
+      head: 'feature/provider-interface',
+      title: 'Add provider interface'
+    }
+    await expect(provider.createReview?.('/repo', input)).resolves.toEqual({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
+    })
+    expect(createBitbucketPullRequestMock).toHaveBeenCalledWith('/repo', input)
   })
 
   it('routes GitLab review creation through the shared provider contract', async () => {
