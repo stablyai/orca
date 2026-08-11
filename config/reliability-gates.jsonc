@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-09",
+  "updatedAt": "2026-08-11",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -5956,6 +5956,19 @@
       ],
       "assertionRefs": [
         {
+          "file": "src/relay/pty-attach-viewport.real.test.ts",
+          "assertions": [
+            "a viewport-bearing relay attach moves the real child PTY from 200x50 to 105x30 and delivers at least one SIGWINCH after the identity check"
+          ]
+        },
+        {
+          "file": "tests/e2e/ssh-pty-reattach-grid.spec.ts",
+          "assertions": [
+            "a restored SSH tab resizes the remote child to the visible client grid and raises its SIGWINCH count above the pre-reattach value",
+            "the renderer grid stays stable while the remote child converges on the restored viewport"
+          ]
+        },
+        {
           "file": "src/renderer/src/startup/ssh-startup-reconnect.test.ts",
           "assertions": [
             "the state returned by ssh.connect is published before persisted terminals reconnect"
@@ -6320,6 +6333,15 @@
           "result": "passed",
           "durationSeconds": 12.5,
           "summary": "One Electron journey passed on the final implementation after exact-authority hydration; six restored SSH terminal managers remounted after renderer reload and remote input reached the Linux target."
+        },
+        {
+          "date": "2026-08-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/relay/pty-attach-viewport.real.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 0.44,
+          "summary": "The real node-pty oracle passed; a viewport-bearing relay attach moved the kernel-visible child grid from 200x50 to 105x30 and delivered SIGWINCH after the pane identity check."
         }
       ],
       "runtimeBudget": {

@@ -26,8 +26,17 @@ import {
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 
+// Why: the relay clamps resize to [1, 500], so drift outside that range is never observable.
+const PTY_DIMENSION_MAX = 500
+
+// Why: drift must differ from the client grid, or reattach adopting it proves nothing.
+function driftDimension(value: number, delta: number, min: number): number {
+  const shrunk = value - delta
+  return Math.min(shrunk >= min ? shrunk : value + delta, PTY_DIMENSION_MAX)
+}
+
 function staleGrid(grid: Grid): Grid {
-  return { cols: Math.max(40, grid.cols - 19), rows: Math.max(12, grid.rows - 7) }
+  return { cols: driftDimension(grid.cols, 19, 40), rows: driftDimension(grid.rows, 7, 12) }
 }
 
 async function startGridMonitor(page: Page, ptyId: string): Promise<void> {
@@ -69,15 +78,19 @@ test.describe('SSH PTY viewport reattach', () => {
         throw new Error('Visible SSH xterm grid unavailable')
       }
       const drift = staleGrid(renderer.xterm)
+      expect(drift).not.toEqual(renderer.xterm)
       await orcaPage.evaluate(({ id, grid }) => window.api.pty.resize(id, grid.cols, grid.rows), {
         id: ptyId,
         grid: drift
       })
       await expect
-        .poll(() => {
-          const grid = readRemoteGrid(target!)
-          return { cols: grid.cols, rows: grid.rows }
-        })
+        .poll(
+          () => {
+            const grid = readRemoteGrid(target!)
+            return { cols: grid.cols, rows: grid.rows }
+          },
+          { timeout: 30_000, message: 'Injected drift did not reach the remote child' }
+        )
         .toEqual(drift)
       const beforeReattach = readRemoteGrid(target)
 
