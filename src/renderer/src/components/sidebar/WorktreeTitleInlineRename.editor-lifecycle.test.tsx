@@ -44,6 +44,7 @@ function renameEditor(): HTMLInputElement | null {
 }
 
 type HarnessProps = {
+  displayName?: string
   onRename?: (displayName: string) => Promise<void> | void
   onEditingChange?: (editing: boolean) => void
   showUnreadEmphasis?: boolean
@@ -52,6 +53,7 @@ type HarnessProps = {
 // Mirrors WorktreeCard: the card clears the trigger as soon as the title consumes it,
 // so from then on the editor stays open on its own state.
 function ShortcutRenameHarness({
+  displayName = DISPLAY_NAME,
   onRename = vi.fn(),
   onEditingChange,
   showUnreadEmphasis = false
@@ -59,7 +61,7 @@ function ShortcutRenameHarness({
   const [renameRequested, setRenameRequested] = useState(true)
   return (
     <WorktreeTitleInlineRename
-      displayName={DISPLAY_NAME}
+      displayName={displayName}
       showUnreadEmphasis={showUnreadEmphasis}
       onRename={onRename}
       onEditingChange={onEditingChange}
@@ -72,6 +74,7 @@ function ShortcutRenameHarness({
 function openEditorByShortcut(props: HarnessProps = {}): {
   input: HTMLInputElement
   markUnread: () => void
+  renameElsewhere: (displayName: string) => void
 } {
   const { rerender } = render(<ShortcutRenameHarness {...props} />)
   const input = renameEditor()
@@ -80,7 +83,9 @@ function openEditorByShortcut(props: HarnessProps = {}): {
   }
   return {
     input,
-    markUnread: () => rerender(<ShortcutRenameHarness {...props} showUnreadEmphasis={true} />)
+    markUnread: () => rerender(<ShortcutRenameHarness {...props} showUnreadEmphasis={true} />),
+    renameElsewhere: (displayName) =>
+      rerender(<ShortcutRenameHarness {...props} displayName={displayName} />)
   }
 }
 
@@ -149,6 +154,21 @@ describe('WorktreeTitleInlineRename editor lifecycle', () => {
 
     expect(document.activeElement).toBe(input)
     expect(select).toHaveBeenCalledTimes(1)
+  })
+
+  // The hovercard editor never sets the unread flag, so a title change is the only
+  // way its key used to move.
+  it('leaves an open editor untouched when the workspace is renamed elsewhere', () => {
+    const { input, renameElsewhere } = openEditorByShortcut()
+    fireEvent.change(input, { target: { value: 'Half typed name' } })
+    const selectAfterOpen = vi.spyOn(HTMLInputElement.prototype, 'select')
+
+    renameElsewhere('Renamed by an agent')
+
+    expect(renameEditor()).toBe(input)
+    expect(input.value).toBe('Half typed name')
+    expect(document.activeElement).toBe(input)
+    expect(selectAfterOpen).not.toHaveBeenCalled()
   })
 
   it('leaves an open editor untouched when an unread notification arrives', () => {
