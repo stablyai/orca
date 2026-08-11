@@ -1,5 +1,9 @@
 import type { MessageRow } from './types'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
+import {
+  formatSenderLivenessLine,
+  type SenderLivenessEvidence
+} from '../../../shared/orchestration-sender-liveness'
 
 const BANNER_WIDTH = 60
 const SEPARATOR = '─'.repeat(BANNER_WIDTH)
@@ -50,10 +54,17 @@ function appendLegacyGuidance(
   }
 }
 
-export function formatMessageBanner(msg: MessageRow, options: MessageFormattingOptions): string
-export function formatMessageBanner(msg: MessageRow): string
+/** A Delivery message, optionally carrying the sender liveness evidence stamped
+ *  on it when the Delivery was assembled. */
+export type FormattableMessage = MessageRow & { senderLiveness?: SenderLivenessEvidence }
+
 export function formatMessageBanner(
-  msg: MessageRow,
+  msg: FormattableMessage,
+  options: MessageFormattingOptions
+): string
+export function formatMessageBanner(msg: FormattableMessage): string
+export function formatMessageBanner(
+  msg: FormattableMessage,
   options: MessageFormattingOptions = {}
 ): string {
   const priorityTag =
@@ -73,6 +84,9 @@ export function formatMessageBanner(
 
   const lines: string[] = [header]
   lines.push(`Subject: ${msg.subject}`)
+  if (msg.senderLiveness) {
+    lines.push(formatSenderLivenessLine(msg.senderLiveness))
+  }
   if (authority !== 'current') {
     appendLegacyGuidance(lines, authority, options.supportedActionHints ?? [])
   }
@@ -99,7 +113,7 @@ export function formatMessageBanner(
 
 // Why: grouping multiple banners under a single wrapper line lets agents detect
 // the message block boundary and parse each banner individually.
-export function formatMessagesForInjection(messages: MessageRow[]): string {
+export function formatMessagesForInjection(messages: FormattableMessage[]): string {
   if (messages.length === 0) {
     return ''
   }

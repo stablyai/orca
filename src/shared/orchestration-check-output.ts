@@ -1,7 +1,15 @@
 import { ORCHESTRATION_LEGACY_RUN_ID } from './orchestration-rpc-contract'
+import {
+  formatSenderLivenessLine,
+  formatSenderLivenessTag,
+  type SenderLivenessEvidence
+} from './orchestration-sender-liveness'
 
 export type OrchestrationMessageSummary = {
   id: string
+  /** Sender liveness stamped by the runtime when the Delivery was assembled.
+   *  Absent from hosts that predate it, so every reader treats it as optional. */
+  senderLiveness?: SenderLivenessEvidence
   run_id?: string
   delivery_contract?: 'legacy_direct' | 'current_delivery' | 'audit_only'
   from_handle: string
@@ -101,7 +109,9 @@ export function formatOrchestrationCheckText(
         `${message.id}${formatMessageReadOnlyTag(
           message,
           compatibilityActive
-        )} [${message.type ?? 'status'}] from=${message.from_handle} "${message.subject}"`
+        )} [${message.type ?? 'status'}] from=${message.from_handle}${formatSenderLivenessTag(
+          message.senderLiveness
+        )} "${message.subject}"`
     )
     .join('\n')
   const output = prepared.deliveryId ? `Delivery ${prepared.deliveryId}\n${rendered}` : rendered
@@ -163,6 +173,9 @@ function formatLegacyAwareCheckMessages(
         `${message.id}${formatMessageReadOnlyTag(message, legacyCompatibilityActive)}${formatMessagePriorityTag(message)} [${message.type ?? 'status'}] from=${message.from_handle}`,
         formatQuotedMessageField('subject', message.subject)
       ]
+      if (message.senderLiveness) {
+        lines.push(formatSenderLivenessLine(message.senderLiveness))
+      }
       if (legacyReadOnly) {
         lines.push('[Inspection only: reply and acknowledgment are unavailable.]')
       }

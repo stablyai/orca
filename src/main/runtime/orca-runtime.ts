@@ -135,6 +135,7 @@ import type {
 } from '../../shared/artifacts'
 import type { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
+import type { SenderAgentTurnObservation } from '../../shared/orchestration-sender-liveness'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type {
@@ -394,6 +395,7 @@ import {
 import { TASK_PROVIDERS } from '../../shared/task-providers'
 import { FIRST_PANE_ID } from '../../shared/pane-key'
 import {
+  isEquivalentPaneKey,
   isTerminalLeafId,
   makePaneKey,
   parseLegacyNumericPaneKey,
@@ -30965,6 +30967,64 @@ export class OrcaRuntimeService {
     } catch {
       return null
     }
+  }
+
+  /** Newest turn-lifecycle observation for an orchestration message sender,
+   *  resolved from the pane key first (the remint-stable identity) and from the
+   *  live handle only as a fallback. Returned unjudged: the Delivery liveness
+   *  evidence decides freshness and trust. Null when no harness reported one. */
+  getSenderAgentTurnObservation(sender: {
+    paneKey?: string | null
+    handle?: string | null
+  }): SenderAgentTurnObservation | null {
+    const paneKey =
+      sender.paneKey ?? (sender.handle ? this.getTerminalPaneKey(sender.handle) : null)
+    const observations: SenderAgentTurnObservation[] = []
+    const retained = paneKey ? this.findRetainedAgentRowForPane(paneKey) : null
+    if (retained) {
+      observations.push({
+        state: retained.payload.state,
+        updatedAt: retained.updatedAt,
+        turnStartedAt: retained.stateStartedAt,
+        restoredUnconfirmed: false,
+        paneKey: retained.paneKey
+      })
+    }
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      const matchesPane = paneKey !== null && isEquivalentPaneKey(entry.paneKey, paneKey)
+      if (!matchesPane && (!sender.handle || entry.terminalHandle !== sender.handle)) {
+        continue
+      }
+      observations.push({
+        state: entry.state,
+        updatedAt: entry.receivedAt,
+        turnStartedAt: entry.stateStartedAt ?? entry.receivedAt,
+        restoredUnconfirmed: entry.restoredUnconfirmed === true,
+        paneKey: entry.paneKey
+      })
+    }
+    return observations.reduce<SenderAgentTurnObservation | null>(
+      (newest, candidate) =>
+        !newest || candidate.updatedAt > newest.updatedAt ? candidate : newest,
+      null
+    )
+  }
+
+  private findRetainedAgentRowForPane(paneKey: string): RuntimeAgentRowSnapshot | null {
+    const exact = this.latestAgentStatusByPaneKey.get(paneKey)
+    if (exact) {
+      return exact
+    }
+    let newest: RuntimeAgentRowSnapshot | null = null
+    for (const snapshot of this.latestAgentStatusByPaneKey.values()) {
+      if (
+        isEquivalentPaneKey(snapshot.paneKey, paneKey) &&
+        (!newest || snapshot.updatedAt > newest.updatedAt)
+      ) {
+        newest = snapshot
+      }
+    }
+    return newest
   }
 
   getAgentStatusOrchestrationContextForPaneKey(

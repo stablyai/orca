@@ -13,6 +13,7 @@ import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { formatMessageBanner } from '../../orchestration/formatter'
 import { isGroupAddress, resolveGroupAddress } from '../../orchestration/groups'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
+import { attachSenderLivenessEvidence } from '../../orchestration/sender-liveness-evidence'
 import { abbreviateOrchestrationTasks } from '../../../../shared/orchestration-task-summary'
 import {
   ORCHESTRATION_LEGACY_RUN_ID,
@@ -26,7 +27,7 @@ import { ORCHESTRATION_WORKER_METHODS } from './orchestration-worker-methods'
 import { ORCHESTRATION_FEDERATION_METHODS } from './orchestration-federation-methods'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { RunRow } from '../../orchestration/types'
+import type { MessageRow, RunRow } from '../../orchestration/types'
 import { encodeFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 
@@ -720,12 +721,18 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             interruptedAcknowledgedCheck(run.id, acknowledged.delivery.id, 'outcome_unknown')
           )
         }
+        // Why: sender liveness is attached where the batch is assembled so every
+        // reader (JSON, banner, injected text) sees the same evidence.
+        const withSenderLiveness = (messages: MessageRow[]) =>
+          attachSenderLivenessEvidence(runtime, db, messages)
+
         if (params.peek || params.all || params.unread === false) {
           const history = db.getRunMailboxHistory(run.id, 100, typeFilter)
-          const messages =
+          const messages = withSenderLiveness(
             params.all || (params.unread === false && !params.peek)
               ? history
               : history.filter((message) => message.read === 0)
+          )
           const result = {
             messages,
             count: messages.length,
@@ -749,18 +756,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           })
         let current = readDelivery(params.wait ? typeFilter : undefined)
         if (current) {
+          const messages = withSenderLiveness(current.messages)
           return {
             runId: run.id,
             deliveryId: current.delivery.id,
-            messages: current.messages,
-            count: current.messages.length,
+            messages,
+            count: messages.length,
             replayed: current.replayed,
             acknowledged: acknowledged?.delivery.id ?? null,
             timedOut: false,
             cancelled: false,
             connectionLost: false,
             ...(params.format || params.inject
-              ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
+              ? { formatted: messages.map(formatMessageBanner).join('\n\n') }
               : {})
           }
         }
@@ -836,18 +844,19 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
 
         current = readDelivery(typeFilter)
+        const arrived = withSenderLiveness(current?.messages ?? [])
         return {
           runId: run.id,
           deliveryId: current?.delivery.id ?? null,
-          messages: current?.messages ?? [],
-          count: current?.messages.length ?? 0,
+          messages: arrived,
+          count: arrived.length,
           replayed: current?.replayed ?? false,
           acknowledged: acknowledged?.delivery.id ?? null,
           timedOut: false,
           cancelled: false,
           connectionLost: false,
           ...(params.format && current
-            ? { formatted: current.messages.map(formatMessageBanner).join('\n\n') }
+            ? { formatted: arrived.map(formatMessageBanner).join('\n\n') }
             : {})
         }
       }
