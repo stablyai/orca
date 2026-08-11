@@ -1969,7 +1969,7 @@
       "invariant": "Close permanently removes the owned provider session, agent descendants, and resume authority even when no TerminalPane is mounted; a terminating id remains reserved through natural exit, duplicate callers await the same completion, and immediate teardown upgrades any graceful request without signalling a recycled PID or a descendant tree after root ownership is lost; process-table work is locale-stable, bounded, fresh for each post-start request, same-turn coalesced, and begins within the requesting caller's deadline, including bulk worktree cleanup; detach and park preserve ownership; aliases prevent a detached agent's immutable physical pane key from being retired with its former tab.",
       "oracle": "Capture the exact PTY before parking, prove it remains listed while the view is absent, close through the product state boundary, and poll the provider inventory until that exact ID disappears; an agent-marked PTY's detached-pgid child is alive before close and absent afterward; unit tests keep a naturally exited id reserved without re-killing its PID or signalling its captured tree, upgrade pending and post-snapshot graceful kills to immediate, force ps into the C locale, coalesce each bounded bulk-shutdown batch, share duplicate teardown completion, coalesce 20 same-turn process-table requests, start one shared successor without waiting for the prior scan, terminate cyclic-looking traversal, retain the source scan's timestamp, bound both read phases, avoid ambiguous SIGKILL, and assert canonical owner dedupe, exact pane tombstones, chained detach transfer, and restart alias restoration.",
       "commands": [
-        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
+        "pnpm dlx node@24 ./node_modules/vitest/vitest.mjs run --config config/vitest.config.ts src/main/agent-hooks/server-pane-authority.test.ts src/main/ipc/agent-hooks.test.ts src/main/ipc/agent-pane-authority-ownership.test.ts src/main/ipc/pty-management.test.ts src/main/persistence.test.ts src/renderer/src/store/slices/agent-pane-authority.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/renderer/src/store/slices/terminal-tab-retirement.test.ts src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/pty-descendant-termination.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host.test.ts src/main/providers/local-pty-provider.test.ts src/main/runtime/worktree-teardown.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-parked-close-retirement.spec.ts --workers=1",
         "pnpm run test:e2e -- tests/e2e/agent-descendant-process-kill.spec.ts --workers=1"
@@ -1989,11 +1989,18 @@
         "src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement.test.ts",
         "src/renderer/src/store/slices/terminal-tab-retirement-store.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts",
         "tests/e2e/terminal-parked-close-retirement.spec.ts",
         "tests/e2e/agent-descendant-process-kill.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "explicit close revokes the exact live recovery record when the tab exists, while PTY-exit-first plus a missing-tab close leaves it stale"
+          ]
+        },
         {
           "file": "tests/e2e/terminal-parked-close-retirement.spec.ts",
           "assertions": [
@@ -2711,11 +2718,13 @@
       "oracle": "Renderer-state tests assert provider-session ownership across preserved and queued panes. Main/provider contracts assert atomic attach-only adoption, stable host/worktree/tab/leaf identity, no fresh spawn on adoption, and safe paired-runtime cancellation. The Electron oracle creates inactive runtime-owned Codex and Setup PTYs plus an unrelated canary, seeds an exact resumable provider session, removes only the target renderer projections, and activates the workspace. It requires byte-stable handle, PTY, incarnation, tab, leaf, process PID, renderer graph, persisted binding, runtime id, graph epoch, and daemon PID across first mount and reload; PID-specific DOM keyboard I/O must remain live with one launch, zero resume argv, zero signals, zero interruption text, and no canary mutation.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/resume-sleeping-agent-session.test.ts src/main/providers/local-pty-provider.test.ts src/main/daemon/terminal-host.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/ipc/pty.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/lib/pane-manager/pane-fit.test.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
         "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/live-background-terminal-mount-authority.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
         "src/main/providers/local-pty-provider.test.ts",
         "src/main/daemon/terminal-host.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts",
@@ -2727,6 +2736,13 @@
         "tests/e2e/live-background-terminal-mount-authority.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "completed and explicitly retired workers retain no provider-resume authority on first workspace activation",
+            "the original tab, leaf, PTY, provider session, release state, replacement count, resume argv, restored banner, and unrelated canary remain exact across restart"
+          ]
+        },
         {
           "file": "src/renderer/src/lib/resume-sleeping-agent-session.test.ts",
           "assertions": [
@@ -7867,16 +7883,24 @@
       "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
       "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose"
       ],
       "testFiles": [
         "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
         "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
         "src/main/runtime/orchestration/worker-transcript-read.test.ts",
-        "src/renderer/src/lib/worker-terminal-takeover-report.test.ts"
+        "src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+          "assertions": [
+            "an already-exited succeeded Dispatch reaches released while its late exact close cannot revoke a missing tab's stale resume record"
+          ]
+        },
         {
           "file": "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
           "assertions": [
