@@ -5763,6 +5763,24 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     expect(second.pairingReach).toBe('network')
   })
 
+  it('noRotate selects the most-recent same-scope device, not the oldest surviving one', () => {
+    // Why: addDevice appends to the registry, so the most-recent same-scope entry sits at the end.
+    // A forward find() would return the oldest device and the URL would point at a stale token.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const older = registry.addDevice('Old server', 'runtime', 'network')
+    const newer = registry.addDevice('New server', 'runtime', 'network')
+    // Mark older as paired so the default-rotation lookup would skip it; noRotate ignores that.
+    registry.updateLastSeen(older.deviceId)
+    // With noRotate, the lookup must return the newer entry (last in the array).
+    const resolved = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
+      noRotate: true
+    })
+    expect(resolved.deviceId).toBe(newer.deviceId)
+    expect(resolved.token).toBe(newer.token)
+    expect(resolved.deviceId).not.toBe(older.deviceId)
+  })
+
   it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     // Why: registries written by older desktops only ever held network-reach grants; a missing field must
