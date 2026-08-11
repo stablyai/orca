@@ -11,6 +11,7 @@ export type CreateTerminalRequest = {
   activate?: boolean
   presentation?: 'background' | 'focused'
   surfaceOwner?: boolean
+  afterTabId?: string
   tabId?: string
   leafId?: string
   splitFromLeafId?: string
@@ -19,6 +20,8 @@ export type CreateTerminalRequest = {
 export type RequestTerminalCreateRequest = {
   requestId: string
   worktreeId?: string
+  afterTabId?: string
+  targetGroupId?: string
   command?: string
   title?: string
   activate?: boolean

@@ -2229,6 +2229,7 @@ describe('orchestration RPC methods', () => {
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
         startupAgent: 'codex',
         title: `worker-${task.id}`,
+        afterTabId: 'tab_coord',
         surfaceOwner: false
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(

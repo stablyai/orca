@@ -3841,6 +3841,7 @@ const api = {
         focus?: boolean
         presentation?: RuntimeTerminalPresentation
         surfaceOwner?: false
+        afterTabId?: string
         tabId?: string
         leafId?: string
         splitFromLeafId?: string
@@ -3867,6 +3868,7 @@ const api = {
           focus?: boolean
           presentation?: RuntimeTerminalPresentation
           surfaceOwner?: false
+          afterTabId?: string
           tabId?: string
           leafId?: string
           splitFromLeafId?: string
