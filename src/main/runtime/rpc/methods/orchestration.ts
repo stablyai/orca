@@ -19,6 +19,10 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import {
+  isTerminalSubmitDelivered,
+  type TerminalSubmitVerdict
+} from '../../../../shared/terminal-submit-verdict'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import { resolveRunScope } from './orchestration-run-scope'
 import { ORCHESTRATION_RUN_METHODS } from './orchestration-runs'
@@ -1308,21 +1312,30 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       })
 
       let injected = false
+      let submitVerdict: TerminalSubmitVerdict | undefined
       if (params.inject) {
         try {
-          await runtime.sendTerminalAgentPrompt(to, preamble)
-          injected = true
+          const send = await runtime.sendTerminalAgentPrompt(to, preamble, { submitVerdict: {} })
+          submitVerdict = send.submitVerdict
+          // Why not `send.accepted`: that only says the bytes reached the PTY. A swallowed Enter
+          // leaves the preamble sitting in the worker's composer, and a coordinator told the
+          // dispatch was injected would then wait on work that never starts.
+          injected = isTerminalSubmitDelivered(submitVerdict)
         } catch (err) {
           db.failDispatch(ctx.id, err instanceof Error ? err.message : String(err))
           throw err
         }
       }
 
+      // Why keep the dispatch context on an unproven submit: the preamble bytes are in the pane and
+      // a `queued` or `unknown` verdict may still become a real turn, so failing it here would
+      // discard work that is about to run. The caller reads submitVerdict and decides.
+      const injectionResult = { injected, ...(submitVerdict ? { submitVerdict } : {}) }
       // Why: returnPreamble is opt-in because the preamble is several hundred bytes most callers don't need in the response.
       if (params.returnPreamble) {
-        return { dispatch: ctx, injected, preamble }
+        return { dispatch: ctx, ...injectionResult, preamble }
       }
-      return { dispatch: ctx, injected }
+      return { dispatch: ctx, ...injectionResult }
     }
   }),
 
