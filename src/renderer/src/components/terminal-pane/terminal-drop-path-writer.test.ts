@@ -90,9 +90,32 @@ describe('terminal drop path writer', () => {
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ')
+    // Why: escaped paths already trail a space — do not add another before the
+    // raw image paste (`file.txt` + `shot.png` must not produce double spaces).
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
-      wrapTerminalBracketedPasteText(' /repo/shot.png')
+      wrapTerminalBracketedPasteText('/repo/shot.png')
+    )
+  })
+
+  it('does not double-space when an escaped image path precedes a raw image', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['/repo/a.png; touch /tmp/pwned #.png', '/repo/shot.png'],
+      targetShell: 'posix'
+    })
+
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, "'/repo/a.png; touch /tmp/pwned #.png' ")
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(
+      2,
+      wrapTerminalBracketedPasteText('/repo/shot.png')
     )
   })
 

@@ -66,8 +66,18 @@ export async function writeTerminalDropPathsToCapturedTarget({
     const needsSeparatorAfterImage = nextPath !== undefined && !nextPathIsRawPasteImage
     // Why: leading space so agent TUIs can tokenize the path after typed text
     // (`1234` + `/img.png` would otherwise fail Cursor's `[^\w@-]` boundary).
+    // Skip it when the previous path already wrote a trailing separator
+    // (escaped paths always do), or we'd get a double space before the image.
+    const previousPath = paths[index - 1]
+    const previousPathIsRawPasteImage =
+      previousPath !== undefined &&
+      isImageDropPath(previousPath) &&
+      canPasteImageDropPathRaw(previousPath, targetShell)
+    const needsLeadingSpaceBeforeImage = index === 0 || previousPathIsRawPasteImage
     const payload = pathIsRawPasteImage
-      ? `${wrapTerminalBracketedPasteText(` ${path}`)}${needsSeparatorAfterImage ? ' ' : ''}`
+      ? `${wrapTerminalBracketedPasteText(
+          `${needsLeadingSpaceBeforeImage ? ' ' : ''}${path}`
+        )}${needsSeparatorAfterImage ? ' ' : ''}`
       : `${shellEscapePath(path, targetShell)} `
     const writeResult = await runTerminalPasteOperationWithTimeout(
       () => writeTerminalPastePtyInput(liveTransport, payload),
