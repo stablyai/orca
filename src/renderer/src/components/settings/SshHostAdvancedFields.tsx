@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { SettingsSwitch } from './SettingsFormControls'
+import { formatSshRelayGraceDuration } from './ssh-relay-grace-duration'
 import type { EditingTarget } from './ssh-target-draft'
 import { translate } from '@/i18n/i18n'
 
@@ -29,6 +30,11 @@ export function SshHostAdvancedFields({
   disabled: boolean
   onFormChange: (updater: (prev: EditingTarget) => EditingTarget) => void
 }): React.JSX.Element {
+  // Why: the field takes seconds, so a milliseconds-shaped entry stays inside the
+  // 60..604800 bounds and reads as an ordinary number until it is spelled out.
+  const graceDuration = form.relayKeepAliveUntilReset
+    ? null
+    : formatSshRelayGraceDuration(Number(form.relayGracePeriodSeconds.trim() || Number.NaN))
   return (
     <Collapsible open={open} onOpenChange={onOpenChange} className="col-span-2 sm:col-span-2">
       <CollapsibleTrigger asChild>
@@ -167,6 +173,7 @@ export function SshHostAdvancedFields({
               max={MAX_SSH_RELAY_GRACE_PERIOD_SECONDS}
             />
             <p className="text-[11px] text-muted-foreground">
+              {graceDuration ? `≈ ${graceDuration} · ` : ''}
               {translate(
                 'auto.components.settings.SshTargetForm.1b19b00e93',
                 'Bounded timeouts must be between 60 seconds and 7 days.'

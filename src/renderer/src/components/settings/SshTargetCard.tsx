@@ -18,6 +18,7 @@ import {
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { formatSshRelayGraceDuration } from './ssh-relay-grace-duration'
 import { translate } from '@/i18n/i18n'
 
 // ── Shared status helpers ────────────────────────────────────────────
@@ -52,19 +53,6 @@ export function statusColor(status: SshConnectionStatus): string {
   }
 }
 
-function formatGraceDuration(seconds: number): string {
-  if (seconds % 86_400 === 0) {
-    return `${seconds / 86_400}d`
-  }
-  if (seconds % 3_600 === 0) {
-    return `${seconds / 3_600}h`
-  }
-  if (seconds % 60 === 0) {
-    return `${seconds / 60}m`
-  }
-  return `${seconds}s`
-}
-
 function formatTerminalPersistence(target: SshTarget): string {
   const graceSeconds = target.relayGracePeriodSeconds ?? DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
   if (graceSeconds === 0) {
@@ -73,7 +61,7 @@ function formatTerminalPersistence(target: SshTarget): string {
   return translate(
     'auto.components.settings.SshTargetCard.a883f5a00f',
     'terminal timeout: {{value0}}',
-    { value0: formatGraceDuration(graceSeconds) }
+    { value0: formatSshRelayGraceDuration(graceSeconds) ?? `${graceSeconds}s` }
   )
 }
 
