@@ -18655,13 +18655,23 @@ export class OrcaRuntimeService {
       // connectionId), so we never stamp local/ssh onto it — that would re-attribute a
       // real local project to the wrong host. Runtime is the only host that lost its
       // identity to the pre-#7018 path-only import and needs the backfill.
-      if (
+      const shouldAdoptRuntimeHost =
         existing.executionHostId == null &&
         parseExecutionHostId(executionHostId)?.kind === 'runtime'
-      ) {
+      const shouldPromoteToGit = kind === 'git' && isFolderRepo(existing)
+      if (shouldAdoptRuntimeHost || shouldPromoteToGit) {
+        const updates: Parameters<Store['updateRepo']>[1] = {}
+        if (shouldAdoptRuntimeHost) {
+          updates.executionHostId = executionHostId
+        }
+        if (shouldPromoteToGit) {
+          updates.kind = 'git'
+        }
         const adopted =
-          this.store.updateRepo(existing.id, { executionHostId }) ??
-          ({ ...existing, executionHostId } as Repo)
+          this.store.updateRepo(existing.id, updates) ?? ({ ...existing, ...updates } as Repo)
+        if (shouldPromoteToGit) {
+          await prepareLocalWorktreeRootForRepo(this.store, adopted)
+        }
         this.invalidateResolvedWorktreeCache()
         this.invalidateWorktreeScanCacheForRepo(existing.id)
         this.notifyReposChanged()

@@ -7310,6 +7310,45 @@ describe('OrcaRuntimeService', () => {
     expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
   })
 
+  it('promotes an existing folder after git init and explicit git re-add', async () => {
+    const tempRoot = await mkdtemp(join(tmpdir(), 'orca-runtime-folder-promotion-'))
+    const repos: Record<string, unknown>[] = []
+    const runtimeStore = {
+      ...store,
+      getRepos: () => [...repos] as never,
+      addRepo: (repo: Record<string, unknown>) => {
+        repos.push(repo)
+      },
+      getRepo: (id: string) => repos.find((repo) => repo.id === id) as never,
+      updateRepo: vi.fn((id: string, updates: Record<string, unknown>) => {
+        const index = repos.findIndex((repo) => repo.id === id)
+        if (index === -1) {
+          return null
+        }
+        repos[index] = { ...repos[index], ...updates }
+        return repos[index] as never
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    try {
+      const folder = await runtime.addRepo(tempRoot, 'folder')
+      execFileSync('git', ['init', '-q'], { cwd: tempRoot })
+      const readded = await runtime.addRepo(tempRoot, 'git')
+
+      expect(folder.kind).toBe('folder')
+      expect(readded).toMatchObject({ id: folder.id, kind: 'git' })
+      expect(repos).toHaveLength(1)
+      expect(runtimeStore.updateRepo).toHaveBeenCalledWith(folder.id, { kind: 'git' })
+      expect(prepareLocalWorktreeRootForRepoMock).toHaveBeenLastCalledWith(
+        runtimeStore,
+        expect.objectContaining({ id: folder.id, kind: 'git' })
+      )
+    } finally {
+      await rm(tempRoot, { recursive: true, force: true })
+    }
+  })
+
   it('prepares the runtime worktree root when adding a repo', async () => {
     const added: Record<string, unknown>[] = []
     const runtimeStore = {

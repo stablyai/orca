@@ -155,6 +155,33 @@ describe('repos:add with git worktrees', () => {
     expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
   })
 
+  it('promotes a tracked folder when the same path is re-added as git', async () => {
+    const folderRepo = {
+      ...trackedMainRepo(),
+      id: 'folder-repo-id',
+      path: '/Users/dev/projects/promoted',
+      kind: 'folder'
+    } as Repo
+    mockStore.getRepos.mockReturnValue([folderRepo])
+    mockStore.updateRepo.mockReturnValue({
+      ...folderRepo,
+      kind: 'git',
+      projectHostSetupMethod: 'imported-existing-folder'
+    })
+
+    const result = await callAdd({ path: folderRepo.path, kind: 'git' })
+
+    expect(isGitRepoMock).toHaveBeenCalledWith(folderRepo.path)
+    expect(result).toEqual({
+      repo: expect.objectContaining({ id: folderRepo.id, kind: 'git' })
+    })
+    expect(mockStore.updateRepo).toHaveBeenCalledWith(folderRepo.id, {
+      kind: 'git',
+      projectHostSetupMethod: 'imported-existing-folder'
+    })
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
   it('matches the tracked main checkout across path separator differences', async () => {
     mockStore.getRepos.mockReturnValue([
       { ...trackedMainRepo(), path: 'C:\\Users\\dev\\projects\\orca' } as Repo

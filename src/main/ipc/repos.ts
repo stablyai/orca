@@ -293,6 +293,15 @@ async function addLocalRepoFromPath(
     .getRepos()
     .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
   if (existing) {
+    if (repoKind === 'git' && isFolderRepo(existing)) {
+      const updated = store.updateRepo(existing.id, {
+        kind: 'git',
+        projectHostSetupMethod: existing.projectHostSetupMethod ?? 'imported-existing-folder'
+      })
+      if (updated) {
+        return { repo: updated, alreadyExisted: true }
+      }
+    }
     return { repo: existing, alreadyExisted: true }
   }
 
