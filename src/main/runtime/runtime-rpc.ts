@@ -878,14 +878,16 @@ export class OrcaRuntimeRpcServer {
     try {
       relayPairing = await relayProvider.createPairingRelay(device.deviceId)
     } catch (error) {
-      // Why: the raw provider error can carry request metadata or credentials — log only the validated code.
+      // Why: the raw provider error can carry request metadata or credentials — log only the validated codes.
       const relayFailure = mobileRelayMintFailureFromUnknown({
         stage: 'create_pairing_relay',
         error,
         fallbackCode: 'relay_mint_failed',
         fallbackMessage: 'Relay pairing invite request failed'
       })
-      console.warn(`[runtime] Failed to create Relay pairing invite: ${relayFailure.code}`)
+      console.warn(
+        `[runtime] Failed to create Relay pairing invite: ${relayFailure.code}${relayFailure.networkCode ? ` (${relayFailure.networkCode})` : ''}`
+      )
       return refuseAutomaticWithoutRelay(relayFailure)
     }
     const currentDevice = this.deviceRegistry?.getDevice(device.deviceId)

@@ -6,6 +6,7 @@ import type {
   SelectOrcaProfileOrgResult,
   SignOutCurrentOrcaProfileResult
 } from '../../shared/orca-profiles'
+import { networkTransportErrorCode } from '../../shared/network-transport-error-code'
 import { ensureActiveOrcaProfile } from './profile-index-store'
 import { getOrcaCloudAuthConfig, isOrcaCloudDevAuthEnabled } from './profile-cloud-auth-config'
 import {
@@ -95,10 +96,13 @@ export async function connectCurrentOrcaProfile(
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
       }
     }
+    // Why: the token exchange rejects with the bare message "fetch failed"; without the
+    // transport code the sign-in toast cannot distinguish an untrusted TLS chain from DNS.
+    const networkCode = networkTransportErrorCode(error)
     return {
       status: 'failed',
       auth: getCurrentOrcaProfileAuthStatus(userDataPath),
-      error: message
+      error: networkCode ? `${message} (${networkCode})` : message
     }
   }
 }
