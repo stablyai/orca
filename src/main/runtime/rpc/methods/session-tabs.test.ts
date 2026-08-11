@@ -626,29 +626,31 @@ describe('session tab RPC methods', () => {
     const listeners: ((snapshot: unknown) => void)[] = []
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listAllMobileSessionTabs: vi.fn(() => [
-        {
-          worktree: 'wt-1',
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        },
-        {
-          worktree: 'wt-2',
-          publicationEpoch: 'epoch-2',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]),
-      onMobileSessionTabsChanged: vi.fn((listener: (snapshot: unknown) => void) => {
+      subscribeAllMobileSessionTabs: vi.fn(async (listener: (snapshot: unknown) => void) => {
         listeners.push(listener)
-        return unsubscribe
+        return {
+          snapshots: [
+            {
+              worktree: 'wt-1',
+              publicationEpoch: 'epoch-1',
+              snapshotVersion: 1,
+              activeGroupId: null,
+              activeTabId: null,
+              activeTabType: null,
+              tabs: []
+            },
+            {
+              worktree: 'wt-2',
+              publicationEpoch: 'epoch-2',
+              snapshotVersion: 1,
+              activeGroupId: null,
+              activeTabId: null,
+              activeTabType: null,
+              tabs: []
+            }
+          ],
+          unsubscribe
+        }
       }),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
@@ -675,7 +677,7 @@ describe('session tab RPC methods', () => {
       expect.any(Function),
       'conn-1'
     )
-    expect(runtime.onMobileSessionTabsChanged).toHaveBeenCalledTimes(1)
+    expect(runtime.subscribeAllMobileSessionTabs).toHaveBeenCalledTimes(1)
     expect(messages.map((message) => JSON.parse(message).result)).toEqual([
       {
         type: 'snapshots',
@@ -691,8 +693,7 @@ describe('session tab RPC methods', () => {
   it('keeps duplicate all-session-tab subscribers independent on one connection', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listAllMobileSessionTabs: vi.fn(() => []),
-      onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
+      subscribeAllMobileSessionTabs: vi.fn(async () => ({ snapshots: [], unsubscribe: vi.fn() })),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })

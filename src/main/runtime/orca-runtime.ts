@@ -5694,6 +5694,25 @@ export class OrcaRuntimeService {
   async listAllMobileSessionTabs(
     clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabsResult[]> {
+    await this.refreshAllMobileSessionTabs()
+    return this.captureAllMobileSessionTabs(clientNavigationId)
+  }
+
+  async subscribeAllMobileSessionTabs(
+    listener: (snapshot: RuntimeMobileSessionTabsResult) => void,
+    clientNavigationId?: string
+  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; unsubscribe: () => void }> {
+    await this.refreshAllMobileSessionTabs()
+    const unsubscribe = this.onMobileSessionTabsChanged(listener, clientNavigationId)
+    try {
+      return { snapshots: this.captureAllMobileSessionTabs(clientNavigationId), unsubscribe }
+    } catch (error) {
+      unsubscribe()
+      throw error
+    }
+  }
+
+  private async refreshAllMobileSessionTabs(): Promise<void> {
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
@@ -5702,6 +5721,11 @@ export class OrcaRuntimeService {
     }
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     await this.refreshMobileSessionPtyRecords()
+  }
+
+  private captureAllMobileSessionTabs(
+    clientNavigationId?: string
+  ): RuntimeMobileSessionTabsResult[] {
     return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.clientSessionTabSelections.project(
         this.toMobileSessionTabsResult(snapshot),

@@ -86,6 +86,7 @@ import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { useRuntimeSessionMirrorEnvironmentKey } from './use-runtime-session-mirror-environment-key'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
+const WEB_SESSION_TABS_INITIAL_SNAPSHOT_TIMEOUT_MS = 15_000
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -93,6 +94,11 @@ type SessionTabsStreamEvent =
   | { type: 'end' }
 
 type SessionTabsListAllResult = {
+  snapshots: RuntimeMobileSessionTabsResult[]
+}
+
+type SessionTabsSnapshotsEvent = {
+  type: 'snapshots'
   snapshots: RuntimeMobileSessionTabsResult[]
 }
 
@@ -165,11 +171,44 @@ export type WebSessionTabsSyncState = Pick<
 > &
   Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
 
+function isRuntimeSessionTabsSnapshot(value: unknown): value is RuntimeMobileSessionTabsResult {
+  if (!value || typeof value !== 'object') {
+    return false
+  }
+  const candidate = value as Partial<RuntimeMobileSessionTabsResult>
+  return (
+    typeof candidate.worktree === 'string' &&
+    typeof candidate.publicationEpoch === 'string' &&
+    typeof candidate.snapshotVersion === 'number' &&
+    Array.isArray(candidate.tabs)
+  )
+}
+
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
     Boolean(value) &&
     typeof value === 'object' &&
-    Array.isArray((value as { snapshots?: unknown }).snapshots)
+    Array.isArray((value as { snapshots?: unknown }).snapshots) &&
+    (value as SessionTabsListAllResult).snapshots.every(isRuntimeSessionTabsSnapshot)
+  )
+}
+
+function isSessionTabsSnapshotsEvent(value: unknown): value is SessionTabsSnapshotsEvent {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    (value as { type?: unknown }).type === 'snapshots' &&
+    isSessionTabsListAllResult(value)
+  )
+}
+
+function isSessionTabsSnapshotEvent(
+  value: unknown
+): value is RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' } {
+  return (
+    isRuntimeSessionTabsSnapshot(value) &&
+    ((value as { type?: unknown }).type === 'snapshot' ||
+      (value as { type?: unknown }).type === 'updated')
   )
 }
 
@@ -2702,6 +2741,38 @@ export function applyWebSessionTabsStorePatch(
   }
 }
 
+function startAllWebSessionTabsSubscription(
+  args: Parameters<typeof window.api.runtimeEnvironments.subscribe>[0],
+  callbacks: Parameters<typeof window.api.runtimeEnvironments.subscribe>[1],
+  onStartError: (error: unknown) => void
+): () => void {
+  let disposed = false
+  let unsubscribe: (() => void) | null = null
+  void window.api.runtimeEnvironments
+    .subscribe(args, callbacks)
+    .then((handle) => {
+      if (disposed) {
+        handle.unsubscribe()
+        return
+      }
+      unsubscribe = handle.unsubscribe
+    })
+    .catch((error) => {
+      if (!disposed) {
+        onStartError(error)
+      }
+    })
+  return () => {
+    disposed = true
+    unsubscribe?.()
+  }
+}
+
+function startWebSessionTabsInitialFallbackTimer(onTimeout: () => void): () => void {
+  const timer = setTimeout(onTimeout, WEB_SESSION_TABS_INITIAL_SNAPSHOT_TIMEOUT_MS)
+  return () => clearTimeout(timer)
+}
+
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useRuntimeSessionMirrorEnvironmentKey()
@@ -2751,7 +2822,6 @@ export function useWebSessionTabsSync(): void {
 
     let disposed = false
     const unsubscribes: (() => void)[] = []
-    // Why: the stream's initial snapshot can land after first render, so a one-shot fetch makes initial parity deterministic.
     for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
       if (
         !shouldSyncAllRuntimeSessionTabs({
@@ -2761,73 +2831,105 @@ export function useWebSessionTabsSync(): void {
       ) {
         continue
       }
-      void window.api.runtimeEnvironments
-        .call({
-          selector: environmentId,
-          method: 'session.tabs.listAll',
-          params: {},
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision
-        })
-        .then(async (response: RuntimeRpcResponse<unknown>) => {
-          if (
-            disposed ||
-            getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-          ) {
-            return
+      let receivedInitialSnapshots = false
+      let requestedInitialFallback = false
+      let stopInitialFallbackTimer = (): void => {}
+      const pairingIsCurrent = (): boolean =>
+        getRuntimeEnvironmentRevision(environmentId) === expectedEnvironmentPairingRevision
+      const recoverAndApplySnapshots = async (
+        snapshots: RuntimeMobileSessionTabsResult[],
+        replayed: boolean
+      ): Promise<void> => {
+        const recovered = await Promise.all(
+          snapshots.map((snapshot) =>
+            recoverWebSessionTerminalOrphansBeforeApply(
+              useAppStore.getState(),
+              snapshot,
+              environmentId
+            )
+          )
+        )
+        if (disposed || !pairingIsCurrent()) {
+          return
+        }
+        const applicable = recovered.filter(
+          (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
+        )
+        if (replayed) {
+          for (const snapshot of applicable) {
+            acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
           }
-          if (response.ok === false) {
-            console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
-            return
-          }
-          const result = response.result
-          if (!isSessionTabsListAllResult(result)) {
-            console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
-            return
-          }
-          const recovered = await Promise.all(
-            result.snapshots.map((snapshot) =>
-              recoverWebSessionTerminalOrphansBeforeApply(
-                useAppStore.getState(),
-                snapshot,
-                environmentId
+        }
+        applyWebSessionTabsStorePatch((state) =>
+          applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
+        )
+      }
+      const requestInitialSnapshotFallback = (): void => {
+        if (
+          disposed ||
+          !pairingIsCurrent() ||
+          receivedInitialSnapshots ||
+          requestedInitialFallback
+        ) {
+          return
+        }
+        requestedInitialFallback = true
+        stopInitialFallbackTimer()
+        void window.api.runtimeEnvironments
+          .call({
+            selector: environmentId,
+            method: 'session.tabs.listAll',
+            params: {},
+            timeoutMs: WEB_SESSION_TABS_INITIAL_SNAPSHOT_TIMEOUT_MS,
+            expectedEnvironmentPairingRevision
+          })
+          .then((response: RuntimeRpcResponse<unknown>) => {
+            if (disposed || !pairingIsCurrent()) {
+              return
+            }
+            if (response.ok === false) {
+              console.warn(
+                '[web-session-tabs-sync] fallback listAll failed:',
+                response.error.message
               )
-            )
-          )
-          if (disposed) {
-            return
-          }
-          const applicable = recovered.filter(
-            (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
-          )
-          applyWebSessionTabsStorePatch((state) =>
-            applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
-          )
-        })
-        .catch((error) => {
-          if (!disposed) {
-            console.warn(
-              '[web-session-tabs-sync] failed to load initial session tabs:',
-              error instanceof Error ? error.message : String(error)
-            )
-          }
-        })
+              return
+            }
+            if (!isSessionTabsListAllResult(response.result)) {
+              console.warn('[web-session-tabs-sync] fallback listAll returned an invalid payload')
+              return
+            }
+            void recoverAndApplySnapshots(response.result.snapshots, false).catch((error) => {
+              if (!disposed) {
+                console.warn('[web-session-tabs-sync] fallback snapshot recovery failed:', error)
+              }
+            })
+          })
+          .catch((error) => {
+            if (!disposed && pairingIsCurrent()) {
+              console.warn(
+                '[web-session-tabs-sync] failed to load fallback session tabs:',
+                error instanceof Error ? error.message : String(error)
+              )
+            }
+          })
+      }
+      stopInitialFallbackTimer = startWebSessionTabsInitialFallbackTimer(
+        requestInitialSnapshotFallback
+      )
+      unsubscribes.push(stopInitialFallbackTimer)
 
-      void window.api.runtimeEnvironments
-        .subscribe(
+      unsubscribes.push(
+        startAllWebSessionTabsSubscription(
           {
             selector: environmentId,
             method: 'session.tabs.subscribeAll',
             params: {},
-            timeoutMs: 15_000,
+            timeoutMs: WEB_SESSION_TABS_INITIAL_SNAPSHOT_TIMEOUT_MS,
             expectedEnvironmentPairingRevision
           },
           {
             onResponse: (response: RuntimeRpcResponse<unknown>) => {
-              if (
-                disposed ||
-                getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-              ) {
+              if (disposed || !pairingIsCurrent()) {
                 return
               }
               if (response.ok === false) {
@@ -2835,44 +2937,27 @@ export function useWebSessionTabsSync(): void {
                   '[web-session-tabs-sync] global subscription failed:',
                   response.error.message
                 )
+                requestInitialSnapshotFallback()
                 return
               }
-              const event = response.result as SessionTabsStreamEvent
+              const event = response.result
               const replayed = isRuntimeSubscriptionReplayResponse(response)
-              if (event.type === 'snapshots') {
-                void Promise.all(
-                  event.snapshots.map((snapshot) =>
-                    recoverWebSessionTerminalOrphansBeforeApply(
-                      useAppStore.getState(),
-                      snapshot,
-                      environmentId
-                    )
-                  )
-                )
-                  .then((recovered) => {
-                    if (!disposed) {
-                      const applicable = recovered.filter(
-                        (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
-                      )
-                      if (replayed) {
-                        for (const snapshot of applicable) {
-                          acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
-                        }
-                      }
-                      applyWebSessionTabsStorePatch((state) =>
-                        applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
-                      )
-                    }
-                  })
-                  .catch((error) => {
-                    if (!disposed) {
-                      console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
-                    }
-                  })
+              if (isSessionTabsSnapshotsEvent(event)) {
+                receivedInitialSnapshots = true
+                stopInitialFallbackTimer()
+                void recoverAndApplySnapshots(event.snapshots, replayed).catch((error) => {
+                  if (!disposed) {
+                    console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
+                  }
+                })
                 return
               }
-              if (event.type !== 'snapshot' && event.type !== 'updated') {
+              if (!isSessionTabsSnapshotEvent(event)) {
+                requestInitialSnapshotFallback()
                 return
+              }
+              if (!receivedInitialSnapshots) {
+                requestInitialSnapshotFallback()
               }
               void recoverWebSessionTerminalOrphansBeforeApply(
                 useAppStore.getState(),
@@ -2896,25 +2981,27 @@ export function useWebSessionTabsSync(): void {
                 })
             },
             onError: (error) => {
+              if (disposed || !pairingIsCurrent()) {
+                return
+              }
               console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+              requestInitialSnapshotFallback()
+            },
+            onClose: () => {
+              requestInitialSnapshotFallback()
+            }
+          },
+          (error) => {
+            if (!disposed) {
+              console.warn(
+                '[web-session-tabs-sync] failed to subscribe globally:',
+                error instanceof Error ? error.message : String(error)
+              )
+              requestInitialSnapshotFallback()
             }
           }
         )
-        .then((handle) => {
-          if (disposed) {
-            handle.unsubscribe()
-            return
-          }
-          unsubscribes.push(handle.unsubscribe)
-        })
-        .catch((error) => {
-          if (!disposed) {
-            console.warn(
-              '[web-session-tabs-sync] failed to subscribe globally:',
-              error instanceof Error ? error.message : String(error)
-            )
-          }
-        })
+      )
     }
 
     return () => {
