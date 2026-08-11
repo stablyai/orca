@@ -346,4 +346,66 @@ describe('SkillUpdateRunner', () => {
     runner.acknowledge()
     expect(runner.getState()).toEqual({ state: 'idle' })
   })
+
+  it('falls back to the next npx candidate when the first dies with 126', async () => {
+    // A dead asdf/mise shim (missing declared node version) exits 126 after
+    // passing the X_OK probe; the runner must retry the next PATH candidate.
+    const children: FakeChild[] = []
+    const spawnCalls: { command: string }[] = []
+    const runner = new SkillUpdateRunner({
+      now: () => 1000,
+      resolveCommandCandidates: () => ['/home/user/.asdf/shims/npx', '/usr/local/bin/npx'],
+      rescanOutdatedNames: async () => [],
+      killTree: async (_pid, killRoot) => killRoot(),
+      onState: () => {},
+      spawnProcess: ((command: string) => {
+        spawnCalls.push({ command })
+        const child = new FakeChild()
+        children.push(child)
+        return child as never
+      }) as never
+    })
+
+    runner.start(['orca-cli'])
+    children[0].emit('close', 126)
+    await flush()
+
+    expect(spawnCalls.map((call) => call.command)).toEqual([
+      '/home/user/.asdf/shims/npx',
+      '/usr/local/bin/npx'
+    ])
+    expect(runner.getState().state).toBe('running')
+  })
+
+  it('settles as an error when the last npx candidate also exits 126', async () => {
+    const children: FakeChild[] = []
+    const runner = new SkillUpdateRunner({
+      now: () => 1000,
+      resolveCommandCandidates: () => ['/home/user/.asdf/shims/npx', '/usr/local/bin/npx'],
+      rescanOutdatedNames: async () => ['orca-cli'],
+      killTree: async (_pid, killRoot) => killRoot(),
+      onState: () => {},
+      spawnProcess: (() => {
+        const child = new FakeChild()
+        children.push(child)
+        return child as never
+      }) as never
+    })
+
+    runner.start(['orca-cli'])
+    children[0].emit('close', 126)
+    await flush()
+    children[1].emit('close', 126)
+    await flush()
+
+    const run = runner.getState()
+    expect(run.state).toBe('error')
+    expect(run.state === 'error' && run.message).toBe('skills update exited with code 126')
+  })
+
+  it('uses the single resolveCommand result when no candidates are injected', () => {
+    const { runner, spawnCalls } = makeRunner({ resolveCommand: () => '/usr/local/bin/npx' })
+    runner.start(['orca-cli'])
+    expect(spawnCalls[0].command).toBe('/usr/local/bin/npx')
+  })
 })

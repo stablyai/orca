@@ -29,6 +29,10 @@ export const CANCEL_RELEASE_TIMEOUT_MS = 12_000
 export type SkillUpdateRunnerDeps = {
   spawnProcess?: typeof spawn
   resolveCommand?: (commandName: string) => string
+  /** Ordered fallback list for a command; tried in order when the previous
+   *  candidate dies with exit 126 (a version-manager shim whose declared
+   *  node version is not installed). */
+  resolveCommandCandidates?: (commandName: string) => string[]
   /** Returns the subset of `names` that did not land, re-read from disk. */
   rescanOutdatedNames?: (names: string[]) => Promise<string[]>
   killTree?: (pid: number, killRoot: () => void) => Promise<void>
@@ -37,6 +41,12 @@ export type SkillUpdateRunnerDeps = {
   now?: () => number
   onState?: (run: SkillUpdateRun) => void
 }
+
+// Why: asdf/mise shims pass an accessSync(X_OK) probe but exec their declared
+// node version on launch; when that version is not installed the shim exits
+// 126. Retrying the next PATH candidate once turns a permanently broken
+// update into a working one (issue #13807).
+const DEAD_SHIM_EXIT_CODE = 126
 
 function stripAnsi(value: string): string {
   return value.replace(ANSI_RE, '').replace(/\r(?!\n)/g, '\n')
@@ -90,19 +100,20 @@ export class SkillUpdateRunner {
     }
 
     const resolveCommand = this.deps.resolveCommand ?? ((name: string) => resolveCliCommand(name))
-    const spawnProcess = this.deps.spawnProcess ?? spawn
-    const npxCommand = resolveCommand('npx')
+    const candidates =
+      this.deps.resolveCommandCandidates?.(canonicalNames[0] ? 'npx' : 'npx') ??
+      [resolveCommand('npx')]
     const npxArgs = ['--yes', 'skills', 'update', ...canonicalNames, '--global', '-y']
 
-    let spawnCmd: string
-    let spawnArgs: string[]
+    // Why: the first candidate is validated synchronously so the caller keeps
+    // the `started: false, reason: 'unsafe-command-path'` contract instead of
+    // learning about a bad path only after the run has already been published
+    // as running (the cmd.exe rail rejects paths containing &, ^, etc.).
+    let firstSpawn: { spawnCmd: string; spawnArgs: string[] } | null = null
     try {
       const buildSpawnArgs = this.deps.buildSpawnArgs ?? getSpawnArgsForWindows
-      ;({ spawnCmd, spawnArgs } = buildSpawnArgs(npxCommand, npxArgs))
+      firstSpawn = buildSpawnArgs(candidates[0] ?? 'npx', npxArgs)
     } catch {
-      // Why: the names are already canonical here, so this is the cmd.exe rail
-      // rejecting the resolved npx *path*. Publishing the failure keeps the dialog
-      // honest; a bare `started: false` would leave the button dead and silent.
       this.runToken += 1
       this.settling = false
       this.publish({
@@ -112,8 +123,8 @@ export class SkillUpdateRunner {
         output: '',
         failedNames: canonicalNames,
         message:
-          `Could not run ${npxCommand} safely from this location: its path contains one of ` +
-          `${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL}, which cmd.exe would reinterpret.`
+          `Could not run ${candidates[0] ?? 'npx'} safely from this location: its path contains ` +
+          `one of ${WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL}, which cmd.exe would reinterpret.`
       })
       return { started: false, reason: 'unsafe-command-path' }
     }
@@ -122,6 +133,39 @@ export class SkillUpdateRunner {
     const token = ++this.runToken
     this.settling = false
     this.publish({ state: 'running', names: canonicalNames, startedAt, output: '' })
+    this.spawnAttempt(token, canonicalNames, candidates, 0, npxArgs, firstSpawn)
+    return { started: true }
+  }
+
+  private spawnAttempt(
+    token: number,
+    canonicalNames: string[],
+    candidates: string[],
+    index: number,
+    npxArgs: string[],
+    prebuilt?: { spawnCmd: string; spawnArgs: string[] }
+  ): void {
+    if (token !== this.runToken || this.run.state !== 'running') {
+      return
+    }
+    const spawnProcess = this.deps.spawnProcess ?? spawn
+    const npxCommand = candidates[index] ?? candidates.at(-1) ?? 'npx'
+
+    let spawnCmd: string
+    let spawnArgs: string[]
+    if (prebuilt) {
+      ;({ spawnCmd, spawnArgs } = prebuilt)
+    } else {
+      try {
+        const buildSpawnArgs = this.deps.buildSpawnArgs ?? getSpawnArgsForWindows
+        ;({ spawnCmd, spawnArgs } = buildSpawnArgs(npxCommand, npxArgs))
+      } catch {
+        // A later candidate hitting the cmd.exe rail is a hard failure — the
+        // first one already passed, so this is an unusual path; surface it.
+        this.settle(token, canonicalNames, `Could not run ${npxCommand} safely from this location`)
+        return
+      }
+    }
 
     const child = spawnProcess(spawnCmd, spawnArgs, {
       // Why: stdin ignored keeps `process.stdin.isTTY` falsy in the child, which
@@ -173,14 +217,21 @@ export class SkillUpdateRunner {
     })
     child.on('close', (code) => {
       drain()
+      // Why: 126 is the POSIX "found but not executable" exit — version-manager
+      // shims (asdf/mise) with a missing declared node version die with it. The
+      // shim passed our X_OK probe, so the only way to recover is to try the
+      // next PATH candidate once (issue #13807).
+      if (code === DEAD_SHIM_EXIT_CODE && index + 1 < candidates.length) {
+        this.child = null
+        this.spawnAttempt(token, canonicalNames, candidates, index + 1, npxArgs)
+        return
+      }
       this.settle(
         token,
         canonicalNames,
         code === 0 ? null : `skills update exited with code ${code}`
       )
     })
-
-    return { started: true }
   }
 
   private settle(token: number, names: string[], spawnError: string | null): void {
