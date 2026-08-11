@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest'
-
+import type { PRComment } from './types'
+import { createBotAuthorOverrideSet } from './pr-bot-author-overrides'
 import {
-  createBotAuthorOverrideSet,
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
   isBotPRComment
 } from './pr-comment-audience'
-import type { PRComment } from '../../../shared/types'
 
 function comment(overrides: Partial<PRComment>): PRComment {
   return {
@@ -21,9 +20,17 @@ function comment(overrides: Partial<PRComment>): PRComment {
 }
 
 describe('pr comment audience filtering', () => {
-  it('uses GitHub bot metadata before falling back to login suffixes', () => {
-    expect(isBotPRComment(comment({ author: 'chatgpt-codex-connector', isBot: true }))).toBe(true)
+  it('classifies provider metadata and automation logins', () => {
+    expect(isBotPRComment(comment({ author: 'alice', isBot: true }))).toBe(true)
     expect(isBotPRComment(comment({ author: 'github-actions[bot]' }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'renovate-bot' }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'preview-automation' }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'qodo-ai-reviewer', isBot: false }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'coderabbitai', isBot: false }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'sonarcloud' }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'codium-ai-reviewer' }))).toBe(true)
+    expect(isBotPRComment(comment({ author: 'octocat' }))).toBe(false)
+    expect(isBotPRComment(comment({ author: 'robotics-dev' }))).toBe(false)
     expect(isBotPRComment(comment({ author: 'human-botany' }))).toBe(false)
   })
 
@@ -35,6 +42,7 @@ describe('pr comment audience filtering', () => {
     ]
 
     expect(getPRCommentAudienceCounts(comments)).toEqual({ all: 3, human: 1, bot: 2 })
+    expect(filterPRCommentsByAudience(comments, 'all')).toBe(comments)
     expect(filterPRCommentsByAudience(comments, 'human').map((item) => item.id)).toEqual([1])
     expect(filterPRCommentsByAudience(comments, 'bot').map((item) => item.id)).toEqual([2, 3])
   })

@@ -76,6 +76,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
 import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -125,7 +126,7 @@ function getRuntimeRepoTarget(
   if (target.kind !== 'environment') {
     return null
   }
-  const repo = state.repos.find((candidate) => candidate.path === repoPath)
+  const repo = getGitHubRepoLookupIndex(state.repos).findByPath(repoPath)
   return repo ? { target, repo } : null
 }
 
@@ -249,9 +250,9 @@ function findRepoForGitHubOwner(
   repoId: string | undefined,
   repoPath: string
 ): Repo | undefined {
-  return (state.repos ?? []).find((candidate) =>
-    repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
-  )
+  return state.repos
+    ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
+    : undefined
 }
 
 function getGitHubFocusedRepoOwnerHostId(
@@ -962,13 +963,7 @@ function getPRChecksCacheTtl(entry: CacheEntry<PRCheckDetail[]> | undefined): nu
 }
 
 function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    const worktree = worktrees.find((w) => w.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-  return null
+  return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
 }
 
 type WorktreeLookupEntry = {
@@ -981,9 +976,12 @@ type WorktreeLookupIndex = {
   repoHostIdsByRepoId: Map<string, Set<string>>
 }
 
+const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
+const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
+
 function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
+  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
@@ -1007,11 +1005,29 @@ function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   return { byId, repoHostIdsByRepoId }
 }
 
+// Why: worktree/owner updates replace these snapshots, while weak ownership avoids retaining superseded state.
+const worktreeLookupIndexes = new WeakMap<
+  AppState['worktreesByRepo'],
+  { repos: AppState['repos']; index: WorktreeLookupIndex }
+>()
+
+function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
+  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const repos = state.repos ?? EMPTY_WORKTREE_REPOS
+  const cached = worktreeLookupIndexes.get(worktreesByRepo)
+  if (cached && cached.repos === repos) {
+    return cached.index
+  }
+  const index = buildWorktreeLookupIndex(state)
+  worktreeLookupIndexes.set(worktreesByRepo, { repos, index })
+  return index
+}
+
 function findUniqueWorktreeById(
   state: AppState,
   worktreeId: string,
   executionHostId?: string,
-  lookupIndex = buildWorktreeLookupIndex(state)
+  lookupIndex = getWorktreeLookupIndex(state)
 ): Worktree | null {
   const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
   // Why: metadata persistence is keyed only by worktree id; an id owned by two hosts is non-unique so destructive clears fail closed.
@@ -1130,9 +1146,10 @@ function shouldApplyBranchMismatchedLinkedPRClear(args: {
 function buildPRRefreshCandidate(
   state: AppState,
   worktree: Worktree,
-  repoPath?: string
+  repoPath?: string,
+  repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = state.repos.find((r) => r.id === worktree.repoId)
+  const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
   if (!repo) {
     return null
   }
@@ -2989,9 +3006,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repoLookup = getGitHubRepoLookupIndex(get().repos)
+    const repo = options?.repoId
+      ? repoLookup.findById(options.repoId)
+      : repoLookup.findByPath(repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -4415,22 +4433,33 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   refreshAllGitHub: () => {
     // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
-    set((s) => ({
-      commentsCache: {},
-      prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache),
-      checksCache: evictStaleEntries(s.checksCache),
-      workItemsCache: evictStaleEntries(s.workItemsCache),
-      projectViewCache: evictStaleEntries(s.projectViewCache),
-      prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
-    }))
+    set((s) => {
+      const next = {
+        commentsCache: Object.keys(s.commentsCache).length === 0 ? s.commentsCache : {},
+        prCache: evictStaleEntries(s.prCache),
+        issueCache: evictStaleEntries(s.issueCache),
+        checksCache: evictStaleEntries(s.checksCache),
+        workItemsCache: evictStaleEntries(s.workItemsCache),
+        projectViewCache: evictStaleEntries(s.projectViewCache),
+        prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
+      }
+      // Why: each eviction helper returns its input untouched when nothing changed, so an
+      // unchanged sweep can return `s` and avoid waking every subscriber on window resume.
+      return next.commentsCache === s.commentsCache &&
+        next.prCache === s.prCache &&
+        next.issueCache === s.issueCache &&
+        next.checksCache === s.checksCache &&
+        next.workItemsCache === s.workItemsCache &&
+        next.projectViewCache === s.projectViewCache &&
+        next.prRefreshStates === s.prRefreshStates
+        ? s
+        : next
+    })
 
     // Why: don't prune prRequestGenerations here — deleting a live generation makes its response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
-    const now = Date.now()
-    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
     const rawCardProps = cardProps as readonly string[]
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
@@ -4442,10 +4471,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       (state.settings?.experimentalNewWorktreeCardStyle === true
         ? cardProps.includes('status')
         : cardProps.includes('pr') || rawCardProps.includes('ci'))
+    if (!shouldRefreshPRs && !shouldRefreshIssues) {
+      return
+    }
+
+    const now = Date.now()
+    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
+    const repoLookup = getGitHubRepoLookupIndex(state.repos)
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
-        const repo = state.repos.find((r) => r.id === wt.repoId)
+        const repo = repoLookup.findById(wt.repoId)
         if (!repo) {
           continue
         }
@@ -4463,7 +4499,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
           const prEntry = state.prCache[prKey]
           if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
-            const candidate = buildPRRefreshCandidate(state, wt)
+            const candidate = buildPRRefreshCandidate(state, wt, undefined, repo)
             if (candidate) {
               stalePRCandidates.push({
                 candidate,

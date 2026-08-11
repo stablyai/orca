@@ -11569,37 +11569,6 @@
           "9f47f345a4": "それほど時間はかかりません！",
           "e4726b2d50": "オンボーディングをスキップしますか?"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "ツアーに参加する",
-          "60c5576353": "出口ツアー"
-        },
-        "RepoStep": {
-          "e8fdb36338": "リポジトリをスキャンしています。クリックして停止します。",
-          "b7c4da0504": "SSH? 「設定」でホストをセットアップする",
-          "c33b190ca3": "ホストパスのみ",
-          "7b679207e4": "ワークスペース",
-          "24c7c8696c": "ホストパスにクローンを作成します",
-          "7932e95f68": "クローン",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "HTTPS または SSH URL を貼り付けます。",
-          "132425a3e3": "リポジトリのクローンを作成する",
-          "6558d50c69": "一度に多くのリポジトリをインポートしたいですか?親フォルダーを選択します。",
-          "831524961f": "git repo かどうかに関係なく、任意のローカルディレクトリを選択します。",
-          "f4e9c8dcf8": "フォルダーを参照する",
-          "e8214aa632": "フォルダーとして開く",
-          "3863747c56": "Git プロジェクトの追加",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "ホスト上に存在するパスを入力します。",
-          "8cab104e3c": "ホストプロジェクトを開く",
-          "2d20200346": "リポジトリのインポート",
-          "27ca610db1": "戻る",
-          "cecd6593fa": "スキャンしたフォルダー:",
-          "c7af322fc3": "スキャンを停止する",
-          "c3d9d44ca2": "スキャンの停止",
-          "cf23006ba7": "選択したホスト",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}このフォルダー内で {{value1}} {{value2}} が見つかりました。"
-        },
         "ThemeStep": {
           "a4b254779d": "macOS の Option キー",
           "6c51398942": "マウス",
@@ -11627,8 +11596,6 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "SSH 設定を開けませんでした",
-              "fd74e7558e": "クローン作成に失敗しました",
               "52acfbef51": "進行状況を保存できませんでした"
             }
           }
@@ -12108,43 +12075,6 @@
             "cda56c5915": "メモ / launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "思考中…",
-            "ef8b164dd1": "review src/auth",
-            "952d3ddd9a": "セッションが開始されました",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "12 個のテストを実行する",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "分割可能なターミナル",
-            "2a7cfc82c8": "GH #1842 にリンク",
-            "3822d8d14b": "fix/worktree-picker-truncates",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "開始",
-            "c1f28c03b2": "ワークツリーピッカーが切り捨てる",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "GitHub と Linear タスク",
-            "5171768676": "3 つの Agent を調整する",
-            "cebc7769cd": "認証フローを再設計する",
-            "e44269e97d": "Agent のオーケストレーション",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "請求 Webhook をリファクタリングする",
-            "9c812e0d7c": "CIパイプラインを高速化する",
-            "3c4adfd821": "ログイン競合状態を修正",
-            "56a0271428": "隔離されたワークスペース",
-            "ef737dcee1": "GitHub と Linear タスク",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "複数の作業を同時に進めましょう。各ワークスペースはブランチ、ターミナル、Agent の活動をまとめます。",
-            "70aa182266": "目標を任せて離れます。コーディネーター Agent が作業を分担し、並列で PR を出します。",
-            "f10c14dd9d": "タブ切り替えは不要。GitHub または Linear のバックログから選んで、ワンクリックでワークスペースを開始します。",
-            "5d6ee181b6": "ワークスペースを開いてターミナルに戻り、テスト、ログ、Agent 用にペインを分割します。"
-          },
           "FeatureWallBody": {
             "25ec5356d6": "設定"
           },
@@ -12387,11 +12317,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "実行中"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",

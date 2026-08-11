@@ -1,6 +1,3 @@
-// Relative timestamp for PR comments (ISO string in, "Xm/Xh/Xd/Xmo/Xy" out),
-// mirroring the desktop formatRelativeTime so the timeline reads the same. Pure +
-// unit-testable; nowMs is passed in (Date.now() is unavailable in some contexts).
 export function formatPrCommentRelativeTime(iso: string, nowMs: number): string {
   const ts = Date.parse(iso)
   if (Number.isNaN(ts)) {

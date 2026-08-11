@@ -11589,37 +11589,6 @@
           "9f47f345a4": "不会花很长时间的！",
           "e4726b2d50": "跳过入门引导？"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "开始导览",
-          "60c5576353": "退出导览"
-        },
-        "RepoStep": {
-          "e8fdb36338": "扫描存储库。单击停止。",
-          "b7c4da0504": "SSH？在“设置”中设置主机",
-          "c33b190ca3": "仅服务器路径",
-          "7b679207e4": "工作区",
-          "24c7c8696c": "克隆到服务器路径",
-          "7932e95f68": "克隆",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "粘贴 HTTPS 或 SSH URL。",
-          "132425a3e3": "克隆一个仓库",
-          "6558d50c69": "想要一次导入多个仓库？选择父文件夹。",
-          "831524961f": "选择任何本地目录，无论是否为 git 仓库。",
-          "f4e9c8dcf8": "浏览文件夹",
-          "e8214aa632": "作为文件夹打开",
-          "3863747c56": "添加 Git 项目",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "输入运行时服务器上存在的路径。",
-          "8cab104e3c": "打开服务器项目",
-          "2d20200346": "导入存储库",
-          "27ca610db1": "返回",
-          "cecd6593fa": "扫描的文件夹：",
-          "c7af322fc3": "停止扫描",
-          "c3d9d44ca2": "停止扫描",
-          "cf23006ba7": "运行时服务器",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}在此文件夹中找到{{value1}} {{value2}}。"
-        },
         "ThemeStep": {
           "a4b254779d": "macOS Option 键",
           "6c51398942": "鼠标",
@@ -11647,8 +11616,6 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "无法打开 SSH 设置",
-              "fd74e7558e": "克隆失败",
               "52acfbef51": "无法保存进度"
             }
           }
@@ -12128,43 +12095,6 @@
             "cda56c5915": "笔记/launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "思维...",
-            "ef8b164dd1": "审查 src/auth",
-            "952d3ddd9a": "会话开始",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "运行 12 项测试",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "可拆分终端",
-            "2a7cfc82c8": "链接到 GH #1842",
-            "3822d8d14b": "修复/worktree-picker-截断",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "开始",
-            "c1f28c03b2": "工作树选择器截断",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "GitHub 和 Linear 任务",
-            "5171768676": "协调3个智能体",
-            "cebc7769cd": "重新设计身份验证流程",
-            "e44269e97d": "智能体编排",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "重构计费 Webhook",
-            "9c812e0d7c": "加速 CI 管道",
-            "3c4adfd821": "修复登录竞争条件",
-            "56a0271428": "独立的工作区",
-            "ef737dcee1": "GitHub 和 Linear 任务",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "同时推进多项工作。每个工作区都会把分支、终端和智能体活动放在一起。",
-            "70aa182266": "交给一个目标后就可以离开。协调智能体会分发工作并并行交付 PR。",
-            "f10c14dd9d": "跳过来回切换标签页。从 GitHub 或 Linear 待办中挑选任务，一键启动工作区。",
-            "5d6ee181b6": "打开任意工作区即可回到它的终端，然后拆分窗格运行测试、日志和智能体。"
-          },
           "FeatureWallBody": {
             "25ec5356d6": "设置"
           },
@@ -12407,11 +12337,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "处理中"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",

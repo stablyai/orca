@@ -11569,37 +11569,6 @@
           "9f47f345a4": "오래 걸리지 않을 거예요!",
           "e4726b2d50": "온보딩을 건너뛰시겠습니까?"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "둘러보기",
-          "60c5576353": "투어 종료"
-        },
-        "RepoStep": {
-          "e8fdb36338": "repos를 스캔하는 중입니다. 중지하려면 클릭하세요.",
-          "b7c4da0504": "SSH? 설정에서 호스트를 설정하세요",
-          "c33b190ca3": "호스트 경로만",
-          "7b679207e4": "워크스페이스",
-          "24c7c8696c": "서버 경로로 복제",
-          "7932e95f68": "클론",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "HTTPS 또는 SSH URL을 붙여넣습니다.",
-          "132425a3e3": "repo 복제",
-          "6558d50c69": "한 번에 여러 repos를 가져오고 싶으신가요? 상위 폴더를 선택하세요.",
-          "831524961f": "로컬 디렉터리(git repo 여부)를 선택하세요.",
-          "f4e9c8dcf8": "폴더 찾아보기",
-          "e8214aa632": "폴더로 열기",
-          "3863747c56": "Git 프로젝트 추가",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "선택한 호스트에 존재하는 경로를 입력하세요.",
-          "8cab104e3c": "서버 프로젝트 열기",
-          "2d20200346": "repos 가져오기",
-          "27ca610db1": "뒤로",
-          "cecd6593fa": "스캔한 폴더:",
-          "c7af322fc3": "스캔 중지",
-          "c3d9d44ca2": "스캔 중지",
-          "cf23006ba7": "선택한 호스트",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}이 폴더에서 {{value1}} {{value2}}을(를) 찾았습니다."
-        },
         "ThemeStep": {
           "a4b254779d": "macOS 옵션 키",
           "6c51398942": "마우스",
@@ -11627,8 +11596,6 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "SSH 설정을 열 수 없습니다.",
-              "fd74e7558e": "복제 실패",
               "52acfbef51": "진행 상황을 저장할 수 없습니다."
             }
           }
@@ -12108,43 +12075,6 @@
             "cda56c5915": "메모 / launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "생각 중...",
-            "ef8b164dd1": "src/auth 리뷰",
-            "952d3ddd9a": "세션이 시작되었습니다",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "12개 테스트 실행",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "분할 가능한 terminal",
-            "2a7cfc82c8": "GH #1842와 연결됨",
-            "3822d8d14b": "fix/worktree-picker-truncates",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "시작",
-            "c1f28c03b2": "작업 트리 선택 도구가 잘립니다.",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "GitHub 및 Linear 작업",
-            "5171768676": "agents 3개 조율",
-            "cebc7769cd": "인증 흐름 재설계",
-            "e44269e97d": "Agent 오케스트레이션",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "청구 웹훅 리팩터링",
-            "9c812e0d7c": "CI 파이프라인 속도 향상",
-            "3c4adfd821": "로그인 경쟁 조건 수정",
-            "56a0271428": "격리된 워크스페이스",
-            "ef737dcee1": "GitHub 및 Linear 작업",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "여러 작업을 동시에 진행하세요. 각 워크스페이스는 브랜치, terminal, agent 활동을 함께 보관합니다.",
-            "70aa182266": "목표를 넘겨두고 자리를 비우세요. 코디네이터 agent가 작업을 나누어 병렬 PR을 만듭니다.",
-            "f10c14dd9d": "탭을 오갈 필요 없이 GitHub 또는 Linear 백로그에서 선택하고 한 번의 클릭으로 워크스페이스를 시작하세요.",
-            "5d6ee181b6": "워크스페이스를 열어 terminal로 돌아가고, 테스트와 로그, agents 용으로 패널을 나누세요."
-          },
           "FeatureWallBody": {
             "25ec5356d6": "설정"
           },
@@ -12387,11 +12317,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "작업 중"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",

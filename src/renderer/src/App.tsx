@@ -745,14 +745,7 @@ function App(): React.JSX.Element {
   const featureTipsSuppressedByOnboardingThisSessionRef = useRef(false)
   const unmountAddRepoDialogTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
-  const [onboardingSettingsDetour, setOnboardingSettingsDetour] = useState(false)
   const shouldRenderOnboarding = onboarding !== null && shouldShowOnboarding(onboarding)
-  const onboardingSettingsDetourActive =
-    onboardingSettingsDetour && activeView === 'settings' && shouldRenderOnboarding
-  if (onboardingSettingsDetour && !onboardingSettingsDetourActive) {
-    // Why: the detour is valid only while Settings is onscreen; clear it during render so onboarding resumes without an extra Effect pass.
-    setOnboardingSettingsDetour(false)
-  }
 
   useEffect(() => {
     if (activeModal === 'add-repo') {
@@ -874,10 +867,6 @@ function App(): React.JSX.Element {
     persistedUIReady,
     settings
   ])
-
-  const beginOnboardingSettingsDetour = useCallback(() => {
-    setOnboardingSettingsDetour(true)
-  }, [])
 
   // Why: useLayoutEffect fires before paint, so dispatching SYNC_FIT_PANES_EVENT reflows the terminal in the same frame as the width change — no wrongly-sized transient.
   useLayoutEffect(() => {
@@ -2752,23 +2741,18 @@ function App(): React.JSX.Element {
             >
               <CrashReportDialog />
             </RecoverableRenderErrorBoundary>
-            {onboarding && shouldRenderOnboarding && !onboardingSettingsDetourActive ? (
+            {onboarding && shouldRenderOnboarding ? (
               <Suspense fallback={null}>
                 <RecoverableRenderErrorBoundary
                   boundaryId="modal.onboarding"
                   surface="modal"
-                  resetKey={onboardingSettingsDetourActive}
                   title={translate('auto.App.f02d37278a', 'Onboarding hit an error.')}
                   description={translate(
                     'auto.App.221a95ba38',
                     'Retry onboarding or close it and continue in the app.'
                   )}
                 >
-                  <OnboardingFlow
-                    onboarding={onboarding}
-                    onOnboardingChange={setOnboarding}
-                    onSettingsDetourStart={beginOnboardingSettingsDetour}
-                  />
+                  <OnboardingFlow onboarding={onboarding} onOnboardingChange={setOnboarding} />
                 </RecoverableRenderErrorBoundary>
               </Suspense>
             ) : null}

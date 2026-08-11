@@ -105,6 +105,10 @@ const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
+const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
+  string,
+  Map<string, Set<string>>
+>()
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
@@ -164,6 +168,33 @@ export type WebSessionTabsSyncState = Pick<
   | 'sortEpoch'
 > &
   Partial<Pick<AppState, 'automaticAgentResumeClaimsByTabId' | 'pendingStartupByTabId'>>
+
+type WebSessionTabsBatchRecordKey =
+  | 'activeBrowserTabIdByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeGroupIdByWorktree'
+  | 'activeTabIdByWorktree'
+  | 'activeTabTypeByWorktree'
+  | 'agentStatusByPaneKey'
+  | 'automaticAgentResumeClaimsByTabId'
+  | 'browserCertificateFailuresByPageId'
+  | 'browserPagesByWorkspace'
+  | 'browserTabsByWorktree'
+  | 'groupsByWorktree'
+  | 'layoutByWorktree'
+  | 'pendingStartupByTabId'
+  | 'ptyIdsByTabId'
+  | 'remoteBrowserPageHandlesByPageId'
+  | 'tabBarOrderByWorktree'
+  | 'tabsByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'unifiedTabsByWorktree'
+  | 'unreadTerminalTabs'
+
+type WebSessionTabsBatchContext = {
+  agentPaneKeysByTabId: Map<string, Set<string>> | null
+  changedRecords: Set<WebSessionTabsBatchRecordKey>
+}
 
 function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -331,15 +362,23 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   replayableSessionTabsSnapshotByWorktree.clear()
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
+  hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
 }
 
 export function _getWebSessionTabsTrackingCountsForTest(): {
   freshness: number
   hostMappings: number
+  hostMappingWorktrees: number
 } {
+  let hostMappingWorktrees = 0
+  for (const mappingKeysByWorktree of hostSessionTabMappingKeysByEnvironmentAndWorktree.values()) {
+    hostMappingWorktrees += mappingKeysByWorktree.size
+  }
   return {
     freshness: latestSessionTabsSnapshotByWorktree.size,
-    hostMappings: hostSessionTabIdByLocalKey.size
+    hostMappings: hostSessionTabIdByLocalKey.size,
+    // Why: the mapping index is a parallel structure, so leak tests must see it drain alongside the flat map.
+    hostMappingWorktrees
   }
 }
 
@@ -352,12 +391,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
   clearWebSessionCloseIntentsForWorktree({ environmentId }, worktreeId)
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
-  const keyPrefix = `${environmentId}:${worktreeId}:`
-  for (const key of hostSessionTabIdByLocalKey.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      hostSessionTabIdByLocalKey.delete(key)
-    }
-  }
+  clearHostSessionTabIdMappings(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -381,10 +415,15 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       lastHostTerminalTabCountByWorktree.delete(key)
     }
   }
-  for (const key of hostSessionTabIdByLocalKey.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      hostSessionTabIdByLocalKey.delete(key)
+  const mappingKeysByWorktree =
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.get(trimmedEnvironmentId)
+  if (mappingKeysByWorktree) {
+    for (const mappingKeys of mappingKeysByWorktree.values()) {
+      for (const mappingKey of mappingKeys) {
+        hostSessionTabIdByLocalKey.delete(mappingKey)
+      }
     }
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
@@ -396,6 +435,35 @@ function hostSessionTabMappingKey(args: {
   tabId: string
 }): string {
   return `${args.environmentId}:${args.worktreeId}:${args.tabId}`
+}
+
+function clearHostSessionTabIdMappings(environmentId: string, worktreeId: string): void {
+  const mappingKeysByWorktree = hostSessionTabMappingKeysByEnvironmentAndWorktree.get(environmentId)
+  const mappingKeys = mappingKeysByWorktree?.get(worktreeId)
+  if (!mappingKeys) {
+    return
+  }
+  for (const mappingKey of mappingKeys) {
+    hostSessionTabIdByLocalKey.delete(mappingKey)
+  }
+  mappingKeysByWorktree?.delete(worktreeId)
+  if (mappingKeysByWorktree?.size === 0) {
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(environmentId)
+  }
+}
+
+function setHostSessionTabIdMapping(
+  args: { environmentId: string; worktreeId: string; tabId: string },
+  hostTabId: string
+): void {
+  const mappingKey = hostSessionTabMappingKey(args)
+  hostSessionTabIdByLocalKey.set(mappingKey, hostTabId)
+  const mappingKeysByWorktree =
+    hostSessionTabMappingKeysByEnvironmentAndWorktree.get(args.environmentId) ?? new Map()
+  const mappingKeys = mappingKeysByWorktree.get(args.worktreeId) ?? new Set<string>()
+  mappingKeys.add(mappingKey)
+  mappingKeysByWorktree.set(args.worktreeId, mappingKeys)
+  hostSessionTabMappingKeysByEnvironmentAndWorktree.set(args.environmentId, mappingKeysByWorktree)
 }
 
 export function resolveHostSessionTabIdForWebSessionTab(
@@ -735,13 +803,60 @@ function isFencedClientAgentStatus(
   return isClientOwnedAgentStatus(paneKey, existing) && isAgentStatusFresh(existing, now)
 }
 
+function batchAgentPaneKeysForTabs(
+  state: WebSessionTabsSyncState,
+  tabIds: ReadonlySet<string>,
+  batchContext?: WebSessionTabsBatchContext
+): string[] {
+  if (!batchContext) {
+    return Object.keys(state.agentStatusByPaneKey)
+  }
+  if (!batchContext.agentPaneKeysByTabId) {
+    batchContext.agentPaneKeysByTabId = new Map()
+    for (const paneKey of Object.keys(state.agentStatusByPaneKey)) {
+      const tabId = parsePaneKey(paneKey)?.tabId
+      if (!tabId) {
+        continue
+      }
+      const paneKeys = batchContext.agentPaneKeysByTabId.get(tabId) ?? new Set<string>()
+      paneKeys.add(paneKey)
+      batchContext.agentPaneKeysByTabId.set(tabId, paneKeys)
+    }
+  }
+  return [...tabIds].flatMap((tabId) => [...(batchContext.agentPaneKeysByTabId?.get(tabId) ?? [])])
+}
+
+function updateBatchAgentPaneKey(
+  paneKey: string,
+  present: boolean,
+  batchContext?: WebSessionTabsBatchContext
+): void {
+  const tabId = parsePaneKey(paneKey)?.tabId
+  const index = batchContext?.agentPaneKeysByTabId
+  if (!tabId || !index) {
+    return
+  }
+  if (present) {
+    const paneKeys = index.get(tabId) ?? new Set<string>()
+    paneKeys.add(paneKey)
+    index.set(tabId, paneKeys)
+    return
+  }
+  const paneKeys = index.get(tabId)
+  paneKeys?.delete(paneKey)
+  if (paneKeys?.size === 0) {
+    index.delete(tabId)
+  }
+}
+
 /** Generates a state patch for mirrored agent statuses, merging host entries with client overrides. */
 function buildMirroredAgentStatusPatch(
   state: WebSessionTabsSyncState,
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
-  now: number
+  now: number,
+  batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
   const mirroredTabIds = new Set<string>()
   for (const tab of currentTerminalTabs) {
@@ -812,7 +927,7 @@ function buildMirroredAgentStatusPatch(
   let aggregateRelevantChange = false
   let sortRelevantChange = false
 
-  for (const paneKey of Object.keys(state.agentStatusByPaneKey)) {
+  for (const paneKey of batchAgentPaneKeysForTabs(state, mirroredTabIds, batchContext)) {
     if (!isMirroredAgentPaneKeyForTabs(paneKey, mirroredTabIds)) {
       continue
     }
@@ -830,9 +945,14 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = { ...state.agentStatusByPaneKey }
+      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
+        state,
+        'agentStatusByPaneKey',
+        batchContext
+      )
     }
     delete nextAgentStatusByPaneKey[paneKey]
+    updateBatchAgentPaneKey(paneKey, false, batchContext)
     changed = true
     aggregateRelevantChange = true
     sortRelevantChange = true
@@ -844,9 +964,14 @@ function buildMirroredAgentStatusPatch(
       continue
     }
     if (nextAgentStatusByPaneKey === state.agentStatusByPaneKey) {
-      nextAgentStatusByPaneKey = { ...state.agentStatusByPaneKey }
+      nextAgentStatusByPaneKey = writableWebSessionTabsRecord(
+        state,
+        'agentStatusByPaneKey',
+        batchContext
+      )
     }
     nextAgentStatusByPaneKey[paneKey] = entry
+    updateBatchAgentPaneKey(paneKey, true, batchContext)
     changed = true
     const entryAttributionChanged =
       existing?.worktreeId !== entry.worktreeId || existing?.tabId !== entry.tabId
@@ -1075,7 +1200,7 @@ function buildMirroredBrowserTabs(
     const createdAt = existing?.page.createdAt ?? now + sortOffset + index
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const title = tab.title.trim() || 'Browser'
-    const page: BrowserPage = {
+    const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
@@ -1090,6 +1215,9 @@ function buildMirroredBrowserTabs(
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
     }
+    // Why: reuse hinges on browserPageEqual comparing workspaceId — the removed-workspace
+    // page-list cleanup gates on page.workspaceId matching this entry's workspace.id.
+    const page = existing && browserPageEqual(existing.page, nextPage) ? existing.page : nextPage
     const workspace: BrowserWorkspace = {
       id: workspaceId,
       worktreeId: snapshot.worktree,
@@ -1285,34 +1413,20 @@ function updateHostSessionTabIdMappings(args: {
   browserTabs: readonly MirroredBrowserTab[]
   editorTabs: readonly MirroredEditorTab[]
 }): void {
-  const keyPrefix = `${args.environmentId}:${args.worktreeId}:`
-  for (const key of hostSessionTabIdByLocalKey.keys()) {
-    if (key.startsWith(keyPrefix)) {
-      hostSessionTabIdByLocalKey.delete(key)
-    }
-  }
+  clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
   for (const surface of args.terminalSurfaces) {
     const localId = toWebTerminalSurfaceTabId(surface.parentTabId)
     if (mirroredTerminalIds.has(localId)) {
-      hostSessionTabIdByLocalKey.set(
-        hostSessionTabMappingKey({ ...args, tabId: localId }),
-        surface.parentTabId
-      )
+      setHostSessionTabIdMapping({ ...args, tabId: localId }, surface.parentTabId)
     }
   }
   for (const entry of args.browserTabs) {
-    hostSessionTabIdByLocalKey.set(
-      hostSessionTabMappingKey({ ...args, tabId: entry.unifiedTab.id }),
-      entry.hostTabId
-    )
+    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
   for (const entry of args.editorTabs) {
-    hostSessionTabIdByLocalKey.set(
-      hostSessionTabMappingKey({ ...args, tabId: entry.unifiedTab.id }),
-      entry.hostTabId
-    )
+    setHostSessionTabIdMapping({ ...args, tabId: entry.unifiedTab.id }, entry.hostTabId)
   }
 }
 
@@ -1500,20 +1614,47 @@ function pushRecentTabId(recent: string[] | undefined, tabId: string): string[] 
   return [...base.filter((id) => id !== tabId), tabId]
 }
 
+function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecordKey>(
+  state: WebSessionTabsSyncState,
+  recordKey: K,
+  batchContext?: WebSessionTabsBatchContext
+): NonNullable<WebSessionTabsSyncState[K]> {
+  const record = (state[recordKey] ?? {}) as NonNullable<WebSessionTabsSyncState[K]>
+  if (!batchContext) {
+    return { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+  }
+  // Why: one batch owns its record copies, so later snapshots can update them without recopying every workspace.
+  if (batchContext.changedRecords.has(recordKey)) {
+    return record
+  }
+  const next = { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+  const mutableState = state as unknown as Record<
+    WebSessionTabsBatchRecordKey,
+    Record<string, unknown>
+  >
+  mutableState[recordKey] = next as Record<string, unknown>
+  batchContext.changedRecords.add(recordKey)
+  return next
+}
+
 function withWorktreeEntry<T>(
-  record: Record<string, T>,
+  state: WebSessionTabsSyncState,
+  recordKey: WebSessionTabsBatchRecordKey,
   key: string,
   value: T | null,
-  equal: (a: T | undefined, b: T | null) => boolean
+  equal: (a: T | undefined, b: T | null) => boolean,
+  batchContext?: WebSessionTabsBatchContext,
+  deleteNull = true
 ): Record<string, T> {
+  const record = (state[recordKey] ?? {}) as Record<string, T>
   if (equal(record[key], value)) {
     return record
   }
-  const next = { ...record }
-  if (value === null) {
+  const next = writableWebSessionTabsRecord(state, recordKey, batchContext) as Record<string, T>
+  if (value === null && deleteNull) {
     delete next[key]
   } else {
-    next[key] = value
+    next[key] = value as T
   }
   return next
 }
@@ -1763,11 +1904,12 @@ function findCurrentVisibleUnifiedTabId(args: {
   return null
 }
 
-export function applyWebSessionTabsSnapshot(
+function applyWebSessionTabsSnapshotWithContext(
   state: WebSessionTabsSyncState,
   rawSnapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  now = Date.now()
+  now = Date.now(),
+  batchContext?: WebSessionTabsBatchContext
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
   const worktreeId = rawSnapshot.worktree
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
@@ -1891,6 +2033,9 @@ export function applyWebSessionTabsSnapshot(
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)
+  )
+  const removedTerminalResourceIds = [...removedTerminalIds].filter(
+    (tabId) => !mirroredTerminalIds.has(tabId)
   )
   for (const provisionalTabId of exactProvisionalHandoffs) {
     clearWebAgentSessionHandoff({ environmentId, worktreeId, provisionalTabId })
@@ -2259,28 +2404,42 @@ export function applyWebSessionTabsSnapshot(
   })()
 
   let nextPtyIdsByTabId = state.ptyIdsByTabId
-  for (const removedId of removedTerminalIds) {
+  for (const removedId of removedTerminalResourceIds) {
     if (nextPtyIdsByTabId[removedId]) {
       nextPtyIdsByTabId =
-        nextPtyIdsByTabId === state.ptyIdsByTabId ? { ...state.ptyIdsByTabId } : nextPtyIdsByTabId
+        nextPtyIdsByTabId === state.ptyIdsByTabId
+          ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
+          : nextPtyIdsByTabId
       delete nextPtyIdsByTabId[removedId]
     }
   }
   for (const { tab, ptyIds } of mirroredTerminalTabs) {
+    if (ptyIds.length === 0) {
+      if (nextPtyIdsByTabId[tab.id]) {
+        nextPtyIdsByTabId =
+          nextPtyIdsByTabId === state.ptyIdsByTabId
+            ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
+            : nextPtyIdsByTabId
+        delete nextPtyIdsByTabId[tab.id]
+      }
+      continue
+    }
     const current = nextPtyIdsByTabId[tab.id] ?? []
     if (!sameStringArray(current, ptyIds)) {
       nextPtyIdsByTabId =
-        nextPtyIdsByTabId === state.ptyIdsByTabId ? { ...state.ptyIdsByTabId } : nextPtyIdsByTabId
+        nextPtyIdsByTabId === state.ptyIdsByTabId
+          ? writableWebSessionTabsRecord(state, 'ptyIdsByTabId', batchContext)
+          : nextPtyIdsByTabId
       nextPtyIdsByTabId[tab.id] = ptyIds
     }
   }
 
   let nextTerminalLayoutsByTabId = state.terminalLayoutsByTabId
-  for (const removedId of removedTerminalIds) {
+  for (const removedId of removedTerminalResourceIds) {
     if (nextTerminalLayoutsByTabId[removedId]) {
       nextTerminalLayoutsByTabId =
         nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-          ? { ...state.terminalLayoutsByTabId }
+          ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
           : nextTerminalLayoutsByTabId
       delete nextTerminalLayoutsByTabId[removedId]
     }
@@ -2289,7 +2448,7 @@ export function applyWebSessionTabsSnapshot(
     if (!terminalLayoutEqual(nextTerminalLayoutsByTabId[tab.id], layout)) {
       nextTerminalLayoutsByTabId =
         nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId
-          ? { ...state.terminalLayoutsByTabId }
+          ? writableWebSessionTabsRecord(state, 'terminalLayoutsByTabId', batchContext)
           : nextTerminalLayoutsByTabId
       nextTerminalLayoutsByTabId[tab.id] = layout
     }
@@ -2300,7 +2459,7 @@ export function applyWebSessionTabsSnapshot(
     if (nextUnreadTerminalTabs[removedId]) {
       nextUnreadTerminalTabs =
         nextUnreadTerminalTabs === state.unreadTerminalTabs
-          ? { ...state.unreadTerminalTabs }
+          ? writableWebSessionTabsRecord(state, 'unreadTerminalTabs', batchContext)
           : nextUnreadTerminalTabs
       delete nextUnreadTerminalTabs[removedId]
     }
@@ -2314,14 +2473,14 @@ export function applyWebSessionTabsSnapshot(
     if (nextPendingStartupByTabId[removedId]) {
       nextPendingStartupByTabId =
         nextPendingStartupByTabId === pendingStartupByTabId
-          ? { ...pendingStartupByTabId }
+          ? writableWebSessionTabsRecord(state, 'pendingStartupByTabId', batchContext)
           : nextPendingStartupByTabId
       delete nextPendingStartupByTabId[removedId]
     }
     if (nextAutomaticAgentResumeClaimsByTabId[removedId]) {
       nextAutomaticAgentResumeClaimsByTabId =
         nextAutomaticAgentResumeClaimsByTabId === automaticAgentResumeClaimsByTabId
-          ? { ...automaticAgentResumeClaimsByTabId }
+          ? writableWebSessionTabsRecord(state, 'automaticAgentResumeClaimsByTabId', batchContext)
           : nextAutomaticAgentResumeClaimsByTabId
       delete nextAutomaticAgentResumeClaimsByTabId[removedId]
     }
@@ -2330,29 +2489,52 @@ export function applyWebSessionTabsSnapshot(
   let nextBrowserPagesByWorkspace = state.browserPagesByWorkspace
   let nextRemoteBrowserPageHandlesByPageId = state.remoteBrowserPageHandlesByPageId
   let nextBrowserCertificateFailuresByPageId = state.browserCertificateFailuresByPageId
-  for (const removedWorkspaceId of removedBrowserWorkspaceIds) {
-    const pages = nextBrowserPagesByWorkspace[removedWorkspaceId] ?? []
-    if (nextBrowserPagesByWorkspace[removedWorkspaceId]) {
-      nextBrowserPagesByWorkspace =
-        nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
-          ? { ...state.browserPagesByWorkspace }
-          : nextBrowserPagesByWorkspace
-      delete nextBrowserPagesByWorkspace[removedWorkspaceId]
-    }
-    for (const page of pages) {
-      if (nextBrowserCertificateFailuresByPageId[page.id]) {
-        nextBrowserCertificateFailuresByPageId =
-          nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
-            ? { ...state.browserCertificateFailuresByPageId }
-            : nextBrowserCertificateFailuresByPageId
-        delete nextBrowserCertificateFailuresByPageId[page.id]
+  if (removedBrowserWorkspaceIds.size > 0) {
+    const nextBrowserWorkspaceIds = new Set(nextBrowserTabs?.map((tab) => tab.id) ?? [])
+    const nextBrowserPageIds = new Set(mirroredBrowserTabs.map((entry) => entry.page.id))
+    for (const workspace of retainedBrowserTabs) {
+      for (const page of state.browserPagesByWorkspace[workspace.id] ?? []) {
+        nextBrowserPageIds.add(page.id)
       }
-      if (nextRemoteBrowserPageHandlesByPageId[page.id]) {
-        nextRemoteBrowserPageHandlesByPageId =
-          nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
-            ? { ...state.remoteBrowserPageHandlesByPageId }
-            : nextRemoteBrowserPageHandlesByPageId
-        delete nextRemoteBrowserPageHandlesByPageId[page.id]
+    }
+    for (const removedWorkspaceId of removedBrowserWorkspaceIds) {
+      const pages = nextBrowserPagesByWorkspace[removedWorkspaceId] ?? []
+      if (
+        !nextBrowserWorkspaceIds.has(removedWorkspaceId) &&
+        nextBrowserPagesByWorkspace[removedWorkspaceId]
+      ) {
+        nextBrowserPagesByWorkspace =
+          nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
+            ? writableWebSessionTabsRecord(state, 'browserPagesByWorkspace', batchContext)
+            : nextBrowserPagesByWorkspace
+        delete nextBrowserPagesByWorkspace[removedWorkspaceId]
+      }
+      for (const page of pages) {
+        if (nextBrowserPageIds.has(page.id)) {
+          continue
+        }
+        if (nextBrowserCertificateFailuresByPageId[page.id]) {
+          nextBrowserCertificateFailuresByPageId =
+            nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
+              ? writableWebSessionTabsRecord(
+                  state,
+                  'browserCertificateFailuresByPageId',
+                  batchContext
+                )
+              : nextBrowserCertificateFailuresByPageId
+          delete nextBrowserCertificateFailuresByPageId[page.id]
+        }
+        if (nextRemoteBrowserPageHandlesByPageId[page.id]) {
+          nextRemoteBrowserPageHandlesByPageId =
+            nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
+              ? writableWebSessionTabsRecord(
+                  state,
+                  'remoteBrowserPageHandlesByPageId',
+                  batchContext
+                )
+              : nextRemoteBrowserPageHandlesByPageId
+          delete nextRemoteBrowserPageHandlesByPageId[page.id]
+        }
       }
     }
   }
@@ -2361,7 +2543,7 @@ export function applyWebSessionTabsSnapshot(
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =
         nextBrowserPagesByWorkspace === state.browserPagesByWorkspace
-          ? { ...state.browserPagesByWorkspace }
+          ? writableWebSessionTabsRecord(state, 'browserPagesByWorkspace', batchContext)
           : nextBrowserPagesByWorkspace
       nextBrowserPagesByWorkspace[page.workspaceId] = [page]
     }
@@ -2372,7 +2554,7 @@ export function applyWebSessionTabsSnapshot(
     ) {
       nextRemoteBrowserPageHandlesByPageId =
         nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
-          ? { ...state.remoteBrowserPageHandlesByPageId }
+          ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
           : nextRemoteBrowserPageHandlesByPageId
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
@@ -2387,7 +2569,7 @@ export function applyWebSessionTabsSnapshot(
     ) {
       nextBrowserCertificateFailuresByPageId =
         nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
-          ? { ...state.browserCertificateFailuresByPageId }
+          ? writableWebSessionTabsRecord(state, 'browserCertificateFailuresByPageId', batchContext)
           : nextBrowserCertificateFailuresByPageId
       if (certificateFailure) {
         nextBrowserCertificateFailuresByPageId[page.id] = certificateFailure
@@ -2398,28 +2580,36 @@ export function applyWebSessionTabsSnapshot(
   }
 
   const nextTabsByWorktree = withWorktreeEntry(
-    state.tabsByWorktree,
+    state,
+    'tabsByWorktree',
     worktreeId,
     nextTerminalTabs,
-    sameTerminalTabs
+    sameTerminalTabs,
+    batchContext
   )
   const nextBrowserTabsByWorktree = withWorktreeEntry(
-    state.browserTabsByWorktree,
+    state,
+    'browserTabsByWorktree',
     worktreeId,
     nextBrowserTabs,
-    sameBrowserTabs
+    sameBrowserTabs,
+    batchContext
   )
   const nextUnifiedTabsByWorktree = withWorktreeEntry(
-    state.unifiedTabsByWorktree,
+    state,
+    'unifiedTabsByWorktree',
     worktreeId,
     nextUnifiedTabs,
-    sameUnifiedTabs
+    sameUnifiedTabs,
+    batchContext
   )
   const nextGroupsByWorktree = withWorktreeEntry(
-    state.groupsByWorktree,
+    state,
+    'groupsByWorktree',
     worktreeId,
     nextGroups,
-    sameGroups
+    sameGroups,
+    batchContext
   )
   const nextActiveGroupId =
     // Why: status/title snapshots carry the host's last active tab; a client that already switched panes keeps its local group focus.
@@ -2429,7 +2619,14 @@ export function applyWebSessionTabsSnapshot(
     null
   const nextActiveGroupIdByWorktree =
     nextGroups && state.activeGroupIdByWorktree[worktreeId] !== nextActiveGroupId
-      ? { ...state.activeGroupIdByWorktree, [worktreeId]: nextActiveGroupId ?? targetGroupId }
+      ? withWorktreeEntry(
+          state,
+          'activeGroupIdByWorktree',
+          worktreeId,
+          nextActiveGroupId ?? targetGroupId,
+          (current, next) => current === next,
+          batchContext
+        )
       : state.activeGroupIdByWorktree
   const nextLayoutByWorktree = (() => {
     if (!nextGroups) {
@@ -2467,28 +2664,58 @@ export function applyWebSessionTabsSnapshot(
     if (tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], fallbackLayout)) {
       return state.layoutByWorktree
     }
-    return {
-      ...state.layoutByWorktree,
-      [worktreeId]: fallbackLayout
-    }
+    return withWorktreeEntry(
+      state,
+      'layoutByWorktree',
+      worktreeId,
+      fallbackLayout,
+      (current, next) => current === next,
+      batchContext
+    )
   })()
   const nextTabBarOrderByWorktree = withWorktreeEntry(
-    state.tabBarOrderByWorktree,
+    state,
+    'tabBarOrderByWorktree',
     worktreeId,
     nextTabBarOrder.length > 0 ? nextTabBarOrder : null,
-    (a, b) => sameStringArray(a ?? [], b ?? [])
+    (a, b) => sameStringArray(a ?? [], b ?? []),
+    batchContext
   )
   const nextActiveTabIdByWorktree =
     (state.activeTabIdByWorktree[worktreeId] ?? null) !== nextActiveTerminalId
-      ? { ...state.activeTabIdByWorktree, [worktreeId]: nextActiveTerminalId }
+      ? withWorktreeEntry(
+          state,
+          'activeTabIdByWorktree',
+          worktreeId,
+          nextActiveTerminalId,
+          (current, next) => (current ?? null) === next,
+          batchContext,
+          false
+        )
       : state.activeTabIdByWorktree
   const nextActiveBrowserTabIdByWorktree =
     (state.activeBrowserTabIdByWorktree[worktreeId] ?? null) !== nextActiveBrowserWorkspaceId
-      ? { ...state.activeBrowserTabIdByWorktree, [worktreeId]: nextActiveBrowserWorkspaceId }
+      ? withWorktreeEntry(
+          state,
+          'activeBrowserTabIdByWorktree',
+          worktreeId,
+          nextActiveBrowserWorkspaceId,
+          (current, next) => (current ?? null) === next,
+          batchContext,
+          false
+        )
       : state.activeBrowserTabIdByWorktree
   const nextActiveFileIdByWorktree =
     (state.activeFileIdByWorktree[worktreeId] ?? null) !== nextActiveEditorFileId
-      ? { ...state.activeFileIdByWorktree, [worktreeId]: nextActiveEditorFileId }
+      ? withWorktreeEntry(
+          state,
+          'activeFileIdByWorktree',
+          worktreeId,
+          nextActiveEditorFileId,
+          (current, next) => (current ?? null) === next,
+          batchContext,
+          false
+        )
       : state.activeFileIdByWorktree
   const isActiveWorktree = state.activeWorktreeId === worktreeId
   const focusIntentVisibleTabType =
@@ -2564,14 +2791,22 @@ export function applyWebSessionTabsSnapshot(
   const nextActiveTabType = isActiveWorktree ? nextVisibleTabType : state.activeTabType
   const nextActiveTabTypeByWorktree =
     state.activeTabTypeByWorktree[worktreeId] !== nextVisibleTabType
-      ? { ...state.activeTabTypeByWorktree, [worktreeId]: nextVisibleTabType }
+      ? withWorktreeEntry(
+          state,
+          'activeTabTypeByWorktree',
+          worktreeId,
+          nextVisibleTabType,
+          (current, next) => current === next,
+          batchContext
+        )
       : state.activeTabTypeByWorktree
   const agentStatusPatch = buildMirroredAgentStatusPatch(
     state,
     currentTerminalTabs,
     terminalSurfaceTabs,
     mirroredTerminalTabs,
-    now
+    now,
+    batchContext
   )
 
   const patch: Partial<WebSessionTabsSyncState> = {
@@ -2641,21 +2876,45 @@ export function applyWebSessionTabsSnapshot(
   return Object.keys(patch).length === 0 ? state : patch
 }
 
+export function applyWebSessionTabsSnapshot(
+  state: WebSessionTabsSyncState,
+  rawSnapshot: RuntimeMobileSessionTabsResult,
+  environmentId: string,
+  now = Date.now()
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  return applyWebSessionTabsSnapshotWithContext(state, rawSnapshot, environmentId, now)
+}
+
 export function applyWebSessionTabsSnapshots(
   state: WebSessionTabsSyncState,
   snapshots: readonly RuntimeMobileSessionTabsResult[],
   environmentId: string,
   now = Date.now()
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
-  let nextState = state
+  const nextState = { ...state }
+  const batchContext: WebSessionTabsBatchContext = {
+    agentPaneKeysByTabId: null,
+    changedRecords: new Set()
+  }
   let mergedPatch: Partial<WebSessionTabsSyncState> = {}
   for (const snapshot of snapshots) {
-    const patch = applyWebSessionTabsSnapshot(nextState, snapshot, environmentId, now)
+    const patch = applyWebSessionTabsSnapshotWithContext(
+      nextState,
+      snapshot,
+      environmentId,
+      now,
+      batchContext
+    )
     if (patch === nextState) {
       continue
     }
     mergedPatch = { ...mergedPatch, ...patch }
-    nextState = { ...nextState, ...patch }
+    Object.assign(nextState, patch)
+  }
+  const mutableMergedPatch = mergedPatch as Record<string, unknown>
+  const mutableNextState = nextState as unknown as Record<string, unknown>
+  for (const recordKey of batchContext.changedRecords) {
+    mutableMergedPatch[recordKey] = mutableNextState[recordKey]
   }
   return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
 }

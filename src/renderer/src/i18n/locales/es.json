@@ -11569,37 +11569,6 @@
           "9f47f345a4": "¡No tardará mucho!",
           "e4726b2d50": "¿Saltar la incorporación?"
         },
-        "OnboardingTourStep": {
-          "3f9586c043": "Haz el recorrido",
-          "60c5576353": "Salir del recorrido"
-        },
-        "RepoStep": {
-          "e8fdb36338": "Escaneo de repositorios. Haga clic para detener.",
-          "b7c4da0504": "¿SSH? Configura hosts en Configuración",
-          "c33b190ca3": "Solo rutas del host",
-          "7b679207e4": "Espacio de trabajo",
-          "24c7c8696c": "Clonar en ruta del host",
-          "7932e95f68": "Clonar",
-          "955134915e": "git@github.com:org/repo.git",
-          "288d8444b7": "Pegue una URL HTTPS o SSH.",
-          "132425a3e3": "Clonar un repositorio",
-          "6558d50c69": "¿Quieres importar muchos repositorios a la vez? Seleccione la carpeta principal.",
-          "831524961f": "Elija cualquier directorio local, repositorio git o no.",
-          "f4e9c8dcf8": "Buscar una carpeta",
-          "e8214aa632": "Abrir como carpeta",
-          "3863747c56": "Agregar proyecto Git",
-          "2ebbc26343": "/home/user/project",
-          "466108ab89": "Introduce una ruta que exista en el host seleccionado.",
-          "8cab104e3c": "Abrir un proyecto en este host",
-          "2d20200346": "Importar repositorios",
-          "27ca610db1": "Atrás",
-          "cecd6593fa": "Carpeta escaneada:",
-          "c7af322fc3": "Dejar de escanear",
-          "c3d9d44ca2": "Detener escaneo",
-          "cf23006ba7": "Host seleccionado",
-          "7ec3f48820": "/home/user",
-          "2e6438dd34": "{{value0}}Se encontraron {{value1}} {{value2}} en esta carpeta."
-        },
         "ThemeStep": {
           "a4b254779d": "Tecla de opción de macOS",
           "6c51398942": "Ratón",
@@ -11627,8 +11596,6 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "No se pudo abrir la configuración de SSH",
-              "fd74e7558e": "Clon falló",
               "52acfbef51": "No se pudo guardar el progreso"
             }
           }
@@ -12108,43 +12075,6 @@
             "cda56c5915": "notes / launch-plan.md",
             "e16479c1c5": "[data-slash-menu] [data-slash-row].slash-active { background: rgba(24,24,27,0.07); box-shadow: inset 0 0 0 1px rgba(24,24,27,0.06); } [data-md-active-line][data-role=\"active\"] { color: rgb(113 113 122); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; } [data-md-active-line][data-role=\"h1\"] { color: inherit; font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.2; margin-top: 6px; } [data-md-caret] { display: inline-block; width: 1.5px; height: 1em; background: currentColor; vertical-align: -2px; margin-left: 1px; animation: md-caret-blink 1.05s steps(1) infinite; } @keyframes md-caret-blink { 0%, 50% { opacity: 1 } 51%, 100% { opacity: 0 } } @keyframes md-block-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: none; } } @keyframes md-cursor-ripple { 0% { transform: scale(0.4); opacity: 0.9; } 100% { transform: scale(1.4); opacity: 0; } } [data-clicking=\"1\"] [data-cursor-ripple] { animation: md-cursor-ripple 460ms ease-out forwards; }"
           },
-          "FeatureTourPreview": {
-            "1170621527": ">",
-            "304ad0dfc1": "Pensando...",
-            "ef8b164dd1": "revisar src/auth",
-            "952d3ddd9a": "sesión iniciada",
-            "771d8881c2": "claude",
-            "6ed43cb0e0": "dashboard.spec.ts",
-            "24fedd5a52": "login.spec.ts",
-            "8279e9d95b": "Ejecutando 12 pruebas",
-            "6218a9014d": "pnpm playwright test",
-            "04d54d50ec": "orca · zsh",
-            "1aa8a9a24a": "Terminal dividible",
-            "2a7cfc82c8": "Vinculado a GH #1842",
-            "3822d8d14b": "fix/worktree-picker-truncates",
-            "d54aefe09e": "LIN-329",
-            "40bbd92ef4": "Comenzar",
-            "c1f28c03b2": "El selector de worktree se trunca",
-            "fc0cc0b267": "GH #1842",
-            "0688842445": "GH #1799",
-            "bee6b4088d": "Tareas de GitHub y Linear",
-            "5171768676": "orquestando 3 agentes",
-            "cebc7769cd": "rediseñar el flujo de autenticación",
-            "e44269e97d": "Orquestación de agentes",
-            "ec4a73f5e6": "PR 3/3",
-            "cfdfd4d6b4": "PR 2/3",
-            "b1f17bcc74": "PR 1/3",
-            "e38112b289": "refactorizar el webhook de facturación",
-            "9c812e0d7c": "acelerar el proceso de CI",
-            "3c4adfd821": "arreglar la condición de carrera de inicio de sesión",
-            "56a0271428": "Espacios de trabajo aislados",
-            "ef737dcee1": "Tareas de GitHub y Linear",
-            "ac51c061e2": "codex",
-            "47f16ecf34": "Avanza en varias cosas a la vez. Cada workspace mantiene juntos su rama, terminal y actividad de agentes.",
-            "70aa182266": "Delega un objetivo y sigue con lo tuyo. Un agente coordinador se despliega y publica PRs en paralelo.",
-            "f10c14dd9d": "Evita cambiar de pestaña. Elige desde tu backlog de GitHub o Linear e inicia un workspace con un clic.",
-            "5d6ee181b6": "Abre cualquier workspace para volver a su terminal y luego divide paneles para tests, logs y agentes."
-          },
           "FeatureWallBody": {
             "25ec5356d6": "Configuración"
           },
@@ -12387,11 +12317,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "laboral"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",

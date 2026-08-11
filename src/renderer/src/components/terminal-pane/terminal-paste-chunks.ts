@@ -1,6 +1,7 @@
 import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
 import { TERMINAL_PASTE_CHUNK_MAX_BYTES } from './terminal-paste-limits'
 import type { TerminalPastePlan } from './terminal-paste-coordinator'
+import { getUtf8ByteLengthForCodePoint } from '../../../../shared/utf8-byte-limits'
 
 const TERMINAL_PASTE_ESCAPE_CODE_POINT = 0x1b
 const TERMINAL_PASTE_INERT_ESCAPE_CODE_POINT = 0x241b
@@ -58,7 +59,7 @@ function* iterateTextByUtf8Bytes(
       : normalizedCodePoint === codePoint
         ? text.slice(index, index + codeUnitLength)
         : '\r'
-    const nextBytes = utf8BytesForCodePoint(
+    const nextBytes = getUtf8ByteLengthForCodePoint(
       sanitizedEscape ? TERMINAL_PASTE_INERT_ESCAPE_CODE_POINT : normalizedCodePoint
     )
     if (chunk && chunkBytes + nextBytes > maxBytes) {
@@ -79,17 +80,4 @@ function* iterateTextByUtf8Bytes(
   if (chunk) {
     yield chunk
   }
-}
-
-function utf8BytesForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }
