@@ -43,6 +43,8 @@ const DEFAULT_HARDENING_CACHE_BOUNDS: SecurePathHardeningCacheBounds = {
   maxTotalKeyBytes: SECURE_PATH_HARDENING_CACHE_KEYS_MAX_BYTES
 }
 
+const UNSUPPORTED_DIRECTORY_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP'])
+
 // Why: PowerShell hardening (~1-1.5s) stalls the main thread, so cache idempotent re-hardens per process.
 let hardenedPathsThisProcess = new SecurePathHardeningCache<HardenedPathCacheEntry>(
   DEFAULT_HARDENING_CACHE_BOUNDS
@@ -143,8 +145,14 @@ export function fsyncFileSync(path: string): void {
 export function bestEffortFsyncDirectorySync(directory: string): void {
   try {
     fsyncFileSync(directory)
-  } catch {
-    // Directory fsync is unsupported on some POSIX and remote filesystems.
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      UNSUPPORTED_DIRECTORY_FSYNC_CODES.has((error as NodeJS.ErrnoException).code ?? '')
+    ) {
+      return
+    }
+    throw error
   }
 }
 

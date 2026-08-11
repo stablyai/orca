@@ -4,20 +4,24 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
+const fsyncMockState = vi.hoisted(() => ({ directoryErrorCode: 'EINVAL' }))
+
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof NodeFs>('node:fs')
   return {
     ...actual,
     fsyncSync: (descriptor: number) => {
       if (actual.fstatSync(descriptor).isDirectory()) {
-        throw new Error('directory fsync unsupported')
+        throw Object.assign(new Error('directory fsync failed'), {
+          code: fsyncMockState.directoryErrorCode
+        })
       }
       return actual.fsyncSync(descriptor)
     }
   }
 })
 
-import { writeDurableSecureJsonFile } from '../../shared/secure-file'
+import { bestEffortFsyncDirectorySync, writeDurableSecureJsonFile } from '../../shared/secure-file'
 import {
   clearArtifactCreateIntents,
   getOrCreateArtifactCreateIntent
@@ -26,9 +30,18 @@ import {
 const createdPaths: string[] = []
 
 afterEach(() => {
+  fsyncMockState.directoryErrorCode = 'EINVAL'
   for (const path of createdPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
+})
+
+it('propagates directory fsync I/O failures', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'orca-artifact-directory-fsync-eio-'))
+  createdPaths.push(directory)
+  fsyncMockState.directoryErrorCode = 'EIO'
+
+  expect(() => bestEffortFsyncDirectorySync(directory)).toThrow('directory fsync failed')
 })
 
 it('keeps durable artifact records usable when directory fsync is unsupported', () => {
