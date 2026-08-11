@@ -522,6 +522,7 @@ describe('terminal scroll intent', () => {
 
     restoreTerminalStructuralScrollIntent(terminal, intent, { restoreBy: 'bottomOffset' })
 
+    expect(terminal.scrollToBottom).toHaveBeenCalledTimes(1)
     expect(terminal.scrollToLine).not.toHaveBeenCalled()
     expect(terminal.buffer.active.viewportY).toBe(800)
     expect(getTerminalScrollIntentKind(terminal)).toBe('followOutput')
