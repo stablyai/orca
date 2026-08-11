@@ -190,6 +190,60 @@ describe('dispatch --inject --supervise adopts a running agent as a supervised w
     expect(db.getTask(task.id)?.status).toBe('ready')
   })
 
+  it('supervises nothing when the worker reports done before the record is written', async () => {
+    const task = db.createTask({ spec: 'fast work', runId })
+    // The worker can settle between the prompt write and the record write; showTerminal is the
+    // await point the handler suspends on, so settling there reproduces the real interleaving.
+    vi.mocked(runtime.showTerminal).mockImplementation(async (handle: string) => {
+      const ctxRow = db.getDispatchContext(task.id)
+      if (ctxRow) {
+        db.settleWorkerReport({
+          taskId: task.id,
+          dispatchId: ctxRow.id,
+          outcome: 'succeeded',
+          result: 'done'
+        })
+      }
+      return { handle, worktreeId: 'wt_worker', connected: true } as never
+    })
+
+    const dispatched = (await dispatchToWorker(task.id, { supervise: true })) as {
+      dispatch: { id: string }
+      injected: boolean
+      supervised: boolean
+      superviseError?: string
+    }
+
+    expect(dispatched).toMatchObject({ injected: true, supervised: false })
+    expect(dispatched.superviseError).toContain('can no longer be supervised')
+    // A ready worker row here would describe a lane nobody is running.
+    expect(db.getWorkerDispatch(dispatched.dispatch.id)).toBeUndefined()
+    expect(db.getDispatchContextById(dispatched.dispatch.id)?.status).toBe('completed')
+    expect(db.getWorkerTerminalResourceByOwner(dispatched.dispatch.id)).toBeUndefined()
+  })
+
+  it('refuses to attach a supervised record to a settled dispatch', async () => {
+    const task = db.createTask({ spec: 'work', runId })
+    const dispatched = await dispatchToWorker(task.id)
+    db.settleWorkerReport({
+      taskId: task.id,
+      dispatchId: dispatched.dispatch.id,
+      outcome: 'failed',
+      result: 'gave up'
+    })
+
+    expect(() =>
+      db.attachSupervisedWorkerToDispatch({
+        dispatchId: dispatched.dispatch.id,
+        terminalHandle: 'term_worker',
+        paneKey: WORKER_PANE_KEY,
+        processIncarnation: WORKER_INCARNATION,
+        worktreeId: 'wt_worker'
+      })
+    ).toThrow('is failed and can no longer be supervised')
+    expect(db.getWorkerDispatch(dispatched.dispatch.id)).toBeUndefined()
+  })
+
   it('downgrades to unsupervised instead of failing a delivered dispatch', async () => {
     const task = db.createTask({ spec: 'work', runId })
     vi.spyOn(db, 'attachSupervisedWorkerToDispatch').mockImplementation(() => {

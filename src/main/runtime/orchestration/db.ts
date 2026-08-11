@@ -4124,6 +4124,15 @@ export class OrchestrationDb {
           `Dispatch ${params.dispatchId} was not found.`
         )
       }
+      // Why: the worker can report done between the prompt write and this transaction, and
+      // settlement skips a worker row that does not exist yet — a later insert would publish a
+      // ready worker for a lane nobody is running.
+      if (dispatch.status !== 'dispatched') {
+        throw new OrchestrationError(
+          'dispatch_inactive',
+          `Dispatch ${params.dispatchId} is ${dispatch.status} and can no longer be supervised.`
+        )
+      }
       if (this.getWorkerDispatch(params.dispatchId)) {
         throw new OrchestrationError(
           'dispatch_inactive',
