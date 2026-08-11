@@ -34,6 +34,8 @@ export const TERMINAL_TAP_DISPATCH_JS = `
       if (!longPressOrigin) return;
       var c = viewportToCell(longPressOrigin.x, longPressOrigin.y);
       if (!c) return;
+      tapCandidate = null;
+      cancelTerminalPlainTap();
       enterSelect(c.col, c.row);
     }, LONG_PRESS_MS);
   }
@@ -57,6 +59,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
     var onHandle = target === handleStart || target === handleEnd;
     var inOverlay = targetInside(target, selectionOverlay);
     var inSurface = targetInside(target, surface);
+    if (!inSurface && !onHandle && !inOverlay) return;
     // Why: clear any stale tap candidate up front; only a fresh single-finger
     // surface touch (below) re-arms it, so handle drags / pinches / dismiss
     // taps never resolve as a link tap on touchend.
@@ -64,6 +67,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
 
     if (e.touches.length === 2) {
       // pinch latch
+      cancelTerminalPlainTap();
       if (selMode === 'select') {
         notify({ type: 'mobile-clip-cancel-by-pinch' });
         cancelSelect();
@@ -76,6 +80,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
 
     if (onHandle && selMode === 'select') {
       // start handle drag
+      cancelTerminalPlainTap();
       var handleName = (target === handleStart) ? 'start' : 'end';
       sel.activeHandle = handleName;
       dispatch.mode = 'select-drag';
@@ -86,6 +91,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
 
     if (inOverlay) {
       // tap on menu pill — let the buttons' own handlers fire
+      cancelTerminalPlainTap();
       return;
     }
 
@@ -93,6 +99,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
       // Why: tap-to-dismiss matches native iOS/Android — touching outside the
       // selection clears it. We cancel immediately and latch to 'surface' so
       // the same gesture still drives scroll/pan without a second touch.
+      cancelTerminalPlainTap();
       cancelSelect();
       dispatch.mode = 'surface';
       dispatch.touchId = t.identifier;
@@ -128,10 +135,14 @@ export const TERMINAL_TAP_DISPATCH_JS = `
         if (mt.identifier === tapCandidate.identifier) {
           var dx = Math.abs(mt.clientX - tapCandidate.x);
           var dy = Math.abs(mt.clientY - tapCandidate.y);
-          if (dx + dy > TAP_SLOP) tapCandidate = null;
+          if (dx + dy > TAP_SLOP) {
+            tapCandidate = null;
+            cancelTerminalPlainTap();
+          }
         }
-      } else if (e.touches.length !== 1) {
+      } else if (tapCandidate && e.touches.length !== 1) {
         tapCandidate = null;
+        cancelTerminalPlainTap();
       }
       // existing surface handler will run from its own listener
     }
@@ -157,13 +168,12 @@ export const TERMINAL_TAP_DISPATCH_JS = `
       // Why: fire the tap from the tap-candidate origin (survives jitter under
       // TAP_SLOP) rather than longPressOrigin, which the press-to-select slop
       // can null mid-tap — that was dropping URL/file taps that moved a few px.
-      if (
-        e.touches.length === 0 &&
-        tapCandidate &&
-        selMode !== 'select' &&
-        Date.now() - tapCandidate.t <= TAP_MAX_MS
-      ) {
-        notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true);
+      if (e.touches.length === 0 && tapCandidate) {
+        if (selMode !== 'select' && Date.now() - tapCandidate.t <= TAP_MAX_MS) {
+          notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true);
+        } else {
+          cancelTerminalPlainTap();
+        }
       }
       clearLongPress();
       tapCandidate = null;
@@ -175,6 +185,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
   }, { capture: true, passive: true });
 
   document.addEventListener('touchcancel', function() {
+    cancelTerminalPlainTap();
     clearLongPress();
     tapCandidate = null;
     stopEdgeScroll();

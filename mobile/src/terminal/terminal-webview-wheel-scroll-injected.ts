@@ -3,7 +3,7 @@
 // file within its max-lines budget. Closes over host-IIFE state/functions:
 // term, getCellHeight, getTotalScale, shouldRouteScrollToTerminalInput,
 // routeScrollLines, enqueueNormalBufferScrollDelta, resetSmoothScrollOffset,
-// and dispatcherShouldBlockSurface.
+// dispatcherShouldBlockSurface, and cancelTerminalPlainTap.
 export const TERMINAL_WHEEL_SCROLL_JS = `
   var wheelAccumDeltaY = 0;
 
@@ -21,6 +21,7 @@ export const TERMINAL_WHEEL_SCROLL_JS = `
     targetSurface.addEventListener('wheel', function(e) {
       if (dispatcherShouldBlockSurface()) return;
       if (!term) return;
+      cancelTerminalPlainTap();
       // Why: xterm's own wheel handler scrolls its hidden viewport or emits
       // cursor keys through onData, which the mobile query-reply gate drops.
       // Claim the event so indirect pointers share the touch scroll router.

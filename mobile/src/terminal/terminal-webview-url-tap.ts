@@ -118,7 +118,7 @@ export const URL_TAP_WEBVIEW_JS = `
     if (typeof uri !== 'string') return null;
     if (/^https?:/i.test(uri)) return { kind: 'url', url: uri };
     var fileTap = resolveTerminalOscFileTap(uri);
-    return fileTap ? { kind: 'file', fileTap: fileTap } : null;
+    return fileTap ? { kind: 'file', fileTap: fileTap } : { kind: 'unsupported' };
   }
   function resolveTerminalOscFileTap(uri) {
     return resolveTerminalFileUrlTap(uri) || parseOscPathLikeTarget(uri);
@@ -205,9 +205,15 @@ export const URL_TAP_WEBVIEW_JS = `
     } catch (e) { return 0; }
   }
 
+  function cancelTerminalPlainTap() {
+    notify({ type: 'terminal-plain-tap-cancelled' });
+  }
+
   function notifyTerminalSurfaceTap(originX, originY, focusKeyboard) {
     var tappedOscLink = oscLinkAtViewportPoint(originX, originY);
+    var unsupportedOscLink = tappedOscLink && tappedOscLink.kind === 'unsupported';
     if (tappedOscLink && tappedOscLink.kind === 'file') {
+      cancelTerminalPlainTap();
       notify({
         type: 'terminal-file-tap',
         pathText: tappedOscLink.fileTap.pathText,
@@ -219,6 +225,7 @@ export const URL_TAP_WEBVIEW_JS = `
     var tappedFileUrl = fileUrlAtViewportPoint(originX, originY);
     var tappedFileUrlPath = tappedFileUrl ? resolveTerminalFileUrlTap(tappedFileUrl) : null;
     if (tappedFileUrlPath) {
+      cancelTerminalPlainTap();
       notify({
         type: 'terminal-file-tap',
         pathText: tappedFileUrlPath.pathText,
@@ -229,11 +236,13 @@ export const URL_TAP_WEBVIEW_JS = `
     }
     var tappedUrl = tappedOscLink && tappedOscLink.kind === 'url' ? tappedOscLink.url : urlAtViewportPoint(originX, originY);
     if (tappedUrl) {
+      cancelTerminalPlainTap();
       notify({ type: 'open-url', url: tappedUrl });
       return;
     }
     var tappedPath = filePathAtViewportPoint(originX, originY);
     if (tappedPath) {
+      cancelTerminalPlainTap();
       notify({
         type: 'terminal-file-tap',
         pathText: tappedPath.pathText,
@@ -246,8 +255,14 @@ export const URL_TAP_WEBVIEW_JS = `
     if (clickInput) {
       notify({ type: 'terminal-input', bytes: clickInput });
     }
+    var mouseTrackingTap = isClickMouseTrackingMode(getMouseTrackingMode());
+    if (focusKeyboard && !mouseTrackingTap && !unsupportedOscLink) {
+      notify({ type: 'terminal-plain-tap' });
+    } else if (focusKeyboard) {
+      cancelTerminalPlainTap();
+    }
     // Touch still needs native input focus after the TUI consumes its mouse click.
-    if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode())) {
+    if (focusKeyboard || !mouseTrackingTap) {
       notify({ type: 'terminal-tap' });
     }
   }

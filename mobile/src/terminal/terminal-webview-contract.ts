@@ -54,6 +54,10 @@ export type TerminalSelectionEvents = {
   onTerminalInput?: (bytes: string) => void
   onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
+  // Finger tap on plain terminal content after links, files, TUI mouse, selection,
+  // scrolling, pinching, and long-press gestures have been excluded.
+  onTerminalPlainTap?: () => void
+  onTerminalPlainTapCancelled?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
   // WebView-detected URL tap; RN chooses the mobile routing destination.

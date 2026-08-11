@@ -936,7 +936,11 @@ export default function SessionScreen() {
     toggleTerminalLiveInput
   } = useTerminalLiveInputModePreference({ hostId, worktreeId })
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
-  const shouldSendTabForTap = useTerminalDoubleTapTab(activeHandle)
+  const terminalInputLifecycleKey = JSON.stringify([hostId, worktreeId, connState])
+  const { cancelPendingTap, shouldSendTabForTap } = useTerminalDoubleTapTab(
+    activeHandle,
+    terminalInputLifecycleKey
+  )
   // Reactive teardown signal for the native-chat covered stream; see unsubscribeTerminal.
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
@@ -1102,17 +1106,13 @@ export default function SessionScreen() {
     activeSessionTabType: activeSessionTab?.type
   })
   const liveInputEnabled = activeHandle ? liveInputTerminalHandles.has(activeHandle) : false
-  const {
-    focusLiveInput,
-    handleTerminalTap: handleTerminalFocusTap,
-    resetLiveInputFocus
-  } = useTerminalLiveInputFocus({
+  const { focusLiveInput, handleTerminalTap, resetLiveInputFocus } = useTerminalLiveInputFocus({
     activeHandleRef,
     canSend,
     inputRef: liveInputRef,
     keyboardHeight,
     lifecycleIdentity: client,
-    lifecycleKey: JSON.stringify([hostId, worktreeId, connState]),
+    lifecycleKey: terminalInputLifecycleKey,
     liveInputEnabled,
     timerRef: liveInputFocusTimerRef
   })
@@ -3214,14 +3214,13 @@ export default function SessionScreen() {
     })
   }, [])
 
-  const handleTerminalTap = useCallback(
+  const handleTerminalPlainTap = useCallback(
     (handle: string) => {
-      handleTerminalFocusTap(handle)
       if (handle === activeHandleRef.current && shouldSendTabForTap(handle)) {
         void handleAccessoryKeyRef.current({ bytes: '\t' })
       }
     },
-    [handleTerminalFocusTap, shouldSendTabForTap]
+    [shouldSendTabForTap]
   )
 
   // Tap a terminal or chat file path → resolve on host, open as file tab/preview.
@@ -4755,6 +4754,8 @@ export default function SessionScreen() {
                     onTerminalInput={handleTerminalInput}
                     onTerminalQueryReply={handleTerminalQueryReply}
                     onTerminalTap={handleTerminalTap}
+                    onTerminalPlainTap={handleTerminalPlainTap}
+                    onTerminalPlainTapCancelled={cancelPendingTap}
                     onFileTap={handleFileTap}
                     onOpenUrl={handleTerminalOpenUrl}
                   />

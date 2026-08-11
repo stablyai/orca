@@ -119,6 +119,10 @@ function terminalInputBytes(postMessage: ReturnType<typeof vi.fn>): string {
     .join('')
 }
 
+function postedMessageTypes(postMessage: ReturnType<typeof vi.fn>): string[] {
+  return postMessage.mock.calls.map(([raw]) => (JSON.parse(String(raw)) as { type: string }).type)
+}
+
 describe('terminal WebView external pointer wheel scrolling', () => {
   let animationFrames: Array<() => void>
   let buffer: BufferState
@@ -200,6 +204,16 @@ describe('terminal WebView external pointer wheel scrolling', () => {
     // Why: alt-screen TUIs (Claude Code, vim) have no scrollback, so an external
     // mouse/trackpad wheel must reach the PTY as cursor keys the way touch does.
     expect(terminalInputBytes(postMessage)).toBe(ESC_ARROW_DOWN.repeat(3))
+    expect(postedMessageTypes(postMessage)).toContain('terminal-plain-tap-cancelled')
+  })
+
+  it('cancels a pending plain tap when a trackpad pinch is swallowed', () => {
+    boot()
+
+    dispatchWheel(CELL_HEIGHT, { ctrlKey: true })
+
+    expect(postedMessageTypes(postMessage)).toContain('terminal-plain-tap-cancelled')
+    expect(terminalInputBytes(postMessage)).toBe('')
   })
 
   it('sends application cursor keys when the TUI enabled DECCKM', () => {

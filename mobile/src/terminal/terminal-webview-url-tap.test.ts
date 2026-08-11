@@ -204,6 +204,7 @@ describe('findUrlAtColumn', () => {
     expect(XTERM_HTML).toContain('function isLocalFileUriHostname(')
     expect(XTERM_HTML).toContain('return parsePathLineCol(value);')
     expect(XTERM_HTML).toContain('function notifyTerminalSurfaceTap(')
+    expect(XTERM_HTML).toContain('function cancelTerminalPlainTap(')
     expect(XTERM_HTML).toContain("notify({ type: 'open-url', url: tappedUrl });")
   })
 })

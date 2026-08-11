@@ -138,6 +138,8 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchstart', [{ x: tapX, y: tapY }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
+    expect(posted.find((m) => m.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(posted.filter((m) => m.type === 'terminal-plain-tap-cancelled')).toHaveLength(1)
   })
 
   it('still posts open-url when the tap jitters a few pixels', async () => {
@@ -163,6 +165,10 @@ describe('terminal WebView tap routing', () => {
         .filter((message) => message.type === 'terminal-input' || message.type === 'terminal-tap')
         .map((message) => message.type)
     ).toEqual(['terminal-input', 'terminal-tap'])
+    expect(posted.find((message) => message.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(
+      posted.filter((message) => message.type === 'terminal-plain-tap-cancelled')
+    ).toHaveLength(1)
   })
 
   it('reports a non-mouse touch tap without terminal mouse bytes', async () => {
@@ -173,7 +179,62 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchend', [])
 
     expect(posted.find((message) => message.type === 'terminal-input')).toBeUndefined()
+    expect(posted.filter((message) => message.type === 'terminal-plain-tap')).toHaveLength(1)
+    expect(
+      posted.find((message) => message.type === 'terminal-plain-tap-cancelled')
+    ).toBeUndefined()
     expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
+  })
+
+  it('does not classify pinch, long-press, or selection-dismiss gestures as plain taps', async () => {
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    fireTouch('touchstart', [
+      { x: 20, y: tapY },
+      { x: 80, y: tapY }
+    ])
+    fireTouch('touchend', [])
+    expect(posted.find((message) => message.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(
+      posted.filter((message) => message.type === 'terminal-plain-tap-cancelled')
+    ).toHaveLength(1)
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    await new Promise((resolve) => setTimeout(resolve, 550))
+    fireTouch('touchend', [])
+    expect(posted.find((message) => message.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(
+      posted.filter((message) => message.type === 'terminal-plain-tap-cancelled').length
+    ).toBeGreaterThan(1)
+
+    posted.length = 0
+    fireTouch('touchstart', [{ x: 40, y: tapY }])
+    fireTouch('touchend', [])
+    expect(posted.find((message) => message.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(posted.find((message) => message.type === 'terminal-plain-tap-cancelled')).toBeDefined()
+  })
+
+  it('cancels a pending plain tap when a scroll occurs before the next tap', async () => {
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchmove', [{ x: 20, y: tapY + 120 }])
+    fireTouch('touchend', [])
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(
+      posted
+        .filter(
+          (message) =>
+            message.type === 'terminal-plain-tap' || message.type === 'terminal-plain-tap-cancelled'
+        )
+        .map((message) => message.type)
+    ).toEqual(['terminal-plain-tap', 'terminal-plain-tap-cancelled', 'terminal-plain-tap'])
   })
 
   it('opens the URL even right after a width-change reflow', async () => {
@@ -215,6 +276,25 @@ describe('terminal WebView tap routing', () => {
       line: 12,
       column: 3
     })
+    expect(posted.find((m) => m.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-plain-tap-cancelled')).toBeDefined()
+  })
+
+  it('does not classify unsupported OSC links as plain terminal taps', async () => {
+    const oscLinks = [{ row: 0, startCol: 0, endCol: 8, uri: 'mailto:team@example.com' }]
+    const { posted } = boot('email us', oscLinks)
+    await settle()
+
+    fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY }])
+    fireTouch('touchend', [])
+    fireTouch('touchstart', [{ x: screenXForCol(2), y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-file-tap')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(posted.filter((m) => m.type === 'terminal-plain-tap-cancelled')).toHaveLength(2)
+    expect(posted.filter((m) => m.type === 'terminal-tap')).toHaveLength(2)
   })
 
   it('opens plain file URLs through terminal file taps', async () => {
@@ -293,5 +373,7 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchmove', [{ x: tapX, y: tapY + 120 }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-plain-tap')).toBeUndefined()
+    expect(posted.find((m) => m.type === 'terminal-plain-tap-cancelled')).toBeDefined()
   })
 })

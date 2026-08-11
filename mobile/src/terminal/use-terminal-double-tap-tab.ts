@@ -3,7 +3,15 @@ import { useFocusEffect } from 'expo-router'
 import { loadTerminalDoubleTapTabEnabled } from '../storage/preferences'
 import { resolveTerminalDoubleTapTab, type TerminalTapRecord } from './terminal-double-tap-tab'
 
-export function useTerminalDoubleTapTab(activeHandle: string | null): (handle: string) => boolean {
+export type TerminalDoubleTapTabHandlers = {
+  readonly cancelPendingTap: () => void
+  readonly shouldSendTabForTap: (handle: string) => boolean
+}
+
+export function useTerminalDoubleTapTab(
+  activeHandle: string | null,
+  lifecycleKey: string
+): TerminalDoubleTapTabHandlers {
   const [enabled, setEnabled] = useState(false)
   const lastTapRef = useRef<TerminalTapRecord | null>(null)
 
@@ -25,9 +33,13 @@ export function useTerminalDoubleTapTab(activeHandle: string | null): (handle: s
 
   useEffect(() => {
     lastTapRef.current = null
-  }, [activeHandle])
+  }, [activeHandle, lifecycleKey])
 
-  return useCallback(
+  const cancelPendingTap = useCallback(() => {
+    lastTapRef.current = null
+  }, [])
+
+  const shouldSendTabForTap = useCallback(
     (handle: string) => {
       const resolution = resolveTerminalDoubleTapTab({
         enabled,
@@ -40,4 +52,6 @@ export function useTerminalDoubleTapTab(activeHandle: string | null): (handle: s
     },
     [enabled]
   )
+
+  return { cancelPendingTap, shouldSendTabForTap }
 }

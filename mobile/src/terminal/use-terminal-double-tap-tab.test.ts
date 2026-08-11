@@ -42,11 +42,20 @@ vi.mock('../storage/preferences', () => ({
 
 describe('useTerminalDoubleTapTab', () => {
   let renderer: ReactTestRenderer | null = null
+  let cancelPendingTap: (() => void) | null = null
   let shouldSendTab: ((handle: string) => boolean) | null = null
   let now = 100
 
-  function Harness({ activeHandle }: { activeHandle: string | null }): null {
-    shouldSendTab = useTerminalDoubleTapTab(activeHandle)
+  function Harness({
+    activeHandle,
+    lifecycleKey = 'host-a:worktree-a:connected'
+  }: {
+    activeHandle: string | null
+    lifecycleKey?: string
+  }): null {
+    const handlers = useTerminalDoubleTapTab(activeHandle, lifecycleKey)
+    cancelPendingTap = handlers.cancelPendingTap
+    shouldSendTab = handlers.shouldSendTabForTap
     return null
   }
 
@@ -70,6 +79,7 @@ describe('useTerminalDoubleTapTab', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    cancelPendingTap = null
     shouldSendTab = null
     vi.restoreAllMocks()
   })
@@ -88,6 +98,33 @@ describe('useTerminalDoubleTapTab', () => {
 
     act(() => renderer?.update(createElement(Harness, { activeHandle: 'terminal-b' })))
     act(() => renderer?.update(createElement(Harness, { activeHandle: 'terminal-a' })))
+    now += 100
+
+    expect(shouldSendTab?.('terminal-a')).toBe(false)
+  })
+
+  it('clears a pending tap across route or connection lifecycle changes', async () => {
+    await mount()
+    expect(shouldSendTab?.('terminal-a')).toBe(false)
+
+    act(() =>
+      renderer?.update(
+        createElement(Harness, {
+          activeHandle: 'terminal-a',
+          lifecycleKey: 'host-a:worktree-a:reconnecting'
+        })
+      )
+    )
+    now += 100
+
+    expect(shouldSendTab?.('terminal-a')).toBe(false)
+  })
+
+  it('clears a pending tap when an excluded terminal gesture occurs', async () => {
+    await mount()
+    expect(shouldSendTab?.('terminal-a')).toBe(false)
+
+    act(() => cancelPendingTap?.())
     now += 100
 
     expect(shouldSendTab?.('terminal-a')).toBe(false)

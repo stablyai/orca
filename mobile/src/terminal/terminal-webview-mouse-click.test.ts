@@ -43,6 +43,10 @@ describe('terminal WebView external mouse click', () => {
 
     const messages = mouse.postedMessages()
     expect(messages.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
+    expect(messages.filter((message) => message.type === 'terminal-plain-tap')).toEqual([])
+    expect(messages.filter((message) => message.type === 'terminal-plain-tap-cancelled')).toEqual([
+      { type: 'terminal-plain-tap-cancelled' }
+    ])
     expect(mouse.terminalInputBytes()).toBe('')
   })
 
