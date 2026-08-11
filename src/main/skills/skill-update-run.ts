@@ -220,17 +220,22 @@ export class SkillUpdateRunner {
       // Why: 126 is the POSIX "found but not executable" exit — version-manager
       // shims (asdf/mise) with a missing declared node version die with it. The
       // shim passed our X_OK probe, so the only way to recover is to try the
-      // next PATH candidate once (issue #13807).
-      if (code === DEAD_SHIM_EXIT_CODE && index + 1 < candidates.length) {
+      // next PATH candidate once (issue #13807). Deliberately a single fallback:
+      // more attempts would mask genuinely broken installs.
+      if (code === DEAD_SHIM_EXIT_CODE && index === 0 && index + 1 < candidates.length) {
         this.child = null
         this.spawnAttempt(token, canonicalNames, candidates, index + 1, npxArgs)
         return
       }
-      this.settle(
-        token,
-        canonicalNames,
-        code === 0 ? null : `skills update exited with code ${code}`
-      )
+      const exitMessage =
+        code === DEAD_SHIM_EXIT_CODE && code !== 0
+          ? `skills update exited with code ${code} — ${npxCommand} looks like a version-manager ` +
+            `shim whose declared runtime is not installed. Check or install the configured node ` +
+            `version (e.g. 'asdf install' or 'mise install') or fix PATH so a working npx comes first.`
+          : code === 0
+            ? null
+            : `skills update exited with code ${code}`
+      this.settle(token, canonicalNames, exitMessage)
     })
   }
 
