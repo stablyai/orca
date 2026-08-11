@@ -1,7 +1,7 @@
 import type {
   CheckStatus,
   GitHubAssignableUser,
-  GitHubPRCheckSummary,
+  ProviderCheckSummary,
   GitHubPRMergeMethod,
   GitHubPRMergeMethodSettings,
   GitHubPRReviewSummary,
@@ -82,11 +82,14 @@ export function readCheckRunStatus(value: unknown): PRCheckDetail['status'] | nu
   return value === 'queued' || value === 'in_progress' || value === 'completed' ? value : null
 }
 
+// Why: dropping `action_required` here rendered a merge-blocking approval gate as a pending
+// check; the shared classifier counts it as a failure, so it must survive parsing.
 export function readCheckRunConclusion(value: unknown): PRCheckDetail['conclusion'] {
   return value === 'success' ||
     value === 'failure' ||
     value === 'cancelled' ||
     value === 'timed_out' ||
+    value === 'action_required' ||
     value === 'neutral' ||
     value === 'skipped' ||
     value === 'pending'
@@ -182,12 +185,18 @@ export function readMergeMethodSettings(value: unknown): GitHubPRMergeMethodSett
   }
 }
 
-export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefined {
+export function readCheckSummary(value: unknown): ProviderCheckSummary | undefined {
   if (!isRecord(value)) {
     return undefined
   }
   const state = value.state
-  if (state !== 'success' && state !== 'failure' && state !== 'pending' && state !== 'none') {
+  if (
+    state !== 'success' &&
+    state !== 'failure' &&
+    state !== 'pending' &&
+    state !== 'neutral' &&
+    state !== 'none'
+  ) {
     return undefined
   }
   return {
@@ -195,6 +204,7 @@ export function readCheckSummary(value: unknown): GitHubPRCheckSummary | undefin
     total: readNumber(value.total) ?? 0,
     passed: readNumber(value.passed) ?? 0,
     failed: readNumber(value.failed) ?? 0,
-    pending: readNumber(value.pending) ?? 0
+    pending: readNumber(value.pending) ?? 0,
+    neutral: readNumber(value.neutral) ?? 0
   }
 }

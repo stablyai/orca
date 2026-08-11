@@ -40,11 +40,34 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
+const ABSENT_BRANCH_DIFF_HEAD_OID = { absent: true } as const
+
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
   }
   return (error as { code?: unknown }).code === JsonRpcErrorCode.MethodNotFound
+}
+
+// Why: the relay returns the durable ref it wrote; re-deriving it on the client
+// can disagree (URL normalization) and leave resolve looking at the wrong path.
+function readDurableReviewHeadLocalRef(
+  result: unknown,
+  kind: 'pull request' | 'merge request'
+): string {
+  if (result && typeof result === 'object' && 'localRef' in result) {
+    const localRef = (result as { localRef: unknown }).localRef
+    if (typeof localRef === 'string') {
+      const trimmed = localRef.trim()
+      if (trimmed.startsWith('refs/orca/')) {
+        return trimmed
+      }
+    }
+  }
+  throw new Error(
+    `This SSH host did not return the durable ${kind} head ref. Reconnect to deploy the latest relay, then try again.`
+  )
 }
 
 function formatStatusEntriesForCleanCheck(entries: GitStatusResult['entries']): string | undefined {
@@ -107,11 +130,16 @@ export class SshGitProvider implements IGitProvider {
       ? { bypassEffectiveUpstreamNegativeCache: true }
       : {}
     const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+    const branchLineTotalArgs =
+      options?.branchLineTotalMergeBase === undefined
+        ? {}
+        : { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     const request = {
       worktreePath,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
-      ...lineStatsReuseArgs
+      ...lineStatsReuseArgs,
+      ...branchLineTotalArgs
     }
     return (await (options?.signal
       ? this.mux.request('git.status', request, { signal: options.signal })
@@ -350,10 +378,9 @@ export class SshGitProvider implements IGitProvider {
         }
       }
       entry.started = true
-      return (await this.mux.request(
-        'agent.execNonInteractive',
-        payload
-      )) as RemoteCommitMessageExecResult
+      return (await this.mux.request('agent.execNonInteractive', payload, {
+        timeoutMs: payload.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+      })) as RemoteCommitMessageExecResult
     } finally {
       signal?.removeEventListener('abort', abortEntry)
       entry.release()
@@ -575,22 +602,71 @@ export class SshGitProvider implements IGitProvider {
     worktreePath: string,
     remote: string,
     mrIid: number
-  ): Promise<void> {
-    await this.runWithDiffDedupeClear(async () => {
-      await this.mux.request('git.fetchGitLabMergeRequestHead', {
-        worktreePath,
-        remote,
-        mrIid
+  ): Promise<string> {
+    try {
+      return await this.runWithDiffDedupeClear(async () => {
+        // Why: the durable-ref RPC is a NEW method name. Old relays only implement
+        // FETCH_HEAD-semantics git.fetchGitLabMergeRequestHead, so calling the ref
+        // variant makes them return -32601 rather than silently no-op the durable
+        // ref (which would leave the client resolving a stale/missing MR head).
+        const result = await this.mux.request('git.fetchGitLabMergeRequestHeadRef', {
+          worktreePath,
+          remote,
+          mrIid
+        })
+        // Why: use the host-written path; a second client-side get-url can disagree.
+        return readDurableReviewHeadLocalRef(result, 'merge request')
       })
-    })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older SSH relays predate the durable-ref MR fetch; surface a
+        // reconnect prompt instead of a raw JSON-RPC method-not-found error.
+        throw new Error(
+          'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
+  }
+
+  async fetchGitHubPullRequestHead(
+    worktreePath: string,
+    remote: string,
+    prNumber: number
+  ): Promise<string> {
+    try {
+      return await this.runWithDiffDedupeClear(async () => {
+        const result = await this.mux.request('git.fetchGitHubPullRequestHead', {
+          worktreePath,
+          remote,
+          prNumber
+        })
+        // Why: use the host-written path; a second client-side get-url can disagree.
+        return readDurableReviewHeadLocalRef(result, 'pull request')
+      })
+    } catch (error) {
+      if (isJsonRpcMethodNotFoundError(error)) {
+        // Why: older SSH relays predate git.fetchGitHubPullRequestHead; surface a
+        // reconnect prompt instead of a raw JSON-RPC method-not-found error.
+        throw new Error(
+          'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.'
+        )
+      }
+      throw error
+    }
   }
 
   async getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string; headOid?: string }
   ): Promise<GitDiffResult[]> {
     const keyOptions = options ?? {}
+    const { headOid: rawHeadOid, ...relayOptions } = keyOptions
+    // Why: compare snapshots type headOid as `string | null`, so collapse an
+    // unpinned null to absent instead of putting a field on the wire that a
+    // pinned-OID relay must reject.
+    const headOid = rawHeadOid == null ? undefined : rawHeadOid
     return this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'branchDiff',
@@ -598,13 +674,15 @@ export class SshGitProvider implements IGitProvider {
         baseRef,
         keyOptions.includePatch ?? null,
         keyOptions.filePath ?? null,
-        keyOptions.oldPath ?? null
+        keyOptions.oldPath ?? null,
+        headOid === undefined ? ABSENT_BRANCH_DIFF_HEAD_OID : headOid
       ]),
       async () =>
         (await requestGitStreamable(this.mux, 'git.branchDiff', {
           worktreePath,
           baseRef,
-          ...options
+          ...relayOptions,
+          ...(headOid === undefined ? {} : { headOid })
         })) as GitDiffResult[]
     ) as Promise<GitDiffResult[]>
   }

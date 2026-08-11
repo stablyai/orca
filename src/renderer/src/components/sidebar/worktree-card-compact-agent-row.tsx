@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
@@ -27,8 +28,11 @@ function formatShortTimeAgo(ts: number, now: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
-  const prompt = getAgentRowPrimaryText(agent.entry)
+function getCompactAgentPrimary(
+  agent: DashboardAgentRowData,
+  conversationName: string | null
+): string {
+  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -116,7 +120,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // "?" glyph. Nesting under the parent already conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const dotState = getAgentDotState(agent)
-  const primary = getCompactAgentPrimary(agent)
+  const conversationName = useAgentRowConversationName(agent)
+  const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
   const model = agent.entry.model?.trim() ?? ''
@@ -213,7 +218,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       {model && (
         <span
           className={cn(
-            'max-w-24 shrink-0 truncate font-mono text-[10px]',
+            'min-w-0 max-w-24 truncate font-mono text-[10px]',
             isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
           )}
           title={model}
@@ -250,7 +255,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <div
       draggable={false}
       className={cn(
-        'compact-agent-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'compact-agent-row group/compact-agent-row min-w-0 overflow-hidden cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',

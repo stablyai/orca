@@ -6,9 +6,7 @@ const {
   callRuntimeEnvironmentMock,
   registerCliHandlersMock,
   registerPreflightHandlersMock,
-  registerClaudeUsageHandlersMock,
-  registerCodexUsageHandlersMock,
-  registerOpenCodeUsageHandlersMock,
+  registerUsageProviderHandlersMock,
   registerGitHubHandlersMock,
   registerFeedbackHandlersMock,
   registerStatsHandlersMock,
@@ -53,8 +51,10 @@ const {
   registerGitLabHandlersMock,
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
+  registerCodexConfigSyncHandlersMock,
   registerOnboardingHandlersMock,
   registerDashboardPopoutHandlersMock,
+  isDashboardPopoutRendererMock,
   registerTerminalPreviewHandlersMock,
   registerSpeechHandlersMock,
   registerSkillsHandlersMock,
@@ -70,9 +70,7 @@ const {
   callRuntimeEnvironmentMock: vi.fn(),
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
-  registerClaudeUsageHandlersMock: vi.fn(),
-  registerCodexUsageHandlersMock: vi.fn(),
-  registerOpenCodeUsageHandlersMock: vi.fn(),
+  registerUsageProviderHandlersMock: vi.fn(),
   registerGitHubHandlersMock: vi.fn(),
   registerFeedbackHandlersMock: vi.fn(),
   registerStatsHandlersMock: vi.fn(),
@@ -117,8 +115,10 @@ const {
   registerGitLabHandlersMock: vi.fn(),
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
+  registerCodexConfigSyncHandlersMock: vi.fn(),
   registerOnboardingHandlersMock: vi.fn(),
   registerDashboardPopoutHandlersMock: vi.fn(),
+  isDashboardPopoutRendererMock: vi.fn(),
   registerTerminalPreviewHandlersMock: vi.fn(),
   registerSpeechHandlersMock: vi.fn(),
   registerSkillsHandlersMock: vi.fn(),
@@ -144,12 +144,20 @@ vi.mock('./runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: callRuntimeEnvironmentMock
 }))
 
+vi.mock('./codex-config-sync', () => ({
+  registerCodexConfigSyncHandlers: registerCodexConfigSyncHandlersMock
+}))
+
 vi.mock('./onboarding', () => ({
   registerOnboardingHandlers: registerOnboardingHandlersMock
 }))
 
 vi.mock('./dashboard-popout', () => ({
   registerDashboardPopoutHandlers: registerDashboardPopoutHandlersMock
+}))
+
+vi.mock('../window/dashboard-popout-window', () => ({
+  isDashboardPopoutRenderer: isDashboardPopoutRendererMock
 }))
 
 vi.mock('./terminal-preview', () => ({
@@ -168,16 +176,8 @@ vi.mock('./preflight', () => ({
   registerPreflightHandlers: registerPreflightHandlersMock
 }))
 
-vi.mock('./claude-usage', () => ({
-  registerClaudeUsageHandlers: registerClaudeUsageHandlersMock
-}))
-
-vi.mock('./codex-usage', () => ({
-  registerCodexUsageHandlers: registerCodexUsageHandlersMock
-}))
-
-vi.mock('./opencode-usage', () => ({
-  registerOpenCodeUsageHandlers: registerOpenCodeUsageHandlersMock
+vi.mock('./usage-provider-handlers', () => ({
+  registerUsageProviderHandlers: registerUsageProviderHandlersMock
 }))
 
 vi.mock('./github', () => ({
@@ -383,9 +383,7 @@ describe('registerCoreHandlers', () => {
     callRuntimeEnvironmentMock.mockReset()
     registerCliHandlersMock.mockReset()
     registerPreflightHandlersMock.mockReset()
-    registerClaudeUsageHandlersMock.mockReset()
-    registerCodexUsageHandlersMock.mockReset()
-    registerOpenCodeUsageHandlersMock.mockReset()
+    registerUsageProviderHandlersMock.mockReset()
     registerGitHubHandlersMock.mockReset()
     registerFeedbackHandlersMock.mockReset()
     registerStatsHandlersMock.mockReset()
@@ -448,7 +446,7 @@ describe('registerCoreHandlers', () => {
     const claudeUsage = { marker: 'claudeUsage' }
     const codexUsage = { marker: 'codexUsage' }
     const openCodeUsage = { marker: 'openCodeUsage' }
-    const codexAccounts = { marker: 'codexAccounts' }
+    const codexAccounts = { marker: 'codexAccounts', runtimeHomeService: { marker: 'runtimeHome' } }
     const claudeAccounts = { marker: 'claudeAccounts' }
     const rateLimits = { marker: 'rateLimits' }
     const agentAwakeService = { marker: 'agentAwakeService' }
@@ -482,19 +480,27 @@ describe('registerCoreHandlers', () => {
       result: { sessions: 'bad-shape' }
     })
 
-    expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
-    expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
-    expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
+    expect(registerUsageProviderHandlersMock).toHaveBeenCalledWith({
+      claudeUsage,
+      codexUsage,
+      openCodeUsage
+    })
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
-    expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(codexAccounts)
+    expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(
+      codexAccounts,
+      expect.any(Function)
+    )
     expect(registerAgentHookHandlersMock).toHaveBeenCalledWith(runtime, {
       getPtyIdForPaneKey: expect.any(Function)
     })
+    expect(registerCodexConfigSyncHandlersMock).toHaveBeenCalledWith(
+      codexAccounts.runtimeHomeService
+    )
     expect(registerPetHandlersMock).toHaveBeenCalled()
     expect(registerClaudeAccountHandlersMock).toHaveBeenCalledWith(claudeAccounts)
     expect(registerMiniMaxCredentialsHandlersMock).toHaveBeenCalledWith(rateLimits)
     expect(registerGrokAccountHandlersMock).toHaveBeenCalled()
-    expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits)
+    expect(registerRateLimitHandlersMock).toHaveBeenCalledWith(rateLimits, codexAccounts)
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()
@@ -517,13 +523,15 @@ describe('registerCoreHandlers', () => {
     expect(registerTelemetryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerOrcaProfileHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerSessionHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerUIHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerUIHandlersMock).toHaveBeenCalledWith(store, {
+      isDashboardPopoutRenderer: isDashboardPopoutRendererMock
+    })
     expect(registerEmulatorFrameStreamHandlersMock).toHaveBeenCalled()
     expect(registerEmulatorVideoStreamHandlersMock).toHaveBeenCalled()
     expect(registerFilesystemHandlersMock).toHaveBeenCalledWith(store)
     expect(registerRuntimeHandlersMock).toHaveBeenCalledWith(runtime)
     expect(registerRuntimeEnvironmentHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store)
+    expect(registerEphemeralVmHandlersMock).toHaveBeenCalledWith(store, undefined)
     expect(registerAiVaultHandlersMock).toHaveBeenCalledWith(
       expect.objectContaining({
         getAdditionalCodexHomePaths: getAdditionalAiVaultCodexHomePaths,

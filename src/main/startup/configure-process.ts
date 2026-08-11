@@ -90,28 +90,6 @@ export function resetDevParentShutdownRequestForTests(): void {
   devParentShutdownRequested = false
 }
 
-export function installUncaughtPipeErrorGuard(): void {
-  const onUncaughtException = (error: unknown): void => {
-    if (
-      error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      ((error as NodeJS.ErrnoException).code === 'EIO' ||
-        (error as NodeJS.ErrnoException).code === 'EPIPE')
-    ) {
-      return
-    }
-
-    process.off('uncaughtException', onUncaughtException)
-    // Why: throwing inside an uncaughtException handler exits with status 7 and hides the fault; re-throw next tick for the real stack.
-    setImmediate(() => {
-      throw error
-    })
-  }
-
-  process.on('uncaughtException', onUncaughtException)
-}
-
 export function patchPackagedProcessPath(): void {
   if (!app.isPackaged) {
     return
@@ -121,15 +99,14 @@ export function patchPackagedProcessPath(): void {
   const extraPaths: string[] = []
 
   if (process.platform !== 'win32') {
-    extraPaths.push(
-      '/opt/homebrew/bin',
-      '/opt/homebrew/sbin',
-      '/usr/local/bin',
-      '/usr/local/sbin',
-      '/snap/bin',
-      '/home/linuxbrew/.linuxbrew/bin',
-      '/nix/var/nix/profiles/default/bin'
-    )
+    extraPaths.push('/opt/homebrew/bin', '/opt/homebrew/sbin', '/usr/local/bin', '/usr/local/sbin')
+
+    if (process.platform === 'linux') {
+      // Why: snap and Linuxbrew ship on Linux only, so seeding them elsewhere adds phantom PATH entries every spawn must stat.
+      extraPaths.push('/snap/bin', '/home/linuxbrew/.linuxbrew/bin')
+    }
+
+    extraPaths.push('/nix/var/nix/profiles/default/bin')
 
     if (home) {
       extraPaths.push(
@@ -282,6 +259,13 @@ export function enableMainProcessGpuFeatures(): void {
     app.disableHardwareAcceleration()
     app.commandLine.appendSwitch('disable-gpu')
     return
+  }
+
+  if (process.platform === 'darwin') {
+    // Why: Graphite can strand corrupt Metal tiles after idle; Ganesh preserves GPU compositing without the stale surface.
+    // Reached on every macOS launch only because GPU fallback skips this function and is win32-only; if fallback ever
+    // reaches macOS this must move out of this path or Macs silently lose the fix.
+    app.commandLine.appendSwitch('disable-skia-graphite')
   }
 
   // Why: Blink evicts the oldest WebGL context past 16/renderer and each terminal pane holds one, silently downgrading panes to DOM.

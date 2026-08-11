@@ -80,6 +80,43 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the AI Vault OMP resume file through hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'omp',
+          providerSession: { key: 'session_id', id: 'omp-session' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 10,
+          launchConfig: {
+            agentArgs: '',
+            agentEnv: {},
+            ompResumeFilePath: '/custom/omp-sessions/project/session.jsonl'
+          },
+          origin: 'quit'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.launchConfig
+          ?.ompResumeFilePath
+      ).toBe('/custom/omp-sessions/project/session.jsonl')
+    }
+  })
+
   it('drops Pi sleeping-agent records without an authoritative session file', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -289,6 +326,39 @@ describe('parseWorkspaceSession sleeping agents', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('quit')
+    }
+  })
+
+  it('preserves the tab-open-only restore flag across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'worktree-sleep',
+          restoreOnTabOpenOnly: true
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: dropping it on restart resurrects the mobile-wake fan-out this flag exists to stop.
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.restoreOnTabOpenOnly
+      ).toBe(true)
     }
   })
 

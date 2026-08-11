@@ -39,6 +39,10 @@ vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: (...args: unknown[]) =>
     notifyHostOfMirroredEditorCloseMock(...args)
 }))
+const loadGitLabJobLogDetailsMock = vi.hoisted(() => vi.fn())
+vi.mock('@/runtime/gitlab-job-trace-client', () => ({
+  loadGitLabJobLogDetails: loadGitLabJobLogDetailsMock
+}))
 
 function createEditorStore(): StoreApi<AppState> {
   // Only the editor slice + activeWorktreeId are needed for these tests.
@@ -66,6 +70,13 @@ function createEditorTabsStore(): StoreApi<AppState> {
     browserTabsByWorktree: {},
     activeBrowserTabId: null,
     activeBrowserTabIdByWorktree: {},
+    activeTabId: null,
+    activeTabIdByWorktree: {},
+    tabBarOrderByWorktree: {},
+    setTabBarOrder: (worktreeId: string, order: string[]) =>
+      args[0]((state: AppState) => ({
+        tabBarOrderByWorktree: { ...state.tabBarOrderByWorktree, [worktreeId]: order }
+      })),
     repos: [{ id: 'repo-1', path: '/repo' }],
     worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
     folderWorkspaces: [],
@@ -90,6 +101,22 @@ function ownedEditorFileId(
   return `editor:${encodeURIComponent(worktreeId)}:${encodeURIComponent(runtimeKey)}:${encodeURIComponent(filePath)}`
 }
 
+/** Counts how often store code reads `entityId` off a worktree's unified tabs —
+ *  a scan-count proxy that pins complexity without timing the wall clock. */
+function withCountedEntityIdReads(tabs: readonly Tab[], onRead: () => void): Tab[] {
+  return tabs.map((tab) => {
+    const { entityId, ...rest } = tab
+    return Object.defineProperty(rest, 'entityId', {
+      get: () => {
+        onRead()
+        return entityId
+      },
+      enumerable: true,
+      configurable: true
+    }) as Tab
+  })
+}
+
 function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: string): Tab {
   return {
     id,
@@ -106,6 +133,62 @@ function mirroredEditorUnifiedTab(id: string, entityId: string, worktreeId: stri
 }
 
 describe('createEditorSlice right sidebar state', () => {
+  it('queues and safely consumes explicit editor focus requests', () => {
+    const store = createEditorStore()
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { focusEditor: true }
+    )
+
+    const request = store.getState().pendingEditorFocusRequest
+    expect(request).toMatchObject({
+      fileId: '/repo/README.md',
+      worktreeId: 'wt-1',
+      viewStateId: expect.any(String),
+      expiresAt: expect.any(Number)
+    })
+
+    store.getState().consumeEditorFocusRequest((request?.token ?? 0) + 1)
+    expect(store.getState().pendingEditorFocusRequest).toBe(request)
+
+    store.getState().consumeEditorFocusRequest(request?.token ?? 0)
+    expect(store.getState().pendingEditorFocusRequest).toBeNull()
+  })
+
+  it('scopes the focus request to the unified tab that will render the file', () => {
+    const store = createEditorTabsStore()
+    const sourceTab = store.getState().createUnifiedTab('wt-1', 'terminal', { id: 'terminal-1' })
+    const targetGroupId = store.getState().createEmptySplitGroup('wt-1', sourceTab.groupId, 'right')
+    if (!targetGroupId) {
+      throw new Error('expected split group')
+    }
+
+    store.getState().openFile(
+      {
+        filePath: '/repo/README.md',
+        relativePath: 'README.md',
+        worktreeId: 'wt-1',
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { focusEditor: true, targetGroupId }
+    )
+
+    const editorTab = store
+      .getState()
+      .unifiedTabsByWorktree['wt-1']?.find((tab) => tab.contentType === 'editor')
+    expect(editorTab?.groupId).toBe(targetGroupId)
+    // Why: the pane matches the handoff on its own tab id, so a drifting id silently drops it.
+    expect(store.getState().pendingEditorFocusRequest?.viewStateId).toBe(editorTab?.id)
+  })
+
   it('does not record markdown-file-created when opening an existing markdown file', () => {
     const store = createEditorStore()
 
@@ -607,7 +690,7 @@ describe('createEditorSlice openDiff', () => {
   it('bumps fileContentReloadNonce when re-opening an existing clean file with reload requested', () => {
     const store = createEditorStore()
 
-    const openFileWithReloadRequest = (): void =>
+    const openFileWithReloadRequest = (): void => {
       store.getState().openFile(
         {
           filePath: '/repo/file.ts',
@@ -618,6 +701,7 @@ describe('createEditorSlice openDiff', () => {
         },
         { forceContentReload: true }
       )
+    }
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBeUndefined()
@@ -627,6 +711,62 @@ describe('createEditorSlice openDiff', () => {
 
     openFileWithReloadRequest()
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
+  })
+
+  it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
+    const store = createEditorStore()
+    const file = {
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'wt-1',
+      language: 'png',
+      mode: 'edit' as const
+    }
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ])
+    } as never)
+    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-1' })
+
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-2' }],
+      sshConnectionStates: new Map([
+        [
+          'ssh-2',
+          {
+            targetId: 'ssh-2',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 2
+          }
+        ]
+      ])
+    } as never)
+    store.getState().openFile({ ...file, externalSshTargetId: 'ssh-2' })
+
+    expect(store.getState().openFiles).toHaveLength(1)
+    expect(store.getState().openFiles[0]?.externalSshTargetId).toBe('ssh-2')
+    expect(store.getState().openFiles[0]?.operationProvenance).toEqual(
+      expect.objectContaining({
+        generation: expect.objectContaining({
+          route: { executionHostId: 'ssh:ssh-2', runtimeEnvironmentId: null }
+        }),
+        expectedSshConnectionGeneration: 2
+      })
+    )
   })
 
   it('does not bump fileContentReloadNonce when a dirty file is re-opened', () => {
@@ -757,7 +897,7 @@ describe('createEditorSlice openDiff', () => {
   it('keeps an existing preview replaceable when it is opened as preview again', () => {
     const store = createEditorTabsStore()
 
-    const openPreviewFile = (): void =>
+    const openPreviewFile = (): void => {
       store.getState().openFile(
         {
           filePath: '/repo/a.ts',
@@ -768,6 +908,7 @@ describe('createEditorSlice openDiff', () => {
         },
         { preview: true }
       )
+    }
 
     openPreviewFile()
     openPreviewFile()
@@ -1147,6 +1288,35 @@ describe('createEditorSlice split-group editor routing', () => {
 
     expect(findUnifiedTabByEntity(store, '/repo/explicit.ts')?.groupId).toBe(terminalGroupId)
   })
+
+  it('opens implicit files in a focused browser split group instead of stealing an editor pane (#6891)', () => {
+    const store = createEditorTabsStore()
+    const { editorGroupId } = seedTerminalAndEditorGroups(store)
+
+    // Regression #6891: with a split like Agent | Browser, focusing the browser
+    // pane and opening a file sent it to another pane. A focused browser pane
+    // was treated like a focused agent terminal, so the open was stolen into an
+    // existing editor pane instead of the focused group.
+    const browserGroupId = store.getState().createEmptySplitGroup('wt-1', editorGroupId, 'right')
+    if (!browserGroupId) {
+      throw new Error('Expected split browser group')
+    }
+    store.getState().createUnifiedTab('wt-1', 'browser', {
+      id: 'browser-tab',
+      entityId: 'browser-tab',
+      label: 'Browser',
+      targetGroupId: browserGroupId
+    })
+    store.setState({
+      activeGroupIdByWorktree: { 'wt-1': browserGroupId },
+      activeTabType: 'browser',
+      activeTabTypeByWorktree: { 'wt-1': 'browser' }
+    } as Partial<AppState>)
+
+    openSourceFile(store, '/repo/from-browser.ts')
+
+    expect(findUnifiedTabByEntity(store, '/repo/from-browser.ts')?.groupId).toBe(browserGroupId)
+  })
 })
 
 describe('createEditorSlice untitled cleanup routing', () => {
@@ -1482,6 +1652,172 @@ describe('createEditorSlice recently closed editor tabs', () => {
     expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
     expect(store.getState().openFiles.at(-1)).toMatchObject({ filePath: '/repo/notes.md' })
     expect(store.getState().openFiles.at(-1)).not.toHaveProperty('mirroredFromRuntimeSession')
+  })
+
+  it('restores the exact same-path owner instead of moving the local editor', () => {
+    const store = createEditorTabsStore()
+    const localId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const remoteId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      runtimeEnvironmentId: 'env-1',
+      mode: 'edit'
+    })
+    store.getState().setTabBarOrder('wt-1', [localId, remoteId])
+
+    store.getState().closeFile(remoteId)
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    const openIds = store.getState().openFiles.map((file) => file.id)
+    expect(openIds).toEqual([localId, remoteId])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([localId, remoteId])
+  })
+
+  it('keeps same-path edit and diff tabs as separate entities on reopen', () => {
+    const store = createEditorTabsStore()
+    const editId = store.getState().openFile({
+      filePath: '/repo/notes.md',
+      relativePath: 'notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().openDiff('wt-1', '/repo/notes.md', 'notes.md', 'markdown', false)
+    const diffId = 'wt-1::diff::unstaged::notes.md'
+    store.getState().setTabBarOrder('wt-1', [editId, diffId])
+
+    store.getState().closeFile(diffId)
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual([editId, diffId])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([editId, diffId])
+  })
+
+  it('keeps close-all editor snapshots positioned for reopen', () => {
+    const store = createEditorTabsStore()
+    const firstId = store.getState().openFile({
+      filePath: '/repo/first.md',
+      relativePath: 'first.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const middleId = store.getState().openFile({
+      filePath: '/repo/middle.md',
+      relativePath: 'middle.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    const lastId = store.getState().openFile({
+      filePath: '/repo/last.md',
+      relativePath: 'last.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit'
+    })
+    store.getState().setTabBarOrder('wt-1', [firstId, middleId, lastId])
+
+    store.getState().closeAllFiles()
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles[0]?.id).toBe(firstId)
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([firstId])
+  })
+
+  it('captures close-all snapshot positions without rescanning tab state per closed tab', () => {
+    const countEntityIdReads = (fileCount: number): number => {
+      const store = createEditorTabsStore()
+      for (let index = 0; index < fileCount; index += 1) {
+        store.getState().openFile(
+          {
+            filePath: `/repo/file-${index}.ts`,
+            relativePath: `file-${index}.ts`,
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit'
+          },
+          { preview: false }
+        )
+      }
+      let reads = 0
+      store.setState({
+        unifiedTabsByWorktree: {
+          'wt-1': withCountedEntityIdReads(
+            store.getState().unifiedTabsByWorktree['wt-1'] ?? [],
+            () => {
+              reads += 1
+            }
+          )
+        }
+      } as Partial<AppState>)
+      reads = 0
+
+      store.getState().closeAllFiles()
+
+      expect(store.getState().openFiles).toHaveLength(0)
+      expect(store.getState().recentlyClosedEditorTabsByWorktree['wt-1']?.[0]?.position).toEqual({
+        tabBarIndex: 0,
+        groupId: expect.any(String),
+        groupIndex: 0
+      })
+      return reads
+    }
+
+    // Why: resolving each closed tab's position by rescanning tab order and group membership
+    // made close-all cubic — 4x the tabs cost ~64x the scans and froze the renderer for seconds.
+    expect(countEntityIdReads(80)).toBeLessThanOrEqual(countEntityIdReads(20) * 8)
+  })
+
+  it('reactivates the live tab when a stale reopen id targets an already-open file', () => {
+    const store = createEditorTabsStore()
+    store.setState({
+      worktreesByRepo: {
+        'repo-1': [
+          { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+          { id: 'wt-2', repoId: 'repo-1', path: '/repo-2' }
+        ]
+      }
+    } as unknown as Partial<AppState>)
+    const sharedPath = '/home/me/.zshrc'
+    const openShared = (worktreeId: string): string =>
+      store.getState().openFile({
+        filePath: sharedPath,
+        relativePath: '.zshrc',
+        worktreeId,
+        language: 'shell',
+        mode: 'edit'
+      })
+
+    // Bare path id: nothing else owns this path yet.
+    const staleWt1Id = openShared('wt-1')
+    expect(staleWt1Id).toBe(sharedPath)
+    store.getState().closeFile(staleWt1Id)
+
+    // wt-2 claims the bare id, so wt-1's reopen gets a namespaced id instead.
+    const wt2Id = openShared('wt-2')
+    expect(wt2Id).toBe(sharedPath)
+    const liveWt1Id = openShared('wt-1')
+    expect(liveWt1Id).toBe(ownedEditorFileId(sharedPath, 'wt-1', null))
+    store.getState().closeFile(wt2Id)
+
+    expect(store.getState().reopenClosedEditorTab('wt-1')).toBe(true)
+
+    expect(store.getState().openFiles.map((file) => file.id)).toEqual([liveWt1Id])
+    expect(store.getState().activeFileId).toBe(liveWt1Id)
+    expect(store.getState().activeFileIdByWorktree['wt-1']).toBe(liveWt1Id)
+    expect(
+      (store.getState().unifiedTabsByWorktree['wt-1'] ?? []).map((tab) => tab.entityId)
+    ).toEqual([liveWt1Id])
+    expect(store.getState().tabBarOrderByWorktree['wt-1']).toEqual([liveWt1Id])
   })
 })
 
@@ -1848,6 +2184,36 @@ describe('createEditorSlice markdown table of contents visibility', () => {
 })
 
 describe('createEditorSlice openMarkdownPreview', () => {
+  it('keeps external SSH ownership after the source edit tab closes', () => {
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/tmp/notes.md',
+      relativePath: '/tmp/notes.md',
+      worktreeId: 'wt-1',
+      language: 'markdown',
+      mode: 'edit',
+      externalSshTargetId: 'ssh-1'
+    })
+
+    store.getState().openMarkdownPreview(
+      {
+        filePath: '/tmp/notes.md',
+        relativePath: '/tmp/notes.md',
+        worktreeId: 'wt-1',
+        language: 'markdown'
+      },
+      { sourceFileId: '/tmp/notes.md' }
+    )
+    store.getState().closeFile('/tmp/notes.md')
+
+    expect(store.getState().openFiles).toEqual([
+      expect.objectContaining({
+        id: 'markdown-preview::/tmp/notes.md',
+        externalSshTargetId: 'ssh-1'
+      })
+    ])
+  })
+
   it('opens markdown preview as a separate read-only tab', () => {
     const store = createEditorStore()
 
@@ -2714,18 +3080,24 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       checkRunId: 42
     }
+    const githubRepository = { owner: 'upstream', repo: 'project' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
       details: null,
       loading: false,
-      error: null
+      error: null,
+      githubRepository
     })
 
     await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
 
     expect(fetchPRCheckDetails).toHaveBeenCalledWith(
       '/repo',
-      expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
+      expect.objectContaining({
+        checkRunId: 42,
+        checkName: 'verify',
+        prRepo: githubRepository
+      }),
       { repoId: 'repo-1' }
     )
     expect(store.getState().openFiles).toContainEqual(
@@ -2737,6 +3109,188 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+  })
+
+  it('stops loading when an open check-details tab loses its repository', async () => {
+    const fetchPRCheckDetails = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {},
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          error: 'Repository details are unavailable for this check.'
+        })
+      })
+    )
+  })
+
+  // Regression for #7732: refreshing a GitLab job tab through the GitHub check-runs
+  // API returns null and blanks the tab the user just asked to reload.
+  it('reloads an open GitLab job tab through the job trace client', async () => {
+    loadGitLabJobLogDetailsMock.mockReset()
+    loadGitLabJobLogDetailsMock.mockResolvedValue({
+      name: 'test: unit',
+      status: 'completed',
+      conclusion: 'failure',
+      url: null,
+      detailsUrl: null,
+      startedAt: null,
+      completedAt: null,
+      title: null,
+      summary: null,
+      text: null,
+      annotations: [],
+      jobs: [
+        {
+          id: 42,
+          name: 'test: unit',
+          status: 'completed',
+          conclusion: 'failure',
+          startedAt: null,
+          completedAt: null,
+          url: null,
+          logTail: 'ERROR: Job failed: exit code 1',
+          steps: []
+        }
+      ]
+    })
+    const fetchPRCheckDetails = vi.fn().mockResolvedValue(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      settings: { activeRuntimeEnvironmentId: null },
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'test: unit',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      gitlabJobId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:42')
+
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ repoPath: '/repo', repoId: 'repo-1', check })
+    )
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::gitlab-job:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          error: null,
+          details: expect.objectContaining({
+            jobs: [expect.objectContaining({ logTail: 'ERROR: Job failed: exit code 1' })]
+          })
+        })
+      })
+    )
+  })
+
+  // Regression for #7732: a fork MR's job lives in the source project, so reloading
+  // without the stored project ref requests the trace from the wrong project.
+  it('reloads a fork MR job tab with the stored GitLab project ref', async () => {
+    loadGitLabJobLogDetailsMock.mockReset()
+    loadGitLabJobLogDetailsMock.mockResolvedValue(null)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [{ id: 'repo-1', path: '/repo' }],
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo' }] },
+      settings: { activeRuntimeEnvironmentId: null },
+      fetchPRCheckDetails: vi.fn().mockResolvedValue(null),
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'test: unit',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      gitlabJobId: 77
+    }
+    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null,
+      gitlabProjectRef: projectRef
+    })
+
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::gitlab-job:77')
+
+    expect(loadGitLabJobLogDetailsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ check, projectRef })
+    )
+  })
+
+  it('keeps a stored GitLab project ref when a patch omits it', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'test: unit',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      gitlabJobId: 77
+    }
+    const projectRef = { host: 'gitlab.com', path: 'contributor/fork' }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: false,
+      error: null,
+      gitlabProjectRef: projectRef
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null,
+      gitlabProjectRef: null
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::gitlab-job:77')
+        ?.checkRunDetails?.gitlabProjectRef
+    ).toEqual(projectRef)
   })
 
   it('patches an open check-details tab without changing the active file', () => {
@@ -2791,6 +3345,112 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+  })
+
+  it('ignores a stale check-details request after the tab context changes', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:new', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(
+      expect.objectContaining({ contextKey: 'repo:new', details: null, loading: true, error: null })
+    )
+  })
+
+  it('ignores an older check-details request in the same context', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, details: null, loading: true, error: null }))
+  })
+
+  it('does not reopen a check-details tab with an older sidebar snapshot', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: false,
+      error: 'newer result'
+    })
+    store.getState().openFile({
+      filePath: '/repo/other.ts',
+      relativePath: 'other.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale result'
+    })
+
+    expect(store.getState().activeFileId).toBe('wt-1::check-details::check-run:42')
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, error: 'newer result' }))
   })
 
   it('opens check full details as a center-pane editor tab', () => {
@@ -4770,7 +5430,7 @@ describe('closeFile host mirroring', () => {
 describe('read-only editor tabs (AI Vault View Log)', () => {
   const LOG_PATH = '/home/user/.claude/sessions/log.jsonl'
 
-  const openReadOnlyLog = (store: StoreApi<AppState>): void =>
+  const openReadOnlyLog = (store: StoreApi<AppState>): void => {
     store.getState().openFile(
       {
         filePath: LOG_PATH,
@@ -4784,6 +5444,7 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
       },
       { preview: false, forceContentReload: true, suppressActiveRuntimeFallback: true }
     )
+  }
 
   it('creates a permanent read-only edit tab', () => {
     const store = createEditorStore()
@@ -4887,5 +5548,31 @@ describe('read-only editor tabs (AI Vault View Log)', () => {
     )
     expect(restored?.pendingDiskBaselineVerification).toBeUndefined()
     expect(store.getState().editorDrafts[LOG_PATH]).toBeUndefined()
+  })
+
+  it('restores the SSH target that owns an external host file', () => {
+    const store = createEditorStore()
+    store.setState({
+      worktreesByRepo: { 'repo-1': [{ id: 'wt-1' }] },
+      folderWorkspaces: []
+    } as never)
+
+    store.getState().hydrateEditorSession({
+      openFilesByWorktree: {
+        'wt-1': [
+          {
+            filePath: '/tmp/ssh-preview.png',
+            relativePath: '/tmp/ssh-preview.png',
+            worktreeId: 'wt-1',
+            language: 'png',
+            externalSshTargetId: 'ssh-1'
+          }
+        ]
+      }
+    } as never)
+
+    expect(store.getState().openFiles[0]).toEqual(
+      expect.objectContaining({ externalSshTargetId: 'ssh-1' })
+    )
   })
 })

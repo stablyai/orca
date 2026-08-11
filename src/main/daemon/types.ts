@@ -19,6 +19,7 @@ import type {
   AgentSessionOwnerBinding,
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
+import type * as HistorySeedProtocol from './terminal-history-seed-transfer-protocol'
 export type { TerminalModes } from './terminal-modes'
 import type { TerminalSnapshot } from './terminal-snapshot'
 export type { TerminalSnapshot } from './terminal-snapshot'
@@ -27,10 +28,13 @@ export {
   AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION,
+  MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
+  supportsMode2031UnsubscribeFact,
   supportsPtyStartupIngress
 } from './daemon-protocol-version'
 
@@ -54,7 +58,7 @@ export type { DaemonEndpointIdentity, HelloMessage, HelloResponse } from './daem
 export type CreateOrAttachRequest = {
   id: string
   type: 'createOrAttach'
-  payload: {
+  payload: HistorySeedProtocol.CreateOrAttachHistorySeedPayload & {
     sessionId: string
     cols: number
     rows: number
@@ -64,6 +68,8 @@ export type CreateOrAttachRequest = {
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
+    /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
+    attachOnly?: boolean
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
      *  The daemon forwards this to its subprocess spawner so each tab honors
      *  the shell picked in the "+" menu or the persisted default-shell setting,
@@ -79,8 +85,6 @@ export type CreateOrAttachRequest = {
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
-    /** Recovered ANSI applied before the new subprocess can emit startup output. */
-    historySeed?: string
     startupIngress?: PtyStartupIngressIntent
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
@@ -98,9 +102,7 @@ export type CloseStartupQueryAuthorityRequest = {
 export type CancelCreateOrAttachRequest = {
   id: string
   type: 'cancelCreateOrAttach'
-  payload: {
-    sessionId: string
-  }
+  payload: { sessionId: string }
 }
 
 export type WriteRequest = {
@@ -292,6 +294,7 @@ export type TakePendingOutputResult = {
 
 export type DaemonRequest =
   | CreateOrAttachRequest
+  | HistorySeedProtocol.TerminalHistorySeedTransferRequest
   | CancelCreateOrAttachRequest
   | WriteRequest
   | ResizeRequest
@@ -379,23 +382,6 @@ export type DaemonSessionInfo = SessionInfo & {
 // Stream-socket event shapes live in daemon-stream-events.ts; re-exported so
 // existing importers keep one types entry point.
 export * from './daemon-stream-events'
-
-// ─── Binary Frame Protocol (Daemon ↔ PTY Subprocess) ────────────────
-//
-// 5-byte header: [type:1][length:4 big-endian]
-// Followed by `length` bytes of payload.
-
-export const enum FrameType {
-  Data = 0x01,
-  Resize = 0x02,
-  Exit = 0x03,
-  Error = 0x04,
-  Kill = 0x05,
-  Signal = 0x06
-}
-
-export const FRAME_HEADER_SIZE = 5
-export const FRAME_MAX_PAYLOAD = 1024 * 1024 // 1MB
 
 // ─── Notify prefix ──────────────────────────────────────────────────
 // Requests with IDs starting with this prefix are fire-and-forget:

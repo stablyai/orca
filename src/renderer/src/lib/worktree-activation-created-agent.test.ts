@@ -9,7 +9,8 @@ import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-sess
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 import {
   makeCreatedAgentWorktree as makeWorktree,
-  seedAlreadyActiveWorktree
+  seedAlreadyActiveWorktree,
+  seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
 
 const initialAppStoreState = useAppStore.getState()
@@ -22,6 +23,19 @@ function makeWebRuntimeWorktree() {
   }
 }
 
+/** Activates and asserts a focusable tab appeared with no queued startup, returning its id. */
+function activateAndExpectNoRelaunch(
+  worktreeId: string,
+  opts?: Parameters<typeof activateAndRevealWorktree>[1]
+): string {
+  const result = activateAndRevealWorktree(worktreeId, opts)
+  const tabId = result === false ? undefined : (result.primaryTabId ?? undefined)
+
+  expect(tabId).toBeDefined()
+  expect(useAppStore.getState().pendingStartupByTabId[tabId!]).toBeUndefined()
+  return tabId!
+}
+
 afterEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.unstubAllGlobals()
@@ -30,7 +44,7 @@ afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
 })
 
-describe('activateAndRevealWorktree created agent reopen', () => {
+describe('activateAndRevealWorktree', () => {
   it('does not restamp focus recency when reselecting the already-active terminal worktree', () => {
     const worktree = makeWorktree()
     const { markWorktreeVisited, recordWorktreeVisit, revealWorktreeInSidebar } =
@@ -57,133 +71,69 @@ describe('activateAndRevealWorktree created agent reopen', () => {
     expect(recordWorktreeVisit).toHaveBeenCalledWith(worktree.id)
   })
 
-  it('reopens an empty worktree with the agent selected at creation time', () => {
+  it('does not relaunch the creation-time agent when reopening an empty worktree', () => {
     const worktree = makeWorktree()
-    const revealWorktreeInSidebar = vi.fn()
-
-    useAppStore.setState({
-      repos: [
-        {
-          id: 'repo-1',
-          path: '/workspace/repo',
-          displayName: 'repo',
-          badgeColor: '#000000',
-          addedAt: 0
-        }
-      ],
-      worktreesByRepo: { 'repo-1': [worktree] },
-      activeRepoId: 'repo-1',
-      activeView: 'terminal',
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      groupsByWorktree: {},
-      layoutByWorktree: {},
-      activeGroupIdByWorktree: {},
-      openFiles: [],
-      browserTabsByWorktree: {},
-      activeFileIdByWorktree: {},
-      activeBrowserTabIdByWorktree: {},
-      activeTabTypeByWorktree: {},
-      activeTabIdByWorktree: {},
-      tabBarOrderByWorktree: {},
-      pendingStartupByTabId: {},
-      settings: {
-        agentCmdOverrides: {},
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
-      markWorktreeVisited: vi.fn(),
-      recordWorktreeVisit: vi.fn(),
-      refreshGitHubForWorktreeIfStale: vi.fn(),
-      revealWorktreeInSidebar
-    })
+    const { revealWorktreeInSidebar } = seedEmptyActivatableWorktree(worktree)
 
     const result = activateAndRevealWorktree(worktree.id)
     const state = useAppStore.getState()
     const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
 
+    // A focusable surface still appears — it is just a plain shell, with no queued agent launch.
     expect(result).toEqual({ primaryTabId: reopenedTab?.id })
     expect(reopenedTab).toBeDefined()
-    expect(state.pendingStartupByTabId[reopenedTab!.id]).toEqual({
-      command: "codex '--dangerously-bypass-approvals-and-sandbox'",
-      env: {},
-      launchAgent: 'codex',
-      launchConfig: {
-        agentCommand: "codex '--dangerously-bypass-approvals-and-sandbox'",
-        agentArgs: '--dangerously-bypass-approvals-and-sandbox',
-        agentEnv: {}
-      },
-      launchToken: expect.any(String),
-      sessionOptions: undefined,
-      telemetry: {
-        agent_kind: 'codex',
-        launch_source: 'sidebar',
-        request_kind: 'resume'
-      }
-    })
+    expect(state.pendingStartupByTabId[reopenedTab!.id]).toBeUndefined()
     expect(revealWorktreeInSidebar).toHaveBeenCalledWith(worktree.id)
   })
 
-  it('uses WSL launch quoting when reopening a Windows-path WSL project agent', () => {
-    const worktree = {
-      ...makeWorktree(),
-      path: 'C:\\Users\\jinwo\\repo\\feature'
+  it('does not relaunch on repeated activate/close cycles', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      activateAndExpectNoRelaunch(worktree.id)
+
+      // Return to zero tabs, the state that used to re-arm the relaunch. Sets state
+      // directly rather than via closeTab — the sleeping-record purge is covered in
+      // worktree-reactivation-tab-forkbomb.test.ts.
+      useAppStore.setState({ tabsByWorktree: {}, activeTabIdByWorktree: {} })
     }
+  })
 
-    useAppStore.setState({
-      projects: [
-        {
-          id: 'repo-1',
-          displayName: 'repo',
-          badgeColor: '#000000',
-          sourceRepoIds: ['repo-1'],
-          createdAt: 0,
-          updatedAt: 0,
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-        }
-      ],
-      repos: [
-        {
-          id: 'repo-1',
-          path: 'C:\\Users\\jinwo\\repo',
-          displayName: 'repo',
-          badgeColor: '#000000',
-          addedAt: 0
-        }
-      ],
-      worktreesByRepo: { 'repo-1': [worktree] },
-      activeRepoId: 'repo-1',
-      activeView: 'terminal',
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: {},
-      groupsByWorktree: {},
-      layoutByWorktree: {},
-      activeGroupIdByWorktree: {},
-      openFiles: [],
-      browserTabsByWorktree: {},
-      activeFileIdByWorktree: {},
-      activeBrowserTabIdByWorktree: {},
-      activeTabTypeByWorktree: {},
-      activeTabIdByWorktree: {},
-      tabBarOrderByWorktree: {},
-      pendingStartupByTabId: {},
-      settings: {
-        agentCmdOverrides: {},
-        agentDefaultArgs: { codex: '--profile "don\'t"' },
-        setupScriptLaunchMode: 'new-tab'
-      } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
-      markWorktreeVisited: vi.fn(),
-      recordWorktreeVisit: vi.fn(),
-      refreshGitHubForWorktreeIfStale: vi.fn(),
-      revealWorktreeInSidebar: vi.fn()
+  it('does not relaunch when activating a sibling worktree the user never opened', () => {
+    const sibling = makeWorktree()
+    const target = { ...makeWorktree(), id: 'wt-handoff', displayName: 'handoff' }
+    seedEmptyActivatableWorktree(target, { extraWorktrees: [sibling] })
+
+    // The shape post-delete focus handoff produces. That caller passes no opts at all —
+    // asserted directly in active-worktree-focus-after-delete.test.ts.
+    activateAndExpectNoRelaunch(target.id)
+  })
+
+  it('does not relaunch when activation opts carry no startup payload', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+
+    // The opts shape CLI/relay navigation and notification clicks arrive with; those
+    // callers are asserted in useIpcEvents.test.ts. The host's `didSpawnStartup` leg is
+    // a main-process concern and is not reachable from here.
+    activateAndExpectNoRelaunch(worktree.id, { notifyHostRuntime: false })
+  })
+
+  it('still queues an explicit startup supplied by the caller', () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+
+    const result = activateAndRevealWorktree(worktree.id, {
+      startup: { command: 'codex' }
     })
-
-    const result = activateAndRevealWorktree(worktree.id)
     const state = useAppStore.getState()
-    const reopenedTab = state.tabsByWorktree[worktree.id]?.[0]
+    const tabId = result === false ? undefined : (result.primaryTabId ?? undefined)
 
-    expect(result).toEqual({ primaryTabId: reopenedTab?.id })
-    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).toContain("'don'\\''t'")
-    expect(state.pendingStartupByTabId[reopenedTab!.id]?.command).not.toContain("'don''t'")
+    expect(tabId).toBeDefined()
+    expect(state.pendingStartupByTabId[tabId!]).toEqual(
+      expect.objectContaining({ command: 'codex' })
+    )
   })
 
   it('does not duplicate a sleeping agent session owned by a preserved slept pane', () => {

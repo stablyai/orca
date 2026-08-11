@@ -4,7 +4,7 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
-    kind === 'pi'
+    kind !== 'omp'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
@@ -16,6 +16,19 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
           ''
         ]
       : []
+
+  // Why: OMP can switch sessions in-process, so each latest-only post needs fresh identity.
+  const ctxParam = ', ctx'
+  const bareCtxParams = '_event, ctx'
+  const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
+  const primeDaemonWorkerGuard =
+    kind === 'prime-agent'
+      ? [
+          '  // Why: Prime loads extensions in both its frontend and event-emitting daemon worker.',
+          '  if (!process.env.PRIME_AGENT_INTERNAL_DAEMON_WORKER) return'
+        ]
+      : []
+  const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
 
   return [
     '// Why: pi assistant messages carry content as an array of parts',
@@ -48,36 +61,42 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     "// Why: child agents inherit the lead's pane env; only its process may",
     '// register status hooks. PID identity keeps in-process reloads reporting.',
     'export default function (pi): void {',
-    '  const ownerPid = process.env.ORCA_PI_STATUS_OWNED',
+    ...primeDaemonWorkerGuard,
+    `  const ownerPid = process.env.${ownerEnv}`,
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid) return',
-    '  process.env.ORCA_PI_STATUS_OWNED = selfPid',
+    `  process.env.${ownerEnv} = selfPid`,
     ...sessionStartHandler,
-    "  pi.on('before_agent_start', (event) => {",
+    `  pi.on('before_agent_start', (event${ctxParam}) => {`,
+    ...captureSessionMetadata,
     "    post('before_agent_start', { prompt: event.prompt ?? '' })",
     '  })',
     '',
-    "  pi.on('agent_start', () => {",
+    `  pi.on('agent_start', (${bareCtxParams}) => {`,
+    ...captureSessionMetadata,
     '    clearPendingAgentEndCheck()',
     '    agentEndReported = false',
     "    post('agent_start')",
     '  })',
     '',
-    "  pi.on('tool_execution_start', (event) => {",
+    `  pi.on('tool_execution_start', (event${ctxParam}) => {`,
+    ...captureSessionMetadata,
     "    post('tool_execution_start', {",
     '      tool_name: event.toolName,',
     '      tool_input: event.args,',
     '    })',
     '  })',
     '',
-    "  pi.on('tool_call', (event) => {",
+    `  pi.on('tool_call', (event${ctxParam}) => {`,
+    ...captureSessionMetadata,
     "    post('tool_call', {",
     '      tool_name: event.toolName,',
     '      tool_input: event.input,',
     '    })',
     '  })',
     '',
-    "  pi.on('tool_execution_end', (event) => {",
+    `  pi.on('tool_execution_end', (event${ctxParam}) => {`,
+    ...captureSessionMetadata,
     "    post('tool_execution_end', {",
     '      tool_name: event.toolName,',
     '    })',
@@ -87,7 +106,8 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '  // so the dashboard preview reflects the most recent reply even before',
     '  // agent_end fires. message_end is the right hook because pi guarantees',
     '  // it fires after the message is finalized (post-streaming).',
-    "  pi.on('message_end', (event) => {",
+    `  pi.on('message_end', (event${ctxParam}) => {`,
+    ...captureSessionMetadata,
     "    if (event.message?.role !== 'assistant') return",
     '    const text = extractAssistantText(event.message)',
     '    if (!text) return',
@@ -140,13 +160,15 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     '    agentEndIdleRecheckMs = Math.min(agentEndIdleRecheckMs * 2, AGENT_END_IDLE_RECHECK_MAX_MS)',
     '  }',
     '',
-    "  pi.on('agent_settled', () => {",
+    `  pi.on('agent_settled', (${bareCtxParams}) => {`,
+    ...captureSessionMetadata,
     '    agentSettledSupported = true',
     '    clearPendingAgentEndCheck()',
     '    postAgentEndOnce()',
     '  })',
     '',
     "  pi.on('agent_end', (_event, ctx) => {",
+    ...captureSessionMetadata,
     '    if (agentSettledSupported) return',
     "    if (!ctx || typeof ctx.isIdle !== 'function') {",
     '      postAgentEndOnce()',

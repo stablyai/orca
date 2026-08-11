@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { RuntimeClientEventStreamMessage } from '../../../src/shared/runtime-client-events'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree-id'
@@ -6,6 +6,10 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import { getLiveWorktreeDisplayName, type WorktreeDisplayNameSource } from './worktree-display-name'
 import { FLOATING_WORKSPACE_TITLE, isFloatingWorkspaceWorktreeId } from './floating-workspace'
+import {
+  classifyWorktreeShowResponse,
+  type WorktreeShowResolution
+} from '../worktree/worktree-show-resolution'
 
 const WORKTREE_NAME_FALLBACK_POLL_MS = 3000
 
@@ -16,7 +20,19 @@ type Params = {
   worktreeId: string
 }
 
-export function useLiveWorktreeName({ client, connState, routeName, worktreeId }: Params): string {
+export type LiveWorktreeName = {
+  name: string
+  /** What the host last proved about this worktree still existing — see the bounce in
+   *  use-missing-worktree-bounce.ts. */
+  resolution: WorktreeShowResolution
+}
+
+export function useLiveWorktreeName({
+  client,
+  connState,
+  routeName,
+  worktreeId
+}: Params): LiveWorktreeName {
   // Why: the floating sentinel has no worktree record, so worktree.show would
   // fail forever and keep the 3s fallback poll alive; its title is fixed.
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
@@ -25,6 +41,15 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
     worktreeId,
     name: routeNameHint
   }))
+  // Why: keyed by id so a verdict about the previous route can never survive into the next one.
+  const [resolved, setResolved] = useState<{
+    worktreeId: string
+    resolution: WorktreeShowResolution
+  }>(() => ({ worktreeId, resolution: 'unknown' }))
+  // Why: a transient desktop repo-scan rejection collapses the catalog to zero rows and
+  // answers selector_not_found for a live worktree — one miss is suspicion, not proof.
+  // The fallback poll guarantees a confirming read (a failed show never stops it).
+  const missingStreakRef = useRef({ worktreeId, count: 0 })
 
   useEffect(() => {
     setWorktreeName((current) =>
@@ -33,6 +58,12 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
         : { worktreeId, name: routeNameHint }
     )
   }, [routeNameHint, worktreeId])
+
+  useEffect(() => {
+    setResolved((current) =>
+      current.worktreeId === worktreeId ? current : { worktreeId, resolution: 'unknown' }
+    )
+  }, [worktreeId])
 
   useFocusEffect(
     useCallback(() => {
@@ -60,7 +91,26 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
           const response = await client.sendRequest('worktree.show', {
             worktree: `id:${worktreeId}`
           })
-          if (stale || generation !== refreshGeneration || !response.ok) {
+          if (stale || generation !== refreshGeneration) {
+            return
+          }
+          const classified = classifyWorktreeShowResponse(response)
+          const streak = missingStreakRef.current
+          missingStreakRef.current = {
+            worktreeId,
+            count:
+              classified === 'missing'
+                ? (streak.worktreeId === worktreeId ? streak.count : 0) + 1
+                : 0
+          }
+          const resolution =
+            classified === 'missing' && missingStreakRef.current.count < 2 ? 'unknown' : classified
+          setResolved((current) =>
+            current.worktreeId === worktreeId && current.resolution === resolution
+              ? current
+              : { worktreeId, resolution }
+          )
+          if (!response.ok) {
             return
           }
           const result = (response as RpcSuccess).result as {
@@ -148,7 +198,11 @@ export function useLiveWorktreeName({ client, connState, routeName, worktreeId }
   )
 
   if (isFloatingWorkspace) {
-    return FLOATING_WORKSPACE_TITLE
+    // The sentinel has no worktree record to resolve, so nothing is ever proven about it.
+    return { name: FLOATING_WORKSPACE_TITLE, resolution: 'unknown' }
   }
-  return worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint
+  return {
+    name: worktreeName.worktreeId === worktreeId ? worktreeName.name : routeNameHint,
+    resolution: resolved.worktreeId === worktreeId ? resolved.resolution : 'unknown'
+  }
 }

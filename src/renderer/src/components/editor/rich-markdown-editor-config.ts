@@ -44,6 +44,7 @@ export type EditorConfigParams = {
   filePath: string
   worktreeId: string
   worktreeRoot: string | null
+  externalSshTargetId?: string
   runtimeEnvironmentId?: string | null
   isMac: boolean
   richMarkdownSpellcheckEnabled: boolean
@@ -97,6 +98,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     filePath,
     worktreeId,
     worktreeRoot,
+    externalSshTargetId,
     runtimeEnvironmentId,
     isMac,
     richMarkdownSpellcheckEnabled,
@@ -202,6 +204,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     onBlur: () => {
       window.api.ui.setMarkdownEditorFocused(false)
       clearAnnotationTarget()
+      params.flushPendingSerialization()
     },
     onCreate: ({ editor: nextEditor }) => {
       // Why: normalizeEmptyListItems (not normalizeSoftBreaks) so hard-wrapped
@@ -223,6 +226,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
         nextEditor,
         createRichMarkdownImageResolverContext({
           filePath,
+          externalSshTargetId,
           runtimeEnvironmentId,
           settings,
           worktreeId,

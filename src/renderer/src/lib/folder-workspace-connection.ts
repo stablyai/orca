@@ -1,11 +1,12 @@
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import { getProjectGroupSubtreeIds } from '../../../shared/project-groups'
+import { parseExecutionHostId } from '../../../shared/execution-host'
 
 export type FolderWorkspaceConnectionState = {
-  folderWorkspaces: FolderWorkspace[]
-  projectGroups: ProjectGroup[]
-  repos: Repo[]
+  folderWorkspaces: readonly FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  repos: readonly Repo[]
 }
 
 function getFolderScopeCandidateRepos(args: {
@@ -65,6 +66,10 @@ export function getFolderWorkspaceConnectionId(
   const workspace = state.folderWorkspaces.find((entry) => entry.id === folderWorkspaceId)
   if (!workspace) {
     return undefined
+  }
+  const explicitHost = parseExecutionHostId(workspace.executionHostId)
+  if (explicitHost) {
+    return explicitHost.kind === 'ssh' ? explicitHost.targetId : null
   }
   const scopeConnectionId =
     workspace.connectionId ??

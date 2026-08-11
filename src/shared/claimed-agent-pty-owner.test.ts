@@ -3,7 +3,10 @@ import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from './agent-session-host-authority'
-import { ClaimedAgentPtyOwnerRegistry } from './claimed-agent-pty-owner'
+import {
+  ClaimedAgentPtyOwnerRegistry,
+  MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
+} from './claimed-agent-pty-owner'
 
 function claim(
   identityDigest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -165,6 +168,53 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     expect(() => registry.register({ ...owner, generation: 'generation-2' })).toThrow(
       'agent_session_conflict'
     )
+  })
+
+  it('retains only allowlisted owner fields', () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+    const owner = {
+      claim: { ...claim(), unknownPayload: 'claim payload' },
+      generation: 'generation-1',
+      phase: 'live' as const,
+      ptyId: 'pty-1',
+      surface: { ...surface, unknownPayload: 'surface payload' },
+      unknownPayload: 'owner payload'
+    }
+
+    registry.register(owner)
+
+    expect(registry.list()).toEqual([
+      {
+        claim: claim(),
+        generation: 'generation-1',
+        phase: 'live',
+        ptyId: 'pty-1',
+        surface
+      }
+    ])
+  })
+
+  it('fails closed when recovered owner evidence reaches the process-wide cap', () => {
+    const registry = new ClaimedAgentPtyOwnerRegistry()
+    const owners = Array.from({ length: MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES }, (_, index) => ({
+      claim: claim(`identity-${index}`),
+      generation: `generation-${index}`,
+      phase: 'live' as const,
+      ptyId: `pty-${index}`,
+      surface
+    }))
+    registry.reconcileAuthoritative(owners)
+
+    expect(() =>
+      registry.register({
+        claim: claim('one-more-identity'),
+        generation: 'one-more-generation',
+        phase: 'live',
+        ptyId: 'one-more-pty',
+        surface
+      })
+    ).toThrow('execution_owner_unavailable')
+    expect(registry.list()).toHaveLength(MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES)
   })
 
   it('atomically converges from conflicting provider evidence to one owner', async () => {

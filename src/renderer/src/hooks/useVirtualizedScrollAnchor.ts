@@ -46,6 +46,10 @@ type UseVirtualizedScrollAnchorOptions<
   // Why: some callers record user scroll anchors outside this hook; passive
   // programmatic scroll events during remount must not teach them a transient row.
   recordAnchorOnScroll?: boolean
+  // Why: old key -> new key for rows this render re-keyed without moving, so an
+  // anchor recorded under the old key follows its own row instead of pinning a
+  // neighbour. Omitted by callers whose row keys are stable.
+  rekeyedRowKeys?: ReadonlyMap<string, string>
   // Why: when provided, anchor restore runs only when this value changes
   // (structural row changes) or while a prior restore is still converging —
   // not on every totalSize/isScrolling tick. Measurement-driven shifts are the
@@ -80,6 +84,7 @@ export function useVirtualizedScrollAnchor<
   programmaticScrollMarks,
   recordAnchorOnCleanup = true,
   recordAnchorOnScroll = true,
+  rekeyedRowKeys,
   restoreSignal,
   rows,
   scrollElementRef,
@@ -254,7 +259,8 @@ export function useVirtualizedScrollAnchor<
         // adjustment; restoring here would fight concurrent user scrolling.
         return
       }
-      if (anchor.scrollTop !== undefined) {
+      // Why: pending restores own layout shifts; unmarked user scrolls disarm them in the listener.
+      if (anchor.scrollTop !== undefined && !pendingRestoreRef.current) {
         const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
         const clampExplained =
           anchor.scrollTop > maxScrollTop + 1 && el.scrollTop >= maxScrollTop - 2
@@ -290,6 +296,7 @@ export function useVirtualizedScrollAnchor<
       pendingRestoreRef,
       programmaticScrollMarks: programmaticScrollMarksRef.current,
       recordScrollAnchor,
+      rekeyedRowKeys,
       rowIndexByKey,
       scrollOffsetRef,
       virtualizer
@@ -299,6 +306,7 @@ export function useVirtualizedScrollAnchor<
     getItemElementKey,
     itemElementSelector,
     recordScrollAnchor,
+    rekeyedRowKeys,
     restoreSignal,
     rowIndexByKey,
     scrollElementRef,

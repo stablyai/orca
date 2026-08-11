@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyAutocomplete,
   detectAutocompleteTrigger,
+  rankSlashCommandSuggestions,
   rankSuggestions
 } from './mobile-native-chat-autocomplete'
 
@@ -55,5 +56,38 @@ describe('rankSuggestions', () => {
 
   it('returns the head of the list for an empty query', () => {
     expect(rankSuggestions(['a', 'b', 'c'], '', 2)).toEqual(['a', 'b'])
+  })
+})
+
+describe('rankSlashCommandSuggestions', () => {
+  const commands = [
+    { name: 'clear', description: 'Clear conversation history' },
+    { name: 'compact', description: 'Summarize and compact' },
+    { name: 'mcp', description: 'List MCP tools' }
+  ]
+
+  it('shows the whole catalog for a bare slash', () => {
+    expect(rankSlashCommandSuggestions(commands, '').map((c) => c.name)).toEqual([
+      'clear',
+      'compact',
+      'mcp'
+    ])
+  })
+
+  it('ranks prefix matches ahead of substring matches', () => {
+    expect(rankSlashCommandSuggestions(commands, 'c').map((c) => c.name)).toEqual([
+      'clear',
+      'compact',
+      'mcp'
+    ])
+    expect(rankSlashCommandSuggestions(commands, 'm').map((c) => c.name)).toEqual([
+      'mcp',
+      'compact'
+    ])
+  })
+
+  it('is case-insensitive and drops non-matches', () => {
+    expect(rankSlashCommandSuggestions(commands, 'CLE').map((c) => c.name)).toEqual(['clear'])
+    expect(rankSlashCommandSuggestions(commands, 'zzz')).toEqual([])
   })
 })

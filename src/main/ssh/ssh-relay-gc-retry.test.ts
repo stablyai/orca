@@ -33,7 +33,10 @@ vi.mock('./ssh-relay-versioned-install', () => ({
   abandonInstall: vi.fn(),
   gcOldRelayVersions: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('./ssh-relay-install-lock', () => ({ acquireInstallLock: vi.fn() }))
+vi.mock('./ssh-relay-install-lock', () => ({
+  acquireInstallLock: vi.fn(),
+  RELAY_INSTALL_LOCK_NAME: '.install-lock'
+}))
 vi.mock('./ssh-relay-repair-lock', () => ({
   tryAcquireRelayRepairLock: vi.fn().mockResolvedValue('acquired')
 }))
@@ -66,7 +69,8 @@ function makeConnection(): SshConnection {
   }
   return {
     canRunConcurrentExecCommands: vi.fn().mockReturnValue(true),
-    exec: vi.fn().mockResolvedValue(channel)
+    exec: vi.fn().mockResolvedValue(channel),
+    writeFile: vi.fn().mockResolvedValue(undefined)
   } as unknown as SshConnection
 }
 

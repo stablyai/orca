@@ -1,7 +1,6 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter } from 'node:path'
+import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { win32 as pathWin32 } from 'node:path'
 import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -12,7 +11,7 @@ import { buildWindowsPowerShellSpawnAttempts } from './windows-shell-fallback-ch
 import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
-import { parseWslPath, isWslAvailable } from '../wsl'
+import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 import {
   injectHistoryEnv,
@@ -39,6 +38,8 @@ import type { ShellReadySignal } from './local-pty-shell-ready'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { SessionNotFoundError } from '../daemon/daemon-errors'
+import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
 import { addWslEnvKeys } from '../wsl-env'
 import {
@@ -55,10 +56,7 @@ import { resolveAgentForegroundProcessWithAvailability } from './agent-foregroun
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import {
-  captureDescendantSnapshot,
-  terminateDescendantSnapshot
-} from '../pty-descendant-termination'
+import { killWithDescendantSweep } from '../pty-descendant-termination'
 import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
 import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
@@ -68,7 +66,18 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { readPtsName } from '../pty/node-pty-pts-name'
+import {
+  createPtySlaveEchoProbe,
+  readPtySlavePath
+} from '../../shared/pty-slave-line-discipline-echo'
+import {
+  expandWindowsEnvironmentVariables,
+  expandWindowsPathEnvironmentVariables
+} from '../../shared/windows-environment-expansion'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -80,7 +89,7 @@ const PANE_IDENTITY_ENV_KEYS = [
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
 const ptyIncarnations = new Map<string, string>()
-// Why: only agent sessions get descendant tree-kill (tool children run in detached groups SIGHUP can't reach); plain terminals skip it so nohup-detached children survive.
+// Why: agent sessions always sweep descendant trees; plain terminals preserve nohup children except on immediate win32 shutdown.
 const ptyAgentSessionIds = new Set<string>()
 // Why: descendant capture is async, so reattach/duplicate shutdown must wait for the original owner, not return a dying PTY.
 type PtyShutdownOperation = {
@@ -162,12 +171,18 @@ function promoteAgentTeamsShimPath(
   if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
     return
   }
-  const shimDir = requestedPath.split(delimiter)[0]
+  const normalizedRequestedPath =
+    process.platform === 'win32'
+      ? expandWindowsEnvironmentVariables(requestedPath, env)
+      : requestedPath
+  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
+  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
   if (!shimDir) {
     return
   }
-  const currentParts = env.PATH?.split(delimiter).filter(Boolean) ?? []
-  env.PATH = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(delimiter)
+  const pathKey = resolvePathEnvKey(env, process.platform)
+  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
+  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
 }
 
 /**
@@ -224,9 +239,9 @@ function getWslContextFromWorktreeId(
  */
 function getWslContextFromPreferredDistro(
   distro: string | null | undefined
-): { distro: string } | undefined {
+): { distro: string; treatPosixCwdAsWsl: true } | undefined {
   const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed } : undefined
+  return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
 /**
@@ -364,9 +379,12 @@ function cancelAllPendingLocalPtySpawns(): void {
 /**
  * Normalizes renderer session ids that should be reused for local PTY reattach.
  */
-function normalizeLocalCallerSessionId(sessionId: string | undefined): string | null {
+function normalizeLocalCallerSessionId(
+  sessionId: string | undefined,
+  allowNumeric = false
+): string | null {
   const requested = sessionId?.trim()
-  if (!requested || /^\d+$/.test(requested)) {
+  if (!requested || (!allowNumeric && /^\d+$/.test(requested))) {
     return null
   }
   return requested
@@ -490,7 +508,7 @@ export type LocalPtyProviderOptions = {
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
   getWindowsShell?: () => string | undefined
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
-  pwshAvailable?: () => boolean
+  pwshAvailable?: () => boolean | Promise<boolean>
   onSpawned?: (id: string, incarnationId: string) => void
   onExit?: (id: string, code: number, incarnationId: string) => void
   onData?: (
@@ -520,7 +538,7 @@ export class LocalPtyProvider implements IPtyProvider {
    * Windows launches can pre-deliver startup commands in argv, so the stdin fallback only runs when needed.
    */
   async spawn(args: PtySpawnOptions): Promise<PtySpawnResult> {
-    const reattachId = normalizeLocalCallerSessionId(args.sessionId)
+    const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
     if (reattachId) {
       const pendingShutdown = ptyShutdownOperations.get(reattachId)
       if (pendingShutdown) {
@@ -530,6 +548,9 @@ export class LocalPtyProvider implements IPtyProvider {
       if (existing) {
         return existing
       }
+    }
+    if (args.attachOnly) {
+      throw new SessionNotFoundError(args.sessionId ?? '')
     }
     const id = allocatePtyId(reattachId ?? undefined)
     const incarnationId = randomUUID()
@@ -551,6 +572,10 @@ export class LocalPtyProvider implements IPtyProvider {
       process.platform === 'win32'
         ? getWslContextFromPreferredDistro(args.terminalWindowsWslDistro)
         : undefined
+    let launchWslContext =
+      wslInfo !== null
+        ? getWslContextFromPreferredDistro(wslInfo.distro)
+        : (worktreeWslContext ?? preferredWslContext)
 
     let shellPath: string
     let shellArgs: string[]
@@ -576,6 +601,9 @@ export class LocalPtyProvider implements IPtyProvider {
         process.env.COMSPEC ||
         'powershell.exe'
       const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
+      if (!launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
+        launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
+      }
       const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
       const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
       // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
@@ -592,6 +620,7 @@ export class LocalPtyProvider implements IPtyProvider {
       })
       const shouldResolvePowerShellFamily =
         powerShellImplementation !== undefined || pathWin32.basename(shellFamily) === shellFamily
+      const pwshAvailable = shouldProbePwsh ? await (this.opts.pwshAvailable?.() ?? false) : false
       if (resolvedGitBashPath) {
         shellPath = resolvedGitBashPath
       } else if (shellFamily === WINDOWS_GIT_BASH_SHELL) {
@@ -601,7 +630,7 @@ export class LocalPtyProvider implements IPtyProvider {
           ? (resolveEffectiveWindowsPowerShell({
               shellFamily: resolvedShellFamily,
               implementation: powerShellImplementation,
-              pwshAvailable: shouldProbePwsh ? (this.opts.pwshAvailable?.() ?? false) : false
+              pwshAvailable
             }) ?? shellFamily)
           : shellFamily
       }
@@ -610,7 +639,7 @@ export class LocalPtyProvider implements IPtyProvider {
         shellPath,
         cwd,
         defaultCwd,
-        wslContext: worktreeWslContext ?? preferredWslContext,
+        wslContext: launchWslContext,
         startupCommand: args.command
       })
       const primaryAttempt = windowsFallbackAttempts[0]
@@ -625,7 +654,7 @@ export class LocalPtyProvider implements IPtyProvider {
           shellPath,
           cwd,
           defaultCwd,
-          worktreeWslContext ?? preferredWslContext,
+          launchWslContext,
           args.command
         )
         shellArgs = resolved.shellArgs
@@ -676,8 +705,7 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
-    const launchWslDistro =
-      wslInfo?.distro ?? worktreeWslContext?.distro ?? preferredWslContext?.distro ?? null
+    const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
     const finalEnv = this.opts.buildSpawnEnv
       ? this.opts.buildSpawnEnv(id, spawnEnv, {
           command: args.command,
@@ -787,7 +815,12 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyLaunch = args.command ? shellLaunch : null
       }
     }
-    promoteAgentTeamsShimPath(finalEnv, args.env?.PATH)
+    const requestedEnv = args.env
+    expandWindowsPathEnvironmentVariables(finalEnv)
+    promoteAgentTeamsShimPath(
+      finalEnv,
+      requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
+    )
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -800,7 +833,7 @@ export class LocalPtyProvider implements IPtyProvider {
     let historyResult: ReturnType<typeof injectHistoryEnv> | null = null
     if (historyEnabled) {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
-        wslDistro: preferredWslContext?.distro ?? worktreeWslContext?.distro ?? null
+        wslDistro: launchWslDistro
       })
       logHistoryInjection(worktreeId, historyResult)
     }
@@ -898,6 +931,7 @@ export class LocalPtyProvider implements IPtyProvider {
         )
       }
     }
+    const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -906,7 +940,8 @@ export class LocalPtyProvider implements IPtyProvider {
         wslDistro: spawnedWslDistro
       }),
       write: (data) => proc.write(data),
-      onEmission: emitIngressData
+      onEmission: emitIngressData,
+      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
     })
     startupIngressByPty.set(id, startupIngress)
 
@@ -1043,6 +1078,13 @@ export class LocalPtyProvider implements IPtyProvider {
     return ptyProcesses.has(id)
   }
   write(id: string, data: string): void {
+    // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
+    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
+      const ingress = startupIngressByPty.get(id)
+      if (ingress?.answerLiveQueryReply(data)) {
+        return
+      }
+    }
     ptyProcesses.get(id)?.write(data)
   }
   resize(id: string, cols: number, rows: number): void {
@@ -1115,19 +1157,33 @@ export class LocalPtyProvider implements IPtyProvider {
     operation: PtyShutdownOperation
   ): Promise<void> {
     const physicalExit = ptyPhysicalExits.get(id)
-    // Why: snapshot before signaling — once the shell dies, descendants reparent to pid 1 and a ppid walk can't find them.
-    const descendants = ptyAgentSessionIds.has(id)
-      ? await captureDescendantSnapshot(proc.pid)
-      : null
-    // Why: a natural exit can race the snapshot — never signal descendants or the root PID after this PTY loses ownership.
-    if (ptyProcesses.get(id) === proc) {
-      if (descendants) {
-        terminateDescendantSnapshot(descendants)
+    const signalRoot = (): void => {
+      // Why: natural exit can race the sweep — never signal after this PTY loses ownership.
+      if (ptyProcesses.get(id) !== proc) {
+        return
       }
       // Cancel startup delivery now, but keep the exit listener and ownership maps until node-pty reports physical exit.
       runPtyCleanup(id)
       operation.rootSignalled = true
       this.requestTrackedPtyShutdown(id, proc, operation.immediate)
+    }
+    if (ptyAgentSessionIds.has(id)) {
+      // Why: POSIX needs a pre-kill descendant snapshot; Windows tree-kills only when the
+      // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
+      // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else if (process.platform === 'win32' && operation.immediate) {
+      // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
+      // skips the console reap), so a live `pnpm i`/`node` keeps the ConPTY console alive and
+      // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
+      // otherwise root close alone, and detached children may block physical stop (#10004).
+      await killWithDescendantSweep(proc.pid, signalRoot, {
+        ownsRoot: () => ptyProcesses.get(id) === proc
+      })
+    } else {
+      signalRoot()
     }
     await waitForPtyPhysicalExit(id, physicalExit)
   }
@@ -1161,11 +1217,20 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!proc) {
       return
     }
-    try {
-      process.kill(proc.pid, signal)
-    } catch {
-      /* Process may already be dead */
+    const signalRootPid = (): void => {
+      try {
+        process.kill(proc.pid, signal)
+      } catch {
+        /* Process may already be dead */
+      }
     }
+    // Why only SIGWINCH: see posix-pty-foreground-group — a real resize reaches the
+    // tty's foreground group, which proc.pid is never a member of.
+    if (signal === 'SIGWINCH') {
+      signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
+      return
+    }
+    signalRootPid()
   }
 
   async getCwd(id: string): Promise<string> {
@@ -1349,7 +1414,7 @@ export class LocalPtyProvider implements IPtyProvider {
       if (gitBashPath) {
         profiles.push({ name: 'Git Bash', path: gitBashPath })
       }
-      if (isWslAvailable()) {
+      if (await isWslAvailableAsync()) {
         profiles.push({ name: 'WSL', path: 'wsl.exe' })
       }
       return profiles

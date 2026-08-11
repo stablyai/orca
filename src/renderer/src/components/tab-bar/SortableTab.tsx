@@ -6,7 +6,6 @@ import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import type { TerminalTab } from '../../../../shared/types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
@@ -21,13 +20,13 @@ import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
 import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
-import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
+import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TerminalTabLeadingIcon } from './TerminalTabLeadingIcon'
 import {
-  hasUnreadAgentCompletionForTerminalTab,
   isTerminalTabActivityLive,
-  resolveTerminalTabActivityStatus
+  resolveTerminalTabActivityStatus,
+  terminalTabHasUnreadActivity
 } from './terminal-tab-activity-status'
 
 type SortableTabProps = {
@@ -36,6 +35,7 @@ type SortableTabProps = {
   groupId: string
   tabCount: number
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
   isActive: boolean
   isPinned: boolean
   isExpanded: boolean
@@ -43,6 +43,7 @@ type SortableTabProps = {
   onClose: (tabId: string) => void
   onCloseOthers: (tabId: string) => void
   onCloseToRight: (tabId: string) => void
+  onCloseToLeft: (tabId: string) => void
   onSetCustomTitle: (tabId: string, title: string | null) => void
   onSetTabColor: (tabId: string, color: string | null) => void
   onTogglePin: () => void
@@ -66,6 +67,7 @@ export default function SortableTab({
   groupId,
   tabCount,
   hasTabsToRight,
+  hasTabsToLeft,
   isActive,
   isPinned,
   isExpanded,
@@ -73,6 +75,7 @@ export default function SortableTab({
   onClose,
   onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onSetCustomTitle,
   onSetTabColor,
   onTogglePin,
@@ -85,10 +88,12 @@ export default function SortableTab({
   onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
-  const hasUnreadActivity = useAppStore(
-    (s) =>
-      s.unreadTerminalTabs[tab.id] === true ||
-      hasUnreadAgentCompletionForTerminalTab(s.unreadAgentCompletionPanes, tab.id)
+  const hasUnreadActivity = useAppStore((s) =>
+    terminalTabHasUnreadActivity({
+      terminalTabId: tab.id,
+      unreadTerminalTabs: s.unreadTerminalTabs,
+      unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
+    })
   )
   // Why: resolver returns a primitive so unrelated agent updates can't repaint this tab (pane bucketing memoized per snapshot).
   const activityStatus = useAppStore((s) =>
@@ -205,7 +210,8 @@ export default function SortableTab({
     onActivate: handleActivate,
     disabled: isEditing
   })
-  const closeShortcut = useShortcutKeyDetails('tab.close')
+  const closeShortcut = useOptionalShortcutLabel('tab.close')
+  const closeLabel = translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -387,11 +393,8 @@ export default function SortableTab({
               <X className="w-3 h-3" />
             </button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6} className="flex items-center gap-2">
-            <span>{translate('auto.components.tab.bar.SortableTab.95db5f2f7d', 'Close tab')}</span>
-            {closeShortcut.keys.length > 0 && (
-              <ShortcutKeyCombo keys={closeShortcut.keys} doubleTap={closeShortcut.doubleTap} />
-            )}
+          <TooltipContent side="bottom" sideOffset={6}>
+            {closeShortcut ? `${closeLabel} (${closeShortcut})` : closeLabel}
           </TooltipContent>
         </Tooltip>
       )}
@@ -421,12 +424,14 @@ export default function SortableTab({
         point={menuPoint}
         tabCount={tabCount}
         hasTabsToRight={hasTabsToRight}
+        hasTabsToLeft={hasTabsToLeft}
         isPinned={isPinned}
         onOpenChange={setMenuOpen}
         onActivate={onActivate}
         onClose={onClose}
         onCloseOthers={onCloseOthers}
         onCloseToRight={onCloseToRight}
+        onCloseToLeft={onCloseToLeft}
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}

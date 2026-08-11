@@ -36,9 +36,7 @@ export type AgentStartupPlan = {
   sessionOptions?: Record<string, SessionOptionValue>
 }
 
-function appliedSessionOptionProps(
-  values: Record<string, SessionOptionValue>
-): Pick<AgentStartupPlan, 'sessionOptions'> {
+function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {
   return Object.keys(values).length > 0 ? { sessionOptions: { ...values } } : {}
 }
 
@@ -52,6 +50,7 @@ export function buildAgentStartupPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   sessionOptions?: Record<string, SessionOptionValue>
+  sessionOptionsOverrideAgentArgs?: boolean
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must be skipped for remote launches. */
   isRemote?: boolean
@@ -68,6 +67,7 @@ export function buildAgentStartupPlan(args: {
     shell,
     agentArgs: usesQuery ? null : args.agentArgs,
     sessionOptions: args.sessionOptions,
+    sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs,
     isRemote: args.isRemote
   })
   if (!baseCommand.ok) {
@@ -193,11 +193,12 @@ export function buildAgentResumeStartupPlan(args: {
   agentArgs?: string | null
   agentEnv?: Record<string, string> | null
   agentCommand?: string | null
+  ompResumeFilePath?: string | null
   sessionOptions?: Record<string, SessionOptionValue>
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
 }): AgentStartupPlan | null {
-  const argv = getAgentResumeArgv(args.agent, args.providerSession)
+  const argv = getAgentResumeArgv(args.agent, args.providerSession, args.ompResumeFilePath)
   if (!argv) {
     return null
   }

@@ -42,20 +42,22 @@ async function setupMultiplexStream(): Promise<{
   let snapshot: { data: string; seq?: number } = { data: 'INITIAL', seq: 0 }
   let deferSerialize = false
   let releaseDeferredSerialize: (() => void) | null = null
+  const serializeSnapshot = vi.fn(async () => {
+    if (deferSerialize) {
+      deferSerialize = false
+      await new Promise<void>((resolve) => {
+        releaseDeferredSerialize = resolve
+      })
+    }
+    return { data: snapshot.data, cols: 80, rows: 24, seq: snapshot.seq }
+  })
 
   const runtime = {
     getRuntimeId: () => 'test-runtime',
     resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
-    serializeTerminalBuffer: vi.fn(async () => {
-      if (deferSerialize) {
-        deferSerialize = false
-        await new Promise<void>((resolve) => {
-          releaseDeferredSerialize = resolve
-        })
-      }
-      return { data: snapshot.data, cols: 80, rows: 24, seq: snapshot.seq }
-    }),
+    serializeTerminalBuffer: serializeSnapshot,
+    serializeAuthoritativeTerminalBuffer: serializeSnapshot,
     getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
     getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
     getLayout: vi.fn().mockReturnValue({ seq: 1 }),

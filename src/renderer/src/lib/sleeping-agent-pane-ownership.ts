@@ -6,12 +6,15 @@ import type {
   TerminalTab
 } from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
   const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' ? `${base}\0${record.providerSession.transcriptPath ?? ''}` : base
+  return record.agent === 'pi' || record.agent === 'prime-agent'
+    ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
+    : base
 }
 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
@@ -78,6 +81,30 @@ function hasRestorableStablePanePty(
   )
 }
 
+// Why: a pane whose PTY is live *right now* already owns its running session
+// — e.g. a Pi TUI that finished a turn but stays alive in a background tab.
+// Resume must never fork such a pane into a duplicate tab, even when it isn't
+// the pane that reconnects on activation. Liveness comes from the runtime
+// live-PTY map (ptyIdsByTabId), not the layout's ptyIdsByLeafId snapshot, which
+// persists stale across sleep/restart.
+function stablePaneHasLivePty(
+  tabId: string,
+  leafId: string,
+  ptyIdsByTabId: Record<string, string[]>,
+  layout: TerminalLayoutSnapshot | undefined
+): boolean {
+  const livePtyIds = ptyIdsByTabId[tabId] ?? []
+  if (livePtyIds.length === 0) {
+    return false
+  }
+  const leafPtyId = layout?.ptyIdsByLeafId?.[leafId]
+  if (leafPtyId) {
+    return livePtyIds.includes(leafPtyId)
+  }
+  // Single-leaf tabs have no per-leaf binding; the tab's live PTY is this leaf's.
+  return layout?.root?.type === 'leaf' && layout.root.leafId === leafId
+}
+
 function paneWillConnectOnActivation(
   worktreeId: string,
   tabId: string,
@@ -86,19 +113,13 @@ function paneWillConnectOnActivation(
   if (state.activeWorktreeId !== worktreeId) {
     return false
   }
-  if (state.activeTabType === 'terminal' && state.activeTabId === tabId) {
-    return true
-  }
-  // Why: split groups can show multiple terminal tabs at once; each group's
-  // active terminal mounts and connects even when another group has focus.
-  const groups = state.groupsByWorktree[worktreeId] ?? []
-  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  return groups.some((group) => {
-    const tab = group.activeTabId
-      ? unifiedTabs.find((candidate) => candidate.id === group.activeTabId)
-      : null
-    return tab?.contentType === 'terminal' && tab.entityId === tabId
-  })
+  // Why: keep-alive mounts every terminal tab of the active worktree and pane
+  // connect is not visibility-gated (cold-activation deferral delays a mount,
+  // never cancels it), so any preserved restorable pane cold-restores in place.
+  // Gating on the visible tab forked a second live surface onto the same
+  // provider session for every non-group-active agent tab. Web-mirror tabs are
+  // the exception: they never mount a local pane, so they cannot own recovery.
+  return !isWebTerminalSurfaceTabId(tabId)
 }
 
 export function recordPaneIsOwnedByPreservedPane(
@@ -117,6 +138,18 @@ export function recordPaneIsOwnedByPreservedPane(
       return false
     }
     if (isPassiveCompletedHibernationEvidence(record)) {
+      return true
+    }
+    // Why: a pane with a live PTY owns its running session regardless of which
+    // pane reconnects on activation; forking it would duplicate the session.
+    if (
+      stablePaneHasLivePty(
+        tabId,
+        stable.leafId,
+        state.ptyIdsByTabId,
+        state.terminalLayoutsByTabId[tabId]
+      )
+    ) {
       return true
     }
     // Why: active sessions rely on pane-level cold restore. A preserved leaf

@@ -24,7 +24,13 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import {
+  Sheet,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetTitle
+} from '@/components/ui/sheet'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { VisuallyHidden } from 'radix-ui'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
@@ -217,7 +223,11 @@ function CommentCard({
           {comment.line ? `:${comment.line}` : ''}
         </div>
       ) : null}
-      <CommentMarkdown content={comment.body} />
+      <CommentMarkdown
+        content={comment.body}
+        variant="document"
+        className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+      />
     </div>
   )
 }
@@ -1008,7 +1018,12 @@ export default function GitLabItemDialog({
 
   return (
     <Sheet open={item !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
+      {/* Why: the sheet's absolute default close control would overlap this header's actions. */}
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl"
+      >
         <VisuallyHidden.Root>
           <SheetTitle>
             {item
@@ -1055,20 +1070,32 @@ export default function GitLabItemDialog({
                     </div>
                   ) : null}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={translate('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
-                  disabled={loading}
-                  onClick={handleRefresh}
-                  className="size-7"
-                >
-                  {loading ? (
-                    <LoaderCircle className="size-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="size-3.5" />
-                  )}
-                </Button>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={translate('auto.components.GitLabItemDialog.b3c156dd51', 'Refresh')}
+                    disabled={loading}
+                    onClick={handleRefresh}
+                    className="size-7"
+                  >
+                    {loading ? (
+                      <LoaderCircle className="size-3.5 animate-spin" />
+                    ) : (
+                      <RefreshCw className="size-3.5" />
+                    )}
+                  </Button>
+                  <SheetClose asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      className="size-7"
+                      aria-label={translate('auto.components.GitLabItemDialog.a199eb364b', 'Close')}
+                    >
+                      <X className="size-3.5" />
+                    </Button>
+                  </SheetClose>
+                </div>
               </div>
             </header>
 
@@ -1387,7 +1414,11 @@ export default function GitLabItemDialog({
                           </Button>
                         </div>
                       ) : null}
-                      <CommentMarkdown content={details.body} />
+                      <CommentMarkdown
+                        content={details.body}
+                        variant="document"
+                        className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
+                      />
                     </div>
                   ) : (
                     <div>

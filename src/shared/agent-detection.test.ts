@@ -7,6 +7,7 @@ import {
   getAgentLabel,
   isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
+  MAX_OSC_TITLES_PER_CHUNK,
   normalizeTerminalTitle
 } from './agent-detection'
 import {
@@ -64,6 +65,19 @@ describe('OSC title extraction', () => {
     expect(extracted?.startsWith('a'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
+  })
+
+  it('retains only the newest titles when one chunk contains limit +1', () => {
+    const data = Array.from(
+      { length: MAX_OSC_TITLES_PER_CHUNK + 1 },
+      (_, index) => `\x1b]0;title-${index}\x07`
+    ).join('')
+
+    const titles = extractAllOscTitles(data)
+
+    expect(titles).toHaveLength(MAX_OSC_TITLES_PER_CHUNK)
+    expect(titles[0]).toBe('title-1')
+    expect(titles.at(-1)).toBe(`title-${MAX_OSC_TITLES_PER_CHUNK}`)
   })
 })
 

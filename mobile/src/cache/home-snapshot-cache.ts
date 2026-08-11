@@ -5,24 +5,11 @@
 // WebSocket reconnects and the first responses come back.
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { AccountsSnapshot } from '../components/AccountUsage'
+// Why: the canonical shape, so persisted counts keep carrying countsProvenAt — the home card
+// needs it to know whether a rehydrated count is minutes or days old.
+import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
 
 const STORAGE_KEY = 'orca:home-snapshot:v1'
-
-type WorktreeSummary = {
-  worktreeId: string
-  repo: string
-  branch: string
-  displayName: string
-  liveTerminalCount: number
-  status?: 'working' | 'active' | 'permission' | 'done' | 'inactive'
-}
-
-type HostWorktreeInfo = {
-  hostId: string
-  totalWorktrees: number
-  activeCount: number
-  lastActiveWorktree: WorktreeSummary | null
-}
 
 export type HomeSnapshot = {
   worktreeInfo: Record<string, HostWorktreeInfo>

@@ -15,9 +15,11 @@ import type { EditorSlice } from './slices/editor'
 import type { StatsSlice } from './slices/stats'
 import type { MemorySlice } from './slices/memory'
 import type { WorkspaceSpaceSlice } from './slices/workspace-space'
-import type { ClaudeUsageSlice } from './slices/claude-usage'
-import type { CodexUsageSlice } from './slices/codex-usage'
-import type { OpenCodeUsageSlice } from './slices/opencode-usage'
+import type {
+  ClaudeUsageSlice,
+  CodexUsageSlice,
+  OpenCodeUsageSlice
+} from './slices/usage-provider-slices'
 import type { BrowserSlice } from './slices/browser'
 import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
@@ -37,7 +39,9 @@ import type { PinnedTabCloseConfirmSlice } from './slices/pinned-tab-close-confi
 import type { RecentlyClosedTabsSlice } from './slices/recently-closed-tabs'
 import type { OrcaProfilesSlice } from './slices/orca-profiles'
 import type { NewIssueDraftSlice } from './slices/new-issue-draft'
+import type { TaskCreationDraftsSlice } from './slices/task-creation-drafts'
 import type { RemoteServerUpdatesSlice } from './slices/remote-server-updates'
+import type { TerminalQuickCommandHostsSlice } from './slices/terminal-quick-command-hosts'
 
 export type AppState = RepoSlice &
   SparsePresetsSlice &
@@ -78,4 +82,6 @@ export type AppState = RepoSlice &
   RecentlyClosedTabsSlice &
   OrcaProfilesSlice &
   NewIssueDraftSlice &
-  RemoteServerUpdatesSlice
+  TaskCreationDraftsSlice &
+  RemoteServerUpdatesSlice &
+  TerminalQuickCommandHostsSlice

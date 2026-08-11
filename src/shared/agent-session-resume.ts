@@ -12,7 +12,9 @@ export const RESUMABLE_TUI_AGENTS = [
   'mimo-code',
   'droid',
   'grok',
-  'devin'
+  'devin',
+  'omp',
+  'prime-agent'
 ] as const satisfies readonly TuiAgent[]
 
 export type ResumableTuiAgent = (typeof RESUMABLE_TUI_AGENTS)[number]
@@ -35,6 +37,7 @@ export type SleepingAgentLaunchConfig = {
   agentCommand?: string
   agentArgs: string
   agentEnv: Record<string, string>
+  ompResumeFilePath?: string
 }
 
 export type SleepingAgentSessionRecord = {
@@ -58,6 +61,14 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
+  /** Prevents provider-session relaunch while main reconciles a durable
+   *  orchestration assignment against authoritative PTY inventory. */
+  automaticResumeBlockedBy?: 'legacy-orchestration-worker'
+  /** Set on a finished pane captured by an explicit workspace sleep. Its
+   *  `--resume` is issued by the pane's own cold restore when its tab is
+   *  opened, so a mobile wake must not background-mount every such tab and
+   *  respawn the whole workspace the user just slept (#11598). */
+  restoreOnTabOpenOnly?: boolean
 }
 
 const RESUMABLE_TUI_AGENT_SET: ReadonlySet<string> = new Set(RESUMABLE_TUI_AGENTS)
@@ -152,7 +163,7 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
 }
 
 /** Compare the provider-owned values that identify the CLI resume target.
- *  Pi's file path is identity; other agents resume by their provider id. */
+ *  Pi-family transcript resumes use file identity; other agents use provider ids. */
 export function agentProviderSessionsEqual(
   agent: string | undefined,
   left: AgentProviderSessionMetadata | undefined,
@@ -164,7 +175,7 @@ export function agentProviderSessionsEqual(
   return (
     left.key === right.key &&
     left.id === right.id &&
-    (agent !== 'pi' || left.transcriptPath === right.transcriptPath)
+    ((agent !== 'pi' && agent !== 'prime-agent') || left.transcriptPath === right.transcriptPath)
   )
 }
 
@@ -184,6 +195,7 @@ export function extractAgentProviderSession(
     case 'gemini':
     case 'droid':
     // Why: Kimi Code posts a Claude-shaped `session_id` (e.g. session_<uuid>).
+    // falls through
     case 'kimi': {
       const id = readSessionId(payload, ['session_id'])
       return id ? { key: 'session_id', id } : null
@@ -197,7 +209,8 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['sessionID'])
       return id ? { key: 'session_id', id } : null
     }
-    case 'pi': {
+    case 'pi':
+    case 'prime-agent': {
       const id = readSessionId(payload, ['session_id'])
       const providerSession = id
         ? withTranscriptPath({ key: 'session_id', id }, payload, ['session_file'])
@@ -212,9 +225,13 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['session_id', 'sessionId'])
       return id ? { key: 'session_id', id } : null
     }
+    // Why: OMP's managed extension reports the authoritative CLI resume id.
+    case 'omp': {
+      const id = readSessionId(payload, ['session_id'])
+      return id ? { key: 'session_id', id } : null
+    }
     case 'amp':
     case 'cursor':
-    case 'omp':
     case 'command-code':
     case 'copilot':
     case 'hermes':
@@ -224,7 +241,8 @@ export function extractAgentProviderSession(
 
 export function getAgentResumeArgv(
   agent: ResumableTuiAgent,
-  providerSession: AgentProviderSessionMetadata
+  providerSession: AgentProviderSessionMetadata,
+  ompResumeFilePath?: string | null
 ): string[] | null {
   const id = providerSession.id
   switch (agent) {
@@ -242,6 +260,10 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' && providerSession.transcriptPath
         ? ['pi', '--session', providerSession.transcriptPath]
         : null
+    case 'prime-agent':
+      return providerSession.key === 'session_id' && providerSession.transcriptPath
+        ? ['prime-agent', '--resume', providerSession.transcriptPath]
+        : null
     case 'mimo-code':
       return providerSession.key === 'session_id' ? ['mimo', '--session', id] : null
     case 'droid':
@@ -250,5 +272,9 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id' ? ['grok', '--resume', id] : null
     case 'devin':
       return providerSession.key === 'session_id' ? ['devin', '--resume', id] : null
+    case 'omp':
+      return providerSession.key === 'session_id'
+        ? ['omp', '--resume', ompResumeFilePath?.trim() || id]
+        : null
   }
 }

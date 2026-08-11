@@ -4,8 +4,19 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
-import { resolveIndexedWorktreeOwner } from './worktree-runtime-owner-index'
+import { addRoute, resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
+import {
+  findIndexedDetectedWorktrees,
+  hasIndexedDetectedWorktree,
+  resolveIndexedWorktreeOwner
+} from './worktree-runtime-owner-index'
+import {
+  findFolderWorkspaceOwner,
+  getExecutionHostIdForFolderWorkspace,
+  type FolderWorkspaceRuntimeOwnerState
+} from './folder-workspace-runtime-owner'
 
 export type WorktreeOperationRoute = {
   executionHostId: ExecutionHostId | null
@@ -17,19 +28,18 @@ export type WorktreeOperationRouteResolution =
   | { kind: 'ambiguous' }
   | { kind: 'missing' }
 
-type WorktreeOperationOwnerRecord = {
+export type WorktreeOperationOwnerRecord = {
   id: string
   repoId: string
   hostId?: ExecutionHostId
   runtimeOwnerEnvironmentId?: string
 }
 
-type WorktreeOperationRouteState = {
+// settings/runtimeEnvironments come from FolderWorkspaceRuntimeOwnerState's legacy-owner base.
+export type WorktreeOperationRouteState = FolderWorkspaceRuntimeOwnerState & {
   repos?: readonly Pick<AppState['repos'][number], 'id' | 'connectionId' | 'executionHostId'>[]
-  settings?: Pick<NonNullable<AppState['settings']>, 'activeRuntimeEnvironmentId'> | null
   worktreesByRepo?: Record<string, readonly WorktreeOperationOwnerRecord[]>
   detectedWorktreesByRepo?: Record<string, { worktrees: readonly WorktreeOperationOwnerRecord[] }>
-  runtimeEnvironments?: readonly { id: string }[]
   runtimeEnvironmentCatalogHydrated?: boolean
   removedRuntimeEnvironmentIds?: ReadonlySet<string>
 }
@@ -39,55 +49,66 @@ const repoOperationRouteIndexCache = new WeakMap<
   ReadonlyMap<string, WorktreeOperationRouteResolution>
 >()
 
-function routeForOwner(owner: {
-  hostId?: ExecutionHostId
-  runtimeOwnerEnvironmentId?: string
-}): WorktreeOperationRoute | null {
-  const runtimeOwnerEnvironmentId = owner.runtimeOwnerEnvironmentId?.trim()
-  if (!owner.hostId && !runtimeOwnerEnvironmentId) {
-    return null
-  }
-  const parsedHost = parseExecutionHostId(owner.hostId)
-  return {
-    executionHostId: owner.hostId ?? null,
-    runtimeEnvironmentId:
-      runtimeOwnerEnvironmentId ||
-      (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
-  }
-}
-
-function addRoute(
-  routes: Map<string, WorktreeOperationRoute>,
-  route: WorktreeOperationRoute | null
-): void {
-  if (!route) {
-    return
-  }
-  routes.set(JSON.stringify(route), route)
-}
-
-function resolveExactWorktreeRoute(
+function ownerRecordsOnHost(
   state: WorktreeOperationRouteState,
-  owner: WorktreeOperationOwnerRecord
-): WorktreeOperationRouteResolution {
-  const route = routeForOwner(owner)
-  if (!route) {
-    return { kind: 'missing' }
-  }
-  if (route.runtimeEnvironmentId || parseExecutionHostId(route.executionHostId)?.kind !== 'ssh') {
-    return { kind: 'resolved', route }
-  }
-  const repoRoute = resolveIndexedRepoOperationRoute(state.repos, owner.repoId)
-  if (repoRoute.kind === 'ambiguous') {
-    return repoRoute
-  }
-  if (repoRoute.kind === 'resolved' && repoRoute.route.runtimeEnvironmentId) {
-    return {
-      kind: 'resolved',
-      route: { ...route, runtimeEnvironmentId: repoRoute.route.runtimeEnvironmentId }
+  worktreeId: string,
+  executionHostId: ExecutionHostId
+): WorktreeOperationOwnerRecord[] {
+  const owners: WorktreeOperationOwnerRecord[] = []
+  for (const worktrees of Object.values(state.worktreesByRepo ?? {})) {
+    for (const worktree of worktrees) {
+      if (
+        worktree.id === worktreeId &&
+        parseExecutionHostId(worktree.hostId)?.id === executionHostId
+      ) {
+        owners.push(worktree)
+      }
     }
   }
-  return { kind: 'resolved', route }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    if (parseExecutionHostId(worktree.hostId)?.id === executionHostId) {
+      owners.push(worktree)
+    }
+  }
+  return owners
+}
+
+/**
+ * The active workspace's host selection is authoritative identity, but it carries no transport:
+ * an `ssh:` host reached through a paired HUB names the target, not the HUB that proxies it. Keep
+ * the selected host and recover the runtime owner from the matching owner rows (#11346).
+ */
+export function resolveActiveWorkspaceRoute(
+  state: WorktreeOperationRouteState,
+  worktreeId: string
+): WorktreeOperationRoute | null {
+  const activeHost =
+    state.activeWorktreeId === worktreeId
+      ? parseExecutionHostId(state.activeWorkspaceExecutionHostId)
+      : null
+  if (!activeHost) {
+    return null
+  }
+  if (activeHost.kind === 'runtime') {
+    return { executionHostId: activeHost.id, runtimeEnvironmentId: activeHost.environmentId }
+  }
+  // Why: only an `ssh:` selection can hide a paired HUB owner, so local stays an O(1) hot path.
+  if (activeHost.kind !== 'ssh') {
+    return { executionHostId: activeHost.id, runtimeEnvironmentId: null }
+  }
+  const environmentIds = new Set<string>()
+  for (const owner of ownerRecordsOnHost(state, worktreeId, activeHost.id)) {
+    const resolution = resolveExactWorktreeRoute(state, owner)
+    if (resolution.kind === 'resolved' && resolution.route.runtimeEnvironmentId) {
+      environmentIds.add(resolution.route.runtimeEnvironmentId)
+    }
+  }
+  const environmentId = environmentIds.values().next().value
+  return {
+    executionHostId: activeHost.id,
+    // Why: rival HUBs projecting the same host cannot be disambiguated by the host selection alone.
+    runtimeEnvironmentId: environmentIds.size === 1 && environmentId ? environmentId : null
+  }
 }
 
 export function resolveWorktreeOperationRoute(
@@ -102,18 +123,25 @@ export function resolveWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
 ): WorktreeOperationRouteResolution {
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return { kind: 'resolved', route: activeRoute }
+  }
+  // Why: folder workspaces are not Git worktrees — they never appear in the worktree/repo
+  // catalogs scanned below, so without this branch a plain local folder workspace reads as an
+  // unresolved cross-host identity and every owner-routed operation fails closed (#10251).
+  const workspaceScope = parseWorkspaceKey(worktreeId)
+  if (workspaceScope?.type === 'folder') {
+    return resolveFolderWorkspaceOperationRoute(state, workspaceScope.folderWorkspaceId)
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind !== 'missing') {
     return explicitResolution
   }
 
   const hasKnownWorktree =
-    Object.values(state.worktreesByRepo ?? {}).some((worktrees) =>
-      worktrees.some((worktree) => worktree.id === worktreeId)
-    ) ||
-    Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    resolveIndexedWorktreeOwner(state.worktreesByRepo, worktreeId).kind !== 'missing' ||
+    hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   const repoId = getRepoIdFromWorktreeId(worktreeId)
   const hasKnownRepo = state.repos?.some((repo) => repo.id === repoId) === true
   if (!hasKnownWorktree && !hasKnownRepo) {
@@ -147,6 +175,28 @@ export function resolveWorktreeOperationRouteResult(
     : { kind: 'missing' }
 }
 
+function resolveFolderWorkspaceOperationRoute(
+  state: WorktreeOperationRouteState,
+  folderWorkspaceId: string
+): WorktreeOperationRouteResolution {
+  if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    // Why: deleted/stale folder ids keep failing closed like unknown worktrees.
+    return { kind: 'missing' }
+  }
+  // Why: a found folder record is positive identity evidence, so keep terminal-owner parity;
+  // the worktree legacy hydration gates would fail local folders closed whenever unrelated
+  // runtimes exist — the exact #10251 symptom.
+  const executionHostId = getExecutionHostIdForFolderWorkspace(state, folderWorkspaceId)
+  const parsedHost = parseExecutionHostId(executionHostId)
+  return {
+    kind: 'resolved',
+    route: {
+      executionHostId,
+      runtimeEnvironmentId: parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null
+    }
+  }
+}
+
 export function resolveExplicitWorktreeOperationRouteResult(
   state: WorktreeOperationRouteState,
   worktreeId: string
@@ -167,18 +217,14 @@ export function resolveExplicitWorktreeOperationRouteResult(
       addRoute(exactRoutes, resolution.route)
     }
   }
-  for (const result of Object.values(state.detectedWorktreesByRepo ?? {})) {
-    for (const worktree of result.worktrees) {
-      if (worktree.id === worktreeId) {
-        exactRepoIds.add(worktree.repoId)
-        const resolution = resolveExactWorktreeRoute(state, worktree)
-        if (resolution.kind === 'ambiguous') {
-          return resolution
-        }
-        if (resolution.kind === 'resolved') {
-          addRoute(exactRoutes, resolution.route)
-        }
-      }
+  for (const worktree of findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, worktreeId)) {
+    exactRepoIds.add(worktree.repoId)
+    const resolution = resolveExactWorktreeRoute(state, worktree)
+    if (resolution.kind === 'ambiguous') {
+      return resolution
+    }
+    if (resolution.kind === 'resolved') {
+      addRoute(exactRoutes, resolution.route)
     }
   }
   if (exactRoutes.size > 0) {

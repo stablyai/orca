@@ -29,14 +29,6 @@ export function normalizedToDevicePixels(
   }
 }
 
-export type AndroidHardwareButton =
-  | 'home'
-  | 'back'
-  | 'recents'
-  | 'power'
-  | 'volume_up'
-  | 'volume_down'
-
 // Android KeyEvent KEYCODE_* values, including the common aliases agents use.
 const BUTTON_KEYCODES: Record<string, number> = {
   home: 3,

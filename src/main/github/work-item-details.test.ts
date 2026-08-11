@@ -206,7 +206,14 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/repo-root', 923, 'issue')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 923, 'issue', undefined)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/repo-root',
+      923,
+      'issue',
+      undefined,
+      {},
+      undefined
+    )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(2)
     expect(ghExecFileAsyncMock.mock.calls[0][0][0]).toBe('api')
     expect(ghExecFileAsyncMock.mock.calls[0][0][1]).toBe('graphql')
@@ -579,7 +586,14 @@ describe('getWorkItemDetails', () => {
 
     const details = await getWorkItemDetails('/home/tester/widgets', 923, 'issue', 'ssh-test-1')
 
-    expect(getWorkItemMock).toHaveBeenCalledWith('/home/tester/widgets', 923, 'issue', 'ssh-test-1')
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/home/tester/widgets',
+      923,
+      'issue',
+      'ssh-test-1',
+      {},
+      undefined
+    )
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/home/tester/widgets',
       'upstream',
@@ -649,7 +663,14 @@ describe('getWorkItemDetails', () => {
     const details = await getWorkItemDetails('/repo-root', 42, 'pr', null, localGitOptions)
 
     expect(details?.body).toBe('PR body')
-    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, localGitOptions)
+    expect(getWorkItemMock).toHaveBeenCalledWith(
+      '/repo-root',
+      42,
+      'pr',
+      null,
+      localGitOptions,
+      undefined
+    )
     expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
       '/repo-root',
       'origin',
@@ -675,6 +696,16 @@ describe('getWorkItemDetails', () => {
     expect(ghExecFileAsyncMock.mock.calls.every((call) => call[1]?.wslDistro === 'Ubuntu')).toBe(
       true
     )
+  })
+
+  // Why: details open by number, so it must pin the same source as the list;
+  // otherwise a fork and its upstream sharing PR #42 render different PRs.
+  it('forwards the explicit origin source preference to the work item lookup', async () => {
+    getWorkItemMock.mockResolvedValueOnce(null)
+
+    await expect(getWorkItemDetails('/repo-root', 42, 'pr', null, {}, 'origin')).resolves.toBeNull()
+
+    expect(getWorkItemMock).toHaveBeenCalledWith('/repo-root', 42, 'pr', null, {}, 'origin')
   })
 
   // Why: a rate-limited/auth-failed file fetch must not render as an empty PR;

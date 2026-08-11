@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { HistoryManager } from './history-manager'
 import { HistoryReader } from './history-reader'
 import { HeadlessEmulator } from './headless-emulator'
+import { POST_REPLAY_MODE_RESET } from '../../shared/terminal-mode-reset-profiles'
 
 // Reproduces the "blank pane after agent hibernation" bug: alt-screen TUI snapshots have scrollbackAnsi='', so the adapter's
 // `if (scrollback)` gate (daemon-pty-adapter.ts:230) dropped the cold-restore payload and repainted blank despite an intact snapshotAnsi.
@@ -37,7 +38,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     expect(info).not.toBeNull()
     // Adapter uses rehydrateSequences + snapshotAnsi for non-alt-screen → non-empty.
     expect(info!.modes.alternateScreen).toBe(false)
@@ -59,7 +60,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     // Session is eligible (endedAt null) and the agent's snapshot is intact.
     expect(info).not.toBeNull()
     expect(info!.modes.alternateScreen).toBe(true)
@@ -88,16 +89,13 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     const adapterScrollback = info!.modes.alternateScreen
       ? info!.scrollbackAnsi || info!.snapshotAnsi || null
       : info!.rehydrateSequences + info!.snapshotAnsi
     expect(adapterScrollback).not.toBeNull()
 
     // Must end in the normal buffer (no alt-screen re-entry) so it won't fight the agent's own repaint when resume relaunches it.
-    // POST_REPLAY_MODE_RESET copied literally from renderer layout-serialization.ts (main-process test can't import renderer) — keep in sync.
-    const POST_REPLAY_MODE_RESET =
-      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l'
     const fresh = new HeadlessEmulator({ cols: 80, rows: 24 })
     fresh.writeSync('\x1b[2J\x1b[3J\x1b[H')
     fresh.writeSync(adapterScrollback as string)
@@ -118,7 +116,7 @@ describe('agent hibernation cold-restore (alt-screen TUI)', () => {
     await manager.checkpoint(sessionId, em.getSnapshot())
     em.dispose()
 
-    const info = reader.detectColdRestore(sessionId)
+    const info = await reader.detectColdRestore(sessionId)
     expect(info!.modes.alternateScreen).toBe(true)
     const adapterScrollback = info!.scrollbackAnsi || info!.snapshotAnsi || null
     expect(adapterScrollback).not.toContain(ALT_SCREEN_ON)

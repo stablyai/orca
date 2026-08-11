@@ -5,6 +5,7 @@ import type {
 } from '../../shared/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isTrustedUIRenderer } from './ui'
 import {
   TERMINAL_PREVIEW_OUTPUT_BATCH_MAX_BYTES,
   TerminalPreviewOutputStream
@@ -16,6 +17,12 @@ function isValidPtyId(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0 && value.length <= PREVIEW_ID_MAX_LENGTH
 }
 
+// Why: the preview dialog has two hosts — the pop-out window and the main
+// renderer's in-window overlay. The trusted UI renderer already has full PTY
+// access through the regular terminal channels, so admitting it adds no reach.
+function isTerminalPreviewRenderer(sender: WebContents): boolean {
+  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+}
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.removeHandler('terminalPreview:connect')
@@ -27,7 +34,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   const subscriptionsByContents = new Map<number, Map<string, TerminalPreviewOutputStream>>()
   // Why: the preview dialog claims the PTY grid through the remote-desktop
   // viewer registry so the main-window pane parks and later reclaims its own
-  // geometry. Claims are tracked per popout webContents so an explicit
+  // geometry. Claims are tracked per viewer webContents so an explicit
   // unsubscribe or a destroyed window always releases the size floor.
   const fitClaimsByContents = new Map<number, Map<string, symbol>>()
 
@@ -83,7 +90,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       event,
       args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown } }
     ): Promise<TerminalPreviewConnectResult> => {
-      if (!isDashboardPopoutRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+      if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
         return { snapshot: null, replay: [] }
       }
       const ptyId = args.ptyId
@@ -159,7 +166,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:input',
     (event, args: { ptyId?: unknown; data?: unknown }): Promise<boolean> => {
       if (
-        !isDashboardPopoutRenderer(event.sender) ||
+        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
         typeof args.data !== 'string'
       ) {
@@ -173,7 +180,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:ack',
     (event, args: { ptyId?: unknown; bytes?: unknown }): void => {
       if (
-        !isDashboardPopoutRenderer(event.sender) ||
+        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
         typeof args.bytes !== 'number' ||
         !Number.isFinite(args.bytes) ||
@@ -197,7 +204,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       args: { ptyId?: unknown; cols?: unknown; rows?: unknown }
     ): Promise<{ cols: number; rows: number } | null> => {
       if (
-        !isDashboardPopoutRenderer(event.sender) ||
+        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
         typeof args.cols !== 'number' ||
         typeof args.rows !== 'number' ||
@@ -244,7 +251,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   )
 
   ipcMain.handle('terminalPreview:unsubscribe', (event, args: { ptyId?: unknown }): void => {
-    if (!isDashboardPopoutRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+    if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
       return
     }
     subscriptionsByContents.get(event.sender.id)?.get(args.ptyId)?.dispose()

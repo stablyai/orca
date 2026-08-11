@@ -10,10 +10,10 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY,
   SNAPSHOT_REPLAY_PREAMBLE_ALT,
   SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
-  bufferHasSerializeHostileWrappedRow,
   createRendererParityTerminal,
   cursorPosition,
   normalBufferRowsTrimmed,
+  visibleRowWraps,
   visibleRowStyles,
   visibleRows,
   writeChunksToTerminal
@@ -56,8 +56,6 @@ type FidelityDiff = {
   stage: string
   expected: unknown
   actual: unknown
-  /** True when the buffer trips the known upstream addon-serialize blank-leading-wrapped-row bug (see bufferHasSerializeHostileWrappedRow). */
-  knownSerializeWrapBug?: boolean
 }
 
 function buildCase(seed: number): FidelityCase {
@@ -155,9 +153,6 @@ async function runFidelityCase(testCase: FidelityCase): Promise<FidelityDiff | n
     if (!diff) {
       return null
     }
-    if (bufferHasSerializeHostileWrappedRow(control.terminal)) {
-      return { ...diff, knownSerializeWrapBug: true }
-    }
     return diff
   } finally {
     emulator.dispose()
@@ -226,31 +221,19 @@ describe('headless emulator snapshot fidelity fuzz', () => {
   })
 
   it(`matches an always-visible renderer twin across ${ITERATIONS} seeded agent-TUI streams`, async () => {
-    // Bug A (serialize wrap) is tolerated + counted so deep mode surfaces only new divergences; B and C are fixed, so their regressions fail loudly.
-    let knownSerializeWrapBugHits = 0
     for (let i = 0; i < ITERATIONS; i++) {
       const seed = FIXED_SEED ?? 1 + i
       const testCase = buildCase(seed)
       const diff = await runFidelityCase(testCase)
-      if (diff?.knownSerializeWrapBug) {
-        knownSerializeWrapBugHits += 1
-        continue
-      }
       if (diff) {
         const minimized = await minimizeFailure(testCase)
         const minimizedDiff = await runFidelityCase(minimized)
         expect.fail(formatFailure(minimized, minimizedDiff ?? diff))
       }
     }
-    // Guard the tolerance: the predicate tripping on most seeds means the gate has gone degenerate.
-    expect(knownSerializeWrapBugHits).toBeLessThan(Math.max(3, ITERATIONS * 0.5))
   }, 600_000)
 
-  // HEADLINE FINDING (do not delete while unfixed upstream): @xterm/addon-serialize 0.15.0-beta.287
-  // doesn't round-trip null cells at a soft-wrap boundary, garbling every snapshot restore of a TUI that
-  // erased inside a soft-wrapped line. Repros below — V1 cell loss (seed 31, SerializeAddon.ts ~L214
-  // wrap-validity ternary), V2 stray '-' filler (seed 157). Unskip once the upstream fix lands.
-  it.skip('round-trips a wrapped line whose continuation row starts with an erased cell', async () => {
+  it('round-trips a wrapped line whose continuation row starts with an erased cell', async () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 6 })
     const control = createRendererParityTerminal({ cols: 20, rows: 6 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 6 })
@@ -267,6 +250,9 @@ describe('headless emulator snapshot fidelity fuzz', () => {
         POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
       ])
       expect(visibleRows(restored.terminal)).toEqual(visibleRows(control.terminal))
+      expect(visibleRowStyles(restored.terminal)).toEqual(visibleRowStyles(control.terminal))
+      expect(visibleRowWraps(restored.terminal)).toEqual(visibleRowWraps(control.terminal))
+      expect(cursorPosition(restored.terminal)).toEqual(cursorPosition(control.terminal))
     } finally {
       emulator.dispose()
       control.terminal.dispose()
@@ -274,8 +260,7 @@ describe('headless emulator snapshot fidelity fuzz', () => {
     }
   })
 
-  // V2 repro of the headline finding (stray '-' on a fully erased wrapped source row); unskip with V1.
-  it.skip('round-trips a wrapped line whose source row was fully erased', async () => {
+  it('round-trips a wrapped line whose source row was fully erased', async () => {
     const emulator = new HeadlessEmulator({ cols: 20, rows: 6 })
     const control = createRendererParityTerminal({ cols: 20, rows: 6 })
     const restored = createRendererParityTerminal({ cols: 20, rows: 6 })
@@ -292,8 +277,10 @@ describe('headless emulator snapshot fidelity fuzz', () => {
         snapshot.rehydrateSequences + snapshot.snapshotAnsi,
         POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY
       ])
-      // Fails today: restored row 0 shows '-' where the live row is blank.
       expect(visibleRows(restored.terminal)).toEqual(visibleRows(control.terminal))
+      expect(visibleRowStyles(restored.terminal)).toEqual(visibleRowStyles(control.terminal))
+      expect(visibleRowWraps(restored.terminal)).toEqual(visibleRowWraps(control.terminal))
+      expect(cursorPosition(restored.terminal)).toEqual(cursorPosition(control.terminal))
     } finally {
       emulator.dispose()
       control.terminal.dispose()

@@ -1,9 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { buildFromTemplateMock, setApplicationMenuMock, getFocusedWindowMock } = vi.hoisted(() => ({
+const {
+  buildFromTemplateMock,
+  setApplicationMenuMock,
+  getFocusedWindowMock,
+  getFocusedWebContentsMock,
+  sendActionToFirstResponderMock
+} = vi.hoisted(() => ({
   buildFromTemplateMock: vi.fn(),
   setApplicationMenuMock: vi.fn(),
-  getFocusedWindowMock: vi.fn()
+  getFocusedWindowMock: vi.fn(),
+  getFocusedWebContentsMock: vi.fn(),
+  sendActionToFirstResponderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -12,10 +20,14 @@ vi.mock('electron', () => ({
   },
   Menu: {
     buildFromTemplate: buildFromTemplateMock,
-    setApplicationMenu: setApplicationMenuMock
+    setApplicationMenu: setApplicationMenuMock,
+    sendActionToFirstResponder: sendActionToFirstResponderMock
   },
   app: {
     name: 'Orca'
+  },
+  webContents: {
+    getFocusedWebContents: getFocusedWebContentsMock
   }
 }))
 
@@ -70,7 +82,13 @@ describe('registerAppMenu', () => {
     buildFromTemplateMock.mockReset()
     setApplicationMenuMock.mockReset()
     getFocusedWindowMock.mockReset()
+    getFocusedWebContentsMock.mockReset()
+    sendActionToFirstResponderMock.mockReset()
     buildFromTemplateMock.mockImplementation((template) => ({ template }))
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('shows reload shortcuts as policy-routed menu hints', () => {
@@ -174,6 +192,11 @@ describe('registerAppMenu', () => {
     item?.click?.(
       {} as never,
       undefined as never,
+      { altKey: true, shiftKey: true } as Electron.KeyboardEvent
+    )
+    item?.click?.(
+      {} as never,
+      undefined as never,
       {
         triggeredByAccelerator: true,
         shiftKey: true,
@@ -187,6 +210,13 @@ describe('registerAppMenu', () => {
       [{ includePrerelease: true, includePerfPrerelease: true }],
       [{ includePrerelease: false, includePerfPrerelease: true }],
       [{ includePrerelease: false, includePerfPrerelease: false }],
+      [
+        {
+          includePrerelease: !isMac,
+          includePerfPrerelease: false,
+          ...(isMac ? { localBuild: true } : {})
+        }
+      ],
       [{ includePrerelease: false, includePerfPrerelease: false }]
     ])
   })
@@ -202,22 +232,143 @@ describe('registerAppMenu', () => {
     expect(paletteItem?.accelerator).toBeUndefined()
   })
 
-  it('routes Edit > Paste through Orca coordinated paste ownership', () => {
+  // Why: pin the platform on every case — CI runs this suite on Linux only, so an
+  // unpinned test leaves the other platforms' branches entirely uncovered.
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'routes Edit > Paste through Orca coordinated paste ownership on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const send = vi.fn()
+      const hostContents = { send }
+      getFocusedWindowMock.mockReturnValue({ webContents: hostContents })
+      getFocusedWebContentsMock.mockReturnValue(hostContents)
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+
+      expect(pasteItem).toBeDefined()
+      expect(pasteItem?.role).toBeUndefined()
+      expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+
+      pasteItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(send).toHaveBeenCalledOnce()
+      expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'preserves terminal undo and redo chords on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const expectedRegistration = platform === 'darwin' ? undefined : false
+      const undoItem = editSubmenu.find((item) => item.role === 'undo')
+      const redoItem = editSubmenu.find((item) => item.role === 'redo')
+
+      expect(undoItem?.accelerator).toBeUndefined()
+      expect(redoItem?.accelerator).toBeUndefined()
+      expect(undoItem && 'registerAccelerator' in undoItem).toBe(platform !== 'darwin')
+      expect(redoItem && 'registerAccelerator' in redoItem).toBe(platform !== 'darwin')
+      expect(undoItem?.registerAccelerator).toBe(expectedRegistration)
+      expect(redoItem?.registerAccelerator).toBe(expectedRegistration)
+    }
+  )
+
+  it('keeps selection actions native in a focused guest webview', () => {
     const send = vi.fn()
+    const guestContents = { copy: vi.fn(), selectAll: vi.fn() }
     getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+    getFocusedWebContentsMock.mockReturnValue(guestContents)
     registerAppMenu(buildMenuOptions())
 
     const editSubmenu = getSubmenu(getTemplate(), 'Edit')
-    const pasteItem = editSubmenu.find((item) => item.label === 'Paste')
+    editSubmenu
+      .find((item) => item.label === 'Copy')
+      ?.click?.({} as never, {} as never, {} as never)
+    editSubmenu
+      .find((item) => item.label === 'Select All')
+      ?.click?.({} as never, {} as never, {} as never)
 
-    expect(pasteItem).toBeDefined()
-    expect(pasteItem?.role).toBeUndefined()
-    expect(pasteItem?.accelerator).toBe('CmdOrCtrl+V')
+    expect(guestContents.copy).toHaveBeenCalledOnce()
+    expect(guestContents.selectAll).toHaveBeenCalledOnce()
+    expect(send).not.toHaveBeenCalled()
+  })
 
+  it.each(['darwin', 'linux', 'win32'] as const)(
+    'routes Edit selection actions through the focused Orca window on %s',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      const send = vi.fn()
+      getFocusedWindowMock.mockReturnValue({ webContents: { send } })
+      registerAppMenu(buildMenuOptions())
+
+      const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+      const copyItem = editSubmenu.find((item) => item.label === 'Copy')
+      const selectAllItem = editSubmenu.find((item) => item.label === 'Select All')
+
+      expect(copyItem?.role).toBeUndefined()
+      expect(selectAllItem?.role).toBeUndefined()
+      expect(copyItem?.accelerator).toBe(platform === 'darwin' ? 'Command+C' : undefined)
+      expect(selectAllItem?.accelerator).toBe(platform === 'darwin' ? 'Command+A' : undefined)
+
+      copyItem?.click?.({} as never, {} as never, {} as never)
+      selectAllItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(send.mock.calls).toEqual([
+        ['ui:appMenuSelectionAction', 'copy'],
+        ['ui:appMenuSelectionAction', 'select-all']
+      ])
+    }
+  )
+
+  it('routes macOS selection actions to the native responder without a focused window', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    getFocusedWindowMock.mockReturnValue(null)
+    registerAppMenu(buildMenuOptions())
+
+    const editSubmenu = getSubmenu(getTemplate(), 'Edit')
+    editSubmenu
+      .find((item) => item.label === 'Copy')
+      ?.click?.({} as never, {} as never, {} as never)
+    editSubmenu
+      .find((item) => item.label === 'Select All')
+      ?.click?.({} as never, {} as never, {} as never)
+
+    expect(sendActionToFirstResponderMock.mock.calls).toEqual([['copy:'], ['selectAll:']])
+  })
+
+  it('routes Edit > Paste to the native first responder once on macOS without a focused window', () => {
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    getFocusedWindowMock.mockReturnValue(null)
+    registerAppMenu(buildMenuOptions())
+
+    const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
     pasteItem?.click?.({} as never, {} as never, {} as never)
 
-    expect(send).toHaveBeenCalledWith('ui:appMenuPaste')
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledOnce()
+    expect(sendActionToFirstResponderMock).toHaveBeenCalledWith('paste:')
   })
+
+  it.each(['linux', 'win32'] as const)(
+    'does not invoke the native paste responder on %s without a focused window',
+    (platform) => {
+      vi.spyOn(process, 'platform', 'get').mockReturnValue(platform)
+      getFocusedWindowMock.mockReturnValue(null)
+      registerAppMenu(buildMenuOptions())
+
+      const pasteItem = getSubmenu(getTemplate(), 'Edit').find((item) => item.label === 'Paste')
+      // Why: this case asserts only a negative, so it would pass green if the item vanished.
+      expect(pasteItem).toBeDefined()
+      pasteItem?.click?.({} as never, {} as never, {} as never)
+
+      expect(sendActionToFirstResponderMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.runIf(!isMac)('puts Settings and Exit under File on Windows/Linux', () => {
     registerAppMenu(buildMenuOptions())

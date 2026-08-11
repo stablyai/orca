@@ -284,6 +284,80 @@ describe('agent completion coordinator', () => {
     })
   })
 
+  it('keeps hook working evidence across unavailable inspections', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => ({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true as const
+      })),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeHookStatus({ state: 'working', agentType: 'codex', prompt: 'test' })
+    await vi.advanceTimersByTimeAsync(2_000)
+    coordinator.observeHookStatus({ state: 'done', agentType: 'codex', prompt: 'test' })
+
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(HOOK_DONE_QUIET_MS)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps explicit-title evidence across unavailable inspections', async () => {
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => ({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true as const
+      })),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    coordinator.observeTitle('Codex working')
+    await vi.advanceTimersByTimeAsync(2_000)
+    coordinator.observeClassifiedTitleCompletion('done')
+
+    expect(dispatchCompletion).toHaveBeenCalledExactlyOnceWith('done')
+  })
+
+  it('resets exit confirmation across an unavailable inspection', async () => {
+    let result: RuntimeTerminalProcessInspection = processResult('codex')
+    const dispatchCompletion = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(async () => result),
+      dispatchCompletion,
+      isLive: () => true
+    })
+
+    coordinator.startProcessTracking()
+    await vi.advanceTimersByTimeAsync(2_000)
+    result = processResult(null, false)
+    await vi.advanceTimersByTimeAsync(750)
+    result = { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
+    await vi.advanceTimersByTimeAsync(750)
+    result = processResult(null, false)
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(dispatchCompletion).not.toHaveBeenCalled()
+
+    await vi.advanceTimersByTimeAsync(750)
+    expect(dispatchCompletion).toHaveBeenCalledTimes(1)
+  })
+
   it('does not mark an agent-to-agent process replacement as terminal idle', async () => {
     let foregroundProcess = 'codex'
     const dispatchCompletion = vi.fn()

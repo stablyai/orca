@@ -25,6 +25,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
@@ -296,6 +297,18 @@ function removeInstalledConfig(config: HooksConfig): void {
 }
 
 export class AntigravityHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+    if (process.platform === 'win32') {
+      for (const event of ANTIGRAVITY_EVENTS) {
+        await refreshManagedScriptIfPresent(
+          getWindowsWrapperScriptPath(event),
+          getWindowsWrapperScript(event.eventName)
+        )
+      }
+    }
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()

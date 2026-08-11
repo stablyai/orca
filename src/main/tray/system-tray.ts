@@ -1,6 +1,7 @@
 import { Menu, Tray, nativeImage, nativeTheme, type NativeImage } from 'electron'
 import menuBarIconPath from '../../../resources/tray/orca-menu-barTemplate.png?asset&asarUnpack'
 import menuBarIconRetinaPath from '../../../resources/tray/orca-menu-barTemplate@2x.png?asset&asarUnpack'
+import { deferAppKitSceneMutation } from '../appkit-scene-mutation'
 import { createAppIconImage } from '../app-icon'
 import { translateMain } from '../i18n/main-i18n'
 import { composeTrayAttentionIcon, tintTrayTemplateForAttention } from './tray-attention-icon'
@@ -107,6 +108,23 @@ function applyTrayImage(): void {
   tray.setImage(attentionActive ? composeTrayAttentionIcon(baseTrayImage) : baseTrayImage)
 }
 
+// Why: collapse bursts (rapid show/hide) into one repaint; the deferred pass reads
+// current module state, so a dropped schedule can never land a stale icon.
+let trayImageRepaintPending = false
+
+// Why: tray.setImage/setToolTip drive an NSStatusItem scene update, which deadlocks
+// the main thread when sent from inside an AppKit callout; run it on a fresh turn.
+function scheduleTrayImage(): void {
+  if (trayImageRepaintPending) {
+    return
+  }
+  trayImageRepaintPending = true
+  deferAppKitSceneMutation(() => {
+    trayImageRepaintPending = false
+    applyTrayImage()
+  })
+}
+
 function createMacMenuBarImage(): NativeImage | null {
   const image = nativeImage.createFromPath(menuBarIconPath)
   const { width, height } = image.getSize()
@@ -172,7 +190,8 @@ function watchMacAppearance(): void {
   }
   nativeThemeUpdatedListener = () => {
     if (attentionActive) {
-      applyTrayImage()
+      // Why: 'updated' fires from AppKit's appearance-change dispatch.
+      scheduleTrayImage()
     }
   }
   nativeTheme.on('updated', nativeThemeUpdatedListener)
@@ -299,8 +318,10 @@ export function setTrayAttention(active: boolean): void {
   if (attentionActive === active) {
     return
   }
+  // Why: the dedup latch must settle synchronously or rapid show/hide mis-dedupes;
+  // only the native scene mutation moves off the caller's (AppKit) stack.
   attentionActive = active
-  applyTrayImage()
+  scheduleTrayImage()
 }
 
 /** Destroys the tray icon if present. Safe to call repeatedly or with no tray. */

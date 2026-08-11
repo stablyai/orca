@@ -148,24 +148,6 @@ export async function openWorkspacePortInBrowser(args: {
   return { ok: true }
 }
 
-export async function refreshWorkspacePortScanState(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-}): Promise<WorkspacePortScanResult> {
-  args.setWorkspacePortScanRefreshing(true)
-  try {
-    const scan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: workspacePortScanKeyForTarget(args.runtimeTarget),
-      result: scan
-    })
-    return scan
-  } finally {
-    args.setWorkspacePortScanRefreshing(false)
-  }
-}
-
 export async function refreshWorkspacePortScanAfterStop(args: {
   runtimeTarget: RuntimeClientTarget
   setWorkspacePortScan: WorkspacePortScanSetter

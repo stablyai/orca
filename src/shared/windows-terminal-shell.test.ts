@@ -26,4 +26,10 @@ describe('resolveWindowsShellStartupFamily', () => {
     expect(resolveWindowsShellStartupFamily('wsl.exe')).toBe('posix')
     expect(resolveWindowsShellStartupFamily('C:\\Program Files\\Git\\bin\\bash.exe')).toBe('posix')
   })
+
+  it('maps extension-less bash and wsl entries to POSIX quoting', () => {
+    expect(resolveWindowsShellStartupFamily('bash')).toBe('posix')
+    expect(resolveWindowsShellStartupFamily('wsl')).toBe('posix')
+    expect(resolveWindowsShellStartupFamily('C:\\Program Files\\Git\\bin\\bash')).toBe('posix')
+  })
 })

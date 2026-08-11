@@ -156,10 +156,13 @@ describe('claude subagent sidebar row lifecycle', () => {
       agent_id: 'aweb-research-8a76b7d7595ce04e',
       background_tasks: teammateTasks
     })
-    expect(afterFirst?.payload.subagents).toEqual([
-      expect.objectContaining({ id: 'aoss-hunt-95a28c160dc99e5e', state: 'working' }),
-      expect.objectContaining({ id: 'aweb-research-8a76b7d7595ce04e', state: 'idle' })
-    ])
+    expect(afterFirst?.payload.subagents).toHaveLength(2)
+    expect(afterFirst?.payload.subagents).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 'aoss-hunt-95a28c160dc99e5e', state: 'working' }),
+        expect.objectContaining({ id: 'aweb-research-8a76b7d7595ce04e', state: 'idle' })
+      ])
+    )
 
     // oss-hunt stops too. No TeammateIdle ever confirmed either id as a live
     // teammate, so the next complete fold reaps both parked rows — the pane

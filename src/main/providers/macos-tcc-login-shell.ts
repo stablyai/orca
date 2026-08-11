@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
+import { basename } from 'node:path'
 import {
   classifyLoginPreflightError,
   runMacosLoginSessionPtyProbe,
@@ -10,8 +11,10 @@ import {
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
 const MACOS_LOGIN_PATH = '/usr/bin/login'
-const MACOS_ENV_PATH = '/usr/bin/env'
+const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
+const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
+const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
@@ -20,6 +23,9 @@ const LOGIN_PREFLIGHT_MARKER = 'ORCA_LOGIN_PREFLIGHT_OK'
 const LOGIN_PREFLIGHT_MAX_BUFFER_BYTES = 1024
 const LOGIN_PREFLIGHT_RETRY_BASE_MS = 5_000
 const LOGIN_PREFLIGHT_RETRY_MAX_MS = 5 * 60_000
+// Why: daemons live for weeks across app updates, so a rejected verdict must not
+// disable TCC attribution forever; re-verify on a slow cadence (#9756).
+const LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS = 30 * 60_000
 
 /**
  * Env escape hatch to force the plain (unwrapped) spawn. Set to `1`/`true` if a
@@ -34,10 +40,12 @@ const DISABLE_ENV_VAR = 'ORCA_DISABLE_MACOS_LOGIN_SHELL'
  * maxBuffer, or spawn error) proves nothing about PAM and must not stick.
  */
 let cachedLoginPreflightResult: boolean | null = null
+let cachedRejectionAtMs: number | null = null
 let loginPreflightInFlight: Promise<LoginPreflightOutcome> | null = null
 let transientLoginPreflightFailure: { failureCount: number; retryAtMs: number } | null = null
 let loginPreflightCacheEpoch = 0
 let loginSessionProbeInFlight = false
+let loginSessionAcceptedInProcess = false
 
 function isDisabledByEnv(): boolean {
   const value = process.env[DISABLE_ENV_VAR]
@@ -100,6 +108,35 @@ function runLoginPreflight(
   })
 }
 
+async function verifyRejectedLoginPreflightUnderPty(
+  username: string,
+  accountHome: string,
+  outcome: LoginPreflightOutcome
+): Promise<LoginPreflightOutcome> {
+  if (outcome.ok || !outcome.conclusive) {
+    return outcome
+  }
+  const ptyOutcome = await runMacosLoginSessionPtyProbe(
+    username,
+    accountHome,
+    LOGIN_PREFLIGHT_TIMEOUT_MS,
+    LOGIN_PREFLIGHT_MAX_BUFFER_BYTES
+  )
+  // Why: a pipe-sensitive PAM stack must not override the production-shaped PTY oracle.
+  return ptyOutcome.conclusive ? ptyOutcome : outcome
+}
+
+function expireStaleRejectedVerdict(): void {
+  if (
+    cachedLoginPreflightResult === false &&
+    cachedRejectionAtMs !== null &&
+    Date.now() - cachedRejectionAtMs >= LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS
+  ) {
+    cachedLoginPreflightResult = null
+    cachedRejectionAtMs = null
+  }
+}
+
 function cachedOutcome(): LoginPreflightOutcome | null {
   if (cachedLoginPreflightResult === null) {
     return null
@@ -107,6 +144,18 @@ function cachedOutcome(): LoginPreflightOutcome | null {
   return cachedLoginPreflightResult
     ? { ok: true, conclusive: true, reason: 'accepted' }
     : { ok: false, conclusive: true, reason: 'rejected' }
+}
+
+function cacheConclusiveLoginPreflightOutcome(outcome: LoginPreflightOutcome): void {
+  if (outcome.ok) {
+    cachedRejectionAtMs = null
+    loginSessionAcceptedInProcess = true
+  } else if (cachedLoginPreflightResult !== false || cachedRejectionAtMs === null) {
+    // Why: periodic health probes must not extend one rejected verdict forever.
+    cachedRejectionAtMs = Date.now()
+  }
+  cachedLoginPreflightResult = outcome.ok
+  transientLoginPreflightFailure = null
 }
 
 function loginPreflightSucceeds(
@@ -121,13 +170,13 @@ function loginPreflightSucceeds(
     const cacheEpoch = loginPreflightCacheEpoch
     // Why: simultaneous pane restores share one PAM child instead of multiplying
     // subprocesses at exactly the point terminal startup is already busiest.
-    loginPreflightInFlight = runLoginPreflight(username, accountHome).then((outcome) => {
+    loginPreflightInFlight = runLoginPreflight(username, accountHome).then(async (pipeOutcome) => {
+      const outcome = await verifyRejectedLoginPreflightUnderPty(username, accountHome, pipeOutcome)
       // Why: cache only a conclusive PAM verdict; a killed/timed-out probe is
       // environmental and must be retried next spawn, not stuck forever (F1).
       const mayUpdateCache = !loginSessionProbeInFlight && cacheEpoch === loginPreflightCacheEpoch
       if (outcome.conclusive && mayUpdateCache) {
-        cachedLoginPreflightResult = outcome.ok
-        transientLoginPreflightFailure = null
+        cacheConclusiveLoginPreflightOutcome(outcome)
       } else if (!outcome.conclusive && mayUpdateCache) {
         const failureCount = (transientLoginPreflightFailure?.failureCount ?? 0) + 1
         transientLoginPreflightFailure = {
@@ -148,7 +197,10 @@ function loginPreflightSucceeds(
 }
 
 /**
- * Resolves the one-time PAM capability check before a fresh PTY is spawned.
+ * Resolves the cached PAM capability check before a fresh PTY is spawned.
+ * Accepted spawn verdicts stay cached unless the login-session watch observes
+ * a newer state; rejected verdicts are re-verified after
+ * {@link LOGIN_PREFLIGHT_REJECTED_REVALIDATE_MS}.
  * Callers await this at their async request boundary so existing terminals and
  * the Electron main thread remain responsive while login(1) runs.
  *
@@ -161,6 +213,7 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
   if (process.platform !== 'darwin' || isDisabledByEnv()) {
     return null
   }
+  expireStaleRejectedVerdict()
   if (cachedLoginPreflightResult !== null) {
     return null
   }
@@ -189,10 +242,12 @@ export async function prepareMacosTccLoginShell(): Promise<LoginPreflightOutcome
 
 export function resetMacosLoginShellPreflightForTests(): void {
   cachedLoginPreflightResult = null
+  cachedRejectionAtMs = null
   loginPreflightInFlight = null
   transientLoginPreflightFailure = null
   loginPreflightCacheEpoch = 0
   loginSessionProbeInFlight = false
+  loginSessionAcceptedInProcess = false
 }
 
 /**
@@ -200,9 +255,9 @@ export function resetMacosLoginShellPreflightForTests(): void {
  * cached verdict and the transient backoff, and writes any conclusive verdict
  * back into the cache — so a daemon whose login session died stops wrapping
  * spawns in `login(1)` (which would only mint "Login incorrect" zombies) even
- * before retirement completes. Escalates to a PTY-hosted probe when the pipe
- * probe is inconclusive, since a dead session's PAM stack may only misbehave
- * under a real tty. Returns null when the wrapper doesn't apply.
+ * before retirement completes. Escalates ambiguous probes—and negative probes
+ * after this process accepted a login session—to the production-shaped PTY
+ * oracle. Returns null when the wrapper doesn't apply.
  */
 export async function probeMacosLoginSessionAlive(
   signal?: AbortSignal
@@ -230,7 +285,7 @@ export async function probeMacosLoginSessionAlive(
   try {
     outcome = await (existingPreflight ??
       runLoginPreflight(username, accountHome, LOGIN_SESSION_WATCH_PROBE_TIMEOUT_MS, signal))
-    if (!outcome.conclusive && !signal?.aborted) {
+    if (!outcome.ok && !signal?.aborted && (!outcome.conclusive || loginSessionAcceptedInProcess)) {
       outcome = await runMacosLoginSessionPtyProbe(
         username,
         accountHome,
@@ -245,8 +300,7 @@ export async function probeMacosLoginSessionAlive(
     loginSessionProbeInFlight = false
   }
   if (outcome.conclusive) {
-    cachedLoginPreflightResult = outcome.ok
-    transientLoginPreflightFailure = null
+    cacheConclusiveLoginPreflightOutcome(outcome)
   }
   return outcome
 }
@@ -255,11 +309,11 @@ export async function probeMacosLoginSessionAlive(
  * Wrap a macOS shell spawn in `/usr/bin/login -flpq <user> …` so terminal children
  * get their own TCC identity instead of collapsing into Orca's bundle id — signed
  * CLIs like `op` otherwise re-prompt every launch because tccd attributes the grant
- * to Orca and never persists it (#6996). This mirrors how Terminal.app spawns shells.
+ * to Orca and never persists it (#6996, #8985).
  *
- * Why the env(1) interposition: login(1) overwrites SHELL from the account DB even
- * under -p, so `/usr/bin/env SHELL=<shell>` re-asserts the shell Orca actually runs
- * without disturbing login's attribution (skipped when the shell path contains `=`).
+ * A clean bash trampoline restores SHELL after login(1) overwrites it, then replaces
+ * itself with the configured shell. Values stay positional so custom paths and
+ * arguments are never interpreted as shell source.
  *
  * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
  * or when the login(1) PAM preflight rejects this process's user.
@@ -295,13 +349,29 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
 
   const shellEnvValue = env?.SHELL || file
-  const interposedShellEnv =
-    !file.includes('=') && existsSync(MACOS_ENV_PATH)
-      ? [MACOS_ENV_PATH, `SHELL=${shellEnvValue}`]
-      : []
+  // Why: Bash ignores --rcfile when argv[0] marks it as a login shell; Orca's
+  // rcfile already reproduces login startup and must remain the active wrapper.
+  const trampoline =
+    basename(file).toLowerCase() === 'bash' && args.includes('--rcfile')
+      ? DIRECT_SHELL_TRAMPOLINE
+      : LOGIN_SHELL_TRAMPOLINE
 
+  // Why: -p blocks login(1)-preserved BASH_ENV and imported functions before the fixed trampoline runs.
   return {
     file: MACOS_LOGIN_PATH,
-    args: ['-flpq', username, ...interposedShellEnv, file, ...args]
+    args: [
+      '-flpq',
+      username,
+      MACOS_BASH_PATH,
+      '--noprofile',
+      '--norc',
+      '-p',
+      '-c',
+      trampoline,
+      'orca-tcc-login',
+      shellEnvValue,
+      file,
+      ...args
+    ]
   }
 }

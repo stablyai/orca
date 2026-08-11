@@ -74,6 +74,32 @@ export function getChecksPanelReviewState(
 
   const blockedReason = input.eligibilityBlockedReason
 
+  // 1.5 Keep active positive-review lookups self-updating without hiding stronger safety guidance.
+  const reviewFetchInFlight =
+    input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight'
+  const hasPendingReviewEvidence =
+    input.reviewLookup === 'positive_unresolved' || blockedReason === 'existing_review'
+  const pendingReviewLookupOwnsState =
+    blockedReason === undefined || blockedReason === 'existing_review'
+  if (reviewFetchInFlight && hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
+    return {
+      renderReview: false,
+      title: translate(
+        'auto.components.right.sidebar.checks.panel.review.active.title',
+        'Checking {{reviewLabel}} status',
+        { reviewLabel }
+      ),
+      description: translate(
+        'auto.components.right.sidebar.checks.panel.review.active.body',
+        'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
+        { reviewLabel, provider: providerName }
+      ),
+      composerMode: 'hidden',
+      workflowAction: null,
+      recovery: []
+    }
+  }
+
   // 2. Eligibility safety states own their guidance (existing_review is a hard
   //    create block in the positive-evidence family).
   if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {

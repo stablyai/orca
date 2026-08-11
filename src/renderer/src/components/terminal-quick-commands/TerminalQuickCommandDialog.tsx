@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import type {
   Repo,
   TerminalQuickCommand,
-  TerminalQuickCommandScope
+  TerminalQuickCommandScope,
+  TuiAgent
 } from '../../../../shared/types'
 import {
   getTerminalQuickCommandAction,
@@ -21,7 +22,6 @@ import {
 import { Label } from '@/components/ui/label'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type { TuiAgent } from '../../../../shared/types'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
@@ -39,7 +39,7 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }

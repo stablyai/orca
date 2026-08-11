@@ -22,8 +22,7 @@ import { emulatorProbe, emulatorProbeError } from '../emulator-probe'
 
 // A live scrcpy session validated against a real emulator. The connection
 // handshake (dummy byte, 64-byte device name, codec meta) and the server option
-// set are coupled to the pinned scrcpy server version; the pure framing
-// (scrcpy-video-frame-parser) and control encoding (scrcpy-control-protocol) are
+// set are coupled to the pinned scrcpy server version; pure video framing is
 // unit-tested, while this orchestration is exercised live via probes.
 
 const DEVICE_NAME_BYTES = 64
@@ -198,7 +197,6 @@ export class ScrcpyStreamSession {
     socket.on('error', (error) =>
       emulatorProbeError('scrcpy.control.fail', error, { serial: this.options.serial })
     )
-    // Drop the ref on reset so sendControl() can't write to a dead socket (half-open session).
     socket.on('close', () => {
       if (this.controlSocket === socket) {
         this.controlSocket = null
@@ -251,11 +249,6 @@ export class ScrcpyStreamSession {
     for (const frame of result.frames) {
       this.callbacks.onFrame(frame)
     }
-  }
-
-  // Sends an encoded scrcpy control message (see scrcpy-control-protocol).
-  sendControl(message: Buffer): void {
-    this.controlSocket?.write(message)
   }
 
   private fail(message: string): void {

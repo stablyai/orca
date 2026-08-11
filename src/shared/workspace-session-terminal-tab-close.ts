@@ -265,6 +265,7 @@ export function closeTerminalTabInWorkspaceSession(
     if (!hasSurface) {
       next.activeWorktreeId = null
       next.activeWorkspaceKey = null
+      next.activeWorkspaceExecutionHostId = null
     }
   }
   if ((next.tabsByWorktree[worktreeId]?.length ?? 0) === 0) {

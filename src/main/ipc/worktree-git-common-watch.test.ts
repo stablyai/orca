@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendFile, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
-import { rmSync, writeFileSync } from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
+import { chmodSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { WatcherProcessFailure } from './parcel-watcher-process-failure'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
@@ -19,6 +21,20 @@ vi.mock('./parcel-watcher-process', () => ({
   subscribeViaWatcherProcess: vi.fn()
 }))
 
+// Records every stat target so a test can assert which paths a parked poll stopped touching.
+const { statCalls } = vi.hoisted(() => ({ statCalls: [] as string[] }))
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
+  return {
+    ...actual,
+    stat: (...args: Parameters<typeof actual.stat>) => {
+      statCalls.push(String(args[0]))
+      return actual.stat(...args)
+    }
+  }
+})
+
 const POLL_MS = 25
 
 const alwaysVisible: WorktreePollerWindowVisibility = {
@@ -30,18 +46,18 @@ function createVisibilityHarness(): {
   source: WorktreePollerWindowVisibility
   hide: () => void
   show: () => void
+  listenerCount: () => number
 } {
   let visible = true
-  let listener: (() => void) | null = null
+  // A set, not a single slot: the darwin path parks two independent watches.
+  const listeners = new Set<() => void>()
   return {
     source: {
       isWindowVisible: () => visible,
       onWindowBecameVisible: (nextListener) => {
-        listener = nextListener
+        listeners.add(nextListener)
         return () => {
-          if (listener === nextListener) {
-            listener = null
-          }
+          listeners.delete(nextListener)
         }
       }
     },
@@ -50,8 +66,11 @@ function createVisibilityHarness(): {
     },
     show: () => {
       visible = true
-      listener?.()
-    }
+      for (const listener of listeners) {
+        listener()
+      }
+    },
+    listenerCount: () => listeners.size
   }
 }
 
@@ -70,6 +89,7 @@ describe('worktree git-common narrow watch (darwin)', () => {
   afterEach(async () => {
     await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()))
     childSubscriptions = []
+    statCalls.length = 0
     subscribeMock.mockReset()
   })
 
@@ -100,13 +120,21 @@ describe('worktree git-common narrow watch (darwin)', () => {
     }
   }
 
-  async function startWatch(commonDir: string, received: WorktreeBasePollEvent[][]): Promise<void> {
+  async function startWatch(
+    commonDir: string,
+    received: WorktreeBasePollEvent[][],
+    getStatusRefPaths: () => readonly string[] = () => [],
+    onWatchError?: (error: Error) => void
+  ): Promise<void> {
     const watch = await startGitCommonWatch(
       makeTarget(commonDir),
       (events) => received.push(events),
       POLL_MS,
       'darwin',
-      alwaysVisible
+      alwaysVisible,
+      undefined,
+      getStatusRefPaths,
+      onWatchError
     )
     cleanups.push(() => watch.unsubscribe())
   }
@@ -125,6 +153,58 @@ describe('worktree git-common narrow watch (darwin)', () => {
     const entryPath = join(commonDir, 'worktrees', 'wt-a')
     childSubscriptions[0].callback(null, [{ type: 'create', path: entryPath }])
     expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+  })
+
+  it('detects a common config write via the primary-metadata poll', async () => {
+    // Why: an external `git push -u` rewrites only the common config (plus
+    // remote-tracking refs) — outside the narrow worktrees/ stream, so the
+    // primary-metadata poll must carry it.
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const configPath = join(commonDir, 'config')
+    await writeFile(configPath, '[core]\n\tbare = false\n')
+    const received: WorktreeBasePollEvent[][] = []
+    await startWatch(commonDir, received)
+
+    await appendFile(configPath, '[branch "main"]\n\tremote = origin\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: configPath })
+    })
+  })
+
+  it('polls only the accepted upstream ref and rebinds without synthetic events', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const firstRef = join(commonDir, 'refs', 'remotes', 'origin', 'first')
+    const nextRef = join(commonDir, 'refs', 'remotes', 'origin', 'next')
+    const unrelatedRef = join(commonDir, 'refs', 'remotes', 'origin', 'unrelated')
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), { recursive: true })
+    await Promise.all([
+      writeFile(firstRef, 'aaa\n'),
+      writeFile(nextRef, 'bbb\n'),
+      writeFile(unrelatedRef, 'ccc\n')
+    ])
+    let selected = [firstRef]
+    const received: WorktreeBasePollEvent[][] = []
+    await startWatch(commonDir, received, () => selected)
+
+    statCalls.length = 0
+    await appendFile(firstRef, 'updated\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: firstRef })
+    })
+    expect(statCalls).not.toContain(unrelatedRef)
+
+    received.length = 0
+    selected = [nextRef]
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    expect(received.flat()).toEqual([])
+    await appendFile(firstRef, 'ignored\n')
+    await appendFile(nextRef, 'watched\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: nextRef })
+    })
+    expect(received.flat()).not.toContainEqual({ type: 'update', path: firstRef })
   })
 
   it('tears down and re-arms when the watched root is deleted', async () => {
@@ -180,6 +260,89 @@ describe('worktree git-common narrow watch (darwin)', () => {
     expect(childSubscriptions[1].unsubscribe).not.toHaveBeenCalled()
   })
 
+  it('routes watcher failures through the unknown-metadata callback', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const received: WorktreeBasePollEvent[][] = []
+    const onWatchError = vi.fn()
+    await startWatch(commonDir, received, () => [], onWatchError)
+
+    const error = new Error('watcher child reported failure')
+    childSubscriptions[0].callback(error, [])
+
+    expect(onWatchError).toHaveBeenCalledWith(error)
+    expect(received).toEqual([])
+  })
+
+  it('falls back to structural polling after the watcher crash fuse opens', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    childSubscriptions[0].callback(
+      new WatcherProcessFailure(
+        'watcher process crashed repeatedly',
+        'supervisor',
+        'supervisor_crash_fuse'
+      ),
+      []
+    )
+    await vi.waitFor(() => {
+      expect(childSubscriptions[0].unsubscribe).toHaveBeenCalledOnce()
+      expect(visibility.listenerCount()).toBe(3)
+    })
+
+    const entryPath = join(worktreesDir, 'fallback-entry')
+    await mkdir(entryPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+    })
+    await rm(entryPath, { recursive: true })
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'delete', path: entryPath })
+    })
+    expect(subscribeMock).toHaveBeenCalledOnce()
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
+  })
+
+  it('starts structural polling when the watcher process is already unavailable', async () => {
+    subscribeMock.mockRejectedValue(
+      new WatcherProcessFailure('watcher process unavailable', 'supervisor', 'process_unavailable')
+    )
+    const commonDir = await makeCommonDir(true)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    const entryPath = join(worktreesDir, 'fallback-entry')
+    await mkdir(entryPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: entryPath })
+    })
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    expect(subscribeMock).toHaveBeenCalledOnce()
+
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
+  })
+
   it('reports a structural change after a watcher-child interruption', async () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
@@ -204,6 +367,110 @@ describe('worktree git-common narrow watch (darwin)', () => {
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(1)
     })
+  })
+
+  async function startHiddenExistencePoll(visibility: {
+    source: WorktreePollerWindowVisibility
+    hide: () => void
+  }): Promise<{ commonDir: string; worktreesDir: string; received: WorktreeBasePollEvent[][] }> {
+    const commonDir = await makeCommonDir(false)
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+    cleanups.push(() => watch.unsubscribe())
+    visibility.hide()
+    // Let the armed poll observe the hidden window and park itself.
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+    statCalls.length = 0
+    return { commonDir, worktreesDir: join(commonDir, 'worktrees'), received }
+  }
+
+  it('parks the existence poll while the window is hidden', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir, received } = await startHiddenExistencePoll(visibility)
+
+    await mkdir(worktreesDir)
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+
+    expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(0)
+    expect(subscribeMock).not.toHaveBeenCalled()
+    expect(received.flat()).toHaveLength(0)
+  })
+
+  it('re-checks on show and still reports a worktrees dir created while hidden', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir, received } = await startHiddenExistencePoll(visibility)
+
+    await mkdir(worktreesDir)
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+    expect(subscribeMock).not.toHaveBeenCalled()
+
+    visibility.show()
+    // Promptly: the re-check stats on show, not a poll interval later.
+    expect(statCalls.filter((path) => path === worktreesDir)).toHaveLength(1)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+  })
+
+  it('resumes polling when the dir is still absent on show', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const { worktreesDir } = await startHiddenExistencePoll(visibility)
+
+    visibility.show()
+    await mkdir(worktreesDir)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('keeps polling and reporting while the window stays visible', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const commonDir = await makeCommonDir(false)
+    const worktreesDir = join(commonDir, 'worktrees')
+    const received: WorktreeBasePollEvent[][] = []
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      (events) => received.push(events),
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+    cleanups.push(() => watch.unsubscribe())
+
+    await mkdir(worktreesDir)
+    await vi.waitFor(() => {
+      expect(subscribeMock).toHaveBeenCalledTimes(1)
+    })
+    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
+  })
+
+  it('drops both visibility subscriptions on dispose', async () => {
+    installSubscribeMock()
+    const visibility = createVisibilityHarness()
+    const commonDir = await makeCommonDir(false)
+    const watch = await startGitCommonWatch(
+      makeTarget(commonDir),
+      () => {},
+      POLL_MS,
+      'darwin',
+      visibility.source
+    )
+
+    // Narrow watch + primary-metadata poll each park on window visibility.
+    expect(visibility.listenerCount()).toBe(2)
+    await watch.unsubscribe()
+    expect(visibility.listenerCount()).toBe(0)
   })
 
   it('keeps the native stream live while the primary poll is parked', async () => {
@@ -292,7 +559,8 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     commonDir: string,
     received: WorktreeBasePollEvent[][],
     onFullScan?: () => void,
-    visibility: WorktreePollerWindowVisibility = alwaysVisible
+    visibility: WorktreePollerWindowVisibility = alwaysVisible,
+    getStatusRefPaths: () => readonly string[] = () => []
   ): Promise<void> {
     const watch = await startGitCommonWatch(
       makePollingTarget(commonDir),
@@ -300,7 +568,8 @@ describe('worktree git-common polling gate (non-darwin)', () => {
       POLL_MS,
       'linux',
       visibility,
-      onFullScan
+      onFullScan,
+      getStatusRefPaths
     )
     cleanups.push(() => watch.unsubscribe())
   }
@@ -349,30 +618,36 @@ describe('worktree git-common polling gate (non-darwin)', () => {
     })
   })
 
-  it('does not fabricate worktree deletions when the readdir fails non-ENOENT (transient)', async () => {
-    // Why: a transient readdir failure (EIO/ESTALE/EMFILE/ENOTDIR, network/SSH hiccup) must not be read
-    // as "every linked worktree removed". Simulate a non-ENOENT failure by replacing the worktrees dir
-    // with a file so readdir throws ENOTDIR; the known entry must NOT be reported deleted. On the old
-    // catch-all (entryPaths = []) this emitted a false delete for every entry.
-    const commonDir = await makePollingCommonDir()
-    const entry = join(commonDir, 'worktrees', 'keep')
-    await mkdir(entry)
-    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
-    const received: WorktreeBasePollEvent[][] = []
-    await startPollingWatch(commonDir, received)
+  // Why runIf: chmod 0 cannot revoke directory listing on Windows or for root, so the EACCES injection is inert there.
+  it.runIf(process.platform !== 'win32' && process.getuid?.() !== 0)(
+    'does not fabricate worktree deletions when the readdir fails non-ENOENT (transient)',
+    async () => {
+      // Why: a transient readdir failure (EIO/ESTALE/EMFILE/EACCES, network/SSH hiccup) must not be read
+      // as "every linked worktree removed". Revoke dir permissions so readdir throws EACCES; the known
+      // entry must NOT be reported deleted. On the old catch-all (entryPaths = []) this emitted a false
+      // delete for every entry. chmod (not a dir->file swap) because it is one atomic syscall: an
+      // in-flight tick's threadpool readdir sees success or EACCES, never a transient ENOENT window
+      // that would legitimately emit a delete and flake this assertion.
+      const commonDir = await makePollingCommonDir()
+      const entry = join(commonDir, 'worktrees', 'keep')
+      await mkdir(entry)
+      await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
+      const received: WorktreeBasePollEvent[][] = []
+      await startPollingWatch(commonDir, received)
 
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
-    const worktreesDir = join(commonDir, 'worktrees')
-    // Swap dir -> file synchronously so no event-loop turn (and thus no poll
-    // tick) observes the transient ENOENT window, which would legitimately emit
-    // a delete and defeat the non-ENOENT assertion below.
-    rmSync(worktreesDir, { recursive: true, force: true })
-    writeFileSync(worktreesDir, 'not-a-dir')
-    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+      await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+      const worktreesDir = join(commonDir, 'worktrees')
+      chmodSync(worktreesDir, 0o000)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS * 4))
+      } finally {
+        // Why: restore before cleanup so the afterEach recursive rm can traverse the dir.
+        chmodSync(worktreesDir, 0o755)
+      }
 
-    expect(received.flat()).not.toContainEqual({ type: 'delete', path: entry })
-    await rm(worktreesDir, { force: true })
-  })
+      expect(received.flat()).not.toContainEqual({ type: 'delete', path: entry })
+    }
+  )
 
   it('detects an in-place structural (HEAD) write on a known entry every tick, without the index backstop', async () => {
     // Why: a raw HEAD/gitdir/config.worktree rewrite does not bump the entry-dir mtime, so the
@@ -410,6 +685,47 @@ describe('worktree git-common polling gate (non-darwin)', () => {
       expect(received.flat()).toContainEqual({ type: 'update', path: headLogPath })
     })
     expect(fullScans).not.toHaveBeenCalled()
+  })
+
+  it('polls the common config so an external push -u surfaces its new upstream', async () => {
+    // Why: `git push -u` from an external shell rewrites only the common
+    // config (plus remote-tracking refs); the primary-metadata list must
+    // surface it or the upstream stays invisible until a safety poll.
+    const commonDir = await makePollingCommonDir()
+    const configPath = join(commonDir, 'config')
+    await writeFile(configPath, '[core]\n\tbare = false\n')
+    const received: WorktreeBasePollEvent[][] = []
+    const fullScans = vi.fn()
+    await startPollingWatch(commonDir, received, fullScans)
+
+    await appendFile(configPath, '[branch "main"]\n\tremote = origin\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: configPath })
+    })
+    expect(fullScans).not.toHaveBeenCalled()
+  })
+
+  it('detects create, update, and delete for one transient upstream ref', async () => {
+    const commonDir = await makePollingCommonDir()
+    const refPath = join(commonDir, 'refs', 'remotes', 'origin', 'feature', 'nested')
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin', 'feature'), { recursive: true })
+    const received: WorktreeBasePollEvent[][] = []
+    await startPollingWatch(commonDir, received, undefined, alwaysVisible, () => [refPath])
+
+    await writeFile(refPath, 'aaa\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'create', path: refPath })
+    })
+    received.length = 0
+    await appendFile(refPath, 'bbb\n')
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'update', path: refPath })
+    })
+    received.length = 0
+    await rm(refPath)
+    await vi.waitFor(() => {
+      expect(received.flat()).toContainEqual({ type: 'delete', path: refPath })
+    })
   })
 
   it('forces a full scan on the 15-tick backstop', async () => {

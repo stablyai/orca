@@ -1,8 +1,10 @@
 // Why: stdin ownership is a cross-agent process contract; one executable
 // matrix catches an unread early exit without duplicating template assertions.
+// Exception (#11549): Windows batch hooks give up stdin ownership on the
+// missing-Orca-env path, so their writer may break there.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { spawn } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -82,6 +84,7 @@ import {
   wrapWindowsGitBashHookCommand,
   wrapWindowsHookCommand
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 
 const REMOTE_HOME = '/home/dev'
@@ -155,6 +158,7 @@ const LOCAL_INSTALLERS = [
 type HookRun = {
   exitCode: number | null
   stdinErrors: NodeJS.ErrnoException[]
+  stdout: string
 }
 
 function runHookProcess(
@@ -163,8 +167,9 @@ function runHookProcess(
   env: NodeJS.ProcessEnv
 ): Promise<HookRun> {
   return new Promise((resolve, reject) => {
-    const child = spawn(executable, args, { env, stdio: ['pipe', 'ignore', 'ignore'] })
+    const child = spawn(executable, args, { env, stdio: ['pipe', 'pipe', 'ignore'] })
     const stdinErrors: NodeJS.ErrnoException[] = []
+    let stdout = ''
     const timeout = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('hook did not finish after stdin closed'))
@@ -173,10 +178,13 @@ function runHookProcess(
       clearTimeout(timeout)
       reject(error)
     })
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
     child.stdin.on('error', (error: NodeJS.ErrnoException) => stdinErrors.push(error))
     child.on('close', (exitCode) => {
       clearTimeout(timeout)
-      resolve({ exitCode, stdinErrors })
+      resolve({ exitCode, stdinErrors, stdout })
     })
     child.stdin.end(LARGE_PAYLOAD)
   })
@@ -229,7 +237,7 @@ function withPlatform<T>(platform: NodeJS.Platform, run: () => T): T {
 }
 
 describe('Windows managed hook stdin structure', () => {
-  it('routes every batch guard to a shared drain epilogue', () => {
+  it('exits immediately when Orca env is missing and keeps drain for other failures', () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-'))
     homedirMock.mockReturnValue(home)
     const previousGrokHome = process.env.GROK_HOME
@@ -251,15 +259,23 @@ describe('Windows managed hook stdin structure', () => {
       expect(mainBatchScripts).toHaveLength(10)
       for (const fileName of mainBatchScripts) {
         const script = readFileSync(join(hooksDir, fileName), 'utf8')
+        // Why: missing-env path must not touch more.com — hang class from #11549.
         expect(script, `${fileName} port guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_PORT%"=="" goto :orca_agent_hook_drain_stdin'
+          'if "%ORCA_AGENT_HOOK_PORT%"=="" exit /b 0'
         )
         expect(script, `${fileName} token guard`).toContain(
-          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" goto :orca_agent_hook_drain_stdin'
+          'if "%ORCA_AGENT_HOOK_TOKEN%"=="" exit /b 0'
         )
-        expect(script, `${fileName} pane guard`).toContain(
-          'if "%ORCA_PANE_KEY%"=="" goto :orca_agent_hook_drain_stdin'
+        expect(script, `${fileName} pane guard`).toContain('if "%ORCA_PANE_KEY%"=="" exit /b 0')
+        // Why: pin the rule, not today's three guards — a fourth ORCA_* guard routed to the
+        // drain would reintroduce #11549 with this suite green. The pattern spans the guard so
+        // it catches both `if "%VAR%"==""` and `if not defined VAR`; the Devin skip names no
+        // ORCA_* var, so it stays exempt.
+        expect(script, `${fileName} no ORCA_* guard may route to the more.com drain`).not.toMatch(
+          /ORCA_[A-Z_]+.*goto :?orca_agent_hook_drain_stdin/
         )
+        // Why: the epilogue stays shared — claude-hook.cmd still jumps to it from the
+        // Devin-imports-.claude skip, which now sits below these guards.
         expect(script, `${fileName} drain epilogue`).toContain(
           [
             ':orca_agent_hook_drain_stdin',
@@ -269,12 +285,25 @@ describe('Windows managed hook stdin structure', () => {
         )
       }
 
+      // Why (#11549): the Devin skip is the only remaining in-script jump to more.com, so it
+      // must sit below the env guards — otherwise a Devin session outside an Orca pane still
+      // parks there and strands the hook exactly like the pre-fix guards did.
+      const claude = readFileSync(join(hooksDir, 'claude-hook.cmd'), 'utf8')
+      expect(claude, 'claude devin guard present').toContain(
+        'if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin'
+      )
+      expect(claude.indexOf('if "%ORCA_PANE_KEY%"=="" exit /b 0')).toBeLessThan(
+        claude.indexOf('if not "%DEVIN_PROJECT_DIR%"=="" goto :orca_agent_hook_drain_stdin')
+      )
+
       const copilot = readFileSync(join(hooksDir, 'copilot-hook.ps1'), 'utf8')
       expect(copilot.indexOf('[Console]::In.ReadToEnd()')).toBeLessThan(
         copilot.indexOf('if (-not $env:ORCA_AGENT_HOOK_PORT')
       )
       const kimi = readFileSync(join(hooksDir, 'kimi-hook.sh'), 'utf8')
-      expect(kimi.indexOf('payload=$(cat)')).toBeLessThan(kimi.indexOf('exit 0'))
+      expect(kimi.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)).toBeLessThan(
+        kimi.indexOf('exit 0')
+      )
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       if (previousGrokHome === undefined) {
@@ -292,7 +321,7 @@ describe('Windows managed hook stdin structure', () => {
   })
 
   it.skipIf(process.platform !== 'win32')(
-    'executes every local script and missing-script launcher without a broken writer',
+    'exits 0 for every local script and missing-script launcher, and only .cmd drops stdin',
     async () => {
       const home = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-windows-live-'))
       homedirMock.mockReturnValue(home)
@@ -330,7 +359,17 @@ describe('Windows managed hook stdin structure', () => {
               : [scriptPath]
           const result = await runHookProcess(executable, args, hookEnvironment())
           expect(result.exitCode, `${fileName} exit code`).toBe(0)
-          expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+          if (fileName.endsWith('.cmd')) {
+            // Why (#11549): these guards exit rather than own stdin, so the writer breaks —
+            // EPIPE, or ECONNRESET when Windows tears the pipe down first. hookEnvironment()
+            // strips every ORCA_* var, so the relaxation only ever covers the missing-env
+            // path — a happy-path case added to this loop must not reuse it.
+            for (const error of result.stdinErrors) {
+              expect(['EPIPE', 'ECONNRESET'], `${fileName} stdin error`).toContain(error.code)
+            }
+          } else {
+            expect(result.stdinErrors, `${fileName} stdin errors`).toHaveLength(0)
+          }
         }
 
         const missingScript = 'C:\\missing\\orca-hook.cmd'
@@ -370,7 +409,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf('payload=$(cat)')
+      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)
@@ -390,6 +429,50 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
       const result = await runPosixHook(script, extraEnv)
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
+    }
+  })
+
+  it('does not need PATH to capture or drain POSIX hook stdin', async () => {
+    const scripts = await generatePosixScripts()
+    for (const [agent, script] of scripts) {
+      const result = await runPosixHook(script, { PATH: '' })
+      expect(result.exitCode, `${agent} exit code`).toBe(0)
+      expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
+    }
+
+    const missing = await runPosixHook(wrapPosixHookCommand('/missing/orca-hook.sh'), { PATH: '' })
+    expect(missing.exitCode, 'missing script launcher exit code').toBe(0)
+    expect(missing.stdinErrors, 'missing script launcher stdin errors').toHaveLength(0)
+  })
+
+  // Why: an unread stdin still exits 0, so exit codes alone cannot prove the
+  // reader consumed the payload. Assert the captured byte count directly.
+  it.each([
+    ['empty PATH', ''],
+    // Why: /bin/cat is absent on NixOS-style hosts, so an absolute path alone is
+    // not enough; the reader must fall back to the shell's default PATH.
+    ['PATH without coreutils', '/nonexistent'],
+    // Why: a worktree-local `cat` must never receive the hook payload.
+    ['PATH whose first cat is a decoy', '']
+  ])('captures the whole payload with %s', async (label, pathValue) => {
+    const decoyDir = mkdtempSync(join(tmpdir(), 'orca-hook-stdin-decoy-'))
+    try {
+      let effectivePath = pathValue
+      if (label === 'PATH whose first cat is a decoy') {
+        const decoy = join(decoyDir, 'cat')
+        writeFileSync(decoy, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+        effectivePath = decoyDir
+      }
+      const result = await runHookProcess(
+        '/bin/sh',
+        ['-c', `payload=$(${POSIX_HOOK_STDIN_READER}); printf '%s' "${'${#payload}'}"`],
+        { ...hookEnvironment(), PATH: effectivePath }
+      )
+      expect(result.exitCode, `${label} exit code`).toBe(0)
+      expect(result.stdinErrors, `${label} stdin errors`).toHaveLength(0)
+      expect(result.stdout, `${label} captured bytes`).toBe(String(LARGE_PAYLOAD.length))
+    } finally {
+      rmSync(decoyDir, { recursive: true, force: true })
     }
   })
 

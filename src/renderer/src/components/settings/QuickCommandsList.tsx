@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react'
+import { Check, Copy, Pencil, Trash2 } from 'lucide-react'
 import type {
   Repo,
   TerminalQuickCommand,
@@ -10,6 +10,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../../shared/terminal-quick-commands'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Badge } from '../ui/badge'
@@ -40,6 +41,20 @@ function QuickCommandRow({
   onRemove: (command: TerminalQuickCommand) => void
 }): React.JSX.Element {
   const scope = getTerminalQuickCommandScope(command)
+  const body = getTerminalQuickCommandBody(command)
+  const { canCopy, copyText, status } = useClipboardTextCopyFeedback(body)
+
+  const copyLabel =
+    status === 'copied'
+      ? translate('auto.components.settings.QuickCommandsPane.8d525e5f15', 'Copied')
+      : status === 'failed'
+        ? translate('auto.components.settings.QuickCommandsPane.53b17a4b1b', "Couldn't copy")
+        : canCopy
+          ? translate('auto.components.settings.QuickCommandsPane.a9a564b7e7', 'Copy {{value0}}', {
+              value0: command.label || 'quick command'
+            })
+          : translate('auto.components.settings.QuickCommandsPane.69a1441a21', 'Nothing to copy')
+
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 bg-background px-3 py-2 shadow-xs">
       <div className="min-w-0 flex-1">
@@ -67,8 +82,8 @@ function QuickCommandRow({
           ) : null}
           <span className={cn('truncate', isTerminalAgentQuickCommand(command) ? '' : 'font-mono')}>
             {isTerminalAgentQuickCommand(command)
-              ? `${getAgentLabel(command.agent)}: ${getTerminalQuickCommandBody(command)}`
-              : getTerminalQuickCommandBody(command) ||
+              ? `${getAgentLabel(command.agent)}: ${body}`
+              : body ||
                 translate(
                   'auto.components.settings.QuickCommandsPane.0252ddd578',
                   'No command text'
@@ -83,6 +98,21 @@ function QuickCommandRow({
             ? translate('auto.components.settings.QuickCommandsPane.9b3e338d62', 'Enter')
             : translate('auto.components.settings.QuickCommandsPane.9fcfc29519', 'Insert')}
       </div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        disabled={!canCopy}
+        aria-label={copyLabel}
+        title={copyLabel}
+        onClick={() => void copyText()}
+        className={cn(
+          status === 'copied' && 'text-status-success',
+          status === 'failed' && 'text-destructive'
+        )}
+      >
+        {status === 'copied' ? <Check /> : <Copy />}
+      </Button>
       <Button
         type="button"
         variant="ghost"

@@ -42,10 +42,12 @@ import {
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
+import { fitRevealedPane } from './pane-reveal-fit'
 import { PaneIdentityRegistry } from './pane-identity-registry'
 import {
   closeManagedPane,
   detachManagedPaneForExternalMove,
+  retireManagedPanePreservingPty,
   splitManagedPane
 } from './pane-split-close'
 import { FIRST_PANE_ID } from '../../../../shared/pane-key'
@@ -70,6 +72,7 @@ export class PaneManager {
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
   private renderingSuspended: boolean
+  private atlasRecoveryVisible: boolean
   private identities = new PaneIdentityRegistry()
   private pendingPaneReparentFrameIds = new Set<number>()
 
@@ -80,6 +83,7 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    this.atlasRecoveryVisible = !this.renderingSuspended
     // Why: atlas recovery must reach every live manager — see
     // resetAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
@@ -189,12 +193,49 @@ export class PaneManager {
     })
   }
 
-  getPanes(): ManagedPane[] {
-    return Array.from(this.panes.values()).map(toPublicPane)
+  retirePanePreservingPty(paneId: number): boolean {
+    return retireManagedPanePreservingPty({
+      paneId,
+      activePaneId: this.activePaneId,
+      panes: this.panes,
+      root: this.root,
+      styleOptions: this.styleOptions,
+      managerOptions: this.options,
+      getDragCallbacks: () => this.getDragCallbacks(),
+      releasePaneIdentity: (numericPaneId) => this.identities.release(numericPaneId),
+      setActivePaneId: (id) => {
+        this.activePaneId = id
+      }
+    })
+  }
+
+  getPanes(limit = Number.POSITIVE_INFINITY): ManagedPane[] {
+    const panes: ManagedPane[] = []
+    for (const pane of this.panes.values()) {
+      if (panes.length >= limit) {
+        break
+      }
+      panes.push(toPublicPane(pane))
+    }
+    return panes
+  }
+
+  /** Why separate from getPanes: the census runs on the crash path, where
+   *  materializing every public pane view just to read `.length` is waste. */
+  getPaneCount(): number {
+    return this.panes.size
   }
 
   fitAllPanes(): void {
     fitAllPanesInternal(this.panes)
+  }
+
+  // Why: a raw synchronous fit on reveal can apply a transient DOM<->WebGL
+  // cell-metric grid and reflow-garble diff-painting inline TUIs; see fitRevealedPane.
+  fitAllRevealedPanes(): void {
+    for (const pane of this.panes.values()) {
+      fitRevealedPane(pane)
+    }
   }
 
   refreshAllPanes(): void {
@@ -239,6 +280,7 @@ export class PaneManager {
       gpuRenderingEnabled: pane.gpuRenderingEnabled,
       webglAttachmentDeferred: pane.webglAttachmentDeferred,
       webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      webglAttachFailedSinceRecovery: pane.webglAttachFailedSinceRecovery === true,
       hasComplexScriptOutput: pane.hasComplexScriptOutput,
       terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
       hasWebgl: Boolean(pane.webglAddon)
@@ -324,6 +366,14 @@ export class PaneManager {
 
   resetWebglTextureAtlases(): void {
     resetPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  setAtlasRecoveryVisible(visible: boolean): void {
+    this.atlasRecoveryVisible = visible
+  }
+
+  isVisibleForAtlasRecovery(): boolean {
+    return this.atlasRecoveryVisible && !this.destroyed
   }
 
   scheduleRevealRepaint(): void {

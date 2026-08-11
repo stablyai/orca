@@ -71,4 +71,59 @@ describe('SshConnectionManager', () => {
     expect(mockState.instances).toHaveLength(2)
     expect(manager.getConnection(target.id)).toBe(secondConnection)
   })
+
+  it('keeps the replacement when the disconnected attempt resolves late', async () => {
+    let resolveFirst!: () => void
+    mockState.connectResults.push(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve
+      }),
+      Promise.resolve()
+    )
+    const manager = new SshConnectionManager({
+      onStateChange: vi.fn()
+    })
+
+    const firstConnect = manager.connect(target)
+    await manager.disconnect(target.id)
+    const replacement = await manager.connect(target)
+    resolveFirst()
+
+    await expect(firstConnect).resolves.not.toBe(replacement)
+    expect(mockState.instances[0].disconnect).toHaveBeenCalledOnce()
+    expect(await manager.connect(target)).toBe(replacement)
+    expect(manager.getConnection(target.id)).toBe(replacement)
+  })
+
+  it('closes a late-resolved connection without evicting the replacement', async () => {
+    let resolveFirst!: () => void
+    mockState.connectResults.push(
+      new Promise<void>((resolve) => {
+        resolveFirst = resolve
+      }),
+      Promise.resolve()
+    )
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+
+    const firstConnect = manager.connect(target)
+    await manager.disconnect(target.id)
+    const replacement = await manager.connect(target)
+    resolveFirst()
+    const late = await firstConnect
+
+    await manager.disconnectConnection(target.id, late)
+
+    expect(mockState.instances[0].disconnect).toHaveBeenCalledTimes(2)
+    expect(manager.getConnection(target.id)).toBe(replacement)
+  })
+
+  it('clears the pool entry when the closed connection is still the registered one', async () => {
+    const manager = new SshConnectionManager({ onStateChange: vi.fn() })
+    const conn = await manager.connect(target)
+
+    await manager.disconnectConnection(target.id, conn)
+
+    expect(mockState.instances[0].disconnect).toHaveBeenCalledOnce()
+    expect(manager.getConnection(target.id)).toBeUndefined()
+  })
 })

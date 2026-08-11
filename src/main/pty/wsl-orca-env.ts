@@ -1,3 +1,14 @@
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
+import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
+
 const WSLENV_ENTRY_SEPARATOR = ':'
 
 function parseWslenvEntries(value: string | undefined): string[] {
@@ -54,6 +65,13 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // via /mnt/c) until the WSL hook relay reports the guest home — then it is
   // already a guest-side POSIX path and must cross untranslated.
   const endpointFlag = env.ORCA_AGENT_HOOK_ENDPOINT?.startsWith('/') ? 'u' : 'p'
+  // Why: ONLY a guest-side POSIX overlay may cross. /p would path-translate a
+  // Windows value into /mnt/c and let in-guest OpenCode adopt it as its config
+  // root — reachable via the relay spawn's process.env (wsl-hook-relay-launch)
+  // and via daemon-inherited env, which buildPtyHostEnv's delete cannot reach.
+  const opencodeOverlayEntries = (['OPENCODE_CONFIG_DIR', 'ORCA_OPENCODE_CONFIG_DIR'] as const)
+    .filter((name) => env[name]?.startsWith('/'))
+    .map((name) => `${name}/u`)
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',
@@ -63,16 +81,42 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_TAB_ID/u',
     'ORCA_WORKTREE_ID/u',
     'ORCA_AGENT_LAUNCH_TOKEN/u',
+    `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
+    `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`,
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u',
+    'ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u',
     'ORCA_AGENT_HOOK_PORT/u',
     'ORCA_AGENT_HOOK_TOKEN/u',
     'ORCA_AGENT_HOOK_ENV/u',
     'ORCA_AGENT_HOOK_VERSION/u',
     `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
+    ...opencodeOverlayEntries,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
     'ORCA_OMP_STATUS_EXTENSION/p',
+    'ORCA_PRIME_AGENT_STATUS_EXTENSION/p',
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)
+}
+
+export function stampWslOrchestrationCompatibilityHost(
+  env: Record<string, string>,
+  hostId: string | null | undefined,
+  distro: string | null | undefined
+): void {
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  const normalizedHostId = hostId?.trim()
+  const normalizedDistro = distro?.trim()
+  if (!normalizedHostId || !normalizedDistro) {
+    return
+  }
+  env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'wsl'
+  env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = normalizedHostId
+  env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] = normalizedDistro
 }

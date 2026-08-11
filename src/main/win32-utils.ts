@@ -1,6 +1,16 @@
 import { execFile, execFileSync, type ExecFileOptionsWithStringEncoding } from 'node:child_process'
-import { delimiter, join } from 'node:path'
+import { delimiter, join, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
+
+export {
+  getCmdExePath,
+  getSpawnArgsForWindows,
+  isWindowsBatchScript,
+  WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
+  UnsafeWindowsBatchArgumentsError,
+  type GetSpawnArgsForWindowsOptions
+} from '../shared/windows-batch-spawn'
 
 function execFileWithoutBlocking(
   command: string,
@@ -31,29 +41,11 @@ export function getWhoamiExePath(): string {
   return `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\whoami.exe`
 }
 
-/**
- * Full path to reg.exe. A bare `reg.exe` through execFileSync throws ENOENT
- * when Electron's main process inherited a PATH without System32 (Start Menu
- * and service launches), so registry probes must use the absolute path. Accepts
- * an env override so callers that inject a test environment resolve SystemRoot
- * from it.
- */
+/** Absolute path because service-launched Electron can omit System32 from PATH. */
 export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
-  return `${env.SystemRoot ?? 'C:\\Windows'}\\System32\\reg.exe`
-}
-
-/**
- * Full path to cmd.exe, respecting the ComSpec convention used elsewhere in
- * the codebase (hooks.ts, repo.ts, ssh-connection-utils.ts).
- * Falls back to SystemRoot-based path if ComSpec is unset.
- */
-export function getCmdExePath(): string {
-  return process.env.ComSpec || `${process.env.SystemRoot ?? 'C:\\Windows'}\\System32\\cmd.exe`
-}
-
-/** Whether a resolved command path points to a Windows batch script (.cmd/.bat). */
-export function isWindowsBatchScript(commandPath: string): boolean {
-  return process.platform === 'win32' && /\.(cmd|bat)$/i.test(commandPath)
+  const systemRoot = env.SystemRoot?.trim()
+  const root = systemRoot && /^[a-z]:[\\/]/i.test(systemRoot) ? systemRoot : 'C:\\Windows'
+  return win32.join(root, 'System32', 'reg.exe')
 }
 
 export function resolveWindowsCommand(
@@ -81,19 +73,6 @@ export function resolveWindowsCommand(
     }
   }
   return command
-}
-
-export const WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR = 'UNSAFE_WINDOWS_BATCH_ARGUMENTS'
-
-export class UnsafeWindowsBatchArgumentsError extends Error {
-  constructor() {
-    super(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
-    this.name = 'UnsafeWindowsBatchArgumentsError'
-  }
-}
-
-function hasUnsafeWindowsBatchSyntax(value: string): boolean {
-  return /[&|<>^"%!\r\n]/.test(value)
 }
 
 /** Check whether an error is a Windows permission error (EACCES or EPERM). */
@@ -238,38 +217,4 @@ export async function grantDirAclAsync(dirPath: string): Promise<void> {
       timeout: 10_000
     }
   )
-}
-
-/**
- * Resolve spawn parameters for a command that may be a Windows batch script.
- *
- * Why: Node's spawn() cannot execute .cmd/.bat files directly without
- * shell:true, but shell:true with an args array triggers DEP0190 because
- * args are concatenated, not escaped. Routing through cmd.exe /c explicitly
- * avoids the deprecation warning while passing args correctly.
- *
- * Why /d: disables per-machine/user AutoRun registry commands so a background
- * spawn cannot inherit surprising side effects from the user's shell config.
- *
- * SAFETY: when the .cmd/.bat branch is taken, cmd.exe re-parses the command
- * line. Args with cmd metacharacters are rejected instead of escaped because
- * the agent prompt may contain arbitrary staged diff text.
- */
-export function getSpawnArgsForWindows(
-  command: string,
-  args: string[]
-): { spawnCmd: string; spawnArgs: string[] } {
-  if (isWindowsBatchScript(command)) {
-    for (const value of [command, ...args]) {
-      if (hasUnsafeWindowsBatchSyntax(value)) {
-        throw new UnsafeWindowsBatchArgumentsError()
-      }
-    }
-
-    // Why: when Node passes a pre-quoted command line as one argv entry,
-    // cmd.exe sees literal escaped quotes on Windows and refuses to run .cmd
-    // shims. Separate argv entries let Node quote spaces without breaking cmd.
-    return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/c', command, ...args] }
-  }
-  return { spawnCmd: command, spawnArgs: args }
 }

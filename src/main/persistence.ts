@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: persistence keeps schema defaults, migration, and load/save/flush in one file so the storage contract reviews as a unit. */
-import { app, safeStorage } from 'electron'
+import { app } from 'electron'
 import {
   readFileSync,
   writeFileSync,
@@ -11,7 +11,13 @@ import {
   statSync,
   realpathSync
 } from 'node:fs'
-import { writeFile, rename, mkdir, rm, copyFile } from 'node:fs/promises'
+import { rename, mkdir, rm, copyFile, open, stat, access, writeFile } from 'node:fs/promises'
+import {
+  durableWriteTempPath,
+  removeStaleDurableWriteTempFiles,
+  renameDurable,
+  writeFileDurableSync
+} from './durable-file-write'
 import { join, dirname, isAbsolute, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { createHash, randomUUID } from 'node:crypto'
@@ -32,6 +38,8 @@ import {
 } from '../shared/automation-schedules'
 import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
 import { normalizeAutomationPrecheck } from '../shared/automation-precheck'
+import { normalizeProxyUrl } from '../shared/network-proxy'
+import { normalizeKagiSessionLink } from '../shared/browser-url'
 import type {
   PersistedState,
   Project,
@@ -71,11 +79,19 @@ import {
   normalizeProjectRuntimePreference
 } from '../shared/project-execution-runtime'
 import { projectHostSetupProjectionFromRepos } from '../shared/project-host-setup-projection'
+import { isPluginPanelTabKey } from '../shared/plugins/plugin-manifest'
 import type { GitRemoteIdentity } from '../shared/git-remote-identity'
 import {
+  areTaskSourceContextsEqual,
   buildTaskSourceContextFromRepo,
-  buildWorkspaceRunContext
+  buildWorkspaceRunContext,
+  normalizeStoredTaskSourceContext
 } from '../shared/task-source-context'
+import {
+  areWorkspaceLinkedItemsEqual,
+  normalizeWorkspaceLinkedItem
+} from '../shared/workspace-linked-item'
+import { isWorkspaceLinkedItemSourceContextMatch } from '../shared/workspace-linked-item-source-context'
 import type { MigrationUnsupportedPtyEntry } from '../shared/agent-status-types'
 import { MOBILE_PAIRING_USERDATA_FILES } from './runtime/mobile-pairing-files'
 import { normalizePersistedMobileClientTabSelections } from './runtime/client-session-tab-selection-persistence'
@@ -88,11 +104,21 @@ import { hardenExistingSecureFile } from '../shared/secure-file'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   type RemovedSshTargetTombstone,
+  type SshPtyConsumerRecovery,
   type SshRemotePtyLease,
   type SshTarget
 } from '../shared/ssh-types'
 import { isFolderRepo } from '../shared/repo-kind'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostOrder,
+  normalizeExecutionHostId,
+  normalizeVisibleExecutionHostIds,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../shared/execution-host'
 import {
   getDefaultPersistedState,
   getDefaultNotificationSettings,
@@ -108,20 +134,12 @@ import {
   ONBOARDING_FLOW_VERSION,
   ONBOARDING_FINAL_STEP
 } from '../shared/constants'
-import { parseWorkspaceSession } from '../shared/workspace-session-schema'
+import { parseWorkspaceSessionSalvaging } from '../shared/workspace-session-salvage'
 import { normalizeUsagePercentageDisplay } from '../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../shared/status-bar-usage-mode'
 import { isExistingPersistedProfile } from '../shared/project-order-manual-default-notice'
 import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../shared/usage-percentage-display-change-notice'
 import { normalizePRBotAuthorOverrides } from '../shared/pr-bot-author-overrides'
-import {
-  LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostOrder,
-  normalizeExecutionHostId,
-  normalizeVisibleExecutionHostIds,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../shared/execution-host'
 import { toRelaySshPtyId } from './providers/ssh-pty-id'
 import {
   migrateUiHostScopeSshTargetId,
@@ -159,6 +177,11 @@ import {
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
+import {
+  addMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../shared/mobile-pairing-custom-address'
 import { normalizeOpenInApplications } from '../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../shared/keybindings'
 import { normalizeSourceControlGroupOrder } from '../shared/source-control-group-order'
@@ -178,6 +201,10 @@ import {
 } from '../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../shared/contextual-tours'
 import { normalizeFeatureTipIds } from '../shared/feature-tips'
+import {
+  parseCodexResetCreditAttemptLedger,
+  type CodexResetCreditAttemptLedger
+} from '../shared/codex-reset-credit-attempt-ledger'
 import { normalizeManualRepoOrder } from '../shared/manual-repo-order'
 import {
   DEFAULT_WORKSPACE_STATUS_ID,
@@ -187,6 +214,7 @@ import {
   normalizeWorkspaceStatuses
 } from '../shared/workspace-statuses'
 import { clampMarkdownTocPanelWidth } from '../shared/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../shared/combined-diff-file-tree-width'
 import { isLegacyRepoForExternalWorktreeVisibility } from '../shared/worktree-ownership'
 import { sanitizeRepoIcon } from '../shared/repo-icon'
 import { normalizeRepoBadgeColor } from '../shared/repo-badge-color'
@@ -219,6 +247,10 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../shared/tui-agent-launch-defaults'
 import { normalizeTerminalCursorStyleDefault } from '../shared/terminal-cursor-style-settings'
+import {
+  normalizeOsc52ClipboardDefaultOn,
+  osc52ClipboardDefaultOnOverridesPersistedOff
+} from '../shared/osc52-clipboard-settings'
 import { normalizeTerminalLineHeight } from '../shared/terminal-line-height-settings'
 import { normalizeUiLanguage } from '../shared/ui-language'
 import { normalizeBrowserPageZoomLevel } from '../shared/browser-page-zoom'
@@ -242,39 +274,30 @@ import {
   readTerminalScrollbackSnapshotSync,
   type TerminalScrollbackSnapshotStorage
 } from './terminal-scrollback-snapshots'
+import {
+  deleteRemovedTerminalScrollbackSnapshotsAsync,
+  migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync
+} from './terminal-scrollback-snapshot-async-migration'
 import { track } from './telemetry/client'
 import { getCohortAtEmit } from './telemetry/cohort-classifier'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from './startup/startup-diagnostics'
+import {
+  PROTECTED_SECRET_SLOT,
+  ProtectedSecretPersistence,
+  sshPtyOwnerLeaseSecretSlot,
+  type ProtectedSecretRetentionUpdate
+} from './protected-secret-persistence'
 
-function encrypt(plaintext: string): string {
-  if (!plaintext || !safeStorage.isEncryptionAvailable()) {
-    return plaintext
-  }
-  try {
-    return safeStorage.encryptString(plaintext).toString('base64')
-  } catch (err) {
-    console.error('[persistence] Encryption failed:', err)
-    return plaintext
-  }
+function isLegacyOpenCodeSessionCookie(value: string): boolean {
+  const trimmed = value.trim()
+  return (
+    trimmed.startsWith('Fe26.2**') ||
+    trimmed.split(';').some((pair) => /^(?:auth|__Host-auth)=\S+$/i.test(pair.trim()))
+  )
 }
 
-function decrypt(ciphertext: string): string {
-  if (!ciphertext || !safeStorage.isEncryptionAvailable()) {
-    return ciphertext
-  }
-  try {
-    return safeStorage.decryptString(Buffer.from(ciphertext, 'base64'))
-  } catch {
-    // Why: decrypt failure usually means plaintext (pre-encryption) or a changed keychain; return raw so the cookie survives upgrade.
-    console.warn(
-      '[persistence] safeStorage decryption failed — returning ciphertext as-is. Possible keychain reset.'
-    )
-    return ciphertext
-  }
-}
-
-function decryptOptionalSecret(value: string | null | undefined): string | null {
-  return value ? decrypt(value) : null
+function isLegacySshPtyOwnerLease(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
 }
 
 function retireLegacyInstructionsForClearedTextActionRecipes(
@@ -347,6 +370,7 @@ function getGithubCacheFile(dataFile = getDataFile()): string {
 // Why: worktrees deleted outside Orca orphan their worktreeMeta, so the map grew monotonically (63% dead on a heavy install).
 // GC stays narrow: local-host entries only (a local existsSync would falsely condemn SSH/WSL remote paths) and only after a 30-day idle grace.
 const WORKTREE_META_GC_GRACE_MS = 30 * 24 * 60 * 60 * 1000
+const STALE_DURABLE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 function gcStaleWorktreeMeta(state: PersistedState): number {
   // Why: a hand-corrupted "worktreeMeta": null overrides the defaults merge; normalize here instead of throwing.
@@ -402,6 +426,49 @@ function gcStaleWorktreeMeta(state: PersistedState): number {
     removed++
   }
   return removed
+}
+
+function normalizeWorktreeLinkedItemMetadata(state: PersistedState): boolean {
+  let changed = false
+  const rawWorktreeMeta = state.worktreeMeta as unknown
+  if (
+    typeof rawWorktreeMeta !== 'object' ||
+    rawWorktreeMeta === null ||
+    Array.isArray(rawWorktreeMeta)
+  ) {
+    state.worktreeMeta = {}
+    changed = rawWorktreeMeta !== undefined
+  }
+  for (const [key, meta] of Object.entries(state.worktreeMeta)) {
+    // Why: hand-corrupted non-object entries are a real input class; drop them here because gcStaleWorktreeMeta
+    // keeps timestamp-less keys forever and every downstream consumer trusts the Record<string, WorktreeMeta> type.
+    if (typeof meta !== 'object' || meta === null || Array.isArray(meta)) {
+      delete state.worktreeMeta[key]
+      // Companions go with it, matching gcStaleWorktreeMeta/removeWorktreeMeta; a stranded lineage row would
+      // otherwise re-attach to a worktree recreated at the same repoId::path.
+      delete state.worktreeLineageById[key]
+      delete state.workspaceLineageByChildKey[worktreeWorkspaceKey(key)]
+      changed = true
+      continue
+    }
+    const linkedWorkItem = normalizeWorkspaceLinkedItem(meta.linkedWorkItem)
+    const sourceContext = normalizeStoredTaskSourceContext(meta.linkedTaskSourceContext)
+    const linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+      linkedWorkItem,
+      sourceContext
+    )
+      ? sourceContext
+      : null
+    if (!areWorkspaceLinkedItemsEqual(meta.linkedWorkItem, linkedWorkItem)) {
+      meta.linkedWorkItem = linkedWorkItem
+      changed = true
+    }
+    if (!areTaskSourceContextsEqual(meta.linkedTaskSourceContext, linkedTaskSourceContext)) {
+      meta.linkedTaskSourceContext = linkedTaskSourceContext
+      changed = true
+    }
+  }
+  return changed
 }
 
 function readGithubCacheSnapshot(dataFile: string): PersistedState['githubCache'] | null {
@@ -488,15 +555,27 @@ function workspaceSessionPatchNeedsFullNormalization(patch: WorkspaceSessionPatc
   )
 }
 
+function workspaceSessionSalvageLogDetails(result: {
+  droppedCount: number
+  droppedPaths: string[]
+}): { count: number; fields: string[]; detailsTruncated: boolean } {
+  return {
+    count: result.droppedCount,
+    fields: [...new Set(result.droppedPaths.map((path) => path.split('.', 1)[0]))],
+    detailsTruncated: result.droppedCount > result.droppedPaths.length
+  }
+}
+
 /** Normalize non-'local' host partitions; 'local' (the legacy workspaceSession blob) is dropped so the two surfaces never diverge.
  *  Each partition is zod-validated independently, so one corrupt host drops to defaults without taking out the others. Idempotent. */
 function parseWorkspaceSessionsByHostId(
   raw: unknown,
   defaults: WorkspaceSessionState
-): Partial<Record<ExecutionHostId, WorkspaceSessionState>> {
+): { partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>>; repaired: boolean } {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {}
+    return { partitions: {}, repaired: raw !== undefined }
   }
+  let repaired = false
   const partitions: Partial<Record<ExecutionHostId, WorkspaceSessionState>> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const hostId = normalizeExecutionHostId(key)
@@ -504,21 +583,37 @@ function parseWorkspaceSessionsByHostId(
     if (!hostId || hostId === LOCAL_EXECUTION_HOST_ID) {
       continue
     }
-    const result = parseWorkspaceSession(value)
+    const result = parseWorkspaceSessionSalvaging(value)
     if (!result.ok) {
+      repaired = true
       console.error(
         `[persistence] Corrupt workspace session for host ${hostId}, using defaults:`,
         result.error
       )
       continue
     }
+    if (result.droppedCount > 0) {
+      console.warn(
+        `[persistence] Salvaged workspace session for host ${hostId}; dropped corrupt entries:`,
+        workspaceSessionSalvageLogDetails(result)
+      )
+      repaired = true
+    }
     partitions[hostId] = { ...defaults, ...result.value }
   }
-  return partitions
+  return { partitions, repaired }
 }
 
 function backupPath(dataFile: string, index: number): string {
   return `${dataFile}.bak.${index}`
+}
+
+/** existsSync's non-blocking twin: existsSync is an access(F_OK) probe, so access() is the exact analogue. */
+async function exists(path: string): Promise<boolean> {
+  return access(path).then(
+    () => true,
+    () => false
+  )
 }
 
 function buildWorkspaceDirHistoryForUpdate(
@@ -772,16 +867,22 @@ function normalizeProjectOrderBy(projectOrderBy: unknown): PersistedState['ui'][
   return getDefaultUIState().projectOrderBy
 }
 
-function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
+export function normalizeRightSidebarTab(tab: unknown): PersistedState['ui']['rightSidebarTab'] {
   if (
     tab === 'explorer' ||
     tab === 'search' ||
     tab === 'vault' ||
     tab === 'workspaces' ||
+    tab === 'pr-checks' ||
     tab === 'source-control' ||
     tab === 'checks' ||
     tab === 'ports'
   ) {
+    return tab
+  }
+  // Why: plugin tabs are open-ended `plugin:<publisher>.<id>/<panel>` keys; validate the
+  // shape so a persisted plugin tab doesn't reset to Explorer on restart.
+  if (typeof tab === 'string' && isPluginPanelTabKey(tab)) {
     return tab
   }
   return getDefaultUIState().rightSidebarTab
@@ -1095,6 +1196,7 @@ function backfillLegacyAutomationContexts(
 type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown
   remoteWorkspaceSyncGracePeriodSeconds?: unknown
+  experimentalPtySourceCreditV1?: unknown
 }
 
 // Why: old targets predate configHost; default to label-based lookup so imported SSH aliases still resolve via ssh -G.
@@ -1109,6 +1211,7 @@ function normalizeSshTarget(t: SshTarget): SshTarget {
   delete target.remoteWorkspaceSyncGracePeriodSeconds
   delete target.relayGracePeriodSeconds
   delete target.systemSshConnectionReuse
+  delete target.experimentalPtySourceCreditV1
   // Why: prefer the synced grace over stale relayGracePeriodSeconds so a user's "unlimited" (0) survives migration.
   const relayGracePeriodSeconds =
     legacySyncEnabled === true && typeof legacyGracePeriodSeconds === 'number'
@@ -1305,13 +1408,26 @@ function sanitizeRepoUpstream(value: unknown): Repo['upstream'] | undefined {
   if (!value || typeof value !== 'object') {
     return undefined
   }
-  const candidate = value as { owner?: unknown; repo?: unknown }
+  const candidate = value as { owner?: unknown; repo?: unknown; host?: unknown }
   const owner = typeof candidate.owner === 'string' ? candidate.owner.trim() : ''
   const repo = typeof candidate.repo === 'string' ? candidate.repo.trim() : ''
-  return owner && repo ? { owner, repo } : undefined
+  if (!owner || !repo) {
+    return undefined
+  }
+  // Why: an `upstream` remote may live on a different server than `origin`, so
+  // dropping the host forced consumers to re-infer it from origin and could bind
+  // a GHES parent to a same-named github.com repo. Absent host stays absent so
+  // records written before this survive unchanged.
+  const host = typeof candidate.host === 'string' ? candidate.host.trim() : ''
+  return host ? { owner, repo, host } : { owner, repo }
 }
 
-function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | undefined {
+function sanitizeGitRemoteIdentity(value: unknown): GitRemoteIdentity | null | undefined {
+  // Why: `null` is a resolved "no usable remote" marker; dropping it would make
+  // a settled repo indistinguishable from one whose identity probe is pending.
+  if (value === null) {
+    return null
+  }
   if (!value || typeof value !== 'object') {
     return undefined
   }
@@ -1370,7 +1486,7 @@ function sanitizeRepoUpdatesForPersistence<
       sanitized.repoIcon = repoIcon
     }
   }
-  // Why: `null` is a valid "not a fork" marker; only drop malformed shapes.
+  // Why: `null` is a valid "not a fork" / "no usable remote" marker; only drop malformed shapes.
   if ('upstream' in sanitized) {
     const upstream = sanitizeRepoUpstream(sanitized.upstream)
     if (upstream === undefined) {
@@ -1507,6 +1623,57 @@ function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | null {
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
     ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+  }
+}
+
+const SSH_PTY_OWNER_LEASE_MAX_LENGTH = 512
+const ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH = 4096
+
+function normalizeSshPtyConsumerRecovery(
+  value: unknown,
+  ownerLeaseMaxLength = SSH_PTY_OWNER_LEASE_MAX_LENGTH
+): SshPtyConsumerRecovery | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const raw = value as Partial<SshPtyConsumerRecovery>
+  const clientGeneration = raw.clientGeneration
+  const ownerGeneration = raw.ownerGeneration
+  if (
+    typeof raw.targetId !== 'string' ||
+    raw.targetId.length === 0 ||
+    raw.targetId.length > 512 ||
+    typeof raw.clientInstanceId !== 'string' ||
+    raw.clientInstanceId.length === 0 ||
+    raw.clientInstanceId.length > 512 ||
+    typeof raw.serverBuildId !== 'string' ||
+    raw.serverBuildId.length === 0 ||
+    raw.serverBuildId.length > 512 ||
+    typeof clientGeneration !== 'number' ||
+    !Number.isSafeInteger(clientGeneration) ||
+    clientGeneration <= 0 ||
+    typeof ownerGeneration !== 'number' ||
+    !Number.isSafeInteger(ownerGeneration) ||
+    ownerGeneration <= 0 ||
+    typeof raw.ownerLease !== 'string' ||
+    raw.ownerLease.length === 0 ||
+    raw.ownerLease.length > ownerLeaseMaxLength
+  ) {
+    return null
+  }
+  const flow = raw.outputFlowControl
+  const outputFlowControl =
+    flow?.version === 1 && Number.isSafeInteger(flow.windowSu) && flow.windowSu > 0
+      ? { version: 1 as const, windowSu: flow.windowSu }
+      : undefined
+  return {
+    targetId: raw.targetId,
+    clientInstanceId: raw.clientInstanceId,
+    serverBuildId: raw.serverBuildId,
+    clientGeneration,
+    ownerGeneration,
+    ownerLease: raw.ownerLease,
+    ...(outputFlowControl ? { outputFlowControl } : {})
   }
 }
 
@@ -2348,50 +2515,36 @@ function cloneWorkspaceSessionState(session: WorkspaceSessionState): WorkspaceSe
   return structuredClone(session)
 }
 
-function removeWorkspaceSessionOwner(
-  session: WorkspaceSessionState | undefined,
+// Deletes the O(1) owner-keyed fields for `ownerKey` from an already-cloned
+// session in place, recording removed tab ids into `removedTabIds`. The
+// pane-key-scanned maps (pty incarnations, surface tombstones, sleeping agents)
+// and the shutdown list are handled by deleteScannedSessionFieldsForOwners so a
+// batch prune scans each collection once instead of once per owner.
+function deleteOwnerKeyedSessionFields(
+  next: WorkspaceSessionState,
   ownerKey: string,
+  removedTabIds: Set<string>,
   options: { advanceTerminalTopologyRevision?: boolean } = {}
-): WorkspaceSessionState | undefined {
-  if (!session) {
-    return session
-  }
-  const next = cloneWorkspaceSessionState(session)
+): void {
   const removedTerminalTabs = next.tabsByWorktree?.[ownerKey] ?? []
   if (next.tabsByWorktree) {
     delete next.tabsByWorktree[ownerKey]
   }
   for (const tab of removedTerminalTabs) {
+    removedTabIds.add(tab.id)
     delete next.terminalLayoutsByTabId[tab.id]
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
     }
   }
-  if (next.terminalPtyIncarnationsByPaneKey) {
-    const removedTabIds = new Set(removedTerminalTabs.map((tab) => tab.id))
-    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
-      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
-        const separator = paneKey.lastIndexOf(':')
-        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
-      })
-    )
-  }
-  if (next.terminalSurfaceTombstonesByPaneKey) {
-    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
-      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
-        ([, tombstone]) => tombstone.worktreeId !== ownerKey
-      )
-    )
-  }
-  const repoId = getRepoIdFromWorktreeId(ownerKey)
-  const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
   if (options.advanceTerminalTopologyRevision) {
+    const repoId = getRepoIdFromWorktreeId(ownerKey)
+    const previousTopologyRevision = next.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
     next.terminalTopologyRevisionByRepoId = {
       ...next.terminalTopologyRevisionByRepoId,
       [repoId]: previousTopologyRevision + 1
     }
   }
-
   if (next.openFilesByWorktree) {
     delete next.openFilesByWorktree[ownerKey]
   }
@@ -2434,21 +2587,97 @@ function removeWorkspaceSessionOwner(
   if (next.defaultTerminalTabsAppliedByWorktreeId) {
     delete next.defaultTerminalTabsAppliedByWorktreeId[ownerKey]
   }
-  if (next.sleepingAgentSessionsByPaneKey) {
-    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
-      if (record.worktreeId === ownerKey) {
-        delete next.sleepingAgentSessionsByPaneKey[paneKey]
-      }
-    }
-  }
   if (next.activeWorkspaceKey === ownerKey) {
     next.activeWorkspaceKey = null
   }
   if (next.activeWorktreeId === ownerKey) {
     next.activeWorktreeId = null
   }
+}
+
+// Scans the pane-key-keyed maps and the shutdown list once, removing every entry
+// owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose tab
+// was removed). Kept separate from the O(1) deletes so a batch prune scans each
+// collection a single time regardless of how many owners are being removed.
+function deleteScannedSessionFieldsForOwners(
+  next: WorkspaceSessionState,
+  removedTabIds: ReadonlySet<string>,
+  isRemovedOwner: (worktreeId: string) => boolean
+): void {
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => !isRemovedOwner(tombstone.worktreeId)
+      )
+    )
+  }
+  if (next.sleepingAgentSessionsByPaneKey) {
+    for (const [paneKey, record] of Object.entries(next.sleepingAgentSessionsByPaneKey)) {
+      if (isRemovedOwner(record.worktreeId)) {
+        delete next.sleepingAgentSessionsByPaneKey[paneKey]
+      }
+    }
+  }
   next.activeWorktreeIdsOnShutdown = next.activeWorktreeIdsOnShutdown?.filter(
-    (worktreeId) => worktreeId !== ownerKey
+    (worktreeId) => !isRemovedOwner(worktreeId)
+  )
+}
+
+// Remote (ssh:/runtime:) workspace state can exist in both the renderer's local blob and main's host
+// partition, because the renderer falls back to 'local' whenever worktree ownership is unresolved.
+function workspaceSessionPartitionIdsForHost(hostId: string | null | undefined): ExecutionHostId[] {
+  const parsed = parseExecutionHostId(hostId)
+  return parsed && parsed.id !== LOCAL_EXECUTION_HOST_ID
+    ? [LOCAL_EXECUTION_HOST_ID, parsed.id]
+    : [LOCAL_EXECUTION_HOST_ID]
+}
+
+/** The partition the host actually owns; the others are only spill surfaces for it. */
+function workspaceSessionOwnerPartitionForHost(hostId: string | null | undefined): ExecutionHostId {
+  return parseExecutionHostId(hostId)?.id ?? LOCAL_EXECUTION_HOST_ID
+}
+
+function removeWorkspaceSessionOwner(
+  session: WorkspaceSessionState | undefined,
+  ownerKey: string,
+  options: { advanceTerminalTopologyRevision?: boolean } = {}
+): WorkspaceSessionState | undefined {
+  if (!session) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTabIds = new Set<string>()
+  deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds, options)
+  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) => worktreeId === ownerKey)
+  return next
+}
+
+// Batch variant of removeWorkspaceSessionOwner: prunes every owner in `ownerKeys`
+// with a single structuredClone and a single scan of each collection, instead of
+// one clone+scan per owner. Project removal can touch many worktrees across many
+// host partitions, so the per-owner clones added up to O(worktrees × hosts).
+function removeWorkspaceSessionOwners(
+  session: WorkspaceSessionState | undefined,
+  ownerKeys: ReadonlySet<string>
+): WorkspaceSessionState | undefined {
+  if (!session || ownerKeys.size === 0) {
+    return session
+  }
+  const next = cloneWorkspaceSessionState(session)
+  const removedTabIds = new Set<string>()
+  for (const ownerKey of ownerKeys) {
+    deleteOwnerKeyedSessionFields(next, ownerKey, removedTabIds)
+  }
+  deleteScannedSessionFieldsForOwners(next, removedTabIds, (worktreeId) =>
+    ownerKeys.has(worktreeId)
   )
   return next
 }
@@ -2561,14 +2790,27 @@ export class Store {
   private readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private pendingWrite: Promise<void> | null = null
+  private pendingSnapshotFileWork: Promise<void> | null = null
+  private readonly staleTempCleanup: Promise<void>
   private writeGeneration = 0
+  private inFlightAsyncTmpFile: string | null = null
+  // Prevent a sync flush from interleaving a second rotation with awaited ring mutations.
+  private backupRotationInFlight = false
   // Why: after a profile transfer rewrites this file on disk, a late flush of stale in-memory state would resurrect the moved project.
   private writesFrozen = false
+  /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
+  private quitFlushStarted = false
+  private quitFlushPromise: Promise<void> | null = null
   // Content hash at last write, to skip no-op writes; derived from the payload with encrypted blobs normalized back to plaintext (see buildStateToSave), since encrypt() uses a random IV per call.
   private lastWrittenStateHash: string | null = null
+  private lastDurableWriteGeneration = -1
   private firstPendingSaveAt: number | null = null
   private githubCacheDirty = false
+  private githubCacheGeneration = 0
+  private pendingGithubCacheWrite: Promise<void> | null = null
+  private readonly staleGithubCacheTempCleanup: Promise<void>
   private gitUsernameCache = new Map<string, string>()
+  private readonly protectedSecrets = new ProtectedSecretPersistence()
   private loadNeedsSave = false
   private settingsChangeListeners = new Set<
     (
@@ -2582,6 +2824,13 @@ export class Store {
   constructor(options: StoreOptions = {}) {
     // Why: profile switching yields multiple state paths; capture per Store so late async writes can't follow a global path.
     this.dataFile = options.dataFile ?? getDataFile()
+    this.staleTempCleanup = removeStaleDurableWriteTempFiles(this.dataFile, {
+      minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS
+    })
+    this.staleGithubCacheTempCleanup = removeStaleDurableWriteTempFiles(
+      getGithubCacheFile(this.dataFile),
+      { minimumAgeMs: STALE_DURABLE_WRITE_TEMP_AGE_MS }
+    )
     const profileSnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(this.dataFile)
     const legacySnapshotRoot = getProfileTerminalScrollbackSnapshotRoot(getDataFile())
     this.terminalScrollbackSnapshotStorage = {
@@ -2704,28 +2953,52 @@ export class Store {
     }
   }
 
+  // Why separate from the sync twin: a statSync here parks the Electron main thread in uninterruptible
+  // sleep on a stalled SMB/NFS profile mount. Error semantics are deliberately identical: rotate.
+  private async shouldRotateBackupsAsync(dataFile: string): Promise<boolean> {
+    try {
+      const mtime = (await stat(backupPath(dataFile, 0))).mtimeMs
+      return Date.now() - mtime >= BACKUP_MIN_INTERVAL_MS
+    } catch {
+      return true
+    }
+  }
+
   // Why: rotate current file into the .bak ring so load() can recover if a later primary write is truncated or corrupt.
   private async rotateBackupsAsync(dataFile: string): Promise<void> {
-    if (!existsSync(dataFile)) {
+    if (this.backupRotationInFlight) {
       return
     }
-    await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
-      if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error('[persistence] Failed to remove oldest backup:', err)
+    this.backupRotationInFlight = true
+    try {
+      if (!(await this.shouldRotateBackupsAsync(dataFile))) {
+        return
       }
-    })
-    for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
-      const src = backupPath(dataFile, i)
-      const dst = backupPath(dataFile, i + 1)
-      if (existsSync(src)) {
-        await rename(src, dst).catch((err) => {
-          console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
-        })
+      if (!(await exists(dataFile))) {
+        return
       }
+      await rm(backupPath(dataFile, BACKUP_COUNT - 1)).catch((err: unknown) => {
+        if (err && (err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          console.error('[persistence] Failed to remove oldest backup:', err)
+        }
+      })
+      for (let i = BACKUP_COUNT - 2; i >= 0; i--) {
+        const src = backupPath(dataFile, i)
+        const dst = backupPath(dataFile, i + 1)
+        // Why probe instead of rename-then-swallow-ENOENT: a degraded mount rejects a rename of an
+        // absent slot with ESTALE/EIO, which would log once per empty slot on every debounced save.
+        if (await exists(src)) {
+          await rename(src, dst).catch((err) => {
+            console.error('[persistence] Failed to rotate backup', src, '->', dst, err)
+          })
+        }
+      }
+      await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
+        console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
+      })
+    } finally {
+      this.backupRotationInFlight = false
     }
-    await copyFile(dataFile, backupPath(dataFile, 0)).catch((err) => {
-      console.error('[persistence] Failed to snapshot current file to .bak.0:', err)
-    })
   }
 
   private rotateBackupsSync(dataFile: string): void {
@@ -2800,14 +3073,69 @@ export class Store {
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
         if (parsed.settings?.opencodeSessionCookie) {
-          parsed.settings.opencodeSessionCookie = decrypt(parsed.settings.opencodeSessionCookie)
+          parsed.settings.opencodeSessionCookie = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+            parsed.settings.opencodeSessionCookie,
+            isLegacyOpenCodeSessionCookie
+          )
         }
         if (parsed.settings?.httpProxyUrl) {
-          parsed.settings.httpProxyUrl = decrypt(parsed.settings.httpProxyUrl)
+          const decryptedProxy = this.protectedSecrets.decryptWithStatus(
+            PROTECTED_SECRET_SLOT.httpProxyUrl,
+            parsed.settings.httpProxyUrl,
+            (value) => normalizeProxyUrl(value).ok
+          )
+          // Why (STA-3442): after a keychain reset decrypt returns raw ciphertext; a non-URL
+          // value must not masquerade as a configured proxy (silent DIRECT fallback) or
+          // re-persist as garbage. Plaintext URLs still pass, preserving the upgrade path.
+          if (
+            decryptedProxy.status === 'unavailable' ||
+            (decryptedProxy.status === 'failed' && !decryptedProxy.plaintext)
+          ) {
+            parsed.settings.httpProxyUrl = ''
+          } else if (normalizeProxyUrl(decryptedProxy.plaintext).ok) {
+            parsed.settings.httpProxyUrl = decryptedProxy.plaintext
+          } else {
+            console.warn(
+              '[persistence] httpProxyUrl could not be decrypted — clearing the stored proxy URL. Re-enter it in Settings > Advanced > Network.'
+            )
+            parsed.settings.httpProxyUrl = ''
+            this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+            this.loadNeedsSave = true
+          }
         }
         if (parsed.ui?.browserKagiSessionLink) {
-          parsed.ui.browserKagiSessionLink = decryptOptionalSecret(parsed.ui.browserKagiSessionLink)
+          parsed.ui.browserKagiSessionLink = this.protectedSecrets.decrypt(
+            PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+            parsed.ui.browserKagiSessionLink,
+            (value) => normalizeKagiSessionLink(value) !== null
+          )
         }
+        parsed.sshPtyConsumerRecoveries = (
+          Array.isArray(parsed.sshPtyConsumerRecoveries) ? parsed.sshPtyConsumerRecoveries : []
+        )
+          .map((record) =>
+            normalizeSshPtyConsumerRecovery(record, ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH)
+          )
+          .filter((record): record is SshPtyConsumerRecovery => record !== null)
+          .map((record) => {
+            const slot = sshPtyOwnerLeaseSecretSlot(record.targetId)
+            const decrypted = this.protectedSecrets.decryptWithStatus(
+              slot,
+              record.ownerLease,
+              isLegacySshPtyOwnerLease
+            )
+            const normalized =
+              decrypted.status === 'unavailable' ||
+              (decrypted.status === 'failed' && !decrypted.plaintext)
+                ? record
+                : normalizeSshPtyConsumerRecovery({ ...record, ownerLease: decrypted.plaintext })
+            if (!normalized) {
+              this.protectedSecrets.removeRetainedBlob(slot)
+            }
+            return normalized
+          })
+          .filter((record): record is SshPtyConsumerRecovery => record !== null)
 
         // Merge with defaults in case new fields were added
         const homeDir = homedir()
@@ -2852,6 +3180,14 @@ export class Store {
         const migratedFloatingTerminalEnabled = floatingTerminalDefaultedForAllUsers
           ? (parsed.settings?.floatingTerminalEnabled ?? true)
           : true
+        // Why: the old off default persisted `false` for every profile, indistinguishable from a real opt-out — flip unmigrated profiles once (#10567).
+        const migratedOsc52Clipboard = normalizeOsc52ClipboardDefaultOn(parsed.settings)
+        const osc52ClipboardNoticePending =
+          osc52ClipboardDefaultOnOverridesPersistedOff(parsed.settings) ||
+          parsed.ui?.osc52ClipboardDefaultOnNoticePending === true
+        if (parsed.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers !== true) {
+          this.loadNeedsSave = true
+        }
         const floatingTerminalCwdMigrated =
           parsed.settings?.floatingTerminalCwdMigratedToAppWorkspace === true
         // Why: an earlier migration wrote '' for the notes dir; floating terminals still open at home, notes use a separate IPC.
@@ -3015,6 +3351,34 @@ export class Store {
           parsed.settings?.compactWorktreeCards ??
           parsed.settings?.experimentalCompactWorktreeCards ??
           defaults.settings.compactWorktreeCards
+        const mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+          parsed.settings?.mobilePairingCustomAddress
+        )
+        const rawMobilePairingCustomAddresses = parsed.settings?.mobilePairingCustomAddresses
+        const mobilePairingCustomAddresses = mobilePairingCustomAddress
+          ? addMobilePairingCustomAddress(
+              normalizeMobilePairingCustomAddresses(rawMobilePairingCustomAddresses),
+              mobilePairingCustomAddress
+            )
+          : normalizeMobilePairingCustomAddresses(rawMobilePairingCustomAddresses)
+        if (
+          parsed.settings?.mobilePairingCustomAddress !== undefined &&
+          parsed.settings.mobilePairingCustomAddress !== mobilePairingCustomAddress
+        ) {
+          this.loadNeedsSave = true
+        }
+        const customAddressesMatch =
+          Array.isArray(rawMobilePairingCustomAddresses) &&
+          rawMobilePairingCustomAddresses.length === mobilePairingCustomAddresses.length &&
+          rawMobilePairingCustomAddresses.every(
+            (address, index) => address === mobilePairingCustomAddresses[index]
+          )
+        if (
+          (rawMobilePairingCustomAddresses !== undefined || mobilePairingCustomAddress !== null) &&
+          !customAddressesMatch
+        ) {
+          this.loadNeedsSave = true
+        }
         const normalizedSourceControlGroupOrder = normalizeSourceControlGroupOrder(
           parsed.settings?.sourceControlGroupOrder
         )
@@ -3084,6 +3448,7 @@ export class Store {
             localWindowsRuntimeDefault: migratedWindowsRuntimeDefault,
             localAccountRuntime: migratedLocalAccountRuntime,
             localAccountRuntimeDefaultedToAutoForAllUsers: true,
+            ...migratedOsc52Clipboard,
             floatingTerminalEnabled: migratedFloatingTerminalEnabled,
             floatingTerminalDefaultedForAllUsers: true,
             floatingTerminalCwd: migratedFloatingTerminalCwd,
@@ -3097,6 +3462,8 @@ export class Store {
               parsed.settings?.terminalCustomThemes
             ),
             appIcon: normalizeAppIconId(parsed.settings?.appIcon),
+            mobilePairingCustomAddress,
+            mobilePairingCustomAddresses,
             // Why: persisted settings may be hand-edited or from older builds; keep tray-minimize false unless stored value is true.
             minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
             // Why: missing means default-on; round-trips unchanged on non-mac since darwin consumers gate the effect.
@@ -3172,6 +3539,8 @@ export class Store {
             const inlineAgentsMigrated = parsed.ui?._inlineAgentsDefaultedForAllUsers === true
             const expandedCardPropsMigrated =
               parsed.ui?._expandedWorktreeCardPropertiesDefaulted === true
+            const jiraIssueCardPropDefaulted =
+              parsed.ui?._jiraIssueWorktreeCardPropertyDefaulted === true
             const hadExperimentOn = readDeprecatedExperimentFlag(parsed)
             const deliberateUncheck =
               hadExperimentOn &&
@@ -3210,7 +3579,12 @@ export class Store {
                 }
                 return next
               })()
-              const normalized = normalizeWorktreeCardProperties(expandedCandidate)
+              // Why: 'jira-issue' joined the defaults after the expansion migration already stamped upgraded profiles, so it needs its own one-shot backfill.
+              const jiraCandidate =
+                jiraIssueCardPropDefaulted || expandedCandidate.includes('jira-issue')
+                  ? expandedCandidate
+                  : [...expandedCandidate, 'jira-issue' as const]
+              const normalized = normalizeWorktreeCardProperties(jiraCandidate)
               const changed =
                 normalized.length !== rawCardProps.length ||
                 normalized.some((property, index) => property !== rawCardProps[index])
@@ -3219,7 +3593,8 @@ export class Store {
             if (
               migratedCardProps !== undefined ||
               !inlineAgentsMigrated ||
-              !expandedCardPropsMigrated
+              !expandedCardPropsMigrated ||
+              !jiraIssueCardPropDefaulted
             ) {
               this.loadNeedsSave = true
             }
@@ -3268,6 +3643,9 @@ export class Store {
                   : false,
               setupGuideBrowserMilestoneLegacyComplete:
                 parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
+              // Why persist rather than notify inline: the flip lands during load, before any
+              // window exists, and it must survive a crash before the user ever sees the notice.
+              osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
               sortBy: migrate ? ('smart' as const) : sort,
               showDotfilesByWorktree: normalizeShowDotfilesByWorktree(
                 parsed.ui?.showDotfilesByWorktree
@@ -3284,7 +3662,8 @@ export class Store {
               // Why: keep stamping the legacy flag for rollback forward-compat; the new flag actually gates the migration.
               _inlineAgentsDefaultedForExperiment: true,
               _inlineAgentsDefaultedForAllUsers: true,
-              _expandedWorktreeCardPropertiesDefaulted: true
+              _expandedWorktreeCardPropertiesDefaulted: true,
+              _jiraIssueWorktreeCardPropertyDefaulted: true
             }
           })(),
           // Why: volatile schema; zod-validate workspaceSession at read so a bad payload falls to defaults, not a renderer crash.
@@ -3292,7 +3671,7 @@ export class Store {
             if (parsed.workspaceSession === undefined) {
               return defaults.workspaceSession
             }
-            const result = parseWorkspaceSession(parsed.workspaceSession)
+            const result = parseWorkspaceSessionSalvaging(parsed.workspaceSession)
             if (!result.ok) {
               console.error(
                 '[persistence] Corrupt workspace session, using defaults:',
@@ -3300,13 +3679,28 @@ export class Store {
               )
               return defaults.workspaceSession
             }
+            if (result.droppedCount > 0) {
+              console.warn(
+                '[persistence] Salvaged workspace session; dropped corrupt entries:',
+                workspaceSessionSalvageLogDetails(result)
+              )
+              // Why: salvage repairs only the in-memory session; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
             return { ...defaults.workspaceSession, ...result.value }
           })(),
           // Why: per-host session partitions, validated independently; 'local' stays in workspaceSession for downgrade compat.
-          workspaceSessionsByHostId: parseWorkspaceSessionsByHostId(
-            parsed.workspaceSessionsByHostId,
-            defaults.workspaceSession
-          ),
+          workspaceSessionsByHostId: (() => {
+            const { partitions, repaired } = parseWorkspaceSessionsByHostId(
+              parsed.workspaceSessionsByHostId,
+              defaults.workspaceSession
+            )
+            if (repaired) {
+              // Why: salvage repairs only the in-memory partitions; without a save the corrupt entries stay on disk and get re-dropped every launch.
+              this.loadNeedsSave = true
+            }
+            return partitions
+          })(),
           sshTargets: (parsed.sshTargets ?? []).map(normalizeSshTarget),
           deletedSshConfigAliases: Array.isArray(parsed.deletedSshConfigAliases)
             ? parsed.deletedSshConfigAliases.filter(
@@ -3316,6 +3710,7 @@ export class Store {
           sshRemotePtyLeases: (parsed.sshRemotePtyLeases ?? [])
             .map(normalizeSshRemotePtyLease)
             .filter((lease): lease is SshRemotePtyLease => lease !== null),
+          sshPtyConsumerRecoveries: parsed.sshPtyConsumerRecoveries,
           claudeLivePtySessionIds: normalizeClaudeLivePtySessionIds(parsed.claudeLivePtySessionIds),
           migrationUnsupportedPtyEntries: normalizeMigrationUnsupportedPtyEntries(
             parsed.migrationUnsupportedPtyEntries
@@ -3404,6 +3799,10 @@ export class Store {
       this.loadNeedsSave = true
     }
     result = folderScopeConnectionMigration.state
+
+    if (normalizeWorktreeLinkedItemMetadata(result)) {
+      this.loadNeedsSave = true
+    }
 
     if (gcStaleWorktreeMeta(result) > 0) {
       this.loadNeedsSave = true
@@ -3500,6 +3899,13 @@ export class Store {
   private static SAVE_MAX_WAIT_MS = 5_000
 
   private scheduleSave(): void {
+    // Why: once the quit flush has snapshotted, a newly debounced write would fire during
+    // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
+    // flush is the last write by construction.
+    if (this.quitFlushStarted) {
+      return
+    }
+    this.writeGeneration += 1
     const now = Date.now()
     this.firstPendingSaveAt ??= now
     if (this.writeTimer) {
@@ -3510,20 +3916,27 @@ export class Store {
     this.writeTimer = setTimeout(() => {
       this.writeTimer = null
       this.firstPendingSaveAt = null
-      // Why (issue #1158): serialize async writes so backup rotation can't race two callers over the same paths.
-      const prev = this.pendingWrite ?? Promise.resolve()
-      const next = prev
-        .then(() => this.writeToDiskAsync())
-        .catch((err) => {
-          console.error('[persistence] Failed to write state:', err)
-        })
-        .finally(() => {
-          if (this.pendingWrite === next) {
-            this.pendingWrite = null
-          }
-        })
-      this.pendingWrite = next
+      void this.enqueueWrite()
     }, delay)
+  }
+
+  private enqueueWrite(): Promise<void> {
+    const previousWrite = Promise.all([
+      this.pendingWrite ?? this.staleTempCleanup,
+      this.pendingSnapshotFileWork ?? Promise.resolve()
+    ]).then(() => {})
+    const write = previousWrite.then(() => this.writeToDiskAsync())
+    const trackedWrite = write
+      .catch((err) => {
+        console.error('[persistence] Failed to write state:', err)
+      })
+      .finally(() => {
+        if (this.pendingWrite === trackedWrite) {
+          this.pendingWrite = null
+        }
+      })
+    this.pendingWrite = trackedWrite
+    return write
   }
 
   /** Wait for any in-flight async disk write to complete. Used in tests. */
@@ -3537,8 +3950,12 @@ export class Store {
     return durable
   }
 
-  // Why: build payload synchronously so hash and serialized bytes reflect the same state tick (no await interleave). One full-state stringify serves both the on-disk payload and the no-op-write guard hash: each secret slot is serialized as a fresh unguessable sentinel, then sentinels are substituted to ciphertext for the payload and to plaintext for the hash. The hash is thus a pure function of plaintext state (skips a byte-identical rewrite) without a second stringify.
-  private buildStateToSave(): { payload: string; stateHash: string } {
+  // Why: build payload synchronously so hash and bytes reflect one state tick. A degraded prefix makes the first healthy retry durable even when plaintext state is unchanged.
+  private buildStateToSave(): {
+    payload: string
+    stateHash: string
+    protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
+  } {
     // Why sentinels (not a blob/key string match): the substitution must be
     // position-exact. A plain search for the ciphertext — or even for a
     // `"key":"blob"` token — can be mimicked by user-controlled state (e.g. an
@@ -3548,50 +3965,79 @@ export class Store {
     // on deterministic-IV platforms (macOS/legacy-Linux OSCrypt). A per-slot
     // random UUID can't occur anywhere else in the serialized state (the user
     // sets their data before it is minted), so it appears exactly once.
-    const secretSubs: { sentinel: string; blob: string; plaintext: string }[] = []
-    const encryptToSentinel = (plaintext: string): string => {
-      const blob = encrypt(plaintext)
-      // Deterministic already (empty secret / safeStorage unavailable / encrypt
-      // failure): blob === plaintext, so no normalization — and no sentinel,
-      // which also avoids substituting an empty or plaintext-shaped slot.
-      if (blob === plaintext) {
+    const secretSubs: { sentinel: string; blob: string; hashValue: string }[] = []
+    const protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
+    let protectedStorageDegraded = false
+    const encryptToSentinel = (slot: string, plaintext: string): string => {
+      const encrypted = this.protectedSecrets.encrypt(slot, plaintext)
+      if (encrypted.retentionUpdate) {
+        protectedSecretUpdates.push(encrypted.retentionUpdate)
+      }
+      protectedStorageDegraded ||= encrypted.degraded
+      const { blob, hashValue = plaintext } = encrypted
+      // Values already identical in payload and hash need no sentinel substitution.
+      if (blob === plaintext && hashValue === plaintext) {
         return blob
       }
       const sentinel = `orca-secret-slot-${randomUUID()}`
-      secretSubs.push({ sentinel, blob, plaintext })
+      secretSubs.push({ sentinel, blob, hashValue })
       return sentinel
+    }
+    const encryptOptionalToSentinel = (
+      slot: string,
+      plaintext: string | null | undefined
+    ): string | null => {
+      const encrypted = encryptToSentinel(slot, plaintext ?? '')
+      return encrypted || null
     }
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
+      sshPtyConsumerRecoveries: (this.state.sshPtyConsumerRecoveries ?? []).map((record) => ({
+        ...record,
+        ownerLease: encryptToSentinel(
+          sshPtyOwnerLeaseSecretSlot(record.targetId),
+          record.ownerLease
+        )
+      })),
       settings: {
         ...this.state.settings,
-        opencodeSessionCookie: encryptToSentinel(this.state.settings.opencodeSessionCookie),
-        httpProxyUrl: encryptToSentinel(this.state.settings.httpProxyUrl ?? '')
+        opencodeSessionCookie: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.opencodeSessionCookie,
+          this.state.settings.opencodeSessionCookie
+        ),
+        httpProxyUrl: encryptToSentinel(
+          PROTECTED_SECRET_SLOT.httpProxyUrl,
+          this.state.settings.httpProxyUrl ?? ''
+        )
       },
       ui: {
         ...this.state.ui,
-        browserKagiSessionLink: this.state.ui.browserKagiSessionLink
-          ? encryptToSentinel(this.state.ui.browserKagiSessionLink)
-          : null
+        browserKagiSessionLink: encryptOptionalToSentinel(
+          PROTECTED_SECRET_SLOT.browserKagiSessionLink,
+          this.state.ui.browserKagiSessionLink
+        )
       }
     }
     // Why compact: ~20% fewer bytes and less serialize time; all readers JSON.parse so formatting is irrelevant.
     // One full-state stringify; secret slots currently hold sentinels.
     const serialized = JSON.stringify(stateToSave)
     // Substitute each unique sentinel exactly once: ciphertext for the on-disk
-    // payload, plaintext for the guard hash. Function-form replacement keeps
-    // `$` in blob/plaintext inert; both sides read the sentinel as JSON-escaped
+    // payload, a stable normalized value for the guard hash. Function-form
+    // replacement keeps `$` inert; both sides read the sentinel as JSON-escaped
     // in `serialized`, so each replace is byte-for-byte position-exact.
     let payload = serialized
     let hashInput = serialized
-    for (const { sentinel, blob, plaintext } of secretSubs) {
+    for (const { sentinel, blob, hashValue } of secretSubs) {
       const escapedSentinel = JSON.stringify(sentinel).slice(1, -1)
-      payload = payload.replace(escapedSentinel, () => blob)
-      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(plaintext).slice(1, -1))
+      payload = payload.replace(escapedSentinel, () => JSON.stringify(blob).slice(1, -1))
+      hashInput = hashInput.replace(escapedSentinel, () => JSON.stringify(hashValue).slice(1, -1))
     }
-    const stateHash = createHash('sha1').update(hashInput).digest('hex')
-    return { payload, stateHash }
+    const stateHash = createHash('sha1')
+      .update(protectedStorageDegraded ? 'safeStorage-degraded\0' : '')
+      .update(hashInput)
+      .digest('hex')
+    return { payload, stateHash, protectedSecretUpdates }
   }
 
   // Why: async writes avoid blocking the main Electron thread on every debounced save.
@@ -3600,51 +4046,76 @@ export class Store {
       return
     }
     const gen = this.writeGeneration
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
     if (stateHash === this.lastWrittenStateHash) {
+      this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       return
     }
     const dataFile = this.dataFile
     const dir = dirname(dataFile)
     await mkdir(dir, { recursive: true }).catch(() => {})
-    const tmpFile = `${dataFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const tmpFile = durableWriteTempPath(dataFile)
 
     // Why: on any write/rename failure, remove the tmp file so it doesn't leave a multi-MB orphan.
     let renamed = false
     try {
-      await writeFile(tmpFile, payload, 'utf-8')
+      // Why: fsync before rename, then fsync the directory; see writeFileDurable.
+      const handle = await open(tmpFile, 'w')
+      try {
+        await handle.writeFile(payload, 'utf-8')
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
       // Why: if flush() bumped writeGeneration mid-write, it already wrote fresher state; don't overwrite it.
       if (this.writeGeneration !== gen) {
         return
       }
-      await rename(tmpFile, dataFile)
-      renamed = true
-      // Why re-check gen: a sync flush during the rename await may have written fresher state; don't record a stale hash over it.
-      if (this.writeGeneration === gen) {
+      this.inFlightAsyncTmpFile = tmpFile
+      try {
+        await renameDurable(tmpFile, dataFile)
+        renamed = true
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || this.writeGeneration === gen) {
+          throw error
+        }
+      } finally {
+        if (this.inFlightAsyncTmpFile === tmpFile) {
+          this.inFlightAsyncTmpFile = null
+        }
+      }
+      // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
+      if (renamed && this.writeGeneration === gen) {
         this.lastWrittenStateHash = stateHash
+        this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
+      } else if (renamed) {
+        this.lastWrittenStateHash = null
+      }
+      if (renamed) {
+        this.lastDurableWriteGeneration = Math.max(this.lastDurableWriteGeneration, gen)
       }
     } finally {
       if (!renamed) {
         await rm(tmpFile).catch(() => {})
       }
     }
-    // Why (issue #1158): rotate backups only after rename succeeded, and let a concurrent flush own rotation.
+    if (!renamed) {
+      return
+    }
+    // Why (#1158): rotate only after the primary rename while this write still owns its generation.
     if (this.writeGeneration !== gen) {
       return
     }
-    const now = Date.now()
-    if (this.shouldRotateBackups(now, dataFile)) {
-      await this.rotateBackupsAsync(dataFile)
-    }
+    await this.rotateBackupsAsync(dataFile)
   }
 
   // Why: sync variant only for flush() at shutdown, where the process may exit before an async write completes.
-  private writeToDiskSync(opts: { force?: boolean } = {}): void {
+  private writeToDiskSync(opts: { force?: boolean; skipBackupRotation?: boolean } = {}): void {
     if (this.writesFrozen) {
       return
     }
-    const { payload, stateHash } = this.buildStateToSave()
+    const { payload, stateHash, protectedSecretUpdates } = this.buildStateToSave()
     // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
     if (!opts.force && stateHash === this.lastWrittenStateHash) {
       return
@@ -3659,10 +4130,16 @@ export class Store {
     // Why: on any write/rename failure, remove the tmp file so shutdown crashes don't leak orphans.
     let renamed = false
     try {
-      writeFileSync(tmpFile, payload, 'utf-8')
-      renameSync(tmpFile, dataFile)
+      // Why: fsync the temp file and the directory; a bare rename can survive as stale or empty
+      // content after power loss, losing projects/tabs back to the newest usable .bak slot.
+      writeFileDurableSync(tmpFile, dataFile, payload)
       renamed = true
       this.lastWrittenStateHash = stateHash
+      this.protectedSecrets.commitRetentionUpdates(protectedSecretUpdates)
+      this.lastDurableWriteGeneration = Math.max(
+        this.lastDurableWriteGeneration,
+        this.writeGeneration
+      )
     } finally {
       if (!renamed) {
         try {
@@ -3673,12 +4150,15 @@ export class Store {
       }
     }
     const now = Date.now()
-    if (this.shouldRotateBackups(now, dataFile)) {
+    if (!opts.skipBackupRotation && this.shouldRotateBackups(now, dataFile)) {
       this.rotateBackupsSync(dataFile)
     }
   }
 
   flushOrThrow(): void {
+    if (this.quitFlushStarted) {
+      throw new Error('Cannot synchronously flush after final persistence has started')
+    }
     if (this.writeTimer) {
       clearTimeout(this.writeTimer)
       this.writeTimer = null
@@ -3687,12 +4167,49 @@ export class Store {
     const asyncWriteWasInFlight = this.pendingWrite !== null
     // Why: bump writeGeneration so an in-flight async write skips its rename and can't overwrite this sync write.
     this.writeGeneration++
-    this.pendingWrite = null
-    this.writeToDiskSync({ force: asyncWriteWasInFlight })
+    if (this.inFlightAsyncTmpFile) {
+      try {
+        unlinkSync(this.inFlightAsyncTmpFile)
+        this.inFlightAsyncTmpFile = null
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          void this.enqueueWrite().catch(() => {})
+          throw error
+        }
+      }
+    }
+    // Why: later async flushes must remain serialized behind the invalidated writer.
+    this.writeToDiskSync({
+      force: asyncWriteWasInFlight,
+      skipBackupRotation: this.backupRotationInFlight
+    })
   }
 
   flushActiveViewPreferenceOrThrow(): void {
     this.activeViewPreference.flushOrThrow()
+  }
+
+  getCodexResetCreditAttemptLedger(): CodexResetCreditAttemptLedger {
+    return parseCodexResetCreditAttemptLedger(this.state.codexResetCreditAttemptLedger)
+  }
+
+  replaceCodexResetCreditAttemptLedgerAndFlush(ledger: CodexResetCreditAttemptLedger): void {
+    if (this.writesFrozen) {
+      throw new Error('Cannot persist Codex reset-credit attempts while writes are frozen')
+    }
+    const next = parseCodexResetCreditAttemptLedger(ledger)
+    const previous = this.state.codexResetCreditAttemptLedger
+      ? structuredClone(this.state.codexResetCreditAttemptLedger)
+      : undefined
+    this.state.codexResetCreditAttemptLedger = next
+    try {
+      this.flushOrThrow()
+    } catch (error) {
+      // Why: callers use a successful return as the durability barrier before
+      // handing a scarce-credit mutation to the provider.
+      this.state.codexResetCreditAttemptLedger = previous
+      throw error
+    }
   }
 
   // ── Repos ──────────────────────────────────────────────────────────
@@ -3800,11 +4317,16 @@ export class Store {
     if (!project) {
       return null
     }
+    // Why: the same repo id can exist on multiple execution hosts, so match this setup's own host
+    // row and never fall back to a sibling host's row — a stale repoId/hostId would delete that host's
+    // registration. With no exact match the setup is stale, and the path below drops just the setup.
     const repo = setup.repoId
-      ? this.state.repos.find((entry) => entry.id === setup.repoId)
+      ? this.state.repos.find(
+          (entry) => entry.id === setup.repoId && getRepoExecutionHostId(entry) === setup.hostId
+        )
       : undefined
     if (repo) {
-      this.removeProject(repo.id)
+      this.removeProjectForHost(repo.id, setup.hostId)
       return { project, setup, repo: this.hydrateRepo(repo) }
     }
     this.state.projectHostSetups = this.state.projectHostSetups.filter(
@@ -3949,7 +4471,9 @@ export class Store {
     name?: string
     folderPath?: string | null
     linkedTask?: FolderWorkspace['linkedTask']
+    linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
+    creatorProvenance?: FolderWorkspace['creatorProvenance']
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
@@ -3964,13 +4488,19 @@ export class Store {
       throw new Error('Folder-backed project group not found.')
     }
     const now = Date.now()
+    const linkedTask = normalizeWorkspaceLinkedItem(input.linkedTask)
+    const sourceContext = normalizeStoredTaskSourceContext(input.linkedTaskSourceContext)
     const workspace: FolderWorkspace = {
       id: randomUUID(),
       projectGroupId: group.id,
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
-      linkedTask: input.linkedTask ?? null,
+      ...(input.creatorProvenance ? { creatorProvenance: input.creatorProvenance } : {}),
+      linkedTask,
+      linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
+        ? sourceContext
+        : null,
       comment: '',
       isArchived: false,
       isUnread: false,
@@ -3997,6 +4527,7 @@ export class Store {
         | 'name'
         | 'folderPath'
         | 'linkedTask'
+        | 'linkedTaskSourceContext'
         | 'comment'
         | 'isArchived'
         | 'isUnread'
@@ -4022,7 +4553,27 @@ export class Store {
       workspace.folderPath = updates.folderPath
     }
     if (updates.linkedTask !== undefined) {
-      workspace.linkedTask = updates.linkedTask
+      workspace.linkedTask = normalizeWorkspaceLinkedItem(updates.linkedTask)
+      if (
+        workspace.linkedTaskSourceContext &&
+        !isWorkspaceLinkedItemSourceContextMatch(
+          workspace.linkedTask,
+          workspace.linkedTaskSourceContext
+        )
+      ) {
+        workspace.linkedTaskSourceContext = null
+      }
+    }
+    if (updates.linkedTaskSourceContext !== undefined) {
+      const linkedTaskSourceContext = normalizeStoredTaskSourceContext(
+        updates.linkedTaskSourceContext
+      )
+      workspace.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+        workspace.linkedTask,
+        linkedTaskSourceContext
+      )
+        ? linkedTaskSourceContext
+        : null
     }
     if (updates.comment !== undefined) {
       workspace.comment = updates.comment
@@ -4237,9 +4788,63 @@ export class Store {
       hostMembership.set(key, result)
       return result
     }
+    // Why: session state (legacy blob + per-host partitions) references worktrees
+    // by the same `${repoId}::${path}` owner key; if it is not pruned here, a
+    // deleted project's worktrees stay in lastVisitedAtByWorktreeId /
+    // sleepingAgentSessionsByPaneKey and get re-materialized into worktreeMeta on
+    // the next launch, surfacing as an orphaned "unknown" workspace.
+    // worktreeMeta is host-classified via belongsToHost, but session partitions
+    // are keyed by host directly. A session owner key carries no host, and the
+    // same key can exist in multiple partitions (shared repo id/path across
+    // hosts). So for session cleanup we collect every prefix-matching owner key
+    // regardless of belongsToHost, and let the per-partition host gating below
+    // decide which partition to touch. (belongsToHost still governs
+    // worktreeMeta/lineage deletion. Collect before deleting worktreeMeta.)
+    const ownerKeysToPrune = new Set<string>()
+    const collectPrefixedKeys = (keys: Iterable<string>): void => {
+      for (const key of keys) {
+        if (key.startsWith(prefix)) {
+          ownerKeysToPrune.add(key)
+        }
+      }
+    }
+    collectPrefixedKeys(Object.keys(this.state.worktreeMeta))
+    collectPrefixedKeys(Object.keys(this.state.workspaceSession?.lastVisitedAtByWorktreeId ?? {}))
+    for (const session of Object.values(this.state.workspaceSessionsByHostId ?? {})) {
+      collectPrefixedKeys(Object.keys(session?.lastVisitedAtByWorktreeId ?? {}))
+    }
+
     for (const key of Object.keys(this.state.worktreeMeta)) {
       if (belongsToHost(key)) {
         delete this.state.worktreeMeta[key]
+      }
+    }
+    // Why: owner keys are `${repoId}::${path}` and do not carry a host, so a
+    // host-scoped prune (hostId != null) must only touch that host's session:
+    // the legacy blob is the local host's session, and each
+    // workspaceSessionsByHostId partition is one non-local host. Pruning every
+    // partition here would wipe a surviving host's tabs, sleeping-agent state,
+    // and active-worktree pointer for a shared repo id/path. A full removal
+    // (hostId === null) still clears every host.
+    const pruneLegacyLocalSession = hostId === null || hostId === LOCAL_EXECUTION_HOST_ID
+    const pruneAllHostPartitions = hostId === null
+    if (pruneLegacyLocalSession) {
+      this.state.workspaceSession = removeWorkspaceSessionOwners(
+        this.state.workspaceSession,
+        ownerKeysToPrune
+      )!
+    }
+    if (this.state.workspaceSessionsByHostId) {
+      for (const [partitionHostId, session] of Object.entries(
+        this.state.workspaceSessionsByHostId
+      )) {
+        if (!pruneAllHostPartitions && partitionHostId !== hostId) {
+          continue
+        }
+        const pruned = removeWorkspaceSessionOwners(session, ownerKeysToPrune)
+        if (pruned) {
+          this.state.workspaceSessionsByHostId[partitionHostId] = pruned
+        }
       }
     }
     for (const [childId, lineage] of Object.entries(this.state.worktreeLineageById)) {
@@ -4305,9 +4910,13 @@ export class Store {
     > & {
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
-    }
+    },
+    hostId?: ExecutionHostId
   ): Repo | null {
-    const repo = this.state.repos.find((r) => r.id === id)
+    const repo = this.state.repos.find(
+      (candidate) =>
+        candidate.id === id && (!hostId || getRepoExecutionHostId(candidate) === hostId)
+    )
     if (!repo) {
       return null
     }
@@ -4846,6 +5455,16 @@ export class Store {
   setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
     const existing = this.state.worktreeMeta[worktreeId] || getDefaultWorktreeMeta()
     const updated = { ...existing, ...meta }
+    updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
+    const linkedTaskSourceContext = normalizeStoredTaskSourceContext(
+      updated.linkedTaskSourceContext
+    )
+    updated.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
+      updated.linkedWorkItem,
+      linkedTaskSourceContext
+    )
+      ? linkedTaskSourceContext
+      : null
     if (!updated.instanceId) {
       updated.instanceId = randomUUID()
     }
@@ -4854,15 +5473,34 @@ export class Store {
     return updated
   }
 
-  removeWorktreeMeta(worktreeId: string): void {
+  removeWorktreeMeta(worktreeId: string, hostId?: ExecutionHostId | null): void {
+    // Persisted ownership beats stale live routing; hostId is only an ownerless fallback.
+    const owner = this.state.worktreeMeta[worktreeId]?.hostId ?? hostId
+    // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
+    const partitions = new Set<ExecutionHostId>(
+      workspaceSessionPartitionIdsForHost(owner).filter((partition) =>
+        this.hasPersistedWorkspaceSession(partition)
+      )
+    )
+    // A repo-wide fence must not rebase a sibling's unpersisted tabs onto main's copy, and a spill
+    // partition that never held this worktree has no claim on the repo at all.
+    const ownerPartition = workspaceSessionOwnerPartitionForHost(owner)
+    const fencedPartitions = new Set(
+      [...partitions].filter(
+        (partition) =>
+          this.partitionOwnsWorktreeTabs(worktreeId, partition) ||
+          (partition === ownerPartition &&
+            !this.partitionHasOtherRepoWorktreeTabs(worktreeId, partition))
+      )
+    )
     delete this.state.worktreeMeta[worktreeId]
     delete this.state.worktreeLineageById[worktreeId]
     delete this.state.workspaceLineageByChildKey[worktreeWorkspaceKey(worktreeId)]
-    this.state.workspaceSession = removeWorkspaceSessionOwner(
-      this.state.workspaceSession,
-      worktreeId,
-      { advanceTerminalTopologyRevision: true }
-    )!
+    for (const partition of partitions) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, partition, {
+        advanceTerminalTopologyRevision: fencedPartitions.has(partition)
+      })
+    }
     this.scheduleSave()
   }
 
@@ -5142,7 +5780,7 @@ export class Store {
     }
   }
 
-  // Why: UI view-state is written from both desktop and mobile (ui.set RPC), so notify to keep bi-directional sync (desktop hydrates UI only once).
+  // Why: renderer-visible UI state is written from desktop and mobile, so notify to keep bi-directional sync.
   onUIChanged(listener: (ui: PersistedState['ui']) => void): () => void {
     this.uiChangeListeners.add(listener)
     return () => {
@@ -5165,12 +5803,22 @@ export class Store {
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     const sanitizedUpdates = stripLegacyTerminalScrollbackBytes(updates)
+    if ('opencodeSessionCookie' in updates && !updates.opencodeSessionCookie) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.opencodeSessionCookie)
+    }
+    if ('httpProxyUrl' in updates && !updates.httpProxyUrl) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.httpProxyUrl)
+    }
     // Why: coerce to boolean here (not the IPC edge) so every write path is covered and a truthy non-bool can't persist as "tray-minimize on".
     if ('minimizeToTrayOnClose' in updates) {
       sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
     }
     if ('showMenuBarIcon' in updates) {
       sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
+    }
+    // Why: the artifact publish capability must be an exact boolean on disk; no truthy value grants it.
+    if ('artifactSharingEnabled' in updates) {
+      sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
     }
     if ('disabledTuiAgents' in updates) {
       sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
@@ -5248,6 +5896,33 @@ export class Store {
       sanitizedUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         updates.prBotAuthorOverrides
       )
+    }
+    if ('mobilePairingCustomAddress' in updates) {
+      sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+        updates.mobilePairingCustomAddress
+      )
+    }
+    if ('mobilePairingCustomAddresses' in updates) {
+      sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+        updates.mobilePairingCustomAddresses
+      )
+    }
+    if (
+      'mobilePairingCustomAddress' in sanitizedUpdates ||
+      'mobilePairingCustomAddresses' in sanitizedUpdates
+    ) {
+      const mobilePairingCustomAddress =
+        'mobilePairingCustomAddress' in sanitizedUpdates
+          ? sanitizedUpdates.mobilePairingCustomAddress
+          : this.state.settings.mobilePairingCustomAddress
+      if (mobilePairingCustomAddress) {
+        sanitizedUpdates.mobilePairingCustomAddresses = addMobilePairingCustomAddress(
+          sanitizedUpdates.mobilePairingCustomAddresses ??
+            this.state.settings.mobilePairingCustomAddresses ??
+            [],
+          mobilePairingCustomAddress
+        )
+      }
     }
     const historyWithPreviousLayout = buildWorkspaceDirHistoryForUpdate(
       this.state.settings,
@@ -5337,7 +6012,12 @@ export class Store {
       statusBarUsageMode: normalizeStatusBarUsageMode(this.state.ui?.statusBarUsageMode),
       // Why: strict boolean coercion so a missing/legacy value reads as false (first-run notice still fires).
       trayMinimizeNoticeShown: this.state.ui?.trayMinimizeNoticeShown === true,
+      osc52ClipboardDefaultOnNoticePending:
+        this.state.ui?.osc52ClipboardDefaultOnNoticePending === true,
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(this.state.ui?.markdownTocPanelWidth),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        this.state.ui?.combinedDiffFileTreeWidth
+      ),
       visibleWorkspaceHostIds: normalizeVisibleExecutionHostIds(
         this.state.ui?.visibleWorkspaceHostIds
       ),
@@ -5357,6 +6037,9 @@ export class Store {
   }
 
   updateUI(updates: Partial<PersistedState['ui']>): void {
+    if ('browserKagiSessionLink' in updates && !updates.browserKagiSessionLink) {
+      this.protectedSecrets.removeRetainedBlob(PROTECTED_SECRET_SLOT.browserKagiSessionLink)
+    }
     const sanitizedUpdates = stripMainOwnedTelemetryMarkerFromUI(updates)
     const { activeView, ...durableUpdates } = sanitizedUpdates
     const activeViewChanged = this.activeViewPreference.set(activeView)
@@ -5438,6 +6121,9 @@ export class Store {
       markdownTocPanelWidth: clampMarkdownTocPanelWidth(
         sanitizedUpdates.markdownTocPanelWidth ?? this.state.ui?.markdownTocPanelWidth
       ),
+      combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+        sanitizedUpdates.combinedDiffFileTreeWidth ?? this.state.ui?.combinedDiffFileTreeWidth
+      ),
       visibleWorkspaceHostIds:
         updates.visibleWorkspaceHostIds !== undefined
           ? normalizeVisibleExecutionHostIds(updates.visibleWorkspaceHostIds)
@@ -5505,7 +6191,8 @@ export class Store {
       (lastEmittedBucket === null ||
         compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
 
-    this.updateUI({
+    this.state.ui = {
+      ...this.state.ui,
       featureInteractions: {
         ...featureInteractions,
         [id]: {
@@ -5513,11 +6200,15 @@ export class Store {
           interactionCount: nextCount
         }
       }
-    })
+    }
     this.state.featureInteractionTelemetryBuckets = shouldEmit
       ? { ...telemetryBuckets, [id]: nextBucket }
       : telemetryBuckets
     this.scheduleSave()
+    // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
+    if (!existing) {
+      this.notifyUIChanged()
+    }
 
     if (shouldEmit) {
       track('feature_interaction_usage_bucket_reached', {
@@ -5576,6 +6267,7 @@ export class Store {
     // Why no scheduleSave: cache is memory-only and snapshotted to a sidecar at flush; persisting here rewrote the whole state file every poll cycle.
     this.state.githubCache = cache
     this.githubCacheDirty = true
+    this.githubCacheGeneration += 1
   }
 
   // ── Workspace Session ─────────────────────────────────────────────
@@ -5593,6 +6285,25 @@ export class Store {
     return this.state.workspaceSessionsByHostId?.[resolved] ?? getDefaultWorkspaceSession()
   }
 
+  /** Whether a partition was ever written; `getWorkspaceSession` defaults absent ones and cannot tell them apart. */
+  private hasPersistedWorkspaceSession(hostId: ExecutionHostId): boolean {
+    return (
+      hostId === LOCAL_EXECUTION_HOST_ID ||
+      this.state.workspaceSessionsByHostId?.[hostId] !== undefined
+    )
+  }
+
+  getWorkspaceSessionHostIds(): ExecutionHostId[] {
+    const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
+    for (const key of Object.keys(this.state.workspaceSessionsByHostId ?? {})) {
+      const hostId = normalizeExecutionHostId(key)
+      if (hostId) {
+        hostIds.add(hostId)
+      }
+    }
+    return [...hostIds]
+  }
+
   readTerminalScrollbackSnapshot(ref: string): string | null {
     return readTerminalScrollbackSnapshotSync(ref, this.terminalScrollbackSnapshotStorage)
   }
@@ -5606,6 +6317,70 @@ export class Store {
     const resolved = this.resolveHostId(hostId)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       this.setLocalWorkspaceSession(session)
+      return
+    }
+    this.setHostWorkspaceSession(resolved, session)
+  }
+
+  removeWorkspaceSessionStateForWorktree(
+    worktreeId: string,
+    hostId?: ExecutionHostId | null,
+    options: { advanceTerminalTopologyRevision?: boolean } = {}
+  ): void {
+    for (const resolved of workspaceSessionPartitionIdsForHost(hostId)) {
+      this.removeWorkspaceSessionOwnerInPartition(worktreeId, resolved, options)
+    }
+  }
+
+  private removeWorkspaceSessionOwnerInPartition(
+    worktreeId: string,
+    resolved: ExecutionHostId,
+    options: { advanceTerminalTopologyRevision?: boolean }
+  ): void {
+    if (!this.hasPersistedWorkspaceSession(resolved)) {
+      return
+    }
+    const current = this.getWorkspaceSession(resolved)
+    const session = removeWorkspaceSessionOwner(current, worktreeId, {
+      advanceTerminalTopologyRevision: options.advanceTerminalTopologyRevision ?? true
+    })
+    if (!session) {
+      return
+    }
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.state.workspaceSession = session
+    } else {
+      // Host scoping matters because identical repo/path ids may exist on two servers.
+      this.state.workspaceSessionsByHostId = {
+        ...this.state.workspaceSessionsByHostId,
+        [resolved]: session
+      }
+    }
+    this.scheduleSave()
+  }
+
+  /** Whether a partition still holds terminal membership for `worktreeId`. */
+  private partitionOwnsWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    return this.getWorkspaceSession(hostId).tabsByWorktree?.[worktreeId] !== undefined
+  }
+
+  /** Whether fencing this partition would rebase a sibling worktree of the same repo. */
+  private partitionHasOtherRepoWorktreeTabs(worktreeId: string, hostId: ExecutionHostId): boolean {
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const tabsByWorktree = this.getWorkspaceSession(hostId).tabsByWorktree ?? {}
+    return Object.entries(tabsByWorktree).some(
+      ([id, tabs]) =>
+        id !== worktreeId && getRepoIdFromWorktreeId(id) === repoId && (tabs?.length ?? 0) > 0
+    )
+  }
+
+  stageWorkspaceSessionBeforeUnload(
+    session: PersistedState['workspaceSession'],
+    hostId?: string | null
+  ): void {
+    const resolved = this.resolveHostId(hostId)
+    if (resolved === LOCAL_EXECUTION_HOST_ID) {
+      this.setLocalWorkspaceSession(session, true)
       return
     }
     this.setHostWorkspaceSession(resolved, session)
@@ -5628,7 +6403,10 @@ export class Store {
     this.scheduleSave()
   }
 
-  private setLocalWorkspaceSession(session: PersistedState['workspaceSession']): void {
+  private setLocalWorkspaceSession(
+    session: PersistedState['workspaceSession'],
+    deferSnapshotFiles = false
+  ): void {
     const prior = this.state.workspaceSession
     session = sanitizeWorkspaceSessionTerminalRetirements(session, prior)
     session = pruneWorkspaceSessionBrowserHistory(
@@ -5757,14 +6535,74 @@ export class Store {
       }
     }
     session = pruneLocalTerminalScrollbackBuffers(session, this.state.repos)
-    const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
-      session,
-      this.terminalScrollbackSnapshotStorage
-    )
-    session = migratedScrollback.session
-    deleteRemovedTerminalScrollbackSnapshots(prior, session, this.terminalScrollbackSnapshotStorage)
+    if (!deferSnapshotFiles) {
+      const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+      session = migratedScrollback.session
+      deleteRemovedTerminalScrollbackSnapshots(
+        prior,
+        session,
+        this.terminalScrollbackSnapshotStorage
+      )
+    }
     this.state.workspaceSession = session
+    if (deferSnapshotFiles) {
+      this.enqueueTerminalScrollbackSnapshotWork(prior, session)
+    }
     this.scheduleSave()
+  }
+
+  private enqueueTerminalScrollbackSnapshotWork(
+    prior: WorkspaceSessionState | undefined,
+    staged: WorkspaceSessionState
+  ): void {
+    const previous = this.pendingSnapshotFileWork ?? Promise.resolve()
+    const work = previous
+      .then(async () => {
+        if (this.state.workspaceSession !== staged) {
+          if (this.state.workspaceSession) {
+            await deleteRemovedTerminalScrollbackSnapshotsAsync(
+              prior,
+              this.state.workspaceSession,
+              this.terminalScrollbackSnapshotStorage
+            )
+          }
+          return
+        }
+        const migrated = await migrateWorkspaceSessionTerminalScrollbackSnapshotsAsync(
+          staged,
+          this.terminalScrollbackSnapshotStorage
+        )
+        const current =
+          this.state.workspaceSession === staged ? migrated : this.state.workspaceSession
+        if (this.state.workspaceSession === staged) {
+          this.state.workspaceSession = migrated
+        } else if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            migrated,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+        if (current) {
+          await deleteRemovedTerminalScrollbackSnapshotsAsync(
+            prior,
+            current,
+            this.terminalScrollbackSnapshotStorage
+          )
+        }
+      })
+      .catch((error) => {
+        console.error('[terminal-scrollback] Failed to prepare unload snapshots:', error)
+      })
+      .finally(() => {
+        if (this.pendingSnapshotFileWork === work) {
+          this.pendingSnapshotFileWork = null
+        }
+      })
+    this.pendingSnapshotFileWork = work
   }
 
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
@@ -5918,11 +6756,26 @@ export class Store {
       ptyId: string
       incarnationId?: string
       startupCwd?: string
+      expectedBinding?: { ptyId: string; incarnationId?: string }
     },
     hostId?: string | null
-  ): void {
+  ): boolean {
     const resolvedHostId = this.resolveHostId(hostId)
     const session = this.getWorkspaceSession(resolvedHostId)
+    const paneKey = `${args.tabId}:${args.leafId}`
+    if (args.expectedBinding) {
+      const tab = session.tabsByWorktree?.[args.worktreeId]?.find(
+        (candidate) => candidate.id === args.tabId && candidate.worktreeId === args.worktreeId
+      )
+      const boundPtyId = session.terminalLayoutsByTabId?.[args.tabId]?.ptyIdsByLeafId?.[args.leafId]
+      if (
+        !tab ||
+        boundPtyId !== args.expectedBinding.ptyId ||
+        session.terminalPtyIncarnationsByPaneKey?.[paneKey] !== args.expectedBinding.incarnationId
+      ) {
+        return false
+      }
+    }
     if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
       this.state.workspaceSessionsByHostId = {
         ...this.state.workspaceSessionsByHostId,
@@ -5930,15 +6783,17 @@ export class Store {
       }
     }
     const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-    const paneKey = `${args.tabId}:${args.leafId}`
+    const reconciledIncarnation =
+      args.expectedBinding !== undefined &&
+      args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
-    const advanceTopologyAfterMembershipChange = (): void => {
+    const advanceTopologyFence = (): void => {
       const repoId = getRepoIdFromWorktreeId(args.worktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
-      if (!terminalMembershipChanged || currentRevision <= 0) {
+      if (!reconciledIncarnation && (!terminalMembershipChanged || currentRevision <= 0)) {
         return
       }
-      // Why: a real host-admitted spawn after a retirement must be distinguishable from a stale renderer replay.
+      // Why: host-admitted membership or incarnation changes must outrank a stale renderer replay.
       session.terminalTopologyRevisionByRepoId = {
         ...session.terminalTopologyRevisionByRepoId,
         [repoId]: currentRevision + 1
@@ -5993,14 +6848,14 @@ export class Store {
     }
     if (!isTerminalLeafId(args.leafId)) {
       // Why: keep legacy renderer-local pane ids out of durable leaf-keyed layout state after the UUID migration.
-      advanceTopologyAfterMembershipChange()
+      advanceTopologyFence()
       try {
         this.flushOrThrow()
       } catch (err) {
         restoreSession()
         throw err
       }
-      return
+      return true
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
@@ -6041,13 +6896,14 @@ export class Store {
         }
       }
     }
-    advanceTopologyAfterMembershipChange()
+    advanceTopologyFence()
     try {
       this.flushOrThrow()
     } catch (err) {
       restoreSession()
       throw err
     }
+    return true
   }
 
   // ── SSH Targets ────────────────────────────────────────────────────
@@ -6085,10 +6941,16 @@ export class Store {
   }
 
   removeSshTarget(id: string): void {
-    if (!this.state.sshTargets) {
+    const targets = this.state.sshTargets ?? []
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const nextTargets = targets.filter((target) => target.id !== id)
+    const nextRecoveries = recoveries.filter((record) => record.targetId !== id)
+    if (nextTargets.length === targets.length && nextRecoveries.length === recoveries.length) {
       return
     }
-    this.state.sshTargets = this.state.sshTargets.filter((t) => t.id !== id)
+    this.state.sshTargets = nextTargets
+    this.state.sshPtyConsumerRecoveries = nextRecoveries
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(id))
     this.scheduleSave()
   }
 
@@ -6235,6 +7097,13 @@ export class Store {
         carrierChanged = true
       }
     }
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const retainedRecoveries = recoveries.filter((record) => record.targetId !== oldTargetId)
+    if (retainedRecoveries.length !== recoveries.length) {
+      this.state.sshPtyConsumerRecoveries = retainedRecoveries
+      this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(oldTargetId))
+      carrierChanged = true
+    }
     let setupsChanged = false
     const keptSetups: ProjectHostSetup[] = []
     for (const setup of this.state.projectHostSetups) {
@@ -6267,6 +7136,52 @@ export class Store {
       this.scheduleSave()
     }
     return [...repoIds]
+  }
+
+  // ── SSH PTY Consumer Recovery ──────────────────────────────────────
+
+  getSshPtyConsumerRecovery(targetId: string): SshPtyConsumerRecovery | null {
+    const record = (this.state.sshPtyConsumerRecoveries ?? []).find(
+      (candidate) => candidate.targetId === targetId
+    )
+    if (
+      record &&
+      this.protectedSecrets.isSealed(sshPtyOwnerLeaseSecretSlot(record.targetId), record.ownerLease)
+    ) {
+      return null
+    }
+    return record ? structuredClone(record) : null
+  }
+
+  async upsertSshPtyConsumerRecovery(record: SshPtyConsumerRecovery): Promise<void> {
+    const normalized = normalizeSshPtyConsumerRecovery(record)
+    if (!normalized) {
+      throw new Error('Invalid SSH PTY consumer recovery record')
+    }
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    this.state.sshPtyConsumerRecoveries = [
+      ...recoveries.filter((candidate) => candidate.targetId !== normalized.targetId),
+      normalized
+    ]
+    await this.flushSshPtyConsumerRecovery()
+  }
+
+  async removeSshPtyConsumerRecovery(targetId: string): Promise<void> {
+    const recoveries = this.state.sshPtyConsumerRecoveries ?? []
+    const next = recoveries.filter((record) => record.targetId !== targetId)
+    if (next.length === recoveries.length) {
+      return
+    }
+    this.state.sshPtyConsumerRecoveries = next
+    this.protectedSecrets.removeRetainedBlob(sshPtyOwnerLeaseSecretSlot(targetId))
+    await this.flushSshPtyConsumerRecovery()
+  }
+
+  private async flushSshPtyConsumerRecovery(): Promise<void> {
+    // Why: ownership must be durable before relay setup continues, but this runs on the live
+    // establish/reconnect path — a sync flush would park the main thread on a stalled profile mount.
+    // Why not caught here: the failure must reach the awaiting caller.
+    await this.flushDurableStateOrThrowAsync()
   }
 
   // ── SSH Remote PTY Leases ──────────────────────────────────────────
@@ -6311,13 +7226,54 @@ export class Store {
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      this.flush()
+    }
+  }
+
+  // Why no write of its own: the committed quit path calls this immediately before the final store
+  // flush, and that flush is what persists it. A durable write here would race the flush and be
+  // rejected the moment it latches, which is exactly how an attached lease used to survive quit.
+  markSshRemotePtyLeasesForShutdown(targetId: string, state: SshRemotePtyLease['state']): void {
+    this.updateSshRemotePtyLeaseStates(targetId, state)
+  }
+
+  async markSshRemotePtyLeasesAsync(
+    targetId: string,
+    state: SshRemotePtyLease['state']
+  ): Promise<void> {
+    if (this.updateSshRemotePtyLeaseStates(targetId, state)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  async markSshRemotePtyLeasesAttachedAsync(
+    targetId: string,
+    ptyIds: readonly string[]
+  ): Promise<void> {
+    const relayPtyIds = new Set(
+      ptyIds.map((ptyId) => this.getRelayPtyIdForSshLeaseStorage(targetId, ptyId))
+    )
+    if (this.updateSshRemotePtyLeaseStates(targetId, 'attached', relayPtyIds)) {
+      await this.flushDurableStateOrThrowAsync()
+    }
+  }
+
+  private updateSshRemotePtyLeaseStates(
+    targetId: string,
+    state: SshRemotePtyLease['state'],
+    ptyIds?: ReadonlySet<string>
+  ): boolean {
     const now = Date.now()
     let changed = false
     const shouldClearBindings = state === 'terminated' || state === 'expired'
     const leasesToClear: SshRemotePtyLease[] = []
     this.state.sshRemotePtyLeases ??= []
     for (const lease of this.state.sshRemotePtyLeases) {
-      if (lease.targetId !== targetId) {
+      if (lease.targetId !== targetId || (ptyIds && !ptyIds.has(lease.ptyId))) {
+        continue
+      }
+      if (state === 'attached' && (lease.state === 'terminated' || lease.state === 'expired')) {
         continue
       }
       if (state === 'detached' && lease.state !== 'attached') {
@@ -6340,9 +7296,7 @@ export class Store {
     const bindingsChanged = shouldClearBindings
       ? this.clearSshRemotePtyBindingsForLeases(targetId, leasesToClear)
       : false
-    if (changed || bindingsChanged) {
-      this.flush()
-    }
+    return changed || bindingsChanged
   }
 
   markSshRemotePtyLease(targetId: string, ptyId: string, state: SshRemotePtyLease['state']): void {
@@ -6476,6 +7430,9 @@ export class Store {
   // ── Flush (for shutdown) ───────────────────────────────────────────
 
   flush(): void {
+    if (this.quitFlushStarted) {
+      return
+    }
     try {
       this.flushOrThrow()
     } catch (err) {
@@ -6487,6 +7444,160 @@ export class Store {
       console.error('[active-view] Failed to flush preference:', err)
     }
     this.writeGithubCacheSnapshotSync()
+  }
+
+  /**
+   * Async twin of flush() for the quit path.
+   *
+   * Why the quit path needs one: writeToDiskSync fsyncs a multi-MB file from the Electron
+   * main thread. On a stalled network profile mount that syscall is uninterruptible, so the
+   * app stops repainting and Force Quit stops working — and no main-thread deadline can
+   * bound it, because the deadline's own timer is stuck behind the same block.
+   *
+   * Never throws — it joins the quit teardown barrier, where a rejection is noise.
+   */
+  flushAsync(): Promise<void> {
+    if (this.quitFlushPromise) {
+      return this.quitFlushPromise
+    }
+    this.quitFlushStarted = true
+    this.quitFlushPromise = this.flushCurrentStateAsync(true).catch(() => {})
+    return this.quitFlushPromise
+  }
+
+  flushPendingAsync(): Promise<void> {
+    // Best-effort callers must not livelock while the live app keeps mutating state.
+    return this.flushCurrentStateAsync(false, undefined, false).catch(() => {})
+  }
+
+  flushPendingOrThrowAsync(
+    options: { signal?: AbortSignal; drainToStableGeneration?: boolean } = {}
+  ): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      return Promise.reject(new Error('Cannot flush while persistence is finalized'))
+    }
+    return this.flushCurrentStateAsync(false, options.signal, options.drainToStableGeneration, true)
+  }
+
+  // Async twin of flushOrThrow: durable state only. Active-view and GitHub sidecars are
+  // quit/startup work and must not be snapshotted on the live SSH establish/reconnect path.
+  private async flushDurableStateOrThrowAsync(): Promise<void> {
+    if (this.writesFrozen || this.quitFlushStarted) {
+      throw new Error('Cannot flush while persistence is finalized')
+    }
+    for (;;) {
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      await this.enqueueWrite()
+      if (generation === this.writeGeneration) {
+        break
+      }
+    }
+  }
+
+  private async flushCurrentStateAsync(
+    final: boolean,
+    signal?: AbortSignal,
+    drainToStableGeneration = true,
+    requireInitialGenerationDurable = false
+  ): Promise<void> {
+    const requiredDurableGeneration = requireInitialGenerationDurable ? this.writeGeneration : null
+    for (;;) {
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (this.writeTimer) {
+        clearTimeout(this.writeTimer)
+        this.writeTimer = null
+      }
+      this.firstPendingSaveAt = null
+      const generation = this.writeGeneration
+      try {
+        await this.enqueueWrite()
+      } catch (error) {
+        await (final
+          ? this.activeViewPreference.flushAsync()
+          : this.activeViewPreference.flushPendingAsync(signal))
+        await this.writeGithubCacheSnapshotAsync(final, signal)
+        throw error
+      }
+      await (final
+        ? this.activeViewPreference.flushAsync()
+        : this.activeViewPreference.flushPendingAsync(signal))
+      await this.writeGithubCacheSnapshotAsync(final, signal)
+      if (signal?.aborted) {
+        throw new Error('Persistence flush aborted')
+      }
+      if (!drainToStableGeneration) {
+        if (
+          requiredDurableGeneration === null ||
+          this.lastDurableWriteGeneration >= requiredDurableGeneration
+        ) {
+          break
+        }
+        continue
+      }
+      if (generation === this.writeGeneration) {
+        break
+      }
+    }
+  }
+
+  // Why best-effort: the sidecar is a refetchable cache; a failed write only costs a cold badge paint next launch, never data.
+  private async writeGithubCacheSnapshotAsync(
+    drainToStableGeneration = true,
+    signal?: AbortSignal
+  ): Promise<void> {
+    if (!this.githubCacheDirty) {
+      return
+    }
+    const previousWrite = this.pendingGithubCacheWrite ?? this.staleGithubCacheTempCleanup
+    const nextWrite = previousWrite
+      .then(async () => {
+        while (this.githubCacheDirty) {
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          const generation = this.githubCacheGeneration
+          const cacheFile = getGithubCacheFile(this.dataFile)
+          const tmpFile = durableWriteTempPath(cacheFile)
+          let renamed = false
+          try {
+            await writeFile(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
+            if (generation === this.githubCacheGeneration) {
+              await rename(tmpFile, cacheFile)
+              renamed = true
+              if (generation === this.githubCacheGeneration) {
+                this.githubCacheDirty = false
+              }
+            }
+          } finally {
+            if (!renamed) {
+              await rm(tmpFile).catch(() => {})
+            }
+          }
+          if (signal?.aborted) {
+            throw new Error('GitHub cache flush aborted')
+          }
+          if (!drainToStableGeneration) {
+            break
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[persistence] Failed to write github cache snapshot:', err)
+      })
+      .finally(() => {
+        if (this.pendingGithubCacheWrite === nextWrite) {
+          this.pendingGithubCacheWrite = null
+        }
+      })
+    this.pendingGithubCacheWrite = nextWrite
+    await nextWrite
   }
 
   // Why: a project move rewrote the data file directly; in-memory state is now stale and any write would undo the transfer.
@@ -6503,12 +7614,19 @@ export class Store {
     if (!this.githubCacheDirty) {
       return
     }
+    if (this.pendingGithubCacheWrite) {
+      void this.writeGithubCacheSnapshotAsync()
+      return
+    }
     const cacheFile = getGithubCacheFile(this.dataFile)
-    const tmpFile = `${cacheFile}.${process.pid}.tmp`
+    const generation = this.githubCacheGeneration
+    const tmpFile = durableWriteTempPath(cacheFile)
     try {
       writeFileSync(tmpFile, JSON.stringify(this.state.githubCache), 'utf-8')
       renameSync(tmpFile, cacheFile)
-      this.githubCacheDirty = false
+      if (generation === this.githubCacheGeneration) {
+        this.githubCacheDirty = false
+      }
     } catch (err) {
       try {
         unlinkSync(tmpFile)
@@ -6533,6 +7651,8 @@ function getDefaultWorktreeMeta(): WorktreeMeta {
     linkedBitbucketPR: null,
     linkedAzureDevOpsPR: null,
     linkedGiteaPR: null,
+    linkedWorkItem: null,
+    linkedTaskSourceContext: null,
     isArchived: false,
     isUnread: false,
     isPinned: false,

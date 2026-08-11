@@ -6,11 +6,14 @@ export type AddRepoSkipFinalizationState = {
   filterRepoIds: string[]
   showActiveOnly: boolean
   hideDefaultBranchWorkspace: boolean
+  showSleepingWorkspaces: boolean
+  alwaysShowDefaultBranchWorkspace: boolean
   worktreesByRepo: Record<string, Worktree[]>
   setActiveRepo: (repoId: string | null) => void
   setFilterRepoIds: (repoIds: string[]) => void
   setShowActiveOnly: (value: boolean) => void
   setHideDefaultBranchWorkspace: (value: boolean) => void
+  setAlwaysShowDefaultBranchWorkspace: (value: boolean) => void
 }
 
 export function finalizeImportedRepoAfterSkip(
@@ -36,5 +39,15 @@ export function finalizeImportedRepoAfterSkip(
     importedWorktrees.every((worktree) => isDefaultBranchWorkspace(worktree))
   ) {
     state.setHideDefaultBranchWorkspace(false)
+  }
+  // Why: with "Hide sleeping" on, a freshly imported project has no live PTY
+  // yet, so the opted-out exemption would leave it invisible on arrival.
+  if (
+    importedWorktrees.length > 0 &&
+    state.alwaysShowDefaultBranchWorkspace === false &&
+    !state.showSleepingWorkspaces &&
+    importedWorktrees.every((worktree) => worktree.isMainWorktree)
+  ) {
+    state.setAlwaysShowDefaultBranchWorkspace(true)
   }
 }

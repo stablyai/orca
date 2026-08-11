@@ -1,20 +1,7 @@
 import { z } from 'zod'
 import { parsePairingCode } from './pairing'
-import {
-  DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
-  MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
-} from './ssh-types'
-// Why: ephemeral-vm-recipe-doctor imports Node's fs/path, so it must NOT be
-// re-exported through this barrel — the renderer/web-client imports this module
-// and would otherwise pull Node built-ins into the browser bundle (build fails).
-// Node callers import doctorEphemeralVmRecipe directly from the doctor module.
-export {
-  getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
-  redactEphemeralVmRecipeResultForDiagnostics
-} from './ephemeral-vm-recipe-diagnostics'
-export type { EphemeralVmRecipeResultWarning } from './ephemeral-vm-recipe-diagnostics'
+import { MAX_SSH_RELAY_GRACE_PERIOD_SECONDS, MIN_SSH_RELAY_GRACE_PERIOD_SECONDS } from './ssh-types'
+import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 
 const JsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -34,6 +21,11 @@ export type JsonValue =
   | null
   | JsonValue[]
   | { [key: string]: JsonValue }
+
+export const EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 256 * 1024,
+  nestingDepth: 64
+} as const
 
 const SavedPortForwardSchema = z
   .object({
@@ -70,8 +62,6 @@ export const EphemeralVmRecipeSshTargetSchema = z
     portForwards: z.array(SavedPortForwardSchema).optional()
   })
   .strict()
-
-export type EphemeralVmRecipeSshTarget = z.infer<typeof EphemeralVmRecipeSshTargetSchema>
 
 const EphemeralVmRecipeOrcaServerConnectionSchema = z
   .object({
@@ -118,10 +108,6 @@ export const EphemeralVmRecipeResultSchema = z.union([
   EphemeralVmRecipeConnectionResultSchema
 ])
 
-export type EphemeralVmRecipeLegacyResult = z.infer<typeof EphemeralVmRecipeLegacyResultSchema>
-export type EphemeralVmRecipeConnectionResult = z.infer<
-  typeof EphemeralVmRecipeConnectionResultSchema
->
 export type EphemeralVmRecipeResult = z.infer<typeof EphemeralVmRecipeResultSchema>
 
 export type EphemeralVmRecipeResultParseResult =
@@ -151,6 +137,7 @@ export function parseEphemeralVmRecipeResult(stdout: string): EphemeralVmRecipeR
   }
   let parsed: unknown
   try {
+    assertJsonTextStructureWithinLimits(trimmed, EPHEMERAL_VM_RECIPE_JSON_STRUCTURE_LIMITS)
     parsed = JSON.parse(trimmed)
   } catch {
     return { ok: false, error: 'Recipe stdout must be one JSON object.' }
@@ -191,16 +178,6 @@ export function getEphemeralVmRecipeResultPairingCode(
 ): string | null {
   const connection = getEphemeralVmRecipeResultConnection(result)
   return connection.type === 'orca-server' ? connection.pairingCode : null
-}
-
-export function getEphemeralVmRecipeResultUserData(
-  result: EphemeralVmRecipeResult
-): Record<string, JsonValue> | undefined {
-  return result.userData
-}
-
-export function getDefaultSshRelayGracePeriodSeconds(): number {
-  return DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS
 }
 
 export function isAbsoluteRuntimePath(path: string): boolean {

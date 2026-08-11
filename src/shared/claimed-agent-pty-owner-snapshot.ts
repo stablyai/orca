@@ -6,6 +6,41 @@ import type {
 
 export type LiveAgentSessionOwner = AgentSessionOwnerBinding & { phase: 'live' }
 
+export function cloneAgentSessionClaim(
+  claim: AgentSessionExecutionClaim
+): AgentSessionExecutionClaim {
+  return {
+    digestVersion: claim.digestVersion,
+    keyId: claim.keyId,
+    identityDigest: claim.identityDigest,
+    worktreeScopeDigest: claim.worktreeScopeDigest,
+    agent: claim.agent
+  }
+}
+
+export function cloneAgentSessionSurface(
+  surface: AgentSessionSurfaceBinding
+): AgentSessionSurfaceBinding {
+  return {
+    worktreeId: surface.worktreeId,
+    tabId: surface.tabId,
+    leafId: surface.leafId,
+    terminalHandle: surface.terminalHandle
+  }
+}
+
+export function cloneAgentSessionOwnerBinding(
+  owner: AgentSessionOwnerBinding
+): AgentSessionOwnerBinding {
+  return {
+    claim: cloneAgentSessionClaim(owner.claim),
+    generation: owner.generation,
+    phase: owner.phase,
+    ptyId: owner.ptyId,
+    surface: cloneAgentSessionSurface(owner.surface)
+  }
+}
+
 export function agentSessionClaimKey(claim: AgentSessionExecutionClaim): string {
   return `${claim.digestVersion}:${claim.keyId}:${claim.agent}:${claim.identityDigest}`
 }
@@ -58,11 +93,7 @@ export function agentSessionOwnerBindingsEqual(
 }
 
 export function cloneAgentSessionOwner(owner: LiveAgentSessionOwner): LiveAgentSessionOwner {
-  return {
-    ...owner,
-    claim: { ...owner.claim },
-    surface: { ...owner.surface }
-  }
+  return cloneAgentSessionOwnerBinding(owner) as LiveAgentSessionOwner
 }
 
 export function prepareRegisteredAgentSessionOwner(args: {

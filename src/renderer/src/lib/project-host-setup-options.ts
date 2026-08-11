@@ -60,14 +60,14 @@ type BuildProjectHostSetupOptionsInput = {
   projectId: string | null
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
-  hosts?: readonly ExecutionHostRegistryEntry[]
+  hosts: readonly ExecutionHostRegistryEntry[]
 }
 
 export function buildProjectHostSetupOptions({
   projectId,
   projectHostSetups,
   eligibleRepos,
-  hosts = []
+  hosts
 }: BuildProjectHostSetupOptionsInput): ProjectHostSetupOption[] {
   if (!projectId) {
     return []
@@ -122,6 +122,7 @@ function buildReadySetupOptions({
         setup.projectId === projectId &&
         setup.setupState === 'ready' &&
         eligibleRepoIds.has(setup.repoId) &&
+        Boolean(host) &&
         !isEphemeralVmProjectHost(host) &&
         !isRuntimeOwnedSshSetupHost(setup.hostId)
       )
@@ -136,6 +137,23 @@ function buildReadySetupOptions({
       detail: setup.displayName,
       path: setup.path
     }))
+    .filter(dedupeByHost())
+}
+
+// Why: a project resolves to at most one setup per host — resolveWorkspaceCreationTarget takes the
+// first project+host match and ignores the rest, so extra same-host setups are unreachable. Legacy
+// profiles can still hold them (a linked worktree added as its own project projects a second local
+// setup), which rendered as repeated identical "Local Mac" rows. Keep the first in input order so
+// the row shown is the one workspace creation actually uses.
+function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
+  const seenHosts = new Set<ExecutionHostId>()
+  return (option) => {
+    if (seenHosts.has(option.hostId)) {
+      return false
+    }
+    seenHosts.add(option.hostId)
+    return true
+  }
 }
 
 function buildNeedsSetupOptions({
@@ -164,7 +182,7 @@ function buildNeedsSetupOptions({
         detail: availability.isAvailable
           ? pendingSetup
             ? getPendingSetupDetail(pendingSetup)
-            : 'Project not set up on this host'
+            : 'Project location not set'
           : availability.detail,
         isAvailable: availability.isAvailable,
         attention: host.health === 'error',

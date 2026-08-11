@@ -1,87 +1,30 @@
-import {
-  getRepoExecutionHostId,
-  parseExecutionHostId,
-  toSshExecutionHostId
-} from '../../../shared/execution-host'
-import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import type { FolderWorkspace, GlobalSettings, ProjectGroup, Worktree } from '../../../shared/types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { GlobalSettings, Worktree } from '../../../shared/types'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '@/store/slices/worktree-helpers'
 import {
-  findIndexedFolderWorkspaceOwner,
-  findIndexedProjectGroupOwner,
   findIndexedRepoOwner as findRepoRecord,
   findIndexedWorktreeOwner as findWorktreeRecord,
+  hasIndexedDetectedWorktree,
   resolveIndexedRepoOwner,
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
 import {
+  getExecutionHostIdForFolderWorkspace,
+  getExplicitRuntimeEnvironmentIdForFolderWorkspace,
+  getRuntimeEnvironmentIdForFolderWorkspace
+} from './folder-workspace-runtime-owner'
+import {
+  resolveActiveWorkspaceRoute,
   resolveExplicitWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResult
 } from './worktree-operation-route'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 export { getRuntimeSessionMirrorEnvironmentIds } from './runtime-session-mirror-owners'
-
-type RuntimeExecutionHost = Extract<ParsedExecutionHost, { kind: 'runtime' }>
-
-function findFolderProjectGroup(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'> | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  if (!folderWorkspace) {
-    return null
-  }
-  return findIndexedProjectGroupOwner(state.projectGroups, folderWorkspace.projectGroupId)
-}
-
-function findFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): Pick<FolderWorkspace, 'id' | 'projectGroupId' | 'connectionId'> | null {
-  return findIndexedFolderWorkspaceOwner(state.folderWorkspaces, folderWorkspaceId)
-}
-
-function getRuntimeEnvironmentIdForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): string | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed?.kind === 'runtime') {
-    return parsed.environmentId
-  }
-  if (
-    parsed?.kind === 'local' ||
-    parsed?.kind === 'ssh' ||
-    folderWorkspace?.connectionId?.trim() ||
-    projectGroup?.connectionId?.trim()
-  ) {
-    return null
-  }
-  const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
-  if (restoredRuntimeHost) {
-    return restoredRuntimeHost.environmentId
-  }
-  return getSingleFocusedRuntimeEnvironmentId(state)
-}
-
-function getRestoredRuntimeHostForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): RuntimeExecutionHost | null {
-  // Why: runtime folder catalogs load after session hydration; the saved
-  // per-host session partition is the only owner evidence during that gap.
-  const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-  const parsed = parseExecutionHostId(
-    state.restoredRuntimeHostIdByWorkspaceSessionKey?.[workspaceKey]
-  )
-  return parsed?.kind === 'runtime' ? parsed : null
-}
 
 function getExplicitRuntimeEnvironmentIdFromHost(
   executionHostId: string | null | undefined
@@ -102,42 +45,13 @@ function getExecutionHostIdFromWorktreeHost(
   return parseExecutionHostId(hostId)?.id ?? null
 }
 
-function getExplicitRuntimeEnvironmentIdForFolderWorkspace(
+function getActiveWorkspaceExecutionHostId(
   state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): string | null {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed) {
-    return parsed.kind === 'runtime' ? parsed.environmentId : null
-  }
-  if (folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()) {
-    return null
-  }
-  return getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)?.environmentId ?? null
-}
-
-function getExecutionHostIdForFolderWorkspace(
-  state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
-): ExecutionHostId {
-  const folderWorkspace = findFolderWorkspace(state, folderWorkspaceId)
-  const projectGroup = findFolderProjectGroup(state, folderWorkspaceId)
-  const parsed = parseExecutionHostId(projectGroup?.executionHostId)
-  if (parsed) {
-    return parsed.id
-  }
-  const connectionId = folderWorkspace?.connectionId?.trim() || projectGroup?.connectionId?.trim()
-  if (connectionId) {
-    return toSshExecutionHostId(connectionId)
-  }
-  const restoredRuntimeHost = getRestoredRuntimeHostForFolderWorkspace(state, folderWorkspaceId)
-  if (restoredRuntimeHost) {
-    return restoredRuntimeHost.id
-  }
-  const environmentId = getSingleFocusedRuntimeEnvironmentId(state)
-  return environmentId ? `runtime:${encodeURIComponent(environmentId)}` : 'local'
+  worktreeId: string
+): ExecutionHostId | null {
+  return state.activeWorktreeId === worktreeId
+    ? (state.activeWorkspaceExecutionHostId ?? null)
+    : null
 }
 
 export function getRuntimeEnvironmentIdForWorktree(
@@ -149,6 +63,10 @@ export function getRuntimeEnvironmentIdForWorktree(
   }
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return null
+  }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
@@ -162,9 +80,7 @@ export function getRuntimeEnvironmentIdForWorktree(
     const owner = indexedOwner.owner
     const projectedRuntimeOwner = getProjectedRuntimeOwnerEnvironmentId(owner)
     const parsedHost = parseExecutionHostId(owner.hostId)
-    const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-      result.worktrees.some((worktree) => worktree.id === worktreeId)
-    )
+    const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
     if (!hasDetectedOwner && (projectedRuntimeOwner || parsedHost)) {
       return (
         projectedRuntimeOwner || (parsedHost?.kind === 'runtime' ? parsedHost.environmentId : null)
@@ -197,6 +113,10 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
   if (!worktreeId) {
     return null
   }
+  const activeRoute = resolveActiveWorkspaceRoute(state, worktreeId)
+  if (activeRoute) {
+    return activeRoute.runtimeEnvironmentId
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExplicitRuntimeEnvironmentIdForFolderWorkspace(
@@ -204,9 +124,7 @@ export function getExplicitRuntimeEnvironmentIdForWorktree(
       workspaceScope.folderWorkspaceId
     )
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     // Why: detected-only rows are selectable before the primary catalog lands; use the same
     // ambiguity-aware explicit provenance as filesystem and terminal operations.
@@ -248,13 +166,15 @@ export function getExecutionHostIdForWorktree(
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return 'local'
   }
+  const activeHostId = getActiveWorkspaceExecutionHostId(state, worktreeId)
+  if (activeHostId) {
+    return activeHostId
+  }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
     return getExecutionHostIdForFolderWorkspace(state, workspaceScope.folderWorkspaceId)
   }
-  const hasDetectedOwner = Object.values(state.detectedWorktreesByRepo ?? {}).some((result) =>
-    result.worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  const hasDetectedOwner = hasIndexedDetectedWorktree(state.detectedWorktreesByRepo, worktreeId)
   if (hasDetectedOwner) {
     const resolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
     if (resolution.kind === 'resolved') {

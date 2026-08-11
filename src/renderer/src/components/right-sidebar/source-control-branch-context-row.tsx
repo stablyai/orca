@@ -1,35 +1,45 @@
 import React from 'react'
 import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { GitBranchCompareSummary, GitUpstreamStatus } from '../../../../shared/types'
+import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
+import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { SourceControlHeaderIconButton } from './source-control-header-icon-button'
+import { SourceControlBranchLineTotalChip } from './source-control-branch-line-total-chip'
 import {
   buildSourceControlBranchContextStats,
-  resolveSourceControlDisplayedBaseRef,
-  shouldShowSourceControlBranchContextRow
+  formatSourceControlRefLabel,
+  resolveSourceControlDisplayedBaseRef
 } from './source-control-branch-context-stats'
-
-export { shouldShowSourceControlBranchContextRow } from './source-control-branch-context-stats'
 
 function BaseRefButton({
   baseRef,
+  displayLabel,
   onClick,
   title
 }: {
   baseRef: string
+  displayLabel: string
   onClick: () => void
   title: string
 }): React.JSX.Element {
+  const accessibleName = translate(
+    'auto.components.right.sidebar.SourceControl.c7d4e2f801',
+    'Change base ref: {{value0}}',
+    { value0: displayLabel }
+  )
   return (
     <button
       type="button"
       className="min-w-0 max-w-full truncate rounded-sm border-0 bg-transparent p-0 text-left font-mono text-[10.5px] font-medium text-foreground/90 underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground"
       onClick={onClick}
       title={`${title} (${baseRef})`}
+      aria-label={accessibleName}
     >
-      {baseRef}
+      {displayLabel}
     </button>
   )
 }
@@ -82,74 +92,300 @@ function ManualReviewLinkButton({
   )
 }
 
+function resolveHeadFlowLabel(
+  display: WorktreeGitIdentityDisplay | null | undefined
+): string | null {
+  if (display?.kind === 'branch') {
+    return display.branchName
+  }
+  if (display?.kind === 'detached') {
+    return display.sourceControlLabel
+  }
+  return null
+}
+
+function HeadIdentity({ display }: { display: WorktreeGitIdentityDisplay }): React.JSX.Element {
+  if (display.kind === 'detached') {
+    return (
+      <DetachedHeadBadge
+        display={display}
+        side="bottom"
+        // Why: tooltip carries the full detached explanation; keep it keyboard-reachable.
+        tabIndex={0}
+        className="min-w-0 max-w-full shrink"
+      />
+    )
+  }
+
+  const branchAriaLabel = translate(
+    'auto.components.right.sidebar.SourceControl.a4e93c21d7',
+    'Current branch: {{value0}}',
+    { value0: display.branchName }
+  )
+
+  // Why: focusable + tooltip so truncated long branch names stay discoverable.
+  // Native title omitted — Radix Tooltip already surfaces the full name on hover.
+  // `block` is load-bearing: `truncate` clips nothing on an inline box, so an
+  // inline span here let long names run under the line-total chip.
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="block min-w-0 max-w-full truncate rounded-sm font-mono text-[10.5px] font-medium text-foreground/90 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          tabIndex={0}
+          aria-label={branchAriaLabel}
+          data-testid="source-control-head-identity"
+        >
+          {display.branchName}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={6} className="max-w-72 break-all font-mono">
+        {display.branchName}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+function CompareFlowGroup({
+  flowLabel,
+  busy,
+  className,
+  children
+}: {
+  flowLabel: string | undefined
+  busy?: boolean
+  className: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div
+      className={className}
+      role={flowLabel != null ? 'group' : undefined}
+      aria-label={flowLabel}
+      aria-busy={busy ? true : undefined}
+    >
+      {children}
+    </div>
+  )
+}
+
+function BaseLine({
+  baseRef,
+  baseLabel,
+  onChangeBaseRef,
+  changeBaseTitle,
+  showArrow,
+  leading,
+  trailing
+}: {
+  baseRef: string
+  baseLabel: string
+  onChangeBaseRef: () => void
+  changeBaseTitle: string
+  showArrow: boolean
+  leading?: React.ReactNode
+  trailing?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center gap-1.5">
+      {leading}
+      {showArrow ? (
+        <span className="shrink-0 text-muted-foreground/70" aria-hidden="true">
+          →
+        </span>
+      ) : (
+        <span className="shrink-0 text-muted-foreground">
+          {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <BaseRefButton
+          baseRef={baseRef}
+          displayLabel={baseLabel}
+          onClick={onChangeBaseRef}
+          title={changeBaseTitle}
+        />
+      </span>
+      {trailing}
+    </div>
+  )
+}
+
+// Why: stacked head / → base (option B) so long branch names fit narrow sidebars
+// without truncating both sides of a single-line head→base pair.
+function StackedCompareFlow({
+  headDisplay,
+  baseRef,
+  baseLabel,
+  onChangeBaseRef,
+  changeBaseTitle,
+  leading,
+  trailing,
+  headTrailing
+}: {
+  headDisplay: WorktreeGitIdentityDisplay | null
+  baseRef: string
+  baseLabel: string
+  onChangeBaseRef: () => void
+  changeBaseTitle: string
+  leading?: React.ReactNode
+  trailing?: React.ReactNode
+  headTrailing?: React.ReactNode
+}): React.JSX.Element {
+  if (!headDisplay) {
+    return (
+      <BaseLine
+        baseRef={baseRef}
+        baseLabel={baseLabel}
+        onChangeBaseRef={onChangeBaseRef}
+        changeBaseTitle={changeBaseTitle}
+        showArrow={false}
+        leading={leading}
+        // Why: no head line exists to host it, so fold it onto the base line
+        // rather than dropping it.
+        trailing={
+          <>
+            {headTrailing}
+            {trailing}
+          </>
+        }
+      />
+    )
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      {/* Why: the line total belongs beside HEAD — it measures this branch's work.
+          The base line keeps the commit count, which measures the comparison. */}
+      {/* Why: gap-2 (not gap-1.5) — an ellipsis butting against the colored
+          counts reads as part of the branch name. */}
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="flex min-w-0 flex-1 items-center">
+          <HeadIdentity display={headDisplay} />
+        </span>
+        {headTrailing}
+      </div>
+      {/* Why: spinner/actions sit on the base line — they describe compare state, not HEAD. */}
+      <BaseLine
+        baseRef={baseRef}
+        baseLabel={baseLabel}
+        onChangeBaseRef={onChangeBaseRef}
+        changeBaseTitle={changeBaseTitle}
+        showArrow
+        leading={leading}
+        trailing={trailing}
+      />
+    </div>
+  )
+}
+
 export function SourceControlBranchContextRow({
   summary,
   compareBaseRef,
+  headDisplay = null,
   upstreamStatus,
   manualReviewUrl,
+  branchLineTotal,
   onChangeBaseRef,
   onRetry
 }: {
   summary: GitBranchCompareSummary | null
   compareBaseRef: string | null
+  headDisplay?: WorktreeGitIdentityDisplay | null
   upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
+  branchLineTotal?: GitBranchLineTotal | null
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
   const displayedBaseRef = resolveSourceControlDisplayedBaseRef(summary, compareBaseRef)
-  if (!shouldShowSourceControlBranchContextRow(summary, compareBaseRef) || !displayedBaseRef) {
-    return null
+
+  // Why: no base → still show HEAD identity so branch/detached never vanish when
+  // compare isn't configured (replaces the separate identity row from #10215).
+  if (!displayedBaseRef) {
+    if (!headDisplay) {
+      return null
+    }
+    return (
+      <div className="min-w-0 text-[11px] text-muted-foreground">
+        <HeadIdentity display={headDisplay} />
+      </div>
+    )
   }
 
+  const baseLabel = formatSourceControlRefLabel(displayedBaseRef)
   const changeBaseTitle = translate(
     'auto.components.right.sidebar.SourceControl.493f963029',
     'Change base ref'
   )
+  const headLabel = resolveHeadFlowLabel(headDisplay)
+  const flowLabel =
+    headLabel != null
+      ? translate(
+          'auto.components.right.sidebar.SourceControl.b8c2e1a904',
+          '{{value0}} → {{value1}}',
+          { value0: headLabel, value1: baseLabel }
+        )
+      : undefined
 
   if (!summary || summary.status === 'loading') {
     return (
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <Loader2 className="size-3 shrink-0 animate-spin" />
-        <span className="shrink-0 text-muted-foreground">
-          {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
+      <CompareFlowGroup
+        flowLabel={flowLabel}
+        busy
+        className="min-w-0 text-[11px] text-muted-foreground"
+      >
+        <StackedCompareFlow
+          headDisplay={headDisplay}
+          baseRef={displayedBaseRef}
+          baseLabel={baseLabel}
+          onChangeBaseRef={onChangeBaseRef}
+          changeBaseTitle={changeBaseTitle}
+          leading={<Loader2 className="size-3 shrink-0 animate-spin" aria-hidden="true" />}
+          trailing={<ManualReviewLinkButton url={manualReviewUrl} />}
+        />
+        <span className="sr-only">
+          {translate('auto.components.right.sidebar.SourceControl.11b5dd8e41', 'Comparing against')}
         </span>
-        <span className="min-w-0 flex-1">
-          <BaseRefButton
-            baseRef={displayedBaseRef}
-            onClick={onChangeBaseRef}
-            title={changeBaseTitle}
-          />
-        </span>
-        <ManualReviewLinkButton url={manualReviewUrl} />
-      </div>
+      </CompareFlowGroup>
     )
   }
 
   if (summary.status !== 'ready') {
     return (
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="min-w-0 flex-1">
-          <BaseRefButton
-            baseRef={displayedBaseRef}
-            onClick={onChangeBaseRef}
-            title={changeBaseTitle}
-          />
-        </span>
-        <span className="min-w-0 flex-1 truncate" title={summary.errorMessage ?? undefined}>
+      <CompareFlowGroup
+        flowLabel={flowLabel}
+        className="flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground"
+      >
+        <StackedCompareFlow
+          headDisplay={headDisplay}
+          baseRef={displayedBaseRef}
+          baseLabel={baseLabel}
+          onChangeBaseRef={onChangeBaseRef}
+          changeBaseTitle={changeBaseTitle}
+          trailing={
+            <>
+              <ManualReviewLinkButton url={manualReviewUrl} />
+              <SourceControlHeaderIconButton
+                icon={RefreshCw}
+                label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
+                onClick={onRetry}
+              />
+            </>
+          }
+        />
+        {/* Why: pl-4 under the base line so the error reads as compare state, not HEAD. */}
+        <span
+          className={cn('min-w-0 truncate', headDisplay != null && 'pl-4')}
+          title={summary.errorMessage ?? undefined}
+        >
           {summary.errorMessage ??
             translate(
               'auto.components.right.sidebar.SourceControl.715d229c86',
               'Branch compare unavailable'
             )}
         </span>
-        <ManualReviewLinkButton url={manualReviewUrl} />
-        <SourceControlHeaderIconButton
-          icon={RefreshCw}
-          label={translate('auto.components.right.sidebar.SourceControl.286dbda4d6', 'Retry')}
-          onClick={onRetry}
-        />
-      </div>
+      </CompareFlowGroup>
     )
   }
 
@@ -159,20 +395,8 @@ export function SourceControlBranchContextRow({
     upstreamStatus
   })
 
-  return (
-    <div className="flex min-w-0 items-center justify-between gap-1.5 text-[11px] text-muted-foreground">
-      <div className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span className="shrink-0">
-          {translate('auto.components.right.sidebar.SourceControl.e8a1c4b203', 'vs')}
-        </span>
-        <span className="min-w-0 flex-1">
-          <BaseRefButton
-            baseRef={displayedBaseRef}
-            onClick={onChangeBaseRef}
-            title={changeBaseTitle}
-          />
-        </span>
-      </div>
+  const trailing = (
+    <>
       {stats.length > 0 ? (
         <span className="inline-flex shrink-0 items-center gap-1.5">
           {stats.map((stat) => (
@@ -181,6 +405,20 @@ export function SourceControlBranchContextRow({
         </span>
       ) : null}
       <ManualReviewLinkButton url={manualReviewUrl} />
-    </div>
+    </>
+  )
+
+  return (
+    <CompareFlowGroup flowLabel={flowLabel} className="min-w-0 text-[11px] text-muted-foreground">
+      <StackedCompareFlow
+        headDisplay={headDisplay}
+        baseRef={displayedBaseRef}
+        baseLabel={baseLabel}
+        onChangeBaseRef={onChangeBaseRef}
+        changeBaseTitle={changeBaseTitle}
+        trailing={trailing}
+        headTrailing={<SourceControlBranchLineTotalChip branchLineTotal={branchLineTotal} />}
+      />
+    </CompareFlowGroup>
   )
 }

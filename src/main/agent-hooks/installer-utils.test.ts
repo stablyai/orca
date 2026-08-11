@@ -31,6 +31,7 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 let tmpDir: string
 let configPath: string
@@ -53,6 +54,25 @@ describe('readHooksJsonWithRaw', () => {
       raw: contents,
       config: { hooks: { Stop: [] }, custom: 1 }
     })
+  })
+
+  it('parses one leading BOM while preserving the exact raw contents', () => {
+    const contents = '\uFEFF{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('rejects multiple or misplaced BOM characters', () => {
+    const body = '{"hooks": {"Stop": []}}'
+    for (const contents of [`\uFEFF\uFEFF${body}`, ` \uFEFF${body}`, `{\uFEFF"hooks": {}}`]) {
+      writeFileSync(configPath, contents, 'utf-8')
+
+      expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: contents, config: null })
+    }
   })
 
   it('reports a missing file as an empty config with no raw bytes', () => {
@@ -357,7 +377,7 @@ describe('wrapPosixHookCommand', () => {
   it('produces a guarded command that no-ops when the script is missing', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh')
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -375,7 +395,7 @@ describe('wrapPosixHookCommand', () => {
     // /bin/sh as a single argument.
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
-      "if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -384,7 +404,7 @@ describe('wrapPosixHookCommand', () => {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -558,7 +578,7 @@ describe('wrapWindowsGitBashHookCommand', () => {
     expect(
       wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
     ).toBe(
-      "if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 

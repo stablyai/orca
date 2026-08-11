@@ -1,5 +1,10 @@
+import type { ClientChannel } from 'ssh2'
 import type { SshConnection } from './ssh-connection'
 import { createSshOperationAbortError, type SshExecOptions } from './ssh-connection-utils'
+import {
+  redactRelayInstallMarkerError,
+  redactRelayInstallMarkerTokens
+} from './ssh-relay-install-marker'
 import type { SystemSshCommandChannel } from './system-ssh-command'
 
 const EXEC_TIMEOUT_MS = 30_000
@@ -36,7 +41,14 @@ export async function execCommand(
   // Why: reconnect/disconnect can flip the connection back to ssh2 before a
   // killed local OpenSSH child emits close; the channel's transport is immutable.
   const openedWithSystemSsh = conn.usesSystemSshTransport?.() === true
-  const channel = await conn.exec(command, execOptions)
+  let channel: ClientChannel
+  try {
+    channel = await conn.exec(command, execOptions)
+  } catch (error) {
+    // Preserve identity/classifier fields while removing install-owner tokens.
+    redactRelayInstallMarkerError(error)
+    throw error
+  }
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
@@ -98,7 +110,10 @@ export async function execCommand(
       }, COMMAND_CLOSE_GRACE_MS)
       channel.close()
     }
-    const fail = (err: Error): void => requestTermination(err)
+    const fail = (err: Error): void => {
+      redactRelayInstallMarkerError(err)
+      requestTermination(err)
+    }
     const onAbort = (): void => requestTermination(createSshOperationAbortError())
     const onStdoutData = (data: Buffer): void => {
       stdout = appendExecOutputTail(stdout, data.toString('utf-8'))
@@ -126,14 +141,25 @@ export async function execCommand(
       } else if (code !== 0) {
         // Why: on the system-ssh transport channel.stderr carries local OpenSSH
         // client noise; preferring it masks the real failure in stdout (2>&1).
-        const output = [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
-        settle(reject, new Error(`Command "${command}" failed (exit ${code}): ${output}`))
+        const output = redactRelayInstallMarkerTokens(
+          [stderr.trim(), stdout.trim()].filter(Boolean).join('\n')
+        )
+        settle(
+          reject,
+          new Error(
+            `Command "${redactRelayInstallMarkerTokens(command)}" failed (exit ${code}): ${output}`
+          )
+        )
       } else {
         settle(resolve, stdout)
       }
     }
     const timeout = setTimeout(() => {
-      requestTermination(new Error(`Command "${command}" timed out after ${timeoutMs / 1000}s`))
+      requestTermination(
+        new Error(
+          `Command "${redactRelayInstallMarkerTokens(command)}" timed out after ${timeoutMs / 1000}s`
+        )
+      )
     }, timeoutMs)
 
     // Why: remote reboot tears down exec channels with stream errors. Without

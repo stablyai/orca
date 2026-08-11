@@ -67,6 +67,33 @@ async function loadLinuxIdentity(fixture: LinuxIdentityFixture) {
   return { identity: await import('./managed-hook-owner-identity'), readFile }
 }
 
+async function loadWindowsIdentity() {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  const execFileAsync = vi.fn(async (_file: string, args: string[]) => ({
+    stdout: args.join(' ').includes('MachineGuid')
+      ? '\r\n    MachineGuid    REG_SZ    AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE\r\n'
+      : '1777777777000\r\n'
+  }))
+  vi.doMock('node:util', () => ({ promisify: () => execFileAsync }))
+  return { identity: await import('./managed-hook-owner-identity'), execFileAsync }
+}
+
+async function loadDarwinIdentity() {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+  let psCalls = 0
+  const execFileAsync = vi.fn(async (file: string) => {
+    if (file === 'sysctl') {
+      return { stdout: 'boot-session\n' }
+    }
+    if (file === 'ps' && ++psCalls === 1) {
+      throw new Error('transient ps failure')
+    }
+    return { stdout: 'Wed Aug  5 12:00:00 2026 node app\n' }
+  })
+  vi.doMock('node:util', () => ({ promisify: () => execFileAsync }))
+  return await import('./managed-hook-owner-identity')
+}
+
 afterEach(() => {
   Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
   if (originalGetuidDescriptor) {
@@ -76,6 +103,8 @@ afterEach(() => {
   }
   vi.unstubAllEnvs()
   vi.doUnmock('node:fs/promises')
+  vi.doUnmock('node:child_process')
+  vi.doUnmock('node:util')
   vi.resetModules()
 })
 
@@ -176,6 +205,30 @@ describe('managed hook owner identity', () => {
     )
     await expect(identity.readManagedHookProcessIdentity(123)).resolves.toBe(
       'linux:pid:[4026533001]:current-boot-id:4242'
+    )
+  })
+
+  it('uses machine and process creation identities on Windows', async () => {
+    const { identity, execFileAsync } = await loadWindowsIdentity()
+
+    await expect(identity.readManagedHookHostIdentity()).resolves.toBe(
+      'win32:aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+    )
+    await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBe(
+      `win32:${process.pid}:1777777777000`
+    )
+    await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBe(
+      `win32:${process.pid}:1777777777000`
+    )
+    expect(execFileAsync).toHaveBeenCalledTimes(2)
+  })
+
+  it('retries an unverified macOS process identity', async () => {
+    const identity = await loadDarwinIdentity()
+
+    await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBeUndefined()
+    await expect(identity.readManagedHookProcessIdentity(process.pid)).resolves.toBe(
+      'darwin:boot-session:Wed Aug  5 12:00:00 2026 node app'
     )
   })
 })

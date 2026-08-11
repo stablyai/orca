@@ -347,7 +347,7 @@ describe('active agent note send', () => {
     expect(testState.callRuntimeRpc).toHaveBeenCalledWith(
       { kind: 'local' },
       'terminal.list',
-      { worktree: 'id:wt-1', limit: 200 },
+      { worktree: 'id:wt-1', limit: 200, includeVisualLayouts: false },
       { timeoutMs: 15000 }
     )
     expect(testState.callRuntimeRpc).toHaveBeenCalledWith(

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
+import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { sendRequest } from './transport'
 
 const servers = new Set<ReturnType<typeof createServer>>()
@@ -23,6 +24,27 @@ afterEach(async () => {
     )
   )
   servers.clear()
+})
+
+describe('runtime transport timeout validation', () => {
+  it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid timer delay %s before transport discovery',
+    async (timeoutMs) => {
+      const metadata: RuntimeMetadata = {
+        runtimeId: 'runtime-1',
+        pid: 123,
+        transports: [],
+        authToken: 'token',
+        startedAt: 1
+      }
+
+      await expect(sendRequest(metadata, 'status.get', undefined, timeoutMs)).rejects.toMatchObject(
+        {
+          code: 'invalid_argument'
+        }
+      )
+    }
+  )
 })
 
 // Why: these tests create Unix domain socket servers in temp directories.

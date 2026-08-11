@@ -3,8 +3,8 @@
 // a running Orca desktop instance. Responds to the same RPC methods the real
 // runtime exposes, with realistic fake data. Supports E2EE handshake.
 import { WebSocketServer, type WebSocket } from 'ws'
-import nacl from 'tweetnacl'
 import { deriveSharedKey, e2eeDecrypt, e2eeEncrypt, type E2EEState } from './mock-server-encryption'
+import { loadOrCreateMockServerKeyPair } from './mock-server-key-pair'
 import {
   error,
   handleRequest,
@@ -17,7 +17,9 @@ const AUTH_TOKEN = 'mock-device-token'
 
 // Why: generate a persistent server keypair for this mock session.
 // The public key is printed at startup so it can be used in pairing QR data.
-const serverKeyPair = nacl.box.keyPair()
+// MOCK_SERVER_KEY_FILE reuses one across restarts so a paired device (which
+// pins the public key) survives a server restart.
+const serverKeyPair = loadOrCreateMockServerKeyPair(process.env.MOCK_SERVER_KEY_FILE)
 const serverPublicKeyB64 = Buffer.from(serverKeyPair.publicKey).toString('base64')
 
 const wss = new WebSocketServer({ port: PORT })

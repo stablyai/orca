@@ -1,5 +1,7 @@
 import { normalizeRuntimePathSeparators } from './cross-platform-path'
+import type { ExternalWorktreeVisibility, Repo } from './types'
 
+export const EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT = Date.UTC(2026, 4, 23)
 export const UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH = 'Unknown location'
 
 function trimRuntimePathTrailingSlash(value: string): string {
@@ -41,4 +43,27 @@ export function getExternalWorktreeParentPath(worktreePath: string | undefined):
     return `${normalized.slice(0, 2)}/`
   }
   return normalized.slice(0, lastSeparatorIndex)
+}
+
+export function isLegacyRepoForExternalWorktreeVisibility(repo: Repo): boolean {
+  if (typeof repo.externalWorktreeVisibilityLegacy === 'boolean') {
+    return repo.externalWorktreeVisibilityLegacy
+  }
+  if (repo.externalWorktreeVisibility === undefined) {
+    return true
+  }
+  if (!Number.isFinite(repo.addedAt)) {
+    return true
+  }
+  return repo.addedAt < EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT
+}
+
+export function effectiveExternalWorktreeVisibility(
+  repo: Pick<Repo, 'externalWorktreeVisibility'>,
+  isLegacyRepoForVisibility: boolean
+): ExternalWorktreeVisibility {
+  if (repo.externalWorktreeVisibility) {
+    return repo.externalWorktreeVisibility
+  }
+  return isLegacyRepoForVisibility ? 'show' : 'hide'
 }

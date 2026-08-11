@@ -159,6 +159,59 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('reads an external SSH file only from its owning target', async () => {
+    const sshResult: RuntimeReadableFileContent = { content: 'remote', isBinary: false }
+    fsReadFile.mockResolvedValue(sshResult)
+
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: null },
+        filePath: '/tmp/external.md',
+        relativePath: '/tmp/external.md',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-1',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    ).resolves.toBe(sshResult)
+
+    expect(fsReadFile).toHaveBeenCalledWith({
+      filePath: '/tmp/external.md',
+      connectionId: 'ssh-1',
+      includeLocalLogMetadata: undefined
+    })
+  })
+
+  it('rejects an external SSH file read after the target changes', async () => {
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: null },
+        filePath: '/tmp/external.md',
+        relativePath: '/tmp/external.md',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-2',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
+
+    expect(fsReadFile).not.toHaveBeenCalled()
+  })
+
+  it('rejects an external SSH file read through a runtime environment', async () => {
+    await expect(
+      readRuntimeFileContent({
+        settings: { activeRuntimeEnvironmentId: 'env-1' },
+        filePath: '/tmp/external.md',
+        relativePath: '/tmp/external.md',
+        worktreeId: 'wt-1',
+        connectionId: 'ssh-1',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
+
+    expect(fsReadFile).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('binds direct SSH mutations to the captured target and generation', async () => {
     const context = {
       settings: { activeRuntimeEnvironmentId: null },
@@ -545,6 +598,23 @@ describe('runtime file client', () => {
       params: { worktree: 'id:wt-1', relativePath: 'images/logo.png' },
       timeoutMs: 15_000
     })
+  })
+
+  it('rejects an external SSH image preview after the target changes', async () => {
+    await expect(
+      readRuntimeFilePreview(
+        {
+          settings: { activeRuntimeEnvironmentId: null },
+          worktreeId: 'wt-1',
+          worktreePath: '/remote/repo',
+          connectionId: 'ssh-2',
+          expectedExternalSshTargetId: 'ssh-1'
+        },
+        '/tmp/logo.png'
+      )
+    ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
+
+    expect(fsReadFile).not.toHaveBeenCalled()
   })
 
   it('does not fall back to client-local preview reads for remote-owned files outside the worktree', async () => {

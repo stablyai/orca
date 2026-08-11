@@ -31,6 +31,12 @@ describe('reconcileReadoptedSshRepoRows', () => {
     expect(result.pendingReadoptions).toEqual([])
   })
 
+  it('returns the input array when nothing is pruned', () => {
+    const repos = [repo({ id: 'shared', path: '/local' })]
+
+    expect(reconcileReadoptedSshRepoRows(repos, []).repos).toBe(repos)
+  })
+
   it('keeps evidence pending when repos:changed has not delivered the new row yet', () => {
     const oldSsh = repo({ id: 'shared', connectionId: 'ssh-old' })
 

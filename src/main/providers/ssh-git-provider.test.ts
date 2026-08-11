@@ -278,13 +278,17 @@ describe('SshGitProvider', () => {
 
     const result = await provider.execNonInteractive('pnpm', ['--version'], '/home/user/repo', 8000)
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['--version'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['--version'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 13_000 }
+    )
     expect(result).toEqual(execResult)
   })
 
@@ -309,17 +313,21 @@ describe('SshGitProvider', () => {
       }
     )
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: '/bin/bash',
-      args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 120_000,
-      env: {
-        ORCA_ROOT_PATH: '/home/user/repo',
-        ORCA_WORKTREE_PATH: '/home/user/repo-feature'
-      }
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: '/bin/bash',
+        args: ['-lc', 'echo "$ORCA_WORKTREE_PATH"'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 120_000,
+        env: {
+          ORCA_ROOT_PATH: '/home/user/repo',
+          ORCA_WORKTREE_PATH: '/home/user/repo-feature'
+        }
+      },
+      { timeoutMs: 125_000 }
+    )
   })
 
   it('cancelNonInteractiveExec sends best-effort relay cancellation', async () => {
@@ -432,6 +440,65 @@ describe('SshGitProvider', () => {
     )
   })
 
+  it('keeps the transport alive for an agent response beyond the default request timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const execResult = {
+        stdout: 'Update docs',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      }
+      mux.request.mockImplementation((_method, _payload, options) => {
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(
+            () => reject(new Error('transport request timed out')),
+            options?.timeoutMs ?? 30_000
+          )
+          setTimeout(() => {
+            clearTimeout(timeout)
+            resolve(execResult)
+          }, 45_000)
+        })
+      })
+
+      let state: 'pending' | 'resolved' | 'rejected' = 'pending'
+      const pending = provider
+        .executeCommitMessagePlan(
+          {
+            binary: 'codex',
+            args: ['exec', 'PROMPT'],
+            stdinPayload: null,
+            label: 'Codex'
+          },
+          '/home/user/repo',
+          60_000
+        )
+        .then(
+          (result) => {
+            state = 'resolved'
+            return result
+          },
+          (error) => {
+            state = 'rejected'
+            throw error
+          }
+        )
+      void pending.catch(() => {})
+
+      await vi.advanceTimersByTimeAsync(30_000)
+      expect(state).toBe('pending')
+      await vi.advanceTimersByTimeAsync(15_000)
+
+      await expect(pending).resolves.toEqual(execResult)
+      expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', expect.any(Object), {
+        timeoutMs: 65_000
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('executeCommitMessagePlan delegates the prepared plan to the relay', async () => {
     const execResult = {
       stdout: 'Update docs',
@@ -452,14 +519,18 @@ describe('SshGitProvider', () => {
       60_000
     )
 
-    expect(mux.request).toHaveBeenCalledWith('agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'commit-message'
-    })
+    expect(mux.request).toHaveBeenCalledWith(
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'commit-message'
+      },
+      { timeoutMs: 65_000 }
+    )
     expect(result).toEqual(execResult)
   })
 
@@ -496,22 +567,32 @@ describe('SshGitProvider', () => {
     )
 
     await waitForRequestCount(mux.request, 2)
-    expect(mux.request).toHaveBeenNthCalledWith(1, 'agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'commit-message'
-    })
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
-      binary: 'codex',
-      args: ['exec', 'PROMPT'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 60_000,
-      operation: 'pull-request-fields'
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      1,
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'commit-message'
+      },
+      { timeoutMs: 65_000 }
+    )
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'agent.execNonInteractive',
+      {
+        binary: 'codex',
+        args: ['exec', 'PROMPT'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 60_000,
+        operation: 'pull-request-fields'
+      },
+      { timeoutMs: 65_000 }
+    )
 
     await provider.cancelGenerateCommitMessage('/home/user/repo')
     await provider.cancelGenerateCommitMessage('/home/user/repo', 'pull-request-fields')
@@ -556,13 +637,18 @@ describe('SshGitProvider', () => {
     await first
     await waitForRequestCount(mux.request, 2)
 
-    expect(mux.request).toHaveBeenNthCalledWith(2, 'agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['install'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      2,
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['install'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 13_000 }
+    )
     completeRequests.shift()?.()
     await second
   })
@@ -637,13 +723,18 @@ describe('SshGitProvider', () => {
     completeRequests.shift()?.()
     await first
     await waitForRequestCount(mux.request, 3)
-    expect(mux.request).toHaveBeenNthCalledWith(3, 'agent.execNonInteractive', {
-      binary: 'pnpm',
-      args: ['install'],
-      cwd: '/home/user/repo',
-      stdin: null,
-      timeoutMs: 8000
-    })
+    expect(mux.request).toHaveBeenNthCalledWith(
+      3,
+      'agent.execNonInteractive',
+      {
+        binary: 'pnpm',
+        args: ['install'],
+        cwd: '/home/user/repo',
+        stdin: null,
+        timeoutMs: 8000
+      },
+      { timeoutMs: 13_000 }
+    )
     completeRequests.shift()?.()
     await second
   })
@@ -895,14 +986,86 @@ describe('SshGitProvider', () => {
     })
   })
 
-  it('fetchGitLabMergeRequestHead sends git.fetchGitLabMergeRequestHead request', async () => {
-    await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+  it('fetchGitLabMergeRequestHead sends the durable-ref git.fetchGitLabMergeRequestHeadRef request', async () => {
+    mux.request.mockResolvedValueOnce({
+      localRef: 'refs/orca/merge-requests/origin-abc/42'
+    })
 
-    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHead', {
+    const localRef = await provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitLabMergeRequestHeadRef', {
       worktreePath: '/home/user/repo',
       remote: 'origin',
       mrIid: 42
     })
+    expect(localRef).toBe('refs/orca/merge-requests/origin-abc/42')
+  })
+
+  it('fetchGitLabMergeRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitLabMergeRequestHeadRef'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch merge request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitLabMergeRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(
+      provider.fetchGitLabMergeRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toBe(error)
+  })
+
+  it('fetchGitHubPullRequestHead sends git.fetchGitHubPullRequestHead request', async () => {
+    mux.request.mockResolvedValueOnce({ localRef: 'refs/orca/pull/origin-abc/42' })
+
+    const localRef = await provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+
+    expect(mux.request).toHaveBeenCalledWith('git.fetchGitHubPullRequestHead', {
+      worktreePath: '/home/user/repo',
+      remote: 'origin',
+      prNumber: 42
+    })
+    expect(localRef).toBe('refs/orca/pull/origin-abc/42')
+  })
+
+  it('fetchGitHubPullRequestHead rejects relays that omit the durable localRef', async () => {
+    mux.request.mockResolvedValueOnce({})
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow('did not return the durable pull request head ref')
+  })
+
+  it('fetchGitHubPullRequestHead maps old relays to the reconnect message', async () => {
+    const methodNotFound = Object.assign(
+      new Error('Method not found: git.fetchGitHubPullRequestHead'),
+      { code: -32601 }
+    )
+    mux.request.mockRejectedValueOnce(methodNotFound)
+
+    await expect(
+      provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)
+    ).rejects.toThrow(
+      'This SSH host is running an older Orca relay that cannot fetch pull request heads. Reconnect to deploy the latest relay, then try again.'
+    )
+  })
+
+  it('fetchGitHubPullRequestHead rethrows non-method-not-found errors', async () => {
+    const error = new Error('fatal: could not read from remote repository')
+    mux.request.mockRejectedValueOnce(error)
+
+    await expect(provider.fetchGitHubPullRequestHead('/home/user/repo', 'origin', 42)).rejects.toBe(
+      error
+    )
   })
 
   it('getBranchDiff sends git.branchDiff request', async () => {
@@ -916,6 +1079,125 @@ describe('SshGitProvider', () => {
       __streamResponse: true
     })
     expect(result).toEqual(diffs)
+  })
+
+  it('getBranchDiff forwards a pinned head OID without adding it when omitted', async () => {
+    const headOid = 'a'.repeat(40)
+    mux.request.mockResolvedValue([])
+
+    await provider.getBranchDiff('/home/user/repo', 'main', {
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid
+    })
+    await provider.getBranchDiff('/home/user/repo', 'main', {
+      includePatch: true,
+      filePath: 'src/other-file.ts',
+      headOid: undefined
+    })
+
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid,
+      __streamResponse: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/other-file.ts',
+      __streamResponse: true
+    })
+  })
+
+  // Why: an unpinned compare snapshot reaches getBranchDiff as null despite the type.
+  it('omits a null head OID and shares the absent-head dedupe key', async () => {
+    const diffs = [{ kind: 'text', originalContent: 'old', modifiedContent: 'new' }]
+    const pendingDiff = deferredValue(diffs)
+    const headOid = 'a'.repeat(40)
+    mux.request.mockReturnValue(pendingDiff.promise)
+
+    const reads = [
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: null as unknown as undefined
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts'
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid
+      })
+    ]
+
+    await waitForRequestCount(mux.request, 2)
+    expect(mux.request).toHaveBeenCalledTimes(2)
+    expect(mux.request).toHaveBeenNthCalledWith(1, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      __streamResponse: true
+    })
+    expect(mux.request).toHaveBeenNthCalledWith(2, 'git.branchDiff', {
+      worktreePath: '/home/user/repo',
+      baseRef: 'main',
+      includePatch: true,
+      filePath: 'src/file.ts',
+      headOid,
+      __streamResponse: true
+    })
+
+    pendingDiff.resolve()
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 3 }, () => diffs))
+  })
+
+  it('coalesces matching branch diff heads while keeping distinct and absent heads separate', async () => {
+    const diffs = [{ kind: 'text', originalContent: 'old', modifiedContent: 'new' }]
+    const pendingDiff = deferredValue(diffs)
+    const firstHeadOid = 'a'.repeat(40)
+    const secondHeadOid = 'b'.repeat(40)
+    mux.request.mockReturnValue(pendingDiff.promise)
+
+    const reads = [
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: firstHeadOid
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        filePath: 'src/file.ts',
+        headOid: firstHeadOid,
+        includePatch: true
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: secondHeadOid
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts'
+      }),
+      provider.getBranchDiff('/home/user/repo', 'main', {
+        includePatch: true,
+        filePath: 'src/file.ts',
+        headOid: undefined
+      })
+    ]
+
+    await waitForRequestCount(mux.request, 3)
+    expect(mux.request).toHaveBeenCalledTimes(3)
+
+    pendingDiff.resolve()
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 5 }, () => diffs))
   })
 
   it('coalesces concurrent identical diff RPCs while in flight', async () => {
@@ -937,7 +1219,7 @@ describe('SshGitProvider', () => {
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingDiff.resolve()
 
-    await expect(Promise.all(reads)).resolves.toEqual(Array(8).fill(diff))
+    await expect(Promise.all(reads)).resolves.toEqual(Array.from({ length: 8 }, () => diff))
 
     mux.request.mockReset()
     const branchDiffs = [diff]
@@ -954,7 +1236,9 @@ describe('SshGitProvider', () => {
     await waitForRequestCount(mux.request, 1)
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingBranchDiff.resolve()
-    await expect(Promise.all(branchReads)).resolves.toEqual(Array(8).fill(branchDiffs))
+    await expect(Promise.all(branchReads)).resolves.toEqual(
+      Array.from({ length: 8 }, () => branchDiffs)
+    )
 
     mux.request.mockReset()
     const pendingCommitDiff = deferredValue(diff)
@@ -971,7 +1255,7 @@ describe('SshGitProvider', () => {
     await waitForRequestCount(mux.request, 1)
     expect(mux.request).toHaveBeenCalledTimes(1)
     pendingCommitDiff.resolve()
-    await expect(Promise.all(commitReads)).resolves.toEqual(Array(8).fill(diff))
+    await expect(Promise.all(commitReads)).resolves.toEqual(Array.from({ length: 8 }, () => diff))
   })
 
   it('retries diff RPCs after an in-flight rejection settles', async () => {

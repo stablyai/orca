@@ -110,7 +110,7 @@ Don't add a fourth level. If something needs more emphasis than "floating," you'
 
 Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. The shadcn-style wrappers in this folder follow a consistent pattern:
 
-- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner`, `repo-multi-combobox`, `team-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
+- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner` and `repo-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
 - Use `cn()` for class merging. Pass user `className` last so callers can override.
 - Use `class-variance-authority` (CVA) for variants when there are multiple.
 
@@ -148,7 +148,7 @@ When a control has multiple plausible primitives, use this fork:
 | Drawer / panel sliding in from an edge                       | `Sheet`                                                              | `Dialog` centered                     |
 | Single choice from a known list                              | `Select`                                                             | Custom listbox                        |
 | Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                                           | `Select` (no search)                  |
-| Multi-select with search                                     | `repo-multi-combobox` / `team-multi-combobox` (mirror their pattern) | Roll a new one                        |
+| Multi-select with search                                     | `repo-multi-combobox` (mirror its pattern)                           | Roll a new one                        |
 | Transient confirmation ("Saved", "Copied")                   | `sonner` toast                                                       | `Dialog`, inline banner               |
 | Persistent inline status ("3 errors")                        | inline text + `Badge`                                                | toast (toasts disappear)              |
 

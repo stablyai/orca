@@ -15,6 +15,15 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { cn } from '@/lib/utils'
 import type { GitHubViewer } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import {
+  extractImageFilesFromDataTransfer,
+  hasAttachableFeedbackImage,
+  readFeedbackImageFiles,
+  releaseFeedbackImageDraft,
+  type FeedbackImageDraft
+} from '@/lib/feedback-image-attachments'
+import { SidebarFeedbackImageAttachments } from './SidebarFeedbackImageAttachments'
+import { useFeedbackImageDrop } from './use-feedback-image-drop'
 
 const GITHUB_ISSUES_URL = 'https://github.com/stablyai/orca/issues/'
 const DISCORD_URL = 'https://discord.gg/fzjDKHxv8Q'
@@ -57,8 +66,98 @@ export function SidebarFeedbackDialog({
   const [viewer, setViewer] = useState<GitHubViewer | null>(null)
   const [isViewerLoading, setIsViewerLoading] = useState(false)
   const [submitAnonymously, setSubmitAnonymously] = useState(false)
+  const [images, setImages] = useState<FeedbackImageDraft[]>([])
+  const [pendingImageReadCount, setPendingImageReadCount] = useState(0)
   const mountedRef = useMountedRef()
   const feedbackTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const liveImageDraftsRef = useRef<FeedbackImageDraft[]>([])
+
+  const clearImages = React.useCallback(() => {
+    liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
+    liveImageDraftsRef.current = []
+    setImages([])
+  }, [])
+
+  // Why: object URLs for the thumbnails leak until revoked, so drop them when
+  // the dialog unmounts as well as when an attachment is removed.
+  React.useEffect(
+    () => () => {
+      liveImageDraftsRef.current.forEach(releaseFeedbackImageDraft)
+      liveImageDraftsRef.current = []
+    },
+    []
+  )
+
+  const imageCount = images.length
+
+  // Why: committed state lags the in-flight reads, so batches still being read
+  // count against capacity — otherwise two quick pastes both see room for four.
+  const pendingImageReadsRef = useRef(0)
+
+  const handleAddFiles = React.useCallback(
+    (files: readonly File[]) => {
+      if (files.length === 0) {
+        return
+      }
+      if (isSubmitting) {
+        toast.warning(
+          translate(
+            'auto.components.sidebar.SidebarFeedbackDialog.attachWhileSending',
+            'Wait for the current feedback to finish sending before attaching more images.'
+          )
+        )
+        return
+      }
+      // Why: read the committed count from the closure rather than a ref. A ref
+      // synced in an effect can still be stale-low right after an add, which
+      // over-accepts and gets the whole submission rejected by the main process.
+      const existingCount = imageCount + pendingImageReadsRef.current
+      pendingImageReadsRef.current += files.length
+      setPendingImageReadCount((current) => current + files.length)
+      void readFeedbackImageFiles(files, existingCount).then(
+        ({ images: added, errors }) => {
+          pendingImageReadsRef.current -= files.length
+          if (!mountedRef.current) {
+            added.forEach(releaseFeedbackImageDraft)
+            return
+          }
+          setPendingImageReadCount((current) => Math.max(0, current - files.length))
+          if (added.length > 0) {
+            liveImageDraftsRef.current = [...liveImageDraftsRef.current, ...added]
+            setImages((existing) => [...existing, ...added])
+          }
+          // Why: never drop an attachment without telling the user — that
+          // silence is what made screenshots vanish in the first place.
+          errors.forEach((error) => toast.warning(error))
+        },
+        (error: unknown) => {
+          pendingImageReadsRef.current -= files.length
+          console.error('Failed to read feedback image attachments:', error)
+          if (mountedRef.current) {
+            setPendingImageReadCount((current) => Math.max(0, current - files.length))
+            toast.error(
+              translate(
+                'auto.components.sidebar.SidebarFeedbackDialog.imageReadFailed',
+                'Could not read the attached images. Try attaching them again.'
+              )
+            )
+          }
+        }
+      )
+    },
+    [imageCount, isSubmitting, mountedRef]
+  )
+
+  const handleRemoveImage = React.useCallback((id: string) => {
+    const removed = liveImageDraftsRef.current.find((image) => image.id === id)
+    if (removed) {
+      releaseFeedbackImageDraft(removed)
+      liveImageDraftsRef.current = liveImageDraftsRef.current.filter((image) => image.id !== id)
+    }
+    setImages((current) => current.filter((image) => image.id !== id))
+  }, [])
+
+  const { isDragActive, contentRef, dragHandlers } = useFeedbackImageDrop(open, handleAddFiles)
 
   React.useEffect(() => {
     if (!open) {
@@ -92,6 +191,9 @@ export function SidebarFeedbackDialog({
   }, [open])
 
   const handleSubmit = async (): Promise<void> => {
+    if (isSubmitting || pendingImageReadsRef.current > 0) {
+      return
+    }
     const trimmed = feedback.trim()
     if (!trimmed) {
       toast.warning(
@@ -115,7 +217,11 @@ export function SidebarFeedbackDialog({
         feedback: trimmed,
         submitAnonymously,
         githubLogin: identity.githubLogin,
-        githubEmail: identity.githubEmail
+        githubEmail: identity.githubEmail,
+        images: images.map((image) => ({
+          contentType: image.contentType,
+          data: image.data
+        }))
       })
 
       if (!result.ok) {
@@ -123,14 +229,26 @@ export function SidebarFeedbackDialog({
       }
 
       if (mountedRef.current) {
-        toast.success(
-          translate(
-            'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
-            'Thanks for the feedback.'
+        // Why: the text reached us but the screenshots did not, so say that
+        // plainly instead of a blanket success the user would misread.
+        if (result.imagesDelivered === false) {
+          toast.warning(
+            translate(
+              'auto.components.sidebar.SidebarFeedbackDialog.imagesNotDelivered',
+              'Feedback sent, but image delivery could not be confirmed.'
+            )
           )
-        )
+        } else {
+          toast.success(
+            translate(
+              'auto.components.sidebar.SidebarFeedbackDialog.7a46c228b8',
+              'Thanks for the feedback.'
+            )
+          )
+        }
         setFeedback('')
         setSubmitAnonymously(false)
+        clearImages()
         onOpenChange(false)
       }
     } catch (err) {
@@ -153,11 +271,30 @@ export function SidebarFeedbackDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="sm:max-w-lg"
+        ref={contentRef}
+        className="max-h-[calc(100vh-3rem)] overflow-y-auto scrollbar-sleek sm:max-w-lg"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
           feedbackTextareaRef.current?.focus()
         }}
+        // Why: paste is bound on the dialog rather than the textarea so a
+        // screenshot lands whether or not the caret is in the message box.
+        onPaste={(event) => {
+          const pasted = extractImageFilesFromDataTransfer(event.clipboardData)
+          if (pasted.length === 0) {
+            return
+          }
+          // Why: consume the paste only when something is actually attachable.
+          // An unsupported image still routes through for its rejection toast,
+          // but preventing default there would silently eat co-pasted text.
+          if (hasAttachableFeedbackImage(pasted, imageCount + pendingImageReadsRef.current)) {
+            event.preventDefault()
+          }
+          handleAddFiles(pasted)
+        }}
+        // Why: dragenter/leave fire per nested child; the hook counts depth so
+        // the highlight only clears once the pointer leaves the dialog.
+        {...dragHandlers}
       >
         <DialogHeader>
           <DialogTitle className="text-sm">
@@ -237,6 +374,14 @@ export function SidebarFeedbackDialog({
           className="min-h-32 w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none ring-offset-background placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         />
 
+        <SidebarFeedbackImageAttachments
+          images={images}
+          disabled={isSubmitting}
+          isDragActive={isDragActive}
+          onAddFiles={handleAddFiles}
+          onRemove={handleRemoveImage}
+        />
+
         <div className="min-h-9 rounded-md border border-border/70 bg-muted/30 px-3 py-2">
           {viewer ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -283,7 +428,10 @@ export function SidebarFeedbackDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             {translate('auto.components.sidebar.SidebarFeedbackDialog.8bf619e4cf', 'Cancel')}
           </Button>
-          <Button onClick={() => void handleSubmit()} disabled={isSubmitting || !feedback.trim()}>
+          <Button
+            onClick={() => void handleSubmit()}
+            disabled={isSubmitting || pendingImageReadCount > 0 || !feedback.trim()}
+          >
             {isSubmitting
               ? translate('auto.components.sidebar.SidebarFeedbackDialog.69969ba364', 'Sending…')
               : translate('auto.components.sidebar.SidebarFeedbackDialog.f2e42e1307', 'Send')}

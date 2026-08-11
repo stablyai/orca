@@ -1,4 +1,5 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './types'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
@@ -93,6 +94,11 @@ function agentForNormalizedProcess(normalized: string): TuiAgent | undefined {
     return PROCESS_TO_AGENT.get('grok')
   }
   return undefined
+}
+
+function recognizedAgentForProcess(normalized: string): RecognizedAgentProcess | null {
+  const agent = agentForNormalizedProcess(normalized)
+  return agent ? { agent, processName: normalized } : null
 }
 
 function tokenizeCommandLine(commandLine: string): string[] {
@@ -197,20 +203,21 @@ function comparablePath(token: string): string {
 }
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
+  const path = comparablePath(token)
+  for (const identity of EXACT_NODE_ENTRYPOINT_IDENTITIES) {
+    if (identity.pattern.test(path)) {
+      return { agent: identity.agent, processName: identity.processName }
+    }
+  }
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]
   if (!markers) {
     return null
   }
-  const path = comparablePath(token)
   if (!markers.some((marker) => path.includes(marker))) {
     return null
   }
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonModule(
@@ -220,11 +227,7 @@ function recognizePythonModule(
     return null
   }
   const normalized = moduleName.split('.', 1)[0]?.toLowerCase() ?? ''
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess | null {
@@ -237,11 +240,7 @@ function recognizePythonScriptEntrypoint(token: string): RecognizedAgentProcess 
   }
   const basename = path.split('/').pop() ?? ''
   const normalized = basename.replace(PYTHON_SCRIPT_EXTENSION_RE, '')
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 function recognizePythonEntrypoint(
@@ -274,11 +273,7 @@ export function recognizeAgentProcess(
   processName: string | null | undefined
 ): RecognizedAgentProcess | null {
   const normalized = normalizeProcessName(processName)
-  const agent = agentForNormalizedProcess(normalized)
-  if (!agent) {
-    return null
-  }
-  return { agent, processName: normalized }
+  return recognizedAgentForProcess(normalized)
 }
 
 export function recognizeAgentProcessFromCommandLine(

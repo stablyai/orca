@@ -38,7 +38,7 @@ export const getShortcutsPaneSearchEntries = createLocalizedCatalog(() => [
   ...KEYBINDING_DEFINITIONS.map((item) => ({
     title: item.title,
     description: translate(
-      'auto.components.settings.shortcuts.search.ca6a0c2df7',
+      'auto.components.settings.shortcuts.search.groupShortcut',
       '{{value0}} shortcut',
       { value0: item.group }
     ),

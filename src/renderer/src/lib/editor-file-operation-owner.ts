@@ -1,5 +1,6 @@
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import {
   assertWorktreeOperationGenerationSnapshotCurrent,
@@ -25,6 +26,9 @@ type EditorOwnerState = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
   | 'runtimeEnvironmentCatalogHydrated'
   | 'removedRuntimeEnvironmentIds'
@@ -98,12 +102,20 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
+  if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+    return { executionHostId: 'local', runtimeEnvironmentId: null }
+  }
   const explicitResolution = resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
   if (explicitResolution.kind === 'resolved') {
     return explicitResolution.route
   }
   if (explicitResolution.kind === 'ambiguous' || provenance.ownershipProjection === 'explicit') {
     return null
+  }
+  // Why: ordinary folder workspaces have no published worktree row, so re-resolve their live
+  // folder owner after preserving the explicit-owner fail-closed contract above (#10251).
+  if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
+    return resolveWorktreeOperationRoute(state, worktreeId)
   }
   return isWorktreePublished(state, worktreeId) ? provenance.generation.route : null
 }
@@ -124,6 +136,7 @@ export function getEditorFileOperationContext(
   file: {
     worktreeId: string
     runtimeEnvironmentId?: string | null
+    externalSshTargetId?: string
     operationProvenance?: EditorFileOperationProvenance
   },
   worktreePath: string | null
@@ -148,7 +161,24 @@ export function getEditorFileOperationContext(
     ? assertEditorFileOperationCurrent(state, file.worktreeId, provenance)
     : provenance.generation.route
   const host = parseExecutionHostId(route.executionHostId)
+  const workspaceScope = parseWorkspaceKey(file.worktreeId)
+  const resolvedWorktreePath =
+    (worktreePath?.trim() ? worktreePath : null) ??
+    (workspaceScope?.type === 'folder'
+      ? (state.folderWorkspaces.find(
+          (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+        )?.folderPath ?? null)
+      : null)
   if (!host) {
+    throw new Error(OWNER_CHANGED_MESSAGE)
+  }
+  const externalSshTargetId = file.externalSshTargetId?.trim()
+  if (
+    externalSshTargetId &&
+    (host.kind !== 'ssh' ||
+      route.runtimeEnvironmentId !== null ||
+      host.targetId !== externalSshTargetId)
+  ) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
   if (host?.kind === 'ssh' && provenance.expectedSshConnectionGeneration === undefined) {
@@ -158,7 +188,7 @@ export function getEditorFileOperationContext(
   return {
     settings: settingsForWorktreeOperationRoute(state.settings, route),
     worktreeId: file.worktreeId,
-    worktreePath,
+    worktreePath: resolvedWorktreePath,
     expectedExecutionHostId: host.kind === 'ssh' ? host.id : 'local',
     ...(route.runtimeEnvironmentId === null && host?.kind === 'ssh'
       ? { connectionId: host.targetId }

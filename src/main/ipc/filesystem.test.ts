@@ -42,6 +42,9 @@ const {
   discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocalMock,
+  getPullRequestDraftContextMock,
+  resolveHostedReviewBodyForGenerationMock,
+  loadPullRequestLinkedIssueMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
@@ -85,6 +88,9 @@ const {
   discoverCommitMessageModelsRemoteMock: vi.fn(),
   cancelGenerateCommitMessageLocalMock: vi.fn(),
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
+  getPullRequestDraftContextMock: vi.fn(),
+  resolveHostedReviewBodyForGenerationMock: vi.fn(),
+  loadPullRequestLinkedIssueMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
@@ -189,6 +195,20 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
   cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }))
 
+vi.mock('../text-generation/pull-request-context', () => ({
+  getPullRequestDraftContext: getPullRequestDraftContextMock
+}))
+
+vi.mock('../source-control/pull-request-template', () => ({
+  readHostedPullRequestTemplate: vi.fn(),
+  readHostedReviewTemplate: vi.fn(),
+  resolveHostedReviewBodyForGeneration: resolveHostedReviewBodyForGenerationMock
+}))
+
+vi.mock('../source-control/pull-request-linked-issue', () => ({
+  loadPullRequestLinkedIssue: loadPullRequestLinkedIssueMock
+}))
+
 import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
@@ -289,6 +309,9 @@ describe('registerFilesystemHandlers', () => {
       resolveCommitMessageSettingsMock,
       generateCommitMessageFromContextMock,
       generatePullRequestFieldsFromContextMock,
+      getPullRequestDraftContextMock,
+      resolveHostedReviewBodyForGenerationMock,
+      loadPullRequestLinkedIssueMock,
       discoverCommitMessageModelsLocalMock,
       discoverCommitMessageModelsRemoteMock,
       cancelGenerateCommitMessageLocalMock,
@@ -300,6 +323,7 @@ describe('registerFilesystemHandlers', () => {
     ]) {
       mock.mockReset()
     }
+    loadPullRequestLinkedIssueMock.mockResolvedValue(null)
 
     handleMock.mockImplementation((channel, handler) => {
       handlers.set(channel, handler)
@@ -340,6 +364,30 @@ describe('registerFilesystemHandlers', () => {
       close: vi.fn()
     })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+  })
+
+  it('re-sorts SSH provider listings directories-first in natural order', async () => {
+    // Why: the remote relay may be an older build that still sorts lexicographically.
+    getSshFilesystemProviderMock.mockReturnValueOnce({
+      readDir: vi.fn().mockResolvedValue([
+        { name: '100 - b.txt', isDirectory: false, isSymlink: false },
+        { name: '9 - c.txt', isDirectory: false, isSymlink: false },
+        { name: '10 - dir', isDirectory: true, isSymlink: false },
+        { name: '99 - a.txt', isDirectory: false, isSymlink: false }
+      ])
+    })
+    registerFilesystemHandlers(store as never)
+
+    const result = (await handlers.get('fs:readDir')!(null, {
+      dirPath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })) as { name: string }[]
+    expect(result.map((e) => e.name)).toEqual([
+      '10 - dir',
+      '9 - c.txt',
+      '99 - a.txt',
+      '100 - b.txt'
+    ])
   })
 
   it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
@@ -1360,6 +1408,32 @@ describe('registerFilesystemHandlers', () => {
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
   })
 
+  it('passes configured shared links through the local status path', async () => {
+    const sharedStore = {
+      ...store,
+      getRepos: () => [
+        {
+          ...store.getRepos()[0],
+          symlinkPaths: ['node_modules']
+        }
+      ],
+      getAllWorktreeMeta: () => ({
+        [`repo-1::${WORKTREE_FEATURE_PATH}`]: {}
+      })
+    }
+    registerWorktreeRootsForRepo(sharedStore as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(sharedStore as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      sharedLinkPaths: ['node_modules']
+    })
+  })
+
   it('allows git operations on the known repo root without rebuilding the worktree cache', async () => {
     getStatusMock.mockResolvedValue({ entries: [] })
 
@@ -2056,6 +2130,233 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('enriches the local commit context with a validated worktree linked issue', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 123 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: folder-repo instances keep `::workspace:<uuid>` on the meta key while the
+  // request path is the stripped cwd. A strip-before-lookup "cleanup" would still
+  // pass plain-id tests and silently lose enrichment on second workspaces.
+  it('enriches local commit context when the worktree id carries a folder-repo workspace suffix', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const instanceId = `repo-1::${WORKTREE_FEATURE_PATH}::workspace:${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const getWorktreeMeta = vi.fn((id: string) =>
+      id === instanceId ? { linkedIssue: 9 } : undefined
+    )
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: instanceId
+    })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(instanceId)
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 9 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: the renderer derives worktreePath from worktreeId, so a mismatched pair
+  // models an independent caller (relay/CLI/future), not a stale renderer context.
+  it('ignores an independently supplied id that does not own the requested worktree path', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+    })
+
+    expect(getWorktreeMeta).not.toHaveBeenCalled()
+    // Why: without this the assertion below passes vacuously on an early return.
+    expect(generateCommitMessageFromContextMock.mock.calls).toHaveLength(1)
+    expect(generateCommitMessageFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'linkedIssue'
+    )
+  })
+
+  it('enriches the SSH commit context from host meta using the remote path', async () => {
+    const context = { branch: 'main', stagedSummary: 'A\tremote.txt', stagedPatch: '+remote' }
+    const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+    const worktreeId = 'repo-1::/remote/repo'
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan: vi.fn()
+    })
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Add file' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      worktreeId,
+      connectionId: 'conn-1'
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 77 },
+      params,
+      expect.objectContaining({ kind: 'remote' })
+    )
+  })
+
+  describe('git:generatePullRequestFields linked issue', () => {
+    const PULL_REQUEST_CONTEXT = {
+      base: 'main',
+      branch: 'feature/ai',
+      branchChangedByPreparation: false,
+      commitSummary: 'a1b2c3d Add generation',
+      changeSummary: 'README.md | 2 +-',
+      patch: '+hello',
+      currentTitle: '',
+      currentBody: '',
+      currentDraft: false
+    }
+    const PULL_REQUEST_ARGS = { base: 'main', title: '', body: '', draft: false }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+
+    beforeEach(() => {
+      resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+      resolveHostedReviewBodyForGenerationMock.mockResolvedValue('')
+      getPullRequestDraftContextMock.mockResolvedValue(PULL_REQUEST_CONTEXT)
+      generatePullRequestFieldsFromContextMock.mockResolvedValue({ success: true, fields: {} })
+    })
+
+    it('enriches the local pull-request context with a validated worktree linked issue', async () => {
+      const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+      const linkedIssueDetails = {
+        provider: 'github',
+        number: 123,
+        title: 'Improve PR generation',
+        description: 'Include issue context.'
+      }
+      loadPullRequestLinkedIssueMock.mockResolvedValue(linkedIssueDetails)
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId,
+        provider: 'github'
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        {
+          ...PULL_REQUEST_CONTEXT,
+          linkedIssue: 123,
+          provider: 'github',
+          linkedIssueDetails
+        },
+        params,
+        expect.objectContaining({ kind: 'local' })
+      )
+    })
+
+    it('enriches the SSH pull-request context from host meta using the remote path', async () => {
+      const worktreeId = 'repo-1::/remote/repo'
+      getSshGitProviderMock.mockReturnValue({
+        exec: vi.fn(),
+        executeCommitMessagePlan: vi.fn()
+      })
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: '/remote/repo',
+        worktreeId,
+        connectionId: 'conn-1'
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        { ...PULL_REQUEST_CONTEXT, linkedIssue: 77 },
+        params,
+        expect.objectContaining({ kind: 'remote' })
+      )
+    })
+
+    it('ignores a pull-request worktree id that does not own the requested path', async () => {
+      const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+
+      registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+      })
+
+      expect(getWorktreeMeta).not.toHaveBeenCalled()
+      // Why: without the length guard the property assertion passes vacuously on `undefined`,
+      // so an unrelated early return would read as "enrichment correctly suppressed".
+      expect(generatePullRequestFieldsFromContextMock.mock.calls).toHaveLength(1)
+      expect(generatePullRequestFieldsFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+        'linkedIssue'
+      )
+    })
+  })
+
   it('returns a sanitized error when local agent account preparation fails', async () => {
     const context = {
       branch: 'feature/ai',
@@ -2161,6 +2462,111 @@ describe('registerFilesystemHandlers', () => {
       undefined,
       'npx codex'
     )
+  })
+
+  it('discovers models from an exact repo-less folder workspace root', async () => {
+    const folderPath = path.resolve('/outside-workspace/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: null
+        }
+      ]
+    }
+    discoverCommitMessageModelsLocalMock.mockResolvedValue({
+      success: true,
+      models: [{ id: 'sonnet', label: 'Sonnet' }],
+      defaultModelId: 'sonnet'
+    })
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await handlers.get('git:discoverCommitMessageModels')!(null, {
+      agentId: 'claude',
+      worktreePath: folderPath
+    })
+
+    expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+      'claude',
+      undefined,
+      undefined,
+      { cwd: folderPath }
+    )
+  })
+
+  it('does not authorize remote-only folder roots as local discovery paths', async () => {
+    const folderPath = path.resolve('/remote-only/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await expect(
+      handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+    ).rejects.toThrow('Access denied')
+    expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a repo-less WSL folder workspace discovery through its distro', async () => {
+    await withPlatform('win32', async () => {
+      const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\tester\\folder-project'
+      const prepareForClaudeLaunch = vi.fn().mockResolvedValue({
+        configDir: '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
+        stripAuthEnv: true,
+        provenance: 'managed:account-1'
+      })
+      const folderStore = {
+        ...store,
+        getFolderWorkspaces: () => [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            folderPath,
+            connectionId: null
+          }
+        ]
+      }
+      discoverCommitMessageModelsLocalMock.mockResolvedValue({
+        success: true,
+        models: [{ id: 'sonnet', label: 'Sonnet' }],
+        defaultModelId: 'sonnet'
+      })
+
+      registerFilesystemHandlers(folderStore as never, { prepareForClaudeLaunch })
+
+      await handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+
+      expect(prepareForClaudeLaunch).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+        'claude',
+        expect.objectContaining({ CLAUDE_CONFIG_DIR: '/home/tester/.claude' }),
+        undefined,
+        { cwd: path.resolve(folderPath), wslDistro: 'Ubuntu' }
+      )
+    })
   })
 
   it('routes local WSL project model discovery through the project runtime target', async () => {
@@ -2690,6 +3096,42 @@ describe('registerFilesystemHandlers', () => {
       },
       {}
     )
+  })
+
+  it('forwards the pinned head through SSH branch diff queries', async () => {
+    const result = {
+      kind: 'text',
+      originalContent: 'left',
+      modifiedContent: 'right',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const getBranchDiff = vi.fn().mockResolvedValue([result])
+    getSshGitProviderMock.mockReturnValue({ getBranchDiff })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:branchDiff')!(null, {
+        worktreePath: '/home/user/project',
+        compare: {
+          baseRef: 'origin/main',
+          baseOid: 'base-oid',
+          headOid: 'head-oid',
+          mergeBase: 'merge-base-oid'
+        },
+        filePath: 'src/file.ts',
+        oldPath: 'src/old-file.ts',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(result)
+
+    expect(getBranchDiff).toHaveBeenCalledWith('/home/user/project', 'merge-base-oid', {
+      includePatch: true,
+      headOid: 'head-oid',
+      filePath: 'src/file.ts',
+      oldPath: 'src/old-file.ts'
+    })
   })
 
   // Why: the original SSH Quick Open bug had two halves — relay-side policy

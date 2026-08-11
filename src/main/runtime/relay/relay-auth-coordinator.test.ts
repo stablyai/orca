@@ -274,4 +274,32 @@ describe('RelayAuthCoordinator', () => {
     await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[2]))
     expect(brokers[1]!.closeNow).toHaveBeenCalledOnce()
   })
+
+  it('reopens instead of republishing registered for a dead broker', async () => {
+    // Why: a broker that lost its control without recovering must not keep
+    // reporting registered on every reconcile while phones get HOST_OFFLINE.
+    let firstBrokerLive = true
+    const brokers = [
+      { closeNow: vi.fn(), isLive: () => firstBrokerLive },
+      { closeNow: vi.fn(), isLive: () => true }
+    ]
+    const openBroker = vi.fn().mockResolvedValueOnce(brokers[0]).mockResolvedValueOnce(brokers[1])
+    const statuses: string[] = []
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: (status) => statuses.push(status)
+    })
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[0]))
+    expect(statuses.at(-1)).toBe('registered')
+
+    firstBrokerLive = false
+    coordinator.reconcile()
+
+    await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[1]))
+    expect(brokers[0]!.closeNow).toHaveBeenCalledOnce()
+    expect(statuses.at(-1)).toBe('registered')
+    expect(statuses.filter((status) => status === 'connecting')).toHaveLength(2)
+  })
 })

@@ -85,6 +85,22 @@ describe('SshConnectionStore', () => {
     expect(mockStore.getSshTargets).toHaveBeenCalled()
   })
 
+  it('lists picker suppression aliases without consulting re-adoption tombstones', () => {
+    mockStore.addDeletedSshConfigAlias('config-removed')
+    mockStore.addRemovedSshTargetTombstone({
+      oldTargetId: 'ssh-manual',
+      configHost: 'manual-removed',
+      host: 'manual.internal',
+      port: 22,
+      username: 'deploy',
+      label: 'Manual',
+      removedAt: 1
+    })
+
+    expect(sshStore.listSuppressedSshConfigAliases()).toEqual(['config-removed'])
+    expect(mockStore.getRemovedSshTargetTombstones).not.toHaveBeenCalled()
+  })
+
   it('getTarget delegates to store', () => {
     sshStore.getTarget('test-id')
     expect(mockStore.getSshTarget).toHaveBeenCalledWith('test-id')
@@ -357,6 +373,65 @@ describe('SshConnectionStore', () => {
       expect(result).toEqual([])
     })
 
+    // SSH matches Host patterns case-insensitively, so `Prod` and `prod` are one host
+    // everywhere else in the picker — import ownership must agree.
+    it('treats a case-only alias variant as owned by the existing manual target', () => {
+      mockStore.addSshTarget({
+        id: 'ssh-m',
+        label: 'Prod',
+        configHost: 'Prod',
+        host: 'manual.example.com',
+        port: 22,
+        username: 'me',
+        source: 'manual'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'prod' })])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+      expect(result).toEqual([])
+    })
+
+    it('keeps a case-only alias variant suppressed after the host was deleted', () => {
+      const added = sshStore.addTarget({
+        label: 'Prod',
+        configHost: 'Prod',
+        host: 'prod.example.com',
+        port: 22,
+        username: 'me'
+      })
+      sshStore.removeTarget(added.id)
+      loadUserSshConfigMock.mockReturnValue([{ host: 'prod' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([candidate({ configHost: 'prod' })])
+
+      const result = sshStore.importFromSshConfig()
+
+      expect(result).toEqual([])
+      expect(mockStore.addSshTarget).toHaveBeenCalledTimes(1)
+    })
+
+    it('lifts a tombstone stored under different casing when the host is re-added', () => {
+      const added = sshStore.addTarget({
+        label: 'Prod',
+        configHost: 'Prod',
+        host: 'prod.example.com',
+        port: 22,
+        username: 'me'
+      })
+      sshStore.removeTarget(added.id)
+      sshStore.addTarget({
+        label: 'prod',
+        configHost: 'prod',
+        host: 'prod.example.com',
+        port: 22,
+        username: 'me'
+      })
+
+      expect(sshStore.listSuppressedSshConfigAliases()).toEqual([])
+    })
+
     it('does not rewrite an unchanged config-sourced target', () => {
       mockStore.addSshTarget({
         id: 'ssh-1',
@@ -423,7 +498,7 @@ describe('SshConnectionStore', () => {
       expect(result).toEqual([])
     })
 
-    it('does not tombstone a manual target on delete', () => {
+    it('suppresses a deleted manual target from config discovery', () => {
       mockStore.addSshTarget({
         id: 'ssh-1',
         label: 'mini',
@@ -435,7 +510,7 @@ describe('SshConnectionStore', () => {
       })
 
       sshStore.removeTarget('ssh-1')
-      expect(mockStore.addDeletedSshConfigAlias).not.toHaveBeenCalled()
+      expect(mockStore.addDeletedSshConfigAlias).toHaveBeenCalledWith('mini')
     })
 
     it('re-adding a deleted host reclaims its alias so sync stops suppressing it', () => {
@@ -557,6 +632,7 @@ describe('SshConnectionStore', () => {
       sshStore.removeTarget('runtime-ssh-abc')
 
       expect(mockStore.addRemovedSshTargetTombstone).not.toHaveBeenCalled()
+      expect(mockStore.addDeletedSshConfigAlias).not.toHaveBeenCalled()
     })
 
     it('re-adopts orphaned repos when the same host is re-added', () => {

@@ -416,4 +416,39 @@ describe('detachTerminalPaneToTab', () => {
       ptyIdsByLeafId: { [LEAF_2]: 'remote:env-2@@terminal-9' }
     })
   })
+
+  it('keeps a detached null-PTY leaf eligible to finish its pending activation', () => {
+    const store = createStore({
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEAF_1 },
+        second: { type: 'leaf', leafId: LEAF_2 }
+      },
+      activeLeafId: LEAF_2,
+      expandedLeafId: null
+    })
+    const manager = {
+      getPanes: vi.fn(() => [{ id: 1 }, { id: 2 }]),
+      getLeafId: vi.fn(() => LEAF_2),
+      detachPaneForExternalMove: vi.fn(() => true)
+    }
+
+    const result = detachTerminalPaneToTab({
+      getStore: () => store,
+      manager,
+      persistLayoutSnapshot: vi.fn(),
+      sourcePaneId: 2,
+      sourceTabId: SOURCE_TAB_ID,
+      targetGroupId: TARGET_GROUP_ID,
+      worktreeId: WORKTREE_ID
+    })
+
+    expect(result?.ptyId).toBeNull()
+    expect(store.createTab).toHaveBeenCalledWith(WORKTREE_ID, TARGET_GROUP_ID, 'powershell.exe', {
+      activate: true,
+      pendingActivationSpawn: true,
+      recordInteraction: true
+    })
+  })
 })

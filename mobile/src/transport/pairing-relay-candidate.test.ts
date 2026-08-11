@@ -3,6 +3,7 @@ import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayOuterError } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { ConnectionLogEntry } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({
@@ -162,5 +163,77 @@ describe('recovering pairing relay candidate', () => {
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
     expect(resolveDirector).toHaveBeenCalledTimes(3)
     expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([50, 100, 200])
+  })
+
+  it('narrates every director attempt, cell move and backoff to the pairing log', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const stale = client(Promise.reject(new Error('HTTP 503')))
+    const target = client(Promise.resolve(success()))
+    const resolveDirector = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('HTTP 504'))
+      .mockImplementationOnce(async (relay) => ({
+        ...relay,
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: 8
+      }))
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => (connects++ === 0 ? stale : target),
+      resolveDirector,
+      persistMove: vi.fn(async () => {}),
+      now: () => 1,
+      random: () => 0.5,
+      sleep: async () => {},
+      onLog: (entry) => entries.push(entry)
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(entries.map((entry) => `${entry.level}|${entry.message}`)).toEqual([
+      'warn|Relay: cell dial failed',
+      'info|Relay: resolving director (attempt 1/3)',
+      'warn|Relay: recovery attempt 1 failed',
+      'info|Relay: backing off 50ms',
+      'info|Relay: resolving director (attempt 2/3)',
+      'info|Relay: cell moved',
+      'info|Relay: backing off 100ms'
+    ])
+    expect(entries[0]!.detail).toBe('Error: HTTP 503')
+    expect(entries[1]!.detail).toBe('relay.onorca.dev')
+    expect(entries[2]!.detail).toBe('Error: HTTP 504')
+    expect(entries[5]!.detail).toBe('relay-c1.onorca.dev → relay-c2.onorca.dev')
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(entries.length)
+  })
+
+  it('reports the final give-up once the recovery budget is spent', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const stale = client(Promise.reject(new RelayOuterError(4409)))
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => stale,
+      resolveDirector: vi.fn(async () => {
+        throw new Error('relay director resolution timed out')
+      }),
+      persistMove: vi.fn(async () => {}),
+      now: () => 1,
+      random: () => 0,
+      sleep: async () => {},
+      maxRecoveryAttempts: 2,
+      onLog: (entry) => entries.push(entry)
+    })
+
+    await expect(candidate.sendRequest('status.get')).rejects.toThrow(/timed out/)
+    expect(entries[0]).toMatchObject({
+      level: 'warn',
+      message: 'Relay: cell dial failed',
+      detail: 'relay close code 4409'
+    })
+    expect(entries.filter((entry) => entry.level === 'error')).toEqual([
+      expect.objectContaining({
+        message: 'Relay: recovery gave up',
+        detail: 'after 2 attempt(s)'
+      })
+    ])
   })
 })

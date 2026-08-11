@@ -69,26 +69,7 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
-vi.mock('lucide-react', () => ({
-  FilePlus: function FilePlus() {
-    return null
-  },
-  FileText: function FileText() {
-    return null
-  },
-  Globe: function Globe() {
-    return null
-  },
-  Plus: function Plus() {
-    return null
-  },
-  Smartphone: function Smartphone() {
-    return null
-  },
-  TerminalSquare: function TerminalSquare() {
-    return null
-  }
-}))
+vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {
@@ -273,6 +254,7 @@ async function renderTabBar(props: Record<string, unknown>): Promise<unknown> {
     onClose: () => {},
     onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onNewTerminalTab: () => {},
     onNewBrowserTab: () => {},
     onSetCustomTitle: () => {},
@@ -397,6 +379,33 @@ describe('TabBar context menu wiring', () => {
     const onClose = editorTabs[0].props.onCloseToRight as () => void
     onClose()
     expect(onCloseToRight).toHaveBeenCalledWith('unified-editor-1')
+  })
+
+  it('wires onCloseToLeft/onCloseOthers and hasTabsToLeft by strip position', async () => {
+    const onCloseToLeft = vi.fn()
+    const onCloseOthers = vi.fn()
+    const element = await renderTabBar({
+      tabs: [TERMINAL_TAB],
+      editorFiles: [EDITOR_FILE],
+      browserTabs: [],
+      tabBarOrder: ['term-1', 'unified-editor-1'],
+      onCloseToLeft,
+      onCloseOthers
+    })
+
+    const sortable = findChildrenByType(element, 'SortableTab')
+    expect(sortable).toHaveLength(1)
+    // First tab in the strip: nothing to its left.
+    expect(sortable[0].props.hasTabsToLeft).toBe(false)
+
+    const editorTabs = findChildrenByType(element, 'EditorFileTab')
+    expect(editorTabs).toHaveLength(1)
+    expect(editorTabs[0].props.hasTabsToLeft).toBe(true)
+    expect(editorTabs[0].props.tabCount).toBe(2)
+    ;(editorTabs[0].props.onCloseToLeft as () => void)()
+    expect(onCloseToLeft).toHaveBeenCalledWith('unified-editor-1')
+    ;(editorTabs[0].props.onCloseOthers as () => void)()
+    expect(onCloseOthers).toHaveBeenCalledWith('unified-editor-1')
   })
 
   it('passes pinned state and toggles unpin through the unified tab id', async () => {

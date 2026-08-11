@@ -147,6 +147,9 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  if (props.surface === 'modal') {
+    await import('./LinearAgentSkillSetupDialog')
+  }
   await act(async () => {})
   return container
 }
@@ -178,6 +181,7 @@ function findBodyButton(label: string): HTMLButtonElement | undefined {
 }
 
 async function settleRender(): Promise<void> {
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
   await act(async () => {})
 }
@@ -253,12 +257,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const unlinked = await renderPrompt({ linked: false, remote: false })
     expect(unlinked.textContent).not.toContain('Set up Linear agent skill')
 
-    await act(async () => {
-      root?.unmount()
-    })
-    root = null
-    unlinked.remove()
-    container = null
+    await unmountPrompt()
 
     const ready = await renderPrompt({ linked: true, remote: false })
     expect(ready.textContent).not.toContain('Set up Linear agent skill')
@@ -343,6 +342,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
     expect(mocks.panelProps.at(-1)).toEqual(
@@ -425,7 +425,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal setup panel in a dialog only after the user asks to set up', async () => {
+  it('keeps the prompt usable and loads the lazy setup dialog only when requested', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).toBeNull()
@@ -436,6 +436,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).not.toBeNull()
     expect(document.body.textContent).toContain('orca-linear')

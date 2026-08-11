@@ -23,7 +23,7 @@ function fakeClient(handle: (method: string, call: number) => unknown, calls: Ca
   } as unknown as RpcClient
 }
 
-const agent = { choice: 'blank' as const, startupCommand: undefined }
+const agent = { choice: 'blank' as const }
 
 const baseArgs = {
   targetRepoId: 'repo-1',
@@ -217,5 +217,24 @@ describe('createWorkspaceFromComposerSource', () => {
       branchNameOverride: 'topic-2',
       name: 'topic-2'
     })
+  })
+
+  it('sends startupAgent (not a pre-built command) for a non-blank agent', async () => {
+    // Why: regression — a bare startupCommand skipped the host's default
+    // `--dangerously-skip-permissions`; the host must resolve the launch args.
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-agent' } }), calls)
+    const selection: MobileComposerCreateSelection = { kind: 'new-branch', branchName: 'topic' }
+    await createWorkspaceFromComposerSource({
+      client,
+      selection,
+      ...baseArgs,
+      agent: { choice: 'claude' }
+    })
+    expect(calls[0]!.params).toMatchObject({
+      startupAgent: 'claude',
+      createdWithAgent: 'claude'
+    })
+    expect('startupCommand' in calls[0]!.params).toBe(false)
   })
 })

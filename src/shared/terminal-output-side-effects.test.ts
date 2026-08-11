@@ -18,6 +18,7 @@ type RecordedEvent =
   | ['finished', number | null]
   | ['pr', string, number]
   | ['2031-subscribe']
+  | ['2031-unsubscribe']
 
 function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): {
   events: RecordedEvent[]
@@ -30,6 +31,7 @@ function createRecordingTracker(overrides: TerminalTitleTrackerCallbacks = {}): 
     onCommandFinished: (exitCode) => events.push(['finished', exitCode]),
     onPrLink: (link) => events.push(['pr', link.url, link.number]),
     onMode2031Subscribe: () => events.push(['2031-subscribe']),
+    onMode2031Unsubscribe: () => events.push(['2031-unsubscribe']),
     ...overrides
   })
   return { events, tracker }
@@ -134,16 +136,40 @@ describe('createTerminalTitleTracker 2031-subscribe facts', () => {
     expect(events).toEqual([['2031-subscribe']])
   })
 
-  it('ignores DECSET 2031 unsubscribes', () => {
+  it('emits an unsubscribe fact so gated views can retire the subscription', () => {
+    // Gated views never see these bytes; without the fact their registry goes stale
+    // and a later theme flip pushes CSI 997 at a shell that already withdrew (#9993).
     const { events, tracker } = createRecordingTracker()
 
     tracker.handleChunk(`${ESC}[?2031l`)
 
+    expect(events).toEqual([['2031-unsubscribe']])
+  })
+
+  it('emits nothing for chunks that carry no 2031 bytes at all', () => {
+    // finalState is null here, not 'unsubscribed' — ordinary output must stay silent.
+    const { events, tracker } = createRecordingTracker()
+
+    tracker.handleChunk('plain build output\r\n')
+
     expect(events).toEqual([])
   })
 
+  it('reports only the chunk-final state when a chunk toggles 2031 both ways', () => {
+    // fish enables and disables 2031 around every prompt; one chunk, one decision.
+    const { events, tracker } = createRecordingTracker()
+
+    tracker.handleChunk(`${ESC}[?2031hprompt${ESC}[?2031l`)
+    tracker.handleChunk(`${ESC}[?2031lprompt${ESC}[?2031h`)
+
+    expect(events).toEqual([['2031-unsubscribe'], ['2031-subscribe']])
+  })
+
   it('skips the 2031 scan entirely when no consumer is registered', () => {
-    const { events, tracker } = createRecordingTracker({ onMode2031Subscribe: undefined })
+    const { events, tracker } = createRecordingTracker({
+      onMode2031Subscribe: undefined,
+      onMode2031Unsubscribe: undefined
+    })
 
     tracker.handleChunk(`${ESC}[?2031h`)
 
@@ -218,5 +244,19 @@ describe('createTerminalTitleTracker transient-fact scanning suppression', () =>
     tracker.handleChunk(`130${BEL}`)
 
     expect(events).toEqual([['finished', 130]])
+  })
+
+  it('a handoff scan seed preserves a provisional 2031 subscribe', () => {
+    const { events, tracker } = createRecordingTracker()
+
+    tracker.setTransientFactScanningSuppressed(true)
+    tracker.setTransientFactScanningSuppressed(false)
+    tracker.handleChunk(`${ESC}[?`, {
+      titleScanData: '',
+      mode2031PendingSubscribe: true
+    })
+    tracker.handleChunk('25h')
+
+    expect(events).toEqual([['2031-subscribe']])
   })
 })

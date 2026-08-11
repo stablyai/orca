@@ -37,6 +37,36 @@ describe('detectRepoIcon', () => {
     })
   })
 
+  it('detects Tauri bundle icons under src-tauri/icons', async () => {
+    const repoPath = await makeTempRepoDir()
+    await mkdir(join(repoPath, 'src-tauri', 'icons'), { recursive: true })
+    await writeFile(
+      join(repoPath, 'src-tauri', 'icons', 'icon.png'),
+      Buffer.from(PNG_1X1_BASE64, 'base64')
+    )
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/png;base64,${PNG_1X1_BASE64}`,
+      source: 'file',
+      label: 'src-tauri/icons/icon.png'
+    })
+  })
+
+  it('detects public WebP icons used by CLI tools', async () => {
+    const repoPath = await makeTempRepoDir()
+    const webpBase64 = 'UklGRhoAAABXRUJQVlA4IA4AAAAwAQCdASoBAAEAAQIlSkwAAA=='
+    await mkdir(join(repoPath, 'public'), { recursive: true })
+    await writeFile(join(repoPath, 'public', 'icon.webp'), Buffer.from(webpBase64, 'base64'))
+
+    await expect(detectRepoIcon({ repoPath, kind: 'folder' })).resolves.toEqual({
+      type: 'image',
+      src: `data:image/webp;base64,${webpBase64}`,
+      source: 'file',
+      label: 'public/icon.webp'
+    })
+  })
+
   it('uses a package homepage favicon when no local icon file exists', async () => {
     const repoPath = await makeTempRepoDir()
     await writeFile(
@@ -181,6 +211,36 @@ describe('detectRepoIcon', () => {
       },
       // Why: fork parents resolve host-qualified so avatars/links stay on the fork's server.
       upstream: { owner: 'stablyai', repo: 'orca', host: 'github.com' }
+    })
+  })
+
+  it('keeps the renamed fork own owner avatar while storing the upstream metadata', async () => {
+    const repoPath = await makeTempRepoDir()
+    await gitExecFileAsync(['init'], { cwd: repoPath })
+    await gitExecFileAsync(['remote', 'add', 'origin', 'git@github.com:acme/rocket-pro.git'], {
+      cwd: repoPath
+    })
+    await gitExecFileAsync(
+      ['remote', 'add', 'upstream', 'git@github.com:upstream-org/rocket.git'],
+      {
+        cwd: repoPath
+      }
+    )
+
+    await expect(detectRepoIconAndUpstream({ repoPath, kind: 'git' })).resolves.toEqual({
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/upstream-org/rocket',
+        remoteName: 'upstream',
+        remoteUrl: 'git@github.com:upstream-org/rocket.git'
+      },
+      // Why: a renamed fork is its own project, so the avatar stays on the origin owner.
+      repoIcon: {
+        type: 'image',
+        src: 'https://github.com/acme.png?size=64',
+        source: 'github',
+        label: 'acme/rocket-pro'
+      },
+      upstream: { owner: 'upstream-org', repo: 'rocket', host: 'github.com' }
     })
   })
 

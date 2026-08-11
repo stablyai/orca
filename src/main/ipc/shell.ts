@@ -1,5 +1,4 @@
 import { ipcMain, shell, dialog } from 'electron'
-import { spawn } from 'node:child_process'
 import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,12 +9,11 @@ import type {
 } from '../../shared/shell-open-types'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
+  launchExternalEditor,
   resolveExternalEditorLaunchSpec,
-  resolveVsCodeRemoteSshLaunchSpec,
-  type ExternalEditorLaunchSpec
+  resolveVsCodeRemoteSshLaunchSpec
 } from '../external-editor-launch'
 import { resolveVsCodeSshAuthority } from '../ssh/vscode-ssh-authority'
 
@@ -70,49 +68,6 @@ async function openInFileManager(
   } catch {
     return { ok: false, reason: 'launch-failed' }
   }
-}
-
-async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
-  const { spawnCmd, spawnArgs } =
-    launchSpec.kind === 'executable'
-      ? getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs)
-      : { spawnCmd: launchSpec.spawnCmd, spawnArgs: launchSpec.spawnArgs }
-
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(spawnCmd, spawnArgs, {
-      detached: true,
-      stdio: 'ignore',
-      // Why: terminal editors such as nvim need a visible console on Windows;
-      // GUI editor launches stay hidden to avoid command-shim flashes.
-      windowsHide: launchSpec.hideWindowsConsole
-    })
-    let settled = false
-
-    function cleanup(): void {
-      child.off('error', onError)
-      child.off('spawn', onSpawn)
-    }
-
-    function settle(callback: () => void): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      callback()
-    }
-
-    function onError(error: Error): void {
-      settle(() => rejectPromise(error))
-    }
-
-    function onSpawn(): void {
-      child.unref()
-      settle(resolvePromise)
-    }
-    child.once('error', onError)
-    child.once('spawn', onSpawn)
-  })
 }
 
 async function openInExternalEditor(

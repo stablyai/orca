@@ -147,6 +147,7 @@ function buildParentPrChecksRow(
     reviewState: review?.state ?? fallbackDisplay?.state ?? null,
     reviewStatus: review?.status ?? fallbackDisplay?.status ?? null,
     provider: review?.provider ?? fallbackDisplay?.provider ?? null,
+    githubRepository: review?.provider === 'github' ? (review.githubRepository ?? null) : null,
     summary: getRowSummary(status, review, detailNames),
     detailNames,
     checks: checkDetails,
@@ -251,7 +252,7 @@ function getGitHubChecksEntry(
   args: ParentPrChecksRowSourceArgs & { repo: Repo },
   review: HostedReviewInfo
 ): ParentPrChecksCacheEntry<PRCheckDetail[]> | undefined {
-  const prRepo = null
+  const prRepo = review.githubRepository ?? null
   const withHead = getGitHubRepoCacheKey(
     args.repo.path,
     args.repo.id,

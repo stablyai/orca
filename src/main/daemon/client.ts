@@ -18,6 +18,7 @@ import type {
   DaemonEvent
 } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
+import { decodeDaemonResponseError } from './daemon-errors'
 
 const CONNECT_TIMEOUT_MS = 5000
 const CONNECTION_ATTEMPT_WAIT_MS = CONNECT_TIMEOUT_MS * 4
@@ -199,6 +200,7 @@ export class DaemonClient {
 
     const id = `req-${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
+    const encoded = encodeNdjson(msg)
 
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -212,18 +214,25 @@ export class DaemonClient {
         timer
       })
 
-      this.controlSocket!.write(encodeNdjson(msg))
+      this.controlSocket!.write(encoded)
     })
   }
 
-  notify(type: string, payload: unknown): void {
+  // Why: fire-and-forget writes need a local delivery signal to trigger dead-endpoint recovery.
+  notify(type: string, payload: unknown): boolean {
     if (!this.connected || !this.controlSocket) {
-      return
+      return false
     }
 
     const id = `${NOTIFY_PREFIX}${++this.requestCounter}`
     const msg = { id, type, ...(payload !== undefined ? { payload } : {}) }
-    this.controlSocket.write(encodeNdjson(msg))
+    try {
+      this.controlSocket.write(encodeNdjson(msg))
+      return true
+    } catch {
+      // Notifications are best-effort; an oversized payload must not tear down the caller.
+      return false
+    }
   }
 
   onEvent(listener: (event: unknown) => void): () => void {
@@ -421,7 +430,12 @@ export class DaemonClient {
             if (response.ok) {
               pending.resolve(response.payload)
             } else {
-              pending.reject(new DaemonProtocolError(addNodePtyRecoveryHint(response.error)))
+              const decoded = decodeDaemonResponseError(response.error)
+              pending.reject(
+                decoded instanceof DaemonProtocolError
+                  ? new DaemonProtocolError(addNodePtyRecoveryHint(response.error))
+                  : decoded
+              )
             }
           }
         }
@@ -495,7 +509,14 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   if (!value || typeof value !== 'object') {
     return null
   }
-  const identity = value as { pid?: unknown; startedAtMs?: unknown; launchNonce?: unknown }
+  const identity = value as {
+    pid?: unknown
+    startedAtMs?: unknown
+    launchNonce?: unknown
+    entryPath?: unknown
+    appVersion?: unknown
+    spawnerExecPath?: unknown
+  }
   if (
     !Number.isSafeInteger(identity.pid) ||
     (identity.pid as number) <= 0 ||
@@ -510,7 +531,16 @@ function parseDaemonEndpointIdentity(value: unknown): DaemonEndpointIdentity | n
   return {
     pid: identity.pid as number,
     startedAtMs: identity.startedAtMs,
-    launchNonce: identity.launchNonce
+    launchNonce: identity.launchNonce,
+    ...(typeof identity.entryPath === 'string' && identity.entryPath.length > 0
+      ? { entryPath: identity.entryPath }
+      : {}),
+    ...(typeof identity.appVersion === 'string' && identity.appVersion.length > 0
+      ? { appVersion: identity.appVersion }
+      : {}),
+    ...(typeof identity.spawnerExecPath === 'string' && identity.spawnerExecPath.length > 0
+      ? { spawnerExecPath: identity.spawnerExecPath }
+      : {})
   }
 }
 

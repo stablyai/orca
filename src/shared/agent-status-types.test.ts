@@ -1,8 +1,10 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
   agentSubagentsEqual,
+  isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
@@ -15,6 +17,26 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('isFreshNonDoneAgentStatus', () => {
+  it('treats a within-TTL working entry as fresh', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 1_000 }, 2_000)).toBe(true)
+  })
+
+  it('never treats a restored-unconfirmed entry as fresh, regardless of age', () => {
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: 1_999, restoredUnconfirmed: true },
+        2_000
+      )
+    ).toBe(false)
+  })
+
+  it('stays false for done and for stale entries', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {
@@ -53,6 +75,17 @@ describe('parseAgentStatusPayload', () => {
     expect(parseAgentStatusPayload('not json')).toBeNull()
     expect(parseAgentStatusPayload('{broken')).toBeNull()
     expect(parseAgentStatusPayload('')).toBeNull()
+  })
+
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const depth = AGENT_STATUS_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+    try {
+      expect(parseAgentStatusPayload(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toBeNull()
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
   })
 
   it('returns null for non-object JSON', () => {
@@ -388,6 +421,20 @@ Fix dispatch fallback preview for normalized status prompts`
     }
   })
 
+  it('preserves sessionBoundary=true only on done (stale-signal suppression like interrupted)', () => {
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":true}')!.sessionBoundary
+    ).toBe(true)
+    for (const state of ['working', 'blocked', 'waiting'] as const) {
+      const result = parseAgentStatusPayload(`{"state":"${state}","sessionBoundary":true}`)
+      expect(result!.sessionBoundary).toBeUndefined()
+    }
+    // Why: parser uses `=== true`, so truthy sentinels don't count.
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
+    ).toBeUndefined()
+  })
+
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {
     // Why: parser uses `=== true`, so truthy string/number sentinels don't count.
     expect(
@@ -495,5 +542,79 @@ describe('agentSubagentsEqual', () => {
     expect(agentSubagentsEqual([snapshot], undefined)).toBe(false)
     expect(agentSubagentsEqual(undefined, [snapshot])).toBe(false)
     expect(agentSubagentsEqual([snapshot], [snapshot, { ...snapshot, id: 'b' }])).toBe(false)
+  })
+})
+
+// Why: the per-source hook normalizers construct these literals and validate them
+// directly. This pins that the direct path stays identical to the JSON round trip
+// they used to take, including where stringify would have altered the payload.
+describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
+  const CASES: Record<string, unknown>[] = [
+    { state: 'working', prompt: 'p', agentType: 'grok', toolName: 'sh', toolInput: 'ls' },
+    { state: 'done', prompt: '', agentType: 'devin', interrupted: true },
+    // stringify DROPS undefined-valued keys; the direct path passes them through
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'cursor',
+      toolName: undefined,
+      toolInput: undefined,
+      interactivePrompt: undefined,
+      lastAssistantMessage: undefined,
+      interrupted: undefined
+    },
+    // raw JSON inside a field exercises the structure scanner's in-string path
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'copilot',
+      interactivePrompt: JSON.stringify({ q: 'pick {one}', options: ['a', 'b'] })
+    },
+    {
+      state: 'working',
+      prompt: 'a\r\nb c',
+      agentType: 'gemini',
+      lastAssistantMessage: 'emoji \u{1f389} \u65e5\u672c\u8a9e\r\n\r\n\r\nmulti'
+    },
+    { state: 'working', prompt: 'p', agentType: 'amp', lastAssistantMessage: 'x'.repeat(50_000) },
+    { state: 'done', prompt: 'p', agentType: 'hermes', toolName: '', toolInput: '' },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'droid',
+      toolInput: '{"nested":{"deep":{"deeper":[1,2,3]}}}'
+    },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'kimi',
+      lastAssistantMessage: '"escaped" quotes and \\ backslashes'
+    },
+    { state: 'working', prompt: 'p', agentType: 'opencode' },
+    { state: 'done', prompt: 'p', agentType: 'antigravity', interrupted: false },
+    { state: 'working', prompt: 'p', agentType: 'pi', toolName: 'x'.repeat(9000) },
+    { state: 'working', prompt: 'x'.repeat(9000), agentType: 'omp' },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'command-code',
+      lastAssistantMessage: 'tail with \u001b[0m escape codes'
+    },
+    // a lone surrogate is the case where stringify and a raw read could diverge
+    { state: 'working', prompt: 'p', agentType: 'grok', lastAssistantMessage: 'lone \ud800 pair' }
+  ]
+
+  it('produces identical output for every normalizer literal shape', () => {
+    for (const [index, payload] of CASES.entries()) {
+      expect({
+        index,
+        agent: payload.agentType,
+        value: normalizeAgentStatusPayload(payload)
+      }).toEqual({
+        index,
+        agent: payload.agentType,
+        value: parseAgentStatusPayload(JSON.stringify(payload))
+      })
+    }
   })
 })

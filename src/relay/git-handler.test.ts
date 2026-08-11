@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import { MAX_RENDERED_DIFF_COMBINED_CHARACTERS } from '../shared/large-diff-render-limit'
+import { reviewHeadRemoteRefComponent } from '../shared/review-head-tracking-ref'
 import {
   createMockDispatcher,
   gitInit,
@@ -118,7 +119,9 @@ describe('GitHandler', () => {
     expect(methods).toContain('git.fetch')
     expect(methods).toContain('git.forkSync')
     expect(methods).toContain('git.fetchRemoteTrackingRef')
+    expect(methods).toContain('git.fetchGitHubPullRequestHead')
     expect(methods).toContain('git.fetchGitLabMergeRequestHead')
+    expect(methods).toContain('git.fetchGitLabMergeRequestHeadRef')
     expect(methods).toContain('git.push')
     expect(methods).toContain('git.pull')
     expect(methods).toContain('git.fastForward')
@@ -1813,6 +1816,60 @@ describe('GitHandler', () => {
       ).rejects.toThrow('Remote-tracking ref does not match the requested remote and branch.')
     })
 
+    it('fetches GitHub pull request heads through the narrow fetch RPC', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-github-pr-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'pr.txt'), 'head')
+        gitCommit(tmpDir, 'pr head')
+        const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', 'origin', 'HEAD:refs/pull/42/head'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        const result = (await dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          prNumber: 42
+        })) as { localRef: string }
+
+        // The ref is scoped by remote identity so soft-keep can never serve
+        // another project's PR #42 out of the same object database.
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/pull/${component}/42`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(actual).toBe(expected)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects invalid GitHub pull request head fetch requests', async () => {
+      await expect(
+        dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: '-origin',
+          prNumber: 42
+        })
+      ).rejects.toThrow('GitHub pull request fetch remote must not start with "-".')
+      await expect(
+        dispatcher.callRequest('git.fetchGitHubPullRequestHead', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          prNumber: 0
+        })
+      ).rejects.toThrow('Invalid GitHub pull request fetch request.')
+    })
+
     it('fetches GitLab merge request heads through the narrow fetch RPC', async () => {
       const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-bare-'))
       try {
@@ -1830,13 +1887,60 @@ describe('GitHandler', () => {
           stdio: 'pipe'
         })
 
-        await dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
+        const result = (await dispatcher.callRequest('git.fetchGitLabMergeRequestHead', {
           worktreePath: tmpDir,
           remote: 'origin',
           mrIid: 42
+        })) as { localRef: string }
+
+        // The head is fetched into a dedicated ref (not shared FETCH_HEAD) so a
+        // concurrent fetch can't retarget the caller's rev-parse of the checkout.
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/42`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(actual).toBe(expected)
+        // Legacy contract: pre-durable-ref desktop clients call this method name
+        // and then resolve FETCH_HEAD, which a refspec fetch still writes.
+        const fetchHead = execFileSync('git', ['rev-parse', '--verify', 'FETCH_HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        expect(fetchHead).toBe(expected)
+      } finally {
+        await fs.rm(bareDir, { recursive: true, force: true })
+      }
+    })
+
+    it('fetches GitLab merge request heads through the versioned durable-ref RPC', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-gitlab-mr-ref-bare-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'mr.txt'), 'head')
+        gitCommit(tmpDir, 'mr head')
+        const expected = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', 'origin', 'HEAD:refs/merge-requests/77/head'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
         })
 
-        const actual = execFileSync('git', ['rev-parse', 'FETCH_HEAD'], {
+        // Why: new clients call the versioned name; old relays 404 it and prompt reconnect.
+        const result = (await dispatcher.callRequest('git.fetchGitLabMergeRequestHeadRef', {
+          worktreePath: tmpDir,
+          remote: 'origin',
+          mrIid: 77
+        })) as { localRef: string }
+
+        const component = reviewHeadRemoteRefComponent('origin', bareDir)
+        expect(result.localRef).toBe(`refs/orca/merge-requests/${component}/77`)
+        const actual = execFileSync('git', ['rev-parse', '--verify', result.localRef], {
           cwd: tmpDir,
           encoding: 'utf-8'
         }).trim()

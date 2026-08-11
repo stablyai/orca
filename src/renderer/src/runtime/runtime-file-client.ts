@@ -52,6 +52,7 @@ export type RuntimeFileReadArgs = {
   relativePath?: string
   worktreeId?: string
   connectionId?: string
+  expectedExternalSshTargetId?: string
   includeLocalLogMetadata?: boolean
 }
 
@@ -63,6 +64,21 @@ export type RuntimeFileOperationArgs = {
   expectedExecutionHostId?: 'local' | `ssh:${string}`
   expectedSshTargetId?: string
   expectedSshConnectionGeneration?: number
+  expectedExternalSshTargetId?: string
+}
+
+function assertExternalSshReadOwnership(
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
+  connectionId: string | undefined,
+  expectedExternalSshTargetId: string | undefined
+): void {
+  const expectedTargetId = expectedExternalSshTargetId?.trim()
+  if (
+    expectedTargetId &&
+    (getActiveRuntimeTarget(settings).kind === 'environment' || connectionId !== expectedTargetId)
+  ) {
+    throw new Error('External SSH files are not available after the workspace host changes.')
+  }
 }
 
 function withSshMutationExpectation<T extends object>(
@@ -227,8 +243,10 @@ export async function readRuntimeFileContent({
   relativePath,
   worktreeId,
   connectionId,
+  expectedExternalSshTargetId,
   includeLocalLogMetadata
 }: RuntimeFileReadArgs): Promise<RuntimeReadableFileContent> {
+  assertExternalSshReadOwnership(settings, connectionId, expectedExternalSshTargetId)
   const target = getActiveRuntimeTarget(settings)
   if (target.kind !== 'environment') {
     return window.api.fs.readFile({ filePath, connectionId, includeLocalLogMetadata })
@@ -275,6 +293,11 @@ export async function readRuntimeFilePreview(
   context: RuntimeFileOperationArgs,
   filePath: string
 ): Promise<RuntimeFilePreviewResult> {
+  assertExternalSshReadOwnership(
+    context.settings,
+    context.connectionId,
+    context.expectedExternalSshTargetId
+  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {
@@ -295,6 +318,11 @@ export async function downloadRuntimeFile(
   filePath: string,
   suggestedName: string
 ): Promise<RuntimeFileDownloadResult> {
+  assertExternalSshReadOwnership(
+    context.settings,
+    context.connectionId,
+    context.expectedExternalSshTargetId
+  )
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     if (hasRemoteRuntimeOwner(context)) {

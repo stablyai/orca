@@ -12,6 +12,7 @@ import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings, TuiAgent } from '../../src/shared/types'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/constants'
+import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 
 type OnboardingState = {
   closedAt: number | null
@@ -421,43 +422,38 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    await orcaPage.evaluate(async () => {
+    // Why: since #10011 `settings:set` strips activeRuntimeEnvironmentId — the
+    // durable Active Server preference is only writable through its dedicated
+    // handler, which resolves the id against the main-process environment
+    // store. So the host has to be registered for real, not faked in the
+    // renderer. Pairing is offline (no live server needed).
+    const pairingCode = encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      scope: 'runtime',
+      endpoint: 'wss://e2e.invalid/ws',
+      deviceToken: 'e2e-device-token',
+      publicKeyB64: 'ZTJlLXB1YmxpYy1rZXk'
+    })
+    const environmentId = await orcaPage.evaluate(async (code) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
+      const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
+        name: 'E2E Server',
+        pairingCode: code
+      })
       // Why: after #5071 the server-path add step gates on the registered
       // runtime-environment list (store.runtimeEnvironments), not just the
-      // activeRuntimeEnvironmentId setting. Seed a redacted environment so the
-      // host option exists and the "on host" add UI renders.
-      const now = Date.now()
-      store.getState().setRuntimeEnvironments([
-        {
-          id: 'env-e2e',
-          name: 'E2E Server',
-          createdAt: now,
-          updatedAt: now,
-          lastUsedAt: null,
-          runtimeId: null,
-          source: 'manual',
-          endpoints: [
-            {
-              id: 'ws-env-e2e',
-              kind: 'websocket',
-              label: 'WebSocket',
-              endpoint: 'wss://e2e.invalid/ws'
-            }
-          ],
-          preferredEndpointId: 'ws-env-e2e'
-        }
-      ])
+      // activeRuntimeEnvironmentId setting.
+      store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
       // Why: a runtime host is only auto-selectable (health 'available') when it
       // has a live, protocol-compatible status; without one it reads
       // 'disconnected' and the Add Project dialog falls back to Local Mac.
       // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
-      store.getState().setRuntimeEnvironmentStatus('env-e2e', {
+      store.getState().setRuntimeEnvironmentStatus(environment.id, {
         status: {
-          runtimeId: 'env-e2e-runtime',
+          runtimeId: `${environment.id}-runtime`,
           rendererGraphEpoch: 0,
           graphStatus: 'ready',
           authoritativeWindowId: null,
@@ -466,15 +462,23 @@ test.describe('Onboarding flow', () => {
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 1
         },
-        checkedAt: now
+        checkedAt: Date.now()
       })
-      await store.getState().updateSettings({ activeRuntimeEnvironmentId: 'env-e2e' })
-    })
+      // Why: the store's switchRuntimeEnvironment probes reachability, which a
+      // synthetic host can't satisfy — write the preference directly and push
+      // the returned settings in rather than refetching (fetchSettings would
+      // kick off a status hydrate that clobbers the seeded 'available' health).
+      const settings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+        environmentId: environment.id
+      })
+      store.setState({ settings })
+      return environment.id
+    }, pairingCode)
     await expect
       .poll(async () => (await getSettings(orcaPage)).activeRuntimeEnvironmentId, {
         timeout: 5_000
       })
-      .toBe('env-e2e')
+      .toBe(environmentId)
 
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 

@@ -8,13 +8,17 @@ import type {
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsResult,
   RuntimeSessionTabCloseReason,
+  RuntimeTerminalCreate,
   RuntimeTerminalClose,
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session-resume'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session-resume'
+import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -44,7 +48,10 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from './web-terminal-surface-id'
-import { deliverLaunchPromptToAgentTab } from '../lib/agent-launch-prompt-delivery'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '../lib/agent-launch-prompt-delivery'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
@@ -52,6 +59,8 @@ import {
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -136,6 +145,15 @@ type CreatedWebRuntimeSessionTerminal = {
   hostTabId?: string
 }
 
+type CreatedAgentTerminalIdentity = Pick<RuntimeTerminalCreate, 'tabId' | 'paneKey'> & {
+  leafId?: string
+}
+
+function createdTerminalLeafId(terminal: CreatedAgentTerminalIdentity): string | undefined {
+  const pane = parsePaneKey(terminal.paneKey ?? '')
+  return pane && pane.tabId === terminal.tabId ? pane.leafId : undefined
+}
+
 export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<WebRuntimeTerminalCreateOutcome> {
@@ -168,6 +186,28 @@ export async function createWebRuntimeAgentSessionTerminal(
   return { outcome: created.outcome, promptDelivered }
 }
 
+/**
+ * Launch a web-host agent terminal whose draft already rode in on the launch
+ * command (argv prefill). No post-ready paste runs for that delivery, so seed
+ * the chat-composer copy here once the mirrored host tab id is known.
+ */
+export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
+  args: CreateWebRuntimeSessionTerminalArgs & {
+    agent: TuiAgent
+    launchDraft: string
+  }
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  if (created.outcome.status !== 'failed' && created.hostTabId) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      agent: args.agent,
+      text: args.launchDraft
+    })
+  }
+  return created.outcome
+}
+
 async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
@@ -190,10 +230,11 @@ async function createWebRuntimeSessionTerminalResult(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   if (args.selectWorktree !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   let hostCreated = false
   let createdTabId: string | undefined
+  let createdLeafId: string | undefined
   try {
     const agent = args.launchAgent ?? args.agent
     const agentArgsOverride =
@@ -201,6 +242,7 @@ async function createWebRuntimeSessionTerminalResult(
     if (agent) {
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
+      // Why: focus belongs to the paired client; a headless execution host has no renderer to focus.
       const hostAuthority = args.afterTabId
         ? undefined
         : args.agentSessionKind === 'resume'
@@ -214,11 +256,14 @@ async function createWebRuntimeSessionTerminalResult(
                       worktree: toRuntimeWorktreeSelector(args.worktreeId),
                       agent,
                       providerSession: args.providerSession!,
+                      ...(args.launchConfig?.ompResumeFilePath
+                        ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+                        : {}),
                       ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
-                      presentation: args.activate === false ? 'background' : 'focused'
+                      presentation: 'background'
                     },
                     timeoutMs: 15_000
                   })) as RuntimeRpcResponse<RuntimeEnsureAgentSessionResult>
@@ -243,7 +288,7 @@ async function createWebRuntimeSessionTerminalResult(
                           : {}),
                         ...(args.cwd ? { startupCwd: args.cwd } : {}),
                         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
-                        presentation: args.activate === false ? 'background' : 'focused'
+                        presentation: 'background'
                       },
                       clientOperationId
                     ),
@@ -251,9 +296,14 @@ async function createWebRuntimeSessionTerminalResult(
                   })) as RuntimeRpcResponse<RuntimeCreateAgentSessionResult>
                 )
               )
-      const created = await runRemoteAgentSessionLaunch<{ terminal: { tabId?: string } }>({
+      const created = await runRemoteAgentSessionLaunch<{
+        terminal: CreatedAgentTerminalIdentity
+      }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
+        ...(args.agentSessionKind === 'resume' && agent === 'omp'
+          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
+          : {}),
         legacy: async () => {
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
@@ -282,11 +332,19 @@ async function createWebRuntimeSessionTerminalResult(
             response as RuntimeRpcResponse<RuntimeMobileSessionCreateTerminalResult>
           )
           legacyAlreadyPlacedInGroup = true
-          return { terminal: { tabId: legacyCreated.tab.id } }
+          return {
+            terminal: {
+              tabId: legacyCreated.tab.id,
+              leafId: legacyCreated.tab.leafId
+            }
+          }
         }
       })
       hostCreated = true
       createdTabId = created.terminal.tabId
+      createdLeafId = legacyAlreadyPlacedInGroup
+        ? created.terminal.leafId
+        : createdTerminalLeafId(created.terminal)
       if (args.targetGroupId && createdTabId && !legacyAlreadyPlacedInGroup) {
         await callEnvironment({
           method: 'session.tabs.move',
@@ -326,14 +384,17 @@ async function createWebRuntimeSessionTerminalResult(
       )
       hostCreated = true
       createdTabId = created.tab.id
+      createdLeafId = created.tab.leafId
     }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Why: record focus intent so the reconcile follows the snapshot's active
       // tab to THIS new terminal, instead of sticky-keeping the prior tab.
-      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId)
+      recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
-      expectedEnvironmentPairingRevision: intentOwner.pairingRevision
+      expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
+      // Why: the publication can beat the RPC response; replay it once after caller focus intent exists.
+      acceptCurrentSnapshot: args.activate !== false && Boolean(createdTabId)
     })
     return {
       outcome: { status: 'created' },
@@ -377,7 +438,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldSelectWorktree = args.selectWorktree !== false
   const stagedFromWorktreeId = useAppStore.getState().activeWorktreeId
   if (shouldSelectWorktree) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   try {
     const response = await callEnvironment({
@@ -443,7 +504,7 @@ function stageWebRuntimeBrowserTab(args: {
     remotePageId
   )
   if (args.restoreFocus !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, args.environmentId)
   }
 
   if (existing) {
@@ -473,8 +534,8 @@ function stageWebRuntimeBrowserTab(args: {
   })
 }
 
-function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId)
+function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
+  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
 }
 
 function findLocalBrowserPageForRemotePage(
@@ -846,9 +907,12 @@ async function callWebRuntimeSessionTabMethod(
         tabId: hostTabId,
         ...(method === 'session.tabs.activate'
           ? {
-              // Why: the additive intent protects new hosts while notifyClients:false protects old hosts.
+              // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
-              navigation: 'caller' as const
+              navigation: 'caller' as const,
+              // Why: every caller here is a tab click, shortcut, or palette pick —
+              // the gesture that is supposed to wake a slept pane.
+              intent: 'user' as const
             }
           : {}),
         ...(isLifecycleClose

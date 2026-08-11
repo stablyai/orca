@@ -3,6 +3,7 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -17,6 +18,7 @@ const mockStore = vi.hoisted(() => ({
 // (React.memo shallow-equal props) does NOT invoke it — which is the claim
 // under test: order-preserving epoch bumps must not re-render cards.
 const cardRenderSpy = vi.hoisted(() => vi.fn())
+const trackSpy = vi.hoisted(() => vi.fn())
 
 type WorktreeListComponent = React.ComponentType<{
   scrollOffsetRef: React.RefObject<number>
@@ -95,6 +97,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 vi.mock('@/lib/sidebar-worktree-activation', () => ({
   activateWorktreeFromSidebar: mockStore.activateWorktreeFromSidebar
 }))
+
+vi.mock('@/lib/telemetry', () => ({ track: trackSpy }))
 
 vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
@@ -319,5 +323,58 @@ describe('WorktreeCard memo bail-out across epoch bumps', () => {
     // The changed card re-renders; identity reuse must not freeze real updates.
     expect(cardRenderSpy.mock.calls.length).toBeGreaterThan(countAfterMount)
     expect(cardRenderSpy).toHaveBeenCalledWith('wt-a')
+  })
+
+  it('tracks Smart attention changes that preserve the displayed order', async () => {
+    mockStore.state = { ...mockStore.state, sortBy: 'smart' }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+
+    await renderList(root)
+    const renderedOrder = (): (string | null)[] =>
+      [...container.querySelectorAll('[data-mock-worktree-card]')].map((card) =>
+        card.getAttribute('data-mock-worktree-card')
+      )
+    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
+    expect(trackSpy).not.toHaveBeenCalledWith('smart_sort_class_distribution', expect.anything())
+
+    const now = Date.now()
+    const paneKey = 'tab-a:11111111-1111-4111-8111-111111111111'
+    const working: AgentStatusEntry = {
+      state: 'working',
+      prompt: '',
+      updatedAt: now,
+      stateStartedAt: now,
+      agentType: 'codex',
+      paneKey,
+      worktreeId: 'wt-a',
+      stateHistory: []
+    }
+    mockStore.state = {
+      ...mockStore.state,
+      agentStatusByPaneKey: { [paneKey]: working },
+      repos: [...(mockStore.state.repos as Repo[])]
+    }
+    await renderList(root)
+
+    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
+    expect(trackSpy).toHaveBeenCalledWith(
+      'smart_sort_class_distribution',
+      expect.objectContaining({ class_3: 1, total_worktrees: 2 })
+    )
+
+    mockStore.state = {
+      ...mockStore.state,
+      agentStatusByPaneKey: {
+        [paneKey]: { ...working, state: 'blocked', stateStartedAt: now + 1, updatedAt: now + 1 }
+      },
+      repos: [...(mockStore.state.repos as Repo[])]
+    }
+    await renderList(root)
+
+    expect(renderedOrder()).toEqual(['wt-a', 'wt-b'])
+    expect(trackSpy).toHaveBeenCalledWith('smart_sort_class_1_promotion', { cause: 'blocked' })
   })
 })

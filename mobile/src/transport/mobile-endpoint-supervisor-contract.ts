@@ -3,7 +3,7 @@ import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bund
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 import type { RpcClient } from './rpc-client'
-import type { HostProfile } from './types'
+import type { ConnectionLogSink, HostProfile } from './types'
 
 export type MobileEndpointSupervisorDependencies = {
   openDirect: (endpoint: string) => RpcClient
@@ -20,4 +20,5 @@ export type MobileEndpointSupervisorDependencies = {
   randomBytes: (length: number) => Uint8Array
   setTimer: typeof setTimeout
   clearTimer: typeof clearTimeout
+  onLog?: ConnectionLogSink
 }

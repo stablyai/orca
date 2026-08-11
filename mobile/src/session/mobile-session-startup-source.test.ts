@@ -5,6 +5,14 @@ const source = readFileSync(
   new URL('../../app/h/[hostId]/session/[worktreeId].tsx', import.meta.url),
   'utf8'
 )
+const reconciliationHookSource = readFileSync(
+  new URL('./use-mobile-session-tabs-reconciliation.ts', import.meta.url),
+  'utf8'
+)
+const autoCreateHookSource = readFileSync(
+  new URL('./use-initial-session-terminal-autocreate.ts', import.meta.url),
+  'utf8'
+)
 
 function sliceBetween(startPattern: string, endPattern: string): string {
   const start = source.indexOf(startPattern)
@@ -15,38 +23,68 @@ function sliceBetween(startPattern: string, endPattern: string): string {
 }
 
 describe('mobile session startup', () => {
-  it('auto-creates one terminal for an initially empty connected session', () => {
-    expect(source).toContain('const initialEmptySessionAutoCreateRef = useRef<string | null>(null)')
-    expect(source).toContain('initialEmptySessionAutoCreateRef.current = null')
-
-    const autoCreateEffect = sliceBetween(
-      'if (\n      !client ||\n      !showEmptyState',
-      'const terminalSummary ='
+  it('auto-creates one terminal for a newly created empty session', () => {
+    expect(source).toContain('useWorktreeSessionTabsLoaded(worktreeId)')
+    expect(source).toContain(
+      'initialSessionAutoCreateRef.current = createInitialSessionAutoCreateState()'
     )
-    expect(autoCreateEffect).toContain('initialEmptySessionAutoCreateRef.current === worktreeId')
-    expect(autoCreateEffect).toContain('initialEmptySessionAutoCreateRef.current = worktreeId')
-    expect(autoCreateEffect).toContain("setCreateError('')")
-    expect(autoCreateEffect).toContain('void handleCreateTerminal()')
+
+    const autoCreateCall = sliceBetween(
+      'useInitialSessionTerminalAutoCreate({',
+      'const connectionVerdict ='
+    )
+    expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
+    expect(autoCreateCall).toContain(
+      'consumeCreationRoute: () => router.setParams({ created: undefined })'
+    )
+    expect(autoCreateCall).toContain("newlyCreatedWorkspace: created === '1'")
+    expect(autoCreateCall).toContain('visibleTabCount: visibleTabs.length')
+    expect(autoCreateCall).toContain('createTerminal: () => void handleCreateTerminal()')
+
+    expect(autoCreateHookSource).toContain('shouldAutoCreateInitialSessionTerminal({')
+    expect(autoCreateHookSource).toContain('stateRef.current.autoCreatedForWorktree === worktreeId')
+    expect(autoCreateHookSource).toContain('stateRef.current.autoCreatedForWorktree = worktreeId')
+    expect(autoCreateHookSource).toContain("connState === 'connected'")
+    expect(autoCreateHookSource).toContain('(visibleTabCount > 0 || activeHandle !== null)')
+    // Why: both callbacks are re-created every render, so the effect must reach them
+    // through useEffectEvent rather than deps or a render-time ref write.
+    expect(autoCreateHookSource).toContain('useEffectEvent(args.consumeCreationRoute)')
+    expect(autoCreateHookSource).toContain('useEffectEvent(args.createTerminal)')
+    expect(autoCreateHookSource).toContain('consumeCreationRoute()')
+    expect(autoCreateHookSource).toContain('createTerminal()')
   })
 
-  it('stops fallback list polling in the background and reconciles on resume', () => {
-    const pollEffect = sliceBetween(
-      "const refreshOnForeground = () => {\n        if (AppState.currentState !== 'active')",
-      '// Why: pick up Settings → Terminal text size on return'
+  it('arms the auto-create only until the route has published a tab (#9717)', () => {
+    // Emptiness after a populated list is a close, not a cold hydrate.
+    expect(source).toContain(
+      'initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0'
     )
 
-    expect(pollEffect).toContain(
-      "if (AppState.currentState !== 'active') {\n          return\n        }\n        void fetchSessionTabs()"
+    const autoCreateCall = sliceBetween(
+      'useInitialSessionTerminalAutoCreate({',
+      'const connectionVerdict ='
     )
-    expect(pollEffect).toContain('void fetchTerminals()')
-    expect(pollEffect).toContain("AppState.addEventListener('change'")
-    expect(pollEffect).toContain("if (state === 'active') {\n          refreshOnForeground()")
-    expect(pollEffect).toContain('const interval = setInterval(refreshOnForeground, 2000)')
-    expect(pollEffect.lastIndexOf('\n      refreshOnForeground()')).toBeGreaterThan(
-      pollEffect.indexOf("AppState.addEventListener('change'")
+    expect(autoCreateCall).toContain('stateRef: initialSessionAutoCreateRef')
+    expect(autoCreateHookSource).toContain('sawSessionTabs: stateRef.current.sawSessionTabs')
+  })
+
+  it('delegates stream ownership while retaining the exact terminal polling cadence', () => {
+    expect(source).toContain('useMobileSessionTabsReconciliation<')
+    expect(source).toContain('const applicationRevision = ++appliedSessionTabsRevisionRef.current')
+    expect(source).toContain('getApplicationRevision: getSessionTabsApplicationRevision')
+    expect(source).not.toContain("client.subscribe(\n      'session.tabs.subscribe'")
+    expect(reconciliationHookSource).toContain("client.subscribe(\n      'session.tabs.subscribe'")
+    expect(reconciliationHookSource).toContain(
+      "if (AppState.currentState !== 'active') {\n          controller.setReconciliationActive(false)"
     )
-    expect(pollEffect).toContain('clearInterval(interval)')
-    expect(pollEffect).toContain('appStateSubscription.remove()')
+    expect(reconciliationHookSource).toContain('void controller.poll()')
+    expect(reconciliationHookSource).toContain('void fetchTerminals()')
+    expect(reconciliationHookSource).toContain("AppState.addEventListener('change'")
+    expect(reconciliationHookSource).toContain('const interval = setInterval(')
+    expect(reconciliationHookSource).toContain('2000')
+    expect(reconciliationHookSource).toContain('controller.setReconciliationActive(false)')
+    expect(reconciliationHookSource).toContain('clearInterval(interval)')
+    expect(reconciliationHookSource).toContain('appStateSubscription.remove()')
   })
 
   it('loads session tabs without waiting for desktop activation', () => {
@@ -62,7 +100,7 @@ describe('mobile session startup', () => {
     expect(startupEffect).toContain("navigation: 'caller'")
     expect(startupEffect).not.toContain("await client\n          .sendRequest('worktree.activate'")
     expect(startupEffect.indexOf("sendRequest('worktree.activate'")).toBeLessThan(
-      startupEffect.indexOf('await fetchSessionTabs()')
+      startupEffect.indexOf('await ensureSessionTabs()')
     )
     expect(startupEffect).toContain('headlessActivationNeedsHostRenderer(response.result)')
     expect(startupEffect).toContain("showToast('Open Orca on the host to wake sleeping agents.'")

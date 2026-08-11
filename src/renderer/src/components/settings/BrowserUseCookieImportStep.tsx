@@ -1,5 +1,6 @@
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import {
@@ -15,7 +16,7 @@ import {
 } from '../ui/dropdown-menu'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
 import { translate } from '@/i18n/i18n'
 
@@ -47,7 +48,8 @@ export function BrowserUseCookieImportStep({
       .importCookiesFromBrowser(profileId, browserFamily, browserProfile)
     if (result.ok) {
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserUsePane.2ea4617e3a',
           'Imported {{value0}} cookies from {{value1}}{{value2}}.',
@@ -66,7 +68,8 @@ export function BrowserUseCookieImportStep({
   const handleImportFromFile = async (): Promise<void> => {
     const result = await useAppStore.getState().importCookiesToProfile('default')
     if (result.ok) {
-      toast.success(
+      emitBrowserCookieImportToast(
+        result.summary,
         translate(
           'auto.components.settings.BrowserUsePane.8f2675c2f3',
           'Imported {{value0}} cookies from file.',

@@ -54,7 +54,8 @@ vi.mock('../ipc/filesystem-auth', async () => {
 })
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
-  getSshFilesystemProvider: getSshFilesystemProviderMock
+  getSshFilesystemProvider: getSshFilesystemProviderMock,
+  onSshFilesystemProviderRegistered: () => () => undefined
 }))
 
 import {

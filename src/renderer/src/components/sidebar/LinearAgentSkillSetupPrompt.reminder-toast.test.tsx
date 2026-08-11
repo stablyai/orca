@@ -119,6 +119,7 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
 }
 

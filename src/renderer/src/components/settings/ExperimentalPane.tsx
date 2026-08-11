@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
@@ -8,6 +9,7 @@ import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { NativeChatExperimentalSetting } from './NativeChatExperimentalSetting'
+import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import {
   MAX_AGENT_HIBERNATION_IDLE_MS,
@@ -85,23 +87,13 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalPet}
-              onClick={() => {
-                updateSettings({ experimentalPet: !settings.experimentalPet })
+            <Switch
+              aria-label={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
+              checked={settings.experimentalPet}
+              onCheckedChange={(checked) => {
+                updateSettings({ experimentalPet: checked })
               }}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalPet ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalPet ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            />
           </div>
         </SearchableSetting>
       ) : null}
@@ -128,73 +120,24 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalActivity}
-              onClick={() =>
-                updateSettings({
-                  experimentalActivity: !settings.experimentalActivity
-                })
-              }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalActivity ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalActivity ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-        </SearchableSetting>
-      ) : null}
-
-      {showAgentDashboard ? (
-        <SearchableSetting
-          title={translate(
-            'auto.components.settings.ExperimentalPane.agentDashboard.title',
-            'Agent Dashboard'
-          )}
-          description={translate(
-            'auto.components.settings.ExperimentalPane.agentDashboard.description',
-            'Pop-out Kanban board for monitoring agents across worktrees.'
-          )}
-          keywords={getExperimentalSearchEntry().agentDashboard.keywords}
-          className="space-y-3 py-2"
-          id="experimental-agent-dashboard"
-        >
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 shrink space-y-0.5">
-              <Label>
-                {translate(
-                  'auto.components.settings.ExperimentalPane.agentDashboard.title',
-                  'Agent Dashboard'
-                )}
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                {translate(
-                  'auto.components.settings.ExperimentalPane.agentDashboard.copy',
-                  'Adds an Agent Dashboard entry to the left sidebar. Open it to monitor attention, working, and idle agents in a separate window and jump into their live terminals.'
-                )}
-              </p>
-            </div>
-            <SettingsSwitch
-              checked={settings.experimentalAgentDashboardPopout === true}
-              ariaLabel={translate(
-                'auto.components.settings.ExperimentalPane.agentDashboard.toggleLabel',
-                'Toggle Agent Dashboard'
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.ExperimentalPane.a05bcdaf57',
+                'Agents View'
               )}
-              onChange={() =>
+              checked={settings.experimentalActivity}
+              onCheckedChange={(checked) =>
                 updateSettings({
-                  experimentalAgentDashboardPopout:
-                    settings.experimentalAgentDashboardPopout !== true
+                  experimentalActivity: checked
                 })
               }
             />
           </div>
         </SearchableSetting>
+      ) : null}
+
+      {showAgentDashboard ? (
+        <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showNativeChat ? (
@@ -229,25 +172,18 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalTerminalAttention}
-              onClick={() =>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.ExperimentalPane.ec897e8d89',
+                'Terminal attention'
+              )}
+              checked={settings.experimentalTerminalAttention}
+              onCheckedChange={(checked) =>
                 updateSettings({
-                  experimentalTerminalAttention: !settings.experimentalTerminalAttention
+                  experimentalTerminalAttention: checked
                 })
               }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalTerminalAttention ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalTerminalAttention ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            />
           </div>
         </SearchableSetting>
       ) : null}

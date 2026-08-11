@@ -36,7 +36,26 @@ function compactTerminalText(buffer: string): string {
 function hasClaudeModelSwitchSuccess(buffer: string, modelLabel: string): boolean {
   const text = compactTerminalText(buffer)
   const marker = `setmodelto${modelLabel.replace(/\s+/g, '').toLowerCase()}`
-  return text.includes(marker)
+  if (text.includes(marker)) {
+    return true
+  }
+  // Why: resolved echoes insert a version ("Opus 5 (1M context)"); retaining
+  // every picker token prevents one context variant from confirming another.
+  const labelTokens = modelLabel.toLowerCase().match(/[a-z]+|\d+[a-z]*/g) ?? []
+  const successStart = text.lastIndexOf('setmodelto')
+  if (successStart < 0 || labelTokens.length === 0) {
+    return false
+  }
+  const successText = text.slice(successStart)
+  let tokenEnd = 0
+  for (const token of labelTokens) {
+    const tokenStart = successText.indexOf(token, tokenEnd)
+    if (tokenStart < 0) {
+      return false
+    }
+    tokenEnd = tokenStart + token.length
+  }
+  return true
 }
 
 function hasClaudeModelSwitchRejection(buffer: string): boolean {

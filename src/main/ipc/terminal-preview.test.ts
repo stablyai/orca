@@ -1,20 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { handlers, ipcMainMock, isDashboardPopoutRendererMock } = vi.hoisted(() => {
-  const map = new Map<string, (...args: unknown[]) => unknown>()
-  return {
-    handlers: map,
-    ipcMainMock: {
-      removeHandler: vi.fn(),
-      handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
-    },
-    isDashboardPopoutRendererMock: vi.fn(() => true)
-  }
-})
+const { handlers, ipcMainMock, isDashboardPopoutRendererMock, isTrustedUIRendererMock } =
+  vi.hoisted(() => {
+    const map = new Map<string, (...args: unknown[]) => unknown>()
+    return {
+      handlers: map,
+      ipcMainMock: {
+        removeHandler: vi.fn(),
+        handle: (channel: string, fn: (...args: unknown[]) => unknown) => map.set(channel, fn)
+      },
+      isDashboardPopoutRendererMock: vi.fn(() => true),
+      isTrustedUIRendererMock: vi.fn(() => false)
+    }
+  })
 
 vi.mock('electron', () => ({ ipcMain: ipcMainMock }))
 vi.mock('../window/dashboard-popout-window', () => ({
   isDashboardPopoutRenderer: isDashboardPopoutRendererMock
+}))
+vi.mock('./ui', () => ({
+  isTrustedUIRenderer: isTrustedUIRendererMock
 }))
 
 import { registerTerminalPreviewHandlers } from './terminal-preview'
@@ -82,6 +87,7 @@ describe('registerTerminalPreviewHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     isDashboardPopoutRendererMock.mockReturnValue(true)
+    isTrustedUIRendererMock.mockReturnValue(false)
   })
   afterEach(() => {
     vi.clearAllMocks()
@@ -279,6 +285,27 @@ describe('registerTerminalPreviewHandlers', () => {
     expect(runtime.serializeTerminalBuffer).not.toHaveBeenCalled()
     expect(runtime.subscribeToTerminalData).not.toHaveBeenCalled()
     expect(runtime.writeTerminalPreviewInput).not.toHaveBeenCalled()
+  })
+
+  // The in-window dashboard overlay hosts the preview dialog from the main
+  // renderer, which is trusted but is not the popout window.
+  it('admits the trusted main renderer when it is not the popout', async () => {
+    const runtime = makeRuntime()
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+    isDashboardPopoutRendererMock.mockReturnValue(false)
+    isTrustedUIRendererMock.mockReturnValue(true)
+
+    await expect(
+      handlers.get('terminalPreview:connect')!(eventFor(sender), { ptyId: 'p1' })
+    ).resolves.toEqual({
+      snapshot: { data: 'screen', cols: 80, rows: 20, seq: 5 },
+      replay: []
+    })
+    await expect(
+      handlers.get('terminalPreview:input')!(eventFor(sender), { ptyId: 'p1', data: 'x' })
+    ).resolves.toBe(true)
+    expect(runtime.writeTerminalPreviewInput).toHaveBeenCalledWith('p1', 'x')
   })
 
   it('pushes a resync only when the PTY grid dimensions change', async () => {

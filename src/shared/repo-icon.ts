@@ -1,3 +1,5 @@
+import { validateRasterImageDataUri } from './image-data-uri'
+
 export type RepoIconImageSource = 'upload' | 'file' | 'favicon' | 'github'
 
 export type RepoIcon =
@@ -29,8 +31,24 @@ export function faviconUrlFromWebsite(rawUrl: string): string | null {
   }
 }
 
+type GitHubAvatarSlug = { owner: string; repo: string; host?: string }
+
+/**
+ * Pick the owner whose avatar represents a repo, given its `origin` and fork parent.
+ * Why: a same-name fork is a personal copy, so it reads as the parent project; a
+ * renamed fork is its own project and keeps its own owner.
+ */
+export function githubAvatarSlug(
+  origin: GitHubAvatarSlug | null | undefined,
+  upstream: GitHubAvatarSlug | null | undefined
+): GitHubAvatarSlug | null {
+  const renamedFork =
+    origin && upstream && origin.repo.toLowerCase() !== upstream.repo.toLowerCase()
+  return renamedFork ? origin : (upstream ?? origin ?? null)
+}
+
 // Why: shared default icon URL/label for main auto-detect and the renderer picker.
-export function githubAvatarIcon(slug: { owner: string; repo: string; host?: string }): RepoIcon {
+export function githubAvatarIcon(slug: GitHubAvatarSlug): RepoIcon {
   // Why: GHES uses the same /<login>.png avatar path as github.com.
   const host = normalizeGitHubAvatarHost(slug.host)
   return {
@@ -62,8 +80,18 @@ function normalizeGitHubAvatarHost(rawHost?: string): string {
 }
 
 function isSupportedImageSrc(src: string, source: RepoIconImageSource): boolean {
-  if (source === 'upload' || source === 'file') {
-    return /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src)
+  if (source === 'upload') {
+    return (
+      /^data:image\/png;base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
+      validateRasterImageDataUri(src) !== null
+    )
+  }
+
+  if (source === 'file') {
+    return (
+      /^data:image\/(?:png|webp);base64,[A-Za-z0-9+/=\s]+$/i.test(src) &&
+      validateRasterImageDataUri(src) !== null
+    )
   }
 
   let url: URL

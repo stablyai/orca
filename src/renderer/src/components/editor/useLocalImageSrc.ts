@@ -22,6 +22,7 @@ export function getLocalImageCacheKey(
   return [
     runtimeEnvironmentId,
     runtimeContext?.connectionId ?? connectionId ?? 'local',
+    runtimeContext?.expectedExternalSshTargetId ?? '',
     runtimeContext?.worktreeId ?? 'unknown-worktree',
     absolutePath
   ].join('\0')

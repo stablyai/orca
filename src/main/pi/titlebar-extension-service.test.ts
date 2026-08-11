@@ -94,6 +94,10 @@ describe('PiTitlebarExtensionService', () => {
     rmSync(join(userDataDir, 'pi-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-agent-overlays'), { recursive: true, force: true })
     rmSync(join(userDataDir, 'omp-managed-status-extension'), { recursive: true, force: true })
+    rmSync(join(userDataDir, 'prime-agent-managed-status-extension'), {
+      recursive: true,
+      force: true
+    })
   })
 
   function expectPiHomeIntact(): void {
@@ -161,6 +165,38 @@ describe('PiTitlebarExtensionService', () => {
     svc.clearPty('pty-2')
 
     expect(existsSync(join(piHome, 'extensions', 'orca-agent-status.ts'))).toBe(true)
+    expectPiHomeIntact()
+  })
+
+  it('installs only Prime status into the selected Prime agent dir', () => {
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildPtyEnv('pty-prime', piHome, 'prime-agent')
+
+    expect(env).toEqual({ ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: piHome })
+    expect(readdirSync(join(piHome, 'extensions')).sort()).toEqual([
+      'orca-agent-status.ts',
+      'user-ext'
+    ])
+    const source = readFileSync(join(piHome, 'extensions', 'orca-agent-status.ts'), 'utf-8')
+    expect(source).toContain('/hook/prime-agent')
+    expect(source).not.toContain("return '/hook/omp'")
+    expect(existsSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'))).toBe(false)
+    expect(existsSync(join(piHome, 'extensions', 'orca-prefill.ts'))).toBe(false)
+    expectPiHomeIntact()
+  })
+
+  it('writes a Prime status-only extension outside the guest-owned config dir', () => {
+    const svc = new PiTitlebarExtensionService()
+    const env = svc.buildStatusOnlyPtyEnv('prime-agent')
+    const statusPath = join(
+      userDataDir,
+      'prime-agent-managed-status-extension',
+      'orca-agent-status.ts'
+    )
+
+    expect(env).toEqual({ ORCA_PRIME_AGENT_STATUS_EXTENSION: statusPath })
+    expect(readFileSync(statusPath, 'utf8')).toContain('/hook/prime-agent')
+    expect(readFileSync(statusPath, 'utf8')).not.toContain("return '/hook/omp'")
     expectPiHomeIntact()
   })
 
@@ -638,6 +674,35 @@ describe('PiTitlebarExtensionService', () => {
           'orca-prefill.ts',
           'orca-titlebar-spinner.ts'
         ])
+      } finally {
+        homedirOverride.current = ''
+        rmSync(fakeHome, { recursive: true, force: true })
+      }
+    })
+
+    it('bare-shell prep does not create missing ~/.pi or ~/.omp homes (#10196)', () => {
+      const fakeHome = mkdtempSync(join(tmpdir(), 'orca-no-eager-agent-home-'))
+      expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
+      expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
+
+      homedirOverride.current = fakeHome
+      try {
+        const svc = new PiTitlebarExtensionService()
+        const piEnv = svc.buildPtyEnv('pty-bare-pi', undefined, 'pi', {
+          materializeDefaultHome: false
+        })
+        const ompEnv = svc.buildPtyEnv('pty-bare-omp', undefined, 'omp', {
+          materializeDefaultHome: false
+        })
+
+        expect(piEnv).toEqual({})
+        expect(existsSync(join(fakeHome, '.pi'))).toBe(false)
+        expect(existsSync(join(fakeHome, '.omp'))).toBe(false)
+        expect(ompEnv.ORCA_OMP_SOURCE_AGENT_DIR).toBeUndefined()
+        expect(ompEnv.ORCA_OMP_STATUS_EXTENSION).toEqual(
+          expect.stringContaining('omp-managed-status-extension')
+        )
+        expect(existsSync(ompEnv.ORCA_OMP_STATUS_EXTENSION!)).toBe(true)
       } finally {
         homedirOverride.current = ''
         rmSync(fakeHome, { recursive: true, force: true })

@@ -483,7 +483,6 @@ async function main() {
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
       ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0',
       ...(options.headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
     }
   })
@@ -572,7 +571,7 @@ async function main() {
     if (options.output) {
       mkdirSync(path.dirname(path.resolve(options.output)), { recursive: true })
       writeFileSync(options.output, `${JSON.stringify(report, null, 2)}\n`)
-      console.log(`[idle-cpu] wrote ${options.output}`)
+      console.log(`[idle-cpu] wrote ${String(options.output)}`)
     }
     console.log(
       JSON.stringify(

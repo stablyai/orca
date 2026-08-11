@@ -66,8 +66,13 @@ describe('TerminalHost', () => {
     _onDataCb: ((data: string) => void) | null
     _onExitCb: ((code: number) => void) | null
   }
+  let platformDescriptor: PropertyDescriptor | undefined
 
   beforeEach(() => {
+    // Pin POSIX so plain-shell teardown is deterministic across host OSes (matches linux CI);
+    // the Windows taskkill /T /F tree-kill path is covered in terminal-session-teardown.test.ts.
+    platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     killWithDescendantSweepMock.mockReset()
     spawnFn = vi.fn(() => {
       const sub = createMockSubprocess() as ReturnType<typeof createMockSubprocess> & {
@@ -82,6 +87,9 @@ describe('TerminalHost', () => {
 
   afterEach(async () => {
     await host.dispose()
+    if (platformDescriptor) {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
   })
 
   it('rejects missing strict inspection', () =>
@@ -415,30 +423,8 @@ describe('TerminalHost', () => {
       ).resolves.toMatchObject({ isNew: false })
     })
 
-    it('force-kills immediately when requested', async () => {
-      await host.createOrAttach({
-        sessionId: 'session-1',
-        cols: 80,
-        rows: 24,
-        streamClient: { onData: vi.fn(), onExit: vi.fn() }
-      })
-      lastSubprocess.forceKill = vi.fn()
-
-      const killed = host.kill('session-1', { immediate: true })
-
-      expect(lastSubprocess.kill).not.toHaveBeenCalled()
-      expect(lastSubprocess.forceKill).toHaveBeenCalled()
-      expect(killWithDescendantSweepMock).not.toHaveBeenCalled()
-      expect(lastSubprocess.dispose).not.toHaveBeenCalled()
-      expect(host.listSessions()).toHaveLength(1)
-
-      lastSubprocess._onExitCb?.(137)
-      await killed
-
-      expect(lastSubprocess.dispose).toHaveBeenCalled()
-      expect(host.listSessions()).toHaveLength(0)
-      expect(host.isKilled('session-1')).toBe(true)
-    })
+    // Plain-shell immediate force-kill (POSIX no-sweep + Windows taskkill tree) is covered in
+    // terminal-host-session-reaping-leak.test.ts and terminal-session-teardown.test.ts.
 
     it('escalates an already-graceful termination and joins its physical exit', async () => {
       await host.createOrAttach({
