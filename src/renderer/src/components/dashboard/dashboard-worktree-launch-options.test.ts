@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DASHBOARD_MAX_LAUNCH_WORKTREES } from '../../../../shared/dashboard-snapshot'
 import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
+import type { FolderWorkspace, ProjectGroup } from '../../../../shared/types'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { buildDashboardWorktreeLaunchOptions } from './dashboard-worktree-launch-options'
 
@@ -133,9 +134,13 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
     const options = buildDashboardWorktreeLaunchOptions(
       state({
         folderWorkspaces: [
-          { id: 'folder-1', projectGroupId: 'group-1', connectionId: 'ssh-folder' }
-        ] as LaunchState['folderWorkspaces'],
-        projectGroups: [{ id: 'group-1' }] as LaunchState['projectGroups'],
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            connectionId: 'ssh-folder'
+          } as FolderWorkspace
+        ],
+        projectGroups: [{ id: 'group-1' } as ProjectGroup],
         remoteDetectedAgentIds: { 'ssh-folder': ['goose'] }
       }),
       [card({ repoId: 'folder-workspace:group-1', worktreeId })]

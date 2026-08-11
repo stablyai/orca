@@ -9,6 +9,7 @@ import {
   getCodexPaneAccount,
   hasRecordedLegacySharedCodexPane,
   hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys,
   recordCodexPaneAccount
 } from './codex-pane-account-registry'
@@ -47,6 +48,17 @@ afterEach(() => {
 })
 
 describe('codex pane account registry', () => {
+  it.each([
+    ['real-home', true],
+    ['account-home', true],
+    ['wsl-home', true],
+    ['shared-home', false],
+    ['custom-home', false],
+    [undefined, false]
+  ] as const)('classifies whether %s proves a pane avoided the shared home', (route, expected) => {
+    expect(isCodexPaneHomeRouteProvenAwayFromSharedHome(route)).toBe(expected)
+  })
+
   it('survives a process restart so a daemon-backed shell stays attributable', () => {
     recordCodexPaneAccount('pty-1', {
       selectionKey: 'host',

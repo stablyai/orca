@@ -24,7 +24,7 @@ type RetainedAgentSnapshot = Map<string, { row: DashboardAgentRow; worktreeId: s
 type RetainedAgentsSyncInputs = {
   repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
 }
@@ -40,7 +40,7 @@ function paneKeyTabId(paneKey: string): string | null {
 function buildLiveTabIndex(args: {
   repos: readonly Repo[]
   worktreesByRepo: Record<string, Worktree[]>
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   tabsByWorktree: Record<string, TerminalTab[]>
 }): {
   existingWorktreeIds: Set<string>

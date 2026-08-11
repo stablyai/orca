@@ -2076,6 +2076,7 @@ export function registerFilesystemHandlers(
         }
         const results = await provider.getBranchDiff(args.worktreePath, args.compare.mergeBase, {
           includePatch: true,
+          headOid: args.compare.headOid,
           filePath: args.filePath,
           oldPath: args.oldPath
         })

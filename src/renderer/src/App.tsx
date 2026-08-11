@@ -690,6 +690,7 @@ function App(): React.JSX.Element {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
@@ -1411,6 +1412,7 @@ function App(): React.JSX.Element {
         hideAutomationGeneratedWorkspaces,
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
+        hideWorkspacesFromOtherDevices,
         alwaysShowDefaultBranchWorkspace,
         showDotfilesByWorktree,
         filterRepoIds,
@@ -1445,6 +1447,7 @@ function App(): React.JSX.Element {
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
     showDotfilesByWorktree,
     filterRepoIds,

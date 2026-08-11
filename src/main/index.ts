@@ -39,7 +39,10 @@ import {
   shutdownDaemon
 } from './daemon/daemon-init'
 import {
+  type CodexPaneHomeRoute,
+  getCodexPaneAccount,
   hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -401,10 +404,23 @@ function handleCodexHomePtySpawned(args: {
   id: string
   codexHomePath: string | null
   reattached?: boolean
+  reattachedHomeRoute?: CodexPaneHomeRoute | null
   launchEnv?: NodeJS.ProcessEnv
   startedAt?: Date
   startedSequence?: number
 }): void {
+  // Why: only shared or ambiguous retained shells can create rollout logs that still need publication.
+  if (args.reattached && args.startedSequence !== undefined) {
+    const paneAccount = getCodexPaneAccount(args.id)
+    const homeRoute =
+      args.reattachedHomeRoute !== undefined
+        ? (args.reattachedHomeRoute ?? undefined)
+        : paneAccount?.homeRoute
+    if (codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
+      codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
+      return
+    }
+  }
   const fullScanRequired =
     codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,

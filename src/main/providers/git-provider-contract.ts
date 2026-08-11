@@ -66,7 +66,7 @@ export type IGitProvider = {
   getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string; headOid?: string }
   ): Promise<GitDiffResult[]>
   getCommitDiff(
     worktreePath: string,

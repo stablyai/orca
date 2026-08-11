@@ -538,6 +538,7 @@ export class RuntimeGitCommands {
       }
       const results = await provider.getBranchDiff(target.worktree.path, compare.mergeBase, {
         includePatch: true,
+        headOid: compare.headOid,
         filePath: relativePath,
         oldPath: oldRelativePath
       })

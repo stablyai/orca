@@ -3142,7 +3142,12 @@
             "c781f992e4": "destructive",
             "be8f0ff166": "Delete",
             "f3a8c2d1e7": "Search quick commands...",
-            "b4e7f9a2c1": "No commands match"
+            "b4e7f9a2c1": "No commands match",
+            "8d525e5f15": "Copied",
+            "53b17a4b1b": "Couldn't copy",
+            "a9a564b7e7": "Copy {{value0}}",
+            "69a1441a21": "Nothing to copy",
+            "192a4616a5": "Quick command actions"
           },
           "shell": {
             "icons": {
@@ -4536,7 +4541,9 @@
           "cliCreated": "Hide CLI-created",
           "detachedHead": "Hide detached HEAD",
           "keepDefaultBranch": "Except default branch",
-          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces"
+          "keepDefaultBranchAria": "Keep the default branch visible while hiding sleeping workspaces",
+          "otherClients": "Hide other-client workspaces",
+          "otherClientsAria": "Hide workspaces created from other Orca clients on shared remote servers"
         },
         "sidebarHostOptions": {
           "3e102f111c": "All hosts",
@@ -6781,7 +6788,11 @@
           "f2bf411640": "Could not load commands from this host.",
           "7ecfee5b8e": "Retry",
           "601d6af51f": "Loading commands…",
-          "923ba89646": "Could not refresh commands from this host. Showing the last loaded commands."
+          "923ba89646": "Could not refresh commands from this host. Showing the last loaded commands.",
+          "8d525e5f15": "Copied",
+          "53b17a4b1b": "Couldn't copy",
+          "a9a564b7e7": "Copy {{value0}}",
+          "69a1441a21": "Nothing to copy"
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",

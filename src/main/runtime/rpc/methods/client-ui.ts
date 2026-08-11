@@ -55,9 +55,11 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'ui.set',
     params: UiUpdate,
-    handler: (params, { runtime }) => ({
-      ui: runtime.updateUIState(params as Partial<PersistedUIState>)
-    })
+    handler: (params, { runtime }) => {
+      const { hideWorkspacesFromOtherDevices: _clientLocalFilter, ...hostUpdates } = params
+      void _clientLocalFilter
+      return { ui: runtime.updateUIState(hostUpdates as Partial<PersistedUIState>) }
+    }
   }),
   defineMethod({
     name: 'ui.recordFeatureInteraction',

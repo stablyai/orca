@@ -1483,12 +1483,15 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
         client?.close()
       }
       const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
-      const nextEnvironment = createStoredWebRuntimeEnvironment({
-        name,
-        offer: parsed.value.pairing,
-        previousEnvironment: activeEnvironment,
-        ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
-      })
+      const nextEnvironment = {
+        ...createStoredWebRuntimeEnvironment({
+          name,
+          offer: parsed.value.pairing,
+          previousEnvironment: activeEnvironment,
+          ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+        }),
+        ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
+      }
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         saveStoredWebRuntimeEnvironment(nextEnvironment)
@@ -2644,7 +2647,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2666,8 +2669,11 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
+      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
+        updates
+      void _clientLocalWorkspaceFilter
       try {
-        await callRuntimeResult('ui.set', updates, 15_000)
+        await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -2694,7 +2700,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -3694,7 +3700,14 @@ function updateEnvironmentFromResponse(
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
-  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
+  const pairedDeviceId =
+    response.ok &&
+    typeof response.result === 'object' &&
+    response.result !== null &&
+    typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
+      ? (response.result as { pairedDeviceId: string }).pairedDeviceId
+      : undefined
+  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId, pairedDeviceId)
 }
 
 function getStoredSettings(): GlobalSettings {
@@ -4001,6 +4014,16 @@ function mergeWebUIState(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
     )
+  }
+}
+
+function mergeHostWebUIState(
+  local: PersistedUIState,
+  incoming: PersistedUIState
+): PersistedUIState {
+  return {
+    ...mergeWebUIState(local, incoming),
+    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
   }
 }
 

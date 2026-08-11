@@ -4473,6 +4473,7 @@ export class Store {
     linkedTask?: FolderWorkspace['linkedTask']
     linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
     connectionId?: string | null
+    creatorProvenance?: FolderWorkspace['creatorProvenance']
     createdWithAgent?: FolderWorkspace['createdWithAgent']
     pendingFirstAgentMessageRename?: boolean
   }): FolderWorkspace {
@@ -4495,6 +4496,7 @@ export class Store {
       name: normalizeFolderWorkspaceName(input.name, `${group.name} workspace`),
       folderPath,
       connectionId: input.connectionId ?? group.connectionId ?? null,
+      ...(input.creatorProvenance ? { creatorProvenance: input.creatorProvenance } : {}),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(linkedTask, sourceContext)
         ? sourceContext

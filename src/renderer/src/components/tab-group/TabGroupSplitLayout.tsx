@@ -182,6 +182,7 @@ function SplitNode({
       <TabGroupPanel
         groupId={node.groupId}
         worktreeId={worktreeId}
+        isVisible={isWorktreeActive}
         // Why: hidden worktrees stay mounted so their PTYs and split layouts
         // survive worktree switches, but only the visible worktree may own the
         // global terminal shortcuts. If an offscreen group's pane stays

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- web session-tab sync reconciles terminal, unified-tab, group, and PTY maps atomically to avoid split-brain tab state */
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { AppState } from '../store'
 import { useAppStore } from '../store'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -11,6 +11,7 @@ import {
 import { agentProviderSessionsEqual } from '../../../shared/agent-session-resume'
 import type {
   RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab,
@@ -84,8 +85,13 @@ import {
 } from './web-agent-session-handoff'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { useRuntimeSessionMirrorEnvironmentKey } from './use-runtime-session-mirror-environment-key'
+import {
+  installWindowVisibilitySubscriptionParking,
+  type WindowVisibilitySubscriptionSpec
+} from './window-visibility-subscription-parking'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
+export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
@@ -101,14 +107,47 @@ type SnapshotFreshness = {
   snapshotVersion: number
 }
 
+type ReceivedSessionTabsSnapshot = SnapshotFreshness & {
+  receivedFrame: number
+}
+
+type SessionTabsRecoveryState = {
+  pendingCount: number
+}
+
+type SessionTabsRemovalFence = {
+  receivedFrame: number
+  recoveryState: SessionTabsRecoveryState
+  pendingCount: number
+}
+
+type TrackedWebSessionTabsWorktree = {
+  worktree: string
+  freshness: SnapshotFreshness
+}
+
+type VisibilityResumeOmission = {
+  baseline: SnapshotFreshness
+  environmentId: string
+  inventoryReceivedFrame: number
+  superseded: boolean
+  visibilityGeneration: number
+}
+
 const latestSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
 const replayableSessionTabsSnapshotByWorktree = new Map<string, SnapshotFreshness>()
+const latestReceivedSessionTabsSnapshotByWorktree = new Map<string, ReceivedSessionTabsSnapshot>()
+const latestSessionTabsRemovalFenceByWorktree = new Map<string, SessionTabsRemovalFence>()
+const sessionTabsRecoveryStateByWorktree = new Map<string, SessionTabsRecoveryState>()
+const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
+const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
 const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+let receivedSessionTabsFrameSequence = 0
 
 type TerminalSurface = RuntimeMobileSessionTerminalClientTab
 type ReadyTerminalSurface = RuntimeMobileSessionTerminalClientTab & { status: 'ready' }
@@ -218,6 +257,218 @@ function sessionTabsFreshnessKey(environmentId: string, worktreeId: string): str
   return `${environmentId}:${worktreeId}`
 }
 
+function advancesSessionTabsFreshness(
+  snapshot: RuntimeMobileSessionTabsResult,
+  baseline: SnapshotFreshness
+): boolean {
+  return (
+    snapshot.publicationEpoch !== baseline.publicationEpoch ||
+    snapshot.snapshotVersion > baseline.snapshotVersion
+  )
+}
+
+function getTrackedWebSessionTabsWorktrees(environmentId: string): TrackedWebSessionTabsWorktree[] {
+  return [...(trackedSessionTabsWorktreeIdsByEnvironment.get(environmentId) ?? [])].flatMap(
+    (worktree) => {
+      const key = sessionTabsFreshnessKey(environmentId, worktree)
+      const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+      return freshness
+        ? [
+            {
+              worktree,
+              freshness
+            }
+          ]
+        : []
+    }
+  )
+}
+
+function trackWebSessionTabsWorktree(environmentId: string, worktreeId: string): void {
+  const worktrees = trackedSessionTabsWorktreeIdsByEnvironment.get(environmentId) ?? new Set()
+  worktrees.add(worktreeId)
+  trackedSessionTabsWorktreeIdsByEnvironment.set(environmentId, worktrees)
+}
+
+function untrackWebSessionTabsWorktree(environmentId: string, worktreeId: string): void {
+  const worktrees = trackedSessionTabsWorktreeIdsByEnvironment.get(environmentId)
+  if (!worktrees) {
+    return
+  }
+  worktrees.delete(worktreeId)
+  if (worktrees.size === 0) {
+    trackedSessionTabsWorktreeIdsByEnvironment.delete(environmentId)
+  }
+}
+
+function recordReceivedWebSessionTabsSnapshot(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult
+): number {
+  const receivedFrame = (receivedSessionTabsFrameSequence += 1)
+  const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  latestReceivedSessionTabsSnapshotByWorktree.set(key, {
+    receivedFrame,
+    publicationEpoch: snapshot.publicationEpoch,
+    snapshotVersion: snapshot.snapshotVersion
+  })
+  if ((snapshot as { removed?: unknown }).removed === true) {
+    recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, receivedFrame)
+  }
+  return receivedFrame
+}
+
+function recordReceivedWebSessionTabsInventory(): number {
+  return (receivedSessionTabsFrameSequence += 1)
+}
+
+function beginWebSessionTabsSnapshotRecovery(
+  environmentId: string,
+  worktreeId: string,
+  receivedFrame: number
+): () => void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const recoveryState = sessionTabsRecoveryStateByWorktree.get(key) ?? { pendingCount: 0 }
+  recoveryState.pendingCount += 1
+  sessionTabsRecoveryStateByWorktree.set(key, recoveryState)
+  let settled = false
+  return () => {
+    if (settled) {
+      return
+    }
+    settled = true
+    recoveryState.pendingCount -= 1
+    if (
+      recoveryState.pendingCount === 0 &&
+      sessionTabsRecoveryStateByWorktree.get(key) === recoveryState
+    ) {
+      sessionTabsRecoveryStateByWorktree.delete(key)
+    }
+    const removalFence = latestSessionTabsRemovalFenceByWorktree.get(key)
+    if (
+      removalFence?.recoveryState === recoveryState &&
+      receivedFrame < removalFence.receivedFrame
+    ) {
+      removalFence.pendingCount -= 1
+      if (removalFence.pendingCount === 0) {
+        latestSessionTabsRemovalFenceByWorktree.delete(key)
+      }
+    }
+  }
+}
+
+function recordReceivedWebSessionTabsRemoval(
+  environmentId: string,
+  worktreeId: string,
+  receivedFrame: number
+): void {
+  const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const current = latestSessionTabsRemovalFenceByWorktree.get(key)
+  if (current && current.receivedFrame >= receivedFrame) {
+    return
+  }
+  const recoveryState = sessionTabsRecoveryStateByWorktree.get(key)
+  if (!recoveryState || recoveryState.pendingCount === 0) {
+    latestSessionTabsRemovalFenceByWorktree.delete(key)
+    return
+  }
+  latestSessionTabsRemovalFenceByWorktree.set(key, {
+    receivedFrame,
+    recoveryState,
+    pendingCount: recoveryState.pendingCount
+  })
+}
+
+function shouldApplyRecoveredWebSessionTabsSnapshot(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number
+): boolean {
+  const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+  const removalFrame = latestSessionTabsRemovalFenceByWorktree.get(key)?.receivedFrame
+  if (removalFrame !== undefined && receivedFrame < removalFrame) {
+    return false
+  }
+  const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+  if (!latest || latest.receivedFrame === receivedFrame) {
+    return latest !== undefined
+  }
+  if (latest.publicationEpoch !== snapshot.publicationEpoch) {
+    return receivedFrame > latest.receivedFrame
+  }
+  return snapshot.snapshotVersion >= latest.snapshotVersion
+}
+
+function isTrackedWebSessionTabsOmissionCurrent(
+  environmentId: string,
+  trackedWorktree: TrackedWebSessionTabsWorktree
+): boolean {
+  const key = sessionTabsFreshnessKey(environmentId, trackedWorktree.worktree)
+  const current = latestSessionTabsSnapshotByWorktree.get(key)
+  return (
+    current?.publicationEpoch === trackedWorktree.freshness.publicationEpoch &&
+    current.snapshotVersion === trackedWorktree.freshness.snapshotVersion
+  )
+}
+
+function recordAcceptedWebSessionTabsEnvironment(
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult
+): void {
+  const environments = new Set(sessionTabsEnvironmentsByWorktree.get(snapshot.worktree) ?? [])
+  if (snapshot.tabs.length > 0) {
+    environments.add(environmentId)
+  } else {
+    environments.delete(environmentId)
+  }
+  if (environments.size > 0) {
+    sessionTabsEnvironmentsByWorktree.set(snapshot.worktree, environments)
+  } else {
+    sessionTabsEnvironmentsByWorktree.delete(snapshot.worktree)
+  }
+}
+
+function removeWebSessionTabsEnvironment(environmentId: string, worktreeId: string): void {
+  const environments = new Set(sessionTabsEnvironmentsByWorktree.get(worktreeId) ?? [])
+  environments.delete(environmentId)
+  if (environments.size > 0) {
+    sessionTabsEnvironmentsByWorktree.set(worktreeId, environments)
+  } else {
+    sessionTabsEnvironmentsByWorktree.delete(worktreeId)
+  }
+}
+
+// Why: omission means removal only because `listAllMobileSessionTabs` publishes every worktree it knows unfiltered; if a host ever
+// scopes that map, this turns live worktrees into tombstones, so the fence below is deliberately short-lived.
+function buildMissingWebSessionTabsRemovals(
+  environmentId: string,
+  trackedWorktrees: readonly TrackedWebSessionTabsWorktree[],
+  publishedWorktrees: ReadonlySet<string>
+): {
+  trackedWorktree: TrackedWebSessionTabsWorktree
+  snapshot: RuntimeMobileSessionTabsRemovedResult
+}[] {
+  return trackedWorktrees
+    .filter(
+      (trackedWorktree) =>
+        !publishedWorktrees.has(trackedWorktree.worktree) &&
+        isTrackedWebSessionTabsOmissionCurrent(environmentId, trackedWorktree)
+    )
+    .map((trackedWorktree) => ({
+      trackedWorktree,
+      snapshot: {
+        worktree: trackedWorktree.worktree,
+        publicationEpoch: 'visibility-inventory-removal',
+        snapshotVersion: 0,
+        removed: true,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    }))
+}
+
 function rememberHostTerminalTabCount(
   environmentId: string,
   snapshot: RuntimeMobileSessionTabsResult
@@ -299,6 +550,8 @@ export function shouldApplyWebSessionTabsSnapshot(
     publicationEpoch: snapshot.publicationEpoch,
     snapshotVersion: snapshot.snapshotVersion
   })
+  trackWebSessionTabsWorktree(environmentId, snapshot.worktree)
+  recordAcceptedWebSessionTabsEnvironment(environmentId, snapshot)
   // Why: a mounted mirror that exhausted bounded polling needs fresh host evidence without subscribing to every store write.
   queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
   return true
@@ -370,6 +623,12 @@ export function shouldSyncAllRuntimeSessionTabs(args: {
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()
+  latestReceivedSessionTabsSnapshotByWorktree.clear()
+  latestSessionTabsRemovalFenceByWorktree.clear()
+  sessionTabsRecoveryStateByWorktree.clear()
+  trackedSessionTabsWorktreeIdsByEnvironment.clear()
+  sessionTabsEnvironmentsByWorktree.clear()
+  receivedSessionTabsFrameSequence = 0
   lastHostTerminalTabCountByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
@@ -392,10 +651,23 @@ export function _getWebSessionTabsTrackingCountsForTest(): {
   }
 }
 
+export function _getWebSessionTabsRecoveryTrackingCountsForTest(): {
+  pendingRecoveries: number
+  removalFrames: number
+} {
+  return {
+    pendingRecoveries: sessionTabsRecoveryStateByWorktree.size,
+    removalFrames: latestSessionTabsRemovalFenceByWorktree.size
+  }
+}
+
 function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeId: string): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
+  latestReceivedSessionTabsSnapshotByWorktree.delete(key)
+  untrackWebSessionTabsWorktree(environmentId, worktreeId)
+  removeWebSessionTabsEnvironment(environmentId, worktreeId)
   lastHostTerminalTabCountByWorktree.delete(key)
   clearWebRuntimeWakeTerminalRespawnForWorktree(worktreeId)
   clearWebSessionReorderIntentsForWorktree({ environmentId }, worktreeId)
@@ -419,6 +691,25 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     if (key.startsWith(keyPrefix)) {
       replayableSessionTabsSnapshotByWorktree.delete(key)
     }
+  }
+  for (const key of latestReceivedSessionTabsSnapshotByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestReceivedSessionTabsSnapshotByWorktree.delete(key)
+    }
+  }
+  for (const key of latestSessionTabsRemovalFenceByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      latestSessionTabsRemovalFenceByWorktree.delete(key)
+    }
+  }
+  for (const key of sessionTabsRecoveryStateByWorktree.keys()) {
+    if (key.startsWith(keyPrefix)) {
+      sessionTabsRecoveryStateByWorktree.delete(key)
+    }
+  }
+  trackedSessionTabsWorktreeIdsByEnvironment.delete(trimmedEnvironmentId)
+  for (const worktreeId of sessionTabsEnvironmentsByWorktree.keys()) {
+    removeWebSessionTabsEnvironment(trimmedEnvironmentId, worktreeId)
   }
   for (const key of lastHostTerminalTabCountByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
@@ -3028,6 +3319,31 @@ export function applyFreshWebSessionTabsSnapshots(
     : applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId, now)
 }
 
+type WebSessionTabsSnapshotOperation = {
+  environmentId: string
+  snapshot: RuntimeMobileSessionTabsResult
+}
+
+function applyWebSessionTabsSnapshotOperations(
+  state: WebSessionTabsSyncState,
+  operations: readonly WebSessionTabsSnapshotOperation[]
+): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  let nextState = state
+  let mergedPatch: Partial<WebSessionTabsSyncState> = {}
+  for (const { environmentId, snapshot } of operations) {
+    if (!shouldApplyWebSessionTabsSnapshot(snapshot, environmentId)) {
+      continue
+    }
+    const patch = applyWebSessionTabsSnapshot(nextState, snapshot, environmentId)
+    if (patch === nextState) {
+      continue
+    }
+    mergedPatch = { ...mergedPatch, ...patch }
+    nextState = { ...nextState, ...patch }
+  }
+  return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
+}
+
 export function applyWebSessionTabsStorePatch(
   buildPatch: (state: AppState) => WebSessionTabsSyncState | Partial<WebSessionTabsSyncState>
 ): void {
@@ -3044,7 +3360,109 @@ export function applyWebSessionTabsStorePatch(
   }
 }
 
+function loadInitialWebSessionTabs(
+  environmentId: string,
+  expectedEnvironmentPairingRevision: number | undefined,
+  isCurrent: () => boolean
+): void {
+  void window.api.runtimeEnvironments
+    .call({
+      selector: environmentId,
+      method: 'session.tabs.listAll',
+      params: {},
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision
+    })
+    .then(async (response: RuntimeRpcResponse<unknown>) => {
+      if (
+        !isCurrent() ||
+        getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+      ) {
+        return
+      }
+      if (response.ok === false) {
+        console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
+        return
+      }
+      const result = response.result
+      if (!isSessionTabsListAllResult(result)) {
+        console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
+        return
+      }
+      const receivedFrames = result.snapshots.map((snapshot) =>
+        recordReceivedWebSessionTabsSnapshot(environmentId, snapshot)
+      )
+      const finishRecoveries = result.snapshots.map((snapshot, index) =>
+        beginWebSessionTabsSnapshotRecovery(
+          environmentId,
+          snapshot.worktree,
+          receivedFrames[index]!
+        )
+      )
+      try {
+        const recovered = await Promise.all(
+          result.snapshots.map((snapshot) =>
+            recoverWebSessionTerminalOrphansBeforeApply(
+              useAppStore.getState(),
+              snapshot,
+              environmentId
+            )
+          )
+        )
+        if (
+          !isCurrent() ||
+          getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
+        ) {
+          return
+        }
+        const applicable = recovered.filter(
+          (snapshot, index): snapshot is RuntimeMobileSessionTabsResult =>
+            snapshot !== null &&
+            shouldApplyRecoveredWebSessionTabsSnapshot(
+              environmentId,
+              snapshot,
+              receivedFrames[index]!
+            )
+        )
+        applyWebSessionTabsStorePatch((state) =>
+          applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
+        )
+      } finally {
+        for (const finishRecovery of finishRecoveries) {
+          finishRecovery()
+        }
+      }
+    })
+    .catch((error) => {
+      if (isCurrent()) {
+        console.warn(
+          '[web-session-tabs-sync] failed to load initial session tabs:',
+          error instanceof Error ? error.message : String(error)
+        )
+      }
+    })
+}
+
 export function useWebSessionTabsSync(): void {
+  const recordVisibilityResumeSnapshotRef = useRef<
+    (environmentId: string, snapshot: RuntimeMobileSessionTabsResult, receivedFrame: number) => void
+  >(() => {})
+  const recordVisibilityResumeSnapshotReceiptRef = useRef<
+    (environmentId: string, snapshot: RuntimeMobileSessionTabsResult, receivedFrame: number) => void
+  >(() => {})
+  const shouldApplyVisibilityResumeSnapshotRef = useRef<
+    (
+      environmentId: string,
+      snapshot: RuntimeMobileSessionTabsResult,
+      receivedFrame: number
+    ) => boolean
+  >(() => true)
+  const visibilityResumeOmissionsByKeyRef = useRef(new Map<string, VisibilityResumeOmission>())
+  const mirroredSessionTabsOwnerRevisionByEnvironmentRef = useRef(
+    new Map<string, number | undefined>()
+  )
+  const activeRuntimeEnvironmentIdRef = useRef<string | null>(null)
+  const activeRuntimeWorktreeKeyRef = useRef<string | null>(null)
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
   const runtimeSessionMirrorEnvironmentKey = useRuntimeSessionMirrorEnvironmentKey()
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
@@ -3070,6 +3488,27 @@ export function useWebSessionTabsSync(): void {
     return environment ? (environment.pairingRevision ?? environment.createdAt) : undefined
   })
   const workspaceSessionReady = useAppStore((state) => state.workspaceSessionReady)
+  // Why: only resume callbacks read these refs, and resumes fire from visibilitychange or
+  // stale-visibility recovery — outside React — so committing during layout leaves no window
+  // where a resume could read the previous worktree's key.
+  useLayoutEffect(() => {
+    activeRuntimeEnvironmentIdRef.current = activeWorktreeRuntimeEnvironmentId?.trim() || null
+    activeRuntimeWorktreeKeyRef.current =
+      activeWorktreeRuntimeEnvironmentId && activeWorktreeId
+        ? sessionTabsFreshnessKey(activeWorktreeRuntimeEnvironmentId, activeWorktreeId)
+        : null
+  }, [activeWorktreeId, activeWorktreeRuntimeEnvironmentId])
+
+  useEffect(
+    () => () => {
+      for (const environmentId of mirroredSessionTabsOwnerRevisionByEnvironmentRef.current.keys()) {
+        clearWebSessionTabsTrackingForEnvironment(environmentId)
+      }
+      mirroredSessionTabsOwnerRevisionByEnvironmentRef.current.clear()
+      visibilityResumeOmissionsByKeyRef.current.clear()
+    },
+    []
+  )
 
   useEffect(() => {
     const environments = runtimeSessionMirrorEnvironmentKey
@@ -3085,14 +3524,396 @@ export function useWebSessionTabsSync(): void {
           })
           .filter(({ environmentId }) => environmentId.trim())
       : []
+    const mirroredEnvironmentOwnerRevisions = new Map(
+      (workspaceSessionReady ? environments : []).map(
+        ({ environmentId, expectedEnvironmentPairingRevision }) =>
+          [environmentId, expectedEnvironmentPairingRevision] as const
+      )
+    )
+    const previousOwnerRevisions = mirroredSessionTabsOwnerRevisionByEnvironmentRef.current
+    // Why: same-owner tracking must survive effect restarts to reconcile removals missed while hidden.
+    for (const [environmentId, previousRevision] of previousOwnerRevisions) {
+      if (
+        !mirroredEnvironmentOwnerRevisions.has(environmentId) ||
+        mirroredEnvironmentOwnerRevisions.get(environmentId) !== previousRevision
+      ) {
+        clearWebSessionTabsTrackingForEnvironment(environmentId)
+      }
+    }
+    mirroredSessionTabsOwnerRevisionByEnvironmentRef.current = mirroredEnvironmentOwnerRevisions
+    for (const [key, omission] of visibilityResumeOmissionsByKeyRef.current) {
+      const previousRevision = previousOwnerRevisions.get(omission.environmentId)
+      if (
+        !mirroredEnvironmentOwnerRevisions.has(omission.environmentId) ||
+        (previousOwnerRevisions.has(omission.environmentId) &&
+          mirroredEnvironmentOwnerRevisions.get(omission.environmentId) !== previousRevision)
+      ) {
+        visibilityResumeOmissionsByKeyRef.current.delete(key)
+      }
+    }
     // Why: mirror all paired runtimes' sessions, not just the selected worktree, so background worktrees don't look asleep (selectedness isn't liveness).
     // Why: applying the host snapshot before startup hydration writes browser-local session state clobbers it and leaves the sidebar stale.
     if (!workspaceSessionReady || environments.length === 0) {
       return
     }
 
-    let disposed = false
-    const unsubscribes: (() => void)[] = []
+    type VisibilityResumeEnvironment = {
+      trackedWorktrees: readonly TrackedWebSessionTabsWorktree[]
+      inventoryReceived: boolean
+      latestInventoryReceivedFrame: number
+      pendingMissingWorktrees: Set<string>
+    }
+    type VisibilityResumeMissing = {
+      environmentId: string
+      inventoryReceivedFrame: number
+      trackedWorktree: TrackedWebSessionTabsWorktree
+      snapshot: RuntimeMobileSessionTabsRemovedResult
+    }
+    type VisibilityResumeBatch = {
+      visibilityGeneration: number
+      environments: Map<string, VisibilityResumeEnvironment>
+      pendingInventoryCount: number
+      pendingMissingByWorktree: Map<string, Map<string, VisibilityResumeMissing>>
+      deferredRepairWorktrees: Set<string>
+      trackedWorktreeIds: ReadonlySet<string>
+      reapplyableSnapshotsByKey: Map<
+        string,
+        { snapshot: RuntimeMobileSessionTabsResult; receivedFrame: number }
+      >
+    }
+
+    const subscriptionSpecs: WindowVisibilitySubscriptionSpec[] = []
+    const environmentIdBySubscriptionSpec: string[] = []
+    let visibilityResumeBatch: VisibilityResumeBatch | null = null
+    const visibilityResumeOmissionsByKey = visibilityResumeOmissionsByKeyRef.current
+
+    const recordVisibilityResumeSnapshotReceipt = (
+      environmentId: string,
+      snapshot: RuntimeMobileSessionTabsResult,
+      receivedFrame: number
+    ): void => {
+      const omission = visibilityResumeOmissionsByKey.get(
+        sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+      )
+      if (
+        omission &&
+        receivedFrame > omission.inventoryReceivedFrame &&
+        ((snapshot as { removed?: unknown }).removed === true ||
+          advancesSessionTabsFreshness(snapshot, omission.baseline))
+      ) {
+        omission.superseded = true
+        if (visibilityResumeBatch?.pendingMissingByWorktree.has(snapshot.worktree)) {
+          reconcileVisibilityResumeWorktrees([snapshot.worktree])
+        }
+      }
+    }
+
+    const shouldApplyVisibilityResumeSnapshot = (
+      environmentId: string,
+      snapshot: RuntimeMobileSessionTabsResult,
+      receivedFrame: number
+    ): boolean => {
+      const omission = visibilityResumeOmissionsByKey.get(
+        sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+      )
+      if (!omission) {
+        return true
+      }
+      if (receivedFrame < omission.inventoryReceivedFrame) {
+        return false
+      }
+      return (
+        (snapshot as { removed?: unknown }).removed === true ||
+        advancesSessionTabsFreshness(snapshot, omission.baseline)
+      )
+    }
+    recordVisibilityResumeSnapshotReceiptRef.current = recordVisibilityResumeSnapshotReceipt
+    shouldApplyVisibilityResumeSnapshotRef.current = shouldApplyVisibilityResumeSnapshot
+
+    const isVisibilityResumeMissingCurrent = (missing: VisibilityResumeMissing): boolean => {
+      const omission = visibilityResumeOmissionsByKey.get(
+        sessionTabsFreshnessKey(missing.environmentId, missing.snapshot.worktree)
+      )
+      return (
+        omission?.inventoryReceivedFrame === missing.inventoryReceivedFrame && !omission.superseded
+      )
+    }
+
+    const getVisibilityResumeSnapshot = (
+      batch: VisibilityResumeBatch,
+      environmentId: string,
+      worktreeId: string
+    ): RuntimeMobileSessionTabsResult | null => {
+      const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+      const entry = batch.reapplyableSnapshotsByKey.get(key)
+      const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+      if (
+        !entry ||
+        freshness?.publicationEpoch !== entry.snapshot.publicationEpoch ||
+        freshness.snapshotVersion !== entry.snapshot.snapshotVersion ||
+        !shouldApplyRecoveredWebSessionTabsSnapshot(
+          environmentId,
+          entry.snapshot,
+          entry.receivedFrame
+        )
+      ) {
+        return null
+      }
+      return entry.snapshot
+    }
+
+    const finishVisibilityResumeBatchIfIdle = (batch: VisibilityResumeBatch): void => {
+      if (
+        batch.pendingInventoryCount === 0 &&
+        batch.pendingMissingByWorktree.size === 0 &&
+        visibilityResumeBatch === batch
+      ) {
+        visibilityResumeBatch = null
+      }
+    }
+
+    // Why: omission tombstones touch shared terminal ids, so apply them only before replaying every surviving host.
+    function reconcileVisibilityResumeWorktrees(worktreeIds: Iterable<string>): void {
+      const batch = visibilityResumeBatch
+      if (!batch) {
+        return
+      }
+      const operations: WebSessionTabsSnapshotOperation[] = []
+      for (const worktreeId of new Set(worktreeIds)) {
+        const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId)
+        if (!pendingMissing) {
+          batch.deferredRepairWorktrees.delete(worktreeId)
+          continue
+        }
+        for (const [environmentId, missing] of pendingMissing) {
+          if (isVisibilityResumeMissingCurrent(missing)) {
+            continue
+          }
+          pendingMissing.delete(environmentId)
+          batch.environments.get(environmentId)?.pendingMissingWorktrees.delete(worktreeId)
+        }
+        if (pendingMissing.size === 0) {
+          batch.pendingMissingByWorktree.delete(worktreeId)
+          batch.deferredRepairWorktrees.delete(worktreeId)
+          continue
+        }
+        const missingEnvironmentIds = new Set(pendingMissing.keys())
+        const survivingSnapshots: {
+          environmentId: string
+          snapshot: RuntimeMobileSessionTabsResult
+        }[] = []
+        let canRepairSharedState = true
+        for (const environmentId of sessionTabsEnvironmentsByWorktree.get(worktreeId) ?? []) {
+          if (missingEnvironmentIds.has(environmentId)) {
+            continue
+          }
+          const snapshot = getVisibilityResumeSnapshot(batch, environmentId, worktreeId)
+          if (!snapshot) {
+            canRepairSharedState = false
+            break
+          }
+          survivingSnapshots.push({ environmentId, snapshot })
+        }
+        if (!canRepairSharedState) {
+          batch.deferredRepairWorktrees.add(worktreeId)
+          continue
+        }
+        for (const missing of pendingMissing.values()) {
+          operations.push({ environmentId: missing.environmentId, snapshot: missing.snapshot })
+        }
+        for (const { environmentId, snapshot } of survivingSnapshots) {
+          acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
+          operations.push({ environmentId, snapshot })
+        }
+        for (const environmentId of pendingMissing.keys()) {
+          batch.environments.get(environmentId)?.pendingMissingWorktrees.delete(worktreeId)
+        }
+        batch.pendingMissingByWorktree.delete(worktreeId)
+        batch.deferredRepairWorktrees.delete(worktreeId)
+      }
+      if (operations.length > 0) {
+        applyWebSessionTabsStorePatch((state) =>
+          applyWebSessionTabsSnapshotOperations(state, operations)
+        )
+      }
+      finishVisibilityResumeBatchIfIdle(batch)
+    }
+
+    const recordVisibilityResumeSnapshot = (
+      environmentId: string,
+      snapshot: RuntimeMobileSessionTabsResult,
+      receivedFrame: number
+    ): void => {
+      const batch = visibilityResumeBatch
+      if (!batch || !batch.trackedWorktreeIds.has(snapshot.worktree)) {
+        return
+      }
+      const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+      const existingIsCurrent = getVisibilityResumeSnapshot(batch, environmentId, snapshot.worktree)
+      const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+      const repairsCrossHostCollision =
+        (sessionTabsEnvironmentsByWorktree.get(snapshot.worktree)?.size ?? 0) > 1 ||
+        batch.deferredRepairWorktrees.has(snapshot.worktree)
+      if (
+        (snapshot as { removed?: unknown }).removed === true ||
+        snapshot.tabs.length === 0 ||
+        !repairsCrossHostCollision ||
+        freshness?.publicationEpoch !== snapshot.publicationEpoch ||
+        freshness.snapshotVersion !== snapshot.snapshotVersion ||
+        !shouldApplyRecoveredWebSessionTabsSnapshot(environmentId, snapshot, receivedFrame)
+      ) {
+        if (!existingIsCurrent) {
+          batch.reapplyableSnapshotsByKey.delete(key)
+        }
+      } else {
+        batch.reapplyableSnapshotsByKey.set(key, { snapshot, receivedFrame })
+      }
+      if (batch.pendingMissingByWorktree.has(snapshot.worktree)) {
+        reconcileVisibilityResumeWorktrees([snapshot.worktree])
+      }
+    }
+
+    const recordVisibilityResumeInventory = (
+      environmentId: string,
+      visibilityGeneration: number,
+      inventoryReceivedFrame: number,
+      missingWorktrees: readonly VisibilityResumeMissing[]
+    ): void => {
+      if (
+        visibilityGeneration === 0 ||
+        visibilityResumeBatch?.visibilityGeneration !== visibilityGeneration
+      ) {
+        return
+      }
+      const environment = visibilityResumeBatch.environments.get(environmentId)
+      if (!environment || environment.latestInventoryReceivedFrame !== inventoryReceivedFrame) {
+        return
+      }
+      const batch = visibilityResumeBatch
+      const affectedWorktrees = new Set(environment.pendingMissingWorktrees)
+      for (const worktreeId of environment.pendingMissingWorktrees) {
+        const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId)
+        pendingMissing?.delete(environmentId)
+        if (pendingMissing?.size === 0) {
+          batch.pendingMissingByWorktree.delete(worktreeId)
+        }
+      }
+      environment.pendingMissingWorktrees.clear()
+      for (const missing of missingWorktrees) {
+        const worktreeId = missing.snapshot.worktree
+        const pendingMissing = batch.pendingMissingByWorktree.get(worktreeId) ?? new Map()
+        pendingMissing.set(environmentId, missing)
+        batch.pendingMissingByWorktree.set(worktreeId, pendingMissing)
+        environment.pendingMissingWorktrees.add(worktreeId)
+        affectedWorktrees.add(worktreeId)
+      }
+      if (!environment.inventoryReceived) {
+        environment.inventoryReceived = true
+        batch.pendingInventoryCount -= 1
+      }
+      reconcileVisibilityResumeWorktrees(affectedWorktrees)
+    }
+    recordVisibilityResumeSnapshotRef.current = recordVisibilityResumeSnapshot
+
+    const recordVisibilityResumeInventoryReceipt = (
+      environmentId: string,
+      visibilityGeneration: number,
+      inventoryReceivedFrame: number,
+      snapshots: readonly RuntimeMobileSessionTabsResult[]
+    ): VisibilityResumeMissing[] => {
+      for (const snapshot of snapshots) {
+        visibilityResumeOmissionsByKey.delete(
+          sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+        )
+      }
+      if (visibilityResumeBatch?.visibilityGeneration !== visibilityGeneration) {
+        return []
+      }
+      const environment = visibilityResumeBatch.environments.get(environmentId)
+      if (!environment) {
+        return []
+      }
+      environment.latestInventoryReceivedFrame = Math.max(
+        environment.latestInventoryReceivedFrame,
+        inventoryReceivedFrame
+      )
+      if (environment.latestInventoryReceivedFrame !== inventoryReceivedFrame) {
+        return []
+      }
+      const publishedWorktrees = new Set(snapshots.map((snapshot) => snapshot.worktree))
+      return buildMissingWebSessionTabsRemovals(
+        environmentId,
+        environment.trackedWorktrees,
+        publishedWorktrees
+      ).map((missing) => {
+        const key = sessionTabsFreshnessKey(environmentId, missing.snapshot.worktree)
+        visibilityResumeOmissionsByKey.set(key, {
+          baseline: missing.trackedWorktree.freshness,
+          environmentId,
+          inventoryReceivedFrame,
+          superseded: false,
+          visibilityGeneration
+        })
+        recordReceivedWebSessionTabsRemoval(
+          environmentId,
+          missing.snapshot.worktree,
+          inventoryReceivedFrame
+        )
+        return { environmentId, inventoryReceivedFrame, ...missing }
+      })
+    }
+
+    const beginVisibilityResume = ({
+      visibilityGeneration,
+      restartingSpecIndexes
+    }: {
+      visibilityGeneration: number
+      restartingSpecIndexes: readonly number[]
+    }): void => {
+      const activeRuntimeWorktreeKey = activeRuntimeWorktreeKeyRef.current
+      for (const [key, omission] of visibilityResumeOmissionsByKey) {
+        // Why: the active worktree's scoped stream resumes before its host inventory, so its fence outlives exactly one resume - never more.
+        if (
+          key !== activeRuntimeWorktreeKey ||
+          omission.visibilityGeneration < visibilityGeneration - 1
+        ) {
+          visibilityResumeOmissionsByKey.delete(key)
+        }
+      }
+      const resumedEnvironments = new Map<string, VisibilityResumeEnvironment>()
+      const trackedWorktreeIds = new Set<string>()
+      for (const index of restartingSpecIndexes) {
+        const environmentId = environmentIdBySubscriptionSpec[index]
+        if (environmentId) {
+          const trackedWorktrees = getTrackedWebSessionTabsWorktrees(environmentId)
+          if (trackedWorktrees.length === 0) {
+            continue
+          }
+          for (const { worktree } of trackedWorktrees) {
+            trackedWorktreeIds.add(worktree)
+          }
+          resumedEnvironments.set(environmentId, {
+            trackedWorktrees,
+            inventoryReceived: false,
+            latestInventoryReceivedFrame: 0,
+            pendingMissingWorktrees: new Set()
+          })
+        }
+      }
+      visibilityResumeBatch =
+        resumedEnvironments.size > 0
+          ? {
+              visibilityGeneration,
+              environments: resumedEnvironments,
+              pendingInventoryCount: resumedEnvironments.size,
+              pendingMissingByWorktree: new Map(),
+              deferredRepairWorktrees: new Set(),
+              trackedWorktreeIds,
+              reapplyableSnapshotsByKey: new Map()
+            }
+          : null
+    }
+
     // Why: the stream's initial snapshot can land after first render, so a one-shot fetch makes initial parity deterministic.
     for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
       if (
@@ -3103,170 +3924,241 @@ export function useWebSessionTabsSync(): void {
       ) {
         continue
       }
-      void window.api.runtimeEnvironments
-        .call({
-          selector: environmentId,
-          method: 'session.tabs.listAll',
-          params: {},
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision
-        })
-        .then(async (response: RuntimeRpcResponse<unknown>) => {
-          if (
-            disposed ||
-            getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-          ) {
-            return
+      let requestedInitialLoad = false
+      environmentIdBySubscriptionSpec.push(environmentId)
+      subscriptionSpecs.push({
+        subscribe: (isCurrent, { visibilityGeneration }) => {
+          const isVisibilityRestart = visibilityGeneration > 0
+          let awaitingVisibilityResumeInventory = isVisibilityRestart
+          if (!requestedInitialLoad) {
+            requestedInitialLoad = true
+            loadInitialWebSessionTabs(environmentId, expectedEnvironmentPairingRevision, isCurrent)
           }
-          if (response.ok === false) {
-            console.warn('[web-session-tabs-sync] initial listAll failed:', response.error.message)
-            return
-          }
-          const result = response.result
-          if (!isSessionTabsListAllResult(result)) {
-            console.warn('[web-session-tabs-sync] initial listAll returned an invalid payload')
-            return
-          }
-          const recovered = await Promise.all(
-            result.snapshots.map((snapshot) =>
-              recoverWebSessionTerminalOrphansBeforeApply(
-                useAppStore.getState(),
-                snapshot,
-                environmentId
-              )
-            )
-          )
-          if (disposed) {
-            return
-          }
-          const applicable = recovered.filter(
-            (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
-          )
-          applyWebSessionTabsStorePatch((state) =>
-            applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
-          )
-        })
-        .catch((error) => {
-          if (!disposed) {
-            console.warn(
-              '[web-session-tabs-sync] failed to load initial session tabs:',
-              error instanceof Error ? error.message : String(error)
-            )
-          }
-        })
-
-      void window.api.runtimeEnvironments
-        .subscribe(
-          {
-            selector: environmentId,
-            method: 'session.tabs.subscribeAll',
-            params: {},
-            timeoutMs: 15_000,
-            expectedEnvironmentPairingRevision
-          },
-          {
-            onResponse: (response: RuntimeRpcResponse<unknown>) => {
-              if (
-                disposed ||
-                getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-              ) {
-                return
-              }
-              if (response.ok === false) {
-                console.warn(
-                  '[web-session-tabs-sync] global subscription failed:',
-                  response.error.message
-                )
-                return
-              }
-              const event = response.result as SessionTabsStreamEvent
-              const replayed = isRuntimeSubscriptionReplayResponse(response)
-              if (event.type === 'snapshots') {
-                void Promise.all(
-                  event.snapshots.map((snapshot) =>
-                    recoverWebSessionTerminalOrphansBeforeApply(
-                      useAppStore.getState(),
-                      snapshot,
-                      environmentId
+          return window.api.runtimeEnvironments.subscribe(
+            {
+              selector: environmentId,
+              method: 'session.tabs.subscribeAll',
+              params: {},
+              timeoutMs: 15_000,
+              expectedEnvironmentPairingRevision
+            },
+            {
+              onResponse: (response: RuntimeRpcResponse<unknown>) => {
+                if (
+                  !isCurrent() ||
+                  getRuntimeEnvironmentRevision(environmentId) !==
+                    expectedEnvironmentPairingRevision
+                ) {
+                  return
+                }
+                if (response.ok === false) {
+                  console.warn(
+                    '[web-session-tabs-sync] global subscription failed:',
+                    response.error.message
+                  )
+                  return
+                }
+                const event = response.result as SessionTabsStreamEvent
+                const replayed = isRuntimeSubscriptionReplayResponse(response)
+                if (event.type === 'snapshots') {
+                  const skipUnchangedResumeWork = awaitingVisibilityResumeInventory && !replayed
+                  awaitingVisibilityResumeInventory = false
+                  // Why: an unchanged epoch/version proves the host published nothing while parked, so there is no missed frame to recover or replay.
+                  const unchangedVisibilityResumeSnapshots = event.snapshots.map((snapshot) => {
+                    const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
+                    const freshness = latestSessionTabsSnapshotByWorktree.get(key)
+                    return Boolean(
+                      skipUnchangedResumeWork &&
+                      // Why: an armed replay is an outstanding repair request, so that worktree must be rebuilt even when the host looks unchanged.
+                      !replayableSessionTabsSnapshotByWorktree.has(key) &&
+                      freshness?.publicationEpoch === snapshot.publicationEpoch &&
+                      freshness.snapshotVersion === snapshot.snapshotVersion
+                    )
+                  })
+                  const receivedFrames = event.snapshots.map((snapshot) => {
+                    const receivedFrame = recordReceivedWebSessionTabsSnapshot(
+                      environmentId,
+                      snapshot
+                    )
+                    recordVisibilityResumeSnapshotReceipt(environmentId, snapshot, receivedFrame)
+                    return receivedFrame
+                  })
+                  const inventoryReceivedFrame = recordReceivedWebSessionTabsInventory()
+                  const missingWorktrees = recordVisibilityResumeInventoryReceipt(
+                    environmentId,
+                    visibilityGeneration,
+                    inventoryReceivedFrame,
+                    event.snapshots
+                  )
+                  const finishRecoveries = event.snapshots.map((snapshot, index) =>
+                    unchangedVisibilityResumeSnapshots[index]
+                      ? null
+                      : beginWebSessionTabsSnapshotRecovery(
+                          environmentId,
+                          snapshot.worktree,
+                          receivedFrames[index]!
+                        )
+                  )
+                  void Promise.all(
+                    event.snapshots.map((snapshot, index) =>
+                      unchangedVisibilityResumeSnapshots[index]
+                        ? Promise.resolve(snapshot)
+                        : recoverWebSessionTerminalOrphansBeforeApply(
+                            useAppStore.getState(),
+                            snapshot,
+                            environmentId
+                          )
                     )
                   )
+                    .then((recovered) => {
+                      if (isCurrent()) {
+                        const applicable = recovered.flatMap((snapshot, index) =>
+                          snapshot !== null &&
+                          shouldApplyRecoveredWebSessionTabsSnapshot(
+                            environmentId,
+                            snapshot,
+                            receivedFrames[index]!
+                          ) &&
+                          shouldApplyVisibilityResumeSnapshot(
+                            environmentId,
+                            snapshot,
+                            receivedFrames[index]!
+                          )
+                            ? [{ index, snapshot }]
+                            : []
+                        )
+                        if (isVisibilityRestart || replayed) {
+                          for (const { index, snapshot } of applicable) {
+                            if (unchangedVisibilityResumeSnapshots[index]) {
+                              continue
+                            }
+                            acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
+                          }
+                        }
+                        const freshSnapshots = applicable.flatMap(({ index, snapshot }) =>
+                          !unchangedVisibilityResumeSnapshots[index] &&
+                          shouldApplyWebSessionTabsSnapshot(snapshot, environmentId)
+                            ? [snapshot]
+                            : []
+                        )
+                        if (freshSnapshots.length > 0) {
+                          applyWebSessionTabsStorePatch((state) =>
+                            applyWebSessionTabsSnapshots(state, freshSnapshots, environmentId)
+                          )
+                        }
+                        const freshSnapshotSet = new Set(freshSnapshots)
+                        for (const { index, snapshot } of applicable) {
+                          if (unchangedVisibilityResumeSnapshots[index]) {
+                            queueAcceptedWebSessionTerminalSnapshot(snapshot, environmentId)
+                          }
+                          if (
+                            unchangedVisibilityResumeSnapshots[index] ||
+                            freshSnapshotSet.has(snapshot)
+                          ) {
+                            recordVisibilityResumeSnapshot(
+                              environmentId,
+                              snapshot,
+                              receivedFrames[index]!
+                            )
+                          }
+                        }
+                        recordVisibilityResumeInventory(
+                          environmentId,
+                          visibilityGeneration,
+                          inventoryReceivedFrame,
+                          missingWorktrees
+                        )
+                      }
+                    })
+                    .catch((error) => {
+                      if (isCurrent()) {
+                        console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
+                      }
+                    })
+                    .finally(() => {
+                      for (const finishRecovery of finishRecoveries) {
+                        finishRecovery?.()
+                      }
+                    })
+                  return
+                }
+                if (event.type !== 'snapshot' && event.type !== 'updated') {
+                  return
+                }
+                const receivedFrame = recordReceivedWebSessionTabsSnapshot(environmentId, event)
+                recordVisibilityResumeSnapshotReceipt(environmentId, event, receivedFrame)
+                const finishRecovery = beginWebSessionTabsSnapshotRecovery(
+                  environmentId,
+                  event.worktree,
+                  receivedFrame
+                )
+                void recoverWebSessionTerminalOrphansBeforeApply(
+                  useAppStore.getState(),
+                  event,
+                  environmentId
                 )
                   .then((recovered) => {
-                    if (!disposed) {
-                      const applicable = recovered.filter(
-                        (snapshot): snapshot is RuntimeMobileSessionTabsResult => snapshot !== null
-                      )
+                    if (
+                      isCurrent() &&
+                      recovered &&
+                      shouldApplyRecoveredWebSessionTabsSnapshot(
+                        environmentId,
+                        recovered,
+                        receivedFrame
+                      ) &&
+                      shouldApplyVisibilityResumeSnapshot(environmentId, recovered, receivedFrame)
+                    ) {
                       if (replayed) {
-                        for (const snapshot of applicable) {
-                          acceptReplayedWebSessionTabsSnapshot(environmentId, snapshot.worktree)
-                        }
+                        acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
                       }
-                      applyWebSessionTabsStorePatch((state) =>
-                        applyFreshWebSessionTabsSnapshots(state, applicable, environmentId)
-                      )
+                      if (shouldApplyWebSessionTabsSnapshot(recovered, environmentId)) {
+                        applyWebSessionTabsStorePatch((state) =>
+                          applyWebSessionTabsSnapshot(state, recovered, environmentId)
+                        )
+                        recordVisibilityResumeSnapshot(environmentId, recovered, receivedFrame)
+                      }
                     }
                   })
                   .catch((error) => {
-                    if (!disposed) {
+                    if (isCurrent()) {
                       console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
                     }
                   })
-                return
+                  .finally(finishRecovery)
+              },
+              onError: (error) => {
+                if (isCurrent()) {
+                  console.warn('[web-session-tabs-sync] global subscription error:', error.message)
+                }
               }
-              if (event.type !== 'snapshot' && event.type !== 'updated') {
-                return
-              }
-              void recoverWebSessionTerminalOrphansBeforeApply(
-                useAppStore.getState(),
-                event,
-                environmentId
-              )
-                .then((recovered) => {
-                  if (!disposed && recovered) {
-                    if (replayed) {
-                      acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
-                    }
-                    applyWebSessionTabsStorePatch((state) =>
-                      applyFreshWebSessionTabsSnapshot(state, recovered, environmentId)
-                    )
-                  }
-                })
-                .catch((error) => {
-                  if (!disposed) {
-                    console.warn('[web-session-tabs-sync] snapshot recovery failed:', error)
-                  }
-                })
-            },
-            onError: (error) => {
-              console.warn('[web-session-tabs-sync] global subscription error:', error.message)
             }
-          }
-        )
-        .then((handle) => {
-          if (disposed) {
-            handle.unsubscribe()
-            return
-          }
-          unsubscribes.push(handle.unsubscribe)
-        })
-        .catch((error) => {
-          if (!disposed) {
-            console.warn(
-              '[web-session-tabs-sync] failed to subscribe globally:',
-              error instanceof Error ? error.message : String(error)
-            )
-          }
-        })
+          )
+        },
+        onSubscribeError: (error) => {
+          console.warn(
+            '[web-session-tabs-sync] failed to subscribe globally:',
+            error instanceof Error ? error.message : String(error)
+          )
+        },
+        onUnsubscribeError: (error) => {
+          console.warn('[web-session-tabs-sync] failed to unsubscribe globally:', error)
+        }
+      })
     }
+    // Why: pace full-host inventories while the scoped active-worktree mirror resumes immediately.
+    const disposeSubscriptions = installWindowVisibilitySubscriptionParking(subscriptionSpecs, {
+      getVisibilityResumePriority: (index) =>
+        environmentIdBySubscriptionSpec[index] === activeRuntimeEnvironmentIdRef.current ? 0 : 1,
+      visibilityResumeStaggerMs: WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS,
+      onVisibilityResume: beginVisibilityResume
+    })
 
     return () => {
-      disposed = true
-      for (const unsubscribe of unsubscribes) {
-        unsubscribe()
-      }
-      // Why: environment ids churn as paired runtimes reconnect; don't leak stale tracking for the renderer lifetime.
+      recordVisibilityResumeSnapshotRef.current = () => {}
+      recordVisibilityResumeSnapshotReceiptRef.current = () => {}
+      shouldApplyVisibilityResumeSnapshotRef.current = () => true
+      disposeSubscriptions()
       for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
-        clearWebSessionTabsTrackingForEnvironment(environmentId)
         const owner = {
           environmentId,
           pairingRevision: expectedEnvironmentPairingRevision
@@ -3293,25 +4185,29 @@ export function useWebSessionTabsSync(): void {
       return
     }
 
-    // Why: activating a worktree can clear its local mirror after the global stream already recorded this host revision.
-    acceptReplayedWebSessionTabsSnapshot(environmentId, activeWorktreeId)
-    let disposed = false
     let requestedInitialTerminal = false
     let requestedRespawnAfterWake = false
-    let unsubscribe: (() => void) | null = null
     const applyActiveSnapshot = async (
       event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
-      response: RuntimeRpcResponse<unknown>
+      response: RuntimeRpcResponse<unknown>,
+      isCurrent: () => boolean,
+      receivedFrame: number
     ): Promise<void> => {
       const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
         useAppStore.getState(),
         event,
         environmentId
       )
-      if (disposed || !recovered) {
+      if (
+        !isCurrent() ||
+        !recovered ||
+        !shouldApplyRecoveredWebSessionTabsSnapshot(environmentId, recovered, receivedFrame) ||
+        !shouldApplyVisibilityResumeSnapshotRef.current(environmentId, recovered, receivedFrame)
+      ) {
         return
       }
-      if (isRuntimeSubscriptionReplayResponse(response)) {
+      if (event.type === 'snapshot' || isRuntimeSubscriptionReplayResponse(response)) {
+        // Why: the parallel global stream can consume an earlier replay allowance before this authoritative snapshot lands.
         acceptReplayedWebSessionTabsSnapshot(environmentId, recovered.worktree)
       }
       const recoveredEvent: SessionTabsStreamEvent = { ...recovered, type: event.type }
@@ -3342,8 +4238,9 @@ export function useWebSessionTabsSync(): void {
         applyWebSessionTabsStorePatch((state) =>
           applyWebSessionTabsSnapshot(state, recovered, environmentId)
         )
+        recordVisibilityResumeSnapshotRef.current(environmentId, recovered, receivedFrame)
       }
-      if (!disposed && shouldBootstrapInitialTerminal) {
+      if (isCurrent() && shouldBootstrapInitialTerminal) {
         requestedInitialTerminal = true
         await createWebRuntimeSessionTerminal({
           worktreeId: activeWorktreeId,
@@ -3351,7 +4248,7 @@ export function useWebSessionTabsSync(): void {
           activate: true
         })
       } else if (
-        !disposed &&
+        isCurrent() &&
         shouldRespawnAfterWake &&
         beginWebRuntimeWakeTerminalRespawn(activeWorktreeId)
       ) {
@@ -3364,62 +4261,79 @@ export function useWebSessionTabsSync(): void {
         }).finally(() => endWebRuntimeWakeTerminalRespawn(activeWorktreeId))
       }
     }
-    void window.api.runtimeEnvironments
-      .subscribe(
-        {
-          selector: environmentId,
-          method: 'session.tabs.subscribe',
-          params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
-          timeoutMs: 15_000,
-          expectedEnvironmentPairingRevision
-        },
-        {
-          onResponse: (response: RuntimeRpcResponse<unknown>) => {
-            if (
-              disposed ||
-              getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision
-            ) {
-              return
-            }
-            if (response.ok === false) {
-              console.warn('[web-session-tabs-sync] subscription failed:', response.error.message)
-              return
-            }
-            const event = response.result as SessionTabsStreamEvent
-            if (event.type !== 'snapshot' && event.type !== 'updated') {
-              return
-            }
-            void applyActiveSnapshot(event, response).catch((error) => {
-              if (!disposed) {
-                console.warn('[web-session-tabs-sync] active snapshot recovery failed:', error)
+    const disposeSubscription = installWindowVisibilitySubscriptionParking([
+      {
+        subscribe: (isCurrent) =>
+          window.api.runtimeEnvironments.subscribe(
+            {
+              selector: environmentId,
+              method: 'session.tabs.subscribe',
+              params: { worktree: toRuntimeWorktreeSelector(activeWorktreeId) },
+              timeoutMs: 15_000,
+              expectedEnvironmentPairingRevision
+            },
+            {
+              onResponse: (response: RuntimeRpcResponse<unknown>) => {
+                if (
+                  !isCurrent() ||
+                  getRuntimeEnvironmentRevision(environmentId) !==
+                    expectedEnvironmentPairingRevision
+                ) {
+                  return
+                }
+                if (response.ok === false) {
+                  console.warn(
+                    '[web-session-tabs-sync] subscription failed:',
+                    response.error.message
+                  )
+                  return
+                }
+                const event = response.result as SessionTabsStreamEvent
+                if (event.type !== 'snapshot' && event.type !== 'updated') {
+                  return
+                }
+                const receivedFrame = recordReceivedWebSessionTabsSnapshot(environmentId, event)
+                recordVisibilityResumeSnapshotReceiptRef.current(
+                  environmentId,
+                  event,
+                  receivedFrame
+                )
+                const finishRecovery = beginWebSessionTabsSnapshotRecovery(
+                  environmentId,
+                  event.worktree,
+                  receivedFrame
+                )
+                void applyActiveSnapshot(event, response, isCurrent, receivedFrame)
+                  .catch((error) => {
+                    if (isCurrent()) {
+                      console.warn(
+                        '[web-session-tabs-sync] active snapshot recovery failed:',
+                        error
+                      )
+                    }
+                  })
+                  .finally(finishRecovery)
+              },
+              onError: (error) => {
+                if (isCurrent()) {
+                  console.warn('[web-session-tabs-sync] subscription error:', error.message)
+                }
               }
-            })
-          },
-          onError: (error) => {
-            console.warn('[web-session-tabs-sync] subscription error:', error.message)
-          }
-        }
-      )
-      .then((handle) => {
-        if (disposed) {
-          handle.unsubscribe()
-          return
-        }
-        unsubscribe = handle.unsubscribe
-      })
-      .catch((error) => {
-        if (!disposed) {
+            }
+          ),
+        onSubscribeError: (error) => {
           console.warn(
             '[web-session-tabs-sync] failed to subscribe:',
             error instanceof Error ? error.message : String(error)
           )
+        },
+        onUnsubscribeError: (error) => {
+          console.warn('[web-session-tabs-sync] failed to unsubscribe:', error)
         }
-      })
+      }
+    ])
 
-    return () => {
-      disposed = true
-      unsubscribe?.()
-    }
+    return disposeSubscription
   }, [
     activeWorktreeId,
     activeWorktreeRuntimeEnvironmentId,

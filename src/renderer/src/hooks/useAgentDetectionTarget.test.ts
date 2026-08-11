@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../shared/types'
+import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getAgentDetectionTargetKeyForWorktree } from './useAgentDetectionTarget'
 
@@ -32,14 +32,14 @@ describe('getAgentDetectionTargetKeyForWorktree', () => {
           id: 'runtime-folder',
           projectGroupId: 'runtime-group',
           folderPath: '/workspace'
-        }
+        } as FolderWorkspace
       ],
       projectGroups: [
         {
           id: 'runtime-group',
           connectionId: null,
           executionHostId: 'runtime:owner-env'
-        }
+        } as ProjectGroup
       ],
       repos,
       worktreesByRepo: {}

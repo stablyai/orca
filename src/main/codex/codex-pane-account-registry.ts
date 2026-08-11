@@ -225,6 +225,13 @@ export function getCodexPaneAccount(ptyId: string): CodexPaneAccountRecord | nul
   return readRegistry().panes[ptyId] ?? null
 }
 
+/** `custom-home` stays conservative because it can mask a non-comparable shared-home route. */
+export function isCodexPaneHomeRouteProvenAwayFromSharedHome(
+  route: CodexPaneHomeRoute | undefined
+): boolean {
+  return route === 'real-home' || route === 'account-home' || route === 'wsl-home'
+}
+
 /**
  * Reports the lane each given PTY launched from, omitting panes with no record.
  *
