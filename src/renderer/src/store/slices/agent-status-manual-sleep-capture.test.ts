@@ -110,6 +110,24 @@ describe('manual sleep agent session capture', () => {
     expect(records['tab-1:stale']).toMatchObject({ state: 'working', updatedAt: NOW })
   })
 
+  it('does not recreate a completed session after shell foreground is confirmed', () => {
+    const store = createTestStore()
+    seedTabs(store)
+    const paneKey = 'tab-1:leaf-1'
+    store.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentEntry({ paneKey, state: 'done' })
+      },
+      paneForegroundAgentByPaneKey: {
+        [paneKey]: { agent: null, shellForeground: true }
+      }
+    } as Partial<AppState>)
+
+    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+  })
+
   it('marks finished panes for tab-open-only restore so a mobile wake cannot respawn them all', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

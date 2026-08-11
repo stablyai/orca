@@ -823,6 +823,15 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
   }
 
+  for (const [paneKey, record] of Object.entries(records)) {
+    if (
+      record.state === 'done' &&
+      state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true
+    ) {
+      delete records[paneKey]
+    }
+  }
+
   return records
 }
 

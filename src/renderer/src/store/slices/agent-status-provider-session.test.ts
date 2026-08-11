@@ -90,6 +90,8 @@ describe('recordAgentProviderSession', () => {
         { providerSession }
       )
     store.getState().setPaneForegroundAgent(paneKey, { agent: null, shellForeground: true })
+    store.getState().clearSleepingAgentSession(paneKey)
+    expect(store.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
     store
       .getState()
       .setAgentStatus(
