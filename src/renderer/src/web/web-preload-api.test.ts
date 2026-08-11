@@ -935,6 +935,26 @@ describe('web settings preload API', () => {
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
   })
 
+  it('normalizes terminal cursor style before web settings writes return or persist', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    const invalid = await api.settings.set({ terminalCursorStyle: 'beam' as never })
+    const invalidStored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalCursorStyle?: string
+      terminalCursorStyleDefaultedToBlock?: boolean
+    }
+    expect(invalid.terminalCursorStyle).toBe('block')
+    expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(invalidStored.terminalCursorStyle).toBe('block')
+    expect(invalidStored.terminalCursorStyleDefaultedToBlock).toBe(true)
+
+    const valid = await api.settings.set({ terminalCursorStyle: 'bar' })
+    expect(valid.terminalCursorStyle).toBe('bar')
+    expect(JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}').terminalCursorStyle).toBe(
+      'bar'
+    )
+  })
+
   it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
     // Why: the web store is a second, independent settings store — the constants-level
     // default flip only reaches profiles that never persisted the old `false` (#10567).
