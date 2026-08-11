@@ -29,8 +29,8 @@ import { DeviceRegistry } from './device-registry'
 import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
+vi.mock('../git/worktree', () => {
+  const worktrees = [
     {
       path: '/tmp/worktree-a',
       head: 'abc',
@@ -38,9 +38,12 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 async function sendRequest(
   endpoint: string,
@@ -436,6 +439,58 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(watchStop).toHaveBeenCalledTimes(1)
     expect(server['metadataOwnershipWatch']).toBeNull()
     expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
+  })
+
+  it('flushes a lastSeen refresh scheduled while transports stop', async () => {
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: false
+    })
+    let pending = false
+    const timeline: string[] = []
+    server['deviceRegistry'] = {
+      flushPendingLastSeen: vi.fn(() => {
+        timeline.push(pending ? 'flush-pending' : 'flush-empty')
+        pending = false
+      })
+    } as unknown as DeviceRegistry
+    let finishSecondStop: () => void = () => {}
+    const secondStop = new Promise<void>((resolve) => {
+      finishSecondStop = resolve
+    })
+    server['activeTransports'] = [
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('failed-transport-stop')
+          throw new Error('transport stop failed')
+        })
+      },
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('second-transport-started')
+          await secondStop
+          timeline.push('second-transport-stopped')
+          pending = true
+        })
+      }
+    ]
+
+    const stopping = server.stop()
+    await vi.waitFor(() => expect(timeline).toContain('second-transport-started'))
+    expect(timeline).not.toContain('flush-empty')
+    finishSecondStop()
+    await expect(stopping).rejects.toThrow('transport stop failed')
+
+    expect(timeline).toEqual([
+      'failed-transport-stop',
+      'second-transport-started',
+      'second-transport-stopped',
+      'flush-pending'
+    ])
+    expect(pending).toBe(false)
   })
 
   it('creates a pairing offer for the active WebSocket transport', async () => {
@@ -3998,6 +4053,32 @@ describe('OrcaRuntimeRpcServer', () => {
           }
         }
       ])
+
+      // Pins the opt-out half of the compat contract: the request above omits
+      // the flag and still gets layouts; only an explicit `false` drops them.
+      const optedOutResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_out',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: false }
+      })
+      const optedOut = optedOutResponse.result as {
+        visualLayouts?: unknown[]
+        terminals: unknown[]
+      }
+      expect(optedOutResponse).toMatchObject({ id: 'req_list_layout_opt_out', ok: true })
+      expect(optedOut.visualLayouts).toBeUndefined()
+      expect(optedOut.terminals).toHaveLength(result.terminals.length)
+
+      const explicitIncludeResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_in',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: true }
+      })
+      expect(
+        (explicitIncludeResponse.result as { visualLayouts?: unknown[] }).visualLayouts
+      ).toHaveLength(1)
 
       const resolvePaneResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
         id: 'req_resolve_pane',

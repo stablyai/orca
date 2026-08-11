@@ -146,10 +146,10 @@ test.describe('Desktop chat AskUserQuestion card (#11761)', () => {
       // The submit button reads "Skip" until an option is chosen; picking one is
       // what proves the card is answerable rather than merely rendered.
       await orcaPage.getByRole('button', { name: /Spaces/ }).click()
-      await expect(orcaPage.getByRole('button', { name: 'Send answer' })).toBeVisible()
+      await expect(orcaPage.getByRole('button', { name: 'Submit' })).toBeVisible()
       await orcaPage.screenshot({ path: path.join(screenshotDir, '02-option-selected.png') })
 
-      await orcaPage.getByRole('button', { name: 'Send answer' }).click()
+      await orcaPage.getByRole('button', { name: 'Submit' }).click()
       // The card owns the composer slot, so its disappearance is the visible
       // signal that the answer was accepted and chat input came back.
       await expect(orcaPage.getByText(QUESTION)).toHaveCount(0, { timeout: 20_000 })

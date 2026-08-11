@@ -34,6 +34,18 @@ describe('file-tree', () => {
     ])
   })
 
+  it('orders numbered names naturally, matching the desktop explorer', () => {
+    const cache: DirectoryCache = {
+      '': { entries: [entry('100 - b.txt'), entry('9 - c.txt'), entry('99 - a.txt')] }
+    }
+
+    expect(flattenDirectoryCache(cache, new Set()).map((row) => row.id)).toEqual([
+      'file:9 - c.txt',
+      'file:99 - a.txt',
+      'file:100 - b.txt'
+    ])
+  })
+
   it('mirrors desktop default browse exclusions while keeping dotfiles visible', () => {
     const cache: DirectoryCache = {
       '': {

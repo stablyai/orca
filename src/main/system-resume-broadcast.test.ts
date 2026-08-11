@@ -4,6 +4,7 @@ import {
   getCrashBreadcrumbSnapshot
 } from './crash-reporting/crash-breadcrumb-store'
 import { registerSystemResumeBroadcast, SYSTEM_RESUMED_CHANNEL } from './system-resume-broadcast'
+import { subscribeSystemPowerLifecycle } from './system-power-lifecycle'
 
 vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: vi.fn(() => []) },
@@ -51,6 +52,27 @@ function createWindow(destroyed = false): {
 }
 
 describe('registerSystemResumeBroadcast', () => {
+  it('publishes suspend and resume to main-process lifecycle consumers', () => {
+    const { source, fireSuspend, fireResume } = createResumeSource()
+    const listener = { onSuspend: vi.fn(), onResume: vi.fn() }
+    const unsubscribe = subscribeSystemPowerLifecycle(listener)
+    listener.onResume.mockClear()
+    const stopBroadcast = registerSystemResumeBroadcast({
+      resumeSource: source,
+      getWindows: () => []
+    })
+
+    fireSuspend()
+    fireResume()
+    unsubscribe()
+    fireSuspend()
+    fireResume()
+    stopBroadcast()
+
+    expect(listener.onSuspend).toHaveBeenCalledOnce()
+    expect(listener.onResume).toHaveBeenCalledOnce()
+  })
+
   it('broadcasts the resume channel to every live window', () => {
     const { source, fireResume } = createResumeSource()
     const liveWindow = createWindow()

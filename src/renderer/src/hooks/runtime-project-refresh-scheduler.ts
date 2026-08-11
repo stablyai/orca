@@ -35,16 +35,17 @@ export async function refreshRuntimeProjectWorktrees(
 ): Promise<void> {
   let nextIndex = 0
   const failures: { repoId: string; error: unknown }[] = []
-  const workerCount = Math.min(concurrency, repos.length)
+  const repoIds = [...new Set(repos.map((repo) => repo.id))]
+  const workerCount = Math.min(concurrency, repoIds.length)
   const executionHostId = toRuntimeExecutionHostId(environmentId)
 
   // Why: one coalesced event can represent many repos; bound probes without dropping host identity.
   await Promise.all(
     Array.from({ length: workerCount }, async () => {
-      while (nextIndex < repos.length) {
+      while (nextIndex < repoIds.length) {
         const index = nextIndex
         nextIndex += 1
-        const repoId = repos[index].id
+        const repoId = repoIds[index]
         try {
           await fetchWorktrees(repoId, { executionHostId })
         } catch (error) {

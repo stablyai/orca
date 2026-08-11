@@ -824,9 +824,6 @@ export function ResourceUsageStatusSegment({
       clearSessionsError()
       void fetchSnapshot()
       void refreshSessions()
-    },
-    onKillAllSettled: () => {
-      void refreshSessions()
     }
   })
 
@@ -1187,12 +1184,9 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            {resourceManagerTooltipLines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={line === 'Space scan ready' ? 'text-primary' : ''}
-              >
-                {line}
+            {resourceManagerTooltipLines.map((line) => (
+              <div key={line.id} className={line.emphasized ? 'text-primary' : ''}>
+                {line.text}
               </div>
             ))}
           </div>

@@ -1,3 +1,7 @@
+import {
+  addTerminalFollowOutputWaiter,
+  notifyTerminalFollowOutputWaiters
+} from './terminal-follow-output-waiters'
 import { isTerminalScrollIntentRebuildInFlight } from './terminal-scroll-intent-rebuild'
 import {
   clampTerminalViewportY,
@@ -55,6 +59,18 @@ const terminalScrollIntentBindingByKey = new Map<TerminalScrollIntentKey, number
 let nextTerminalScrollIntentRevision = 1
 let nextTerminalScrollIntentKeyBinding = 1
 
+/** Runs `listener` once the terminal's intent next becomes follow-output; returns a canceller. Fires immediately when already following. */
+export function onTerminalScrollIntentFollowOutput(
+  terminal: TerminalScrollIntentTarget,
+  listener: () => void
+): () => void {
+  if (getTerminalScrollIntentKind(terminal) === 'followOutput') {
+    listener()
+    return () => {}
+  }
+  return addTerminalFollowOutputWaiter(terminal, listener)
+}
+
 function writeIntent(
   terminal: TerminalScrollIntentTarget,
   kind: TerminalScrollIntentKind
@@ -77,6 +93,9 @@ function writeIntentSnapshot(
   const key = terminalScrollIntentKeyByTerminal.get(terminal)
   if (key) {
     terminalScrollIntentByKey.set(key, intent)
+  }
+  if (kind === 'followOutput') {
+    notifyTerminalFollowOutputWaiters(terminal)
   }
   return intent
 }

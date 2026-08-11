@@ -167,7 +167,11 @@ export async function findActiveRuntimeTerminal(
     runtimeTarget,
     'terminal.list',
     // Why: worktree ids can look like branch names or paths; keep the lookup unambiguous.
-    { worktree: toRuntimeWorktreeSelector(worktreeId), limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT },
+    {
+      worktree: toRuntimeWorktreeSelector(worktreeId),
+      limit: ACTIVE_AGENT_TERMINAL_LIST_LIMIT,
+      includeVisualLayouts: false
+    },
     { timeoutMs }
   )
   return (

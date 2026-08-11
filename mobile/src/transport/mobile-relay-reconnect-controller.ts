@@ -8,7 +8,7 @@ import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
-import type { ConnectionState } from './types'
+import type { ConnectionState, ForegroundNudgeReason } from './types'
 
 export type RelayReconnectDependencies = {
   now: () => number
@@ -50,16 +50,29 @@ export class RelayReconnectController {
     } else if (this.recoveryGate === 'external-signal') {
       this.liftGate()
     }
-    if (
-      wasForeground &&
-      this.recoveryGate !== 'fresh-credential' &&
-      logical.getState() === 'connected'
-    ) {
-      // Why: a network handoff can leave the relay half-open without publishing a close.
-      this.suspendActiveRelay(logical)
-    }
     // Why: revival nudges must honor failure cooldowns even when lease rotation is pending.
     this.onRetry()
+  }
+
+  // Classifies a nudge that arrives while already foreground. A healthy relay is
+  // never suspended here: focus/app-resume probe it, a network change replaces it
+  // make-before-break — suspending first was the grey-blink bug (S2).
+  handleActiveNudge(
+    logical: StableLogicalRpcClient,
+    reason: ForegroundNudgeReason
+  ): 'probe' | 'replace' | 'recover' {
+    if (this.recoveryGate === 'external-signal') {
+      this.liftGate()
+    }
+    if (
+      this.recoveryGate !== 'fresh-credential' &&
+      logical.getActivePath() === 'relay' &&
+      logical.getState() === 'connected'
+    ) {
+      return reason === 'network-change' ? 'replace' : 'probe'
+    }
+    this.onRetry()
+    return 'recover'
   }
 
   handleStateFailure(logical: StableLogicalRpcClient, state: ConnectionState): void {

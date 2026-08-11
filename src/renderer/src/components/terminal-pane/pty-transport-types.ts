@@ -14,6 +14,7 @@ import type { TerminalOscColorQueryReplyColors } from '../../../../shared/termin
 import type { TuiAgent } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
 export type PtyBufferSnapshot = {
   data: string
@@ -161,6 +162,8 @@ export type PtyTransport = {
   getRecoveryState?: () => PtyTransportRecoveryState
   /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
   retryRecovery?: () => boolean
+  /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
+  notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
@@ -176,7 +179,13 @@ export type PtyTransport = {
    *  would corrupt the next live chunk. IPC transports only. */
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
+  serializeBufferOutcome?: (opts?: {
+    scrollbackRows?: number
+  }) => Promise<RemoteRuntimeSnapshotOutcome>
   preserve?: () => void
+  /** Hand the live PTY to a successor without process teardown. Terminal for this instance:
+   *  it also drops the transport's output processor from the pty side-effect memory census,
+   *  so a reattached one would run untracked. Create a new transport instead. */
   detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>
 }

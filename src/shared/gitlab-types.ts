@@ -37,6 +37,8 @@ export type MRInfo = {
   pipelineStatus: CheckStatus
   updatedAt: string
   mergeable: MRMergeableState
+  /** GitLab `detailed_merge_status` (or a short alias) for UI that needs more than MERGEABLE/CONFLICTING/UNKNOWN. */
+  mergeStateStatus?: string | null
   /** Full markdown description. Optional — list endpoints omit it; populated on single-MR fetch (`getMR`). */
   description?: string
   /** Author username (GitLab `username`). Optional for the same reason. */

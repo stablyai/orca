@@ -198,6 +198,8 @@ export type WorktreeSlice = {
       automationProvenanceRequest?: CreateWorktreeArgs['automationProvenanceRequest']
       linkedWorkItem?: WorkspaceLinkedItem | null
       linkedTaskSourceContext?: TaskSourceContext | null
+      /** Lets the owning runtime launch and prefill a task agent without first creating an idle shell. */
+      startupDraft?: string
     }
   ) => Promise<CreateWorktreeResult>
   /** Register an in-flight background creation and make it the active surface. */
@@ -243,11 +245,13 @@ export type WorktreeSlice = {
     expectedHead: string
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
   clearWorktreeDeleteState: (worktreeId: string) => void
+  /** Never rejects — most callers fire-and-forget. Callers that own a surface
+   *  the user is waiting on should read the result and say what went wrong. */
   updateWorktreeMeta: (
     worktreeId: string,
     updates: Partial<WorktreeMeta>,
     options?: WorktreeMetaUpdateOptions
-  ) => Promise<void>
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
   ensureHostedReviewPushTarget: (worktreeId: string) => Promise<void>
   updateWorktreesMeta: (
     updatesByWorktreeId: ReadonlyMap<string, Partial<WorktreeMeta>>

@@ -9,6 +9,12 @@ import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
 import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+import { translate } from '@/i18n/i18n'
+import { isTerminalOwnedLinkGesture } from './terminal-link-activation'
+import {
+  requestTerminalLinkAction,
+  type TerminalLinkActionContext
+} from './terminal-link-action-request'
 
 export { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 export { TERMINAL_HTTP_URL_MAX_LENGTH } from './terminal-http-link-limits'
@@ -18,6 +24,10 @@ type UrlLinkHitTestDeps = {
   sourceOwner?: HttpLinkSourceOwner
   modifierHeld?: boolean
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  linkActionContext?: TerminalLinkActionContext | null
+  actionDestinations?: TerminalHttpLinkActionDestinations
+  actionDestination?: string
+  forceDestination?: TerminalHttpLinkDestination
 }
 
 type UrlLinkClickFallbackDeps = {
@@ -25,6 +35,15 @@ type UrlLinkClickFallbackDeps = {
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  getLinkActionContext?: () => TerminalLinkActionContext | null
+  getActionDestinations?: () => TerminalHttpLinkActionDestinations
+}
+
+export type TerminalHttpLinkDestination = 'orca' | 'system'
+
+export type TerminalHttpLinkActionDestinations = {
+  primary: TerminalHttpLinkDestination
+  alternate?: TerminalHttpLinkDestination
 }
 
 export type TerminalLinkRoutingPreferenceRequester = (
@@ -35,10 +54,73 @@ function isDesktopHttpLinkFallbackActivation(event: MouseEvent): boolean {
   if (event.defaultPrevented || event.button !== 0) {
     return false
   }
-  // Why: desktop terminal links require an intentional Cmd/Ctrl gesture so
-  // plain clicks remain available for cursor placement and selection. Mobile
-  // tap routing is handled separately under mobile/src/terminal.
-  return isTerminalHttpLinkActivation(event)
+  // Why: Shift-only, Alt, and non-primary clicks remain available to the terminal or child TUI.
+  return isTerminalOwnedLinkGesture(event)
+}
+
+export function handleTerminalHttpLink(
+  url: string,
+  event: MouseEvent | undefined,
+  deps: UrlLinkHitTestDeps
+): boolean {
+  if (isTerminalHttpLinkActivation(event)) {
+    const forceDestination = event?.shiftKey
+      ? deps.actionDestinations?.alternate
+      : deps.actionDestinations?.primary
+    openTerminalHttpLink(url, {
+      ...deps,
+      modifierHeld: forceDestination ? false : Boolean(event?.shiftKey),
+      forceDestination
+    })
+    return true
+  }
+
+  const actionDestinations = deps.actionDestinations
+  const primaryDestination = actionDestinations?.primary
+  const labelForDestination = (destination: TerminalHttpLinkDestination): string =>
+    destination === 'orca'
+      ? translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.orcaBrowser',
+          'Orca Browser'
+        )
+      : translate(
+          'auto.components.terminal.pane.TerminalLinkActionPopover.systemBrowser',
+          'System Browser'
+        )
+
+  return requestTerminalLinkAction(event, deps.linkActionContext, {
+    destination: deps.actionDestination ?? url,
+    kind: 'url',
+    primary: {
+      external: primaryDestination === 'system',
+      label: primaryDestination
+        ? labelForDestination(primaryDestination)
+        : translate(
+            'auto.components.terminal.pane.TerminalLinkActionPopover.openLink',
+            'Open link'
+          ),
+      run: () =>
+        openTerminalHttpLink(url, {
+          ...deps,
+          modifierHeld: false,
+          forceDestination: primaryDestination
+        })
+    },
+    ...(actionDestinations?.alternate
+      ? {
+          alternate: {
+            external: actionDestinations.alternate === 'system',
+            label: labelForDestination(actionDestinations.alternate),
+            run: () =>
+              openTerminalHttpLink(url, {
+                ...deps,
+                modifierHeld: false,
+                forceDestination: actionDestinations.alternate
+              })
+          }
+        }
+      : {})
+  })
 }
 
 export function openHttpLinkAtTerminalMouseEvent(
@@ -54,6 +136,19 @@ export function openHttpLinkAtTerminalMouseEvent(
     return false
   }
   return openHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols, deps)
+}
+
+export function findHttpLinkAtTerminalMouseEvent(
+  terminal: Terminal,
+  event: MouseEvent
+): string | null {
+  if (event.button !== 0 || !isTerminalOwnedLinkGesture(event)) {
+    return null
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return position
+    ? findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+    : null
 }
 
 export function installHttpLinkClickFallback(
@@ -74,16 +169,19 @@ export function installHttpLinkClickFallback(
       return
     }
 
-    // Why: xterm's WebLinksAddon only activates after hover state exists. This
-    // direct mouseup fallback preserves modifier-clicks when the hover link was
-    // never established, while defaultPrevented avoids duplicate opens.
-    const opened = openHttpLinkAtTerminalMouseEvent(terminal, event, {
-      worktreeId: deps.worktreeId,
-      sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
-      modifierHeld: event.shiftKey,
-      requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference
-    })
-    if (opened) {
+    // Why: xterm's WebLinksAddon misses first clicks before hover state exists.
+    const url = findHttpLinkAtTerminalMouseEvent(terminal, event)
+    const handled = Boolean(
+      url &&
+      handleTerminalHttpLink(url, event, {
+        worktreeId: deps.worktreeId,
+        sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
+        requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
+        linkActionContext: deps.getLinkActionContext?.(),
+        actionDestinations: deps.getActionDestinations?.()
+      })
+    )
+    if (handled) {
       event.preventDefault()
       terminal.clearSelection()
     }
@@ -161,6 +259,15 @@ export function openTerminalHttpLink(url: string, deps: UrlLinkHitTestDeps): voi
   // Why: Orca browser tabs are local-only, so a link clicked in a runtime-hosted
   // pane must be classified by its pane's host, not the global active runtime.
   const sourceOwner = deps.sourceOwner ?? { kind: 'local' }
+  if (deps.forceDestination) {
+    openHttpLink(url, {
+      worktreeId: deps.worktreeId,
+      forceInApp: deps.forceDestination === 'orca',
+      forceSystemBrowser: deps.forceDestination === 'system',
+      sourceOwner
+    })
+    return
+  }
   if (deps.modifierHeld) {
     // Why: the modifier states a destination outright, so it also skips the
     // one-time routing prompt; openHttpLink resolves which destination it means.

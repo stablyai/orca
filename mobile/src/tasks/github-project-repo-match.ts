@@ -7,11 +7,33 @@ export type GitHubProjectRepoMatch = {
   id: string
   path: string
   displayName: string
+  /** Fork parent resolved by the host and carried on `repo.list`. Absent = not
+   *  a fork or not yet resolved. */
+  upstream?: { owner: string; repo: string; host?: string } | null
 }
 
 export type GitHubRepoSlugCacheEntry = {
   path: string
   repository: { owner: string; repo: string; host?: string } | null
+  /** Resolution failed rather than resolving to "no repository". Cached so the
+   *  board stops waiting on it, but dropped on refresh so it is retried. */
+  failed?: boolean
+}
+
+/** Why: a transient `github.repoSlug` error would otherwise be cached forever as
+ *  an unresolved repo, filtering its rows out of every future board render. */
+export function dropFailedGitHubRepoSlugEntries(
+  slugsByRepoId: Record<string, GitHubRepoSlugCacheEntry | undefined>
+): Record<string, GitHubRepoSlugCacheEntry | undefined> {
+  const retryable = Object.entries(slugsByRepoId).filter(([, entry]) => entry?.failed === true)
+  if (retryable.length === 0) {
+    return slugsByRepoId
+  }
+  const next = { ...slugsByRepoId }
+  for (const [repoId] of retryable) {
+    delete next[repoId]
+  }
+  return next
 }
 
 type CachedSlugState =
@@ -45,6 +67,27 @@ function cachedSlugStateForRepo(
   return { status: 'resolved', repository: cached.repository }
 }
 
+/** Identity key of the repo's fork parent, or null when it is not a fork or its
+ *  origin has not resolved. Why: when `upstream.host` is absent (older persisted
+ *  forks), the fork's origin host is the fallback so GHES parents do not collapse
+ *  into github.com. Unresolved origins refuse the alias. */
+function upstreamIdentityKeyForRepo(
+  repo: GitHubProjectRepoMatch,
+  originState: CachedSlugState | undefined
+): string | null {
+  const upstream = repo.upstream
+  if (!upstream?.owner || !upstream.repo) {
+    return null
+  }
+  if (originState?.status !== 'resolved' || !originState.repository) {
+    return null
+  }
+  return githubRepoIdentityKey({
+    ...upstream,
+    host: upstream.host ?? originState.repository.host
+  })
+}
+
 export function findRepoForGitHubProjectRepository(
   repository: string | null | undefined,
   repos: GitHubProjectRepoMatch[],
@@ -76,6 +119,20 @@ export function findRepoForGitHubProjectRepository(
     return slugMatches[0]!
   }
   if (slugMatches.length > 1) {
+    return null
+  }
+
+  // Why: a Project card references the upstream repo, but a contributor's clone
+  // has their personal fork as `origin`, so origin-only matching hid every row
+  // (#12647). Checked after origin so an open clone of the upstream repo itself
+  // always wins over someone's fork of it.
+  const upstreamMatches = repos.filter(
+    (repo) => upstreamIdentityKeyForRepo(repo, slugStates.get(repo.id)) === requestedIdentityKey
+  )
+  if (upstreamMatches.length === 1) {
+    return upstreamMatches[0]!
+  }
+  if (upstreamMatches.length > 1) {
     return null
   }
 

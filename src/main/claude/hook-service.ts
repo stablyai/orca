@@ -13,6 +13,7 @@ import {
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
@@ -61,15 +62,17 @@ function getManagedScript(
     return [
       '@echo off',
       'setlocal',
+      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+      // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
+      // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
+      ...buildWindowsHookEnvironmentGuardLines(),
       ...(options.skipWhenDevinImportsClaude
         ? [
             // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
             `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
           ]
         : []),
-      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      ...buildWindowsHookEnvironmentGuardLines(),
       // Why: use curl.exe to avoid an extra PowerShell startup per hook.
       buildWindowsAgentHookCurlPostCommand('claude'),
       'exit /b 0',
@@ -167,6 +170,18 @@ export class ClaudeHookService {
       detail = `Managed hook missing for events: ${missing.join(', ')}`
     }
     return { agent: this.options.agent, state, configPath, managedHooksPresent, detail }
+  }
+
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(
+      getManagedScriptPath(this.options.settings),
+      getManagedScript('local', { skipWhenDevinImportsClaude: this.options.agent === 'claude' })
+    )
+    // Why: no agent gate — the statusline script only ever exists for claude, so presence is the gate.
+    await refreshManagedScriptIfPresent(
+      getStatusLineScriptPath(this.options.settings),
+      getManagedStatusLineScript('local')
+    )
   }
 
   install(): AgentHookInstallStatus {

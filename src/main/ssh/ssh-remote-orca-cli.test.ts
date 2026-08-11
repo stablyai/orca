@@ -139,6 +139,42 @@ describe('runRemoteOrcaCli', () => {
     return { runtime, db }
   }
 
+  it.each([
+    { argv: ['terminal', 'list'], includeVisualLayouts: true },
+    { argv: ['terminal', 'list', '--json'], includeVisualLayouts: false },
+    {
+      argv: ['terminal', 'list', '--json', '--include-visual-layouts'],
+      includeVisualLayouts: true
+    },
+    {
+      argv: ['--include-visual-layouts', 'terminal', 'list', '--json'],
+      includeVisualLayouts: true
+    }
+  ])(
+    'requests terminal layouts according to the legacy SSH output mode',
+    async ({ argv, includeVisualLayouts }) => {
+      const runtime = new OrcaRuntimeService()
+      const listTerminals = vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
+        terminals: [],
+        totalCount: 0,
+        truncated: false
+      })
+
+      const result = await runRemoteOrcaCli(
+        runtime,
+        { argv, cwd: '/home/alice/repo', env: {} },
+        LEGACY_FALLBACK_OPTIONS
+      )
+
+      expect(result.exitCode).toBe(0)
+      expect(listTerminals).toHaveBeenCalledWith(undefined, undefined, {
+        handles: undefined,
+        requireFreshPtyLiveness: undefined,
+        includeVisualLayouts
+      })
+    }
+  )
+
   it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
     const { runtime, db } = createRuntime()
 

@@ -43,14 +43,14 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
   const [expanded, setExpanded] = useState<string | null>(null)
   const [filesById, setFilesById] = useState<Record<string, GitBranchChangeEntry[] | 'loading'>>({})
 
-  // Worktree identity change must wipe history immediately — even while
+  // Host or worktree identity change must wipe history immediately — even while
   // disconnected — so a kept-mounted hub segment never shows another tree's commits.
   useEffect(() => {
     setRows(null)
     setError(null)
     setExpanded(null)
     setFilesById({})
-  }, [worktreeId])
+  }, [hostId, worktreeId])
 
   useEffect(() => {
     let active = true
@@ -59,12 +59,9 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
       // resolveMobileHistoryScreenView keeps them visible (STA-1511).
       return
     }
-    // Reset prior error/rows so a successful retry doesn't stay stuck behind a
-    // stale error (error wins render precedence).
+    // Why (F10): clear only the error (it wins render precedence, so a stale one would outlive a
+    // successful retry) — the loaded rows stay up until fresh ones land instead of flashing empty.
     setError(null)
-    setRows(null)
-    setExpanded(null)
-    setFilesById({})
     void (async () => {
       try {
         const result = await fetchMobileGitHistory(client, worktreeId)
@@ -95,45 +92,43 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
     setReloadNonce((n) => n + 1)
   }, [connState, forceReconnect, hostId])
 
-  const toggleCommit = useCallback(
-    (row: MobileCommitRow) => {
-      const next = expanded === row.id ? null : row.id
-      setExpanded(next)
-      if (next && !filesById[row.id]) {
-        // No client (disconnected while cached rows stay visible): resolve to an
-        // empty file list so the row shows "No file changes" instead of a spinner
-        // that never completes — no request can be made.
-        if (!client) {
-          setFilesById((prev) => ({ ...prev, [row.id]: [] }))
-          return
+  const toggleCommit = useCallback((row: MobileCommitRow) => {
+    setExpanded((current) => (current === row.id ? null : row.id))
+  }, [])
+
+  // Why (F10): the expanded commit's files load here, not in the tap handler, so a row expanded
+  // during an outage refetches on reconnect instead of caching the outage's answer forever.
+  useEffect(() => {
+    if (!expanded || !client || connState !== 'connected') {
+      return
+    }
+    const commitId = expanded
+    let stale = false
+    setFilesById((prev) => (prev[commitId] ? prev : { ...prev, [commitId]: 'loading' }))
+    void client
+      .sendRequest('git.commitCompare', { worktree: `id:${worktreeId}`, commitId })
+      .then((response) => {
+        const entries = response.ok
+          ? ((response as RpcSuccess).result as { entries: GitBranchChangeEntry[] }).entries
+          : []
+        if (!stale) {
+          setFilesById((prev) => ({ ...prev, [commitId]: entries }))
         }
-        setFilesById((prev) => ({ ...prev, [row.id]: 'loading' }))
-        void client
-          .sendRequest('git.commitCompare', { worktree: `id:${worktreeId}`, commitId: row.id })
-          .then((response) => {
-            const entries = response.ok
-              ? ((response as RpcSuccess).result as { entries: GitBranchChangeEntry[] }).entries
-              : []
-            setFilesById((prev) => {
-              // Drop stale responses if the row is no longer loading (collapsed + re-opened).
-              if (prev[row.id] !== 'loading') {
-                return prev
-              }
-              return { ...prev, [row.id]: entries }
-            })
-          })
-          .catch(() =>
-            setFilesById((prev) => {
-              if (prev[row.id] !== 'loading') {
-                return prev
-              }
-              return { ...prev, [row.id]: [] }
-            })
+      })
+      .catch(() => {
+        // Keep an already-loaded list; a first load that fails resolves to "No file changes".
+        if (!stale) {
+          setFilesById((prev) =>
+            prev[commitId] === 'loading' ? { ...prev, [commitId]: [] } : prev
           )
-      }
-    },
-    [client, expanded, filesById, worktreeId]
-  )
+        }
+      })
+    return () => {
+      stale = true
+    }
+  }, [client, connState, expanded, worktreeId])
+
+  const connected = client !== null && connState === 'connected'
 
   const renderCommit = useCallback(
     ({ item }: { item: MobileCommitRow }) => {
@@ -162,7 +157,12 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
           {isOpen ? (
             <View style={styles.files}>
               {files === 'loading' || files === undefined ? (
-                <ActivityIndicator size="small" color={colors.textSecondary} />
+                // No request can complete while disconnected, so say so instead of spinning forever.
+                connected ? (
+                  <ActivityIndicator size="small" color={colors.textSecondary} />
+                ) : (
+                  <Text style={styles.empty}>Waiting for desktop...</Text>
+                )
               ) : files.length === 0 ? (
                 <Text style={styles.empty}>No file changes</Text>
               ) : (
@@ -183,14 +183,10 @@ export const MobileGitHistoryList = memo(function MobileGitHistoryList({
         </View>
       )
     },
-    [expanded, filesById, toggleCommit]
+    [connected, expanded, filesById, toggleCommit]
   )
 
-  const view = resolveMobileHistoryScreenView({
-    connected: client !== null && connState === 'connected',
-    rows,
-    error
-  })
+  const view = resolveMobileHistoryScreenView({ connected, rows, error })
 
   if (view.kind === 'error' || view.kind === 'waiting') {
     return (

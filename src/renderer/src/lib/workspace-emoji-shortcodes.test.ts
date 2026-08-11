@@ -86,7 +86,20 @@ describe('workspace emoji shortcodes', () => {
       )
     ).toEqual({
       value: 'Ship 😉 today',
-      cursor: 7
+      cursor: 8
+    })
+  })
+
+  it('adds a trailing space when a selected suggestion is at the end of the name', () => {
+    expect(
+      applyWorkspaceEmojiSuggestion(
+        'Launch :win',
+        { start: 7, end: 11, query: 'win' },
+        { emoji: '😉', shortcode: 'wink' }
+      )
+    ).toEqual({
+      value: 'Launch 😉 ',
+      cursor: 10
     })
   })
 })

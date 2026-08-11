@@ -49,6 +49,14 @@ vi.mock('sonner', () => ({
 import { toast } from 'sonner'
 import { runWorktreeDeletesInParallel } from './delete-worktree-flow'
 
+function runDeletesForCurrentWorktrees(
+  targets: Parameters<typeof runWorktreeDeletesInParallel>[0],
+  options?: Parameters<typeof runWorktreeDeletesInParallel>[1]
+) {
+  mocks.state.worktreeMap = new Map(targets.map((target) => [target.id, target]))
+  return runWorktreeDeletesInParallel(targets, options)
+}
+
 function deferredDeleteResult(): {
   promise: Promise<{ ok: true }>
   resolve: (value: { ok: true }) => void
@@ -65,6 +73,7 @@ describe('runWorktreeDeletesInParallel', () => {
     mocks.state.removeWorktree.mockClear().mockResolvedValue({ ok: true })
     mocks.state.clearWorktreeDeleteState.mockClear()
     mocks.state.markWorktreesDeleting.mockClear()
+    mocks.state.worktreeMap = new Map()
     mocks.state.deleteStateByWorktreeId = {}
     vi.mocked(toast.error).mockClear()
     vi.mocked(toast.info).mockClear()
@@ -77,7 +86,7 @@ describe('runWorktreeDeletesInParallel', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
 
-    const deleted = runWorktreeDeletesInParallel([
+    const deleted = runDeletesForCurrentWorktrees([
       { id: 'wt-1', displayName: 'one', repoId: 'repo-a', path: '/workspaces/one' },
       { id: 'wt-2', displayName: 'two', repoId: 'repo-b', path: '/workspaces/two' }
     ])
@@ -98,7 +107,7 @@ describe('runWorktreeDeletesInParallel', () => {
     const childDelete = deferredDeleteResult()
     mocks.state.removeWorktree.mockReturnValueOnce(childDelete.promise)
 
-    const deleted = runWorktreeDeletesInParallel([
+    const deleted = runDeletesForCurrentWorktrees([
       { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
       { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
     ])
@@ -124,7 +133,7 @@ describe('runWorktreeDeletesInParallel', () => {
   })
 
   it('deletes nested workspaces before their parent within the same repo', async () => {
-    await runWorktreeDeletesInParallel([
+    await runDeletesForCurrentWorktrees([
       { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
       { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
     ])
@@ -134,7 +143,7 @@ describe('runWorktreeDeletesInParallel', () => {
   })
 
   it('passes confirmed force to each delete', async () => {
-    await runWorktreeDeletesInParallel(
+    await runDeletesForCurrentWorktrees(
       [
         { id: 'wt-1', displayName: 'one', repoId: 'repo-a', path: '/workspaces/one' },
         { id: 'wt-2', displayName: 'two', repoId: 'repo-b', path: '/workspaces/two' }
@@ -157,7 +166,7 @@ describe('runWorktreeDeletesInParallel', () => {
       .mockResolvedValueOnce({ ok: true })
       .mockResolvedValueOnce({ ok: false, error: 'selector_not_found' })
 
-    await expect(runWorktreeDeletesInParallel([target, target])).resolves.toEqual(['wt-1'])
+    await expect(runDeletesForCurrentWorktrees([target, target])).resolves.toEqual(['wt-1'])
 
     expect(mocks.state.markWorktreesDeleting).toHaveBeenCalledWith(['wt-1'])
     expect(mocks.state.removeWorktree).toHaveBeenCalledTimes(1)
@@ -176,7 +185,7 @@ describe('runWorktreeDeletesInParallel', () => {
     })
 
     await expect(
-      runWorktreeDeletesInParallel([
+      runDeletesForCurrentWorktrees([
         { id: 'parent', displayName: 'parent', repoId: 'repo-a', path: '/workspaces/parent' },
         { id: 'child', displayName: 'child', repoId: 'repo-a', path: '/workspaces/parent/child' }
       ])

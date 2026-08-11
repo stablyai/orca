@@ -61,6 +61,7 @@ function makeEntry(overrides: Partial<AgentStatusEntry> & { paneKey: string }): 
     terminalTitle: overrides.terminalTitle,
     stateHistory: overrides.stateHistory ?? [],
     interrupted: overrides.interrupted,
+    sessionBoundary: overrides.sessionBoundary,
     restoredUnconfirmed: overrides.restoredUnconfirmed
   }
 }
@@ -175,6 +176,23 @@ describe('resolveAttention', () => {
       updatedAt: NOW - 30_000
     })
     expect(resolveAttention([hookPane(entry)], NOW)).toEqual(IDLE)
+  })
+
+  it('treats a session boundary as idle unless it displaced a real completion', () => {
+    const boundary = makeEntry({
+      paneKey: 't:1',
+      state: 'done',
+      sessionBoundary: true,
+      stateStartedAt: NOW - 1_000,
+      updatedAt: NOW - 500
+    })
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual(IDLE)
+
+    boundary.stateHistory = [makeHistory('done', NOW - 90_000)]
+    expect(resolveAttention([hookPane(boundary)], NOW)).toEqual({
+      cls: 2,
+      attentionTimestamp: NOW - 90_000
+    })
   })
 
   it('classifies a working pane with prior done as Class 3 with the prior timestamp', () => {

@@ -20,13 +20,14 @@ on:
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
       - 'electron.vite.config.ts'
-      - 'build-plugins/**'
+      - 'config/build-plugins/**'
       - 'src/main/daemon/**'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
@@ -135,6 +136,11 @@ jobs:
       # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
       - name: Daemon boot smoke
         run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: a daemon that lost its endpoint name used to delete the replacement's
+      # socket on exit, stranding a live daemon that hosts PTYs nothing can reach.
+      # Only two real processes racing the same endpoint reproduce it.
+      - name: Daemon endpoint handover smoke
+        run: node config/scripts/daemon-endpoint-handover-smoke.mjs
       # Why: workspace removal overlaps graceful renderer teardown with the
       # forced main-process sweep; exercise that exact pair against real ConPTY.
       - name: Windows daemon workspace-close repro

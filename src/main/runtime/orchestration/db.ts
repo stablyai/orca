@@ -53,6 +53,14 @@ import {
 } from './worker-terminal-ownership'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import {
+  releaseContextOnlyDispatch,
+  type ContextOnlyDispatchReleaseResult
+} from './context-only-dispatch-release'
+import {
+  ensureMutationReceiptCapacity,
+  migrateMutationReceiptCapacity
+} from './mutation-receipt-capacity'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -257,9 +265,6 @@ export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 export const LEGACY_CONTRACT_VERSION = 0
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
-const MUTATION_RECEIPT_MAX_ROWS = 10_000
-const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
-
 export type RunListPage = {
   runs: RunRow[]
   nextCursor: string | null
@@ -277,8 +282,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
+const SCHEMA_VERSION = 26
 
 function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -979,6 +984,9 @@ export class OrchestrationDb {
             WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
         `)
       }
+      if (current < 26) {
+        migrateMutationReceiptCapacity(this.db)
+      }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
           ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})
@@ -1394,44 +1402,6 @@ export class OrchestrationDb {
 
   // ── Durable mutation receipts ──
 
-  private ensureMutationReceiptCapacity(): void {
-    this.db
-      .prepare(
-        `DELETE FROM mutation_receipts
-         WHERE state = 'completed'
-           AND updated_at < datetime('now', ?)`
-      )
-      .run(`-${MUTATION_RECEIPT_MAX_AGE_DAYS} days`)
-
-    const row = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
-    }
-    const completedToRemove = row.count - MUTATION_RECEIPT_MAX_ROWS + 1
-    if (completedToRemove > 0) {
-      this.db
-        .prepare(
-          `DELETE FROM mutation_receipts
-           WHERE rowid IN (
-             SELECT rowid FROM mutation_receipts
-             WHERE state = 'completed'
-             ORDER BY updated_at ASC, rowid ASC
-             LIMIT ?
-           )`
-        )
-        .run(completedToRemove)
-    }
-
-    const retained = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
-    }
-    if (retained.count >= MUTATION_RECEIPT_MAX_ROWS) {
-      throw new OrchestrationError(
-        'mutation_ledger_full',
-        'The durable mutation ledger is full of unresolved operations. Resolve or inspect them before starting another mutation.'
-      )
-    }
-  }
-
   beginMutationReceipt(params: {
     callerFingerprint: string
     requestId: string
@@ -1454,7 +1424,7 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: existing.state, row: existing }
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -4005,7 +3975,7 @@ export class OrchestrationDb {
             `Mutation ${receipt.requestId} already has a durable acceptance record.`
           )
         }
-        this.ensureMutationReceiptCapacity()
+        ensureMutationReceiptCapacity(this.db)
         this.db
           .prepare(
             `INSERT INTO mutation_receipts (
@@ -4638,7 +4608,7 @@ export class OrchestrationDb {
           `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
         )
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -5378,13 +5348,27 @@ export class OrchestrationDb {
     dispatchId: string
   ):
     | { disposition: 'stopping'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
-    | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow } {
+    | { disposition: 'already_settled'; worker: WorkerDispatchRow; dispatch: DispatchContextRow }
+    | ({ disposition: 'context_only' } & ContextOnlyDispatchReleaseResult) {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const dispatch = this.getDispatchContextById(dispatchId)
       const worker = this.getWorkerDispatch(dispatchId)
-      if (!dispatch || !worker) {
+      if (!dispatch) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+      }
+      if (!worker) {
+        const released = releaseContextOnlyDispatch(
+          this.db,
+          dispatch,
+          this.getDispatchContext(dispatch.task_id)?.id,
+          'stopped'
+        )
+        if (!released.alreadySettled) {
+          this.closeQuestionsForDispatch(dispatchId)
+        }
+        this.db.exec('COMMIT')
+        return { disposition: 'context_only', ...released }
       }
       if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
         this.db.exec('COMMIT')
@@ -5537,16 +5521,31 @@ export class OrchestrationDb {
     return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
   }
 
-  abandonWorkerDispatch(dispatchId: string): {
-    disposition: 'abandoned' | 'already_abandoned' | 'stale'
-    worker: WorkerDispatchRow
-  } {
+  abandonWorkerDispatch(dispatchId: string):
+    | {
+        disposition: 'abandoned' | 'already_abandoned' | 'stale'
+        worker: WorkerDispatchRow
+      }
+    | ({ disposition: 'context_only' } & ContextOnlyDispatchReleaseResult) {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const worker = this.getWorkerDispatch(dispatchId)
       const dispatch = this.getDispatchContextById(dispatchId)
-      if (!worker || !dispatch) {
+      if (!dispatch) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+      }
+      if (!worker) {
+        const released = releaseContextOnlyDispatch(
+          this.db,
+          dispatch,
+          this.getDispatchContext(dispatch.task_id)?.id,
+          'abandoned'
+        )
+        if (!released.alreadySettled) {
+          this.closeQuestionsForDispatch(dispatchId)
+        }
+        this.db.exec('COMMIT')
+        return { disposition: 'context_only', ...released }
       }
       if (worker.state === 'abandoned') {
         this.db.exec('COMMIT')

@@ -4,7 +4,7 @@ import type { PiAgentKind } from '../../shared/pi-agent-kind'
 // both are independently sizeable and the installed extension concatenates them.
 export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] {
   const sessionStartHandler =
-    kind === 'pi'
+    kind !== 'omp'
       ? [
           "  pi.on('session_start', (event, ctx) => {",
           '    updateSessionMetadata(ctx)',
@@ -21,6 +21,14 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
   const ctxParam = ', ctx'
   const bareCtxParams = '_event, ctx'
   const captureSessionMetadata = ['    updateRuntimeOmpSessionMetadata(ctx)']
+  const primeDaemonWorkerGuard =
+    kind === 'prime-agent'
+      ? [
+          '  // Why: Prime loads extensions in both its frontend and event-emitting daemon worker.',
+          '  if (!process.env.PRIME_AGENT_INTERNAL_DAEMON_WORKER) return'
+        ]
+      : []
+  const ownerEnv = kind === 'prime-agent' ? 'ORCA_PRIME_AGENT_STATUS_OWNED' : 'ORCA_PI_STATUS_OWNED'
 
   return [
     '// Why: pi assistant messages carry content as an array of parts',
@@ -53,10 +61,11 @@ export function getPiAgentStatusHandlerSourceLines(kind: PiAgentKind): string[] 
     "// Why: child agents inherit the lead's pane env; only its process may",
     '// register status hooks. PID identity keeps in-process reloads reporting.',
     'export default function (pi): void {',
-    '  const ownerPid = process.env.ORCA_PI_STATUS_OWNED',
+    ...primeDaemonWorkerGuard,
+    `  const ownerPid = process.env.${ownerEnv}`,
     '  const selfPid = String(process.pid)',
     '  if (ownerPid && ownerPid !== selfPid) return',
-    '  process.env.ORCA_PI_STATUS_OWNED = selfPid',
+    `  process.env.${ownerEnv} = selfPid`,
     ...sessionStartHandler,
     `  pi.on('before_agent_start', (event${ctxParam}) => {`,
     ...captureSessionMetadata,

@@ -342,7 +342,6 @@ mobile-config app/h/*/source-control/*.tsx
 mobile-config app/h/*/tasks.tsx
 mobile-config app/index.tsx
 mobile-config app/pair-scan.tsx
-mobile-config app/terminal-settings.tsx
 mobile-config app/troubleshoot.tsx
 mobile-config scripts/mock-server.ts
 mobile-config scripts/repro-terminal-colors.ts

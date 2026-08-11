@@ -37,10 +37,10 @@ function hasLinkedReview(worktree: Worktree): boolean {
 
 function resolveReview(
   state: DashboardCardContextState,
-  repo: Repo,
+  repo: Repo | null,
   worktree: Worktree
 ): DashboardCardReview | undefined {
-  if (!state.hostedReviewCache || !state.prCache || repo.kind === 'folder') {
+  if (!repo || !state.hostedReviewCache || !state.prCache || repo.kind === 'folder') {
     return undefined
   }
   const branch = branchName(worktree.branch)
@@ -77,7 +77,7 @@ function resolveReview(
 
 export function resolveDashboardCardContext(
   state: DashboardCardContextState,
-  repo: Repo,
+  repo: Repo | null,
   worktree: Worktree
 ): DashboardCardContext {
   const statuses =

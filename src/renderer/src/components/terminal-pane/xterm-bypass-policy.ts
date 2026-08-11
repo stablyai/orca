@@ -32,6 +32,7 @@ export type XtermBypassEvent = {
 
 export type XtermBypassOptions = {
   isMac: boolean
+  kittyKeyboardFlags?: number
   /** True when the terminal has a current text selection — Ctrl+C on
    *  Windows/Linux should only bubble to clipboard when something is selected,
    *  otherwise it must reach the shell as SIGINT. */

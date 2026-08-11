@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 
@@ -22,10 +22,6 @@ function userTextMessage(id: string, text: string): NativeChatMessage {
 describe('useMobileNativeChatDrafts launch draft', () => {
   let renderer: ReactTestRenderer | null = null
   let state: DraftState | null = null
-
-  beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
-  })
 
   afterEach(() => {
     act(() => renderer?.unmount())
@@ -65,20 +61,9 @@ describe('useMobileNativeChatDrafts launch draft', () => {
   }
 
   async function mount(tabId: string): Promise<void> {
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { tabId }))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { tabId }))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('prefills the composer from a host launch draft exactly once', async () => {

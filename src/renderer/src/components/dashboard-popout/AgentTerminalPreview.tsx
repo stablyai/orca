@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { installPreviewTerminalKeyHandler } from './preview-terminal-key-handler'
 import { createPreviewGridClaim } from './preview-grid-claim'
+import { installPreviewTerminalAppMenuClipboard } from './preview-terminal-app-menu-clipboard'
 import type { TerminalPreviewDataPayload } from '../../../../shared/terminal-preview'
 
 const PREVIEW_SCROLLBACK_ROWS = 24
@@ -49,11 +50,13 @@ function clamp(value: number, min: number, max: number): number {
  */
 export function AgentTerminalPreview({
   ptyId,
-  terminalInput = null
+  terminalInput = null,
+  className
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  className?: string
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -381,14 +384,10 @@ export function AgentTerminalPreview({
       replayConnection(connection, replaceExisting, () => void setup(true))
     }
 
-    // Why: the popout has no TerminalPane/useAppMenuPaste, so the Edit menu's
-    // Cmd/Ctrl+V (routed to the focused window as ui:appMenuPaste) would
-    // otherwise be dropped and paste would silently do nothing here.
-    const offAppMenuPaste = window.api.ui.onAppMenuPaste(() => {
-      const active = document.activeElement
-      if (active && container.contains(active)) {
-        void pasteClipboardText(active, 'app-menu')
-      }
+    const disposeAppMenuClipboard = installPreviewTerminalAppMenuClipboard({
+      container,
+      getTerminal: () => terminal,
+      pasteClipboardText
     })
 
     offData = window.api.terminalPreview.onData((payload) => {
@@ -411,7 +410,7 @@ export function AgentTerminalPreview({
       }
       gridClaim.dispose()
       boxResizeObserver?.disconnect()
-      offAppMenuPaste()
+      disposeAppMenuClipboard()
       offData?.()
       userInputDisposable?.dispose()
       disposeImeNativeTextBridge()
@@ -444,7 +443,10 @@ export function AgentTerminalPreview({
     // buffer is. The terminal keeps the pane's true dimensions and is scaled/
     // clipped to fit; fitToBox anchors whichever end keeps the cursor in view.
     <div
-      className="relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5"
+      className={cn(
+        'relative h-[calc(100vh-140px)] w-full overflow-hidden bg-background p-1.5',
+        className
+      )}
       style={terminalTheme?.background ? { backgroundColor: terminalTheme.background } : undefined}
     >
       {ptyGone ? (

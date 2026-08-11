@@ -585,6 +585,37 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
+  it('forwards profile UA options to the active runtime environment', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'remote-google',
+      scope: 'isolated' as const,
+      partition: 'persist:remote-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-create',
+      ok: true,
+      result: { profile },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ settings: settingsWithRuntime('env-1') })
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileCreate',
+      params: { scope: 'isolated', label: 'Google', userAgentMode: 'native' },
+      timeoutMs: 15_000
+    })
+  })
+
   it('keeps browser profile lists separate per host', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -1059,6 +1090,30 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('forwards profile UA options to local browser IPC', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'local-google',
+      scope: 'isolated' as const,
+      partition: 'persist:local-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    mockApi.browser.sessionCreateProfile.mockResolvedValueOnce(profile)
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(mockApi.browser.sessionCreateProfile).toHaveBeenCalledWith({
+      scope: 'isolated',
+      label: 'Google',
+      userAgentMode: 'native'
+    })
   })
 
   it('does not notify the local browser manager when selecting tabs under runtime', () => {
