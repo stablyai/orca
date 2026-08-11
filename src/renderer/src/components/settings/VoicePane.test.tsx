@@ -257,8 +257,8 @@ describe('VoicePane', () => {
   it('merges an in-flight voice write onto the newest settings, not the render-time snapshot', async () => {
     const updateSettings = vi.fn()
     let resolveClear: () => void = () => {}
-    const clearing = new Promise<void>((resolve) => {
-      resolveClear = resolve
+    const clearing = new Promise<{ configured: boolean }>((resolve) => {
+      resolveClear = () => resolve({ configured: false })
     })
     useAppStoreMock.mockImplementation((selector: (state: Record<string, unknown>) => unknown) =>
       selector({
