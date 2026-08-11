@@ -29,7 +29,13 @@ progress either. A dispatch classifies as **unknown** — not wedged, not workin
 - it runs on another Orca server (federated): local evidence says nothing about it;
 - this runtime owns no pane for it, or the pane's PTY is disconnected;
 - a different process now owns the pane, so the dispatch's worker is already gone;
+- the pane reports no process identity at all, so its output cannot be attributed to
+  this dispatch — an exact match is required whenever the dispatch recorded an identity;
 - no evidence of any kind has ever been recorded, so there is no baseline to measure.
+
+The identity checks run before the harness-state check. A pane Orca cannot tie to the
+dispatch stays unknown; it is not reported as blocked, working or wedged on the strength
+of a harness state that may belong to a different process.
 
 ## What is not a wedge
 
@@ -61,9 +67,14 @@ scan never runs faster than 5 seconds or slower than the threshold itself.
 
 The first wedge produces exactly one escalation. Every repeat waits a full
 re-escalation gap and carries a higher `escalationCount`, so a coordinator can tell a
-repeat from a new report. Resumed progress clears the count; the next wedge starts at 1
-again. The count survives a runtime restart because it is read back from the last
-escalation the detector wrote.
+repeat from a new report. The count survives a runtime restart because it is read back
+from the last escalation the detector wrote.
+
+Progress after an escalation retires it: a later wedge is a new one, so it escalates at
+once with the count back at 1, rather than inheriting the old count and the old cadence.
+Because a persisted escalation is stamped to whole seconds and pane evidence is
+millisecond-precise, that comparison allows a one-second margin — without it, a truncated
+stamp would read as fresh progress and the same unchanged wedge would escalate twice.
 
 ## Message shape
 
@@ -114,4 +125,6 @@ mixed-version pair cannot see one attributed to a worker its own server does not
 - `src/main/runtime/orchestration/wedged-worker-runtime-monitor.ts` — the timer and the
   runtime adapter. Armed when a supervised worker becomes ready and when workers are
   adopted after a restart; it stops itself as soon as a scan finds no candidate, so a
-  runtime with no supervised workers pays nothing.
+  runtime with no supervised workers pays nothing. A failed scan is logged and retried on
+  the next tick — one transient database error must not disarm detection for every worker
+  under supervision — and only five consecutive failures disarm it.

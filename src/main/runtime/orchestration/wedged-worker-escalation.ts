@@ -62,6 +62,27 @@ type WedgedWorkerSignalPayload = {
   }
 }
 
+// Why a tolerance: a persisted escalation is stamped by SQLite's `datetime('now')`, which
+// truncates to whole seconds, while pane evidence carries millisecond precision. Without
+// this margin a truncated stamp reads as "progress happened after the escalation" and the
+// same unchanged wedge escalates twice.
+const PERSISTED_ESCALATION_TRUNCATION_MS = 1_000
+
+/**
+ * True when the worker made progress after this escalation was sent, which makes a later
+ * wedge a new one rather than a repeat. Its count restarts and its cadence does not
+ * suppress it.
+ */
+export function isEscalationSupersededByProgress(
+  record: WedgedWorkerEscalationRecord,
+  lastProgressAtEpochMs: number | null
+): boolean {
+  return (
+    lastProgressAtEpochMs !== null &&
+    lastProgressAtEpochMs > record.escalatedAtEpochMs + PERSISTED_ESCALATION_TRUNCATION_MS
+  )
+}
+
 /** Read the count back off a previously synthesized escalation so restarts stay monotonic. */
 export function readWedgedWorkerEscalationRecord(
   message: MessageRow | undefined

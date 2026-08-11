@@ -2,6 +2,7 @@ import type { OrchestrationDb } from './db'
 import type { SupervisedWorkerProgressRow } from './types'
 import {
   buildWedgedWorkerEscalation,
+  isEscalationSupersededByProgress,
   planWedgedWorkerEscalation,
   readWedgedWorkerEscalationRecord,
   type WedgedWorkerEscalationMessage,
@@ -109,7 +110,7 @@ export class WedgedWorkerDetector {
     }
     const plan = planWedgedWorkerEscalation({
       assessment,
-      previous: this.recallEscalation(assessment.dispatchId),
+      previous: this.recallEscalation(assessment),
       nowMs,
       thresholds: this.thresholds
     })
@@ -134,18 +135,28 @@ export class WedgedWorkerDetector {
 
   // Why read the DB: a runtime restart loses in-memory cadence state, and an
   // already-escalated wedge must not restart its count on the next scan.
-  private recallEscalation(dispatchId: string): WedgedWorkerEscalationRecord | undefined {
-    const remembered = this.escalations.get(dispatchId)
+  private recallEscalation(
+    assessment: WorkerProgressAssessment
+  ): WedgedWorkerEscalationRecord | undefined {
+    const dispatchId = assessment.dispatchId
+    const remembered =
+      this.escalations.get(dispatchId) ??
+      readWedgedWorkerEscalationRecord(this.options.db.getLatestDispatchEscalation(dispatchId))
+    // Why discard: the worker made progress after that escalation, so this is a new
+    // wedge and not a repeat of the old one. Deleting the in-memory entry alone would
+    // leave the persisted row to restore the stale count and its stale timestamp,
+    // which would both under-report the wedge and suppress the escalation it earns.
+    if (
+      remembered &&
+      isEscalationSupersededByProgress(remembered, assessment.lastProgressAtEpochMs)
+    ) {
+      this.escalations.delete(dispatchId)
+      return undefined
+    }
     if (remembered) {
-      return remembered
+      this.escalations.set(dispatchId, remembered)
     }
-    const persisted = readWedgedWorkerEscalationRecord(
-      this.options.db.getLatestDispatchEscalation(dispatchId)
-    )
-    if (persisted) {
-      this.escalations.set(dispatchId, persisted)
-    }
-    return persisted
+    return remembered
   }
 
   private forgetSettledDispatches(rows: SupervisedWorkerProgressRow[]): void {

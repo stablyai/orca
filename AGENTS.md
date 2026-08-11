@@ -42,7 +42,7 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 ## Supervised Worker Signals
 
-Orca reports a supervised worker that stopped making progress as an `escalation` in its Run's mailbox, and it never acts on the worker: no stop, kill, restart, interrupt, close, focus, or terminal write. Keep that property. Before changing what counts as progress evidence, the classification, the cadence, or the message, read [`docs/reference/wedged-worker-detection.md`](./docs/reference/wedged-worker-detection.md).
+Orca classifies each supervised worker as working, blocked, unknown or wedged, and reports only a `wedged` classification, as an `escalation` in its Run's mailbox. Missing evidence is `unknown`, never `wedged`; a worker waiting on an `ask` or parked in `check --wait` is `blocked`. Orca never acts on the worker: no stop, kill, restart, interrupt, close, focus, or terminal write. Keep all of that. Before changing what counts as progress evidence, the classification, the cadence, or the message, read [`docs/reference/wedged-worker-detection.md`](./docs/reference/wedged-worker-detection.md).
 
 ## Remote Wire Compatibility
 

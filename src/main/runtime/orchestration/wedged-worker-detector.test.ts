@@ -3,7 +3,10 @@ import { OrchestrationDb } from './db'
 import { WedgedWorkerDetector, type WedgedWorkerObservationSource } from './wedged-worker-detector'
 import { WEDGED_WORKER_SIGNAL_KIND } from './wedged-worker-escalation'
 import type { WorkerPaneSample, WorkerProgressAssessment } from './worker-progress-evidence'
-import { DEFAULT_WORKER_PROGRESS_THRESHOLDS } from './worker-progress-thresholds'
+import {
+  DEFAULT_WORKER_PROGRESS_THRESHOLDS,
+  type WorkerProgressThresholds
+} from './worker-progress-thresholds'
 
 const MINUTE = 60_000
 const WORKER_PANE = 'tab_worker:11111111-1111-4111-8111-111111111111'
@@ -121,6 +124,40 @@ describe('WedgedWorkerDetector', () => {
     return { detector, emissions }
   }
 
+  // Why a mailbox-writing emit: an emit that only records in memory hides the persisted
+  // escalation row, which is what a later scan reads its cadence back from.
+  function createMailboxDetector(
+    d: OrchestrationDb,
+    clock: { nowMs: number },
+    samplePane: () => WorkerPaneSample | null,
+    thresholds: WorkerProgressThresholds = DEFAULT_WORKER_PROGRESS_THRESHOLDS
+  ): WedgedWorkerDetector {
+    return new WedgedWorkerDetector({
+      db: d,
+      source: { samplePane, hasBlockingMailboxWait: () => false },
+      thresholds,
+      emit: ({ assessment, message }) => {
+        d.insertMessage({
+          runId: assessment.runId,
+          from: `dispatch:${assessment.dispatchId}`,
+          to: `run:${assessment.runId}`,
+          subject: message.subject,
+          body: message.body,
+          type: 'escalation',
+          priority: 'high',
+          payload: message.payload
+        })
+      },
+      now: () => clock.nowMs
+    })
+  }
+
+  function mailboxEscalationCounts(d: OrchestrationDb, runId: string): number[] {
+    return d
+      .getUnreadMessages(`run:${runId}`, ['escalation'])
+      .map((message) => JSON.parse(message.payload ?? '{}').wedgedWorker.escalationCount)
+  }
+
   it('escalates exactly once when a ready worker stops producing any progress evidence', () => {
     const d = createDb()
     const runId = createRun(d)
@@ -175,22 +212,31 @@ describe('WedgedWorkerDetector', () => {
     const runId = createRun(d)
     startReadyWorker(d, runId)
     const startedAt = Date.now()
-    const clock = { nowMs: startedAt + 30 * MINUTE }
+    const clock = { nowMs: startedAt + 16 * MINUTE }
     let lastOutputAtEpochMs = startedAt
-    const { detector, emissions } = createDetector(d, clock, {
-      samplePane: () => quietPane(lastOutputAtEpochMs)
-    })
+    // Why a long re-escalation gap: it separates "recovered, then wedged again" from a
+    // repeat of the first wedge. Only a discarded cadence escalates inside this window.
+    const thresholds = {
+      ...DEFAULT_WORKER_PROGRESS_THRESHOLDS,
+      reEscalateAfterMs: 60 * MINUTE
+    }
+    const scan = (): void => {
+      createMailboxDetector(d, clock, () => quietPane(lastOutputAtEpochMs), thresholds).scanOnce()
+    }
 
-    detector.scanOnce()
-    expect(emissions).toHaveLength(1)
+    scan()
+    expect(mailboxEscalationCounts(d, runId)).toEqual([1])
 
     lastOutputAtEpochMs = clock.nowMs
-    expect(detector.scanOnce()).toMatchObject({ byStatus: expect.objectContaining({ working: 1 }) })
+    scan()
+    expect(mailboxEscalationCounts(d, runId)).toEqual([1])
 
-    clock.nowMs += 2 * DEFAULT_WORKER_PROGRESS_THRESHOLDS.reEscalateAfterMs
-    detector.scanOnce()
-    // Why 1 again: resumed progress cleared the cadence, so this reads as a new wedge.
-    expect(emissions.map((emission) => emission.escalationCount)).toEqual([1, 1])
+    clock.nowMs += 20 * MINUTE
+    scan()
+    // Why 1 again, and why at all: the worker made progress after that escalation, so
+    // this is a new wedge. Reading the stale persisted row would both suppress it
+    // (inside the re-escalation gap) and mislabel it as escalation 2.
+    expect(mailboxEscalationCounts(d, runId)).toEqual([1, 1])
   })
 
   it('leaves a worker that is still producing output alone', () => {
@@ -272,6 +318,18 @@ describe('WedgedWorkerDetector', () => {
     expect(emissions).toEqual([])
   })
 
+  it('finds a worker that started after an emptiness probe cached no dispatches', () => {
+    const d = createDb()
+    const runId = createRun(d)
+    // Why prime it: the agent-status publish path probes this on every frame, so a
+    // cached `false` is the normal state when the first worker of a session starts.
+    expect(d.hasAnyDispatchContexts()).toBe(false)
+
+    startReadyWorker(d, runId)
+    expect(d.hasAnyDispatchContexts()).toBe(true)
+    expect(d.listSupervisedWorkerProgressRows()).toHaveLength(1)
+  })
+
   it('ignores a settled dispatch entirely', () => {
     const d = createDb()
     const runId = createRun(d)
@@ -331,6 +389,46 @@ describe('WedgedWorkerDetector', () => {
       byStatus: expect.objectContaining({ unknown: 1 })
     })
     expect(emissions).toEqual([])
+  })
+
+  it('classifies a pane with no verifiable process identity as unknown', () => {
+    const d = createDb()
+    const runId = createRun(d)
+    startReadyWorker(d, runId)
+    const startedAt = Date.now()
+    const quiet = { nowMs: startedAt + 90 * MINUTE }
+    const busy = { nowMs: startedAt + MINUTE }
+    // Why both clocks: an unverifiable identity must not read as wedged OR as working —
+    // the pane's output cannot be attributed to this dispatch either way.
+    for (const clock of [quiet, busy]) {
+      const { detector, emissions } = createDetector(d, clock, {
+        samplePane: () => ({ ...quietPane(startedAt), processIncarnation: null })
+      })
+      expect(detector.scanOnce()).toMatchObject({
+        escalated: 0,
+        byStatus: expect.objectContaining({ unknown: 1 })
+      })
+      expect(emissions).toEqual([])
+    }
+  })
+
+  it('keeps an unverifiable identity unknown even when the harness reports waiting', () => {
+    const d = createDb()
+    const runId = createRun(d)
+    startReadyWorker(d, runId)
+    const startedAt = Date.now()
+    const clock = { nowMs: startedAt + 90 * MINUTE }
+    const { detector } = createDetector(d, clock, {
+      samplePane: () => ({
+        ...quietPane(startedAt),
+        processIncarnation: null,
+        agentState: 'waiting'
+      })
+    })
+
+    expect(detector.scanOnce()).toMatchObject({
+      byStatus: expect.objectContaining({ unknown: 1, blocked: 0 })
+    })
   })
 
   it('classifies a federated dispatch as unknown without sampling local panes', () => {
@@ -397,26 +495,7 @@ describe('WedgedWorkerDetector', () => {
     // clock, so the cadence only reads true if the detector's clock stays near it.
     const clock = { nowMs: startedAt + 16 * MINUTE }
     const emitToMailbox = (): WedgedWorkerDetector =>
-      new WedgedWorkerDetector({
-        db: d,
-        source: {
-          samplePane: () => quietPane(startedAt),
-          hasBlockingMailboxWait: () => false
-        },
-        emit: ({ assessment, message }) => {
-          d.insertMessage({
-            runId: assessment.runId,
-            from: `dispatch:${assessment.dispatchId}`,
-            to: `run:${assessment.runId}`,
-            subject: message.subject,
-            body: message.body,
-            type: 'escalation',
-            priority: 'high',
-            payload: message.payload
-          })
-        },
-        now: () => clock.nowMs
-      })
+      createMailboxDetector(d, clock, () => quietPane(startedAt))
 
     emitToMailbox().scanOnce()
     const mailbox = d.getUnreadMessages(`run:${runId}`, ['escalation'])

@@ -31,12 +31,29 @@ describe('wedged worker runtime monitor', () => {
   let db: OrchestrationDb
   let stub: RuntimeStub
   let paneSample: WorkerPaneSample | null
+  let scanFails: boolean
+
+  /** Real DB that fails only the detector's scan query, standing in for a transient error. */
+  function createFlakyDb(): OrchestrationDb {
+    return new Proxy(db, {
+      get(source, property, receiver) {
+        if (property === 'listSupervisedWorkerProgressRows' && scanFails) {
+          return () => {
+            throw new Error('database is locked')
+          }
+        }
+        const value = Reflect.get(source, property, receiver)
+        return typeof value === 'function' ? value.bind(source) : value
+      }
+    })
+  }
 
   function createRuntimeStub(): RuntimeStub {
     const calls: string[] = []
     const notified: { handle: string; type?: string }[] = []
+    const flakyDb = createFlakyDb()
     const target = {
-      getOrchestrationDb: () => db,
+      getOrchestrationDb: () => flakyDb,
       getOrchestrationWorkerPaneActivity: () => paneSample,
       hasOrchestrationMailboxWaiter: () => false,
       notifyMessageArrived: (handle: string, type?: string) => {
@@ -77,6 +94,7 @@ describe('wedged worker runtime monitor', () => {
 
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
+    scanFails = false
     stub = createRuntimeStub()
     paneSample = {
       connected: true,
@@ -126,6 +144,42 @@ describe('wedged worker runtime monitor', () => {
   it('stops itself when no supervised worker is left to watch', () => {
     ensureWedgedWorkerMonitor(stub.runtime)
     expect(runWedgedWorkerScan(stub.runtime)).toMatchObject({ candidates: 0, escalated: 0 })
+    expect(runWedgedWorkerScan(stub.runtime)).toBeNull()
+  })
+
+  it('keeps watching every supervised worker after a transient scan failure', () => {
+    const run = db.createRun({
+      objective: 'ship the feature',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: 'tab_coordinator:22222222-2222-4222-8222-222222222222'
+    })
+    startReadyWorker(run.id)
+    ensureWedgedWorkerMonitor(stub.runtime)
+
+    scanFails = true
+    expect(runWedgedWorkerScan(stub.runtime)).toBeNull()
+    expect(runWedgedWorkerScan(stub.runtime)).toBeNull()
+
+    // Why: the monitor must still be armed, so the next healthy tick resumes detection.
+    scanFails = false
+    expect(runWedgedWorkerScan(stub.runtime)).toMatchObject({ candidates: 1 })
+  })
+
+  it('disarms only after repeated consecutive scan failures', () => {
+    const run = db.createRun({
+      objective: 'ship the feature',
+      coordinatorHandle: 'term_coordinator',
+      coordinatorPaneKey: 'tab_coordinator:22222222-2222-4222-8222-222222222222'
+    })
+    startReadyWorker(run.id)
+    ensureWedgedWorkerMonitor(stub.runtime)
+
+    scanFails = true
+    for (let attempt = 0; attempt < 5; attempt++) {
+      expect(runWedgedWorkerScan(stub.runtime)).toBeNull()
+    }
+
+    scanFails = false
     expect(runWedgedWorkerScan(stub.runtime)).toBeNull()
   })
 

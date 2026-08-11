@@ -4062,6 +4062,9 @@ export class OrchestrationDb {
         )
         .run(task.id)
       this.db.exec('COMMIT')
+      // Why: a `false` cached before the first dispatch would otherwise survive this
+      // insert, and every emptiness-probing reader would keep short-circuiting.
+      this.hasAnyDispatchContextsCache = true
       return {
         dispatch: this.getDispatchContextById(id) as DispatchContextRow,
         worker: this.getWorkerDispatch(id) as WorkerDispatchRow

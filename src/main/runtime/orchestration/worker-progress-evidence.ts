@@ -49,6 +49,7 @@ export type WorkerProgressReason =
   | 'agent_awaiting_input'
   | 'worker_pane_unobservable'
   | 'worker_process_replaced'
+  | 'worker_process_unverified'
   | 'no_progress_evidence'
   | 'recent_progress_evidence'
   | 'no_progress_within_threshold'
@@ -119,20 +120,23 @@ function assess(
   if (observation.blockingMailboxWait) {
     return { status: 'blocked', reason: 'blocking_mailbox_wait', quietMs: null }
   }
-  if (sample?.agentState && AGENT_AWAITING_INPUT_STATES.has(sample.agentState)) {
-    return { status: 'blocked', reason: 'agent_awaiting_input', quietMs: null }
-  }
   if (!sample || !sample.connected) {
     return { status: 'unknown', reason: 'worker_pane_unobservable', quietMs: null }
   }
-  if (
-    row.process_incarnation &&
-    sample.processIncarnation &&
-    row.process_incarnation !== sample.processIncarnation
-  ) {
+  // Why before the harness-state check: a pane whose identity we cannot pin to this
+  // dispatch tells us nothing about this dispatch — not that it is blocked, not that
+  // it is working, and not that it is wedged. An exact match is required whenever the
+  // dispatch recorded an identity; a missing live identity is unverified, not a match.
+  if (row.process_incarnation && !sample.processIncarnation) {
+    return { status: 'unknown', reason: 'worker_process_unverified', quietMs: null }
+  }
+  if (row.process_incarnation && row.process_incarnation !== sample.processIncarnation) {
     // Why: a different process owns the pane now, so this dispatch's worker is gone.
     // Terminal reconciliation owns that case; a wedge signal would be a wrong diagnosis.
     return { status: 'unknown', reason: 'worker_process_replaced', quietMs: null }
+  }
+  if (sample.agentState && AGENT_AWAITING_INPUT_STATES.has(sample.agentState)) {
+    return { status: 'blocked', reason: 'agent_awaiting_input', quietMs: null }
   }
   if (evidence.size === 0) {
     // Why: no baseline to measure quiet time against. Absence of evidence is
