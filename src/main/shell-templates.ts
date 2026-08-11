@@ -114,10 +114,51 @@ case "\${_orca_home%/}" in
 esac
 if [[ ${checks.join(' && ')} ]]; then
   _orca_wrapper_zdotdir="$ZDOTDIR"
+  # Why: an exec never returns to the source call, so restore the wrapper dir
+  # immediately before process replacement and let the replacement re-enter it.
+  _orca_previous_trapdebug_body="\${functions[TRAPDEBUG]-}"
+  _orca_debug_before_cmd_was_set="\${options[debugbeforecmd]}"
+  setopt DEBUG_BEFORE_CMD
+  if [[ -n "$_orca_previous_trapdebug_body" ]]; then
+    functions[__orca_previous_startup_trapdebug]="$_orca_previous_trapdebug_body"
+  fi
+  TRAPDEBUG() {
+    local _orca_trapdebug_status=0
+    if [[ "\${_orca_exec_restore_pending:-0}" == "1" ]]; then
+      export ZDOTDIR="$_orca_exec_user_zdotdir"
+      unset _orca_exec_user_zdotdir _orca_exec_restore_pending
+    fi
+    if (( \${+functions[__orca_previous_startup_trapdebug]} )); then
+      __orca_previous_startup_trapdebug "$@" || _orca_trapdebug_status=$?
+    fi
+    if (( _orca_trapdebug_status == 0 )); then
+      case "$ZSH_DEBUG_CMD" in
+        exec|exec\\ *|builtin\\ exec|builtin\\ exec\\ *|command\\ exec|command\\ exec\\ *)
+          _orca_exec_user_zdotdir="$ZDOTDIR"
+          export ZDOTDIR="$_orca_wrapper_zdotdir"
+          _orca_exec_restore_pending=1
+          ;;
+      esac
+    fi
+    return $_orca_trapdebug_status
+  }
+  _orca_startup_trapdebug_body="\${functions[TRAPDEBUG]}"
   # Why: user startup files resolve plugin/config paths from their own ZDOTDIR;
   # Orca restores its wrapper dir afterward so zsh still loads wrapper files.
   export ZDOTDIR="$_orca_home"
   source "$_orca_home/${options.fileName}"
+  if [[ "\${functions[TRAPDEBUG]-}" == "$_orca_startup_trapdebug_body" ]]; then
+    if [[ -n "$_orca_previous_trapdebug_body" ]]; then
+      functions[TRAPDEBUG]="$_orca_previous_trapdebug_body"
+    else
+      unfunction TRAPDEBUG
+    fi
+  fi
+  unfunction __orca_previous_startup_trapdebug 2>/dev/null
+  if [[ "$_orca_debug_before_cmd_was_set" != "on" ]]; then
+    unsetopt DEBUG_BEFORE_CMD
+  fi
+  unset _orca_previous_trapdebug_body _orca_startup_trapdebug_body _orca_debug_before_cmd_was_set
   export ZDOTDIR="$_orca_wrapper_zdotdir"
   unset _orca_wrapper_zdotdir
 fi

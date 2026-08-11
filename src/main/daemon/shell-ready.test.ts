@@ -512,6 +512,50 @@ describePosix('daemon shell-ready launch config', () => {
   )
 
   itWithZsh(
+    're-enters the wrapper when a user startup file replaces zsh with exec',
+    async () => {
+      const { getShellReadyLaunchConfig } = await importFreshShellReady()
+      const config = getShellReadyLaunchConfig('/bin/zsh')
+      const tempHome = mkdtempSync(join(tmpdir(), 'orca-zsh-exec-'))
+      const redirectOutput = 'ORCA-EXEC-REDIRECT-PRESERVED'
+      const userTrapOutput = 'ORCA-USER-DEBUG-TRAP-PRESERVED'
+      writeFileSync(
+        join(tempHome, '.zshenv'),
+        `unsetopt DEBUG_BEFORE_CMD
+TRAPDEBUG() {
+  [[ "$ZSH_DEBUG_CMD" == *ORCA-USER-DEBUG-COMMAND* ]] && printf "${userTrapOutput}\\n"
+  return 0
+}
+`
+      )
+      writeFileSync(
+        join(tempHome, '.zprofile'),
+        `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
+  export ORCA_EXEC_REPRO_DONE=1
+  exec 3>&1
+  printf "${redirectOutput}:%s\\n" "$ZDOTDIR" >&3
+  exec zsh -o noglobalrcs -l -i
+fi
+`
+      )
+      writeFileSync(join(tempHome, '.zlogin'), 'print -r -- ORCA-USER-DEBUG-COMMAND\n')
+      try {
+        const output = await runInteractiveZshLogin({
+          tempHome,
+          wrapperZdotdir: config.env.ZDOTDIR,
+          isDone: (current) => current.includes(SHELL_READY_MARKER_OUTPUT)
+        })
+        expect(output).toContain(`${redirectOutput}:${tempHome}`)
+        expect(output).toContain(userTrapOutput)
+        expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
+      } finally {
+        rmSync(tempHome, { recursive: true, force: true })
+      }
+    },
+    15_000
+  )
+
+  itWithZsh(
     'still runs user add-zle-hook-widget line-init hooks after the marker',
     async () => {
       const { getShellReadyLaunchConfig } = await importFreshShellReady()
