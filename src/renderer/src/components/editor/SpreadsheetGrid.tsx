@@ -12,6 +12,8 @@ import {
   planSpreadsheetMergePlacement
 } from './spreadsheet-merged-cells'
 import { SpreadsheetChart } from './SpreadsheetChart'
+import { SpreadsheetSparkline } from './SpreadsheetSparkline'
+import type { ResolvedXlsxSparkline } from './xlsx-sparkline'
 import type { XlsxSheetDrawing } from './xlsx-drawings'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
 import {
@@ -44,6 +46,8 @@ type SpreadsheetGridProps = {
   mergedRanges?: readonly XlsxMergedRange[]
   /** Charts and images the file anchors over its cells. */
   drawings?: readonly XlsxSheetDrawing[]
+  /** In-cell sparklines by row and column. */
+  sparklines?: readonly (readonly (ResolvedXlsxSparkline | undefined)[] | undefined)[]
   /**
    * `center` for the generated column letters of a workbook; `left` for a CSV,
    * whose heading row holds the file's own first row of text.
@@ -160,6 +164,7 @@ export function SpreadsheetGrid({
   declaredRowHeights,
   mergedRanges,
   drawings,
+  sparklines,
   headerAlignment = 'left'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -350,6 +355,7 @@ export function SpreadsheetGrid({
                       ? ''
                       : (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
                   const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
+                  const sparkline = sparklines?.[valueRowIndex]?.[valueColumnIndex]
                   return (
                     <div
                       role="cell"
@@ -391,9 +397,13 @@ export function SpreadsheetGrid({
                       }}
                       title={cell}
                     >
-                      <span className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}>
-                        {cell}
-                      </span>
+                      {sparkline === undefined ? (
+                        <span className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}>
+                          {cell}
+                        </span>
+                      ) : (
+                        <SpreadsheetSparkline sparkline={sparkline} />
+                      )}
                     </div>
                   )
                 })}

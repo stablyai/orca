@@ -67,6 +67,47 @@ export function columnIndexFromXlsxLetters(letters: string): number | null {
   return index - 1
 }
 
+/**
+ * Expands an A1 reference or `A1:B9` range into the cells it covers.
+ *
+ * Sheet-qualified and absolute forms are accepted, since a formula may write
+ * either; the sheet name is dropped because a sparkline's own sheet is the only
+ * one the viewer resolves against.
+ */
+export function expandXlsxCellRange(reference: string): XlsxCellReference[] {
+  const withoutSheet = reference.includes('!')
+    ? reference.slice(reference.lastIndexOf('!') + 1)
+    : reference
+  const [start, end] = withoutSheet.replaceAll('$', '').trim().toUpperCase().split(':')
+  const from = start === undefined ? null : parseXlsxCellReference(start)
+  if (from === null) {
+    return []
+  }
+  const to = end === undefined ? from : parseXlsxCellReference(end)
+  if (to === null) {
+    return []
+  }
+
+  const cells: XlsxCellReference[] = []
+  const rowStart = Math.min(from.rowIndex, to.rowIndex)
+  const rowEnd = Math.max(from.rowIndex, to.rowIndex)
+  const columnStart = Math.min(from.columnIndex, to.columnIndex)
+  const columnEnd = Math.max(from.columnIndex, to.columnIndex)
+  // Why: a sparkline plots a handful of cells. A range wider than this is a
+  // whole-column reference the author did not mean to chart into one cell.
+  if ((rowEnd - rowStart + 1) * (columnEnd - columnStart + 1) > MAX_RANGE_CELLS) {
+    return []
+  }
+  for (let rowIndex = rowStart; rowIndex <= rowEnd; rowIndex += 1) {
+    for (let columnIndex = columnStart; columnIndex <= columnEnd; columnIndex += 1) {
+      cells.push({ rowIndex, columnIndex })
+    }
+  }
+  return cells
+}
+
+const MAX_RANGE_CELLS = 1000
+
 /** Renders a zero-based column index as spreadsheet letters (26 becomes `AA`). */
 export function xlsxColumnLettersFromIndex(columnIndex: number): string {
   if (!Number.isInteger(columnIndex) || columnIndex < 0) {

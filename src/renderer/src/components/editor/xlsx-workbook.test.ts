@@ -308,6 +308,45 @@ describe('parseXlsxWorkbook', () => {
     expect(workbook.sheets[0]?.rows).toHaveLength(1)
   })
 
+  it('resolves in-cell sparklines an export left as formula text', async () => {
+    // Why: these are the formulas a Google Sheets export actually writes — the
+    // SPARKLINE is wrapped in DUMMYFUNCTION with its quotes doubled, and the
+    // cached value is empty, so the chart exists only as text.
+    const columnFormula =
+      'IFERROR(__xludf.DUMMYFUNCTION("SPARKLINE(D17,{""charttype"",""column"";""ymin"", 0; ""ymax"",MAX(D17:E17);""firstcolor"",""#334960""})"),"")'
+    const bytes = buildXlsxWorkbook({
+      sheets: [
+        {
+          name: 'Panel',
+          sheetXml: `
+            <row r="12"><c r="D12" s="0" t="str"><f>${columnFormula.replaceAll('"', '&quot;')}</f><v></v></c></row>
+            <row r="17"><c r="D17"><v>1000</v></c><c r="E17"><v>1500</v></c></row>
+          `
+        }
+      ]
+    })
+
+    const workbook = await parseXlsxWorkbook(bytes)
+
+    expect(workbook.sheets[0]?.sparklines[11]?.[3]).toEqual({
+      chartType: 'column',
+      values: [1000],
+      min: 0,
+      max: 1500,
+      color: '#334960',
+      firstColor: '#334960',
+      negativeColor: '#c0504d'
+    })
+  })
+
+  it('leaves sparklines empty for a sheet that has none', async () => {
+    const bytes = buildXlsxWorkbook({
+      sheets: [{ name: 'Plain', sheetXml: '<row r="1"><c r="A1"><v>1</v></c></row>' }]
+    })
+
+    expect((await parseXlsxWorkbook(bytes)).sheets[0]?.sparklines).toEqual([])
+  })
+
   it('rejects a package with no workbook part', async () => {
     const bytes = buildZipArchive([{ name: '[Content_Types].xml', content: '<Types/>' }])
 

@@ -323,7 +323,15 @@ describe('parseXlsxWorksheetGrid', () => {
   })
 
   it('returns an empty grid for a missing or empty sheet part', () => {
-    const empty = { rows: [], styles: [], rowHeights: [], maxColumns: 0, truncated: false }
+    const empty = {
+      rows: [],
+      styles: [],
+      rowHeights: [],
+      numericValues: new Map(),
+      sparklineFormulas: new Map(),
+      maxColumns: 0,
+      truncated: false
+    }
 
     expect(parseXlsxWorksheetGrid('', context())).toEqual(empty)
     expect(parseXlsxWorksheetGrid('<worksheet><sheetData/></worksheet>', context())).toEqual(empty)

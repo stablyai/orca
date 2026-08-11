@@ -18,6 +18,13 @@ export type XlsxWorksheetGrid = {
   styles: (XlsxCellStyle | undefined)[][]
   /** Author-set row heights in pixels, by row index. */
   rowHeights: (number | undefined)[]
+  /**
+   * Raw numeric cell values, keyed `row:column`. Collected only when the sheet
+   * carries a sparkline, which needs the numbers behind the formatted text.
+   */
+  numericValues: Map<string, number>
+  /** Cell formulas that declare a sparkline, keyed `row:column`. */
+  sparklineFormulas: Map<string, string>
   maxColumns: number
   /** True when the sheet has more rows than `maxRows` allowed through. */
   truncated: boolean
@@ -29,6 +36,8 @@ export type XlsxWorksheetContext = {
   cellStyles: XlsxCellStyles
   use1904DateSystem: boolean
   maxRows: number
+  /** True when the sheet's XML mentions a sparkline, so formulas are collected. */
+  collectSparklines?: boolean
   /**
    * Locale for number formatting. A format code implies the viewer's group and
    * decimal separators, not the file's.
@@ -51,6 +60,9 @@ export function parseXlsxWorksheetGrid(
   const rows: string[][] = []
   const styles: (XlsxCellStyle | undefined)[][] = []
   const rowHeights: (number | undefined)[] = []
+  const numericValues = new Map<string, number>()
+  const sparklineFormulas = new Map<string, string>()
+  const collectSparklines = context.collectSparklines === true
   const collectStyles = context.cellStyles.hasVisualStyles
   let maxColumns = 0
   let truncated = false
@@ -72,7 +84,12 @@ export function parseXlsxWorksheetGrid(
       rows.push([])
     }
 
-    const row = readRowCells(rowElement.inner, context, collectStyles)
+    const row = readRowCells(rowElement.inner, context, collectStyles, {
+      collectSparklines,
+      rowIndex,
+      numericValues,
+      sparklineFormulas
+    })
     // Why: a row element can repeat or arrive out of order in a hand-written
     // sheet; merging into the slot keeps the last writer's values instead of
     // pushing a duplicate row.
@@ -94,6 +111,8 @@ export function parseXlsxWorksheetGrid(
     rows: padRows(rows, maxColumns),
     styles: collectStyles ? padStyleRows(styles, rows.length) : [],
     rowHeights,
+    numericValues,
+    sparklineFormulas,
     maxColumns,
     truncated
   }
@@ -101,10 +120,22 @@ export function parseXlsxWorksheetGrid(
 
 type XlsxWorksheetRow = { cells: string[]; styles: (XlsxCellStyle | undefined)[] }
 
+type XlsxSparklineCollector = {
+  collectSparklines: boolean
+  rowIndex: number
+  numericValues: Map<string, number>
+  sparklineFormulas: Map<string, string>
+}
+
+export function buildCellKey(rowIndex: number, columnIndex: number): string {
+  return `${rowIndex}:${columnIndex}`
+}
+
 function readRowCells(
   rowXml: string,
   context: XlsxWorksheetContext,
-  collectStyles: boolean
+  collectStyles: boolean,
+  collector: XlsxSparklineCollector
 ): XlsxWorksheetRow {
   const cells: string[] = []
   const styles: (XlsxCellStyle | undefined)[] = []
@@ -119,6 +150,9 @@ function readRowCells(
       cells.push('')
     }
     cells[columnIndex] = readCellText(cellElement.attributes, cellElement.inner, context)
+    if (collector.collectSparklines) {
+      collectSparklineData(cellElement.inner, columnIndex, collector)
+    }
     if (collectStyles) {
       styles[columnIndex] = context.cellStyles.getStyle(readStyleIndex(cellElement.attributes.s))
     }
@@ -145,6 +179,25 @@ function readRowHeight(attributes: Record<string, string>): number | undefined {
   return Math.round(
     Math.min(MAX_ROW_HEIGHT_PX, Math.max(MIN_ROW_HEIGHT_PX, points * POINTS_TO_PIXELS))
   )
+}
+
+// Why: a sparkline needs the numbers behind the formatted text, and the formula
+// that describes it — neither survives in the rendered cell string.
+function collectSparklineData(
+  cellXml: string,
+  columnIndex: number,
+  collector: XlsxSparklineCollector
+): void {
+  const key = buildCellKey(collector.rowIndex, columnIndex)
+  const rawValue = readFirstElementText(cellXml, 'v')
+  const numeric = rawValue === null ? Number.NaN : Number(rawValue)
+  if (Number.isFinite(numeric)) {
+    collector.numericValues.set(key, numeric)
+  }
+  const formula = readFirstElementText(cellXml, 'f')
+  if (formula !== null && formula.includes('SPARKLINE(')) {
+    collector.sparklineFormulas.set(key, formula)
+  }
 }
 
 function readStyleIndex(styleIndexAttribute: string | undefined): number | undefined {

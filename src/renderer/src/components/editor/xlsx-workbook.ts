@@ -5,7 +5,13 @@ import {
 } from './xlsx-part-paths'
 import { parseXlsxCellStyles, type XlsxCellStyle } from './xlsx-cell-styles'
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
+import { expandXlsxCellRange } from './xlsx-cell-reference'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
+import {
+  parseXlsxSparklineFormula,
+  resolveXlsxSparkline,
+  type ResolvedXlsxSparkline
+} from './xlsx-sparkline'
 import { parseXlsxThemePalette } from './xlsx-theme-palette'
 import { readXlsxSheetDrawings, type XlsxSheetDrawing } from './xlsx-drawings'
 import { parseXlsxWorksheetGrid } from './xlsx-worksheet-grid'
@@ -27,6 +33,11 @@ export type XlsxSheet = {
   mergedRanges: XlsxMergedRange[]
   /** Charts and images the sheet anchors over its cells. */
   drawings: XlsxSheetDrawing[]
+  /**
+   * In-cell sparklines by row and column. Present only for sheets exported from
+   * an application whose in-cell charts Excel cannot compute.
+   */
+  sparklines: (ResolvedXlsxSparkline | undefined)[][]
   maxColumns: number
   truncated: boolean
 }
@@ -105,7 +116,11 @@ export async function parseXlsxWorkbook(
       relationships.byId.get(descriptor.relationshipId) ??
       resolveXlsxPartPath(workbookPartPath, `worksheets/sheet${index + 1}.xml`)
     const worksheetXml = await archive.readPartText(worksheetPartPath)
+    // Why: collecting the numbers behind every cell is only worth it when the sheet
+    // actually carries a sparkline, so the cheap text probe gates it.
+    const hasSparklines = (worksheetXml ?? '').includes('SPARKLINE(')
     const grid = parseXlsxWorksheetGrid(worksheetXml ?? '', {
+      collectSparklines: hasSparklines,
       sharedStrings,
       numberFormats,
       cellStyles,
@@ -125,7 +140,8 @@ export async function parseXlsxWorkbook(
       hidden: descriptor.hidden,
       ...grid,
       ...layout,
-      drawings
+      drawings,
+      sparklines: resolveSheetSparklines(grid)
     })
   }
 
@@ -212,6 +228,39 @@ function resolveSupportingPartPath(
     relationships.byType.get(relationshipType) ??
     resolveXlsxPartPath(workbookPartPath, conventionalName)
   )
+}
+
+function resolveSheetSparklines(grid: {
+  numericValues: Map<string, number>
+  sparklineFormulas: Map<string, string>
+}): (ResolvedXlsxSparkline | undefined)[][] {
+  if (grid.sparklineFormulas.size === 0) {
+    return []
+  }
+
+  const readRange = (reference: string): number[] =>
+    expandXlsxCellRange(reference)
+      .map((cell) => grid.numericValues.get(`${cell.rowIndex}:${cell.columnIndex}`))
+      .filter((value): value is number => value !== undefined)
+
+  const sparklines: (ResolvedXlsxSparkline | undefined)[][] = []
+  for (const [key, formula] of grid.sparklineFormulas) {
+    const spec = parseXlsxSparklineFormula(formula)
+    if (spec === null) {
+      continue
+    }
+    const resolved = resolveXlsxSparkline(spec, readRange)
+    if (resolved === null) {
+      continue
+    }
+    const [rowIndex, columnIndex] = key.split(':').map(Number)
+    if (rowIndex === undefined || columnIndex === undefined) {
+      continue
+    }
+    sparklines[rowIndex] ??= []
+    sparklines[rowIndex]![columnIndex] = resolved
+  }
+  return sparklines
 }
 
 async function readSupportingPartText(

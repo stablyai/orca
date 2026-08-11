@@ -103,6 +103,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           declaredRowHeights={activeSheet.rowHeights}
           mergedRanges={activeSheet.mergedRanges}
           drawings={activeSheet.drawings}
+          sparklines={activeSheet.sparklines}
           headerAlignment="center"
         />
       ) : (
