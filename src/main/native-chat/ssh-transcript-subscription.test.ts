@@ -420,8 +420,11 @@ describe('subscribeSshNativeChatTranscript', () => {
     })
     await vi.advanceTimersByTimeAsync(30_000)
 
-    // 1s, 2s, 4s, 5s, 5s… rather than 30 ticks at 1s.
+    // 1s, 2s, 4s, 5s, 5s… rather than 30 ticks at 1s. The lower bound matters as
+    // much as the upper one: a loop that died after the first throw would also
+    // satisfy a cap on its own.
     expect(readSshNativeChatTranscript.mock.calls.length).toBeLessThan(12)
+    expect(readSshNativeChatTranscript.mock.calls.length).toBeGreaterThan(4)
     subscription.unsubscribe()
   })
 

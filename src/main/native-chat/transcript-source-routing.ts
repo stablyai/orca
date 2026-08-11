@@ -1,4 +1,8 @@
-import type { AgentType } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat-types'
 import type { ResolveSessionFileOptions } from './session-file-resolver'
 import { readSshNativeChatTranscript, resolveNativeChatSshOwner } from './ssh-transcript-host'
 import { subscribeSshNativeChatTranscript } from './ssh-transcript-subscription'
@@ -26,12 +30,25 @@ export type RoutedReadTranscriptTailArgs = ResolveSessionFileOptions & {
   beforeOffset?: number
 }
 
+/** What both entry points consume. Deliberately narrower than either reader's
+ *  own result: a resume cursor is an internal detail of whichever side did the
+ *  read, and neither the desktop renderer nor a paired client has any use for
+ *  it. */
+export type RoutedNativeChatTranscript =
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+      hasMore: boolean
+      beforeOffset: number
+    }
+  | { error: string; notFound?: true }
+
 const TRANSCRIPT_MISS = { error: 'Transcript unavailable', notFound: true } as const
 
 export async function readRoutedNativeChatTranscriptTail(
   args: RoutedReadTranscriptTailArgs,
   signal?: AbortSignal
-): ReturnType<typeof readNativeChatTranscriptTail> {
+): Promise<RoutedNativeChatTranscript> {
   const owner = routableOwner(args)
   if (!owner) {
     return readNativeChatTranscriptTail(args, signal)

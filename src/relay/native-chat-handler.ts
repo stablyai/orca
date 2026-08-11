@@ -15,7 +15,6 @@ import {
 } from '../main/native-chat/session-file-resolver'
 import { readIncrementalTranscriptMessages } from '../main/native-chat/transcript-incremental-reader'
 import {
-  completedRecordEnd,
   nativeChatLineDecoderForAgent,
   readNativeChatTranscriptTail
 } from '../main/native-chat/transcript-tail-reader'
@@ -84,28 +83,19 @@ export async function readRelayNativeChatTranscript(
   if (!('messages' in result)) {
     return result
   }
-  // Why: the reader re-stats and reads to the CURRENT end, so a record can land
-  // between the stamp above and the read. Stamping after the read keeps the
-  // cursor, the generation and the returned messages describing one state; the
-  // earlier stamp would report an mtime older than the content and make the next
-  // poll see a same-size-different-generation file and re-window for nothing.
+  // Why: the cursor is the reader's OWN completed-record boundary, never a size
+  // from a separate stat. A stat taken before the read can sit mid-record; one
+  // taken after can sit past a record the read never returned, and either way
+  // the next incremental read would skip it. `completedTo` is the one offset
+  // that describes exactly what these messages cover.
+  const { completedTo, ...window } = result
+  // The generation still comes from a post-read stat: it describes file
+  // identity, not content boundaries, and stamping it before the read made a
+  // plain append look like a same-size replacement on the next poll.
   const after = (await transcriptStamp(filePath)) ?? stamp
-  // A window read includes a half-written trailing record, which decodes to
-  // nothing. Handing back the raw file end as the cursor would resume the next
-  // incremental read mid-record and lose that record once its newline lands, so
-  // the cursor stops at the last complete record instead. A pagination read has
-  // no live cursor to protect, so it skips that probe.
-  const cursor =
-    params.beforeOffset === undefined ? await windowCursor(filePath, after.size) : after.size
-  if (cursor === null) {
-    // The file went away between the read and the cursor probe (a rotation).
-    // Report the same retry-worthy miss as every other rotation in here, rather
-    // than throwing and having the caller count it as relay silence.
-    return { error: 'Transcript unavailable', notFound: true }
-  }
   // `filePath` lets a live poller name the file it already resolved, so the next
   // tick costs one access() instead of another walk of the remote agent home.
-  return { ...result, fileSize: cursor, filePath, generation: after.generation }
+  return { ...window, fileSize: completedTo, filePath, generation: after.generation }
 }
 
 /** Answers a live poll without re-windowing, or null when the file moved in a
@@ -188,16 +178,6 @@ async function readAppendedRecords(
     // instead of skipping a record the agent was still writing.
     fileSize: state.pendingStart,
     ...(lifecycle ? { lifecycle } : {})
-  }
-}
-
-/** Null when the file vanished under the probe, so the caller can report a miss
- *  instead of rejecting the whole RPC. */
-async function windowCursor(filePath: string, size: number): Promise<number | null> {
-  try {
-    return await completedRecordEnd(filePath, size)
-  } catch {
-    return null
   }
 }
 

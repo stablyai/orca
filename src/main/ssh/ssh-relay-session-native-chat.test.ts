@@ -81,13 +81,13 @@ function methodNotFound(): Error & { code: number } {
   return Object.assign(new Error('Method not found: nativeChat.readTranscript'), { code: -32601 })
 }
 
-async function establishedSession(): Promise<SshRelaySession> {
+async function establishedSession(targetId = 'target-1'): Promise<SshRelaySession> {
   const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
   const connection = {
     sftp: vi.fn(),
     getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
   } as unknown as SshConnection
-  const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
+  const session = new SshRelaySession(targetId, getMainWindow, mockStore, mockPortForward)
   await session.establish(connection)
   return session
 }
@@ -174,6 +174,60 @@ describe('SshRelaySession native chat transcript reads', () => {
     await expect(session.requestNativeChatTranscript(READ_PARAMS)).resolves.toMatchObject({
       unchanged: true
     })
+  })
+
+  it('keeps capability state per target, so one host cannot disable another', async () => {
+    const unsupported = await establishedSession()
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD) {
+        throw methodNotFound()
+      }
+      return { ok: true }
+    })
+    await expect(unsupported.requestNativeChatTranscript(READ_PARAMS)).resolves.toBeNull()
+
+    const other = await establishedSession('target-2')
+    muxRequestMock.mockImplementation(async (method: string) =>
+      method === SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD
+        ? { unchanged: true, fileSize: 12 }
+        : { ok: true }
+    )
+
+    await expect(other.requestNativeChatTranscript(READ_PARAMS)).resolves.toMatchObject({
+      unchanged: true
+    })
+  })
+
+  it('latches the fallback once even when two callers race the first probe', async () => {
+    // A poll loop and a manually opened chat view can overlap. Both learn the
+    // method is missing; what matters is that the state latches so later callers
+    // stop asking. There is no in-flight dedupe here, matching the AI Vault
+    // methods beside it: the redundant probe costs one method-not-found reply.
+    const session = await establishedSession()
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD) {
+        throw methodNotFound()
+      }
+      return { ok: true }
+    })
+
+    const [first, second] = await Promise.all([
+      session.requestNativeChatTranscript(READ_PARAMS),
+      session.requestNativeChatTranscript(READ_PARAMS)
+    ])
+    expect(first).toBeNull()
+    expect(second).toBeNull()
+
+    const probesAfterRace = muxRequestMock.mock.calls.filter(
+      ([method]) => method === SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD
+    ).length
+    await expect(session.requestNativeChatTranscript(READ_PARAMS)).resolves.toBeNull()
+
+    expect(
+      muxRequestMock.mock.calls.filter(
+        ([method]) => method === SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD
+      )
+    ).toHaveLength(probesAfterRace)
   })
 
   it('surfaces a non-capability failure instead of hiding it as a fallback', async () => {
