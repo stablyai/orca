@@ -368,10 +368,17 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
 export function _getWebSessionTabsTrackingCountsForTest(): {
   freshness: number
   hostMappings: number
+  hostMappingWorktrees: number
 } {
+  let hostMappingWorktrees = 0
+  for (const mappingKeysByWorktree of hostSessionTabMappingKeysByEnvironmentAndWorktree.values()) {
+    hostMappingWorktrees += mappingKeysByWorktree.size
+  }
   return {
     freshness: latestSessionTabsSnapshotByWorktree.size,
-    hostMappings: hostSessionTabIdByLocalKey.size
+    hostMappings: hostSessionTabIdByLocalKey.size,
+    // Why: the mapping index is a parallel structure, so leak tests must see it drain alongside the flat map.
+    hostMappingWorktrees
   }
 }
 

@@ -643,7 +643,8 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 1,
-      hostMappings: 1
+      hostMappings: 1,
+      hostMappingWorktrees: 1
     })
 
     applyFreshWebSessionTabsSnapshot(
@@ -664,7 +665,8 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 0,
-      hostMappings: 0
+      hostMappings: 0,
+      hostMappingWorktrees: 0
     })
   })
 
@@ -720,19 +722,22 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 2,
-      hostMappings: 2
+      hostMappings: 2,
+      hostMappingWorktrees: 2
     })
 
     clearWebSessionTabsTrackingForEnvironment(ENV)
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 1,
-      hostMappings: 1
+      hostMappings: 1,
+      hostMappingWorktrees: 1
     })
   })
 
   it('clears one worktree mapping without dropping a sibling in the same environment', () => {
-    const secondWorktree = 'repo::/other-worktree'
+    // Why: POSIX paths may contain ':', so this sibling's worktree id is prefixed by WT's — the case a prefix scan wiped.
+    const secondWorktree = `${WT}:2`
     const terminalSnapshot = makeSnapshot([
       {
         type: 'terminal',
@@ -781,7 +786,8 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(_getWebSessionTabsTrackingCountsForTest()).toEqual({
       freshness: 1,
-      hostMappings: 1
+      hostMappings: 1,
+      hostMappingWorktrees: 1
     })
     expect(
       resolveHostSessionTabIdForWebSessionTab(makeState(), {
