@@ -42,19 +42,81 @@ async function runClaudeAgentTeams(env: Record<string, string>, args: string[]):
   })
 }
 
-function getOptionalServePort(flags: Map<string, string | boolean>): string | null {
-  if (!flags.has('port')) {
+function getOptionalServePort(
+  flags: Map<string, string | boolean>,
+  flag = 'port',
+  // Why: `--port 0` means "pick an ephemeral port", which serve reports back.
+  // The preview listener is the fixed target of an external reverse-proxy
+  // route, so a port it cannot predict is a misconfiguration, not a request.
+  minimum = 0
+): string | null {
+  if (!flags.has(flag)) {
     return null
   }
-  const rawPort = flags.get('port')
+  const rawPort = flags.get(flag)
   if (typeof rawPort !== 'string' || rawPort.length === 0) {
-    throw new RuntimeClientError('invalid_argument', 'Missing value for --port.')
+    throw new RuntimeClientError('invalid_argument', `Missing value for --${flag}.`)
   }
   const port = Number(rawPort)
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new RuntimeClientError('invalid_argument', `Invalid --port value: ${rawPort}`)
+  if (!Number.isInteger(port) || port < minimum || port > 65535) {
+    throw new RuntimeClientError('invalid_argument', `Invalid --${flag} value: ${rawPort}`)
   }
   return rawPort
+}
+
+function getOptionalStringFlag(flags: Map<string, string | boolean>, flag: string): string | null {
+  if (!flags.has(flag)) {
+    return null
+  }
+  const value = flags.get(flag)
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new RuntimeClientError('invalid_argument', `Missing value for --${flag}.`)
+  }
+  return value
+}
+
+function getServePreviewFlags(flags: Map<string, string | boolean>): {
+  previewPort?: string
+  previewBind?: string | null
+  previewDomain?: string
+  previewAuth?: string | null
+  previewToken?: string | null
+} {
+  const previewPort = getOptionalServePort(flags, 'preview-port', 1)
+  const previewBind = getOptionalStringFlag(flags, 'preview-bind')
+  const previewDomain = getOptionalStringFlag(flags, 'preview-domain')
+  const previewAuth = getOptionalStringFlag(flags, 'preview-auth')
+  const previewToken = getOptionalStringFlag(flags, 'preview-token')
+  const anyPreviewFlag =
+    previewPort !== null ||
+    previewBind !== null ||
+    previewDomain !== null ||
+    previewAuth !== null ||
+    previewToken !== null
+  if (anyPreviewFlag && (previewPort === null || previewDomain === null)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'The preview proxy requires both --preview-port and --preview-domain.'
+    )
+  }
+  if (previewAuth !== null && previewAuth !== 'open' && previewAuth !== 'token') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Invalid --preview-auth value: ${previewAuth} (use open or token).`
+    )
+  }
+  // Why: omit the keys entirely when the preview proxy is not requested so the
+  // spawned argv (and call-shape assertions) stay identical to pre-preview serves.
+  if (!anyPreviewFlag) {
+    return {}
+  }
+  return {
+    previewPort: previewPort!,
+    previewBind,
+    previewDomain: previewDomain!,
+    previewAuth,
+    previewToken
+  }
 }
 
 export const CORE_HANDLERS: Record<string, CommandHandler> = {
@@ -129,7 +191,8 @@ export const CORE_HANDLERS: Record<string, CommandHandler> = {
       noPairing: flags.get('no-pairing') === true,
       mobilePairing: flags.get('mobile-pairing') === true,
       recipeJson: flags.get('recipe-json') === true,
-      projectRoot
+      projectRoot,
+      ...getServePreviewFlags(flags)
     })
     process.exitCode = exitCode
   },

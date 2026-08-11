@@ -318,6 +318,67 @@ describe('PortsPanel runtime routing', () => {
     ).toEqual(['runtime-repo::/srv/app', 'repo::/workspace/app'])
   })
 
+  it('opens a remote port with a preview URL in the user own browser, skipping the remote one', async () => {
+    openUrl.mockResolvedValueOnce(undefined)
+    const createBrowserTab = vi.fn()
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: { ...workspacePort, previewUrl: 'https://app--63468.preview.example.com/?t=1' },
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        openInOrcaBrowser: false,
+        createBrowserTab: createBrowserTab as never,
+        setRemoteBrowserPageHandle: vi.fn() as never
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).toHaveBeenCalledWith('https://app--63468.preview.example.com/?t=1')
+    expect(createBrowserTab).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  it('reports the failure when the system browser rejects a preview URL', async () => {
+    openUrl.mockRejectedValueOnce(new Error('no handler'))
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: { ...workspacePort, previewUrl: 'https://app--63468.preview.example.com/' },
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        openInOrcaBrowser: false,
+        createBrowserTab: vi.fn() as never,
+        setRemoteBrowserPageHandle: vi.fn() as never
+      })
+    ).resolves.toEqual({ ok: false, reason: 'no handler' })
+  })
+
+  it('falls through to the remote browser when a remote port carries no preview URL', async () => {
+    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
+      Promise.resolve({
+        id: method,
+        ok: true,
+        result:
+          method === 'status.get' ? compatibleStatus : { browserPageId: 'remote-browser-page-1' },
+        _meta: { runtimeId: 'runtime-1' }
+      })
+    )
+
+    await expect(
+      openWorkspacePortInBrowser({
+        port: workspacePort,
+        runtimeTarget: { kind: 'environment', environmentId: 'env-1' },
+        openInOrcaBrowser: false,
+        createBrowserTab: vi.fn(() => ({ activePageId: 'local-page-1' })) as never,
+        setRemoteBrowserPageHandle: vi.fn() as never
+      })
+    ).resolves.toEqual({ ok: true })
+
+    expect(openUrl).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall.mock.calls.map((call) => call[0].method)).toEqual([
+      'status.get',
+      'browser.tabCreate'
+    ])
+  })
+
   it('opens remote workspace ports in the server-side browser and binds the local page handle', async () => {
     runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) =>
       Promise.resolve({

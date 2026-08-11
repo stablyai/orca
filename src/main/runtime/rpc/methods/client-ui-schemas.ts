@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { GitHubProjectSettings } from './github-project-settings-schema'
+import { PreviewProxySettingsUpdate } from './preview-proxy-settings-schema'
 import {
   isFeatureInteractionId,
   type FeatureInteractionId
@@ -115,27 +117,6 @@ export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatur
 export const PRBotAuthorOverrideUpdate = z
   .object({ author: z.string(), isBot: z.boolean() })
   .strict()
-const GitHubProjectRef = z
-  .object({
-    owner: z.string(),
-    ownerType: z.enum(['organization', 'user']),
-    number: z.number().int(),
-    host: z.string().optional()
-  })
-  .strict()
-const GitHubProjectSettings = z
-  .object({
-    pinned: z.array(GitHubProjectRef),
-    recent: z.array(
-      GitHubProjectRef.extend({
-        lastOpenedAt: z.string()
-      }).strict()
-    ),
-    lastViewByProject: z.record(z.string(), z.object({ viewId: z.string() }).strict()),
-    activeProject: GitHubProjectRef.nullable()
-  })
-  .strict()
-
 export const SettingsUpdate = z
   .object({
     defaultTuiAgent: z
@@ -172,7 +153,8 @@ export const SettingsUpdate = z
     prBotAuthorOverrides: z
       .unknown()
       .transform((value) => normalizePRBotAuthorOverrides(value))
-      .optional()
+      .optional(),
+    previewProxy: PreviewProxySettingsUpdate.optional()
   })
   .strict()
   .default({})

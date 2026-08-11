@@ -29,6 +29,7 @@ import type {
   DirEntry,
   ForceDeleteWorktreeBranchResult,
   GlobalSettings,
+  PreviewProxyStatus,
   MemorySnapshot,
   OnboardingState,
   PersistedUIState,
@@ -623,6 +624,25 @@ function createWebPreloadApi(): Partial<PreloadApi> {
           reason: 'Workspace port management is unavailable for browser-local workspaces.'
         }),
       onAdvertisedUrlChanged: () => noopUnsubscribe
+    },
+    previewProxy: {
+      status: async () => {
+        if (!requireActiveEnvironmentOrNull()) {
+          return null
+        }
+        try {
+          const result = await callRuntimeResult<{ status: PreviewProxyStatus | null }>(
+            'previewProxy.status',
+            undefined,
+            15_000
+          )
+          return result.status
+        } catch {
+          // Why: older runtimes answer method_not_found; the settings card
+          // simply hides live status instead of erroring.
+          return null
+        }
+      }
     },
     orcaProfiles: {
       list: () =>
@@ -3826,6 +3846,9 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
         result.settings.prBotAuthorOverrides
       )
     }
+    if (result.settings.previewProxy && typeof result.settings.previewProxy === 'object') {
+      runtimeSettings.previewProxy = result.settings.previewProxy
+    }
     // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
     // sends it back, so web shows what the host enforces instead of a local value it ignores.
     if (typeof result.settings.artifactSharingEnabled === 'boolean') {
@@ -3864,6 +3887,9 @@ async function syncRuntimeBackedSettings(
     runtimeUpdates.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
       updates.prBotAuthorOverrides
     )
+  }
+  if (updates.previewProxy && typeof updates.previewProxy === 'object') {
+    runtimeUpdates.previewProxy = updates.previewProxy
   }
   if (Object.keys(runtimeUpdates).length === 0) {
     return localNext

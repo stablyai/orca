@@ -937,6 +937,10 @@ const api = {
     }
   } satisfies PreloadApi['workspacePorts'],
 
+  previewProxy: {
+    status: () => ipcRenderer.invoke('previewProxy:status')
+  } satisfies PreloadApi['previewProxy'],
+
   pty: {
     spawn: (opts: {
       cols: number

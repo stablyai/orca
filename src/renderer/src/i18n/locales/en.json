@@ -10586,6 +10586,44 @@
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar."
         },
+        "PreviewProxySettingsSection": {
+          "a6d49f6741": "Workspace Preview Proxy",
+          "bfadb61ecf": "Expose workspace dev servers through one host-routed listener, so browsers and paired clients open them directly.",
+          "c5b96de11c": "Requests to <workspace>.<domain> are forwarded to that workspace's dev server. Point a wildcard DNS record and reverse-proxy route at the listener port.",
+          "a4a7afac96": "Enable preview proxy",
+          "29f99ff349": "Public domain",
+          "fe1fbcd16f": "https://preview.example.com",
+          "fa3d3820e3": "Listener port",
+          "3743f05344": "Bind address",
+          "e54c382974": "Authentication",
+          "bcee22a1ea": "Auto",
+          "ab818db66b": "Open",
+          "33b8314a61": "Token",
+          "b2e49d6552": "Token value",
+          "ce9623628c": "Tokens may only use letters, digits, and . _ ~ - (up to 512 characters).",
+          "ccdbfdffff": "Configured by orca serve --preview-* flags; these settings apply after the server restarts without them.",
+          "448276c164": "Preview proxy error: {{value0}}",
+          "1d15aae5bc": "Running at {{value0}}",
+          "28c4ebe2b2": "Anyone who can reach the listener and pass its auth mode can reach your dev servers. Keep token auth on untrusted networks. Use a dedicated subdomain: the auth cookie is sent to every host under the domain you configure.",
+          "e759090f76": "Apply",
+          "0f2ac1de77": "Hide token",
+          "7e1b0b4b0c": "Show token",
+          "9a7c1f2e63": "A session token was generated for this run. It is not stored in settings.",
+          "3d0a5c8b41": "Copy token"
+        },
+        "preview": {
+          "proxy": {
+            "search": {
+              "6c17d9b6a2": "preview",
+              "a1ce90a10a": "ports",
+              "4cf2e3c78e": "dev server",
+              "9d1bb03df1": "domain",
+              "4f0d0b1f6b": "wildcard",
+              "7a5e9e0d92": "serve",
+              "5c1f5f4a1e": "token"
+            }
+          }
+        },
         "AgentAwakeSetting": {
           "on": "On",
           "auto": "Agent",
@@ -10844,7 +10882,9 @@
             "740aca88ab": "Workspace port scan failed.",
             "5be4f7f727": "Port {{value0}} menu",
             "7550998473": "Copy",
-            "1004af16ab": "Copy {{value0}}"
+            "1004af16ab": "Copy {{value0}}",
+            "7b2e54b080": "Copy Preview URL",
+            "3442c66cc7": "Copy SSH Forward Command"
           },
           "Search": {
             "1abfb25a66": "Type to search in files",

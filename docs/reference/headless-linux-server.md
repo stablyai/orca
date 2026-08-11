@@ -316,6 +316,78 @@ If you later install the desktop CLI from Orca settings, use that CLI for normal
 shell workflows. Keep the AppImage path in systemd so service restarts do not
 depend on an interactive shell profile.
 
+## Preview Proxy For Workspace Dev Servers
+
+Browser-based clients cannot SSH-tunnel to dev servers running next to a
+headless Orca. The preview proxy exposes every workspace-attributed HTTP port
+through **one** listener, routed by Host header, so your reverse proxy needs a
+single wildcard route and your firewall a single port:
+
+```bash
+/opt/orca/orca-linux.AppImage serve --port 6768 \
+  --preview-port 6769 \
+  --preview-domain https://preview.example.com
+```
+
+Requests to `https://<worktree>.preview.example.com` are forwarded to that
+worktree's dev server: the bare label routes to the port whose URL the dev
+server printed in its terminal (or the only detected port), and
+`https://<worktree>--3000.preview.example.com` targets port 3000 explicitly.
+Worktree labels match the desktop `*.orca.localhost` labels (the worktree
+directory name, slugified; the primary worktree becomes `<project>-main`).
+A bare label with several candidate ports serves a small index page linking
+each one. WebSocket upgrades (HMR) are forwarded. HTTPS dev servers are not
+proxied.
+
+Your reverse-proxy side needs three things: a wildcard DNS record for
+`*.preview.example.com`, a certificate covering that wildcard, and one route
+that forwards the whole wildcard — preserving the incoming `Host` header,
+which carries the routing — to the preview port. Path-based routing (a URL
+prefix per workspace) is deliberately not offered: absolute asset paths and
+HMR sockets break behind a path prefix, which is why hosted IDEs route by
+subdomain too.
+
+Flags:
+
+- `--preview-bind` (default `127.0.0.1`): listener bind address. Keep loopback
+  when the reverse proxy runs on the same host; use `0.0.0.0` only when the
+  proxy is elsewhere.
+- `--preview-auth open|token`: defaults to `open` on loopback binds and
+  `token` otherwise. Token mode requires the first visit to carry
+  `?orca-preview-token=…` (the ports panel's preview URLs include it), then
+  moves it into an HttpOnly cookie scoped to the preview domain.
+- `--preview-token <secret>`: pin the token across restarts; otherwise a fresh
+  one is generated and printed in the ready block. Tokens use letters, digits,
+  and `. _ ~ -` only (they travel in a cookie value).
+
+To keep a pinned token out of the process command line, set
+`ORCA_PREVIEW_TOKEN` instead of passing `--preview-token`. An explicit flag wins
+when both are present.
+
+Use a dedicated subdomain (`preview.example.com`, not the `example.com` apex)
+as the preview domain: the auth cookie is `Domain`-scoped to whatever you
+configure, so browsers would send it to **every** host under an apex — including
+services that have nothing to do with Orca.
+
+The flags are not the only way in. **Settings > Remote Orca Servers > Workspace
+Preview Proxy** holds the same configuration (enable, public domain, listener
+port, bind address, auth mode, token) and applies it live: saving restarts the
+listener in place, on a headless server and on the desktop alike, with no
+restart and no shell access. It renders on the web client too, which is the
+point — a browser client cannot SSH-tunnel to the dev servers it needs. The
+serve flags win while they are set: with `--preview-*` present the card shows
+"Configured by orca serve --preview-* flags" and the stored settings apply only
+after the server restarts without them. A bind failure (port taken, address not
+available) surfaces in the card instead of taking the process down.
+
+The ready block reports the proxy (`Preview proxy: … (auth: token)`), and the
+JSON contract gains a `preview` object. Paired clients see a preview URL per
+port in the ports panel; opening a port there uses it automatically unless the
+"open links in app" setting keeps the embedded browser. The preview proxy
+bypasses Orca's pairing authentication by design — anyone who can reach the
+port and pass its auth mode can reach your dev servers, so prefer token mode
+anywhere the LAN is not fully trusted.
+
 ## Upgrade
 
 `orca serve` never updates itself. In headless mode Orca wires up no auto-updater

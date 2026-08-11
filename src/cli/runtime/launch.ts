@@ -83,6 +83,11 @@ export function serveOrcaApp(
     mobilePairing?: boolean
     recipeJson?: boolean
     projectRoot?: string | null
+    previewPort?: string | null
+    previewBind?: string | null
+    previewDomain?: string | null
+    previewAuth?: string | null
+    previewToken?: string | null
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
@@ -105,6 +110,21 @@ export function serveOrcaApp(
   }
   if (args.mobilePairing) {
     childArgs.push('--serve-mobile-pairing')
+  }
+  if (args.previewPort) {
+    childArgs.push('--serve-preview-port', args.previewPort)
+  }
+  if (args.previewBind) {
+    childArgs.push('--serve-preview-bind', args.previewBind)
+  }
+  if (args.previewDomain) {
+    childArgs.push('--serve-preview-domain', args.previewDomain)
+  }
+  if (args.previewAuth) {
+    childArgs.push('--serve-preview-auth', args.previewAuth)
+  }
+  if (args.previewToken) {
+    childArgs.push('--serve-preview-token', args.previewToken)
   }
   if (args.recipeJson) {
     if (!args.projectRoot) {

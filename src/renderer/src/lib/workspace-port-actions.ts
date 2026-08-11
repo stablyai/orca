@@ -14,7 +14,7 @@ import type {
 } from '../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
-import { browserUrlForPort } from './workspace-port-urls'
+import { browserUrlForPort, previewBrowserUrlForPort } from './workspace-port-urls'
 
 export { addressForPort } from './workspace-port-urls'
 
@@ -113,6 +113,22 @@ export async function openWorkspacePortInBrowser(args: {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       return { ok: false, reason: message || 'Failed to open system browser.' }
+    }
+  }
+
+  // Why: a remote port with a preview URL renders in the user's own browser
+  // (web client: a plain new tab), skipping the screencast-backed remote
+  // browser entirely. openInOrcaBrowser=true keeps the embedded flow.
+  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'environment') {
+    const previewUrl = previewBrowserUrlForPort(args.port)
+    if (previewUrl) {
+      try {
+        await window.api.shell.openUrl(previewUrl)
+        return { ok: true }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return { ok: false, reason: message || 'Failed to open preview URL.' }
+      }
     }
   }
 

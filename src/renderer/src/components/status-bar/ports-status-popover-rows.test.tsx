@@ -87,6 +87,65 @@ const externalPort: WorkspacePort = {
   kind: 'external'
 }
 
+const workspacePort: WorkspacePort = {
+  id: '127.0.0.1:3000:4321',
+  bindHost: '127.0.0.1',
+  connectHost: '127.0.0.1',
+  port: 3000,
+  pid: 4321,
+  processName: 'next-server',
+  protocol: 'http',
+  kind: 'workspace',
+  owner: {
+    worktreeId: 'repo::/srv/workspaces/app',
+    repoId: 'repo',
+    displayName: 'develop',
+    path: '/srv/workspaces/app',
+    confidence: 'cwd'
+  },
+  previewUrl: 'https://app-develop--3000.preview.example.com/?orca-preview-token=secret'
+}
+
+describe('status bar port row preview host', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    ;(window as unknown as { api: unknown }).api = {
+      shell: { openUrl: vi.fn() },
+      ui: { writeClipboardText: vi.fn() }
+    }
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+  })
+
+  it('shows the preview host alongside the bind address, without the token', () => {
+    act(() => {
+      root.render(<PortRow port={workspacePort} activeWorktreeId={null} />)
+    })
+
+    expect(container.textContent).toContain('127.0.0.1:3000')
+    expect(container.textContent).toContain('app-develop--3000.preview.example.com')
+    expect(container.textContent).not.toContain('secret')
+  })
+
+  it('leaves a port with no preview proxy showing only its address', () => {
+    act(() => {
+      root.render(<PortRow port={externalPort} activeWorktreeId={null} external />)
+    })
+
+    expect(container.textContent).not.toContain('preview.example.com')
+  })
+})
+
 describe('status bar port row open routing', () => {
   let container: HTMLDivElement
   let root: Root

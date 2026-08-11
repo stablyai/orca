@@ -70,6 +70,7 @@ import { MobileEmulatorSettingsPane } from './MobileEmulatorSettingsPane'
 import { RuntimeEnvironmentsPane } from './RuntimeEnvironmentsPane'
 import { PrivacyPane } from './PrivacyPane'
 import { AdvancedPane } from './AdvancedPane'
+import { PreviewProxySettingsSection } from './PreviewProxySettingsSection'
 import { SettingsSidebar } from './SettingsSidebar'
 import { SettingsSetupGuidePane } from './SettingsSetupGuidePane'
 import { ActiveSettingsSectionProvider, SettingsSection } from './SettingsSection'
@@ -1723,13 +1724,23 @@ function Settings(): React.JSX.Element {
                   searchEntries={getSectionSearchEntries('servers')}
                 >
                   {isSectionMounted('servers') ? (
-                    <RuntimeEnvironmentsPane
-                      settings={settings}
-                      setActiveRuntimeEnvironmentPreference={setActiveRuntimeEnvironmentPreference}
-                      canGeneratePairingUrl={!isWebClient}
-                      allowLocalRuntime={!isWebClient}
-                      addServerIntentSignal={remoteServerAddIntentSignal}
-                    />
+                    <>
+                      <RuntimeEnvironmentsPane
+                        settings={settings}
+                        setActiveRuntimeEnvironmentPreference={
+                          setActiveRuntimeEnvironmentPreference
+                        }
+                        canGeneratePairingUrl={!isWebClient}
+                        allowLocalRuntime={!isWebClient}
+                        addServerIntentSignal={remoteServerAddIntentSignal}
+                      />
+                      {/* Why here, not Advanced: Advanced is desktop-only, and the
+                          web client of a headless serve is exactly who needs this. */}
+                      <PreviewProxySettingsSection
+                        settings={settings}
+                        updateSettings={updateSettings}
+                      />
+                    </>
                   ) : null}
                 </SettingsSection>
 

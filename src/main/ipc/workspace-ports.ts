@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence'
 import { advertisedUrlWatcher, type AdvertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -13,6 +14,11 @@ import {
   killWorkspacePort,
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
+import {
+  enrichScanWithPreviewUrls,
+  getActivePreviewProxyConfig,
+  type PreviewWorktreeDescriptor
+} from '../ports/worktree-preview-routes'
 
 type WorkspacePortHandlersOptions = {
   advertisedUrlEvents?: Pick<AdvertisedUrlWatcher, 'onDidChange'>
@@ -55,11 +61,20 @@ export function registerWorkspacePortHandlers(
         return existing
       }
 
-      const promise = scanWorkspacePortProbes(worktrees).finally(() => {
-        if (inFlightScans.get(key) === promise) {
-          inFlightScans.delete(key)
-        }
-      })
+      const promise = scanWorkspacePortProbes(worktrees)
+        .then((scan) => {
+          // Why: when the settings-driven preview proxy is live, the local
+          // panel shows the same shareable URLs remote clients see.
+          const previewConfig = getActivePreviewProxyConfig()
+          return previewConfig
+            ? enrichScanWithPreviewUrls(scan, storePreviewDescriptors(store), previewConfig)
+            : scan
+        })
+        .finally(() => {
+          if (inFlightScans.get(key) === promise) {
+            inFlightScans.delete(key)
+          }
+        })
       inFlightScans.set(key, promise)
       return promise
     }
@@ -92,6 +107,24 @@ function broadcastWorkspacePortAdvertisedUrlChanged(
     }
     webContents.send('workspacePorts:advertised-url-changed', event)
   }
+}
+
+// Why: preview labels need the project name; unfiltered probes so labels stay
+// stable regardless of which repo the scan request was scoped to.
+function storePreviewDescriptors(store: Store): PreviewWorktreeDescriptor[] {
+  const reposById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
+  return getStoreWorkspacePortProbes(store).map((probe) => {
+    const repo = reposById.get(probe.repoId)
+    return {
+      worktreeId: probe.id,
+      repoId: probe.repoId,
+      // Why: an empty project name slugifies to the generic "workspace", so
+      // every unnamed repo's primary worktree would answer to the same label.
+      projectName: repo?.displayName || (repo ? path.basename(repo.path) : probe.displayName),
+      worktreeName: probe.displayName,
+      worktreePath: probe.path
+    }
+  })
 }
 
 function parseScanRequest(value: unknown): WorkspacePortScanRequest | undefined {

@@ -28,6 +28,12 @@ export function addressForPort(port: WorkspacePort): string {
   return `${hostForLocalAction(port.connectHost)}:${port.port}`
 }
 
+/** URL served by the runtime's preview proxy (`orca serve --preview-*`);
+ *  opens in the user's own browser instead of the screencast-backed remote one. */
+export function previewBrowserUrlForPort(port: WorkspacePort): string | null {
+  return port.kind === 'workspace' && port.previewUrl ? port.previewUrl : null
+}
+
 export function browserUrlForPort(port: WorkspacePort): string {
   if (port.kind === 'workspace' && port.advertisedUrl) {
     return port.advertisedUrl

@@ -13,6 +13,7 @@ import {
   refreshWorkspacePortScanAfterStop,
   resolvePortOpenInOrcaBrowser
 } from '@/lib/workspace-port-actions'
+import { previewBrowserUrlForPort } from '@/lib/workspace-port-urls'
 import type { WorkspacePortGroup } from '@/lib/workspace-port-groups'
 import { useLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -96,6 +97,19 @@ export function PortRow({
   )
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const canStop = canStopWorkspacePort(port)
+  // Why: the bind address means nothing to a browser client; the preview host is
+  // the one that resolves for whoever is reading this popover.
+  const previewHost = useMemo(() => {
+    const previewUrl = previewBrowserUrlForPort(port)
+    if (!previewUrl) {
+      return null
+    }
+    try {
+      return new URL(previewUrl).host
+    } catch {
+      return null
+    }
+  }, [port])
   const openBrowserLabel = translate(
     'auto.components.status.bar.ports.status.popover.rows.085f4f0334',
     'Open in Browser'
@@ -266,6 +280,11 @@ export function PortRow({
         <div className="select-text truncate text-[10px] text-muted-foreground/70">
           {external ? port.kind : addressForPort(port)}
         </div>
+        {previewHost && (
+          <div className="select-text truncate text-[10px] text-muted-foreground/70">
+            {previewHost}
+          </div>
+        )}
       </div>
     </div>
   )

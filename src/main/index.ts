@@ -85,7 +85,15 @@ import {
   showRuntimeRpcStartupFailureDialog
 } from './runtime/runtime-rpc-startup-failure'
 import { resolveAdvertisedPairingEndpoint } from './runtime/pairing-endpoint'
-import { ServeReadinessPublisher } from './server/serve-readiness'
+import { ServeReadinessPublisher, type ServePreviewReadiness } from './server/serve-readiness'
+import {
+  defaultPreviewAuthForBind,
+  PreviewProxyReconciler,
+  type PreviewProxyStatus
+} from './ports/preview-proxy-reconciler'
+import { createPreviewRouteResolver } from './ports/preview-route-resolver'
+import type { PreviewWorktreeDescriptor } from './ports/worktree-preview-routes'
+import { isValidPreviewToken, resolvePreviewToken } from '../shared/preview-proxy-token'
 import { reserveServeStdoutForReadiness } from './server/serve-stdout-boundary'
 import { DesktopRelayService } from './runtime/relay/desktop-relay-service'
 import type { RelayBrokerStatus } from './runtime/relay/relay-session-broker'
@@ -1808,6 +1816,14 @@ const syntheticTitleSpinnerByPaneKey = new Map<
 >()
 let syntheticTitleSpinnerTimer: ReturnType<typeof setInterval> | null = null
 
+type ServePreviewOptions = {
+  port: number
+  bindHost: string
+  domain: string
+  auth: 'open' | 'token' | null
+  token: string | null
+}
+
 type ServeOptions = {
   json: boolean
   wsPort?: number
@@ -1816,6 +1832,7 @@ type ServeOptions = {
   mobilePairing: boolean
   recipeJson: boolean
   projectRoot: string | null
+  preview: ServePreviewOptions | null
 }
 
 function getServeOptions(argv = process.argv): ServeOptions {
@@ -1843,7 +1860,129 @@ function getServeOptions(argv = process.argv): ServeOptions {
     noPairing: argv.includes('--serve-no-pairing'),
     mobilePairing: argv.includes('--serve-mobile-pairing'),
     recipeJson: argv.includes('--serve-recipe-json'),
-    projectRoot: valueAfter('--serve-project-root')
+    projectRoot: valueAfter('--serve-project-root'),
+    preview: getServePreviewOptions({
+      rawPort: valueAfter('--serve-preview-port'),
+      bindHost: valueAfter('--serve-preview-bind'),
+      domain: valueAfter('--serve-preview-domain'),
+      rawAuth: valueAfter('--serve-preview-auth'),
+      token: valueAfter('--serve-preview-token')
+    })
+  }
+}
+
+function getServePreviewOptions(flags: {
+  rawPort: string | null
+  bindHost: string | null
+  domain: string | null
+  rawAuth: string | null
+  token: string | null
+}): ServePreviewOptions | null {
+  const { rawPort, bindHost, domain, rawAuth, token } = flags
+  if (!rawPort && !domain && !bindHost && !rawAuth && !token) {
+    return null
+  }
+  if (!rawPort || !domain) {
+    throw new Error('Preview proxy requires both --preview-port and --preview-domain.')
+  }
+  const port = Number(rawPort)
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw new Error(`Invalid --preview-port value: ${rawPort}`)
+  }
+  if (rawAuth && rawAuth !== 'open' && rawAuth !== 'token') {
+    throw new Error(`Invalid --preview-auth value: ${rawAuth} (use open or token)`)
+  }
+  const resolvedToken = resolvePreviewToken(token, process.env.ORCA_PREVIEW_TOKEN)
+  if (resolvedToken && !isValidPreviewToken(resolvedToken)) {
+    const source = token ? '--preview-token' : 'ORCA_PREVIEW_TOKEN'
+    throw new Error(`Invalid ${source} value: use 1-512 characters from A-Za-z0-9 . _ ~ -`)
+  }
+  return {
+    port,
+    bindHost: bindHost ?? '127.0.0.1',
+    domain,
+    auth: rawAuth === 'open' || rawAuth === 'token' ? rawAuth : null,
+    token: resolvedToken
+  }
+}
+
+// Why: printServeReady's call shape is a startup-ordering test anchor; the
+// preview block reaches it through module state like runtime/runtimeRpc do.
+let servePreviewReadiness: ServePreviewReadiness | null = null
+let previewProxyReconciler: PreviewProxyReconciler | null = null
+
+// Why: runs for desktop and serve alike — the persisted previewProxy setting
+// drives the listener on both; serve flags override it via setFlagsConfig.
+function initPreviewProxyReconciler(runtimeService: {
+  getPreviewWorktreeDescriptors(): Promise<PreviewWorktreeDescriptor[]>
+  setPreviewProxyStatusProvider(provider: () => PreviewProxyStatus): void
+}): void {
+  if (previewProxyReconciler || !store) {
+    // Why: without the reconciler the IPC channel would not exist at all, and
+    // every renderer status call would reject with "No handler registered"
+    // instead of reporting the proxy as simply not running.
+    if (!previewProxyReconciler) {
+      ipcMain.removeHandler('previewProxy:status')
+      ipcMain.handle('previewProxy:status', () => ({ running: false, source: null }))
+    }
+    return
+  }
+  const settingsStore = store
+  const reconciler = new PreviewProxyReconciler({
+    resolveRoutes: createPreviewRouteResolver({
+      descriptors: () => runtimeService.getPreviewWorktreeDescriptors()
+    })
+  })
+  previewProxyReconciler = reconciler
+  runtimeService.setPreviewProxyStatusProvider(() => reconciler.status())
+  ipcMain.removeHandler('previewProxy:status')
+  ipcMain.handle('previewProxy:status', () => reconciler.status())
+  const applySettings = (): void => {
+    // Why: reconcile rejects if tearing down a live listener fails; swallowing
+    // it with a bare `void` would surface as an unhandled rejection in main.
+    reconciler.applySettings(settingsStore.getSettings()).catch((error: unknown) => {
+      console.error('[preview-proxy] failed to apply settings', error)
+    })
+  }
+  settingsStore.onSettingsChanged((updates) => {
+    if ('previewProxy' in updates) {
+      applySettings()
+    }
+  })
+  applySettings()
+}
+
+async function startServePreviewProxy(options: ServeOptions): Promise<void> {
+  const preview = options.preview
+  if (!preview) {
+    return
+  }
+  if (!previewProxyReconciler) {
+    // Why: the operator asked for a preview listener on the command line;
+    // reporting serve ready without one would look like a silent success.
+    throw new Error('Preview proxy failed to start: the reconciler was never initialized.')
+  }
+  // Why: a loopback bind is only reachable through a local reverse proxy the
+  // operator already trusts; a wide bind is one LAN scan away from every
+  // workspace dev server, so it defaults to token auth.
+  const auth = preview.auth ?? defaultPreviewAuthForBind(preview.bindHost)
+  await previewProxyReconciler.setFlagsConfig({
+    port: preview.port,
+    bindHost: preview.bindHost,
+    domain: preview.domain,
+    auth,
+    token: preview.token
+  })
+  const status = previewProxyReconciler.status()
+  if (!status.running) {
+    throw new Error(`Preview proxy failed to start: ${status.error ?? 'unknown error'}`)
+  }
+  servePreviewReadiness = {
+    bindHost: status.bindHost ?? preview.bindHost,
+    port: status.port ?? preview.port,
+    origin: status.origin ?? preview.domain,
+    auth: status.auth ?? auth,
+    token: status.token ?? null
   }
 }
 
@@ -1914,6 +2053,7 @@ async function printServeReady(options: ServeOptions): Promise<void> {
       advertisedEndpoint: advertised?.ok ? advertised.endpoint : null,
       // Why: the WSL reconciliation barrier fails open, so 'pending' warns a WSL PTY launch may still race a repair.
       managedWslCliReconciliation: managedWslCliReconciliationStatus,
+      ...(servePreviewReadiness ? { preview: servePreviewReadiness } : {}),
       pairing: pairing.available
         ? {
             available: true,
@@ -2552,6 +2692,7 @@ void app.whenReady().then(async () => {
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
+  initPreviewProxyReconciler(runtimeService)
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
@@ -3091,6 +3232,10 @@ void app.whenReady().then(async () => {
     // Why: serve deletes worktrees too, and the history GC that normally drains delete tombstones is
     // armed from the main window — without this, a quit mid-removal leaks the tree until a desktop launch.
     scheduleAllPendingHistoryTreeRemovals()
+    // Why: bind failures (port in use, bad domain) must abort serve startup
+    // loudly — a silently missing preview listener would 404 from the reverse
+    // proxy with nothing in the journal explaining why.
+    await startServePreviewProxy(serveOptions)
     await printServeReady(serveOptions)
     return
   }

@@ -37,6 +37,10 @@ export type WorkspacePort =
        *  userinfo. Prefer this over `protocol://connectHost:port` for the open and
        *  copy-link actions. */
       advertisedUrl?: string
+      /** Externally reachable URL served by the runtime's preview proxy
+       *  (`orca serve --preview-*`). Only set by runtimes with the proxy
+       *  enabled; optional so older runtimes/clients interoperate. */
+      previewUrl?: string
     })
   | (WorkspacePortBase & {
       kind: 'container'
@@ -72,4 +76,8 @@ export type WorkspacePortScanResult = {
   scannedAt: number
   ports: WorkspacePort[]
   unavailableReason?: string
+  /** OS hostname/username of the scanning runtime, so remote clients can offer
+   *  a ready `ssh -L` command. Optional: only runtime-side scans publish them. */
+  sshHostname?: string
+  sshUsername?: string
 }

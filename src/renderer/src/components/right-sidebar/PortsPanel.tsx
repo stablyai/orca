@@ -34,7 +34,8 @@ import {
   addressForPortForwardEntry,
   advertisedBrowserUrlForDetectedPort,
   advertisedBrowserUrlForForwardedRow,
-  browserUrlForPortForwardEntry
+  browserUrlForPortForwardEntry,
+  previewBrowserUrlForPort
 } from '@/lib/workspace-port-urls'
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-port-localhost-label-selector'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -315,6 +316,13 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
     [activeRepo?.id, activeWorktree?.id, displayScan]
   )
 
+  // Why: an ssh -L command only helps against a remote runtime; the local
+  // machine's ports are already reachable.
+  const sshCommandTarget =
+    runtimeTarget.kind === 'environment' && displayScan?.sshHostname
+      ? { hostname: displayScan.sshHostname, username: displayScan.sshUsername }
+      : null
+
   if (!activeRepo) {
     return (
       <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
@@ -393,6 +401,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            sshCommandTarget={sshCommandTarget}
           />
           <LocalPortSection
             id="other"
@@ -406,6 +415,7 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            sshCommandTarget={sshCommandTarget}
           />
           <LocalPortSection
             id="external"
@@ -441,6 +451,8 @@ function LocalWorkspacePortsPanel({ isVisible }: { isVisible: boolean }): React.
   )
 }
 
+type SshCommandTarget = { hostname: string; username?: string }
+
 function LocalPortSection({
   id,
   title,
@@ -450,7 +462,8 @@ function LocalPortSection({
   onToggle,
   onStopPort,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  sshCommandTarget
 }: {
   id: string
   title: string
@@ -461,6 +474,7 @@ function LocalPortSection({
   onStopPort: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  sshCommandTarget?: SshCommandTarget | null
 }): React.JSX.Element | null {
   if (ports.length === 0 && !emptyText) {
     return null
@@ -496,6 +510,7 @@ function LocalPortSection({
                   onStop={onStopPort}
                   onShowDetails={onShowDetails}
                   onOpenInBrowser={onOpenInBrowser}
+                  sshCommandTarget={sshCommandTarget}
                 />
               ))
             : emptyText && <div className="py-1 text-xs text-muted-foreground">{emptyText}</div>}
@@ -505,16 +520,23 @@ function LocalPortSection({
   )
 }
 
+function sshForwardCommandForPort(port: WorkspacePort, target: SshCommandTarget): string {
+  const login = target.username ? `${target.username}@${target.hostname}` : target.hostname
+  return `ssh -L ${safeLocalPort(port.port)}:localhost:${port.port} ${login}`
+}
+
 function LocalPortRow({
   port,
   onStop,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  sshCommandTarget
 }: {
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   onOpenInBrowser: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  sshCommandTarget?: SshCommandTarget | null
 }): React.JSX.Element {
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(addressForPort(port))
@@ -561,6 +583,20 @@ function LocalPortRow({
 
   const processLabel = port.processName ?? (port.pid ? `PID ${port.pid}` : 'Unknown process')
   const address = addressForPort(port)
+  const previewUrl = previewBrowserUrlForPort(port)
+  const previewHost = useMemo(() => {
+    if (!previewUrl) {
+      return null
+    }
+    try {
+      return new URL(previewUrl).host
+    } catch {
+      return null
+    }
+  }, [previewUrl])
+  const sshForwardCommand = sshCommandTarget
+    ? sshForwardCommandForPort(port, sshCommandTarget)
+    : null
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -600,6 +636,11 @@ function LocalPortRow({
               <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
                 <span className="truncate">{address}</span>
               </div>
+              {previewHost && (
+                <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <span className="truncate">{previewHost}</span>
+                </div>
+              )}
               <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
                 <span className="truncate">{ownerLabel}</span>
                 {confidenceLabel && (
@@ -693,6 +734,31 @@ function LocalPortRow({
           <Copy size={13} />
           {translate('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
         </ContextMenuItem>
+        {previewUrl && (
+          <ContextMenuItem
+            className={LOCAL_PORT_MENU_ITEM_CLASS}
+            onSelect={() => {
+              void window.api.ui.writeClipboardText(previewUrl)
+            }}
+          >
+            <Copy size={13} />
+            {translate('auto.components.right.sidebar.PortsPanel.7b2e54b080', 'Copy Preview URL')}
+          </ContextMenuItem>
+        )}
+        {sshForwardCommand && (
+          <ContextMenuItem
+            className={LOCAL_PORT_MENU_ITEM_CLASS}
+            onSelect={() => {
+              void window.api.ui.writeClipboardText(sshForwardCommand)
+            }}
+          >
+            <Copy size={13} />
+            {translate(
+              'auto.components.right.sidebar.PortsPanel.3442c66cc7',
+              'Copy SSH Forward Command'
+            )}
+          </ContextMenuItem>
+        )}
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => {

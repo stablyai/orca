@@ -110,8 +110,8 @@ import {
 import { getGitCloneFailureMessage } from '../../shared/git-clone-failure-message'
 import { GIT_FETCH_SKIP_AUTO_MAINTENANCE_CONFIG_ARGS } from '../../shared/git-fetch-auto-maintenance'
 import { createHash, randomUUID } from 'node:crypto'
-import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { homedir, hostname, userInfo } from 'node:os'
+import { basename, isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
@@ -245,7 +245,8 @@ import type {
   MRListState,
   PRRefreshOutcome,
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  PreviewProxyStatus
 } from '../../shared/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
@@ -521,6 +522,11 @@ import {
   scanWorkspacePortProbes
 } from '../ports/workspace-port-ownership'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
+import {
+  enrichScanWithPreviewUrls,
+  getActivePreviewProxyConfig,
+  type PreviewWorktreeDescriptor
+} from '../ports/worktree-preview-routes'
 import type { AutomationService } from '../automations/service'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
 import { RemoteRuntimeTerminalCreateIdempotency } from './remote-runtime-terminal-create-idempotency'
@@ -1183,6 +1189,7 @@ type RuntimeStore = {
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
+    previewProxy?: GlobalSettings['previewProxy']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
   // a cast. The runtime never reads the return value — the persisted value
@@ -3459,6 +3466,7 @@ export class OrcaRuntimeService {
     | 'minimaxGroupId'
     | 'minimaxUsageModels'
     | 'prBotAuthorOverrides'
+    | 'previewProxy'
     // Read-only on purpose: clients preflight the publish capability here, but SettingsUpdate
     // still omits the key so no RPC caller can grant it to itself.
     | 'artifactSharingEnabled'
@@ -3468,6 +3476,7 @@ export class OrcaRuntimeService {
     }
     const settings = this.store.getSettings()
     return {
+      ...(settings.previewProxy ? { previewProxy: settings.previewProxy } : {}),
       defaultTuiAgent: settings.defaultTuiAgent ?? null,
       disabledTuiAgents: settings.disabledTuiAgents ?? [],
       agentCmdOverrides: settings.agentCmdOverrides ?? {},
@@ -3487,6 +3496,18 @@ export class OrcaRuntimeService {
       prBotAuthorOverrides: settings.prBotAuthorOverrides ?? [],
       artifactSharingEnabled: isArtifactSharingEnabled(settings)
     }
+  }
+
+  // Why: the reconciler lives in main wiring; the runtime only relays its
+  // status so paired clients can render the settings card's live state.
+  private previewProxyStatusProvider: (() => PreviewProxyStatus) | null = null
+
+  setPreviewProxyStatusProvider(provider: () => PreviewProxyStatus): void {
+    this.previewProxyStatusProvider = provider
+  }
+
+  getPreviewProxyStatus(): PreviewProxyStatus | null {
+    return this.previewProxyStatusProvider?.() ?? null
   }
 
   private reconcileManagedAgentHooks(): Promise<void> {
@@ -3535,6 +3556,7 @@ export class OrcaRuntimeService {
       | 'minimaxGroupId'
       | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
+      | 'previewProxy'
     >
   ): Promise<
     Pick<
@@ -3556,6 +3578,7 @@ export class OrcaRuntimeService {
       | 'minimaxGroupId'
       | 'minimaxUsageModels'
       | 'prBotAuthorOverrides'
+      | 'previewProxy'
     >
   > {
     if (!this.store?.getSettings || !this.store.updateSettings) {
@@ -21033,7 +21056,52 @@ export class OrcaRuntimeService {
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {
-    return scanWorkspacePortProbes(await this.getWorkspacePortProbes(repoId))
+    const scan = await scanWorkspacePortProbes(await this.getWorkspacePortProbes(repoId))
+    const previewConfig = getActivePreviewProxyConfig()
+    const enriched = previewConfig
+      ? enrichScanWithPreviewUrls(scan, await this.getPreviewWorktreeDescriptors(), previewConfig)
+      : scan
+    // Why: remote clients compose `ssh -L` hints from the runtime host identity;
+    // optional fields keep older clients' scans decoding unchanged.
+    let sshUsername: string | undefined
+    try {
+      sshUsername = userInfo().username || undefined
+    } catch {
+      // userInfo() throws when the uid has no passwd entry (minimal containers).
+    }
+    return {
+      ...enriched,
+      sshHostname: hostname(),
+      ...(sshUsername ? { sshUsername } : {})
+    }
+  }
+
+  /** Worktrees the preview proxy may route to, with the project name the
+   *  preview label derives from. Mirrors getWorkspacePortProbes' exclusion of
+   *  SSH-connected repos: their ports listen on another machine. */
+  async getPreviewWorktreeDescriptors(): Promise<PreviewWorktreeDescriptor[]> {
+    const reposById = new Map(
+      this.requireStore()
+        .getRepos()
+        .map((repo) => [repo.id, repo])
+    )
+    return (await this.listResolvedWorktrees()).flatMap((worktree) => {
+      const repo = reposById.get(worktree.repoId)
+      if (!repo || repo.connectionId) {
+        return []
+      }
+      return [
+        {
+          worktreeId: worktree.id,
+          repoId: worktree.repoId,
+          // Why: an empty project name slugifies to the generic "workspace",
+          // so every unnamed repo's primary worktree would share one label.
+          projectName: repo.displayName || basename(repo.path),
+          worktreeName: worktree.displayName,
+          worktreePath: worktree.git.path
+        }
+      ]
+    })
   }
 
   async killWorkspacePort(args: WorkspacePortKillRequest): Promise<WorkspacePortKillResult> {

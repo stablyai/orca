@@ -67,6 +67,7 @@ import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
+import { getPreviewProxySearchEntries } from '@/components/settings/preview-proxy-search'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
 import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
@@ -536,7 +537,7 @@ export function buildSettingsNavigationMetadata({
         ? 'Connect this browser to a saved Orca server.'
         : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
       icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
+      searchEntries: [runtimeEnvironmentsSearchEntry, ...getPreviewProxySearchEntries()],
       group: 'remote',
       badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
     },

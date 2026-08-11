@@ -1,6 +1,4 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import https from 'node:https'
-import net from 'node:net'
 import type { Duplex } from 'node:stream'
 import { URL } from 'node:url'
 import type {
@@ -8,10 +6,10 @@ import type {
   LocalhostWorktreeLabelRoute
 } from '../shared/localhost-worktree-labels'
 import {
-  connectableLoopbackHost,
   getLocalhostWorktreeHostLabel,
   getLocalhostWorktreeRouteKey
 } from '../shared/localhost-worktree-labels'
+import { forwardHttpRequestToTarget, forwardUpgradeToTarget } from './http-proxy-forwarding'
 
 type RegisteredRoute = LocalhostWorktreeLabelRoute & {
   label: string
@@ -71,7 +69,7 @@ export class LocalhostWorktreeLabelProxy {
     }
 
     const server = http.createServer((request, response) => {
-      void this.handleRequest(request, response)
+      this.handleRequest(request, response)
     })
     server.on('upgrade', (request, socket, head) => {
       this.handleUpgrade(request, socket, head)
@@ -121,44 +119,19 @@ export class LocalhostWorktreeLabelProxy {
     return url.toString()
   }
 
-  private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+  private handleRequest(request: IncomingMessage, response: ServerResponse): void {
     const route = this.routeForRequest(request)
     if (!route) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
       response.end('Unknown Orca localhost label.')
       return
     }
-
-    const target = targetUrlForRequest(route.target, request)
-    const proxyRequest = requestForTarget(target, {
-      method: request.method,
-      headers: requestHeadersForTarget(request, route.target)
+    forwardHttpRequestToTarget({
+      target: route.target,
+      request,
+      response,
+      routeLabel: route.label
     })
-
-    // Why: a client abort or downstream socket error must tear down the
-    // upstream request instead of surfacing as an uncaught exception/leak.
-    request.on('error', () => proxyRequest.destroy())
-    response.on('error', () => proxyRequest.destroy())
-
-    // Why: the proxy only relabels the hostname; responses are streamed
-    // through untouched so app headers (CSP, cookies) and bodies are
-    // preserved exactly as the dev server sent them.
-    proxyRequest.on('response', (proxyResponse) => {
-      proxyResponse.on('error', () => response.destroy())
-      response.writeHead(proxyResponse.statusCode ?? 502, proxyResponse.headers)
-      proxyResponse.pipe(response)
-    })
-    proxyRequest.on('error', (error) => {
-      // Why: once headers/bytes are flushed we can't write a 502, so tear the
-      // socket down to avoid an ERR_HTTP_HEADERS_SENT crash.
-      if (response.headersSent) {
-        response.destroy(error)
-        return
-      }
-      response.writeHead(502, { 'content-type': 'text/plain; charset=utf-8' })
-      response.end(`Proxy failed for ${route.label}: ${error.message}`)
-    })
-    request.pipe(proxyRequest)
   }
 
   private handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): void {
@@ -167,32 +140,7 @@ export class LocalhostWorktreeLabelProxy {
       socket.destroy()
       return
     }
-
-    const target = targetUrlForRequest(route.target, request)
-    const targetPort = Number(target.port || (target.protocol === 'https:' ? 443 : 80))
-    const targetSocket = net.connect(targetPort, connectableLoopbackHost(target.hostname), () => {
-      const headers = requestHeadersForTarget(request, route.target)
-      targetSocket.write(
-        `${request.method ?? 'GET'} ${target.pathname}${target.search} HTTP/${request.httpVersion}\r\n`
-      )
-      for (const [name, value] of Object.entries(headers)) {
-        if (Array.isArray(value)) {
-          for (const entry of value) {
-            targetSocket.write(`${name}: ${entry}\r\n`)
-          }
-        } else if (value !== undefined) {
-          targetSocket.write(`${name}: ${value}\r\n`)
-        }
-      }
-      targetSocket.write('\r\n')
-      if (head.length > 0) {
-        targetSocket.write(head)
-      }
-      targetSocket.pipe(socket)
-      socket.pipe(targetSocket)
-    })
-    targetSocket.on('error', () => socket.destroy())
-    socket.on('error', () => targetSocket.destroy())
+    forwardUpgradeToTarget({ target: route.target, request, socket, head })
   }
 
   private routeForRequest(request: IncomingMessage): RegisteredRoute | null {
@@ -216,33 +164,4 @@ function parseTargetUrl(rawUrl: string): URL {
     throw new Error('Only http workspace ports can be labeled.')
   }
   return url
-}
-
-function requestForTarget(
-  target: URL,
-  options: { method?: string; headers: http.OutgoingHttpHeaders }
-): http.ClientRequest {
-  const requestOptions = {
-    protocol: target.protocol,
-    hostname: connectableLoopbackHost(target.hostname),
-    port: target.port || (target.protocol === 'https:' ? 443 : 80),
-    path: `${target.pathname}${target.search}`,
-    method: options.method,
-    headers: options.headers
-  }
-  return target.protocol === 'https:' ? https.request(requestOptions) : http.request(requestOptions)
-}
-
-function targetUrlForRequest(target: URL, request: IncomingMessage): URL {
-  const url = new URL(target.toString())
-  const incomingUrl = new URL(request.url || '/', target)
-  url.pathname = incomingUrl.pathname
-  url.search = incomingUrl.search
-  return url
-}
-
-function requestHeadersForTarget(request: IncomingMessage, target: URL): http.OutgoingHttpHeaders {
-  const headers: http.OutgoingHttpHeaders = { ...request.headers }
-  headers.host = target.host
-  return headers
 }

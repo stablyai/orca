@@ -31,6 +31,7 @@ import {
   usePluginPanels,
   usePluginPanelsStore
 } from '@/store/plugin-panels'
+import { usePreviewProxyActive } from '@/hooks/use-preview-proxy-active'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import {
   RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
@@ -90,6 +91,7 @@ function RightSidebarInner(): React.JSX.Element {
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  const isPreviewProxyActive = usePreviewProxyActive()
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -175,9 +177,10 @@ function RightSidebarInner(): React.JSX.Element {
       getVisibleRightSidebarActivityItems(activityItems, {
         isFolder,
         isFolderWorkspace,
-        isSshRepo
+        isSshRepo,
+        isPreviewProxyActive
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, isFolder, isFolderWorkspace, isPreviewProxyActive, isSshRepo]
   )
 
   const rememberedFolderTabByWorkspaceKeyRef = useRef<Record<string, ActiveRightSidebarTab>>({})

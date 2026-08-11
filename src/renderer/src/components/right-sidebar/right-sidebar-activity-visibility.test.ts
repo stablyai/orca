@@ -55,6 +55,17 @@ describe('getVisibleRightSidebarActivityItems', () => {
     ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
   })
 
+  it('shows ports on a local repo once a preview proxy is serving its ports', () => {
+    expect(
+      getVisibleRightSidebarActivityItems(items, {
+        isFolder: false,
+        isFolderWorkspace: false,
+        isSshRepo: false,
+        isPreviewProxyActive: true
+      }).map((item) => item.id)
+    ).toEqual(['explorer', 'source-control', 'ports', 'plugin:orca-samples.my-plugin/dashboard'])
+  })
+
   it('shows Workspaces only for folder workspaces and hides git tabs for all folder scopes', () => {
     expect(
       getVisibleRightSidebarActivityItems(items, {
