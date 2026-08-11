@@ -4,6 +4,7 @@ import { HoverCard, HoverCardTrigger, HoverCardContent } from '@/components/ui/h
 import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
 import CommentMarkdown from './CommentMarkdown'
 import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from './WorktreeContextMenu'
@@ -18,6 +19,7 @@ import { useWorktreeCardDetailsHoverControl } from './worktree-card-details-hove
 import { getReviewLabel } from './worktree-review-helpers'
 import type {
   WorktreeCardIssueDisplay,
+  WorktreeCardJiraIssueDisplay,
   WorktreeCardLinearIssueDisplay,
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps,
@@ -32,6 +34,7 @@ import { WorktreeCardHoverIdentityHeader } from './WorktreeCardHoverIdentityHead
 
 export type {
   WorktreeCardIssueDisplay,
+  WorktreeCardJiraIssueDisplay,
   WorktreeCardLinearIssueDisplay,
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps,
@@ -49,6 +52,7 @@ function hasComment(comment: string | null): boolean {
 export function WorktreeCardDetailsHover({
   issue,
   linearIssue,
+  jiraIssue,
   review,
   comment,
   automationProvenance,
@@ -160,6 +164,7 @@ export function WorktreeCardDetailsHover({
     !hasWorktreeCardDetails({
       issue,
       linearIssue,
+      jiraIssue,
       review,
       comment,
       automationProvenance,
@@ -263,6 +268,35 @@ export function WorktreeCardDetailsHover({
                     ))}
                   </div>
                 )}
+              </WorktreeCardDetailSectionContent>
+            </WorktreeCardDetailSection>
+          )}
+
+          {jiraIssue && (
+            <WorktreeCardDetailSection>
+              <DetailHeader
+                icon={<JiraIcon className="size-3 text-muted-foreground" />}
+                label={translate(
+                  'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
+                  'Jira {{value0}}',
+                  { value0: jiraIssue.identifier }
+                )}
+                actions={
+                  <MetadataActionIcon
+                    label={translate(
+                      'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
+                      'View on Jira'
+                    )}
+                    href={jiraIssue.url}
+                  >
+                    <ExternalLink className="size-3" />
+                  </MetadataActionIcon>
+                }
+              />
+              <WorktreeCardDetailSectionContent>
+                <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
+                  {jiraIssue.title}
+                </div>
               </WorktreeCardDetailSectionContent>
             </WorktreeCardDetailSection>
           )}

@@ -9,6 +9,7 @@ import {
   statSync,
   writeFileSync
 } from 'node:fs'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
 import type { WorkspaceSessionState } from '../shared/types'
@@ -133,6 +134,42 @@ export function writeTerminalScrollbackSnapshotSync(args: {
   }
 }
 
+export async function writeTerminalScrollbackSnapshot(args: {
+  tabId: string
+  leafId: string
+  buffer: string
+  storage?: TerminalScrollbackSnapshotStorage
+}): Promise<string | null> {
+  if (!args.buffer) {
+    return null
+  }
+  const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
+  const snapshotRoot = getSnapshotRoot(args.storage)
+  const path = snapshotPath(ref, snapshotRoot)
+  if (!path) {
+    return null
+  }
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  let renamed = false
+  try {
+    await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
+    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
+    await writeFile(tmpPath, bytes, { mode: 0o600 })
+    await rename(tmpPath, path)
+    renamed = true
+    return ref
+  } catch (err) {
+    console.warn(
+      `[terminal-scrollback] Failed to write snapshot: ${err instanceof Error ? err.message : String(err)}`
+    )
+    return null
+  } finally {
+    if (!renamed) {
+      await rm(tmpPath, { force: true }).catch(() => {})
+    }
+  }
+}
+
 export function readTerminalScrollbackSnapshotSync(
   ref: string,
   storage?: TerminalScrollbackSnapshotStorage
@@ -158,6 +195,15 @@ export function deleteTerminalScrollbackSnapshotSync(
       // Best-effort cleanup; stale refs are harmless and bounded by per-file caps.
     }
   }
+}
+
+export async function deleteTerminalScrollbackSnapshot(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Promise<void> {
+  await Promise.all(
+    snapshotReadPaths(ref, storage).map((path) => rm(path, { force: true }).catch(() => {}))
+  )
 }
 
 export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionState): Set<string> {

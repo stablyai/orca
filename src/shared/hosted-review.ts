@@ -1,4 +1,10 @@
-import type { CheckStatus, PRConflictSummary, PRMergeableState, PRReviewDecision } from './types'
+import type {
+  CheckStatus,
+  GitHubRepositoryIdentity,
+  PRConflictSummary,
+  PRMergeableState,
+  PRReviewDecision
+} from './types'
 
 export type HostedReviewProvider =
   | 'github'
@@ -30,6 +36,8 @@ export type HostedReviewInfo = {
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
   headSha?: string
+  /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
+  githubRepository?: GitHubRepositoryIdentity
   // Why: mirrors PRInfo.confirmedContainedHeadOid so merged-review staleness
   // checks accept a worktree head confirmed to be part of the merged PR.
   confirmedContainedHeadOid?: string
@@ -50,6 +58,12 @@ export type HostedReviewForBranchArgs = {
   linkedGiteaPR?: number | null
   // The worktree's checked-out HEAD oid (GitHub merged-at-head visibility).
   currentHeadOid?: string | null
+  /**
+   * Set only by surfaces scoped to the selected worktree. That tier is O(1), so
+   * the host re-checks it per minute; the worktree list is O(N) and is paced far
+   * more slowly to stay inside the shared API budget (#11532).
+   */
+  active?: boolean
 }
 
 export type HostedReviewSummary = {
@@ -159,56 +173,4 @@ export type HostedReviewCreationEligibilityArgs = {
   linkedGiteaPR?: number | null
 }
 
-export type HostedReviewIdentity = {
-  provider: HostedReviewProvider
-  host: string
-  owner: string
-  repo: string
-  number: number
-}
-
-export type HostedReviewUser = {
-  login: string | null
-  isBot?: boolean
-}
-
 export type HostedReviewDecision = 'approved' | 'changes_requested' | 'review_required' | null
-
-export type HostedReviewThreadSummary = {
-  unresolvedCount: number | null
-  dataCompleteness?: 'full' | 'partial'
-}
-
-export type HostedReviewQueueSummary = {
-  identity: HostedReviewIdentity
-  title: string
-  url: string
-  state: HostedReviewState
-  author: HostedReviewUser | null
-  updatedAt: string
-  lastViewedAt?: number
-  mergeable: PRMergeableState
-  mergeStateStatus?: string | null
-  checksStatus: CheckStatus
-  reviewDecision?: HostedReviewDecision
-  threadSummary?: HostedReviewThreadSummary
-  requestedReviewerLogins?: string[] | null
-  draft?: boolean
-}
-
-export type HostedReviewQueueKey =
-  | 'mine'
-  | 'requested'
-  | 'agent'
-  | 'teammate'
-  | 'needs-response'
-  | 'ready-to-merge'
-
-export type HostedReviewQueueState = 'mine' | 'requested' | 'agent' | 'teammate'
-
-export type HostedReviewQueueClassification = {
-  state: HostedReviewQueueState
-  needsResponse: boolean
-  readyToMerge: boolean
-  requested: boolean
-}

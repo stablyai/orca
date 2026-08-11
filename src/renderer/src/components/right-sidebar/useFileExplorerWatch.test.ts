@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { FsChangedPayload } from '../../../../shared/types'
 import {
   canonicalizeFileExplorerWatchPath,
   getFileExplorerWatchRuntimeEnvironmentId,
   getExternalFileChangeRelativePath,
-  payloadRequiresDeferredTreeRefresh
+  resolveCachedDirPath
 } from './useFileExplorerWatch'
 import type { AppState } from '@/store/types'
 
@@ -104,36 +103,23 @@ describe('canonicalizeFileExplorerWatchPath', () => {
   })
 })
 
-describe('payloadRequiresDeferredTreeRefresh', () => {
-  function payload(events: FsChangedPayload['events'], worktreePath = '/repo'): FsChangedPayload {
-    return { worktreePath, events }
-  }
-
-  it('does not require a full tree refresh for replayable deferred changes', () => {
-    const changes = payload([
-      { kind: 'create', absolutePath: '/repo/src/new.ts', isDirectory: false },
-      { kind: 'update', absolutePath: '/repo/src', isDirectory: true },
-      { kind: 'delete', absolutePath: '/repo/src/old.ts' }
-    ])
-
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+describe('resolveCachedDirPath', () => {
+  it('returns the exact cache key when present', () => {
+    const cache = { '/repo/src': { children: [] } }
+    expect(resolveCachedDirPath(cache, '/repo/src')).toBe('/repo/src')
   })
 
-  it('requires a full tree refresh for unreplayable rename payloads in the current worktree', () => {
-    const changes = payload([
-      { kind: 'rename', absolutePath: '/repo/src/old.ts', isDirectory: false }
-    ])
-
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(true)
+  it('matches Windows cache keys case-insensitively (#10264)', () => {
+    const cache = { 'C:\\Repo\\src': { children: [] } }
+    expect(resolveCachedDirPath(cache, 'c:\\repo\\src')).toBe('C:\\Repo\\src')
   })
 
-  it('ignores stale deferred rename payloads from a previous worktree', () => {
-    const changes = payload(
-      [{ kind: 'rename', absolutePath: '/other/src/old.ts', isDirectory: false }],
-      '/other'
-    )
+  it('falls back to the worktree root path when the root is not yet cached', () => {
+    expect(resolveCachedDirPath({}, 'C:\\Repo', 'C:\\Repo')).toBe('C:\\Repo')
+  })
 
-    expect(payloadRequiresDeferredTreeRefresh(changes, '/repo')).toBe(false)
+  it('returns null when the directory is not cached and is not the worktree root', () => {
+    expect(resolveCachedDirPath({ '/repo': { children: [] } }, '/repo/src', '/repo')).toBeNull()
   })
 })
 

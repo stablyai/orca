@@ -75,6 +75,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
   const count = candidates.length
   const removedIds: string[] = []
   const failures: WorkspaceCleanupFailure[] = []
+  const preservedBranches: NonNullable<WorkspaceCleanupRemoveResult['preservedBranches']> = []
   const failedCandidates: WorkspaceCleanupCandidate[] = []
   const lateSettlementTrackers: WorkspaceCleanupLateSettlementTracker[] = []
   // Why: rows past the removal deadline are still removing; their skip fallout
@@ -200,6 +201,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
               pendingSettlementFailures.delete(timeoutFailure)
               provisionallyBlocked.delete(candidate)
               removedIds.push(...lateResult.removedIds)
+              preservedBranches.push(...(lateResult.preservedBranches ?? []))
               reportFailures(lateResult.failures)
               if (lateResult.failures.length === 0) {
                 removeArrayEntry(failedCandidates, candidate)
@@ -212,6 +214,7 @@ export function startWorkspaceCleanupBackgroundRemoval({
         }
         const result = outcome.result
         removedIds.push(...result.removedIds)
+        preservedBranches.push(...(result.preservedBranches ?? []))
         reportFailures(result.failures)
         if (result.failures.length > 0) {
           failedCandidates.push(candidate)
@@ -244,7 +247,11 @@ export function startWorkspaceCleanupBackgroundRemoval({
         }
       })
     )
-    const result = { removedIds, failures }
+    const result: WorkspaceCleanupRemoveResult = {
+      removedIds,
+      failures,
+      ...(preservedBranches.length > 0 ? { preservedBranches } : {})
+    }
     try {
       onResult?.(result)
     } catch (callbackError) {

@@ -4,8 +4,8 @@
 // hour's loss; fsync stops it from happening.
 
 import { closeSync, fsyncSync, openSync, renameSync, writeFileSync } from 'node:fs'
-import { open, rename } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { open, readdir, rename, rm, stat } from 'node:fs/promises'
+import { basename, dirname, join } from 'node:path'
 
 /**
  * fsync a directory so a rename within it is durable. Best-effort by design: Windows cannot open a
@@ -57,16 +57,83 @@ export async function writeFileDurable(
   finalPath: string,
   payload: string
 ): Promise<void> {
-  const handle = await open(tmpPath, 'w')
+  await writeFileDurableIfCurrent(tmpPath, finalPath, payload, () => true)
+}
+
+/**
+ * `writeFileDurable` with a commit veto: `isCurrent` is consulted after the fsync and before the
+ * rename so a writer that was superseded mid-write doesn't publish a stale snapshot. Returns whether
+ * the rename happened; the temp file is removed on every path that doesn't commit, so a multi-MB
+ * payload can't orphan itself.
+ */
+export async function writeFileDurableIfCurrent(
+  tmpPath: string,
+  finalPath: string,
+  payload: string,
+  isCurrent: () => boolean
+): Promise<boolean> {
+  let renamed = false
   try {
-    await handle.writeFile(payload, 'utf-8')
-    // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-    await handle.sync()
+    const handle = await open(tmpPath, 'w')
+    try {
+      await handle.writeFile(payload, 'utf-8')
+      // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
+      await handle.sync()
+    } finally {
+      await handle.close()
+    }
+    if (!isCurrent()) {
+      return false
+    }
+    await rename(tmpPath, finalPath)
+    renamed = true
+    await syncDirectory(dirname(finalPath))
+    return true
   } finally {
-    await handle.close()
+    if (!renamed) {
+      await rm(tmpPath, { force: true }).catch(() => {})
+    }
   }
-  await rename(tmpPath, finalPath)
-  await syncDirectory(dirname(finalPath))
+}
+
+/** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
+export function durableWriteTempPath(finalPath: string): string {
+  return `${finalPath}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+}
+
+/**
+ * Sweep temp files orphaned by a death between write and rename — for multi-MB payloads they would
+ * otherwise accumulate forever. Callers can require a minimum age to spare another live instance's
+ * write. This process's own temps are always skipped because deleting one would fail its rename.
+ */
+export async function removeStaleDurableWriteTempFiles(
+  finalPath: string,
+  options: { minimumAgeMs?: number } = {}
+): Promise<void> {
+  const directory = dirname(finalPath)
+  const prefix = `${basename(finalPath)}.`
+  const ownPrefix = `${prefix}${process.pid}.`
+  try {
+    const names = await readdir(directory)
+    await Promise.all(
+      names
+        .filter(
+          (name) => name.startsWith(prefix) && name.endsWith('.tmp') && !name.startsWith(ownPrefix)
+        )
+        .map(async (name) => {
+          const path = join(directory, name)
+          if (options.minimumAgeMs) {
+            const info = await stat(path).catch(() => null)
+            if (!info || Date.now() - info.mtimeMs < options.minimumAgeMs) {
+              return
+            }
+          }
+          await rm(path, { force: true }).catch(() => {})
+        })
+    )
+  } catch {
+    // Directory missing or unreadable — nothing to sweep.
+  }
 }
 
 /** Synchronous counterpart for quit and crash paths that cannot await. */

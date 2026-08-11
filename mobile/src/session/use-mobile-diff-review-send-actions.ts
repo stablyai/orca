@@ -11,6 +11,7 @@ import {
   readMobileReviewTerminalSendAccepted,
   readMobileReviewTerminalTabs
 } from './mobile-diff-review-rpc'
+import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import type { ReviewScreenState, SendSheetState } from './mobile-diff-review-screen-model'
 
 type SendActionsInput = {
@@ -73,6 +74,11 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
     async (terminal: string, comments: readonly DiffComment[]) => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
+      }
+      // Marked by terminal handle, not by surface, so a paste orphaned here by native
+      // chat would ride along with these notes (#10228). Diff review carries no device token.
+      if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
+        throw new Error('Failed to send notes')
       }
       const response = await client.sendRequest('terminal.send', {
         terminal,

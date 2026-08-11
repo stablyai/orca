@@ -1,6 +1,9 @@
 import type { WorktreeDragGroup } from './worktree-manual-order'
 import type { WorktreeDragUnitGroup } from './worktree-drag-units'
-import { holdWorktreeSidebarDragRects } from './worktree-sidebar-drag-geometry'
+import type {
+  WorktreeSidebarDragGrab,
+  WorktreeSidebarDropAnchor
+} from './worktree-sidebar-drag-geometry'
 
 const EDGE_ZONE_PX = 56
 const MAX_OUTSIDE_EDGE_PX = 48
@@ -26,11 +29,12 @@ export type WorktreeSidebarDragSession = {
   draggedIds: readonly string[]
   reorderDraggedIds: readonly string[]
   reorderUnitDraggedIds: readonly string[]
-  // Why: `rects` are held stable for hit testing so resizing cards cannot move
-  // the drop target; `liveRects` keep the rendered indicator and row previews
-  // anchored to where the cards actually are right now.
+  // Why: one live coordinate space for both hit testing and rendering. Stability
+  // against mid-drag card resizes comes from holding the drop *decision*
+  // (`anchor`), not from freezing this geometry.
   rects: readonly WorktreeSidebarDragRect[]
-  liveRects: readonly WorktreeSidebarDragRect[]
+  grab: WorktreeSidebarDragGrab | null
+  anchor: WorktreeSidebarDropAnchor | null
 }
 
 export type WorktreeSidebarAutoscrollResult = {
@@ -195,11 +199,7 @@ export function refreshWorktreeSidebarDragSession(args: {
     return null
   }
 
-  return {
-    ...args.session,
-    rects: holdWorktreeSidebarDragRects({ held: args.session.rects, measured: args.rects }),
-    liveRects: args.rects
-  }
+  return { ...args.session, rects: args.rects }
 }
 
 function getVerticalEdgeIntensity(

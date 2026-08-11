@@ -38,6 +38,7 @@ import {
   resolveRuntimePath
 } from '../../shared/cross-platform-path'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
+import { sortDirEntries } from '../../shared/file-name-sort'
 import type {
   RuntimeFileListResult,
   RuntimeFileOpenResult,
@@ -57,6 +58,11 @@ import { listQuickOpenFiles } from '../ipc/filesystem-list-files'
 import { searchWithGitGrep } from '../ipc/filesystem-search-git'
 import { getLocalGitOptionsForRegisteredWorktree } from '../ipc/local-worktree-runtime-options'
 import { checkRgAvailable } from '../ipc/rg-availability'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess
+} from '../../shared/ripgrep-process-availability'
 import {
   listMarkdownDocuments,
   markdownDocumentsFromRelativePaths
@@ -80,7 +86,6 @@ import {
   isWatcherProcessFailure,
   WatcherProcessFailure
 } from '../ipc/parcel-watcher-process-failure'
-import { assertNoClobberRenameDestinationAvailable } from '../../shared/filesystem-rename-collision'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
 import {
   rankRuntimeMobileFilePaths,
@@ -88,7 +93,8 @@ import {
 } from './runtime-mobile-file-path-search'
 import { beginWatcherInstall } from '../ipc/watcher-removal-gate'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { toSshExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { renameLocalPathSerializedByDestination } from '../destination-serialized-local-rename'
 
 const MOBILE_FILE_LIST_LIMIT = 5000
 const MOBILE_FILE_PATH_SEARCH_CACHE_LIMIT = 20_000
@@ -490,11 +496,24 @@ export type ResolvedRuntimeFileTarget = {
   connectionId?: string
 }
 
+export function getRuntimeFileTargetExecutionHostId(
+  target: ResolvedRuntimeFileTarget
+): ExecutionHostId {
+  return (
+    target.worktree.hostId ??
+    (target.connectionId ? toSshExecutionHostId(target.connectionId) : 'local')
+  )
+}
+
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string
   requireStore(): Store
   resolveWorktreeSelector(selector: string): Promise<ResolvedRuntimeFileWorktree>
   resolveRuntimeFileTarget(selector: string): Promise<ResolvedRuntimeFileTarget>
+  resolveKnownWorkspaceFileTarget?(
+    absolutePath: string,
+    executionHostId: ExecutionHostId
+  ): Promise<(ResolvedRuntimeFileTarget & { relativePath: string }) | null>
   resolveTerminalCwd?(terminalHandle: string): string | null | Promise<string | null>
   resolveTerminalContext?(
     terminalHandle: string
@@ -706,7 +725,8 @@ export class RuntimeFileCommands {
     pathText: string,
     cwd?: string | null,
     clientId?: string,
-    terminalHandle?: string | null
+    terminalHandle?: string | null,
+    crossWorkspace?: boolean
   ): Promise<RuntimeTerminalPathResolution> {
     const store = this.host.requireStore()
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
@@ -744,15 +764,30 @@ export class RuntimeFileCommands {
       terminalFileUriHostname
     })
     const relativePath = relativePathInsideRoot(worktree.path, absolutePath)
+    // Why: clients that predate crossWorkspace reuse their own worktree id for the
+    // follow-up files.open, so retargeting to a sibling workspace must be opt-in.
+    const knownWorkspaceTarget =
+      crossWorkspace && relativePath === null
+        ? await this.host.resolveKnownWorkspaceFileTarget?.(
+            absolutePath,
+            getRuntimeFileTargetExecutionHostId(target)
+          )
+        : null
+    const ownedWorktree = knownWorkspaceTarget?.worktree ?? worktree
+    const ownedConnectionId = knownWorkspaceTarget?.connectionId ?? connectionId
+    const ownedRelativePath = knownWorkspaceTarget?.relativePath ?? relativePath
 
     try {
-      if (relativePath !== null && relativePath !== '' && isSafeMobileRelativePath(relativePath)) {
-        const stats = connectionId
-          ? await this.statRemoteTerminalPath(absolutePath, connectionId)
+      if (
+        ownedRelativePath !== null &&
+        (ownedRelativePath === '' || isSafeMobileRelativePath(ownedRelativePath))
+      ) {
+        const stats = ownedConnectionId
+          ? await this.statRemoteTerminalPath(absolutePath, ownedConnectionId)
           : await stat(await resolveAuthorizedPath(absolutePath, store))
         return {
-          worktree: worktree.id,
-          relativePath,
+          worktree: ownedWorktree.id,
+          relativePath: ownedRelativePath,
           absolutePath,
           exists: true,
           isDirectory: stats.isDirectory(),
@@ -760,8 +795,8 @@ export class RuntimeFileCommands {
             ? undefined
             : {
                 kind: 'worktree-file',
-                provider: connectionId ? 'ssh' : 'local',
-                relativePath,
+                provider: ownedConnectionId ? 'ssh' : 'local',
+                relativePath: ownedRelativePath,
                 absolutePath
               }
         }
@@ -832,9 +867,14 @@ export class RuntimeFileCommands {
       // Report genuine not-found as missing; let transport/permission errors surface so remote taps aren't all reported missing.
       if (
         isENOENT(error) ||
-        (connectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
+        (ownedConnectionId && RuntimeFileCommands.isRemoteNotFoundErrorMessage(error))
       ) {
-        return { ...empty, relativePath, absolutePath }
+        return {
+          ...empty,
+          worktree: ownedWorktree.id,
+          relativePath: ownedRelativePath,
+          absolutePath
+        }
       }
       throw error
     }
@@ -1258,7 +1298,9 @@ export class RuntimeFileCommands {
       if (!provider) {
         throw new Error(SSH_FILESYSTEM_PROVIDER_UNAVAILABLE_MESSAGE)
       }
-      return provider.readDir(target.path)
+      // Why: re-sort locally — the remote relay may be an older build with
+      // lexicographic ordering.
+      return sortDirEntries(await provider.readDir(target.path))
     }
 
     const dirPath = await resolveAuthorizedPath(target.path, this.host.requireStore())
@@ -1273,12 +1315,7 @@ export class RuntimeFileCommands {
         }
       })
     )
-    return mapped.sort((a, b) => {
-      if (a.isDirectory !== b.isDirectory) {
-        return a.isDirectory ? -1 : 1
-      }
-      return a.name.localeCompare(b.name)
-    })
+    return sortDirEntries(mapped)
   }
 
   async watchFileExplorer(
@@ -1286,7 +1323,7 @@ export class RuntimeFileCommands {
     callback: (events: FsChangeEvent[]) => void,
     onTerminalError: (error: Error) => void = () => undefined,
     signal?: AbortSignal
-  ): Promise<() => void> {
+  ): Promise<() => Promise<void>> {
     const target = await this.resolveFileExplorerPath(worktreeSelector, '')
     const open = async (): Promise<{
       unsubscribe: () => Promise<void>
@@ -1728,8 +1765,7 @@ export class RuntimeFileCommands {
     const store = this.host.requireStore()
     const oldPath = await resolveAuthorizedPath(oldTarget.path, store, { preserveSymlink: true })
     const newPath = await resolveAuthorizedPath(newTarget.path, store, { preserveSymlink: true })
-    await assertNoClobberRenameDestinationAvailable(oldPath, newPath)
-    await rename(oldPath, newPath)
+    await renameLocalPathSerializedByDestination(oldPath, newPath)
     return { ok: true }
   }
 
@@ -1889,26 +1925,33 @@ export class RuntimeFileCommands {
       1,
       Math.min(options.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
     )
-    const rgAvailable = await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro)
-    if (!rgAvailable) {
+    const wslInfo = parseWslPath(authorizedRootPath)
+    if (
+      (wslInfo || localGitOptions.wslDistro) &&
+      !(await checkRgAvailable(authorizedRootPath, localGitOptions.wslDistro))
+    ) {
       return searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions)
     }
 
-    return new Promise((resolvePromise) => {
+    return new Promise<SearchResult>((resolvePromise) => {
       const searchKey = `${this.host.getRuntimeId()}:${authorizedRootPath}`
       const rgArgs = buildRgArgs(options.query, authorizedRootPath, options)
-      this.activeRuntimeTextSearches.get(searchKey)?.kill()
+      const previousChild = this.activeRuntimeTextSearches.get(searchKey)
+      if (previousChild) {
+        killSpawnedRipgrepProcess(previousChild)
+      }
 
       const acc = createAccumulator()
       let stdoutBuffer = ''
       let resolved = false
+      let processErrorObserved = false
+      let unavailableExitObserved = false
       let child: ChildProcess | null = null
-      const wslInfo = parseWslPath(authorizedRootPath)
       const transformAbsPath = wslInfo
         ? (p: string): string => toWindowsWslPath(p, wslInfo.distro)
         : undefined
 
-      const resolveOnce = (): void => {
+      const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
         if (resolved) {
           return
         }
@@ -1917,8 +1960,11 @@ export class RuntimeFileCommands {
           this.activeRuntimeTextSearches.delete(searchKey)
         }
         cleanupListeners()
-        resolvePromise(finalize(acc))
+        resolvePromise(result)
       }
+      const resolveOnce = (): void => finish(finalize(acc))
+      const resolveWithoutRipgrep = (): void =>
+        finish(searchWithGitGrep(authorizedRootPath, options, maxResults, localGitOptions))
 
       let killTimeout: ReturnType<typeof setTimeout> | null = null
       const cleanupListeners = (): void => {
@@ -1930,6 +1976,12 @@ export class RuntimeFileCommands {
         child?.stderr?.off('data', onStderrData)
         child?.off('error', onError)
         child?.off('close', onClose)
+        if (child) {
+          absorbPendingRipgrepSpawnError(child, {
+            errorObserved: processErrorObserved,
+            unavailableExitObserved
+          })
+        }
       }
 
       const processLine = (line: string): void => {
@@ -1940,8 +1992,8 @@ export class RuntimeFileCommands {
           maxResults,
           transformAbsPath
         )
-        if (verdict === 'stop') {
-          child?.kill()
+        if (verdict === 'stop' && child) {
+          killSpawnedRipgrepProcess(child)
         }
       }
 
@@ -1965,8 +2017,25 @@ export class RuntimeFileCommands {
       const onStderrData = (): void => {
         // Drain stderr so rg cannot block on a full pipe.
       }
-      const onError = (): void => resolveOnce()
-      const onClose = (): void => {
+      const onError = (): void => {
+        processErrorObserved = true
+        if (child && isRipgrepUnavailableExit(child, null, null)) {
+          resolveWithoutRipgrep()
+          return
+        }
+        resolveOnce()
+      }
+      const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+        if (
+          child &&
+          isRipgrepUnavailableExit(child, code, signal, {
+            classifyNativeLauncherExit: !(wslInfo || localGitOptions.wslDistro)
+          })
+        ) {
+          unavailableExitObserved = true
+          resolveWithoutRipgrep()
+          return
+        }
         if (stdoutBuffer) {
           processLine(stdoutBuffer)
         }
@@ -1980,7 +2049,9 @@ export class RuntimeFileCommands {
 
       killTimeout = setTimeout(() => {
         acc.truncated = true
-        child?.kill()
+        if (child) {
+          killSpawnedRipgrepProcess(child)
+        }
         resolveOnce()
       }, SEARCH_TIMEOUT_MS)
     })

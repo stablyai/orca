@@ -15,6 +15,7 @@ const RELAY_DIR = '.orca-remote/relay-0.1.0+hash'
 const MARKER = '.install-lock/.sftp-namespace-deadbeef'
 
 const mapping: SftpNamespacePathMapping = {
+  homeRelativeNamespaceRoot: RELAY_DIR,
   homeRelativePath: RELAY_DIR,
   shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/${MARKER}`,
   homeRelativeProbePath: `${RELAY_DIR}/${MARKER}`
@@ -249,12 +250,12 @@ describe('resolveSftpTransferPath', () => {
       'marker paths must share one marker basename'
     ],
     [
-      'a marker outside the install lock',
+      'a marker at the namespace root',
       {
-        shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/other-lock/.sftp-namespace-deadbeef`,
-        homeRelativeProbePath: `${RELAY_DIR}/other-lock/.sftp-namespace-deadbeef`
+        shellProbePath: `${SHELL_HOME}/${RELAY_DIR}`,
+        homeRelativeProbePath: RELAY_DIR
       },
-      'inside the transfer relay install lock'
+      'inside one namespace root'
     ],
     [
       'a marker under another relay tree',
@@ -262,7 +263,7 @@ describe('resolveSftpTransferPath', () => {
         shellProbePath: `${SHELL_HOME}/other/.install-lock/.sftp-namespace-deadbeef`,
         homeRelativeProbePath: 'other/.install-lock/.sftp-namespace-deadbeef'
       },
-      'inside the transfer relay install lock'
+      'inside one namespace root'
     ]
   ])('rejects %s before issuing any SFTP request', async (_label, overrides, expected) => {
     const { shell, ...mappingOverrides } = overrides as Record<string, string>
@@ -282,6 +283,7 @@ describe('resolveSftpTransferPath', () => {
     const token = 'a'.repeat(32)
     const secretMarker = `.install-lock/.sftp-namespace-${token}`
     const secretMapping: SftpNamespacePathMapping = {
+      homeRelativeNamespaceRoot: RELAY_DIR,
       homeRelativePath: RELAY_DIR,
       shellProbePath: `${SHELL_HOME}/${RELAY_DIR}/${secretMarker}`,
       homeRelativeProbePath: `${RELAY_DIR}/${secretMarker}`

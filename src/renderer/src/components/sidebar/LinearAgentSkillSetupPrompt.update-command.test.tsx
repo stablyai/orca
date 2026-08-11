@@ -107,6 +107,7 @@ async function renderPrompt(
       <LinearAgentSkillSetupPrompt linked={true} remote={false} surface="modal" {...props} />
     )
   })
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
 }
 

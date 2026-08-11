@@ -1,6 +1,7 @@
-import { copyFileSync, mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { copyFileWithWindowsRetry } from '../codex-accounts/fs-utils'
 
 const SNAPSHOT_ATTEMPTS = 5
 
@@ -83,12 +84,15 @@ function copyStableAttempt(sourcePath: string, databasePath: string): boolean {
   }
 
   removeAttemptFiles(databasePath)
-  copyFileSync(sourcePath, databasePath)
+  // Why: #9355 — AV/EDR briefly opens a file literally named "Cookies" with FILE_SHARE_NONE,
+  // so an otherwise-fine copy throws EBUSY. The attempt loop below only handles a false
+  // return, so a throw here would escape it entirely.
+  copyFileWithWindowsRetry(sourcePath, databasePath)
 
   if (walBefore) {
     try {
       // Why: SQLite only discovers a WAL whose basename exactly matches the DB.
-      copyFileSync(sourceWalPath, `${databasePath}-wal`)
+      copyFileWithWindowsRetry(sourceWalPath, `${databasePath}-wal`)
     } catch (error) {
       if (isMissingFileError(error)) {
         return false

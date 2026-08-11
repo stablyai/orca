@@ -96,6 +96,40 @@ describe('simulator-palette-search', () => {
     ])
   })
 
+  it('stamps each row with its own execution host when worktree ids collide', () => {
+    // Two hosts can serve the same worktree id, so activation needs the host
+    // that owns the row rather than the first id match in the store.
+    const entries = [
+      {
+        tab: makeTab({ id: 'sim-local' }),
+        worktree: makeWorktree(),
+        repoName: 'repo/mobile',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      },
+      {
+        tab: makeTab({ id: 'sim-remote' }),
+        worktree: makeWorktree({ hostId: 'ssh:host-1' }),
+        repoName: 'repo/mobile',
+        worktreeSortIndex: 1,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(
+      searchSimulatorTabs(entries, 'emulator').map((result) => [
+        result.tabId,
+        result.worktreeId,
+        result.executionHostId
+      ])
+    ).toEqual([
+      ['sim-local', 'wt-1', undefined],
+      ['sim-remote', 'wt-1', 'ssh:host-1']
+    ])
+  })
+
   it('matches mobile emulator and simulator aliases', () => {
     const entries = [
       {
@@ -108,9 +142,22 @@ describe('simulator-palette-search', () => {
       }
     ]
 
-    expect(searchSimulatorTabs(entries, 'mobile')[0]?.secondaryRange).toEqual({ start: 0, end: 6 })
+    // Why no secondaryRange: type aliases match without a display secondary.
+    const mobileHit = searchSimulatorTabs(entries, 'mobile')[0]
+    expect(mobileHit?.secondaryText).toBe('')
+    expect(mobileHit?.secondaryRange).toBeNull()
+    expect(mobileHit?.typeAliasMatch).toEqual({
+      text: 'mobile emulator tab',
+      range: { start: 0, end: 6 }
+    })
     expect(searchSimulatorTabs(entries, 'simulator')).toHaveLength(1)
     expect(searchSimulatorTabs(entries, 'ios')).toHaveLength(1)
+    expect(searchSimulatorTabs(entries, 'emulator')).toHaveLength(1)
+    // Why: "emulator" must score as a prefix hit, not mid-string in 'mobile emulator tab'.
+    expect(searchSimulatorTabs(entries, 'emulator')[0]?.typeAliasMatch).toEqual({
+      text: 'emulator',
+      range: { start: 0, end: 8 }
+    })
   })
 
   it('searches worktree and repo metadata', () => {
@@ -173,5 +220,50 @@ describe('simulator-palette-search', () => {
 
   it('rejects oversized whitespace before trimming simulator palette queries', () => {
     expect(searchSimulatorTabs([], ' '.repeat(SIMULATOR_PALETTE_QUERY_MAX_BYTES + 1))).toEqual([])
+  })
+
+  it('falls back to the branch label when a cleared display name left it undefined', () => {
+    // Why: Cmd+J runs this search over the same worktree objects as searchWorktrees,
+    // so the store-level display-name corruption reaches here too.
+    const entries = [
+      {
+        tab: makeTab(),
+        worktree: makeWorktree({
+          displayName: undefined as unknown as string,
+          branch: 'refs/heads/feature/mobile-emulator'
+        }),
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchSimulatorTabs(entries, 'mobile-emulator')[0]).toMatchObject({
+      worktreeName: 'feature/mobile-emulator',
+      worktreeRange: { start: 'feature/'.length, end: 'feature/mobile-emulator'.length }
+    })
+  })
+
+  it('lists a branch-less row on the empty query without throwing', () => {
+    const entries = [
+      {
+        tab: makeTab(),
+        worktree: makeWorktree({
+          displayName: undefined as unknown as string,
+          branch: undefined as unknown as string,
+          path: '/repos/design-review'
+        }),
+        repoName: 'orca',
+        worktreeSortIndex: 0,
+        isCurrentTab: false,
+        isCurrentWorktree: false
+      }
+    ]
+
+    expect(searchSimulatorTabs(entries, '')[0]).toMatchObject({
+      worktreeName: 'design-review',
+      worktreeRange: null
+    })
   })
 })

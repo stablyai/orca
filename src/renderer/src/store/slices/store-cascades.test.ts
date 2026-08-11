@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { buildWorktreeComparator } from '@/components/sidebar/smart-sort'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { getDefaultSettings } from '../../../../shared/constants'
+import type { SshProviderEpoch } from '../../../../shared/ssh-types'
+import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery'
 import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../runtime/runtime-compatibility-test-fixture'
 import {
   clearRuntimeCompatibilityCacheForTests,
@@ -216,7 +218,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
       id: 'preserved-branch:feature/test:def456',
@@ -252,7 +254,7 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
     })
     expect(toast.warning).not.toHaveBeenCalled()
   })
@@ -1302,6 +1304,140 @@ describe('setActiveWorktree', () => {
     )
   })
 
+  it('moves current direct SSH binding evidence when detaching a live pane', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sourceTabId = 'tab-source'
+    const targetTabId = 'tab-target'
+    const authority = {
+      targetId: 'target-a',
+      providerEpoch: 'epoch-a' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    const detachedPtyId = 'ssh:target-a@@pty-detached'
+    seedStore(store, {
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId }),
+          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
+        ]
+      },
+      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
+      directSshLivePtyBindingByTabId: {
+        [sourceTabId]: {
+          attemptId: 'live-detach' as DirectSshPaneRetryAttemptId,
+          authority,
+          tabGeneration: 0,
+          ptyId: detachedPtyId
+        }
+      },
+      directSshPaneRetryHistoryByTabId: {
+        [sourceTabId]: { authority, attemptedAt: [1] }
+      },
+      sshConnectionStates: new Map([
+        [
+          authority.targetId,
+          {
+            targetId: authority.targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: authority.providerEpoch,
+            connectionGeneration: authority.connectionGeneration
+          }
+        ]
+      ])
+    })
+
+    store.getState().syncPaneDetachPtyOwnership({
+      detachedLeafId: '11111111-1111-4111-8111-111111111111',
+      detachedPtyId,
+      sourceLayout: makeLayout(),
+      sourceTabId,
+      targetTabId
+    })
+
+    const state = store.getState()
+    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
+      attemptId: 'live-detach',
+      authority,
+      tabGeneration: 0,
+      ptyId: detachedPtyId
+    })
+    expect(state.directSshPaneRetryHistoryByTabId[targetTabId]).toEqual({
+      authority,
+      attemptedAt: [1]
+    })
+  })
+
+  it('rearms a current pending SSH detach as live destination evidence', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    const sourceTabId = 'tab-source'
+    const targetTabId = 'tab-target'
+    const authority = {
+      targetId: 'target-a',
+      providerEpoch: 'epoch-a' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    const detachedPtyId = 'ssh:target-a@@pty-detached'
+    seedStore(store, {
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({ id: sourceTabId, worktreeId: wt, ptyId: detachedPtyId, generation: 2 }),
+          makeTab({ id: targetTabId, worktreeId: wt, ptyId: null })
+        ]
+      },
+      ptyIdsByTabId: { [sourceTabId]: [detachedPtyId], [targetTabId]: [] },
+      directSshPaneRetryByTabId: {
+        [sourceTabId]: {
+          attemptId: 'pending-detach' as DirectSshPaneRetryAttemptId,
+          authority,
+          tabGeneration: 2,
+          startedAt: 1
+        }
+      },
+      sshConnectionStates: new Map([
+        [
+          authority.targetId,
+          {
+            targetId: authority.targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: authority.providerEpoch,
+            connectionGeneration: authority.connectionGeneration
+          }
+        ]
+      ])
+    })
+
+    store.getState().syncPaneDetachPtyOwnership({
+      detachedLeafId: '11111111-1111-4111-8111-111111111111',
+      detachedPtyId,
+      sourceLayout: makeLayout(),
+      sourceTabId,
+      targetTabId
+    })
+
+    const state = store.getState()
+    expect(state.directSshPaneRetryByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshLivePtyBindingByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshPaneRetryHistoryByTabId[sourceTabId]).toBeUndefined()
+    expect(state.directSshLivePtyBindingByTabId[targetTabId]).toEqual({
+      attemptId: 'pending-detach',
+      authority,
+      tabGeneration: 0,
+      ptyId: detachedPtyId
+    })
+    expect(state.tabsByWorktree[wt].find((tab) => tab.id === targetTabId)?.ptyId).toBe(
+      detachedPtyId
+    )
+  })
+
   // Regression for #9911: a split SSH tab's single relay slot points at the
   // last-bound pane; when it exits, clearTabPtyId must promote a surviving pane
   // instead of clearing, or a later relay-drop bulk-clear leaves the survivor
@@ -1522,6 +1658,14 @@ describe('setActiveWorktree', () => {
 
       const terminal = store.getState().createTab(wt, undefined, 'cmd.exe')
       expect(terminal.shellOverride).toBe('wsl.exe')
+
+      const hostTerminal = store
+        .getState()
+        .createTab(wt, undefined, 'powershell.exe', { forceHostRuntime: true })
+      expect(hostTerminal).toMatchObject({
+        shellOverride: 'powershell.exe',
+        forceHostRuntime: true
+      })
     } finally {
       Object.defineProperty(globalThis, 'navigator', {
         value: originalNavigator,
@@ -5183,7 +5327,7 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
   })
 
-  it('skips allowlisted done live sleeping pane sessions during manual sleep', async () => {
+  it('captures allowlisted done live sleeping pane sessions during manual sleep', async () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'
 
@@ -5234,7 +5378,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     const state = store.getState()
-    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey['tab-1:live']).toMatchObject({
+      origin: 'worktree-sleep',
+      state: 'done',
+      providerSession: { key: 'session_id', id: 'live-session' }
+    })
+    // Outside the allowlist, so manual sleep never claimed it.
     expect(state.sleepingAgentSessionsByPaneKey['tab-1:retained']).toBeUndefined()
   })
 

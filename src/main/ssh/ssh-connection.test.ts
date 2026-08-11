@@ -12,10 +12,12 @@ let connectErrorMessage = ''
 let connectErrorCode = ''
 let destroyErrorMessage = ''
 let connectSequence: ('ready' | Error)[] = []
+let connectAttempts = 0
 let execBehavior: 'callback' | 'pending' = 'callback'
 let pendingExecCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
 let sftpBehavior: 'callback' | 'pending' = 'callback'
 let pendingSftpCallback: ((err: Error | undefined, channel: unknown) => void) | null = null
+let notifyClientCreated: (() => void) | undefined
 
 type MockSshClient = {
   setNoDelay: ReturnType<typeof vi.fn>
@@ -33,6 +35,27 @@ function emitSshEvent(event: string, ...args: unknown[]): void {
   }
 }
 
+function nextSshClientCreation(): Promise<void> {
+  return new Promise((resolve) => {
+    notifyClientCreated = resolve
+  })
+}
+
+async function connectWithFakeTimers(conn: SshConnection): Promise<void> {
+  const clientCreated = nextSshClientCreation()
+  const connected = conn.connect()
+  await clientCreated
+  await vi.advanceTimersByTimeAsync(1)
+  await connected
+}
+
+async function advanceToNextSshClient(delayMs: number): Promise<void> {
+  const clientCreated = nextSshClientCreation()
+  await vi.advanceTimersByTimeAsync(delayMs)
+  await clientCreated
+  await vi.advanceTimersByTimeAsync(1)
+}
+
 vi.mock('ssh2', () => {
   class MockBaseAgent {}
   class MockSshClient {
@@ -45,6 +68,8 @@ vi.mock('ssh2', () => {
     lastConnectConfig?: unknown
     constructor() {
       clientInstances.push(this)
+      notifyClientCreated?.()
+      notifyClientCreated = undefined
     }
     on(event: string, handler: (...args: unknown[]) => void) {
       const handlers = eventHandlers?.get(event) ?? new Set<(...args: unknown[]) => void>()
@@ -59,6 +84,7 @@ vi.mock('ssh2', () => {
       }
     }
     connect(config?: unknown) {
+      connectAttempts += 1
       this.lastConnectConfig = config
       const hostVerifier = (config as { hostVerifier?: (key: Buffer) => boolean } | undefined)
         ?.hostVerifier
@@ -122,16 +148,22 @@ vi.mock('ssh2', () => {
 })
 
 const {
+  findSystemSshMock,
   getOrcaControlSocketPathMock,
   removeControlSocketPathMock,
   spawnSystemSshCommandMock,
   spawnSystemSshMock
 } = vi.hoisted(() => ({
+  findSystemSshMock: vi.fn<() => string | null>(),
   getOrcaControlSocketPathMock: vi.fn(),
   removeControlSocketPathMock: vi.fn(),
   spawnSystemSshMock: vi.fn(),
   spawnSystemSshCommandMock: vi.fn()
 }))
+
+// Why: security-key transport selection scans the real ~/.ssh defaults, so a developer's own
+// FIDO2 key would otherwise decide which transport these tests take.
+vi.mock('./system-ssh-binary', () => ({ findSystemSsh: findSystemSshMock }))
 
 vi.mock('./ssh-system-fallback', () => ({
   getOrcaControlSocketPath: getOrcaControlSocketPathMock,
@@ -154,10 +186,10 @@ vi.mock('./ssh-config-parser', () => ({
 
 import {
   SshConnection,
-  SshConnectionManager,
   shouldUseSystemSshTransport,
   type SshConnectionCallbacks
 } from './ssh-connection'
+import { SshConnectionManager } from './ssh-connection-manager'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-config-parser'
 import {
   downloadFileViaSystemSsh,
@@ -167,7 +199,12 @@ import {
   writeFileViaSystemSsh
 } from './ssh-system-fallback'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
-import type { SshTarget } from '../../shared/ssh-types'
+import { CONNECT_TIMEOUT_MS, RECONNECT_BACKOFF_MS } from './ssh-connection-utils'
+import { MIN_SSH_RELAY_GRACE_PERIOD_SECONDS, type SshTarget } from '../../shared/ssh-types'
+import {
+  createOpenSshPrivateKeyFixture,
+  createOpenSshPublicKeyFixture
+} from './ssh-security-key-identity.test-fixture'
 
 function createTarget(overrides?: Partial<SshTarget>): SshTarget {
   return {
@@ -238,6 +275,15 @@ function createFailingSystemCommandChannel(
   return channel
 }
 
+// A probe that never answers — the shape a FIDO2/system-transport host takes when the network drops.
+function createHangingSystemCommandChannel(): ReturnType<typeof createSystemCommandChannel> {
+  const channel = new EventEmitter() as ReturnType<typeof createSystemCommandChannel>
+  channel.stdin = { end: vi.fn(), write: vi.fn() }
+  channel.stderr = new EventEmitter()
+  channel.close = vi.fn()
+  return channel
+}
+
 function createPendingSystemSshProcess() {
   const stdout = new EventEmitter()
   return {
@@ -274,10 +320,12 @@ describe('SshConnection', () => {
     connectErrorCode = ''
     destroyErrorMessage = ''
     connectSequence = []
+    connectAttempts = 0
     execBehavior = 'callback'
     pendingExecCallback = null
     sftpBehavior = 'callback'
     pendingSftpCallback = null
+    notifyClientCreated = undefined
     clientInstances = []
     getOrcaControlSocketPathMock.mockReset()
     getOrcaControlSocketPathMock.mockReturnValue(null)
@@ -298,6 +346,8 @@ describe('SshConnection', () => {
     vi.mocked(writeFileViaSystemSsh).mockResolvedValue(undefined)
     vi.mocked(resolveWithSshG).mockReset()
     vi.mocked(resolveWithSshG).mockResolvedValue(null)
+    findSystemSshMock.mockReset()
+    findSystemSshMock.mockReturnValue(null)
     vi.unstubAllEnvs()
   })
 
@@ -412,6 +462,291 @@ describe('SshConnection', () => {
     expect(conn.getState().status).toBe('connected')
   })
 
+  it('escalates the backoff across repeated post-handshake drops', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks())
+      await connectWithFakeTimers(conn)
+      expect(clientInstances).toHaveLength(1)
+
+      emitSshEvent('close')
+      await vi.advanceTimersByTimeAsync(999)
+      expect(clientInstances).toHaveLength(1)
+      await advanceToNextSshClient(1)
+      expect(clientInstances).toHaveLength(2)
+
+      // Why: a single published counter pinned every post-handshake drop at the 1000ms head step.
+      emitSshEvent('close')
+      await vi.advanceTimersByTimeAsync(1999)
+      expect(clientInstances).toHaveLength(2)
+      await advanceToNextSshClient(1)
+      expect(clientInstances).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('publishes reconnectAttempt=0 on the reconnected state and the escalating step while reconnecting', async () => {
+    vi.useFakeTimers()
+    try {
+      const published: { status: string; reconnectAttempt: number }[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) =>
+            published.push({ status: state.status, reconnectAttempt: state.reconnectAttempt })
+          )
+        })
+      )
+      await connectWithFakeTimers(conn)
+
+      for (let drop = 0; drop < 3; drop++) {
+        emitSshEvent('close')
+        await advanceToNextSshClient(30_000)
+      }
+
+      expect(
+        published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
+      ).toEqual([0, 1, 2])
+      // src/main/ipc/ssh.ts gates the relay redeploy on reconnectAttempt === 0 at 'connected'.
+      expect(
+        published.filter((e) => e.status === 'connected').map((e) => e.reconnectAttempt)
+      ).toEqual([0, 0, 0, 0])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restarts the ladder at the head when an explicit reconnect fails', async () => {
+    // Accepted delta: reset() puts the ladder at the head and the explicit attempt consumes no
+    // step, so the first failure publishes 0/1000ms where the single-counter version published 1/2000ms.
+    vi.useFakeTimers()
+    try {
+      const published: { status: string; reconnectAttempt: number }[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) =>
+            published.push({ status: state.status, reconnectAttempt: state.reconnectAttempt })
+          )
+        })
+      )
+      await connectWithFakeTimers(conn)
+
+      connectBehavior = 'error'
+      connectErrorMessage = 'connect ETIMEDOUT 10.0.0.5:22'
+      connectErrorCode = 'ETIMEDOUT'
+      published.length = 0
+      const clientCreated = nextSshClientCreation()
+      const reconnected = conn.reconnect()
+      await clientCreated
+      await vi.advanceTimersByTimeAsync(1)
+      await reconnected
+
+      // Shipped published [0, 1] here; the ladder's reset() keeps the retry at the head instead.
+      expect(
+        published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
+      ).toEqual([0, 0])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reaches reconnection-failed after 9 consecutive handshake failures', async () => {
+    vi.useFakeTimers()
+    try {
+      const statuses: string[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) => statuses.push(state.status))
+        })
+      )
+      await connectWithFakeTimers(conn)
+
+      connectBehavior = 'error'
+      connectErrorMessage = 'connect ETIMEDOUT 10.0.0.5:22'
+      connectErrorCode = 'ETIMEDOUT'
+      emitSshEvent('close')
+      for (const delayMs of RECONNECT_BACKOFF_MS) {
+        await advanceToNextSshClient(delayMs)
+      }
+
+      expect(statuses).toContain('reconnection-failed')
+      // Pin the budget itself: the initial success plus exactly RECONNECT_BACKOFF_MS.length retries.
+      // Counting a failure twice, or giving up early, would strand a user on a flaky link.
+      expect(connectAttempts).toBe(1 + RECONNECT_BACKOFF_MS.length)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries a saturated flap streak while the remote relay is still in grace', async () => {
+    vi.useFakeTimers()
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks())
+      await connectWithFakeTimers(conn)
+
+      // Saturate the delay ladder on flaps alone; 45s reconnects each drop while staying under
+      // STABLE_CONNECTION_MS, so the ladder never resets to the head.
+      for (let drop = 0; drop < 12; drop++) {
+        emitSshEvent('close')
+        await advanceToNextSshClient(45_000)
+      }
+      expect(conn.getState().status).toBe('connected')
+
+      const before = clientInstances.length
+      emitSshEvent('close')
+      // The retry plus a worst-case handshake must land inside the shortest configurable relay grace,
+      // or the remote daemon shuts down and takes every PTY on that host with it.
+      await advanceToNextSshClient(
+        MIN_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000 - CONNECT_TIMEOUT_MS - 1
+      )
+      expect(clientInstances.length).toBeGreaterThan(before)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('logs the delay ladder position separately from the failure streak', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const conn = new SshConnection(createTarget(), createCallbacks())
+      await connectWithFakeTimers(conn)
+
+      for (let drop = 0; drop < 12; drop++) {
+        emitSshEvent('close')
+        await advanceToNextSshClient(45_000)
+      }
+
+      const lastReconnectLog = warn.mock.calls
+        .map((call) => String(call[0]))
+        .findLast((line) => line.includes('Reconnecting to'))
+      // A saturated flap ladder must not read like the connection is one step from giving up.
+      expect(lastReconnectLog).toContain('delay step 9/9')
+      expect(lastReconnectLog).toContain('failed handshakes 0/9')
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps retrying when a flap streak is followed by one handshake failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const statuses: string[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) => statuses.push(state.status))
+        })
+      )
+      await connectWithFakeTimers(conn)
+
+      // 12 flaps saturate the delay ladder without ever touching the failure streak.
+      for (let drop = 0; drop < 12; drop++) {
+        emitSshEvent('close')
+        await advanceToNextSshClient(30_000)
+      }
+      connectSequence = [new Error('connect ETIMEDOUT 10.0.0.5:22')]
+      emitSshEvent('close')
+      await advanceToNextSshClient(30_000)
+      await advanceToNextSshClient(30_000)
+
+      expect(statuses).not.toContain('reconnection-failed')
+      expect(conn.getState().status).toBe('connected')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a system-transport target on the ladder after a probe timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const statuses: string[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) => statuses.push(state.status))
+        })
+      )
+      await conn.connect()
+      expect(conn.usesSystemSshTransport()).toBe(true)
+
+      // The probe times out with OpenSSH prose, not an errno the transient code table matches.
+      spawnSystemSshCommandMock.mockImplementation(() => createHangingSystemCommandChannel())
+      statuses.length = 0
+      const reconnected = conn.reconnect()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+      await reconnected
+
+      // Shipped published 'error' here, stranding FIDO2 hosts with no path back short of a restart.
+      expect(statuses).not.toContain('error')
+      expect(conn.getState().status).toBe('reconnecting')
+
+      const probesBefore = spawnSystemSshCommandMock.mock.calls.length
+      await vi.advanceTimersByTimeAsync(RECONNECT_BACKOFF_MS[0])
+      expect(spawnSystemSshCommandMock.mock.calls.length).toBeGreaterThan(probesBefore)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('publishes no cancellation error when a connect supersedes a parked ladder attempt', async () => {
+    const published: { status: string; error?: string }[] = []
+    let releaseParked: (() => void) | null = null
+    vi.mocked(resolveWithSshG).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseParked = () => resolve(null)
+        })
+    )
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => published.push({ status: state.status, ...state }))
+      })
+    )
+
+    // The ladder attempt parks inside ssh -G while the user presses Connect.
+    const parked = conn.reconnect()
+    await conn.connect()
+    releaseParked!()
+    await parked
+
+    expect(conn.getState().status).toBe('connected')
+    // Shipped published error:'SSH connection attempt was cancelled' over a live connection.
+    expect(published.filter((entry) => entry.status === 'error')).toEqual([])
+    expect(published.map((entry) => entry.error).filter(Boolean)).toEqual([])
+  })
+
+  it('rejects a superseded connect without publishing a permanent error', async () => {
+    const published: string[] = []
+    let releaseParked: (() => void) | null = null
+    vi.mocked(resolveWithSshG).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseParked = () => resolve(null)
+        })
+    )
+    const conn = new SshConnection(
+      createTarget(),
+      createCallbacks({
+        onStateChange: vi.fn((_id, state) => published.push(state.status))
+      })
+    )
+
+    const superseded = conn.connect()
+    await conn.connect()
+    releaseParked!()
+
+    await expect(superseded).rejects.toThrow('SSH connection attempt was cancelled')
+    expect(conn.getState().status).toBe('connected')
+    expect(published).not.toContain('error')
+  })
+
   it('transitions through connecting → connected states', async () => {
     const states: string[] = []
     const callbacks = createCallbacks({
@@ -456,6 +791,52 @@ describe('SshConnection', () => {
     await conn.disconnect()
 
     expect(conn.getState().status).toBe('disconnected')
+  })
+
+  it('rejects late ssh2 ready after disconnect without resurrecting the connection', async () => {
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const clientCreated = new Promise<void>((resolve) => {
+      notifyClientCreated = resolve
+    })
+    const connectResult = conn.connect().catch((error: Error) => error)
+    await clientCreated
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'SSH connection attempt was cancelled'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'connected' })
+    )
+  })
+
+  it('keeps disconnected state when ssh2 reports a late startup error', async () => {
+    connectBehavior = 'error'
+    connectErrorMessage = 'Connection lost before handshake'
+    const callbacks = createCallbacks()
+    const conn = new SshConnection(createTarget(), callbacks)
+
+    const clientCreated = new Promise<void>((resolve) => {
+      notifyClientCreated = resolve
+    })
+    const connectResult = conn.connect().catch((error: Error) => error)
+    await clientCreated
+    expect(clientInstances).toHaveLength(1)
+    await conn.disconnect()
+
+    await expect(connectResult).resolves.toMatchObject({
+      message: 'Connection lost before handshake'
+    })
+    expect(conn.getState()).toMatchObject({ status: 'disconnected', error: null })
+    expect(callbacks.onStateChange).not.toHaveBeenCalledWith(
+      'target-1',
+      expect.objectContaining({ status: 'error' })
+    )
   })
 
   it('getTarget returns a copy of the target', () => {
@@ -1121,6 +1502,29 @@ describe('SshConnection', () => {
     expect(conn.usesSystemSshTransport()).toBe(true)
   })
 
+  it('uses fresh OpenSSH user for imported GitHub targets', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(
+      createResolvedConfig({ hostname: 'github.com', user: 'git' })
+    )
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(1, 'Invalid command: echo ORCA-SYSTEM-SSH-OK')
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'github.com',
+        host: 'github.com',
+        username: 'stale-user'
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(true)
+  })
+
   it('accepts GitHub restricted-shell SSH probes with resolved host and target username', async () => {
     vi.mocked(resolveWithSshG).mockResolvedValueOnce(
       createResolvedConfig({ hostname: 'github.com', user: undefined })
@@ -1377,6 +1781,94 @@ describe('SshConnection', () => {
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
+  it('retries a generic system SSH probe timeout without ControlMaster', async () => {
+    vi.useFakeTimers()
+    try {
+      getOrcaControlSocketPathMock.mockImplementation(
+        (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+          options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+      )
+      spawnSystemSshCommandMock
+        .mockImplementationOnce(() => createHangingSystemCommandChannel())
+        .mockImplementation(() => createSystemCommandChannel())
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+      const settled = conn.connect()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+
+      await expect(settled).resolves.toBeUndefined()
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(2)
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+      expect(spawnSystemSshCommandMock).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        'echo ORCA-SYSTEM-SSH-OK',
+        expect.objectContaining({ disableControlMaster: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips a second probe for a definite host failure', async () => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'ssh: connect to host box port 22: No route to host')
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow('No route to host')
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+  })
+
+  it.each([
+    'Permission denied (publickey,password).',
+    'Encrypted private key detected, but no passphrase given'
+  ])('skips a second probe for terminal credential failures: %s', async (stderr) => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, stderr)
+    )
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connect()).rejects.toThrow(stderr)
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+  })
+
+  it('retries a generic direct system SSH timeout without ControlMaster', async () => {
+    vi.useFakeTimers()
+    try {
+      getOrcaControlSocketPathMock.mockImplementation(
+        (_target: SshTarget, options?: { disableControlMaster?: boolean }) =>
+          options?.disableControlMaster ? null : '/tmp/orca-ssh-501/stale-socket'
+      )
+      spawnSystemSshMock
+        .mockImplementationOnce(() => createPendingSystemSshProcess())
+        .mockImplementation(() => createSystemSshProcess())
+      vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+      const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+      const settled = conn.connectViaSystemSsh()
+      await vi.advanceTimersByTimeAsync(CONNECT_TIMEOUT_MS)
+
+      await expect(settled).resolves.toBeDefined()
+      expect(spawnSystemSshMock).toHaveBeenCalledTimes(2)
+      expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+      expect(spawnSystemSshMock).toHaveBeenNthCalledWith(
+        2,
+        expect.anything(),
+        expect.objectContaining({ disableControlMaster: true })
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('uses system SSH transport for ProxyCommand targets before ssh2 auth', async () => {
     const conn = new SshConnection(
       createTarget({ proxyCommand: 'ssh -W %h:%p bastion.example.com' }),
@@ -1393,6 +1885,49 @@ describe('SshConnection', () => {
       'echo ORCA-SYSTEM-SSH-OK',
       { wrapCommand: false }
     )
+  })
+
+  it('uses system SSH before ssh2 parses a security-key private key', async () => {
+    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
+    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-connect-'))
+    const keyPath = join(directory, 'id_ed25519_sk')
+    writeFileSync(
+      keyPath,
+      createOpenSshPrivateKeyFixture(['sk-ssh-ed25519@openssh.com'], { encrypted: true })
+    )
+    const conn = new SshConnection(createTarget({ identityFile: keyPath }), createCallbacks())
+
+    try {
+      await conn.connect()
+
+      expect(conn.getState().status).toBe('connected')
+      expect(conn.usesSystemSshTransport()).toBe(true)
+      expect(clientInstances).toHaveLength(0)
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(directory, { recursive: true })
+    }
+  })
+
+  it('uses system SSH for an agent-backed security-key public identity', async () => {
+    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
+    const directory = mkdtempSync(join(tmpdir(), 'orca-security-key-agent-connect-'))
+    const identityPath = join(directory, 'id_ed25519_sk')
+    writeFileSync(
+      `${identityPath}.pub`,
+      createOpenSshPublicKeyFixture('sk-ssh-ed25519@openssh.com')
+    )
+    const conn = new SshConnection(createTarget({ identityFile: identityPath }), createCallbacks())
+
+    try {
+      await conn.connect()
+
+      expect(conn.usesSystemSshTransport()).toBe(true)
+      expect(clientInstances).toHaveLength(0)
+      expect(spawnSystemSshCommandMock).toHaveBeenCalledTimes(1)
+    } finally {
+      rmSync(directory, { recursive: true })
+    }
   })
 
   it('falls back to system SSH when ssh2 hits a local network policy reachability error', async () => {
@@ -1463,6 +1998,30 @@ describe('SshConnection', () => {
     )
   })
 
+  it('tries GSSAPI first for a manually owned config-picker target', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: true })
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'manual',
+        configHost: 'prod',
+        host: 'prod.internal',
+        gssapiAuthentication: true
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(spawnSystemSshCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'manual', configHost: 'prod' }),
+      'echo ORCA-SYSTEM-SSH-OK',
+      expect.objectContaining({ gssapiOnly: true, wrapCommand: false })
+    )
+    expect(clientInstances).toHaveLength(0)
+  })
+
   it('falls back to ssh2 when the GSSAPI-first system SSH attempt fails', async () => {
     spawnSystemSshCommandMock.mockImplementation(() =>
       createFailingSystemCommandChannel(255, 'Permission denied (gssapi-with-mic,publickey)')
@@ -1484,6 +2043,26 @@ describe('SshConnection', () => {
         wrapCommand: false
       }
     )
+  })
+
+  it('ignores stale imported GSSAPI when fresh OpenSSH config disables it', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(
+      createResolvedConfig({ proxyUseFdpass: false, gssapiAuthentication: false })
+    )
+    const conn = new SshConnection(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'krb-host',
+        gssapiAuthentication: true
+      }),
+      createCallbacks()
+    )
+
+    await conn.connect()
+
+    expect(conn.getState().status).toBe('connected')
+    expect(conn.usesSystemSshTransport()).toBe(false)
+    expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
   })
 
   it('falls back to system SSH after an ssh2 auth failure when resolved config enables GSSAPI', async () => {
@@ -1611,6 +2190,19 @@ describe('SshConnection', () => {
     await expect(conn.connect()).rejects.toThrow('All configured authentication methods failed')
     expect(conn.getState().status).toBe('auth-failed')
     expect(spawnSystemSshCommandMock).not.toHaveBeenCalled()
+  })
+
+  it('publishes auth-failed when OpenSSH denies reconnect credentials', async () => {
+    vi.mocked(resolveWithSshG).mockResolvedValue(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+    await conn.connect()
+
+    spawnSystemSshCommandMock.mockImplementation(() =>
+      createFailingSystemCommandChannel(255, 'Permission denied (publickey,password).')
+    )
+    await conn.reconnect()
+
+    expect(conn.getState().status).toBe('auth-failed')
   })
 
   it('clears system SSH transport when the GSSAPI-first probe throws synchronously', async () => {
@@ -1903,6 +2495,22 @@ describe('SshConnection', () => {
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
   })
 
+  it.each([
+    'Permission denied (publickey,password).',
+    'Encrypted private key detected, but no passphrase given'
+  ])('skips a direct retry for terminal credential failures: %s', async (message) => {
+    getOrcaControlSocketPathMock.mockReturnValue('/tmp/orca-ssh-501/stale-socket')
+    spawnSystemSshMock.mockImplementation(() => {
+      throw new Error(message)
+    })
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(createTarget({ configHost: 'fdpass-host' }), createCallbacks())
+
+    await expect(conn.connectViaSystemSsh()).rejects.toThrow(message)
+    expect(spawnSystemSshMock).toHaveBeenCalledTimes(1)
+    expect(removeControlSocketPathMock).toHaveBeenCalledWith('/tmp/orca-ssh-501/stale-socket')
+  })
+
   it('kills delayed direct system SSH startup on disconnect and ignores late stdout', async () => {
     const proc = createPendingSystemSshProcess()
     spawnSystemSshMock.mockReturnValueOnce(proc)
@@ -2042,6 +2650,22 @@ describe('shouldUseSystemSshTransport', () => {
   it('allows an environment override for e2e coverage', () => {
     vi.stubEnv('ORCA_SSH_FORCE_SYSTEM_TRANSPORT', '1')
     expect(shouldUseSystemSshTransport(createTarget(), null)).toBe(true)
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores stale imported proxy fields when fresh OpenSSH config has no proxy', () => {
+    expect(
+      shouldUseSystemSshTransport(
+        createTarget({
+          source: 'ssh-config',
+          configHost: 'workbox',
+          proxyCommand: 'ssh -W %h:%p stale-bastion'
+        }),
+        {
+          proxyUseFdpass: false
+        }
+      )
+    ).toBe(false)
   })
 })
 

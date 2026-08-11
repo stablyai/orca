@@ -11,11 +11,16 @@ import {
   publicKeyToBase64
 } from './e2ee-crypto'
 import { RemoteRuntimeRequestConnection } from './remote-runtime-request-connection'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from './protocol-version'
 
 type TestServer = {
   wss: WebSocketServer
   pairing: PairingOffer
   requests: unknown[]
+  auths: unknown[]
   connectionCount: () => number
 }
 
@@ -54,6 +59,14 @@ describe('RemoteRuntimeRequestConnection', () => {
       _meta: { runtimeId: 'runtime-test' }
     })
     expect(server.connectionCount()).toBe(1)
+    expect(server.auths).toContainEqual(
+      expect.objectContaining({
+        clientCapabilities: [
+          SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+          AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+        ]
+      })
+    )
     expect(server.requests).toMatchObject([
       { method: 'status.get' },
       { method: 'terminal.send', params: { terminal: 't1', text: 'ab' } }
@@ -66,6 +79,7 @@ describe('RemoteRuntimeRequestConnection', () => {
 async function createServer(): Promise<TestServer> {
   const serverKeyPair = generateKeyPair()
   const requests: unknown[] = []
+  const auths: unknown[] = []
   let connectionCount = 0
   const wss = new WebSocketServer({ port: 0 })
   servers.push(wss)
@@ -94,7 +108,15 @@ async function createServer(): Promise<TestServer> {
       }
       if (!authenticated) {
         const auth = JSON.parse(plaintext) as { type: string; deviceToken: string }
-        expect(auth).toEqual({ type: 'e2ee_auth', deviceToken: 'device-token' })
+        auths.push(auth)
+        expect(auth).toEqual({
+          type: 'e2ee_auth',
+          deviceToken: 'device-token',
+          clientCapabilities: [
+            SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+            AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+          ]
+        })
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         return
@@ -133,6 +155,7 @@ async function createServer(): Promise<TestServer> {
     wss,
     pairing,
     requests,
+    auths,
     connectionCount: () => connectionCount
   }
 }

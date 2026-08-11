@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyCodexRateLimitWindows,
-  type CodexRpcRateLimits
+  type CodexRateLimitWindowsSnapshot
 } from './codex-rate-limit-window-classification'
 
-function usedPercentByWindow(result: CodexRpcRateLimits | null): {
+function usedPercentByWindow(result: CodexRateLimitWindowsSnapshot | null): {
   session: number | null
   weekly: number | null
 } {

@@ -22,6 +22,9 @@ export function buildSshPtySpawnEnv(args: {
     merged.ORCA_RELAY_DIR = args.remoteCliBridgeEnv.relayDir
     merged.ORCA_RELAY_NODE_PATH = args.remoteCliBridgeEnv.nodePath
     merged.ORCA_RELAY_SOCKET_PATH = args.remoteCliBridgeEnv.sockPath
+    if (args.remoteCliBridgeEnv.credentialFile) {
+      merged.ORCA_RELAY_CREDENTIAL_FILE = args.remoteCliBridgeEnv.credentialFile
+    }
   }
   // Why: match local/daemon precedence—managed defaults cannot restore explicitly removed values.
   for (const key of args.envToDelete ?? []) {

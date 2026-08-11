@@ -38,8 +38,3 @@ export function isRendererHiddenPtyDeliveryGateEnabled(
   // side-effect-authority sync read).
   return readPersistedHiddenDeliveryGateFlagSync() !== false
 }
-
-/** Test seam: reset the persisted-flag cache between tests. */
-export function _resetHiddenPtyDeliveryGateFlagCacheForTest(): void {
-  persistedGateFlagCache = undefined
-}

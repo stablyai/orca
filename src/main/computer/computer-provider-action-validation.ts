@@ -1,4 +1,5 @@
 import {
+  computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../shared/computer-use-key-spec'
@@ -27,6 +28,7 @@ export async function validateComputerProviderActionParams(
       validateElementOrCoordinates('Click', params)
       validatePositiveInteger(params, 'clickCount')
       validateMouseButton(params)
+      validateClickModifiers(params)
       return app
     case 'performSecondaryAction':
       requireNonNegativeInteger(params, 'elementIndex')
@@ -156,6 +158,17 @@ function validateMouseButton(params: Record<string, unknown>): void {
       'invalid_argument',
       'Unsupported mouseButton; expected left, right, or middle'
     )
+  }
+}
+
+function validateClickModifiers(params: Record<string, unknown>): void {
+  if (params.modifiers === undefined) {
+    return
+  }
+  const modifiers = requireNonEmptyString(params, 'modifiers')
+  const message = computerUseClickModifiersValidationMessage(modifiers)
+  if (message) {
+    throw new RuntimeClientError('invalid_argument', message)
   }
 }
 

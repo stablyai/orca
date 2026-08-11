@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { ClassifiedError, GitHubWorkItem } from '../../../shared/types'
 
 /**
  * Cross-repo Tasks pagination is cursor-based on `updatedAt`: each page's oldest
@@ -33,6 +33,125 @@ export function workItemIdentity(item: Pick<GitHubWorkItem, 'id' | 'repoId'>): s
 
 export function taskPageToGitHubApiPage(taskPage: number): number {
   return Math.max(0, Math.floor(taskPage)) + 1
+}
+
+export type EmptyPageOutcome = {
+  reason: 'window-unreachable' | 'load-failed' | 'end-of-data'
+  /** New advertised page count, or null to leave the current count alone.
+   *  Window clamps are applied via applyWindowPageLimit — this field carries
+   *  the same value there for symmetry, but the count slot must not use it. */
+  clampTotalPagesTo: number | null
+}
+
+/**
+ * An empty page load has three distinct meanings, and only the caller-side
+ * error channels can tell them apart (#11485):
+ * - a `validation_error` is GitHub's 422 for pages past its 1000-result search
+ *   window — the page can never load, so stop advertising it. When a sibling
+ *   repo's fetch also threw, the transient failure wins (load-failed, no
+ *   clamp) so the toast and the clamp never disagree. The window signal is
+ *   issue-side only: PR-side errors arrive demoted (never validation_error).
+ * - any other per-repo error (thrown, or on either envelope channel) may be
+ *   transient (rate limit, permissions), so surface it but keep the count;
+ * - no error at all is end-of-data. That only warrants a clamp while the count
+ *   is unknown (null) or failed (0), to withdraw the speculative page
+ *   `fallbackTotalPages` advertises — a real count must not shrink.
+ */
+export function resolveEmptyPageOutcome(args: {
+  target: number
+  failedCount: number
+  errorTypes: readonly ClassifiedError['type'][]
+  countedTotalPages: number | null
+}): EmptyPageOutcome {
+  const clamp = Math.max(1, Math.floor(args.target))
+  // Why: every error must be the window 422 — a sibling repo's envelope
+  // 403/404 alongside it means a repo that may still have pages, so the
+  // transient-failure branch must win the toast and block the clamp.
+  const onlyWindowErrors =
+    args.errorTypes.length > 0 && args.errorTypes.every((type) => type === 'validation_error')
+  if (onlyWindowErrors && args.failedCount === 0) {
+    return { reason: 'window-unreachable', clampTotalPagesTo: clamp }
+  }
+  if (args.failedCount > 0 || args.errorTypes.length > 0) {
+    return { reason: 'load-failed', clampTotalPagesTo: null }
+  }
+  const countUnknown = args.countedTotalPages === null || args.countedTotalPages === 0
+  return { reason: 'end-of-data', clampTotalPagesTo: countUnknown ? clamp : null }
+}
+
+/**
+ * Functional-updater body for the SPECULATIVE end-of-data withdrawal only.
+ * Must be evaluated against the COMMITTED count (React updater `previous`),
+ * not a click-time closure — the count promise routinely resolves between
+ * click and response. Window 422 clamps are PROVEN and live in their own
+ * state (applyWindowPageLimit); keeping them out of the count slot lets a
+ * later real count overwrite the speculative value instead of being pinned
+ * under it.
+ */
+export function applyEmptyPageClamp(
+  previous: number | null,
+  args: {
+    target: number
+    failedCount: number
+    errorTypes: readonly ClassifiedError['type'][]
+  }
+): number | null {
+  const outcome = resolveEmptyPageOutcome({ ...args, countedTotalPages: previous })
+  if (outcome.reason !== 'end-of-data' || outcome.clampTotalPagesTo === null) {
+    return previous
+  }
+  return outcome.clampTotalPagesTo
+}
+
+/** Proven window 422 limit: set once, only ever lowered, reset per generation. */
+export function applyWindowPageLimit(previous: number | null, target: number): number {
+  const clamp = Math.max(1, Math.floor(target))
+  return previous === null ? clamp : Math.min(previous, clamp)
+}
+
+/**
+ * Advertised page count = the count-or-fallback estimate, capped by the proven
+ * window limit, floored at the loaded pages. Splitting the proven cap from the
+ * count slot makes the result order-independent: a count arriving after a
+ * speculative withdrawal overwrites it, while a proven limit survives.
+ */
+export function deriveAdvertisedTotalPages(args: {
+  loadedPages: number
+  countedTotalPages: number | null
+  fallbackTotalPages: number
+  provenPageLimit: number | null
+}): number {
+  const uncapped =
+    args.countedTotalPages && args.countedTotalPages > 0
+      ? Math.max(args.loadedPages, args.countedTotalPages)
+      : args.fallbackTotalPages
+  const capped = args.provenPageLimit === null ? uncapped : Math.min(uncapped, args.provenPageLimit)
+  return Math.max(args.loadedPages, capped)
+}
+
+/**
+ * Stable identity string for a repo selection. The repos store installs a fresh
+ * array on every repos:changed event, so effects keyed on array identity re-fire
+ * with the selection unchanged — resetting pagination mid-click (#11485). The
+ * key must cover every repo field the work-item requests read; the caller
+ * supplies the resolved source context (which must stay free of timestamps).
+ */
+export function buildSelectedReposKey<
+  T extends {
+    id: string
+    path: string
+    connectionId?: string | null
+    executionHostId?: string | null
+  }
+>(repos: readonly T[], sourceContextFor: (repo: T) => unknown): string {
+  return repos
+    .map(
+      (r) =>
+        `${r.id}|${r.path}|${r.connectionId ?? ''}|${r.executionHostId ?? ''}|${JSON.stringify(
+          sourceContextFor(r)
+        )}`
+    )
+    .join(',')
 }
 
 // Why: provider pages cannot spill truncated rows into the next page. Divide

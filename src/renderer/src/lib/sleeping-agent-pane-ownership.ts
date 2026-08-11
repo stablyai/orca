@@ -6,12 +6,15 @@ import type {
   TerminalTab
 } from '../../../shared/types'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
   const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
-  return record.agent === 'pi' ? `${base}\0${record.providerSession.transcriptPath ?? ''}` : base
+  return record.agent === 'pi' || record.agent === 'prime-agent'
+    ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
+    : base
 }
 
 export function isPassiveCompletedHibernationEvidence(record: SleepingAgentSessionRecord): boolean {
@@ -110,19 +113,13 @@ function paneWillConnectOnActivation(
   if (state.activeWorktreeId !== worktreeId) {
     return false
   }
-  if (state.activeTabType === 'terminal' && state.activeTabId === tabId) {
-    return true
-  }
-  // Why: split groups can show multiple terminal tabs at once; each group's
-  // active terminal mounts and connects even when another group has focus.
-  const groups = state.groupsByWorktree[worktreeId] ?? []
-  const unifiedTabs = state.unifiedTabsByWorktree[worktreeId] ?? []
-  return groups.some((group) => {
-    const tab = group.activeTabId
-      ? unifiedTabs.find((candidate) => candidate.id === group.activeTabId)
-      : null
-    return tab?.contentType === 'terminal' && tab.entityId === tabId
-  })
+  // Why: keep-alive mounts every terminal tab of the active worktree and pane
+  // connect is not visibility-gated (cold-activation deferral delays a mount,
+  // never cancels it), so any preserved restorable pane cold-restores in place.
+  // Gating on the visible tab forked a second live surface onto the same
+  // provider session for every non-group-active agent tab. Web-mirror tabs are
+  // the exception: they never mount a local pane, so they cannot own recovery.
+  return !isWebTerminalSurfaceTabId(tabId)
 }
 
 export function recordPaneIsOwnedByPreservedPane(

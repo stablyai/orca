@@ -1,7 +1,16 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { parseManualNetworkAddress } from './manual-address'
+import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../mobile-pairing-protocol-limits'
 
 describe('parseManualNetworkAddress', () => {
+  it('keeps renderer validation off the Zod schema import path', () => {
+    const source = readFileSync(resolve('src/shared/network/manual-address.ts'), 'utf8')
+    expect(source).not.toContain('mobile-relay-pairing-offer')
+    expect(source).not.toContain("from 'zod'")
+  })
+
   describe('IPv4', () => {
     it('accepts canonical IPv4', () => {
       expect(parseManualNetworkAddress('192.168.1.24')).toEqual({
@@ -14,8 +23,8 @@ describe('parseManualNetworkAddress', () => {
       })
     })
 
-    it('accepts boundary IPv4 values', () => {
-      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
+    it('accepts the upper boundary and rejects the wildcard address', () => {
+      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(false)
       expect(parseManualNetworkAddress('255.255.255.255').ok).toBe(true)
     })
 
@@ -30,7 +39,7 @@ describe('parseManualNetworkAddress', () => {
       for (const bad of ['', '   ', '1.2.3', '1.2.3.4.5', '256.0.0.1']) {
         expect(parseManualNetworkAddress(bad)).toEqual({
           ok: false,
-          error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+          error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
         })
       }
     })
@@ -38,9 +47,8 @@ describe('parseManualNetworkAddress', () => {
     it('rejects leading zeros in octets', () => {
       expect(parseManualNetworkAddress('01.02.03.04')).toEqual({
         ok: false,
-        error: 'Enter an IPv4 address or hostname, optionally with a :port suffix'
+        error: 'Enter an IPv4/IPv6 address, hostname, or HTTP(S)/WebSocket URL'
       })
-      expect(parseManualNetworkAddress('0.0.0.0').ok).toBe(true)
     })
   })
 
@@ -161,13 +169,109 @@ describe('parseManualNetworkAddress', () => {
       expect(parseManualNetworkAddress(`example.com:${'0'.repeat(1000)}8080`).ok).toBe(false)
     })
 
-    it('rejects addresses with more than one colon (e.g. IPv6-shaped input)', () => {
+    it('rejects malformed addresses with more than one colon', () => {
       expect(parseManualNetworkAddress('example.com:80:90').ok).toBe(false)
-      expect(parseManualNetworkAddress('::1').ok).toBe(false)
+    })
+  })
+
+  describe('IPv6', () => {
+    it('accepts bare and bracketed IPv6 addresses with optional ports', () => {
+      expect(parseManualNetworkAddress('::1')).toEqual({ ok: true, address: '::1' })
+      expect(parseManualNetworkAddress('2001:db8::4')).toEqual({
+        ok: true,
+        address: '2001:db8::4'
+      })
+      expect(parseManualNetworkAddress('0:0:0:0:0:0:0:1')).toEqual({
+        ok: true,
+        address: '0:0:0:0:0:0:0:1'
+      })
+      expect(parseManualNetworkAddress('[2001:db8::4]:7443')).toEqual({
+        ok: true,
+        address: '[2001:db8::4]:7443'
+      })
+      expect(parseManualNetworkAddress('[0:0:0:0:0:0:0:1]:7443')).toEqual({
+        ok: true,
+        address: '[0:0:0:0:0:0:0:1]:7443'
+      })
+    })
+
+    it('rejects wildcard, malformed, and invalid-port IPv6 addresses', () => {
+      for (const bad of [
+        '::',
+        '[::]:8080',
+        '0:0:0:0:0:0:0:0',
+        '[0:0:0:0:0:0:0:0]:8080',
+        '::ffff:0.0.0.0',
+        '[::ffff:0.0.0.0]:8080',
+        '[::1]:0',
+        '[::1]:65536',
+        '[::1]:'
+      ]) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
+    })
+
+    it('accepts reachable IPv4-mapped and native IPv6 controls', () => {
+      expect(parseManualNetworkAddress('::ffff:192.168.1.24').ok).toBe(true)
+      expect(parseManualNetworkAddress('[::ffff:192.168.1.24]:8080').ok).toBe(true)
+      expect(parseManualNetworkAddress('2001:db8::24').ok).toBe(true)
+    })
+  })
+
+  describe('full URL', () => {
+    it('accepts ws:// and wss:// URLs with optional ports', () => {
+      expect(parseManualNetworkAddress('wss://example.com')).toEqual({
+        ok: true,
+        address: 'wss://example.com'
+      })
+      expect(parseManualNetworkAddress('wss://example.com:443')).toEqual({
+        ok: true,
+        address: 'wss://example.com:443'
+      })
+      expect(parseManualNetworkAddress('ws://example.com:8080')).toEqual({
+        ok: true,
+        address: 'ws://example.com:8080'
+      })
+    })
+
+    it('accepts reverse-proxy paths and query strings', () => {
+      expect(parseManualNetworkAddress('wss://example.com/orca?route=runtime').ok).toBe(true)
+    })
+
+    it('accepts HTTP URLs that the main process normalizes to WebSocket URLs', () => {
+      expect(parseManualNetworkAddress('http://example.com/orca').ok).toBe(true)
+      expect(parseManualNetworkAddress('https://example.com/orca?route=runtime').ok).toBe(true)
+    })
+
+    it('rejects URLs the pairing endpoint cannot advertise', () => {
+      for (const bad of [
+        'ftp://example.com',
+        'wss://',
+        'wss://user:secret@example.com',
+        'wss://example.com/#fragment',
+        'wss://example.com:0',
+        'ws://0.0.0.0:8080',
+        'ws://[::]:8080',
+        'ws://[0:0:0:0:0:0:0:0]:8080',
+        'ws://[::ffff:0.0.0.0]:8080'
+      ]) {
+        expect(parseManualNetworkAddress(bad).ok).toBe(false)
+      }
     })
   })
 
   describe('length and whitespace', () => {
+    it('matches the shared pairing endpoint length boundary', () => {
+      const prefix = 'wss://example.com/'
+      const atLimit = `${prefix}${'a'.repeat(PAIRING_ENDPOINT_MAX_CHARACTERS - prefix.length)}`
+      const aboveLimit = `${atLimit}a`
+
+      expect(atLimit).toHaveLength(PAIRING_ENDPOINT_MAX_CHARACTERS)
+      expect(parseManualNetworkAddress(atLimit)).toEqual({ ok: true, address: atLimit })
+      expect(aboveLimit).toHaveLength(PAIRING_ENDPOINT_MAX_CHARACTERS + 1)
+      expect(parseManualNetworkAddress(aboveLimit).ok).toBe(false)
+    })
+
     it('rejects inputs longer than 253 chars', () => {
       const long = `${'a'.repeat(250)}.ts.net`
       expect(long.length).toBeGreaterThan(253)

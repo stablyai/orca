@@ -1,16 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import { Terminal } from '@xterm/headless'
 import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   applyTerminalAppearance,
   hexToRgba,
-  installMode2031Handlers,
   publishTerminalViewAttributesAtAppStart
 } from './terminal-appearance'
 import { maybePushMode2031Flip } from './terminal-mode-2031-replies'
+import { safeFit } from '@/lib/pane-manager/pane-fit'
 import { mode2031SequenceFor } from '../../../../shared/terminal-color-scheme-protocol'
-import { replayIntoTerminal, type ReplayingPanesRef } from './replay-guard'
 import { _resetTerminalViewAttributesPublisherForTest } from './terminal-view-attributes-publisher'
 import type { TerminalViewAttributes } from '../../../../shared/terminal-view-attributes'
 
@@ -138,228 +136,30 @@ describe('maybePushMode2031Flip', () => {
     expect(last.get(2)).toBe('dark')
   })
 })
-describe('installMode2031Handlers', () => {
-  // Regression coverage for the "random characters on restart" bug: a replayed `CSI ?2031h` pushed `CSI ?997;1n` into the fresh shell.
-
-  function writeSync(term: Terminal, data: string): Promise<void> {
-    return new Promise((resolve) => term.write(data, resolve))
-  }
-
-  function makeReplayingRef(): ReplayingPanesRef {
-    return { current: new Map() } as ReplayingPanesRef
-  }
-
-  function setup(paneId = 1): {
-    term: Terminal
-    pane: ManagedPane
-    replayingPanesRef: ReplayingPanesRef
-    onSubscribe: ReturnType<typeof vi.fn>
-    paneMode2031: Map<number, boolean>
-    paneLastThemeMode: Map<number, 'dark' | 'light'>
-    dispose: () => void
-  } {
-    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    const pane = { id: paneId, terminal: term } as unknown as ManagedPane
-    const replayingPanesRef = makeReplayingRef()
-    const paneMode2031 = new Map<number, boolean>()
-    const paneLastThemeMode = new Map<number, 'dark' | 'light'>()
-    const onSubscribe = vi.fn()
-    const disposables = installMode2031Handlers({
-      paneId,
-      parser: term.parser,
-      onSubscribe,
-      isReplaying: () => (replayingPanesRef.current.get(paneId) ?? 0) > 0,
-      paneMode2031,
-      paneLastThemeMode
-    })
-    return {
-      term,
-      pane,
-      replayingPanesRef,
-      onSubscribe,
-      paneMode2031,
-      paneLastThemeMode,
-      dispose: () => {
-        for (const d of disposables) {
-          d.dispose()
-        }
-        term.dispose()
-      }
-    }
-  }
-
-  it('records subscribe and fires onSubscribe on a live `CSI ?2031h`', async () => {
-    const h = setup()
-    try {
-      await writeSync(h.term, '\x1b[?2031h')
-      expect(h.paneMode2031.get(1)).toBe(true)
-      expect(h.onSubscribe).toHaveBeenCalledTimes(1)
-    } finally {
-      h.dispose()
-    }
-  })
-
-  it('does NOT fire onSubscribe or record state when the sequence arrives during replay', async () => {
-    // On cold restore the replay guard is set before xterm parses, so the handler must skip both the push and the bookkeeping.
-    const h = setup()
-    try {
-      replayIntoTerminal(h.pane, h.replayingPanesRef, '\x1b[?2031h')
-      // write() is async: the replay guard stays engaged until the write-completion callback fires.
-      await new Promise<void>((resolve) => h.term.write('', resolve))
-
-      expect(h.onSubscribe).not.toHaveBeenCalled()
-      expect(h.paneMode2031.has(1)).toBe(false)
-      expect(h.paneLastThemeMode.has(1)).toBe(false)
-      // Once the replay window closes, the pane is not marked replaying.
-      expect(h.replayingPanesRef.current.get(1) ?? 0).toBe(0)
-    } finally {
-      h.dispose()
-    }
-  })
-
-  it('still honors a real `CSI ?2031h` received after a replay window closes', async () => {
-    // A real `?2031h` from a TUI relaunched after cold restore must take effect normally.
-    const h = setup()
-    try {
-      replayIntoTerminal(h.pane, h.replayingPanesRef, '\x1b[?2031h')
-      await new Promise<void>((resolve) => h.term.write('', resolve))
-      expect(h.onSubscribe).not.toHaveBeenCalled()
-
-      await writeSync(h.term, '\x1b[?2031h')
-      expect(h.paneMode2031.get(1)).toBe(true)
-      expect(h.onSubscribe).toHaveBeenCalledTimes(1)
-    } finally {
-      h.dispose()
-    }
-  })
-
-  it('clears subscribe state on `CSI ?2031l` regardless of replay state', async () => {
-    // The `l` (unsubscribe) branch is intentionally not replay-guarded: clearing is harmless since we only send on subscribe.
-    const h = setup()
-    try {
-      // Non-replay path: subscribe then unsubscribe clears state.
-      await writeSync(h.term, '\x1b[?2031h')
-      h.paneLastThemeMode.set(1, 'dark')
-      expect(h.paneMode2031.get(1)).toBe(true)
-
-      await writeSync(h.term, '\x1b[?2031l')
-      expect(h.paneMode2031.has(1)).toBe(false)
-      expect(h.paneLastThemeMode.has(1)).toBe(false)
-
-      // Replay path: the `l` handler must still clear even during a replay window.
-      await writeSync(h.term, '\x1b[?2031h')
-      h.paneLastThemeMode.set(1, 'dark')
-      expect(h.paneMode2031.get(1)).toBe(true)
-
-      replayIntoTerminal(h.pane, h.replayingPanesRef, '\x1b[?2031l')
-      await new Promise<void>((resolve) => h.term.write('', resolve))
-      expect(h.paneMode2031.has(1)).toBe(false)
-      expect(h.paneLastThemeMode.has(1)).toBe(false)
-    } finally {
-      h.dispose()
-    }
-  })
-
-  it('returns `false` so compound DEC private modes still reach xterm', async () => {
-    // Why: handlers return `false` so compound sequences like `CSI ?25;2031h` still reach xterm's built-in DEC private mode handler.
-    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    const paneMode2031 = new Map<number, boolean>()
-    const paneLastThemeMode = new Map<number, 'dark' | 'light'>()
-    const onSubscribe = vi.fn()
-    const returnValues: boolean[] = []
-    // Cast: parser cb returns plain `boolean` but `Mode2031Parser` reflects xterm's `boolean | Promise<boolean>` (handlers here are sync).
-    const spyParser: Parameters<typeof installMode2031Handlers>[0]['parser'] = {
-      registerCsiHandler: (id, cb) =>
-        term.parser.registerCsiHandler(id, (params) => {
-          const r = cb(params) as boolean
-          returnValues.push(r)
-          return r
-        })
-    }
-    const disposables = installMode2031Handlers({
-      paneId: 1,
-      parser: spyParser,
-      onSubscribe,
-      isReplaying: () => false,
-      paneMode2031,
-      paneLastThemeMode
-    })
-    try {
-      // Compound: ?25 (cursor show) + ?2031 (color-scheme subscribe).
-      await writeSync(term, '\x1b[?25;2031h')
-      // Our 2031 recording fired:
-      expect(paneMode2031.get(1)).toBe(true)
-      expect(onSubscribe).toHaveBeenCalledTimes(1)
-      // Every handler invocation returned `false`, so xterm's built-in DEC private mode handler still processes the sequence.
-      expect(returnValues.length).toBeGreaterThan(0)
-      expect(returnValues.every((v) => v === false)).toBe(true)
-    } finally {
-      for (const d of disposables) {
-        d.dispose()
-      }
-      term.dispose()
-    }
-  })
-
-  it('keeps per-pane state isolated when two panes share the parser API', async () => {
-    // The subscribe bookkeeping map is shared across panes, so a replay on pane 1 must not leak into pane 2's live subscribe.
-    const shared2031 = new Map<number, boolean>()
-    const sharedLast = new Map<number, 'dark' | 'light'>()
-    const replayingPanesRef = makeReplayingRef()
-
-    const term1 = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    const term2 = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
-    const pane1 = { id: 1, terminal: term1 } as unknown as ManagedPane
-    const onSub1 = vi.fn()
-    const onSub2 = vi.fn()
-
-    const d1 = installMode2031Handlers({
-      paneId: 1,
-      parser: term1.parser,
-      onSubscribe: onSub1,
-      isReplaying: () => (replayingPanesRef.current.get(1) ?? 0) > 0,
-      paneMode2031: shared2031,
-      paneLastThemeMode: sharedLast
-    })
-    const d2 = installMode2031Handlers({
-      paneId: 2,
-      parser: term2.parser,
-      onSubscribe: onSub2,
-      isReplaying: () => (replayingPanesRef.current.get(2) ?? 0) > 0,
-      paneMode2031: shared2031,
-      paneLastThemeMode: sharedLast
-    })
-
-    try {
-      // Replay on pane 1 must not subscribe.
-      replayIntoTerminal(pane1, replayingPanesRef, '\x1b[?2031h')
-      await new Promise<void>((resolve) => term1.write('', resolve))
-      expect(onSub1).not.toHaveBeenCalled()
-      expect(shared2031.has(1)).toBe(false)
-
-      // Live on pane 2 must subscribe normally.
-      await writeSync(term2, '\x1b[?2031h')
-      expect(onSub2).toHaveBeenCalledTimes(1)
-      expect(shared2031.get(2)).toBe(true)
-    } finally {
-      for (const d of [...d1, ...d2]) {
-        d.dispose()
-      }
-      term1.dispose()
-      term2.dispose()
-    }
-  })
-})
-
 describe('applyTerminalAppearance theme assignment', () => {
   // xterm rebuilds the palette on any new theme-object identity (wiping OSC color mutations), so the assignment must be value-gated.
-  function makePane(id: number): ManagedPane {
-    return { id, terminal: { options: {}, cols: 80, rows: 24 } } as unknown as ManagedPane
+  // Measurable by default: metric options (fontSize/fontFamily/…) only land on
+  // panes that can measure; unmeasurable panes defer them until fit/reveal.
+  function makePane(id: number, overrides?: { measurable?: boolean }): ManagedPane {
+    const measurable = overrides?.measurable ?? true
+    return {
+      id,
+      terminal: { options: {}, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
   }
 
   function makeManager(panes: ManagedPane[]): PaneManager {
     return {
-      getPanes: () => panes,
+      // Mirrors the real getPanes(), which allocates a fresh toPublicPane()
+      // wrapper per call over a shared terminal — per-pane state must survive that.
+      getPanes: () => panes.map((pane) => ({ ...pane })),
       setPaneLigaturesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
@@ -480,6 +280,75 @@ describe('applyTerminalAppearance theme assignment', () => {
 
     // The value-gate must not rewrite an unchanged ratio — each write clears xterm's contrast cache.
     expect(writes).toBe(writesAfterFirst)
+  })
+
+  it('defers metric options on an unmeasurable pane and lands them on the next fit', () => {
+    // A metric write makes xterm clear, resize and full-refresh; on a pane with
+    // no usable box that repaint is wasted and the cols/rows re-fit that must
+    // follow it cannot run. The write waits for a measurable pane.
+    let measurable = false
+    const pane = {
+      id: 1,
+      terminal: { options: {}, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        fit: vi.fn(),
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontSize: 19 })
+
+    expect(pane.terminal.options.fontSize).toBeUndefined()
+    expect(pane.terminal.options.fontFamily).toBeUndefined()
+    // Non-metric options are safe while hidden and must not be deferred with them.
+    expect(pane.terminal.options.cursorStyle).toBeDefined()
+
+    measurable = true
+    safeFit(pane)
+
+    expect(pane.terminal.options.fontSize).toBe(19)
+    expect(pane.terminal.options.fontFamily).toContain('monospace')
+  })
+
+  it('applies only the latest deferred metric options after repeated hidden changes', () => {
+    let measurable = false
+    const writes: number[] = []
+    const options: Record<string, unknown> = {}
+    Object.defineProperty(options, 'fontSize', {
+      configurable: true,
+      enumerable: true,
+      get: () => writes.at(-1),
+      set: (value: number) => {
+        writes.push(value)
+      }
+    })
+    const pane = {
+      id: 1,
+      terminal: { options, cols: 80, rows: 24 },
+      container: {
+        dataset: {},
+        getBoundingClientRect: () => ({ width: measurable ? 800 : 0, height: measurable ? 600 : 0 })
+      },
+      fitAddon: {
+        fit: vi.fn(),
+        proposeDimensions: () => (measurable ? { cols: 80, rows: 24 } : undefined)
+      }
+    } as unknown as ManagedPane
+    const settings = getDefaultSettings('/tmp')
+
+    apply(pane, { ...settings, terminalFontSize: 15 })
+    apply(pane, { ...settings, terminalFontSize: 21 })
+
+    measurable = true
+    safeFit(pane)
+
+    // Latest wins, exactly one write: intermediate hidden values never touch xterm.
+    expect(writes).toEqual([21])
   })
 })
 

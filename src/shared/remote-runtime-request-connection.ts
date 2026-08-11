@@ -30,6 +30,10 @@ import {
   type RemoteRuntimeRequestReadyWaiter
 } from './remote-runtime-request-ready-waiters'
 import { openRemoteRuntimeWebSocket } from './remote-runtime-request-websocket'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from './protocol-version'
 
 type ConnectionState = 'closed' | 'awaiting_ready' | 'awaiting_authenticated' | 'ready'
 
@@ -205,7 +209,11 @@ export class RemoteRuntimeRequestConnection {
       encrypt(
         serializeRemoteRuntimePayload({
           type: 'e2ee_auth',
-          deviceToken: this.pairing.deviceToken
+          deviceToken: this.pairing.deviceToken,
+          clientCapabilities: [
+            SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+            AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+          ]
         }),
         sharedKey
       )

@@ -21,7 +21,6 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
     'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'
@@ -179,11 +178,52 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     rmSync(accountAuthPath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
 
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toBe(account.managedHomePath)
     expect(existsSync(accountAuthPath)).toBe(false)
-    expect(settings.activeCodexManagedAccountId).toBeNull()
+    expect(settings.activeCodexManagedAccountId).toBe(account.id)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(laterShared)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
+  })
+
+  it('bridges real-home and sibling-account history into the launched account home', async () => {
+    const accountOne = createManagedAccount(
+      'account-1',
+      'acct-1',
+      createAuth('one@example.com', 'acct-1', 'one', 1_000)
+    )
+    const accountTwo = createManagedAccount(
+      'account-2',
+      'acct-2',
+      createAuth('two@example.com', 'acct-2', 'two', 2_000),
+      'two@example.com'
+    )
+    const systemRollout = join('2026', '07', '20', 'rollout-2026-07-20T10-00-00-aaaa.jsonl')
+    const siblingRollout = join('2026', '07', '21', 'rollout-2026-07-21T10-00-00-bbbb.jsonl')
+    writeRollout(systemHome(), systemRollout, '{"session":"real-home"}\n')
+    writeRollout(accountOne.managedHomePath, siblingRollout, '{"session":"account-one"}\n')
+    const { settings, store } = createStore([accountOne, accountTwo], accountOne.id)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const bridge = await import('../codex/codex-account-session-bridge')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    selectManagedAccount(settings, accountTwo.id)
+    service.syncForCurrentSelection()
+    expect(service.prepareForCodexLaunch()).toBe(accountTwo.managedHomePath)
+    await bridge.startCodexAccountSessionBridgeInBackground({
+      targetCodexHomePath: accountTwo.managedHomePath,
+      sourceCodexHomePaths: [systemHome(), accountOne.managedHomePath]
+    })
+
+    // Why: /resume reads only the launch CODEX_HOME, so both histories must be
+    // present under account two or the switch looks like data loss.
+    expect(readFileSync(join(accountTwo.managedHomePath, 'sessions', systemRollout), 'utf-8')).toBe(
+      '{"session":"real-home"}\n'
+    )
+    expect(
+      readFileSync(join(accountTwo.managedHomePath, 'sessions', siblingRollout), 'utf-8')
+    ).toBe('{"session":"account-one"}\n')
+    expect(existsSync(join(systemHome(), 'sessions', siblingRollout))).toBe(false)
   })
 
   it('does not expose an untrusted persisted home through rollout discovery', async () => {
@@ -256,6 +296,12 @@ function managedAccountRecord(
 function selectManagedAccount(settings: GlobalSettings, accountId: string): void {
   settings.activeCodexManagedAccountId = accountId
   settings.activeCodexManagedAccountIdsByRuntime = { host: accountId, wsl: {} }
+}
+
+function writeRollout(homePath: string, relativePath: string, contents: string): void {
+  const filePath = join(homePath, 'sessions', relativePath)
+  mkdirSync(join(filePath, '..'), { recursive: true })
+  writeFileSync(filePath, contents, 'utf-8')
 }
 
 function systemHome(): string {

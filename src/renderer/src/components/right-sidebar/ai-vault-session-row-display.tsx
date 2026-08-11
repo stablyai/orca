@@ -13,7 +13,7 @@ import {
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { SessionTime } from './AiVaultSessionDetails'
+import { SessionTime } from './ai-vault-session-time'
 import { sessionModelLabel } from './ai-vault-session-display'
 import { agentLabel } from './ai-vault-session-filters'
 import {
@@ -42,7 +42,10 @@ export function SessionMetadata({
 }) {
   const modelLabel = sessionModelLabel(session)
   return (
-    <div className="mt-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground">
+    <div
+      data-testid="ai-vault-session-metadata"
+      className="mt-1 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-1.5 gap-y-0.5 text-[11px] leading-4 text-muted-foreground"
+    >
       <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
         <AgentIcon agent={session.agent} size={14} />
       </span>
@@ -106,7 +109,7 @@ export function SessionMetadata({
   )
 }
 
-export function SessionWorktreeLine({
+function SessionWorktreeLine({
   worktreeInfo,
   vaultScope
 }: {
@@ -119,7 +122,7 @@ export function SessionWorktreeLine({
   const repo = useRepoById(repoId)
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-5">
+    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
       {shouldShowAiVaultWorktreeStatusBadge(worktreeInfo.status, { vaultScope }) ? (
         <span className="shrink-0 rounded-sm border border-sidebar-border bg-sidebar-accent/45 px-1.5 py-0.5 text-[10px] leading-none text-muted-foreground">
           {worktreeStatusLabel(worktreeInfo.status)}

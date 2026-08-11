@@ -16,6 +16,8 @@ import {
 import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
 import type { MobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
 import { MobileE2EEDesktopOutboundOwner } from './mobile-e2ee-desktop-outbound-owner'
+import { parseRuntimeClientCapabilities } from './runtime-client-capabilities'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 const HANDSHAKE_TIMEOUT_MS = 10_000
 const MAX_CONSECUTIVE_DECRYPT_FAILURES = 5
@@ -62,6 +64,7 @@ export class E2EEChannel {
 
   deviceToken: string | null = null
   authenticatedDevice: E2EEAuthenticatedDevice | null = null
+  clientCapabilities: readonly RuntimeCapability[] = []
 
   constructor(ws: WebSocket, options: E2EEChannelOptions) {
     this.ws = ws
@@ -246,6 +249,7 @@ export class E2EEChannel {
     }
     const authenticatedDevice = authentication.device
 
+    this.clientCapabilities = parseRuntimeClientCapabilities(authentication.auth.clientCapabilities)
     this.deviceToken = authenticatedDevice.deviceToken
     this.authenticatedDevice = authenticatedDevice
     this.state = 'ready'

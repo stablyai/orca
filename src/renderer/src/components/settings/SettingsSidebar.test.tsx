@@ -1,6 +1,8 @@
+// @vitest-environment happy-dom
+
 import { renderToStaticMarkup } from 'react-dom/server'
-import { Bot, Mic, Network } from 'lucide-react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Bot, GitBranch, Mic, Network, Puzzle } from 'lucide-react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { SettingsSidebar } from './SettingsSidebar'
 import { TooltipProvider } from '../ui/tooltip'
@@ -68,6 +70,29 @@ function renderSidebar(
                 title: 'Computer Use',
                 icon: Bot,
                 installStatus: 'up-to-date'
+              },
+              {
+                id: 'voice-loading',
+                title: 'Voice Loading',
+                icon: Mic,
+                installStatus: 'checking'
+              },
+              {
+                id: 'linear',
+                title: 'Linear',
+                icon: GitBranch,
+                installStatus: 'update-available'
+              },
+              {
+                id: 'ephemeral-vms',
+                title: 'Ephemeral VMs',
+                icon: Bot,
+                installStatus: 'needs-attention'
+              },
+              {
+                id: 'plugins',
+                title: 'Plugins',
+                icon: Puzzle
               }
             ]
           },
@@ -101,6 +126,10 @@ describe('SettingsSidebar', () => {
     mocks.useSettingsSetupGuideProgress.mockReturnValue(makeSetupGuideProgress())
   })
 
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
+
   it('applies left sidebar appearance styles to the settings navigation', () => {
     const markup = renderSidebar('orchestration', {
       ...getDefaultSettings('/tmp'),
@@ -115,12 +144,15 @@ describe('SettingsSidebar', () => {
     expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
   })
 
-  it('renders install state labels separately from static badges', () => {
+  it('reserves install state labels for actionable skill states', () => {
     const markup = renderSidebar()
 
-    expect(markup).toContain('Not installed')
-    expect(markup).toContain('Installed')
-    expect(markup).toContain('Up to date')
+    expect(markup).not.toContain('Not installed')
+    expect(markup).not.toContain('Installed')
+    expect(markup).not.toContain('Up to date')
+    expect(markup).not.toContain('Checking...')
+    expect(markup).toContain('Update available')
+    expect(markup).toContain('Review skill')
     expect(markup).toContain('Optional')
   })
 

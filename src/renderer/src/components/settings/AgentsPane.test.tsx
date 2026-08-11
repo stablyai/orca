@@ -117,19 +117,6 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   }
 }
 
-function findSwitch(node: unknown, ariaLabel: string): ReactElementLike {
-  let found: ReactElementLike | null = null
-  visit(node, (entry) => {
-    if (entry.props.role === 'switch' && entry.props['aria-label'] === ariaLabel) {
-      found = entry
-    }
-  })
-  if (!found) {
-    throw new Error('switch not found')
-  }
-  return found
-}
-
 function findSwitchRow(node: unknown, ariaLabel: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
@@ -249,17 +236,30 @@ describe('AgentsPane', () => {
     expect(agentRuntimeSettingMock.lastRefresh).not.toBe(detectedAgentsMock.refresh)
   })
 
-  it('renders the keep-awake toggle from settings', () => {
+  it('renders the keep-awake modes from settings', () => {
     const markup = renderPane(getDefaultSettings('/tmp'))
 
     expect(markup).not.toContain('Agent location')
     expect(markup).not.toContain('Agent runtime')
     expect(markup).not.toContain('aria-label="Agent runtime"')
-    expect(markup).toContain('Keep computer awake while agents are working')
+    expect(markup).toContain('Keep computer awake')
     expect(markup).toContain(
-      'Keeps this computer and display awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+      'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
     )
-    expect(markup).toContain('aria-checked="false"')
+    expect(markup).toContain('role="radiogroup"')
+    expect(markup).toContain('>Agent<')
+  })
+
+  it('hides desktop-only awake modes in paired web clients', () => {
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    try {
+      expect(renderPane(getDefaultSettings('/tmp'))).not.toContain('Keep computer awake')
+      expect(
+        matchesSettingsSearch('awake', getAgentsPaneSearchEntries({ includeAgentAwake: false }))
+      ).toBe(false)
+    } finally {
+      delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+    }
   })
 
   it('renders the agent runtime control on Windows-class hosts', () => {
@@ -316,11 +316,11 @@ describe('AgentsPane', () => {
 
   it('describes Windows lid behavior according to the device', () => {
     expect(getAgentAwakeDescription('Windows')).toBe(
-      "Keeps this computer and display awake while agents are working. Lid-close behavior follows this device's power settings."
+      "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
     )
   })
 
-  it('toggles the keep-awake setting with the next value', () => {
+  it('updates the keep-awake mode with its legacy fallback', () => {
     const updateSettings = vi.fn()
     const element = AgentAwakeSetting({
       settings: {
@@ -331,14 +331,14 @@ describe('AgentsPane', () => {
     })
 
     const keepAwakeTitle = getAgentAwakeTitle()
-    const keepAwakeSwitch = findSwitch(element, keepAwakeTitle)
-    expect(keepAwakeSwitch.props['aria-label']).toBe(keepAwakeTitle)
-    expect(keepAwakeSwitch.props['aria-checked']).toBe(false)
+    const keepAwakeControl = findSegmentedControl(element, keepAwakeTitle)
+    expect(keepAwakeControl.props.value).toBe('off')
 
-    const onClick = keepAwakeSwitch.props.onClick as () => void
-    onClick()
+    const onChange = keepAwakeControl.props.onChange as (mode: 'auto') => void
+    onChange('auto')
 
     expect(updateSettings).toHaveBeenCalledWith({
+      computerAwakeMode: 'auto',
       keepComputerAwakeWhileAgentsRun: true
     })
   })

@@ -101,6 +101,37 @@ describe('computer action RPC methods', () => {
     ).toThrow()
   })
 
+  it('accepts modifier-only click chords and rejects embedded keys', () => {
+    expect(
+      findMethod('computer.click').params!.parse({
+        app: 'Finder',
+        elementIndex: 0,
+        modifiers: 'CmdOrCtrl+Shift'
+      })
+    ).toMatchObject({ modifiers: 'CmdOrCtrl+Shift' })
+    expect(() =>
+      findMethod('computer.click').params!.parse({
+        app: 'Finder',
+        elementIndex: 0,
+        modifiers: 'CmdOrCtrl+A'
+      })
+    ).toThrow(/Click modifiers accept modifier keys only/)
+    expect(() =>
+      findMethod('computer.click').params!.parse({
+        app: 'Finder',
+        elementIndex: 0,
+        modifiers: ''
+      })
+    ).toThrow(/Click modifiers accept modifier keys only/)
+    expect(() =>
+      findMethod('computer.click').params!.parse({
+        app: 'Finder',
+        elementIndex: 0,
+        modifiers: true
+      })
+    ).toThrow()
+  })
+
   it('rejects modifier chords on press-key but allows literal plus', () => {
     expect(() =>
       findMethod('computer.pressKey').params!.parse({
@@ -126,6 +157,7 @@ describe('computer action RPC methods', () => {
       elementIndex: 0,
       clickCount: 2,
       mouseButton: 'left',
+      modifiers: 'CmdOrCtrl+Shift',
       noScreenshot: true
     })
     await call('computer.performSecondaryAction', {
@@ -147,6 +179,7 @@ describe('computer action RPC methods', () => {
       elementIndex: 0,
       clickCount: 2,
       mouseButton: 'left',
+      modifiers: 'CmdOrCtrl+Shift',
       noScreenshot: true
     })
     expect(computerMocks.callComputerSidecarAction).toHaveBeenNthCalledWith(

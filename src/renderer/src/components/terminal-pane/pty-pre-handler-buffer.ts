@@ -176,11 +176,6 @@ export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) =>
   }
 }
 
-export function clearPreHandlerPtyData(ptyId: string): void {
-  preHandlerPtyData.delete(ptyId)
-  warnedLostHandlerPtyIds.delete(ptyId)
-}
-
 export function clearPreHandlerPtyState(ptyId: string): void {
   preHandlerPtyData.delete(ptyId)
   preHandlerPtyExit.delete(ptyId)

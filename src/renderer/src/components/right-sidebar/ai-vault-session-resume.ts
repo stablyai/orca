@@ -9,6 +9,7 @@ import {
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
 import type { AppState } from '@/store/types'
+import { getIndexedWorktreeMap } from '@/store/worktree-repo-index'
 import { translate } from '@/i18n/i18n'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
@@ -145,9 +146,7 @@ export function isKnownAiVaultResumeWorkspaceTarget(
   }
 
   const worktreeId = workspaceKey?.type === 'worktree' ? workspaceKey.worktreeId : workspaceId
-  return Object.values(state.worktreesByRepo).some((worktrees) =>
-    worktrees.some((worktree) => worktree.id === worktreeId)
-  )
+  return getIndexedWorktreeMap(state.worktreesByRepo).has(worktreeId)
 }
 
 function resolveSupportedResumeWorktreeId(args: {

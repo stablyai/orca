@@ -1,7 +1,7 @@
 export type RasterImageDimensions = { width: number; height: number }
 
-const JPEG_DIMENSION_SCAN_MAX_BYTES = 1024 * 1024
-const JPEG_DIMENSION_SCAN_MAX_MARKERS = 4_096
+// No scan cap: this is a forward seek over a caller-bounded buffer, so it costs O(1) memory and at
+// most one pass. Capping it only made valid images with large ICC/MPF metadata unreadable.
 const ICO_MAX_IMAGES = 1_024
 const JPEG_START_OF_FRAME_MARKERS = new Set([
   0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf
@@ -100,15 +100,13 @@ function readJpegDimensions(bytes: Uint8Array): RasterImageDimensions | null {
     return null
   }
   let offset = 2
-  let markersRead = 0
-  const scanEnd = Math.min(bytes.byteLength, JPEG_DIMENSION_SCAN_MAX_BYTES)
-  while (offset < scanEnd && markersRead < JPEG_DIMENSION_SCAN_MAX_MARKERS) {
+  const scanEnd = bytes.byteLength
+  while (offset < scanEnd) {
     while (offset < scanEnd && bytes[offset] === 0xff) {
       offset += 1
     }
     const marker = bytes[offset]
     offset += 1
-    markersRead += 1
     if (marker === undefined || marker === 0x00 || marker === 0xd9 || marker === 0xda) {
       return null
     }

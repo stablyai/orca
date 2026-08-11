@@ -20,11 +20,13 @@ import { prepareDockerSshRelayImage } from './helpers/docker-ssh-relay-image'
 /** Temp file where the test repo path is stored for the fixture to read. */
 export const TEST_REPO_PATH_FILE = path.join(os.tmpdir(), 'orca-e2e-test-repo-path.txt')
 const ELECTRON_E2E_BUILD_TIMEOUT_MS = 300_000
+const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
   const root = process.cwd()
   const outMain = path.join(root, 'out', 'main', 'index.js')
+  const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
@@ -43,6 +45,17 @@ export default function globalSetup(): void {
       timeout: ELECTRON_E2E_BUILD_TIMEOUT_MS
     })
     console.error('[e2e] Build complete.')
+  }
+  if (process.env.SKIP_BUILD && existsSync(outCli)) {
+    console.error('[e2e] SKIP_BUILD set and out/cli/index.js exists — skipping CLI build')
+  } else {
+    console.error('[e2e] Building bundled CLI...')
+    execSync('pnpm run build:cli', {
+      cwd: root,
+      stdio: 'inherit',
+      timeout: CLI_E2E_BUILD_TIMEOUT_MS
+    })
+    console.error('[e2e] CLI build complete.')
   }
   if (process.env.ORCA_E2E_WEB_CLIENT === '1') {
     if (process.env.SKIP_BUILD && existsSync(outWeb)) {
@@ -104,6 +117,7 @@ export default function globalSetup(): void {
   writeFileSync(path.join(testRepoDir, '.gitignore'), 'node_modules/\n')
   mkdirSync(path.join(testRepoDir, 'src'), { recursive: true })
   writeFileSync(path.join(testRepoDir, 'src', 'index.ts'), 'export const hello = "world"\n')
+  writeFileSync(path.join(testRepoDir, 'src', 'diff-note-layout.ts'), 'export const seed = true\n')
 
   execSync('git add -A', { cwd: testRepoDir, stdio: 'pipe' })
   execSync('git commit -m "Initial commit for E2E tests"', { cwd: testRepoDir, stdio: 'pipe' })

@@ -65,4 +65,50 @@ describe('GitResponseStreamRegistry client ownership', () => {
     expect(notifyBulk.mock.calls[0]?.[0]).toBe('git.responseChunk')
     expect(notifyBulk.mock.calls[1]?.[0]).toBe('git.responseError')
   })
+
+  it('uses encoded producer capacity without collapsing chunks during saturation', async () => {
+    let releaseFirst!: () => void
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const notifyBulk = vi
+      .fn()
+      .mockImplementationOnce(() => firstWrite)
+      .mockResolvedValue(undefined)
+    const producerDataBudget = vi.fn(() => 8)
+    const dispatcher = {
+      notifyBulk,
+      producerDataBudget
+    } as unknown as RelayDispatcher
+    const registry = new GitResponseStreamRegistry()
+    registries.push(registry)
+    const ownerClientId = 7
+
+    const marker = registry.startStream(Buffer.alloc(12), dispatcher, {
+      clientId: ownerClientId,
+      isStale: () => false
+    })
+    const streamId = marker.__orcaGitResponseStream.streamId
+    await flushPump()
+    expect(notifyBulk).toHaveBeenCalledTimes(1)
+
+    registry.recordAck(streamId, 1_000, ownerClientId)
+    releaseFirst()
+    await flushPump()
+    await flushPump()
+
+    expect(producerDataBudget).toHaveBeenCalledExactlyOnceWith(
+      'git.responseChunk',
+      { streamId, seq: 12 },
+      ownerClientId
+    )
+    expect(marker.__orcaGitResponseStream.chunkCount).toBe(2)
+    expect(notifyBulk).toHaveBeenCalledTimes(3)
+    const chunks = notifyBulk.mock.calls
+      .filter(([method]) => method === 'git.responseChunk')
+      .map(([, params]) => params as { data: string })
+    expect(chunks).toHaveLength(2)
+    expect(chunks.every(({ data }) => data.length <= 8)).toBe(true)
+    expect(chunks.map(({ data }) => Buffer.from(data, 'base64').length)).toEqual([6, 6])
+  })
 })

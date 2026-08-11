@@ -13,7 +13,9 @@ import {
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
+import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { getConnectionId } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
@@ -239,8 +241,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     }
     if (effectiveAgent) {
       // Why: direct task launch creates and starts the workspace in separate
-      // steps so agent detection can overlap git worktree creation. Persist
-      // the chosen agent once known so empty-worktree reopen can recreate it.
+      // steps so agent detection can overlap git worktree creation. Persist the
+      // chosen agent once known so removal safety and ownership see it — reopen
+      // no longer relaunches from this field.
       void store.updateWorktreeMeta(worktreeId, { createdWithAgent: effectiveAgent }).catch(() => {
         // Non-critical: activation still has the explicit startup below.
       })
@@ -276,6 +279,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         promptDelivery,
         settings,
         launchPlatform,
+        nativeChatTranscriptIsLocalReadable:
+          isNativeChatTranscriptLocalReadable(launchConnectionId),
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
         isRemote: typeof launchConnectionId === 'string'
@@ -285,7 +290,12 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
       defaultTabs: result.defaultTabs,
-      ...buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource)
+      ...buildDirectWorkItemStartupOpts(
+        effectiveAgent,
+        startupPlan,
+        launchSource,
+        promptDelivery === 'draft' ? draftContent : undefined
+      )
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
@@ -305,6 +315,17 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
     return false
+  }
+
+  // Why: draft delivery lands only in the TUI input buffer (argv prefill or
+  // startup-owned paste); seed the chat-composer copy so the work-item context
+  // isn't invisible in the GUI view.
+  if (promptDelivery === 'draft' && primaryTabId && effectiveAgent) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: primaryTabId,
+      agent: effectiveAgent,
+      text: draftContent
+    })
   }
 
   // Why: at this point the workspace is live and the agent (if any) has

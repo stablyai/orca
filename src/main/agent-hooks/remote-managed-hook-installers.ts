@@ -1,5 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
+import type { AgentHookInstallStatus, AgentHookTarget } from '../../shared/agent-hook-types'
 import { ampHookService } from '../amp/hook-service'
 import { claudeHookService } from '../claude/hook-service'
 import { codexHookService } from '../codex/hook-service'
@@ -26,6 +26,8 @@ export type RemoteManagedHookInstallOptions = {
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
+  /** Positively detected and enabled agents allowed to mutate config. */
+  agents?: readonly AgentHookTarget[]
 }
 
 type RemoteManagedHookInstaller = readonly [
@@ -80,7 +82,11 @@ export async function installRemoteManagedAgentHooks(
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
   const results: AgentHookInstallStatus[] = []
+  const allowedAgents = options?.agents ? new Set(options.agents) : null
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
+    if (allowedAgents && !allowedAgents.has(agent)) {
+      continue
+    }
     // Why: relay requests can disappear during reconnect; do not start more
     // user-config mutations after their client has gone away.
     options?.signal?.throwIfAborted()

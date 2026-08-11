@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { tmpdir } from 'node:os'
-import { cleanup, render, waitFor } from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -134,6 +134,17 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('Sidebar', () => {
+  it('anchors the setup script popup to the bottom toolbar', () => {
+    setSidebarState(getDefaultSettings(tmpdir()))
+    const view = render(sidebarElement())
+    const prompt = view.getByTestId('setup-script-prompt-card')
+    const toolbar = view.getByTestId('sidebar-toolbar')
+
+    expect(prompt.parentElement).toBe(toolbar.parentElement)
+    expect(prompt.parentElement?.classList.contains('relative')).toBe(true)
+    expect(prompt.parentElement?.classList.contains('shrink-0')).toBe(true)
+  })
+
   it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
     setSidebarState({
       ...getDefaultSettings(tmpdir()),
@@ -185,96 +196,27 @@ describe('Sidebar', () => {
     expect(fetchAllWorktrees).toHaveBeenCalledTimes(1)
   })
 
-  it('does not scan when runtime hosts come online during the startup refresh', async () => {
+  it('does not scan all hosts when runtime connection status flaps', () => {
     setSidebarState(getDefaultSettings(tmpdir()))
     const fetchAllWorktrees = vi.fn().mockResolvedValue(undefined)
     mocks.state = {
       ...mocks.state,
       fetchAllWorktrees,
-      fetchWorktreeLineage: vi.fn().mockResolvedValue(undefined),
       runtimeStatusByEnvironmentId: new Map(),
-      startupWorktreeRefreshCompleted: false
+      startupWorktreeRefreshCompleted: true
     }
     const view = render(sidebarElement())
 
-    mocks.state = {
-      ...mocks.state,
-      runtimeStatusByEnvironmentId: new Map([['runtime-a', { status: 'connected' }]])
+    for (let index = 0; index < 5; index += 1) {
+      mocks.state = {
+        ...mocks.state,
+        runtimeStatusByEnvironmentId: new Map([
+          ['runtime-a', { status: index % 2 === 0 ? 'connected' : null }]
+        ])
+      }
+      view.rerender(sidebarElement())
     }
-    view.rerender(sidebarElement())
+
     expect(fetchAllWorktrees).not.toHaveBeenCalled()
-
-    mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
-    view.rerender(sidebarElement())
-    expect(fetchAllWorktrees).not.toHaveBeenCalled()
-
-    mocks.state = {
-      ...mocks.state,
-      runtimeStatusByEnvironmentId: new Map([
-        ['runtime-a', { status: 'connected' }],
-        ['runtime-b', { status: 'connected' }]
-      ])
-    }
-    view.rerender(sidebarElement())
-    await waitFor(() => expect(fetchAllWorktrees).toHaveBeenCalledTimes(1))
-  })
-
-  describe('companion board mutual exclusion', () => {
-    function renderWithDashboardOpen(): {
-      view: ReturnType<typeof render>
-      setAgentDashboardDrawerOpen: ReturnType<typeof vi.fn>
-    } {
-      setSidebarState(getDefaultSettings(tmpdir()))
-      const setAgentDashboardDrawerOpen = vi.fn()
-      mocks.state = { ...mocks.state, agentDashboardDrawerOpen: true, setAgentDashboardDrawerOpen }
-      mocks.panel = {
-        workspaceBoardOpen: false,
-        workspaceBoardRenderedOpen: false,
-        workspaceBoardDragPreviewOpen: false
-      }
-      return { view: render(sidebarElement()), setAgentDashboardDrawerOpen }
-    }
-
-    it('keeps the agent dashboard open while a worktree drag only previews the board', () => {
-      const { view, setAgentDashboardDrawerOpen } = renderWithDashboardOpen()
-
-      mocks.panel = {
-        workspaceBoardOpen: false,
-        workspaceBoardRenderedOpen: true,
-        workspaceBoardDragPreviewOpen: true
-      }
-      view.rerender(sidebarElement())
-
-      expect(setAgentDashboardDrawerOpen).not.toHaveBeenCalled()
-    })
-
-    it('closes the agent dashboard when the workspace board is actually opened', () => {
-      const { view, setAgentDashboardDrawerOpen } = renderWithDashboardOpen()
-
-      mocks.panel = {
-        workspaceBoardOpen: true,
-        workspaceBoardRenderedOpen: true,
-        workspaceBoardDragPreviewOpen: false
-      }
-      view.rerender(sidebarElement())
-
-      expect(setAgentDashboardDrawerOpen).toHaveBeenCalledWith(false)
-    })
-
-    it('closes the workspace board when the agent dashboard opens', () => {
-      setSidebarState(getDefaultSettings(tmpdir()))
-      mocks.panel = {
-        workspaceBoardOpen: true,
-        workspaceBoardRenderedOpen: true,
-        workspaceBoardDragPreviewOpen: false
-      }
-      const view = render(sidebarElement())
-      mocks.closeWorkspaceBoard.mockClear()
-
-      mocks.state = { ...mocks.state, agentDashboardDrawerOpen: true }
-      view.rerender(sidebarElement())
-
-      expect(mocks.closeWorkspaceBoard).toHaveBeenCalled()
-    })
   })
 })

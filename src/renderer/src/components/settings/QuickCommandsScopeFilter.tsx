@@ -21,7 +21,7 @@ function ScopeTriggerLabel({
 }: {
   showAll: boolean
   effectiveSelection: ReadonlySet<string>
-  repos: Repo[]
+  repos: readonly Repo[]
 }): React.JSX.Element {
   if (showAll) {
     return (
@@ -57,7 +57,7 @@ export function QuickCommandsScopeFilter({
   handleSelectAll,
   toggleScope
 }: {
-  repos: Repo[]
+  repos: readonly Repo[]
   effectiveSelection: ReadonlySet<string>
   showAll: boolean
   scopePopoverOpen: boolean

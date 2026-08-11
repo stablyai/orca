@@ -139,37 +139,37 @@ test.describe('Agent awake setting', () => {
     await waitForSessionReady(orcaPage)
   })
 
-  test('can be toggled from Agents settings and persists through IPC', async ({ orcaPage }) => {
+  test('can be changed from Agents settings and persists through IPC', async ({ orcaPage }) => {
     await openSettings(orcaPage)
     await dismissTransientAnnouncement(orcaPage)
     await orcaPage.getByPlaceholder('Search settings').fill('awake')
 
-    await expect(
-      orcaPage.getByText('Keep computer awake while agents are working').first()
-    ).toBeVisible()
+    await expect(orcaPage.getByText('Keep computer awake').first()).toBeVisible()
 
-    const keepAwakeSwitch = orcaPage.getByRole('switch', {
-      name: 'Keep computer awake while agents are working'
+    const keepAwakeModes = orcaPage.getByRole('radiogroup', {
+      name: 'Keep computer awake'
     })
+    const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
+    const autoMode = keepAwakeModes.getByRole('radio', { name: 'Auto' })
 
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'false')
-    await keepAwakeSwitch.click()
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'true')
+    await expect(offMode).toHaveAttribute('aria-checked', 'true')
+    await autoMode.click()
+    await expect(autoMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).keepComputerAwakeWhileAgentsRun, {
+      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
         timeout: 5_000,
-        message: 'keep-awake setting did not persist after enabling'
+        message: 'keep-awake mode did not persist after selecting Auto'
       })
-      .toBe(true)
+      .toBe('auto')
 
-    await keepAwakeSwitch.click()
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'false')
+    await offMode.click()
+    await expect(offMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).keepComputerAwakeWhileAgentsRun, {
+      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
         timeout: 5_000,
-        message: 'keep-awake setting did not persist after disabling'
+        message: 'keep-awake mode did not persist after selecting Off'
       })
-      .toBe(false)
+      .toBe('off')
   })
 
   test('keeps the OS awake only while a hook-reported agent is working', async ({

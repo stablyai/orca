@@ -514,6 +514,47 @@ describe('WebSocketTransport', () => {
     ws.close()
   })
 
+  it('falls back to OS-assigned port when preferred port is reserved', async () => {
+    const tls = makeTls()
+    const transport = new WebSocketTransport({
+      host: '127.0.0.1',
+      port: 6769,
+      tlsCert: tls.cert,
+      tlsKey: tls.key
+    })
+    transports.push(transport)
+
+    const privateTransport = transport as unknown as {
+      tryListen: (port: number) => Promise<void>
+    }
+    const originalTryListen = privateTransport.tryListen.bind(transport)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const tryListenSpy = vi.spyOn(privateTransport, 'tryListen')
+    tryListenSpy
+      .mockRejectedValueOnce(
+        Object.assign(new Error('listen EACCES'), {
+          code: 'EACCES',
+          syscall: 'listen',
+          port: 6769
+        })
+      )
+      .mockImplementation((port) => originalTryListen(port))
+
+    try {
+      await transport.start()
+    } finally {
+      warnSpy.mockRestore()
+    }
+
+    expect(tryListenSpy).toHaveBeenNthCalledWith(1, 6769)
+    expect(tryListenSpy).toHaveBeenNthCalledWith(2, 0)
+    expect(transport.resolvedPort).not.toBe(6769)
+    expect(transport.resolvedPort).toBeGreaterThan(0)
+
+    const ws = await connectWs(transport.resolvedPort)
+    ws.close()
+  })
+
   it('reaps a half-open client that stops responding to pings', async () => {
     // Why: regression cover for the half-open-socket leak that would
     // strand mobile clients in the connection pool until OS TCP keepalive
@@ -676,17 +717,24 @@ describe('WebSocketTransport', () => {
       expect(transport.resolvedPort).toBe(preferredPort)
     })
 
-    it('still throws when the preferred port fails with a non-EADDRINUSE error', async () => {
+    it('still throws when EACCES did not come from listening on the preferred port', async () => {
+      const preferredPort = await reserveFreePort()
       const transport = new WebSocketTransport({
         host: '127.0.0.1',
-        port: await reserveFreePort()
+        port: preferredPort
       })
       transports.push(transport)
       const withListen = transport as unknown as { tryListen(port: number): Promise<void> }
       withListen.tryListen = () =>
-        Promise.reject(Object.assign(new Error('listen EACCES'), { code: 'EACCES' }))
+        Promise.reject(
+          Object.assign(new Error('open EACCES'), {
+            code: 'EACCES',
+            syscall: 'open',
+            port: preferredPort
+          })
+        )
 
-      await expect(transport.start()).rejects.toThrow('listen EACCES')
+      await expect(transport.start()).rejects.toThrow('open EACCES')
     })
 
     it('retries the persisted fallback port before an OS-assigned one', async () => {

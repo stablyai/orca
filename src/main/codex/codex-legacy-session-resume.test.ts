@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  linkSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -9,7 +10,11 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
+import {
+  codexRolloutHardlinkIdentity,
+  dedupeCodexRolloutFileAliases
+} from '../ai-vault/codex-session-root-dedup'
 import { prepareLegacySharedCodexSessionResume } from './codex-legacy-session-resume'
 
 describe('prepareLegacySharedCodexSessionResume', () => {
@@ -117,6 +122,15 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     }
   )
 
+  it('still materializes a legacy resume when an account selection exists', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(legacyArgs(), {
+      ...options(),
+      getSelectedHostAccountCodexHomePath: () => join(root, 'codex-accounts', 'account-1', 'home')
+    })
+
+    expect(result).toEqual({ useRealCodexHome: true })
+  })
+
   function prepare() {
     return prepareLegacySharedCodexSessionResume(legacyArgs(), options())
   }
@@ -142,6 +156,174 @@ describe('prepareLegacySharedCodexSessionResume', () => {
     return join(systemHome, 'sessions', '2026', '07', '20', basename(rolloutPath))
   }
 })
+
+// Why: the session bridge hardlinks each rollout into every per-account home
+// and vault dedup keeps the lexicographically-smallest alias, so a session
+// recorded by the selected account can surface under a peer account's home.
+describe('per-account resume repin', () => {
+  let root: string
+  // Deliberately ordered so the SELECTED account loses the path tie-break.
+  let peerHome: string
+  let selectedHome: string
+  let recordedRolloutPath: string
+  let bridgedRolloutPath: string
+
+  const rolloutRelativePath = join(
+    'sessions',
+    '2026',
+    '07',
+    '20',
+    'rollout-2026-07-20T10-00-00-abcdef00-1234-4321-9999-cafecafecafe.jsonl'
+  )
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-codex-account-repin-'))
+    peerHome = join(root, 'codex-accounts', '11111111-aaaa-4aaa-8aaa-111111111111', 'home')
+    selectedHome = join(root, 'codex-accounts', '99999999-bbbb-4bbb-8bbb-999999999999', 'home')
+    recordedRolloutPath = join(selectedHome, rolloutRelativePath)
+    bridgedRolloutPath = join(peerHome, rolloutRelativePath)
+    mkdirSync(dirname(recordedRolloutPath), { recursive: true })
+    writeFileSync(recordedRolloutPath, '{"type":"session_meta"}\n', 'utf-8')
+    mkdirSync(dirname(bridgedRolloutPath), { recursive: true })
+    linkSync(recordedRolloutPath, bridgedRolloutPath)
+  })
+
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it.each([['recorded rollout first'], ['bridged alias first']])(
+    'repins the surviving vault row to the selected account, discovered %s',
+    async (order) => {
+      const recorded = rolloutCandidate(recordedRolloutPath, selectedHome)
+      const bridged = rolloutCandidate(bridgedRolloutPath, peerHome)
+      const survivors = dedupeCodexRolloutFileAliases(
+        order === 'recorded rollout first' ? [recorded, bridged] : [bridged, recorded],
+        rolloutCandidateAccessors
+      )
+
+      // The dedup pick is order-independent: the peer's alias wins the tie-break.
+      expect(survivors).toEqual([bridged])
+
+      const result = await prepareLegacySharedCodexSessionResume(
+        {
+          agent: 'codex',
+          filePath: bridged.filePath,
+          codexHome: peerHome,
+          executionHostId: 'local'
+        },
+        repinOptions()
+      )
+
+      expect(result).toEqual({ useRealCodexHome: false, substituteCodexHome: selectedHome })
+    }
+  )
+
+  it('keeps the home of a row that already names the selected account', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: recordedRolloutPath,
+        codexHome: selectedHome,
+        executionHostId: 'local'
+      },
+      repinOptions()
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  it('declines while the system default is selected', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: bridgedRolloutPath,
+        codexHome: peerHome,
+        executionHostId: 'local'
+      },
+      { ...repinOptions(), getSelectedHostAccountCodexHomePath: () => null }
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  it('declines while the bridge has not yet linked the rollout into the selected home', async () => {
+    const unbridgedSelectedHome = join(
+      root,
+      'codex-accounts',
+      'ffffffff-cccc-4ccc-8ccc-ffffffffffff',
+      'home'
+    )
+    mkdirSync(unbridgedSelectedHome, { recursive: true })
+
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: bridgedRolloutPath,
+        codexHome: peerHome,
+        executionHostId: 'local'
+      },
+      { ...repinOptions(), getSelectedHostAccountCodexHomePath: () => unbridgedSelectedHome }
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  it('declines a session owned by another host', async () => {
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: bridgedRolloutPath,
+        codexHome: peerHome,
+        executionHostId: 'ssh:server-1' as 'local'
+      },
+      repinOptions()
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  it('declines a transcript outside the dated rollout layout', async () => {
+    const straySessionPath = join(peerHome, 'sessions', 'stray.jsonl')
+    writeFileSync(straySessionPath, '{"type":"session_meta"}\n', 'utf-8')
+
+    const result = await prepareLegacySharedCodexSessionResume(
+      {
+        agent: 'codex',
+        filePath: straySessionPath,
+        codexHome: peerHome,
+        executionHostId: 'local'
+      },
+      repinOptions()
+    )
+
+    expect(result).toEqual({ useRealCodexHome: false })
+  })
+
+  function repinOptions() {
+    return {
+      isHostSystemDefaultRealHome: () => false,
+      getSelectedHostAccountCodexHomePath: () => selectedHome
+    }
+  }
+
+  function rolloutCandidate(filePath: string, codexHome: string) {
+    const stat = statSync(filePath)
+    return {
+      filePath,
+      codexHome,
+      file: { dev: stat.dev, ino: stat.ino, nlink: stat.nlink }
+    }
+  }
+})
+
+const rolloutCandidateAccessors = {
+  isCodex: () => true,
+  getFilePath: (candidate: { filePath: string }) => candidate.filePath,
+  getCodexHome: (candidate: { codexHome: string }) => candidate.codexHome,
+  getHardlinkIdentity: (candidate: { file: { dev: number; ino: number; nlink: number } }) =>
+    codexRolloutHardlinkIdentity(candidate.file)
+}
 
 function rootPlaceholder(): string {
   return '__ROOT__'

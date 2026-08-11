@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Copy, Pin, PinOff, PanelRightClose } from 'lucide-react'
+import {
+  Globe,
+  X,
+  ExternalLink,
+  Copy,
+  CopyX,
+  Pin,
+  PinOff,
+  PanelLeftClose,
+  PanelRightClose
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +37,8 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { cn } from '@/lib/utils'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -283,7 +295,10 @@ export default function BrowserTab({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          className={cn(
+            'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
+            TAB_CONTEXT_MENU_CONTENT_CLASS
+          )}
           sideOffset={0}
           align="start"
         >
@@ -309,6 +324,7 @@ export default function BrowserTab({
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+            <CopyX className="size-3.5" />
             {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
@@ -316,6 +332,7 @@ export default function BrowserTab({
             {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+            <PanelLeftClose className="size-3.5" />
             {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
           </DropdownMenuItem>
           <DropdownMenuItem

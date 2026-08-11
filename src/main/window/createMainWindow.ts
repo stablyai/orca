@@ -19,6 +19,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -42,14 +43,22 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  matchingRichMarkdownContextMenuTableTarget,
+  parseRichMarkdownContextMenuTableTarget
+} from './editable-context-menu'
+import {
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuTableTarget
+} from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
-import { reflowRendererViewport } from './renderer-viewport-reflow'
+import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -61,12 +70,9 @@ function forceRepaint(window: BrowserWindow): void {
     return
   }
   window.webContents.invalidate()
-  // Why: macOS 26 scene-backed windows deadlock the main thread on frame mutation, but invalidate
-  // alone never reflows the dvh root (STA-2383); emulation reflows without touching the frame.
-  // Runs before the maximized/fullscreen bail-out below, which only exists to protect setSize —
-  // emulation leaves those states intact, and a maximized window goes stale just the same.
+  // Why: macOS 26 scene-backed windows deadlock on frame mutation, and device emulation can
+  // strand the compositor after wake. The native shell no longer relies on dvh reflow.
   if (isMacosTahoeOrNewer()) {
-    reflowRendererViewport(window)
     return
   }
   if (window.isMaximized() || window.isFullScreen() || activeRepaintJiggles.has(window)) {
@@ -124,10 +130,8 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
     }
   }
 
-  // Why (STA-2383): occlusion-uncover fires no restore/show, so the renderer relays its genuine
-  // hidden→visible reveal instead. Unlike a bare focus (every Cmd+Tab, window never hidden), this
-  // only fires when the window was actually occluded/throttled — exactly when the stale dvh layout
-  // stranded the bottom status bar off-screen — so the full repaint's size jiggle is warranted.
+  // Why: occlusion reveal can fire no restore/show, so preserve the renderer relay without
+  // trusting events from another window.
   const onRendererRevealed = (event: Electron.IpcMainEvent): void => {
     if (window.isDestroyed() || window.webContents.isDestroyed()) {
       return
@@ -141,7 +145,7 @@ function installMacosVisibilityRepaint(window: BrowserWindow): void {
 
   window.on('restore', repaintAfterVisibilityTransition)
   window.on('show', repaintAfterVisibilityTransition)
-  // Why: occlusion-uncover fires no restore/show, only focus; invalidate only — the setSize jiggle would SIGWINCH every terminal on Cmd+Tab. The renderer-reveal relay above covers the stale-layout recovery that invalidate alone misses.
+  // Why: occlusion-uncover can fire only focus; invalidate without resizing terminals on Cmd+Tab.
   window.on('focus', () => {
     if (!window.isDestroyed() && !window.webContents.isDestroyed()) {
       window.webContents.invalidate()
@@ -301,8 +305,14 @@ export function createMainWindow(
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
 
+  // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
+  if (process.platform === 'win32') {
+    mainWindow.on('session-end', markSystemSessionEnding)
+  }
+
   if (process.platform === 'darwin') {
-    // Why: throttle the main window while hidden (guests self-unthrottle); toggle only while visible or Chromium blanks the surface (electron#42378).
+    // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
+    // make wake recovery independent of the throttled viewport.
     mainWindow.webContents.setBackgroundThrottling(true)
     installMacosVisibilityRepaint(mainWindow)
   }
@@ -441,7 +451,11 @@ export function createMainWindow(
   })
 
   installPrivilegedWindowNavigationPolicy(mainWindow.webContents)
+  // Why: containment must be listening before any plugin panel frame is created,
+  // so register it with the window's other navigation policy.
+  registerPluginPanelNavigationGuard(mainWindow.webContents)
 
+  const browserWindowClosePreload = join(__dirname, 'browser-window-close-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -453,7 +467,9 @@ export function createMainWindow(
       return
     }
 
-    delete webPreferences.preload
+    delete params.preload
+    // Why: preload runs in the page's main world before inline scripts can call window.close().
+    webPreferences.preload = browserWindowClosePreload
     // Why: older Electron builds expose preloadURL alongside preload; delete both so the guest can't inherit the main preload bridge.
     delete (webPreferences as Record<string, unknown>).preloadURL
     webPreferences.nodeIntegration = false
@@ -478,7 +494,9 @@ export function createMainWindow(
   // Why: mirror markdown-editor focus so before-input-event skips Cmd/Ctrl+B while TipTap owns focus (docs/markdown-cmd-b-bold-design.md).
   let markdownEditorFocused = false
   let terminalInputFocused = false
+  // floatingTerminalInputFocused: textarea-only (terminal keybinding context). floatingPanelFocused: superset for routing ownership.
   let floatingTerminalInputFocused = false
+  let floatingPanelFocused = false
   let shortcutRecorderFocused = false
 
   const markdownFocusChannel = 'ui:setMarkdownEditorFocused'
@@ -499,15 +517,20 @@ export function createMainWindow(
     terminalInputFocused = focused === true
   }
   ipcMain.on(terminalInputFocusChannel, onTerminalInputFocused)
-  const floatingTerminalInputFocusChannel = 'ui:setFloatingTerminalInputFocused'
-  // Why: before-input-event runs before renderer keydown; mirror floating xterm focus so Ctrl+B/L reach SSH/tmux.
-  const onFloatingTerminalInputFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
+  const floatingFocusChannel = 'ui:setFloatingFocus'
+  // Why: one atomic payload for both bits so before-input-event never reads a torn terminal=true/panel=false state.
+  // terminalFocused drives the Ctrl+B/L terminal-context carve-out; panelFocused is the routing-ownership superset (panel ⊇ terminal).
+  const onFloatingFocus = (event: Electron.IpcMainEvent, state: unknown): void => {
     if (event.sender !== mainWindow.webContents) {
       return
     }
-    floatingTerminalInputFocused = focused === true
+    const payload = (state ?? {}) as { panelFocused?: unknown; terminalFocused?: unknown }
+    const terminal = payload.terminalFocused === true
+    floatingTerminalInputFocused = terminal
+    // Re-assert the invariant defensively in case a sender ever emits panel=false with terminal=true.
+    floatingPanelFocused = payload.panelFocused === true || terminal
   }
-  ipcMain.on(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+  ipcMain.on(floatingFocusChannel, onFloatingFocus)
   const shortcutRecorderFocusChannel = 'ui:setShortcutRecorderFocused'
   // Why: the Settings recorder must receive app shortcuts to rebind them; before-input-event would otherwise consume the key first.
   const onShortcutRecorderFocused = (event: Electron.IpcMainEvent, focused: unknown): void => {
@@ -518,9 +541,24 @@ export function createMainWindow(
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
+  let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
+  const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
+  }
+  ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
-    if (template.length === 0) {
+    const tableTarget = matchingRichMarkdownContextMenuTableTarget(
+      params,
+      pendingRichMarkdownContextMenuTableTarget
+    )
+    pendingRichMarkdownContextMenuTableTarget = null
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+      tableTarget
+    })
+    if (template.length === 0 || mainWindow.isDestroyed()) {
       return
     }
     // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
@@ -531,12 +569,14 @@ export function createMainWindow(
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+    pendingRichMarkdownContextMenuTableTarget = null
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
   }
   const resetFloatingTerminalInputFocus = (): void => {
     floatingTerminalInputFocused = false
+    floatingPanelFocused = false
   }
   const resetShortcutRecorderFocus = (): void => {
     shortcutRecorderFocused = false
@@ -703,6 +743,20 @@ export function createMainWindow(
       floatingTerminalInputFocused &&
       (action.type === 'toggleLeftSidebar' || action.type === 'toggleRightSidebar')
     ) {
+      return false
+    }
+
+    const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
+    if (isIndexJump && isAutoRepeat) {
+      // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
+      // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
+      event.preventDefault()
+      return true
+    }
+
+    // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
+    // so L2 selects a floating tab instead of switching the main workspace behind the panel.
+    if (floatingPanelFocused && isIndexJump) {
       return false
     }
 
@@ -1081,6 +1135,7 @@ export function createMainWindow(
     markdownEditorFocused = false
     terminalInputFocused = false
     floatingTerminalInputFocused = false
+    floatingPanelFocused = false
     shortcutRecorderFocused = false
     clearRendererRecoveryTimer()
     ipcMain.removeListener(trafficLightChannel, onSyncTrafficLights)
@@ -1094,8 +1149,9 @@ export function createMainWindow(
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
     ipcMain.removeListener(markdownFocusChannel, onMarkdownEditorFocused)
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
-    ipcMain.removeListener(floatingTerminalInputFocusChannel, onFloatingTerminalInputFocused)
+    ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)

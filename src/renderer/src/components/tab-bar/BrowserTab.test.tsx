@@ -60,6 +60,9 @@ vi.mock('lucide-react', () => ({
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
   },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
+  },
   ExternalLink: function ExternalLink(props: Record<string, unknown>) {
     return { type: 'ExternalLink', props }
   },
@@ -71,6 +74,9 @@ vi.mock('lucide-react', () => ({
   },
   PinOff: function PinOff(props: Record<string, unknown>) {
     return { type: 'PinOff', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
   },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }

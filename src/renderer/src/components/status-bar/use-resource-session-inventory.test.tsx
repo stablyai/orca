@@ -1,11 +1,12 @@
 // @vitest-environment happy-dom
-import { act, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DaemonSession } from './resource-usage-merge-types'
+import { notifyDaemonSessionInventoryInvalidated } from './daemon-session-inventory-invalidation'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 
 function session(id: string): DaemonSession {
-  return { id, cwd: '/workspace', title: id }
+  return { id, cwd: '/workspace', title: id, agentOwnership: 'absent' as const }
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -45,6 +46,8 @@ describe('useResourceSessionInventory', () => {
   })
 
   afterEach(() => {
+    // Unmount leftover hooks so their module-level invalidation subscriptions cannot bleed into the next test.
+    cleanup()
     delete (window as unknown as { api?: unknown }).api
   })
 
@@ -252,6 +255,39 @@ describe('useResourceSessionInventory', () => {
     })
 
     expect(result.current.sessionInventory.count).toBe(2)
+  })
+
+  it('re-reads the inventory once when a management kill invalidates it without a pty exit', async () => {
+    listSessions
+      .mockResolvedValueOnce([session('one'), session('two')])
+      .mockResolvedValue([session('one')])
+    const { result } = renderHook(() => useResourceSessionInventory(true))
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(2))
+
+    await act(async () => {
+      notifyDaemonSessionInventoryInvalidated()
+    })
+
+    await waitFor(() => expect(result.current.sessionInventory.count).toBe(1))
+    expect(listSessions).toHaveBeenCalledTimes(2)
+  })
+
+  it('ignores inventory invalidation before session restore is ready and after unmount', async () => {
+    listSessions.mockResolvedValue([session('one')])
+    const { unmount } = renderHook(({ ready }) => useResourceSessionInventory(ready), {
+      initialProps: { ready: false }
+    })
+
+    await act(async () => {
+      notifyDaemonSessionInventoryInvalidated()
+    })
+    expect(listSessions).not.toHaveBeenCalled()
+
+    unmount()
+    await act(async () => {
+      notifyDaemonSessionInventoryInvalidated()
+    })
+    expect(listSessions).not.toHaveBeenCalled()
   })
 
   it('unsubscribes from lifecycle events on unmount', () => {

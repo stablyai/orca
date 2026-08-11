@@ -28,16 +28,6 @@ export function getProjectHeaderDragBucketKey(
   return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
 }
 
-export function getSidebarOrderedRepoHeaderIds(rows: readonly Row[]): string[] {
-  const ids: string[] = []
-  for (const row of rows) {
-    if (row.type === 'header' && row.repo) {
-      ids.push(row.repo.id)
-    }
-  }
-  return ids
-}
-
 export function getSidebarOrderedRepoHeaderIdsByBucket(
   rows: readonly Row[]
 ): Map<ProjectHeaderDragBucketKey, string[]> {

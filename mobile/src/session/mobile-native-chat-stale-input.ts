@@ -41,6 +41,9 @@ export async function healMobileNativeChatStaleInput(args: {
   readonly client: Pick<RpcClient, 'sendRequest'>
   readonly terminal: string
   readonly deviceToken: string | null
+  /** Budget shared with the write this heal precedes, so a hung clear can't spend a
+   *  full send timeout and leave the following write free to spend another. */
+  readonly deadline?: number
 }): Promise<boolean> {
   if (!isMobileNativeChatInputStale(args.terminal)) {
     return true
@@ -51,7 +54,8 @@ export async function healMobileNativeChatStaleInput(args: {
       client: args.client,
       terminal: args.terminal,
       deviceToken: args.deviceToken,
-      imagePaths: []
+      imagePaths: [],
+      ...(args.deadline === undefined ? {} : { deadline: args.deadline })
     })
   } catch {
     // Leave marked for the next attempt.

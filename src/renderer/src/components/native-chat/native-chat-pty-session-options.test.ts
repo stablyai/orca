@@ -5,21 +5,47 @@ import {
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { mergeDiscoveredAuthoritativeModels } from '../../../../shared/agent-session-option-catalog'
+import { GROK_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-grok'
+import {
+  resolveNativeChatSessionOptionDefaults,
+  updateNativeChatSessionOptionDefaults
+} from '../../../../shared/native-chat-session-option-defaults'
+import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
 
 describe('native chat PTY session options', () => {
   beforeEach(() => clearNativeChatSessionOptionCacheForTests())
 
-  it('starts attached sessions unknown and hides model-scoped options', () => {
+  it('renders nothing when no model list exists at all', () => {
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      initialModels: [],
+      mode: 'live',
+      dispatchCommand: vi.fn()
+    })!
+    expect(surface.getSnapshot()).toEqual([])
+  })
+
+  it('renders the version-neutral seed picker before any host catalog arrives', () => {
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
       dispatchCommand: vi.fn()
     })!
-    expect(surface.getSnapshot()).toHaveLength(1)
+
     expect(surface.getSnapshot()[0]).toMatchObject({
       id: 'model',
-      valueSource: 'unknown'
+      valueSource: 'unknown',
+      kind: {
+        choices: [
+          expect.objectContaining({ value: 'fable', label: 'Fable' }),
+          expect.objectContaining({ value: 'opus', label: 'Opus' }),
+          expect.objectContaining({ value: 'sonnet', label: 'Sonnet' }),
+          expect.objectContaining({ value: 'haiku', label: 'Haiku' })
+        ]
+      }
     })
   })
 
@@ -98,7 +124,9 @@ describe('native chat PTY session options', () => {
     expect(persist).toHaveBeenCalledWith({
       modelId: 'opus',
       optionId: 'effort',
-      value: 'high'
+      value: 'high',
+      // Claude tracks a real model here, so this stays a persistable selection.
+      adoptModelAsLaunchDefault: true
     })
   })
 
@@ -122,7 +150,7 @@ describe('native chat PTY session options', () => {
 
     expect(dispatch).toHaveBeenCalledWith('/model fable', {
       detectAgentInteraction: 'claude-model-switch-confirmation',
-      expectedChoiceLabel: 'Fable 5'
+      expectedChoiceLabel: 'Fable'
     })
     expect(onAgentPicker).not.toHaveBeenCalled()
     expect(result.snapshot[0]).toMatchObject({
@@ -518,7 +546,7 @@ describe('native chat PTY session options', () => {
     )
   })
 
-  it('hands Codex model changes to the TUI picker and drops stale truth', async () => {
+  it('hands Codex effort changes to the TUI picker and drops stale truth', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'codex', {
       model: 'gpt-5.5',
       effort: 'high'
@@ -537,7 +565,7 @@ describe('native chat PTY session options', () => {
     )
 
     const result = await surface.invokeAction('effort')
-    expect(dispatch).toHaveBeenCalledWith('/model')
+    expect(dispatch).toHaveBeenCalledWith('/model', { delivery: 'type' })
     expect(onAgentPicker).toHaveBeenCalledOnce()
     expect(result.snapshot).toHaveLength(1)
     expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })
@@ -603,6 +631,58 @@ describe('native chat PTY session options', () => {
     })
   })
 
+  it('keeps a tracked alias selectable when the host catalog omits it', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
+      model: 'opus',
+      effort: 'xhigh'
+    })
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      // Why: current CLIs list `opus[1m]` and no plain `opus`.
+      initialModels: [
+        { id: 'opus[1m]', label: 'Opus (1M context)', options: [] },
+        { id: 'sonnet', label: 'Sonnet', options: [] }
+      ],
+      mode: 'live',
+      dispatchCommand: dispatch
+    })!
+
+    expect(surface.getSnapshot()[0].kind).toMatchObject({
+      currentValue: 'opus',
+      choices: expect.arrayContaining([
+        { value: 'opus', label: 'Opus', description: expect.any(String) }
+      ])
+    })
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      settable: true,
+      kind: { currentValue: 'xhigh' }
+    })
+
+    await surface.setOption('effort', 'high')
+
+    expect(dispatch).toHaveBeenCalledWith('/effort high')
+  })
+
+  it('drops the reconciled row once the tracked model moves onto the host catalog', async () => {
+    seedNativeChatAppliedSessionOptions('pty-1', 'claude', { model: 'opus' })
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'claude',
+      scopeKey: 'pty-1',
+      initialModels: [{ id: 'opus[1m]', label: 'Opus (1M context)', options: [] }],
+      mode: 'live',
+      dispatchCommand: vi.fn()
+    })!
+
+    await surface.setOption('model', 'opus[1m]')
+
+    expect(surface.getSnapshot()[0].kind).toMatchObject({
+      currentValue: 'opus[1m]',
+      choices: [{ value: 'opus[1m]', label: 'Opus (1M context)' }]
+    })
+  })
+
   it('recomposes Cursor model slugs for live option changes', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'cursor', {
       model: 'gpt-5.3-codex',
@@ -624,6 +704,187 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
       kind: { currentValue: 'high' }
+    })
+  })
+
+  it('names grok’s CLI default on load and still applies the rows it draws', async () => {
+    const dispatch = vi.fn()
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: dispatch
+    })!
+    // Nothing tracked means no `-m` was emitted, so grok is on its own default.
+    expect(surface.getSnapshot()[0]).toMatchObject({
+      id: 'model',
+      valueSource: 'default',
+      kind: { currentValue: 'grok-4.5' }
+    })
+
+    // Regression: the effort row hangs off that default model, so resolving the apply
+    // from the tracked model alone threw `Unknown session option: effort` on click.
+    await surface.setOption('effort', 'low')
+
+    expect(dispatch).toHaveBeenCalledWith('/effort low')
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'low' }
+    })
+  })
+
+  it('does not adopt grok’s unprobed seed default as a persisted launch model', async () => {
+    // Regression: setting an option under the CLI default wrote `model` into settings,
+    // so every later grok launch app-wide emitted `-m grok-4.5` — on an account without
+    // that model, a fatal launch the user never opted into. No discovery has run here,
+    // so `grok-4.5` is still only the seed's guess.
+    let persisted: PersistedNativeChatSessionOptions = {}
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn(),
+      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
+        persisted = updateNativeChatSessionOptionDefaults({
+          persisted,
+          agent: 'grok',
+          modelId,
+          optionId,
+          value,
+          adoptModelAsLaunchDefault
+        })
+      }
+    })!
+
+    await surface.setOption('effort', 'low')
+
+    expect(persisted.grok?.model).toBeUndefined()
+    // The scoped value is still remembered for a later explicit pick of that model.
+    expect(persisted.grok?.valuesByModel?.['grok-4.5']?.effort).toBe('low')
+    expect(resolveNativeChatSessionOptionDefaults(persisted, 'grok')).toBeUndefined()
+
+    // A model the user actually picks still becomes the launch default.
+    await surface.setOption('model', 'grok-4.5')
+    expect(persisted.grok?.model).toBe('grok-4.5')
+  })
+
+  it('commits an effort grok accepted even when discovery lands mid-dispatch', async () => {
+    // Regression: the staleness guard resolved through the model list, so a probe
+    // settling mid-dispatch moved which row is `isDefault` and looked like a model
+    // switch — discarding a value the agent had already applied.
+    let release = (): void => {}
+    let markDispatched = (): void => {}
+    const dispatched = new Promise<void>((resolve) => {
+      markDispatched = resolve
+    })
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      dispatchCommand: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            release = () => resolve()
+            markDispatched()
+          })
+      )
+    })!
+
+    const pending = surface.setOption('effort', 'low')
+    await dispatched
+    surface.replaceModels(
+      mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
+        { id: 'grok-4.5', label: 'Grok 4.5', options: [] },
+        { id: 'grok-5', label: 'Grok 5', isDefault: true, options: [] }
+      ])
+    )
+    release()
+    await pending
+
+    expect(surface.getSnapshot().find(({ id }) => id === 'effort')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: 'low' }
+    })
+  })
+
+  it('files a dispatched effort under the default the probe reported, not the seed guess', async () => {
+    // With nothing tracked the session launched without `-m`, so it is running whatever
+    // grok defaults to — a fact only `grok models` knows. The pre-dispatch id is the
+    // seed's guess; committing under it would file the value against a model that was
+    // never running and blank the pill the user just set.
+    const persistSelection = vi.fn()
+    let release = (): void => {}
+    let markDispatched = (): void => {}
+    const dispatched = new Promise<void>((resolve) => {
+      markDispatched = resolve
+    })
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      persistSelection,
+      dispatchCommand: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            release = () => resolve()
+            markDispatched()
+          })
+      )
+    })!
+
+    const pending = surface.setOption('effort', 'low')
+    await dispatched
+    surface.replaceModels(
+      mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
+        { id: 'grok-5', label: 'Grok 5', isDefault: true, options: [] },
+        { id: 'grok-build', label: 'Grok Build', options: [] }
+      ])
+    )
+    release()
+    await pending
+
+    expect(persistSelection).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'grok-5', optionId: 'effort', value: 'low' })
+    )
+    // A tracked model is returned verbatim by the resolver, so this re-resolution can
+    // only ever move an untracked, never-selected id — never one the user picked. The
+    // probe that landed mid-dispatch also confirmed grok-5, so it is safe to adopt.
+    expect(persistSelection).toHaveBeenCalledWith(
+      expect.objectContaining({ adoptModelAsLaunchDefault: true })
+    )
+  })
+
+  it('carries an effort set under a probe-confirmed default into later launches', async () => {
+    // Regression: the value persisted under the model id while `model` stayed unset, so
+    // resolveNativeChatSessionOptionDefaults bailed and every new grok tab reverted to
+    // the catalog default — the setting silently never survived a relaunch.
+    let persisted: PersistedNativeChatSessionOptions = {}
+    const surface = createNativeChatPtySessionOptions({
+      agent: 'grok',
+      scopeKey: 'pty-1',
+      mode: 'live',
+      initialModels: mergeDiscoveredAuthoritativeModels(GROK_SESSION_OPTION_CATALOG.models, [
+        { id: 'grok-4.5', label: 'Grok 4.5', isDefault: true, options: [] }
+      ]),
+      dispatchCommand: vi.fn(),
+      persistSelection: ({ modelId, optionId, value, adoptModelAsLaunchDefault }) => {
+        persisted = updateNativeChatSessionOptionDefaults({
+          persisted,
+          agent: 'grok',
+          modelId,
+          optionId,
+          value,
+          adoptModelAsLaunchDefault
+        })
+      }
+    })!
+
+    await surface.setOption('effort', 'low')
+
+    expect(persisted.grok?.model).toBe('grok-4.5')
+    expect(resolveNativeChatSessionOptionDefaults(persisted, 'grok')).toMatchObject({
+      model: 'grok-4.5',
+      effort: 'low'
     })
   })
 })

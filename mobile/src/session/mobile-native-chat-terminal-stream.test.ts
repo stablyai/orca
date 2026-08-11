@@ -80,13 +80,26 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     )
   })
 
+  it('rearms a covered stream that lost its subscription', () => {
+    // The covered stream IS the input lease, and nothing else re-subscribes it —
+    // losing it while chat is open must not leave the composer locked (#10681).
+    expect(
+      resolveMobileNativeChatTerminalStreamAction({
+        ...base,
+        showNativeChat: true,
+        streamActive: false,
+        streamCovered: true
+      })
+    ).toBe('rearm')
+  })
+
   it('does nothing for non-terminal tabs, missing handles, or settled states', () => {
     expect(resolveMobileNativeChatTerminalStreamAction(base)).toBe('none')
     expect(
       resolveMobileNativeChatTerminalStreamAction({
         ...base,
         showNativeChat: true,
-        streamActive: false,
+        streamActive: true,
         streamCovered: true
       })
     ).toBe('none')
@@ -96,5 +109,13 @@ describe('mobile native-chat terminal stream lifecycle', () => {
     expect(resolveMobileNativeChatTerminalStreamAction({ ...base, activeHandle: null })).toBe(
       'none'
     )
+    // Leaving chat with the WebView not yet ready must wait, not resume blind.
+    expect(
+      resolveMobileNativeChatTerminalStreamAction({
+        ...base,
+        streamCovered: true,
+        webViewReady: false
+      })
+    ).toBe('none')
   })
 })

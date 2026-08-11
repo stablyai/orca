@@ -33,17 +33,30 @@ describe('timer delay policy', () => {
     expect(parsePositiveSafeIntegerText(raw)).toBe(expected)
   })
 
-  it.each(['', '0', '-1', '1.5', '.1', '1e-1', '9007199254740991.1', '9007199254740992'])(
-    'rejects inexact or unsafe integer text %s',
-    (raw) => {
-      expect(parsePositiveSafeIntegerText(raw)).toBeNull()
-    }
-  )
+  it.each([
+    '',
+    '0',
+    '-1',
+    '1.5',
+    '.1',
+    '1e-1',
+    '1.0000000000000000001',
+    '+1.0000000000000000001',
+    '9007199254740991.1',
+    '9007199254740992'
+  ])('rejects inexact or unsafe integer text %s', (raw) => {
+    expect(parsePositiveSafeIntegerText(raw)).toBeNull()
+  })
 
+  // Values the CLI's own Number() coercion accepts must parse to the same
+  // budget here, or the caller's timer expires before the CLI's does.
   it.each([
     ['+1000', 1_000],
     ['1000.0', 1_000],
-    ['1e3', 1_000]
+    ['1e3', 1_000],
+    ['1.0000000000000000001', 1],
+    ['+1.0000000000000000001', 1],
+    ['600000.000000000000001', 600_000]
   ])('parses CLI-compatible positive integer text %s', (raw, expected) => {
     expect(parsePositiveSafeIntegerNumericText(raw)).toBe(expected)
   })

@@ -24,12 +24,19 @@ type Args = {
   readonly getActiveWorktreeConnectionId: () => Promise<string | null>
   readonly beforeTerminalSend: (terminal: string) => Promise<boolean>
   /** Outcome-preserving so an ambiguous ('unknown') delivery after an image
-   *  paste can mark the terminal input for healing (#10228). */
+   *  paste can mark the terminal input for healing (#10228). Takes the image
+   *  send's budget so the paste and this text body share one `sending` window. */
   readonly nativeChatBaseSend: (
     text: string,
-    images?: string[]
+    images?: string[],
+    deadline?: number
   ) => Promise<MobileNativeChatSendOutcome>
+  /** Launch-context text parked on the agent's TUI input line, or null — sizes
+   *  the image paste's leading clear so a multi-line draft cannot ride along. */
+  readonly readSeededLaunchDraft: () => string | null
   readonly showToast: (message: string, durationMs?: number) => void
+  /** Native-chat send failures — rendered in the composer's inline banner. */
+  readonly onNativeChatSendError: (message: string) => void
   readonly onSuccess: () => void
   readonly onError: () => void
 }
@@ -50,7 +57,9 @@ export function useMobileSessionImageAttachments({
   getActiveWorktreeConnectionId,
   beforeTerminalSend,
   nativeChatBaseSend,
+  readSeededLaunchDraft,
   showToast,
+  onNativeChatSendError,
   onSuccess,
   onError
 }: Args): {
@@ -79,7 +88,9 @@ export function useMobileSessionImageAttachments({
     scopeKey: nativeChatScopeKey,
     enabled: nativeChatInputLeaseReady,
     showToast,
+    onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
+    readSeededLaunchDraft,
     onAttachSuccess: onSuccess,
     onError
   })

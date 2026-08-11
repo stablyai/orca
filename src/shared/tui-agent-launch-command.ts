@@ -1,4 +1,7 @@
-import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
+import {
+  removeOverriddenAgentSessionArgs,
+  resolveAgentSessionOptionLaunch
+} from './agent-session-option-launch'
 import type { SessionOptionValue } from './native-chat-session-options'
 import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
@@ -25,6 +28,7 @@ export function resolveAgentLaunchCommand(args: {
   shell: AgentStartupShell
   agentArgs?: string | null
   sessionOptions?: Record<string, SessionOptionValue>
+  sessionOptionsOverrideAgentArgs?: boolean
   isRemote?: boolean
 }): ResolvedAgentLaunchCommand {
   const override = args.cmdOverrides[args.agent]
@@ -46,17 +50,60 @@ export function resolveAgentLaunchCommand(args: {
   const resolvedOptions = resolveAgentSessionOptionLaunch(
     args.agent,
     args.sessionOptions,
-    trailingTokens.tokens
+    args.sessionOptionsOverrideAgentArgs ? [] : trailingTokens.tokens,
+    !args.sessionOptionsOverrideAgentArgs
   )
+  if (override && args.sessionOptionsOverrideAgentArgs) {
+    const overrideTokens = tokenizeStartupCommand(override, args.shell)
+    if (!overrideTokens.ok) {
+      return { ok: false, error: `Agent command override is invalid: ${overrideTokens.error}` }
+    }
+    const commandOverrideOptions = resolveAgentSessionOptionLaunch(
+      args.agent,
+      args.sessionOptions,
+      overrideTokens.tokens,
+      false
+    )
+    if (
+      Object.entries(resolvedOptions.appliedValues).some(
+        ([key, value]) => commandOverrideOptions.appliedValues[key] !== value
+      )
+    ) {
+      return {
+        ok: false,
+        error:
+          'Agent command override conflicts with the requested launch preferences. Remove model or effort flags from the command override.'
+      }
+    }
+  }
   const optionSuffix = resolvedOptions.args.map((arg) => quoteStartupArg(arg, args.shell)).join(' ')
-  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
   const commandWithoutSessionOptions = suffix.suffix ? `${command} ${suffix.suffix}` : command
-  // Why: session flags precede the free-form suffix so the user's explicit
-  // repeated flag remains the final, winning occurrence.
+  const commandWithOptions = optionSuffix ? `${command} ${optionSuffix}` : command
+  const overrideTokens = args.sessionOptionsOverrideAgentArgs
+    ? insertBeforeTerminator(
+        removeOverriddenAgentSessionArgs(args.agent, args.sessionOptions, trailingTokens.tokens),
+        resolvedOptions.args
+      )
+    : []
+  const commandWithOverrides = overrideTokens.length
+    ? `${command} ${overrideTokens.map((token) => quoteStartupArg(token, args.shell)).join(' ')}`
+    : command
   return {
     ok: true,
-    command: suffix.suffix ? `${commandWithOptions} ${suffix.suffix}` : commandWithOptions,
+    command: args.sessionOptionsOverrideAgentArgs
+      ? commandWithOverrides
+      : suffix.suffix
+        ? `${commandWithOptions} ${suffix.suffix}`
+        : commandWithOptions,
     commandWithoutSessionOptions,
     appliedSessionOptions: resolvedOptions.appliedValues
   }
+}
+
+function insertBeforeTerminator(tokens: readonly string[], inserted: readonly string[]): string[] {
+  const terminator = tokens.indexOf('--')
+  if (terminator === -1) {
+    return [...tokens, ...inserted]
+  }
+  return [...tokens.slice(0, terminator), ...inserted, ...tokens.slice(terminator)]
 }

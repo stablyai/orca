@@ -3,9 +3,11 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { isMissingRemoteSessionPathError, statRemoteSessionFile } from './remote-session-file-stat'
-import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
+import { mapRemoteScanBatches } from './remote-session-scan-batching'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { recordRemoteSessionScanIssue } from './remote-session-scan-issues'
 import type {
   RemoteScannerContext,
   RemoteSessionCandidate,
@@ -22,19 +24,24 @@ export async function discoverRemoteSourceCandidates(args: {
   const walked = args.source.fixedChildFileSegments
     ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
     : await walkRemoteSessionFiles(args.source, args.context, args.issues)
-  const partition = args.source.collectSubagentSiblingCounts
-    ? partitionSubagentTranscriptPaths(walked)
-    : null
+  const partition = args.source.partitionSubagentTranscripts?.(walked) ?? null
   const paths = partition ? partition.sessionFilePaths : walked
-  const files = await mapDiscoveryConcurrently(paths, (path) =>
-    statRemoteSessionFile(
-      args.context.provider,
-      path,
-      args.source.agent,
-      args.context.executionHostId,
-      args.issues,
-      { missingIsExpected: Boolean(args.source.fixedChildFileSegments) }
-    )
+  const files = await mapRemoteScanBatches(
+    paths,
+    REMOTE_DISCOVERY_CONCURRENCY,
+    (path) =>
+      statRemoteSessionFile(
+        args.context.provider,
+        path,
+        args.source.agent,
+        args.context.executionHostId,
+        args.issues,
+        {
+          missingIsExpected: Boolean(args.source.fixedChildFileSegments),
+          signal: args.context.signal
+        }
+      ),
+    args.context.signal
   )
   return files
     .filter((file): file is FileWithMtime => Boolean(file))
@@ -50,10 +57,12 @@ async function listRemoteFixedChildFiles(
   context: RemoteScannerContext,
   issues: AiVaultScanIssue[]
 ): Promise<string[]> {
+  throwIfAiVaultScanCancelled(context.signal)
   let entries
   try {
     entries = await context.provider.readDir(source.rootDir)
   } catch (err) {
+    throwIfAiVaultScanCancelled(context.signal)
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, source.rootDir, err)
     return []
   }
@@ -73,10 +82,12 @@ async function walkRemoteSessionFiles(
   dirPath = source.rootDir,
   depth = 0
 ): Promise<string[]> {
+  throwIfAiVaultScanCancelled(context.signal)
   let entries
   try {
     entries = await context.provider.readDir(dirPath)
   } catch (err) {
+    throwIfAiVaultScanCancelled(context.signal)
     recordRemoteDirectoryIssue(source, context.executionHostId, issues, dirPath, err)
     return []
   }
@@ -84,6 +95,7 @@ async function walkRemoteSessionFiles(
   const extensions = new Set(source.extensions)
   const files: string[] = []
   for (const entry of entries) {
+    throwIfAiVaultScanCancelled(context.signal)
     const fullPath = joinRemotePath(context.hostPlatform, dirPath, entry.name)
     if (
       entry.isDirectory &&
@@ -112,18 +124,12 @@ function recordRemoteDirectoryIssue(
   err: unknown
 ): void {
   if (!isMissingRemoteSessionPathError(err)) {
-    issues.push({ executionHostId, agent: source.agent, path, message: errorMessage(err) })
+    recordRemoteSessionScanIssue(issues, {
+      executionHostId,
+      agent: source.agent,
+      kind: 'host',
+      path,
+      message: errorMessage(err)
+    })
   }
-}
-
-async function mapDiscoveryConcurrently<T, U>(
-  items: readonly T[],
-  mapper: (item: T) => Promise<U>
-): Promise<U[]> {
-  const results: U[] = []
-  for (let index = 0; index < items.length; index += REMOTE_DISCOVERY_CONCURRENCY) {
-    const batch = items.slice(index, index + REMOTE_DISCOVERY_CONCURRENCY)
-    results.push(...(await Promise.all(batch.map(mapper))))
-  }
-  return results
 }

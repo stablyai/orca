@@ -130,6 +130,23 @@
     'SF Mono', SFMono-Regular, ui-monospace, 'Cascadia Code', Menlo, Consolas, 'Liberation Mono',
     monospace;
   --radius: 0.625rem;
+  --orca-security-background: #fff;
+  --orca-security-foreground: #0a0a0a;
+  --orca-security-card: #fff;
+  --orca-security-card-foreground: #0a0a0a;
+  --orca-security-popover: #fff;
+  --orca-security-popover-foreground: #0a0a0a;
+  --orca-security-primary: #171717;
+  --orca-security-primary-foreground: #fafafa;
+  --orca-security-secondary: #f5f5f5;
+  --orca-security-secondary-foreground: #171717;
+  --orca-security-muted: #f5f5f5;
+  --orca-security-muted-foreground: #737373;
+  --orca-security-accent: #f5f5f5;
+  --orca-security-accent-foreground: #171717;
+  --orca-security-border: #e5e5e5;
+  --orca-security-input: #e5e5e5;
+  --orca-security-ring: #a1a1a1;
   --background: #fff;
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
@@ -216,6 +233,23 @@
 /* ── Dark Mode ───────────────────────────────────────── */
 
 .dark {
+  --orca-security-background: #0a0a0a;
+  --orca-security-foreground: #fafafa;
+  --orca-security-card: #171717;
+  --orca-security-card-foreground: #fafafa;
+  --orca-security-popover: #171717;
+  --orca-security-popover-foreground: #fafafa;
+  --orca-security-primary: #e5e5e5;
+  --orca-security-primary-foreground: #171717;
+  --orca-security-secondary: #262626;
+  --orca-security-secondary-foreground: #fafafa;
+  --orca-security-muted: #262626;
+  --orca-security-muted-foreground: #a1a1a1;
+  --orca-security-accent: #404040;
+  --orca-security-accent-foreground: #fafafa;
+  --orca-security-border: rgb(255 255 255 / 0.07);
+  --orca-security-input: rgb(255 255 255 / 0.15);
+  --orca-security-ring: #737373;
   --background: #0a0a0a;
   --editor-surface: #1e1e1e;
   --foreground: #fafafa;
@@ -299,6 +333,28 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
   --tab-group-split-divider-strong: #a1a1aa;
+}
+
+.plugin-security-chrome {
+  /* Why: plugin themes may style the app, but provenance and consent must
+     retain host-owned contrast so a pack cannot disguise a trust decision. */
+  --background: var(--orca-security-background);
+  --foreground: var(--orca-security-foreground);
+  --card: var(--orca-security-card);
+  --card-foreground: var(--orca-security-card-foreground);
+  --popover: var(--orca-security-popover);
+  --popover-foreground: var(--orca-security-popover-foreground);
+  --primary: var(--orca-security-primary);
+  --primary-foreground: var(--orca-security-primary-foreground);
+  --secondary: var(--orca-security-secondary);
+  --secondary-foreground: var(--orca-security-secondary-foreground);
+  --muted: var(--orca-security-muted);
+  --muted-foreground: var(--orca-security-muted-foreground);
+  --accent: var(--orca-security-accent);
+  --accent-foreground: var(--orca-security-accent-foreground);
+  --border: var(--orca-security-border);
+  --input: var(--orca-security-input);
+  --ring: var(--orca-security-ring);
 }
 
 .linear-priority-bars {
@@ -394,10 +450,7 @@
     margin: 0;
     padding: 0;
     overflow: hidden;
-    /* Why: dvh tracks the visible viewport so the web app shell isn't taller
-       than the screen when a mobile browser's URL bar is shown (100vh = the
-       large viewport, which forces a ~40-100px scroll). In Electron there is
-       no browser chrome, so dvh resolves identically to the window height. */
+    /* Why: mobile browser chrome changes the visible viewport while open. */
     height: 100dvh;
     font-family: var(
       --app-font-family,
@@ -635,6 +688,14 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+}
+
+/* Why: native windows have a stable content box and need no wake-time viewport reflow. */
+html.native-shell,
+html.native-shell body,
+html.native-shell #root,
+html.native-shell .app-layout {
+  height: 100%;
 }
 
 /* Tab-group split resize handle — wide hit area, visible center line. */
@@ -966,11 +1027,6 @@
   color: var(--muted-foreground);
 }
 
-.titlebar-profile-switcher {
-  -webkit-app-region: no-drag;
-  flex-shrink: 0;
-}
-
 .editor-header {
   display: flex;
   align-items: center;
@@ -1108,11 +1164,11 @@
   background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
 }
 
-/* Why: mixing into the concrete sidebar surface keeps selected contrast stable,
-   including when a custom translucent sidebar theme is active. */
+/* Why: the brighter border carries the selected state; a translucent wash keeps
+   card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
@@ -1122,7 +1178,7 @@
     var(--worktree-sidebar-foreground) 18%,
     var(--worktree-sidebar-border)
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 16%, var(--worktree-sidebar));
+  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 
@@ -1155,16 +1211,6 @@
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   background: color-mix(in srgb, var(--accent) 70%, transparent);
-}
-
-/* Why: sidebar-accent sits too close to sidebar for this persistent prompt;
-   a foreground mix creates the requested light/dark separation without a new token. */
-.setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 5%, var(--sidebar));
-}
-
-.dark .setup-script-prompt-card {
-  background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar));
 }
 
 /* Why: one-shot sidebar education cards need stronger separation than
@@ -1404,6 +1450,26 @@
   grid-template-rows: 1fr;
 }
 
+/* Why: must stay a compositor-driven CSS animation — a JS clock writing
+   per-element transforms blocks the renderer input thread (STA-3328: 41
+   spinners ⇒ ~490 style writes/s, keystroke p90 363ms). The component anchors
+   each animation's startTime once; steps(12) preserves the retired cadence. */
+@keyframes agent-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.agent-working-spinner {
+  animation: agent-spinner-rotate 1s steps(12, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-working-spinner {
+    animation: none;
+  }
+}
+
 /* Why: keyframes run when the content mounts already in its final state. */
 @keyframes compact-agent-expansion-reveal {
   from {
@@ -1575,6 +1641,30 @@
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
+}
+
+.repo-icon-emoji-picker .EmojiPickerReact {
+  --epr-bg-color: var(--card);
+  --epr-category-label-bg-color: var(--card);
+  --epr-text-color: var(--card-foreground);
+  --epr-search-input-bg-color: var(--input);
+  --epr-search-input-bg-color-active: var(--input);
+  --epr-search-border-color: var(--border);
+  --epr-search-border-color-active: var(--ring);
+  --epr-hover-bg-color: var(--accent);
+  --epr-highlight-color: var(--ring);
+  --epr-picker-border-color: var(--border);
+  border: none;
+}
+
+/* The library sets `font-family: sans-serif` on every descendant, so inheriting from the root never lands. */
+.repo-icon-emoji-picker .EmojiPickerReact * {
+  font-family: var(--font-sans);
+}
+
+.repo-icon-emoji-picker .epr-body {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--muted-foreground, #737373) 34%, transparent) transparent;
 }
 
 .collapsible-height-content {
@@ -2136,6 +2226,17 @@
   animation: update-card-enter 200ms ease-out both;
 }
 
+/* Why: `skills update` reports no parseable progress, so the skill-update bar is
+   deliberately indeterminate rather than a faked percentage. */
+@keyframes skill-update-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(365%);
+  }
+}
+
 .animate-update-card-exit {
   animation: update-card-exit 150ms ease-in both;
 }
@@ -2493,106 +2594,6 @@
   animation: feature-wall-meta-pulse 1100ms ease-out 1;
 }
 
-/* Onboarding step 5: the compact "Take the tour" intro expands into the
-   full tour shell, so animate the browser snapshots to avoid a hard jump. */
-html.onboarding-tour-start-transition::view-transition-old(root),
-html.onboarding-tour-start-transition::view-transition-new(root) {
-  animation-duration: 760ms;
-  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  animation-fill-mode: both;
-  mix-blend-mode: normal;
-}
-
-html.onboarding-tour-start-transition::view-transition-old(root) {
-  animation-name: onboarding-tour-start-old;
-}
-
-html.onboarding-tour-start-transition::view-transition-new(root) {
-  animation-name: onboarding-tour-start-new;
-}
-
-@keyframes onboarding-tour-start-old {
-  0% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-  28% {
-    opacity: 0.9;
-    transform: translateY(-2px) scale(0.998);
-  }
-  42% {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.99);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-12px) scale(0.99);
-  }
-}
-
-@keyframes onboarding-tour-start-new {
-  0% {
-    opacity: 0;
-    transform: translateY(18px) scale(0.992);
-  }
-  34% {
-    opacity: 0;
-    transform: translateY(18px) scale(0.992);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* ── Feature tour nudge: cycling preview ─────────────────────────── */
-
-/* Why: the bottom-right nudge cycles through 4 silhouette frames
-   (Workspace → Orchestration → Tasks → Terminal). Each frame is visible for
-   1/4 of the cycle. Holding fade-out late (24%–25%) gives the user dwell
-   time on the resolved state before swapping. Uses CSS-driven timing rather
-   than React state so we stay cheap when the popup is mounted but idle. */
-:root {
-  --feature-tour-cycle: 16s;
-}
-
-.feature-tour-frame {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
-}
-.feature-tour-frame[data-frame='1'] {
-  animation-delay: 0s;
-}
-.feature-tour-frame[data-frame='2'] {
-  animation-delay: 4s;
-}
-.feature-tour-frame[data-frame='3'] {
-  animation-delay: 8s;
-}
-.feature-tour-frame[data-frame='4'] {
-  animation-delay: 12s;
-}
-
-@keyframes feature-tour-frame-fade {
-  0% {
-    opacity: 0;
-  }
-  1.5% {
-    opacity: 1;
-  }
-  24% {
-    opacity: 1;
-  }
-  25% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 0;
-  }
-}
-
 .orca-contextual-tour-target-rings {
   border-radius: 9999px;
   pointer-events: none;
@@ -2627,520 +2628,6 @@ html.onboarding-tour-start-transition::view-transition-new(root) {
     animation: none;
     opacity: 0.72;
     transform: scale(1.28);
-  }
-}
-
-.feature-tour-copy-slide {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  opacity: 0;
-  animation: feature-tour-frame-fade var(--feature-tour-cycle) linear infinite both;
-}
-.feature-tour-copy-slide[data-frame='1'] {
-  animation-delay: 0s;
-}
-.feature-tour-copy-slide[data-frame='2'] {
-  animation-delay: 4s;
-}
-.feature-tour-copy-slide[data-frame='3'] {
-  animation-delay: 8s;
-}
-.feature-tour-copy-slide[data-frame='4'] {
-  animation-delay: 12s;
-}
-
-.feature-tour-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 9999px;
-  background: color-mix(in srgb, var(--foreground) 18%, transparent);
-  animation: feature-tour-dot-pulse var(--feature-tour-cycle) linear infinite;
-}
-.feature-tour-dot[data-frame='1'] {
-  animation-delay: 0s;
-}
-.feature-tour-dot[data-frame='2'] {
-  animation-delay: 4s;
-}
-.feature-tour-dot[data-frame='3'] {
-  animation-delay: 8s;
-}
-.feature-tour-dot[data-frame='4'] {
-  animation-delay: 12s;
-}
-@keyframes feature-tour-dot-pulse {
-  0%,
-  24% {
-    background: var(--primary);
-    transform: scale(1.05);
-  }
-  25%,
-  100% {
-    background: color-mix(in srgb, var(--foreground) 18%, transparent);
-    transform: scale(1);
-  }
-}
-
-/* Frame 1 — Workspace: agent-state dot pulses while a "fix login race"
-   workspace shows two agent rows working in parallel. */
-.feature-tour-ws-status {
-  animation: feature-tour-status-pulse 1.6s ease-in-out infinite;
-}
-@keyframes feature-tour-status-pulse {
-  0%,
-  100% {
-    opacity: 0.95;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.55;
-    transform: scale(0.85);
-  }
-}
-
-/* Frame 2 — Orchestration: child cards flash as bubbles land along the
-   dashed paths fanning down from the coordinator. */
-/* Why: bubbles use percent-based left/top so they always travel from the
-   root card's right edge (34%) to the child card's left edge (64%),
-   regardless of preview width. The previous offset-path used hardcoded
-   pixels and drifted off the dashed lines once the preview resized. */
-.feature-tour-orch-bubble {
-  position: absolute;
-  left: 34%;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  margin-left: -6px;
-  margin-top: -6px;
-  border-radius: 3px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  z-index: 4;
-}
-.feature-tour-orch-bubble.top {
-  animation: feature-tour-orch-travel-top var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
-    infinite;
-  animation-delay: 4s;
-}
-.feature-tour-orch-bubble.mid {
-  animation: feature-tour-orch-travel-mid var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
-    infinite;
-  animation-delay: calc(4s + 0.2s);
-}
-.feature-tour-orch-bubble.bot {
-  animation: feature-tour-orch-travel-bot var(--feature-tour-cycle) cubic-bezier(0.4, 0, 0.2, 1)
-    infinite;
-  animation-delay: calc(4s + 0.4s);
-}
-@keyframes feature-tour-orch-travel-top {
-  0% {
-    left: 34%;
-    top: 50%;
-    opacity: 0;
-  }
-  2% {
-    opacity: 1;
-  }
-  3.5% {
-    left: 49%;
-    top: 50%;
-    opacity: 1;
-  }
-  6.5% {
-    left: 64%;
-    top: 18%;
-    opacity: 1;
-  }
-  7.5% {
-    left: 64%;
-    top: 18%;
-    opacity: 0;
-  }
-  25%,
-  100% {
-    left: 64%;
-    top: 18%;
-    opacity: 0;
-  }
-}
-@keyframes feature-tour-orch-travel-mid {
-  0% {
-    left: 34%;
-    top: 50%;
-    opacity: 0;
-  }
-  2% {
-    opacity: 1;
-  }
-  6.5% {
-    left: 64%;
-    top: 50%;
-    opacity: 1;
-  }
-  7.5% {
-    left: 64%;
-    top: 50%;
-    opacity: 0;
-  }
-  25%,
-  100% {
-    left: 64%;
-    top: 50%;
-    opacity: 0;
-  }
-}
-@keyframes feature-tour-orch-travel-bot {
-  0% {
-    left: 34%;
-    top: 50%;
-    opacity: 0;
-  }
-  2% {
-    opacity: 1;
-  }
-  3.5% {
-    left: 49%;
-    top: 50%;
-    opacity: 1;
-  }
-  6.5% {
-    left: 64%;
-    top: 82%;
-    opacity: 1;
-  }
-  7.5% {
-    left: 64%;
-    top: 82%;
-    opacity: 0;
-  }
-  25%,
-  100% {
-    left: 64%;
-    top: 82%;
-    opacity: 0;
-  }
-}
-
-.feature-tour-orch-child {
-  animation: feature-tour-orch-child-flash var(--feature-tour-cycle) linear infinite;
-}
-.feature-tour-orch-child.top {
-  animation-delay: 4s;
-}
-.feature-tour-orch-child.mid {
-  animation-delay: calc(4s + 0.2s);
-}
-.feature-tour-orch-child.bot {
-  animation-delay: calc(4s + 0.4s);
-}
-@keyframes feature-tour-orch-child-flash {
-  0%,
-  6% {
-    box-shadow: 0 0 0 0 transparent;
-    border-color: var(--border);
-  }
-  7% {
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--foreground) 12%, transparent);
-    border-color: color-mix(in srgb, var(--foreground) 38%, transparent);
-  }
-  9% {
-    box-shadow: 0 0 0 0 transparent;
-    border-color: var(--border);
-  }
-  25%,
-  100% {
-    box-shadow: 0 0 0 0 transparent;
-    border-color: var(--border);
-  }
-}
-
-/* Frame 3 — Tasks: cursor lands on the second row, the "Open" pill morphs
-   to a dark "Start workspace →" pill, then a workspace card slides in. */
-.feature-tour-tasks-cursor {
-  /* Why: anchored from the row's right edge so the cursor sits just past the
-     pill's right edge (12px row padding + ~6px past pill end) instead of
-     covering the label text. The arrow tip (top-left of the SVG) lands on the
-     dark pill's trailing edge with the body of the cursor extending right. */
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  width: 14px;
-  height: 14px;
-  pointer-events: none;
-  z-index: 8;
-  transform: translate(120px, -30%);
-  opacity: 0;
-  animation: feature-tour-tasks-cursor var(--feature-tour-cycle) cubic-bezier(0.45, 0.05, 0.2, 1)
-    infinite;
-  animation-delay: 8s;
-}
-.feature-tour-tasks-cursor svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-@keyframes feature-tour-tasks-cursor {
-  0% {
-    transform: translate(160px, -10%);
-    opacity: 0;
-  }
-  2% {
-    opacity: 1;
-  }
-  5% {
-    transform: translate(60px, -30%);
-    opacity: 1;
-  }
-  8% {
-    transform: translate(0px, -30%);
-    opacity: 1;
-  }
-  9% {
-    transform: translate(0px, -10%);
-    opacity: 1;
-  }
-  10.5% {
-    transform: translate(0px, -30%);
-    opacity: 1;
-  }
-  23.5% {
-    transform: translate(0px, -30%);
-    opacity: 1;
-  }
-  24.5% {
-    opacity: 0;
-  }
-  25%,
-  100% {
-    transform: translate(0px, -30%);
-    opacity: 0;
-  }
-}
-
-.feature-tour-tasks-row {
-  animation: feature-tour-tasks-row-hover var(--feature-tour-cycle) linear infinite;
-  animation-delay: 8s;
-}
-@keyframes feature-tour-tasks-row-hover {
-  0%,
-  4% {
-    background: transparent;
-    box-shadow: none;
-  }
-  6% {
-    background: color-mix(in srgb, var(--foreground) 5%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
-  }
-  23.5% {
-    background: color-mix(in srgb, var(--foreground) 5%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground) 6%, transparent);
-  }
-  25%,
-  100% {
-    background: transparent;
-    box-shadow: none;
-  }
-}
-
-.feature-tour-tasks-pill {
-  animation: feature-tour-tasks-pill-morph var(--feature-tour-cycle) linear infinite;
-  animation-delay: 8s;
-}
-@keyframes feature-tour-tasks-pill-morph {
-  0%,
-  6% {
-    width: 28px;
-    background: rgb(34 197 94 / 0.14);
-    border-color: rgb(34 197 94 / 0.3);
-    box-shadow: none;
-  }
-  8% {
-    width: 78px;
-    background: var(--primary);
-    border-color: var(--primary);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
-  }
-  23.5% {
-    width: 78px;
-    background: var(--primary);
-    border-color: var(--primary);
-    box-shadow: 0 1px 2px rgb(0 0 0 / 0.18);
-  }
-  25%,
-  100% {
-    width: 28px;
-    background: rgb(34 197 94 / 0.14);
-    border-color: rgb(34 197 94 / 0.3);
-    box-shadow: none;
-  }
-}
-
-.feature-tour-tasks-pill-label {
-  opacity: 0;
-  animation: feature-tour-tasks-pill-label var(--feature-tour-cycle) linear infinite;
-  animation-delay: 8s;
-}
-@keyframes feature-tour-tasks-pill-label {
-  0%,
-  7% {
-    opacity: 0;
-  }
-  9% {
-    opacity: 1;
-  }
-  23.5% {
-    opacity: 1;
-  }
-  24.5% {
-    opacity: 0;
-  }
-  25%,
-  100% {
-    opacity: 0;
-  }
-}
-
-/* Click ring fires when the cursor "clicks" the morphed pill on the tasks
-   row. Positioned to overlay the right-side pill of the second task. */
-.feature-tour-tasks-click-ring {
-  /* Why: ring is centered on the cursor tip (right=28 from row's right edge)
-     so the click feedback lands where the cursor is, on the arrow icon — not
-     centered on the pill, which would visually disconnect from the cursor. */
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  width: 28px;
-  height: 28px;
-  margin-top: -14px;
-  border-radius: 9999px;
-  border: 1.5px solid color-mix(in srgb, var(--foreground) 55%, transparent);
-  opacity: 0;
-  z-index: 7;
-  pointer-events: none;
-  animation: feature-tour-tasks-click-ring var(--feature-tour-cycle) linear infinite;
-  animation-delay: 8s;
-}
-@keyframes feature-tour-tasks-click-ring {
-  0%,
-  7% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  8% {
-    opacity: 0.85;
-    transform: scale(0.6);
-  }
-  10% {
-    opacity: 0;
-    transform: scale(1.4);
-  }
-  25%,
-  100% {
-    opacity: 0;
-    transform: scale(1.4);
-  }
-}
-
-/* Newly-created workspace card slides in beneath the task row once the
-   user clicks "Start workspace" — sells the "task → workspace" jump. */
-.feature-tour-tasks-workspace {
-  opacity: 0;
-  transform: translateY(-6px);
-  animation: feature-tour-tasks-workspace var(--feature-tour-cycle) linear infinite;
-  animation-delay: 8s;
-}
-@keyframes feature-tour-tasks-workspace {
-  0%,
-  10% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  12% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  23.5% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  25%,
-  100% {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-}
-
-/* Frame 4 — Terminal: command stays anchored while the split panes stream
-   Playwright and Claude activity. */
-.feature-tour-terminal-line {
-  width: 23ch;
-}
-
-.feature-tour-terminal-output {
-  opacity: 0;
-  transform: translateY(2px);
-  animation: feature-tour-terminal-output var(--feature-tour-cycle) linear infinite;
-  animation-delay: 12s;
-}
-.feature-tour-terminal-output[data-line='1'] {
-  animation-delay: calc(12s + 0.05s);
-}
-.feature-tour-terminal-output[data-line='2'] {
-  animation-delay: calc(12s + 0.25s);
-}
-.feature-tour-terminal-output[data-line='3'] {
-  animation-delay: calc(12s + 0.45s);
-}
-@keyframes feature-tour-terminal-output {
-  0%,
-  10% {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-  12% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  23.5% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  25%,
-  100% {
-    opacity: 0;
-    transform: translateY(2px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .feature-tour-frame,
-  .feature-tour-copy-slide,
-  .feature-tour-dot,
-  .feature-tour-ws-status,
-  .feature-tour-orch-bubble,
-  .feature-tour-orch-child,
-  .feature-tour-tasks-cursor,
-  .feature-tour-tasks-row,
-  .feature-tour-tasks-pill,
-  .feature-tour-tasks-pill-label,
-  .feature-tour-tasks-click-ring,
-  .feature-tour-tasks-workspace,
-  .feature-tour-terminal-output {
-    animation: none !important;
-  }
-  .feature-tour-frame[data-frame='1'],
-  .feature-tour-copy-slide[data-frame='1'] {
-    opacity: 1;
-  }
-  .feature-tour-dot[data-frame='1'] {
-    background: var(--primary);
   }
 }
 

@@ -1,3 +1,9 @@
+import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import {
+  getUtf8ByteLengthForCodePoint,
+  readUtf8CodePointAt
+} from '../../../shared/utf8-byte-limits'
+
 export type PastePayloadMetadata = {
   byteLength: number
   exceededLimit: boolean
@@ -22,7 +28,7 @@ export function measurePastePayloadMetadata(
   let previousWasCarriageReturn = false
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
     if (codePoint === 0x0d) {
@@ -62,7 +68,7 @@ export async function measurePastePayloadMetadataWithYield(
     1,
     options.yieldAfterCodeUnits ?? PASTE_PAYLOAD_METADATA_YIELD_CODE_UNITS
   )
-  const yieldToEventLoop = options.yieldToEventLoop ?? defaultPastePayloadMetadataYield
+  const yieldBetweenBatches = options.yieldToEventLoop ?? yieldToEventLoop
   let nextYieldAt = yieldAfterCodeUnits
   let byteLength = 0
   let hasControlSequences = false
@@ -70,7 +76,7 @@ export async function measurePastePayloadMetadataWithYield(
   let previousWasCarriageReturn = false
 
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     byteLength += getUtf8ByteLengthForCodePoint(codePoint)
     hasControlSequences ||= isPasteControlSequenceCodePoint(codePoint)
     if (codePoint === 0x0d) {
@@ -89,7 +95,7 @@ export async function measurePastePayloadMetadataWithYield(
       index += 1
     }
     if (index >= nextYieldAt) {
-      await yieldToEventLoop()
+      await yieldBetweenBatches()
       nextYieldAt = index + yieldAfterCodeUnits
     }
   }
@@ -107,7 +113,7 @@ export function countPastePayloadLines(text: string): number {
 
 export function hasPastePayloadControlSequence(text: string): boolean {
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = readUtf8CodePointAt(text, index)
     if (isPasteControlSequenceCodePoint(codePoint)) {
       return true
     }
@@ -135,21 +141,4 @@ function isPasteControlSequenceCodePoint(codePoint: number): boolean {
     (codePoint >= 0x0e && codePoint <= 0x1f) ||
     codePoint === 0x7f
   )
-}
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function defaultPastePayloadMetadataYield(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0))
 }

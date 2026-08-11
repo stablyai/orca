@@ -19,7 +19,7 @@ vi.mock('../../store', () => ({
   })
 }))
 
-import { TerminalOverlaySlot } from './TerminalPaneOverlayLayer'
+import { TerminalOverlaySlot } from './TerminalOverlaySlot'
 
 const GROUP_ID = 'group-react185'
 const TAB_ID = 'tab-react185'

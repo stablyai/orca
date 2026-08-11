@@ -9,8 +9,8 @@ import { localhostWorktreeLabelRouteForPort } from './workspace-port-localhost-l
 // this is the single source for both reactive and imperative call sites.
 type LocalhostLabelLookupState = {
   settings?: Pick<GlobalSettings, 'localhostWorktreeLabelsEnabled'> | null
-  repos?: Repo[]
-  projects?: Project[]
+  repos?: readonly Repo[]
+  projects?: readonly Project[]
   getKnownWorktreeById?: (worktreeId: string) => { projectId?: string | null } | null | undefined
 }
 

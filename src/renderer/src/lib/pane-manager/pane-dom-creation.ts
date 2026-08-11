@@ -15,12 +15,6 @@ import { ENABLE_WEBGL_RENDERER } from './pane-webgl-renderer'
 import { installGuardedLinkProviderRegistration } from './terminal-link-provider-guard'
 import { installWindowsCtrlAltChordRepair } from './terminal-windows-ctrl-alt-chord-classification'
 
-function getTerminalUrlOpenHint(): string {
-  return navigator.userAgent.includes('Mac')
-    ? '⌘+click to open or ⇧⌘+click for system browser'
-    : 'Ctrl+click to open or Shift+Ctrl+click for system browser'
-}
-
 function defaultLinkTooltipText(uri: string, openLinkHint: string): string {
   return `${uri} (${openLinkHint})`
 }
@@ -60,7 +54,6 @@ export function createPaneDOM(
   const fitAddon = new FitAddon()
   const searchAddon = new SearchAddon()
   const unicode11Addon = new Unicode11Addon()
-  const openLinkHint = getTerminalUrlOpenHint()
   // Why: async tooltip formatting can resolve after hover changes, so stale
   // results must not overwrite the tooltip for the currently hovered link.
   let linkTooltipHoverToken = 0
@@ -77,15 +70,16 @@ export function createPaneDOM(
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 
   const webLinksAddon = new WebLinksAddon(
-    options.onLinkClick ? (event, uri) => options.onLinkClick!(event, uri) : undefined,
+    options.onLinkClick ? (event, uri) => options.onLinkClick!(id, event, uri) : undefined,
     {
       hover: (_event, uri) => {
         if (uri) {
           linkTooltipHoverToken += 1
           const hoverToken = linkTooltipHoverToken
+          const openLinkHint = options.linkOpenHint(id)
           linkTooltip.textContent = defaultLinkTooltipText(uri, openLinkHint)
           linkTooltip.style.display = ''
-          const formatted = options.formatLinkTooltip?.(uri, openLinkHint)
+          const formatted = options.formatLinkTooltip?.(id, uri, openLinkHint)
           if (formatted && typeof formatted === 'object' && 'then' in formatted) {
             void formatted.then(
               (nextText) => {
@@ -145,6 +139,7 @@ export function createPaneDOM(
     compositionHandler: null,
     focusClassSyncCleanup: null,
     terminalScrollIntentDisposable: null,
+    linkifierMouseLeaveResetDisposable: null,
     arabicShapingJoinerCleanup: null,
     pendingSplitScrollState: null,
     pendingSplitScrollRafIds: [],

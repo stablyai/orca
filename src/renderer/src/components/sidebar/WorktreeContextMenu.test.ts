@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  hasSleepableWorkspaceActivity,
   isContextWorktreeDeletable,
   shouldUseNativeContextMenu,
   shouldIgnoreNestedWorktreeContextMenuScope,
@@ -12,9 +11,32 @@ import {
   hasWorktreeParentLink,
   isWorktreeParentPickerDisabled,
   planWorkspaceStatusAssignment,
-  selectMenuScopedMap
+  selectMenuScopedMap,
+  shouldRevealWorktreeDeveloperMenu
 } from './WorktreeContextMenu'
 import type { Worktree, WorktreeLineage, WorkspaceStatusDefinition } from '../../../../shared/types'
+
+describe('shouldRevealWorktreeDeveloperMenu', () => {
+  it('stays hidden for an ordinary right-click', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: false, isMultiContext: false })
+    ).toBe(false)
+  })
+
+  it('reveals when Option/Alt was held at open time', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: false })
+    ).toBe(true)
+  })
+
+  // Why: the parking action targets one workspace, so it must not appear for a
+  // multi-select context even with the modifier held.
+  it('stays hidden for a multi-workspace selection', () => {
+    expect(
+      shouldRevealWorktreeDeveloperMenu({ developerMenuRevealed: true, isMultiContext: true })
+    ).toBe(false)
+  })
+})
 
 describe('selectMenuScopedMap (delete-teardown re-render guard)', () => {
   // Why: the closed menu wrapper must stay inert to delete teardown's high-churn
@@ -191,28 +213,6 @@ describe('parent picker context menu affordance', () => {
     } as HTMLElement
 
     expect(getWorktreeParentPickerAnchor(scope, 'child')).toBe(scope)
-  })
-})
-
-describe('hasSleepableWorkspaceActivity', () => {
-  it('treats preserved empty PTY arrays as slept, not live', () => {
-    expect(
-      hasSleepableWorkspaceActivity('wt-1', { 'wt-1': [{ id: 'tab-1' }] }, { 'tab-1': [] }, {})
-    ).toBe(false)
-  })
-
-  it('detects live terminal and browser activity', () => {
-    expect(
-      hasSleepableWorkspaceActivity(
-        'wt-1',
-        { 'wt-1': [{ id: 'tab-1' }] },
-        { 'tab-1': ['pty-1'] },
-        {}
-      )
-    ).toBe(true)
-    expect(hasSleepableWorkspaceActivity('wt-1', {}, {}, { 'wt-1': [{ id: 'browser-1' }] })).toBe(
-      true
-    )
   })
 })
 

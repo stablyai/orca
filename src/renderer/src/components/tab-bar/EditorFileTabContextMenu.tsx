@@ -1,8 +1,10 @@
 import {
   Copy,
+  CopyX,
   ExternalLink,
   Eye,
   ListX,
+  PanelLeftClose,
   PanelRightClose,
   Pencil,
   Pin,
@@ -24,6 +26,7 @@ import type { OpenFile } from '../../store/slices/editor'
 import { shouldBlockEditorTabLocalOpen } from './editor-tab-local-open-guard'
 import { translate } from '@/i18n/i18n'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -114,7 +117,7 @@ export function EditorFileTabContextMenu({
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent
-        className="w-48"
+        className={TAB_CONTEXT_MENU_CONTENT_CLASS}
         sideOffset={0}
         align="start"
         onCloseAutoFocus={(event) => {
@@ -156,6 +159,7 @@ export function EditorFileTabContextMenu({
           {closeShortcut ? <DropdownMenuShortcut>{closeShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          <CopyX className="size-3.5" />
           {translate('components.tab.bar.EditorFileTabContextMenu.closeOthers', 'Close Others')}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseAll}>
@@ -176,6 +180,7 @@ export function EditorFileTabContextMenu({
           )}
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+          <PanelLeftClose className="size-3.5" />
           {translate(
             'components.tab.bar.EditorFileTabContextMenu.closeTabsToLeft',
             'Close Tabs To The Left'

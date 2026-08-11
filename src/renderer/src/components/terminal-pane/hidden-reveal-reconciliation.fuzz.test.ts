@@ -10,7 +10,6 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET_PARITY,
   SNAPSHOT_REPLAY_PREAMBLE_ALT,
   SNAPSHOT_REPLAY_PREAMBLE_NORMAL,
-  bufferHasSerializeHostileWrappedRow,
   buildParityMainBufferSnapshot,
   createRendererParityTerminal,
   cursorPosition,
@@ -86,7 +85,6 @@ type RevealResult = {
   /** True when the terminal ended on the alternate screen: alt has no scrollback, so the normal-buffer content comparison does not apply. */
   alternate: boolean
   forcedFreshRestore: boolean
-  knownSerializeWrapBug: boolean
 }
 
 async function readScreen(
@@ -100,8 +98,7 @@ async function readScreen(
     cursor: cursorPosition(term.terminal),
     scrolled: term.terminal.buffer.active.baseY > 0,
     alternate,
-    forcedFreshRestore: false,
-    knownSerializeWrapBug: false
+    forcedFreshRestore: false
   }
 }
 
@@ -133,7 +130,6 @@ async function revealFromSnapshot(
       pendingEscapeTail: extractPartialEscapeTail(hiddenChunks.join(''))
     })
     const alt = snapshot.alternateScreen
-    const knownSerializeWrapBug = bufferHasSerializeHostileWrappedRow(source.terminal)
     // The pending escape tail must be the FINAL replay write (mirrors applyMainBufferSnapshot); a later ESC would abort the dangling sequence.
     const preamble =
       alt && snapshot.scrollbackAnsi !== undefined
@@ -168,7 +164,6 @@ async function revealFromSnapshot(
     }
     const result = await readScreen(restored)
     result.forcedFreshRestore = forcedFreshRestore
-    result.knownSerializeWrapBug = knownSerializeWrapBug
     return result
   } finally {
     source.terminal.dispose()
@@ -388,7 +383,6 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     let statsCompared = 0
     let statsSkippedScrolled = 0
     let statsForcedFresh = 0
-    let statsKnownWrapBug = 0
     for (let i = 0; i < ITERATIONS; i++) {
       const seed = FIXED_SEED ?? 1 + i
       const scenario = buildScenario(seed)
@@ -401,10 +395,6 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
       ])
       if (reveal.forcedFreshRestore || reference.forcedFreshRestore) {
         statsForcedFresh += 1
-        continue
-      }
-      if (reveal.knownSerializeWrapBug || reference.knownSerializeWrapBug) {
-        statsKnownWrapBug += 1
         continue
       }
       if (reveal.alternate !== reference.alternate) {
@@ -456,8 +446,6 @@ describe('hidden reveal seq-reconciliation fuzz', () => {
     if (FIXED_SEED === null) {
       expect(statsCompared).toBeGreaterThan(ITERATIONS * 0.2)
     }
-    expect(
-      statsCompared + statsSkippedScrolled + statsForcedFresh + statsKnownWrapBug
-    ).toBeLessThanOrEqual(ITERATIONS)
+    expect(statsCompared + statsSkippedScrolled + statsForcedFresh).toBeLessThanOrEqual(ITERATIONS)
   }, 120_000)
 })

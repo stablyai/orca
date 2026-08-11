@@ -24,7 +24,14 @@ export type AgentBackgroundSessionTestState = {
       | { kind: 'windows-host' }
       | { kind: 'wsl'; distro: string | null }
   }[]
-  repos: { id: string; connectionId: string | null; path: string }[]
+  repos: { id: string; connectionId: string | null; path: string; projectGroupId?: string | null }[]
+  folderWorkspaces: {
+    id: string
+    projectGroupId: string
+    folderPath: string
+    connectionId?: string | null
+  }[]
+  projectGroups: { id: string; parentGroupId?: string | null; connectionId?: string | null }[]
   worktreesByRepo: Record<
     string,
     { id: string; repoId: string; projectId: string; path: string; displayName: string }[]
@@ -35,6 +42,7 @@ export type AgentBackgroundSessionTestState = {
   sshConnectionStates: Map<string, { status: string }>
   transientClearedAgentStatusConnectionIds: Record<string, true>
   allWorktrees: () => { id: string; repoId: string; path: string }[]
+  getKnownWorktreeById: (worktreeId: string) => { id: string; path: string } | undefined
   createTab: TestMock
   setTabCustomTitle: TestMock
   updateTabPtyId: TestMock
@@ -87,6 +95,8 @@ export function createAgentBackgroundSessionTestState(mocks: {
         }
       ]
     },
+    folderWorkspaces: [] as AgentBackgroundSessionTestState['folderWorkspaces'],
+    projectGroups: [] as AgentBackgroundSessionTestState['projectGroups'],
     tabsByWorktree: { 'wt-1': [] as { id: string; title: string }[] },
     terminalLayoutsByTabId: {} as Record<
       string,
@@ -96,6 +106,8 @@ export function createAgentBackgroundSessionTestState(mocks: {
     sshConnectionStates: new Map<string, { status: string }>(),
     transientClearedAgentStatusConnectionIds: {} as Record<string, true>,
     allWorktrees: () => state.worktreesByRepo['repo-1'],
+    getKnownWorktreeById: (worktreeId: string) =>
+      state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId),
     createTab: mocks.createTab,
     setTabCustomTitle: mocks.setTabCustomTitle,
     updateTabPtyId: mocks.updateTabPtyId,
@@ -120,6 +132,8 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
   }
   state.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
   state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
+  state.folderWorkspaces = []
+  state.projectGroups = []
   state.worktreesByRepo = {
     'repo-1': [
       {
@@ -136,6 +150,9 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
   state.ptyIdsByTabId = {}
   state.sshConnectionStates = new Map()
   state.transientClearedAgentStatusConnectionIds = {}
+  // Why: restored here so a test that stubs folder-workspace lookup cannot leak it forward.
+  state.getKnownWorktreeById = (worktreeId: string) =>
+    state.worktreesByRepo['repo-1']?.find((worktree) => worktree.id === worktreeId)
 }
 
 export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTestState): void {
@@ -146,6 +163,13 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
   }
 }
 
+/** The tab id reserved before the spawn; the run tab adopts it once the PTY is live. */
+export function expectReservedAgentBackgroundTabId(spawn: TestMock): string {
+  const tabId = spawn.mock.calls[0]?.[0]?.tabId
+  expect(tabId).toMatch(AGENT_BACKGROUND_SESSION_UUID_RE)
+  return tabId
+}
+
 export function expectStableAgentBackgroundPaneSpawn(spawn: TestMock): string {
   const spawnArgs = spawn.mock.calls[0]?.[0]
   const paneKey = spawnArgs?.env?.ORCA_PANE_KEY
@@ -153,7 +177,7 @@ export function expectStableAgentBackgroundPaneSpawn(spawn: TestMock): string {
   expect(typeof paneKey).toBe('string')
   expect(typeof leafId).toBe('string')
   expect(leafId).toMatch(AGENT_BACKGROUND_SESSION_UUID_RE)
-  expect(paneKey).toBe(`tab-1:${leafId}`)
+  expect(paneKey).toBe(`${expectReservedAgentBackgroundTabId(spawn)}:${leafId}`)
   return paneKey
 }
 
@@ -208,8 +232,9 @@ export function resetAgentBackgroundSessionTestHarness(args: {
       (args.runtimeCall as unknown as (value: unknown) => unknown)(request)
   )
   resetAgentBackgroundSessionTestState(args.state)
-  args.createTab.mockImplementation(() => {
-    const tab = { id: 'tab-1', title: 'Terminal 1' }
+  // Why: production reserves the tab id before the spawn; honoring options.id mirrors createTab's adoption contract.
+  args.createTab.mockImplementation((_worktreeId, _groupId, _shellOverride, options) => {
+    const tab = { id: options?.id ?? 'tab-1', title: 'Terminal 1' }
     args.state.tabsByWorktree['wt-1'].push(tab)
     return tab
   })

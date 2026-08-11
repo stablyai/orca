@@ -102,6 +102,51 @@ describe('MobileNotificationReplayBuffer', () => {
     ])
   })
 
+  it('returns the retained buffer when the watermark came from a previous desktop run', () => {
+    // The #8591 defect: `seq` is per-process and restarts at 0 every launch, but the
+    // client's watermark is persisted. A client holding seq 57 meets a counter at 2,
+    // `57 >= 2` cuts everything, and catch-up stays dead until the new process
+    // dispatches 57 notifications. The epoch is what makes the two distinguishable.
+    const previousRun = new MobileNotificationReplayBuffer()
+    for (let i = 0; i < 57; i++) {
+      dispatch(previousRun, { notificationId: `old:${i}` })
+    }
+    const staleWatermark = 57
+    const staleEpoch = previousRun.epoch
+
+    const afterRestart = new MobileNotificationReplayBuffer()
+    dispatch(afterRestart, { notificationId: 'agent:one' })
+    dispatch(afterRestart, { notificationId: 'agent:two' })
+
+    // Seq-only (the old behaviour) still silently drops everything...
+    expect(afterRestart.getMissedSince(staleWatermark)).toEqual([])
+    // ...but a watermark tagged with the old epoch is recognised as void.
+    expect(
+      afterRestart.getMissedSince(staleWatermark, staleEpoch).map((e) => e.notificationId)
+    ).toEqual(['agent:one', 'agent:two'])
+  })
+
+  it('keeps the exact seq cut when the epoch matches the live counter', () => {
+    const buffer = new MobileNotificationReplayBuffer()
+    const first = dispatch(buffer, { notificationId: 'agent:one' })
+    dispatch(buffer, { notificationId: 'agent:two' })
+
+    // Same counter: the epoch must not widen the cut into a re-push of delivered events.
+    expect(
+      buffer.getMissedSince(first.notificationSeq, buffer.epoch).map((e) => e.notificationId)
+    ).toEqual(['agent:two'])
+    expect(buffer.getMissedSince(2, buffer.epoch)).toEqual([])
+  })
+
+  it('stamps every recorded event with the buffer epoch, and epochs differ per process', () => {
+    const buffer = new MobileNotificationReplayBuffer()
+    const event = dispatch(buffer, { notificationId: 'agent:one' })
+
+    expect(event.notificationEpoch).toBe(buffer.epoch)
+    // A restart must produce a different epoch or the watermark stays ambiguous.
+    expect(new MobileNotificationReplayBuffer().epoch).not.toBe(buffer.epoch)
+  })
+
   it('evicts oldest entries once the capacity is exceeded', () => {
     const buffer = new MobileNotificationReplayBuffer(2)
     dispatch(buffer, { notificationId: 'agent:one' })

@@ -82,12 +82,6 @@ export function isValidRepoSlug(value: unknown): value is string {
   )
 }
 
-// Backwards-compatible alias for callers that don't distinguish owner vs repo.
-// Prefer `isValidOwnerSlug` / `isValidRepoSlug` at new call sites.
-export function isValidSlug(value: unknown): value is string {
-  return isValidOwnerSlug(value) || isValidRepoSlug(value)
-}
-
 export function assertSlug(
   value: unknown,
   field: 'owner' | 'repo'

@@ -20,6 +20,7 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { CliRegistrationDialog } from './CliRegistrationDialog'
@@ -32,6 +33,7 @@ import {
   getWslCliDistroRequest
 } from './CliSkillRuntimeSetup'
 import { WslCliRegistration } from './WslCliRegistration'
+import { useLocalCliSkillFreshnessName } from './use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 
 type CliSectionProps = {
@@ -86,6 +88,7 @@ export function CliSection({
       getSelectedAgentRuntime(settings, wslSupportedPlatform, wslAvailable, wslCapabilitiesLoading),
     [settings, wslAvailable, wslCapabilitiesLoading, wslSupportedPlatform]
   )
+  const cliSkillFreshnessName = useLocalCliSkillFreshnessName(agentRuntime)
   const cliSkillDiscoveryTarget = useMemo(
     () => getSkillDiscoveryTargetForRuntime(agentRuntime),
     [agentRuntime]
@@ -286,21 +289,16 @@ export function CliSection({
               </Tooltip>
             </TooltipProvider>
             {!isBrowserManaged ? (
-              <button
-                role="switch"
-                aria-checked={isEnabled}
+              <Switch
+                aria-label={translate(
+                  'auto.components.settings.CliSection.38edbb5721',
+                  'Shell command'
+                )}
+                checked={isEnabled}
                 disabled={loading || !isSupported || pathStatusUnknown || busyAction !== null}
-                onClick={() => setDialogOpen(true)}
-                className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors ${
-                  isEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-                } ${loading || !isSupported || pathStatusUnknown || busyAction !== null ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-              >
-                <span
-                  className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                    isEnabled ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
+                onCheckedChange={() => setDialogOpen(true)}
+                className="disabled:opacity-60"
+              />
             ) : null}
           </div>
         </div>
@@ -395,7 +393,7 @@ export function CliSection({
                     }))
               }}
               onRecheck={refreshCliSkill}
-              freshnessSkillName={agentRuntime.runtime === 'host' ? ORCA_CLI_SKILL_NAME : undefined}
+              freshnessSkillName={cliSkillFreshnessName}
             />
           </div>
         ) : null}

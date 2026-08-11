@@ -4,6 +4,7 @@ import type { DeviceEntry, DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { E2EEChannel, type E2EEAuthenticatedDevice } from './e2ee-channel'
 import { createMobileE2EEOutboundMemoryBudget } from './mobile-e2ee-outbound-memory-budget'
+import type { RuntimeCapability } from '../../../shared/protocol-version'
 
 type MobileSocketPayload = string | Uint8Array<ArrayBufferLike>
 
@@ -36,6 +37,7 @@ export type AuthenticatedMobileSocket = {
   ws: WebSocket
   connectionId: string
   device: E2EEAuthenticatedDevice
+  clientCapabilities: readonly RuntimeCapability[]
   transport: MobileSocketTransportMetadata
 }
 
@@ -158,11 +160,18 @@ export class MobileSocketWiring {
           }
           return toAuthenticatedDevice(device)
         },
-        onReady: (_channel, device) => {
-          const socket = { ws, connectionId, device, transport: metadata }
+        onReady: (channel, device) => {
+          const socket = {
+            ws,
+            connectionId,
+            device,
+            clientCapabilities: channel.clientCapabilities,
+            transport: metadata
+          }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceToken)
-          this.deviceRegistry.updateLastSeen(device.deviceId)
+          // Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
+          this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

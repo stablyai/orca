@@ -14,7 +14,7 @@ function getCssRuleBody(selector: string): string {
 }
 
 describe('worktree card active styling', () => {
-  it('mixes the primary selection into the worktree sidebar surface', () => {
+  it('keeps the primary selection wash translucent so card text stays legible', () => {
     const primary = getCssRuleBody(
       "[data-worktree-card-surface][data-worktree-card-active='primary']"
     )
@@ -22,9 +22,12 @@ describe('worktree card active styling', () => {
       ".dark [data-worktree-card-surface][data-worktree-card-active='primary']"
     )
 
-    expect(primary).toContain('var(--worktree-sidebar-foreground) 8%')
-    expect(primary).toContain('var(--worktree-sidebar)')
-    expect(darkPrimary).toContain('var(--worktree-sidebar-foreground) 16%')
+    expect(primary).toContain(
+      'background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent)'
+    )
+    expect(darkPrimary).toContain(
+      'background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent)'
+    )
     expect(darkPrimary).toContain('var(--worktree-sidebar-border)')
   })
 
