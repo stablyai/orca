@@ -543,6 +543,27 @@ describe('tui agent startup plans', () => {
     })
   })
 
+  it('collapses CRLF and cmd-sensitive characters on Windows cmd shells', () => {
+    // Why: cmd sees the command after newline normalization, so collapse must
+    // happen before caret escaping keeps the launch line physically single-line.
+    const plan = buildAgentStartupPlan({
+      agent: 'droid',
+      prompt:
+        'File: docs/plan.md\r\nLine: 19\rUser comment: "what do you think about it?" & %PATH%',
+      cmdOverrides: {},
+      platform: 'win32',
+      shell: 'cmd'
+    })
+    expect(plan).toEqual({
+      agent: 'droid',
+      launchCommand:
+        'droid "File: docs/plan.md Line: 19 User comment: ^"what do you think about it?^" ^& ^%PATH^%"',
+      expectedProcess: 'droid',
+      followupPrompt: null,
+      launchConfig: { agentCommand: 'droid', agentArgs: '', agentEnv: {} }
+    })
+  })
+
   it('normalizes CRLF to LF in prompts on POSIX shells', () => {
     const plan = buildAgentStartupPlan({
       agent: 'droid',
@@ -593,5 +614,18 @@ describe('tui agent startup plans', () => {
     })
     expect(plan?.launchCommand).toBe('aider')
     expect(plan?.followupPrompt).toBe('line one\nline two')
+  })
+
+  it('normalizes CRLF and lone CR follow-up prompts on Windows stdin-after-start agents', () => {
+    // Why: stdin-after-start writes straight to the PTY, so Windows line
+    // endings must stay logical newlines instead of shell-collapsing away.
+    const plan = buildAgentStartupPlan({
+      agent: 'aider',
+      prompt: 'line one\r\nline two\rline three',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+    expect(plan?.launchCommand).toBe('aider')
+    expect(plan?.followupPrompt).toBe('line one\nline two\nline three')
   })
 })
