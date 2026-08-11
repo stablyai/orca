@@ -1,10 +1,40 @@
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SpreadsheetGrid } from './SpreadsheetGrid'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+// Why: happy-dom reports every element as zero-sized, so the virtualizers would
+// decide nothing is on screen and render no cells at all — which would let an
+// assertion about cells pass against an empty document.
+const VIEWPORT = { width: 800, height: 600 }
+
+beforeEach(() => {
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0,
+    y: 0,
+    top: 0,
+    left: 0,
+    right: VIEWPORT.width,
+    bottom: VIEWPORT.height,
+    ...VIEWPORT,
+    toJSON: () => ({})
+  })
+  for (const [name, value] of [
+    ['clientWidth', VIEWPORT.width],
+    ['clientHeight', VIEWPORT.height],
+    ['offsetWidth', VIEWPORT.width],
+    ['offsetHeight', VIEWPORT.height]
+  ] as const) {
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value })
+  }
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 let container: HTMLDivElement | null = null
 let root: Root | null = null
@@ -74,5 +104,46 @@ describe('SpreadsheetGrid', () => {
     for (const row of container!.querySelectorAll('[role="row"]')) {
       expect(row.getAttribute('style')?.length ?? 0).toBeLessThan(2000)
     }
+  })
+})
+
+describe('SpreadsheetGrid overlay and overflow', () => {
+  it('draws a sparkline once for a merged range, not once per covered row', () => {
+    // Why: the merge band is painted per row, so drawing the sparkline inside the
+    // cell repeated it four times down a four-row column.
+    render(
+      <SpreadsheetGrid
+        header={['A', 'B']}
+        rows={[[''], [''], [''], ['']]}
+        columnCount={2}
+        mergedRanges={[{ rowIndex: 0, columnIndex: 0, rowSpan: 4, columnSpan: 1 }]}
+        sparklines={[
+          [{ chartType: 'column', values: [1000], min: 0, max: 1500, color: '#334960' }]
+        ]}
+      />
+    )
+
+    expect(container!.querySelectorAll('svg[role="img"]')).toHaveLength(1)
+  })
+
+  it('lets a left-aligned label reach across empty neighbours', () => {
+    render(
+      <SpreadsheetGrid
+        header={['A', 'B', 'C']}
+        rows={[['Presupuesto mensual', '', '']]}
+        columnCount={3}
+      />
+    )
+
+    const cell = container!.querySelector('[role="cell"]')
+    expect(cell?.className).toContain('overflow-visible')
+    expect(cell?.querySelector('span')?.getAttribute('style')).toContain('max-width')
+  })
+
+  it('keeps a label clipped when the next column holds something', () => {
+    render(<SpreadsheetGrid header={['A', 'B']} rows={[['Gastos', '950 €']]} columnCount={2} />)
+
+    const cell = container!.querySelector('[role="cell"]')
+    expect(cell?.className).toContain('overflow-hidden')
   })
 })

@@ -7,12 +7,13 @@ import {
   SPREADSHEET_ALIGNMENT_CLASSES,
   getSpreadsheetCellAlignmentClass
 } from './spreadsheet-cell-alignment'
+import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
   buildSpreadsheetMergeIndex,
   planSpreadsheetMergePlacement
 } from './spreadsheet-merged-cells'
-import { SpreadsheetChart } from './SpreadsheetChart'
-import { SpreadsheetSparkline } from './SpreadsheetSparkline'
+import { SpreadsheetGridOverlay } from './SpreadsheetGridOverlay'
+import { buildSpreadsheetOverlayPlacements } from './spreadsheet-grid-overlay'
 import type { ResolvedXlsxSparkline } from './xlsx-sparkline'
 import type { XlsxSheetDrawing } from './xlsx-drawings'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
@@ -75,56 +76,16 @@ export type SpreadsheetCellStyle = {
 
 export type SpreadsheetCellBorderEdge = { width: string; style: string; color?: string }
 
-type SpreadsheetDrawingPlacement = {
-  drawing: XlsxSheetDrawing
-  left: number
-  top: number
-  width: number
-  height: number
-}
-
-function placeSpreadsheetDrawings({
-  drawings,
-  columnWidths,
-  rowCount,
-  getRowHeight,
-  rowNumberColumnPx
-}: {
-  drawings: readonly XlsxSheetDrawing[]
-  columnWidths: readonly number[]
-  rowCount: number
-  getRowHeight: (index: number) => number
-  rowNumberColumnPx: number
-}): SpreadsheetDrawingPlacement[] {
-  const columnOffsets = buildOffsets(columnWidths.length, (index) => columnWidths[index] ?? 0)
-  const rowOffsets = buildOffsets(rowCount, getRowHeight)
-  const offsetAt = (offsets: number[], index: number): number =>
-    offsets[Math.min(Math.max(index, 0), offsets.length - 1)] ?? 0
-
-  return drawings.map((drawing) => {
-    const left = rowNumberColumnPx + offsetAt(columnOffsets, drawing.fromColumn)
-    const top = offsetAt(rowOffsets, drawing.fromRow)
-    return {
-      drawing,
-      left,
-      top,
-      // Why: an anchor's end cell is exclusive of its own extent in Excel's model
-      // only when it carries offsets we do not read, so span through it and keep a
-      // minimum so a single-cell anchor is still visible.
-      width: Math.max(1, rowNumberColumnPx + offsetAt(columnOffsets, drawing.toColumn + 1) - left),
-      height: Math.max(1, offsetAt(rowOffsets, drawing.toRow + 1) - top)
-    }
-  })
-}
-
-/** Prefix sums, so `offsets[i]` is where track `i` starts. */
-function buildOffsets(count: number, getSize: (index: number) => number): number[] {
-  const offsets = Array.from<number>({ length: count + 1 })
-  offsets[0] = 0
-  for (let index = 0; index < count; index += 1) {
-    offsets[index + 1] = offsets[index]! + getSize(index)
+// Why: the file's own alignment wins; inferring from the value is the fallback,
+// and only a left-aligned label overflows to the right.
+function resolveCellAlignment(
+  cell: string,
+  cellStyle: SpreadsheetCellStyle | undefined
+): 'left' | 'right' | 'center' {
+  if (cellStyle?.horizontalAlignment !== undefined) {
+    return cellStyle.horizontalAlignment
   }
-  return offsets
+  return getSpreadsheetCellAlignmentClass(cell).startsWith('justify-start') ? 'left' : 'center'
 }
 
 function buildCellBorderStyle(borders: SpreadsheetCellStyle['borders']): React.CSSProperties {
@@ -196,20 +157,28 @@ export function SpreadsheetGrid({
     [paddedHeader, rows, columnCount, declaredColumnWidths, zoomScale]
   )
   const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
-  // Why: only pay for the offset tables when the sheet actually anchors an image.
-  const imagePlacements = useMemo(
+  const overlay = useMemo(
     () =>
-      drawings === undefined || drawings.length === 0
-        ? []
-        : placeSpreadsheetDrawings({
-            drawings,
-            columnWidths,
-            rowCount: rows.length,
-            getRowHeight: (index) =>
-              Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
-            rowNumberColumnPx
-          }),
-    [drawings, columnWidths, rows, declaredRowHeights, zoomScale, rowNumberColumnPx]
+      buildSpreadsheetOverlayPlacements({
+        drawings,
+        sparklines,
+        mergeIndex,
+        columnWidths,
+        rowCount: rows.length,
+        getRowHeight: (index) =>
+          Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
+        rowNumberColumnPx
+      }),
+    [
+      drawings,
+      sparklines,
+      mergeIndex,
+      columnWidths,
+      rows,
+      declaredRowHeights,
+      zoomScale,
+      rowNumberColumnPx
+    ]
   )
 
   const rowVirtualizer = useVirtualizer({
@@ -355,14 +324,30 @@ export function SpreadsheetGrid({
                       ? ''
                       : (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
                   const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
-                  const sparkline = sparklines?.[valueRowIndex]?.[valueColumnIndex]
+                  // Why: a left-aligned label runs across empty neighbours the way
+                  // a spreadsheet draws it, instead of being clipped to its column.
+                  const overflowWidth =
+                    cellStyle?.wrapText === true ||
+                    mergePlacement !== null ||
+                    cell === '' ||
+                    resolveCellAlignment(cell, cellStyle) !== 'left'
+                      ? null
+                      : computeSpreadsheetTextOverflowWidth({
+                          row: rows[valueRowIndex] ?? [],
+                          columnIndex,
+                          columnCount,
+                          columnWidths,
+                          hasBackground: (index) =>
+                            cellStyles?.[valueRowIndex]?.[index]?.backgroundColor !== undefined
+                        })
                   return (
                     <div
                       role="cell"
                       aria-colindex={columnIndex + 2}
                       key={virtualColumn.key}
                       className={cn(
-                        'flex overflow-hidden border-b border-r border-spreadsheet-gridline px-2',
+                        'flex border-b border-r border-spreadsheet-gridline px-2',
+                        overflowWidth === null ? 'overflow-hidden' : 'overflow-visible',
                         // Why: an author-set alignment is a decision; inferring
                         // from the value is only the fallback when there is none.
                         cellStyle?.horizontalAlignment === undefined
@@ -397,13 +382,12 @@ export function SpreadsheetGrid({
                       }}
                       title={cell}
                     >
-                      {sparkline === undefined ? (
-                        <span className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}>
-                          {cell}
-                        </span>
-                      ) : (
-                        <SpreadsheetSparkline sparkline={sparkline} />
-                      )}
+                      <span
+                        className={cellStyle?.wrapText === true ? 'min-w-0' : 'truncate'}
+                        style={overflowWidth === null ? undefined : { maxWidth: overflowWidth }}
+                      >
+                        {cell}
+                      </span>
                     </div>
                   )
                 })}
@@ -412,39 +396,7 @@ export function SpreadsheetGrid({
             )
           })}
         </div>
-        {imagePlacements.length > 0 && (
-          // Why: a separate layer, not cells — a drawing spans a range and must not
-          // disturb the grid tracks the header and rows share. It ignores pointer
-          // events so the cells underneath stay hoverable.
-          <div aria-hidden={false} className="pointer-events-none absolute inset-0">
-            {imagePlacements.map((placement, index) => (
-              <div
-                key={index}
-                className="absolute"
-                style={{
-                  left: placement.left,
-                  top: placement.top,
-                  width: placement.width,
-                  height: placement.height
-                }}
-              >
-                {placement.drawing.kind === 'chart' ? (
-                  <SpreadsheetChart
-                    chart={placement.drawing.chart}
-                    width={placement.width}
-                    height={placement.height}
-                  />
-                ) : (
-                  <img
-                    src={placement.drawing.source}
-                    alt={placement.drawing.description ?? ''}
-                    className="size-full object-contain"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+        <SpreadsheetGridOverlay placements={overlay} />
       </div>
     </div>
   )
