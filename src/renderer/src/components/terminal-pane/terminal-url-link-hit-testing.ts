@@ -4,7 +4,10 @@ import { buildEdgeWrappedHttpLogicalLineCandidates } from './edge-wrapped-termin
 import { buildHardWrappedHttpLogicalLineCandidates } from './hard-wrapped-terminal-http-links'
 import { dedupeLogicalLines } from './terminal-file-link-hit-testing'
 import { isTerminalHttpLinkActivation } from './terminal-http-link-activation'
-import { installTerminalLinkPtyMouseSuppression } from './terminal-link-pty-mouse-suppression'
+import {
+  installTerminalLinkPtyMouseSuppression,
+  type TerminalLinkPtyMouseSuppression
+} from './terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
 import { extractTerminalHttpLinks } from './terminal-http-url-extraction'
 import { buildWrappedLogicalLine, rangeForParsedFileLink } from './wrapped-terminal-link-ranges'
@@ -37,6 +40,10 @@ type UrlLinkClickFallbackDeps = {
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
   getLinkActionContext?: () => TerminalLinkActionContext | null
   getActionDestinations?: () => TerminalHttpLinkActionDestinations
+}
+
+export type HttpLinkClickFallbackBinding = IDisposable & {
+  ptyMouseSuppression: TerminalLinkPtyMouseSuppression
 }
 
 export type TerminalHttpLinkDestination = 'orca' | 'system'
@@ -154,8 +161,8 @@ export function findHttpLinkAtTerminalMouseEvent(
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
-): IDisposable {
-  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(terminal, (event) => {
+): HttpLinkClickFallbackBinding {
+  const isLinkMouseEvent = (event: MouseEvent): boolean => {
     if (isTerminalLinkifierHoverActive(terminal)) {
       return true
     }
@@ -163,7 +170,16 @@ export function installHttpLinkClickFallback(
     return Boolean(
       position && findHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
     )
-  })
+  }
+  const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
+    terminal,
+    isLinkMouseEvent,
+    (event) => {
+      const context = deps.getLinkActionContext?.()
+      return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
+    },
+    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+  )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {
       return
@@ -190,6 +206,7 @@ export function installHttpLinkClickFallback(
   const terminalElement = terminal.element
   terminalElement?.addEventListener('mouseup', handleMouseUp)
   return {
+    ptyMouseSuppression,
     dispose: () => {
       ptyMouseSuppression.dispose()
       terminalElement?.removeEventListener('mouseup', handleMouseUp)

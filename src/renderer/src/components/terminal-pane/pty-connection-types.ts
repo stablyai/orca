@@ -98,6 +98,7 @@ export type PtyConnectionDeps = {
   setCacheTimerStartedAt: (key: string, ts: number | null) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearExitedPanePtyLayoutBinding: (paneId: number, exitedPtyId: string) => void
+  deferPtyInput?: (paneId: number, data: string, forward: (data: string) => void) => void
   /** Records a DECSET 2031 subscription answered from main's
    *  '2031-subscribe' fact, mirroring the xterm CSI handler's registry write
    *  (paneMode2031 + last replied theme) so later theme flips push CSI 997.
