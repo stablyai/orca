@@ -113,7 +113,7 @@ export function writeSecureFile(
       mode: 0o600
     })
     if (options.durable) {
-      flushFile(tmpFile)
+      fsyncFileSync(tmpFile)
     }
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
     applySecurePathRestriction(tmpFile, false, process.platform, true)
@@ -123,7 +123,7 @@ export function writeSecureFile(
       rememberHardenedPath(targetPath, false)
     }
     if (options.durable && process.platform !== 'win32') {
-      flushDirectory(dir)
+      bestEffortFsyncDirectorySync(dir)
     }
   } catch (error) {
     rmSync(tmpFile, { force: true })
@@ -131,7 +131,7 @@ export function writeSecureFile(
   }
 }
 
-function flushFile(path: string): void {
+export function fsyncFileSync(path: string): void {
   const descriptor = openSync(path, 'r')
   try {
     fsyncSync(descriptor)
@@ -140,9 +140,9 @@ function flushFile(path: string): void {
   }
 }
 
-function flushDirectory(directory: string): void {
+export function bestEffortFsyncDirectorySync(directory: string): void {
   try {
-    flushFile(directory)
+    fsyncFileSync(directory)
   } catch {
     // Directory fsync is unsupported on some POSIX and remote filesystems.
   }

@@ -6,6 +6,7 @@ import type {
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
 import {
+  type ArtifactCreateIntent,
   getArtifactCreateIntent,
   getOrCreateArtifactCreateIntent,
   removeArtifactCreateIntent
@@ -88,7 +89,7 @@ export class ArtifactPublisher {
         request.sourceKey,
         auth.scope
       )
-      const created = await this.create(request, token, apiUrl, auth, idempotencyKey)
+      const created = await this.create(request, token, apiUrl, auth, idempotencyKey, pending)
       return pending && !artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))
         ? this.updateExisting(request, token, apiUrl, auth, {
             slug: created.result.item.artifact.slug,
@@ -114,7 +115,7 @@ export class ArtifactPublisher {
         auth.scope
       )
       if (pending) {
-        const created = await this.create(request, token, apiUrl, auth, idempotencyKey)
+        const created = await this.create(request, token, apiUrl, auth, idempotencyKey, pending)
         if (artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))) {
           return created.result
         }
@@ -145,7 +146,7 @@ export class ArtifactPublisher {
           })
         }
       }
-      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).result
+      return (await this.create(request, token, apiUrl, auth, idempotencyKey, null)).result
     })
   }
 
@@ -197,19 +198,20 @@ export class ArtifactPublisher {
     token: string,
     apiUrl: string,
     auth: ArtifactPublishAuthContext,
-    idempotencyKey: string
+    idempotencyKey: string,
+    pending: ArtifactCreateIntent | null
   ): Promise<ArtifactCreateOutcome> {
-    const replaying =
-      getArtifactCreateIntent(auth.profileId, this.userDataPath, request.sourceKey, auth.scope) !==
-      null
-    const intent = getOrCreateArtifactCreateIntent(
-      auth.profileId,
-      this.userDataPath,
-      request.sourceKey,
-      auth.scope,
-      idempotencyKey,
-      artifactWriteBody(request)
-    )
+    const replaying = pending !== null
+    const intent =
+      pending ??
+      getOrCreateArtifactCreateIntent(
+        auth.profileId,
+        this.userDataPath,
+        request.sourceKey,
+        auth.scope,
+        idempotencyKey,
+        artifactWriteBody(request)
+      )
     let response: ArtifactCreateResponse
     try {
       response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {

@@ -1,9 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, rm, stat, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ARTIFACT_CLI_MAX_RPC_BYTES, artifactWriteRequestByteLength } from '../../shared/artifacts'
 import {
+  MAX_ARTIFACT_CREATE_INTENT_BYTES,
   MAX_PENDING_ARTIFACT_CREATES,
   clearArtifactCreateIntents,
   getArtifactCreateIntent,
@@ -23,7 +25,7 @@ const scope: ArtifactShareScope = {
 }
 const body = {
   content: '<h1>Original</h1>',
-  contentType: 'text/html',
+  contentType: 'text/html' as const,
   fileName: 'report.html',
   title: 'Original'
 }
@@ -224,6 +226,47 @@ describe('artifact create intent store', () => {
         body
       )
     ).toThrow(/could not be read safely/)
+  })
+
+  it('persists a valid artifact request near the RPC limit', async () => {
+    const userDataPath = await createUserDataPath()
+    const nearLimitBody = { ...body, content: 'x'.repeat(ARTIFACT_CLI_MAX_RPC_BYTES - 200) }
+    expect(
+      artifactWriteRequestByteLength({ sourceKey: '/repo/report.html', ...nearLimitBody })
+    ).toBeLessThanOrEqual(ARTIFACT_CLI_MAX_RPC_BYTES)
+
+    expect(() =>
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        nearLimitBody
+      )
+    ).not.toThrow()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+    const [fileName] = await readdir(directory)
+    expect((await stat(join(directory, fileName))).size).toBeGreaterThan(ARTIFACT_CLI_MAX_RPC_BYTES)
+  })
+
+  it('rejects an oversized recovery record before reading it', async () => {
+    const userDataPath = await createUserDataPath()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+    getOrCreateArtifactCreateIntent(
+      'local-profile',
+      userDataPath,
+      '/repo/report.html',
+      scope,
+      'key-a',
+      body
+    )
+    const [fileName] = await readdir(directory)
+    await truncate(join(directory, fileName), MAX_ARTIFACT_CREATE_INTENT_BYTES + 1)
+
+    expect(() =>
+      getArtifactCreateIntent('local-profile', userDataPath, '/repo/report.html', scope)
+    ).toThrow(/exceeds the supported size/)
   })
 })
 

@@ -1,23 +1,27 @@
 import { createHash, randomBytes } from 'node:crypto'
 import {
-  closeSync,
   existsSync,
-  fsyncSync,
   mkdirSync,
-  openSync,
   readFileSync,
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { hardenSecurePath } from '../../shared/secure-file'
+import { ARTIFACT_CLI_MAX_RPC_BYTES } from '../../shared/artifacts'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync,
+  hardenSecurePath
+} from '../../shared/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
 export const MAX_PENDING_ARTIFACT_CREATES = 32
+export const MAX_ARTIFACT_CREATE_INTENT_BYTES = ARTIFACT_CLI_MAX_RPC_BYTES + 128 * 1024
 
 const MAX_HARDENED_INTENT_DIRECTORIES = 64
 const hardenedIntentDirectories = new Set<string>()
@@ -54,23 +58,6 @@ function ensureIntentDirectory(profileId: string, userDataPath: string): string 
   return directory
 }
 
-function flushPath(path: string): void {
-  const descriptor = openSync(path, 'r')
-  try {
-    fsyncSync(descriptor)
-  } finally {
-    closeSync(descriptor)
-  }
-}
-
-function flushDirectory(directory: string): void {
-  try {
-    flushPath(directory)
-  } catch {
-    // Some POSIX and remote filesystems reject directory fsync; the file fsync remains mandatory.
-  }
-}
-
 function removeTemporaryIntents(directory: string): void {
   for (const name of readdirSync(directory)) {
     if (name.endsWith('.tmp')) {
@@ -79,18 +66,18 @@ function removeTemporaryIntents(directory: string): void {
   }
 }
 
-function writeIntent(path: string, directory: string, intent: ArtifactCreateIntent): void {
+function writeIntent(path: string, directory: string, serializedIntent: string): void {
   // Child files inherit the once-hardened directory ACL, avoiding per-create PowerShell launches.
   const temporaryPath = `${path}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
   try {
-    writeFileSync(temporaryPath, JSON.stringify(intent, null, 2), {
+    writeFileSync(temporaryPath, serializedIntent, {
       encoding: 'utf8',
       mode: 0o600
     })
-    flushPath(temporaryPath)
+    fsyncFileSync(temporaryPath)
     renameSync(temporaryPath, path)
     if (process.platform !== 'win32') {
-      flushDirectory(directory)
+      bestEffortFsyncDirectorySync(directory)
     }
   } catch (error) {
     rmSync(temporaryPath, { force: true })
@@ -151,6 +138,15 @@ function isScope(value: unknown): value is ArtifactShareScope {
 }
 
 function readIntent(path: string): ArtifactCreateIntent {
+  let size: number
+  try {
+    size = statSync(path).size
+  } catch (error) {
+    throw new Error('Artifact create recovery record could not be read safely.', { cause: error })
+  }
+  if (size > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
+    throw new Error('Artifact create recovery record exceeds the supported size.')
+  }
   let parsed: unknown
   try {
     parsed = JSON.parse(readFileSync(path, 'utf8'))
@@ -216,7 +212,11 @@ export function getOrCreateArtifactCreateIntent(
     idempotencyKey,
     body
   }
-  writeIntent(intentPath(profileId, userDataPath, sourceKey, scope), directory, intent)
+  const serializedIntent = JSON.stringify(intent, null, 2)
+  if (Buffer.byteLength(serializedIntent, 'utf8') > MAX_ARTIFACT_CREATE_INTENT_BYTES) {
+    throw new Error('Artifact create recovery record exceeds the supported size.')
+  }
+  writeIntent(intentPath(profileId, userDataPath, sourceKey, scope), directory, serializedIntent)
   return intent
 }
 
@@ -234,7 +234,7 @@ export function removeArtifactCreateIntent(
   if (readIntent(path).idempotencyKey === expectedIdempotencyKey) {
     rmSync(path, { force: true })
     if (process.platform !== 'win32') {
-      flushDirectory(intentDirectory(profileId, userDataPath))
+      bestEffortFsyncDirectorySync(intentDirectory(profileId, userDataPath))
     }
   }
 }
@@ -250,6 +250,6 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
     }
   }
   if (process.platform !== 'win32') {
-    flushDirectory(directory)
+    bestEffortFsyncDirectorySync(directory)
   }
 }
