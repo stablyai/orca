@@ -2794,6 +2794,10 @@ export type GlobalSettings = {
   /** One-shot migration guard for the default-on rollout. Existing profiles
    *  without the guard are flipped on once; later explicit opt-outs stick. */
   autoRenameBranchFromWorkDefaultedOn?: boolean
+  /** When enabled, Orca deletes a local workspace once its branch has landed in
+   *  the repo's base and the checkout is clean. Defaults off: unlike the other
+   *  automations this one removes a checkout. */
+  autoCloseMergedWorktrees?: boolean
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

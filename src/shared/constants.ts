@@ -180,6 +180,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     localBaseRefSuggestionDismissed: false,
     autoRenameBranchFromWork: true,
     autoRenameBranchFromWorkDefaultedOn: true,
+    autoCloseMergedWorktrees: false,
     branchPrefix: 'git-username',
     branchPrefixCustom: '',
     enableGitHubAttribution: false,

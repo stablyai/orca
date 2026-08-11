@@ -6390,7 +6390,9 @@
           "compareAgainstUpstreamTitle": "Default Compare Base",
           "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
           "compareBaseRepositoryDefault": "Repository default",
-          "compareBaseBranchUpstream": "Branch upstream"
+          "compareBaseBranchUpstream": "Branch upstream",
+          "autoCloseMergedWorkspacesTitle": "Close Merged Workspaces Automatically",
+          "autoCloseMergedWorkspacesDescription": "Delete a local workspace once its branch has landed in the base branch, including squash merges. Orca keeps the workspace when it has uncommitted or untracked changes, when its branch was never pushed, when it is pinned, and always keeps the project checkout itself."
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",
@@ -8707,7 +8709,9 @@
             "upstream": "upstream",
             "localChanges": "local changes",
             "originMaster": "origin/master",
-            "committedChanges": "committed changes"
+            "committedChanges": "committed changes",
+            "autoCloseMergedWorkspacesTitle": "Close Merged Workspaces Automatically",
+            "autoCloseMergedWorkspacesDescription": "Delete a local workspace once its branch has landed in the base branch, including squash merges. Orca keeps the workspace when it has uncommitted or untracked changes, when its branch was never pushed, when it is pinned, and always keeps the project checkout itself."
           }
         },
         "input": {

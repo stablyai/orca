@@ -121,6 +121,35 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate(
+      'auto.components.settings.git.search.autoCloseMergedWorkspacesTitle',
+      'Close Merged Workspaces Automatically'
+    ),
+    description: translate(
+      'auto.components.settings.git.search.autoCloseMergedWorkspacesDescription',
+      'Delete a local workspace once its branch has landed in the base branch, including squash merges. Orca keeps the workspace when it has uncommitted or untracked changes, when its branch was never pushed, when it is pinned, and always keeps the project checkout itself.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.git.search.autoClose', 'auto close'),
+      ...translateSearchKeyword('auto.components.settings.git.search.merged', 'merged'),
+      ...translateSearchKeyword('auto.components.settings.git.search.cleanup', 'cleanup'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.deleteWorkspace',
+        'delete workspace'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.removeWorktree',
+        'remove worktree'
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.landed', 'landed'),
+      ...translateSearchKeyword('auto.components.settings.git.search.squashMerge', 'squash merge'),
+      ...translateSearchKeyword(
+        'auto.components.settings.git.search.staleWorkspace',
+        'stale workspace'
+      )
+    ]
+  },
   ...getAutoRenameBranchSearchEntries(),
   {
     title: translate('auto.components.settings.git.search.bc7d9f69ce', 'Orca Attribution'),
