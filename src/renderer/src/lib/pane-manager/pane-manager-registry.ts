@@ -79,11 +79,18 @@ export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
   }
 }
 
-export function presentAllTerminalPanesWithoutAtlasClear(): void {
-  for (const manager of liveManagers) {
-    if (manager.isVisibleForAtlasRecovery?.() === false) {
-      continue
-    }
+export function presentAllTerminalPanesWithoutAtlasClear(reason?: string): void {
+  const recoveryManagers = Array.from(liveManagers).filter(
+    (manager) => manager.isVisibleForAtlasRecovery?.() !== false
+  )
+  // Why: a present-only recovery leaves no atlas-reset crumb, so a silently
+  // broken repair would look identical to a successful one in a freeze report.
+  recordTerminalWebglDiagnostic('webgl-atlas-present', {
+    managers: recoveryManagers.length,
+    mountedManagers: liveManagers.size,
+    ...(reason ? { reason } : {})
+  })
+  for (const manager of recoveryManagers) {
     try {
       manager.scheduleRevealPresent?.()
     } catch {

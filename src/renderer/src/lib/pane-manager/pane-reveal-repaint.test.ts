@@ -225,6 +225,25 @@ describe('schedulePaneRevealRepaint', () => {
       expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
     })
 
+    it('drives a paused renderer through the render-pause gate instead of a swallowed refresh', () => {
+      // Why: reveal can leave xterm's IntersectionObserver reporting the pane
+      // as not intersecting, and a paused RenderService drops refresh(). The
+      // atlas-clearing repaint already punches through; the present must too,
+      // or degrading a coverage shot to a present silently repaints nothing.
+      const pane = createPane({ webglAddon: { clearTextureAtlas: vi.fn() } })
+      const refreshRows = vi.fn()
+      const renderService = { _isPaused: true, _needsFullRefresh: true, refreshRows }
+      ;(pane.terminal as never as { _core: unknown })._core = { _renderService: renderService }
+
+      schedulePaneRevealPresent(() => [pane])
+      flushFrame()
+      flushFrame()
+
+      expect(refreshRows).toHaveBeenCalledWith(0, 23, true)
+      expect(renderService._isPaused).toBe(false)
+      expect(pane.terminal.refresh).not.toHaveBeenCalled()
+    })
+
     it('still retries a missing WebGL attach on the settled frame', () => {
       const pane = createPane()
       schedulePaneRevealPresent(() => [pane])

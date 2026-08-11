@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import { collectRendererMemoryProfileCounts } from '../renderer-memory-profile'
 import {
   forEachLivePaneForDesyncSentinel,
@@ -28,6 +29,7 @@ describe('pane manager registry', () => {
     for (const manager of registeredManagers.splice(0)) {
       unregisterLivePaneManager(manager)
     }
+    setTerminalWebglDiagnosticRecorder(null)
   })
 
   it('resets atlases on every registered manager', () => {
@@ -158,6 +160,39 @@ describe('pane manager registry', () => {
     expect(visible.scheduleRevealPresent).toHaveBeenCalledOnce()
     expect(visible.resetWebglTextureAtlases).not.toHaveBeenCalled()
     expect(hidden.scheduleRevealPresent).not.toHaveBeenCalled()
+  })
+
+  it('records a present crumb so a degraded recovery is distinguishable from none', () => {
+    // Why: without its own crumb, a present-only recovery that silently stopped
+    // running would look exactly like one that worked — both show a freeze
+    // report with fewer atlas resets than before.
+    const recorded: { kind: string; detail?: Record<string, unknown> }[] = []
+    setTerminalWebglDiagnosticRecorder((kind, detail) => {
+      recorded.push({ kind, detail })
+    })
+    const visible = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => true
+    }
+    const hidden = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      scheduleRevealPresent: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false
+    }
+    registerLivePaneManager(visible)
+    registeredManagers.push(visible)
+    registerLivePaneManager(hidden)
+    registeredManagers.push(hidden)
+
+    presentAllTerminalPanesWithoutAtlasClear('tab-reveal')
+
+    expect(recorded).toEqual([
+      {
+        kind: 'webgl-atlas-present',
+        detail: { managers: 1, mountedManagers: 2, reason: 'tab-reveal' }
+      }
+    ])
   })
 
   it('fits and refreshes every registered manager', () => {
