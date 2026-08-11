@@ -2046,7 +2046,9 @@ describe('registerPtyHandlers', () => {
       const env = await spawnAndGetEnv()
       expect(env.TERM).toBe('xterm-256color')
       expect(env.COLORTERM).toBe('truecolor')
-      expect(env.TERM_PROGRAM).toBe('Orca')
+      expect(env.TERM_PROGRAM).toBe('vscode')
+      // Why: the advertised brand is a compatibility claim; Orca's real identity stays readable.
+      expect(env.ORCA_TERM_PROGRAM).toBe('Orca')
     })
 
     it('keeps indexed Git prompt guards in a local agent terminal env', async () => {

@@ -57,6 +57,10 @@ import {
   recognizeAgentProcess,
   recognizeAgentProcessFromCommandLine
 } from '../../shared/agent-process-recognition'
+import {
+  ORCA_ADVERTISED_TERM_PROGRAM,
+  ORCA_TRUE_TERM_PROGRAM
+} from '../../shared/terminal-brand-env'
 import { shouldInspectOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import {
   shouldUseShellReadyStartupDelivery,
@@ -612,7 +616,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), opts.env),
     TERM: 'xterm-256color',
     COLORTERM: 'truecolor',
-    TERM_PROGRAM: 'Orca',
+    TERM_PROGRAM: ORCA_ADVERTISED_TERM_PROGRAM,
+    ORCA_TERM_PROGRAM: ORCA_TRUE_TERM_PROGRAM,
     // Why: TUIs feature-gate on TERM_PROGRAM_VERSION; ORCA_APP_VERSION is inherited from the forking main process.
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // Why: `supports-hyperlinks` gates OSC 8 on a TERM_PROGRAM allowlist excluding Orca; force it since xterm.js parses OSC 8 for clickable links.

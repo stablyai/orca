@@ -706,6 +706,19 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     })
 
+    // Why: TUIs feature-gate capabilities on a TERM_PROGRAM allowlist that has
+    // no Orca entry, so an honest brand lands in a fail-closed unknown bucket.
+    it.each([
+      ['a plain shell', {}],
+      ['an agent launch', { launchAgent: 'grok' as const }]
+    ])('advertises an xterm.js brand for %s', async (_case, spawnArgs) => {
+      await provider.spawn({ cols: 80, rows: 24, ...spawnArgs })
+
+      const spawnEnv = spawnMock.mock.calls.at(-1)![2].env as Record<string, string>
+      expect(spawnEnv.TERM_PROGRAM).toBe('vscode')
+      expect(spawnEnv.ORCA_TERM_PROGRAM).toBe('Orca')
+    })
+
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
       const keys = [
         'GIT_CONFIG_COUNT',

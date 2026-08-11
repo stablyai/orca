@@ -19,6 +19,7 @@ import {
 import { getRelayShellLaunchConfig } from './pty-shell-launch'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
 import { shouldUseShellReadyStartupDelivery } from '../shared/codex-startup-delivery'
+import { ORCA_ADVERTISED_TERM_PROGRAM, ORCA_TRUE_TERM_PROGRAM } from '../shared/terminal-brand-env'
 import { buildStartupCommandSubmission } from '../shared/startup-command-submission'
 import { resolveSetupAgentSequenceLaunchCommand } from '../shared/setup-agent-sequencing'
 import {
@@ -585,7 +586,8 @@ export class PtyHandler {
         ...stripInheritedBuildModeEnv(process.env),
         TERM: 'xterm-256color',
         COLORTERM: 'truecolor',
-        TERM_PROGRAM: 'Orca',
+        TERM_PROGRAM: ORCA_ADVERTISED_TERM_PROGRAM,
+        ORCA_TERM_PROGRAM: ORCA_TRUE_TERM_PROGRAM,
         TERM_PROGRAM_VERSION:
           rendererEnv?.ORCA_APP_VERSION || process.env.ORCA_APP_VERSION || '0.0.0-dev',
         FORCE_HYPERLINK: '1'
