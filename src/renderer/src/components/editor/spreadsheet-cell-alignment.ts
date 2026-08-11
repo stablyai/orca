@@ -5,7 +5,19 @@ export type SpreadsheetCellAlignment = 'left' | 'right' | 'center'
 // codes centered; everything else left. Alignment is the main cue that tells a
 // reader which columns are numeric, and it has to be derived from the rendered
 // text because the grid only ever receives strings.
-const NUMERIC_PATTERN = /^[+-]?(?:\d+(?:[.,]\d+)?|[.,]\d+)(?:[eE][+-]?\d+)?%?$/
+// Why: the rendered text is all the grid gets, so a formatted number has to be
+// recognised through its separators. A number format such as `#,##0.00` emits
+// grouped thousands (`1.234,50`), and a currency one wraps them in a symbol; both
+// are numbers a spreadsheet right-aligns, and matching only ungrouped digits
+// left-aligned every currency column.
+const GROUP_SEPARATORS = '.,\\s\\u00a0\\u202f'
+const CURRENCY_SYMBOLS = '\\p{Sc}'
+const NUMERIC_PATTERN = new RegExp(
+  `^[+-]?(?:${CURRENCY_SYMBOLS}\\s?)?` +
+    `(?:\\d{1,3}(?:[${GROUP_SEPARATORS}]\\d{3})+(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)?|[.,]\\d+)` +
+    `(?:[eE][+-]?\\d+)?(?:\\s?(?:%|${CURRENCY_SYMBOLS}))?$`,
+  'u'
+)
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?$/
 const TIME_OF_DAY_PATTERN = /^\d{2}:\d{2}:\d{2}$/
 const BOOLEAN_TEXTS = new Set(['TRUE', 'FALSE'])

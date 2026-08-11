@@ -4,9 +4,11 @@ import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import {
-  SPREADSHEET_ALIGNMENT_CLASSES,
-  getSpreadsheetCellAlignmentClass
-} from './spreadsheet-cell-alignment'
+  SpreadsheetCell,
+  resolveSpreadsheetCellAlignment,
+  type SpreadsheetCellStyle,
+  type SpreadsheetVerticalAlignment
+} from './SpreadsheetCell'
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
   buildSpreadsheetMergeIndex,
@@ -54,53 +56,15 @@ type SpreadsheetGridProps = {
    * whose heading row holds the file's own first row of text.
    */
   headerAlignment?: 'left' | 'center'
+  /**
+   * Vertical alignment for cells whose style declares none. A workbook passes
+   * `bottom`, which is what Excel and Sheets do by default; a CSV has no such
+   * default and centers in its row.
+   */
+  defaultVerticalAlignment?: SpreadsheetVerticalAlignment
 }
 
-/** Visual styling a data file declares for one cell. */
-export type SpreadsheetCellStyle = {
-  backgroundColor?: string
-  textColor?: string
-  bold?: boolean
-  italic?: boolean
-  /** Font size relative to the file's own default. */
-  fontScale?: number
-  horizontalAlignment?: 'left' | 'right' | 'center'
-  wrapText?: boolean
-  borders?: {
-    top?: SpreadsheetCellBorderEdge
-    right?: SpreadsheetCellBorderEdge
-    bottom?: SpreadsheetCellBorderEdge
-    left?: SpreadsheetCellBorderEdge
-  }
-}
-
-export type SpreadsheetCellBorderEdge = { width: string; style: string; color?: string }
-
-// Why: the file's own alignment wins; inferring from the value is the fallback,
-// and only a left-aligned label overflows to the right.
-function resolveCellAlignment(
-  cell: string,
-  cellStyle: SpreadsheetCellStyle | undefined
-): 'left' | 'right' | 'center' {
-  if (cellStyle?.horizontalAlignment !== undefined) {
-    return cellStyle.horizontalAlignment
-  }
-  return getSpreadsheetCellAlignmentClass(cell).startsWith('justify-start') ? 'left' : 'center'
-}
-
-function buildCellBorderStyle(borders: SpreadsheetCellStyle['borders']): React.CSSProperties {
-  if (borders === undefined) {
-    return {}
-  }
-  const edgeStyle = (edge: SpreadsheetCellBorderEdge | undefined): string | undefined =>
-    edge === undefined ? undefined : `${edge.width} ${edge.style} ${edge.color ?? 'currentColor'}`
-  return {
-    borderTop: edgeStyle(borders.top),
-    borderRight: edgeStyle(borders.right),
-    borderBottom: edgeStyle(borders.bottom),
-    borderLeft: edgeStyle(borders.left)
-  }
-}
+export type { SpreadsheetCellBorderEdge, SpreadsheetCellStyle } from './SpreadsheetCell'
 
 // Why: shared by CsvViewer and XlsxViewer — both render a read-only sheet of
 // strings, and duplicating a virtualized grid twice would let the two drift.
@@ -126,7 +90,8 @@ export function SpreadsheetGrid({
   mergedRanges,
   drawings,
   sparklines,
-  headerAlignment = 'left'
+  headerAlignment = 'left',
+  defaultVerticalAlignment = 'middle'
 }: SpreadsheetGridProps): React.JSX.Element {
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why: reuse the editor's own zoom level rather than a control of our own, so
@@ -330,7 +295,7 @@ export function SpreadsheetGrid({
                     cellStyle?.wrapText === true ||
                     mergePlacement !== null ||
                     cell === '' ||
-                    resolveCellAlignment(cell, cellStyle) !== 'left'
+                    resolveSpreadsheetCellAlignment(cell, cellStyle) !== 'left'
                       ? null
                       : computeSpreadsheetTextOverflowWidth({
                           row: rows[valueRowIndex] ?? [],
@@ -341,61 +306,16 @@ export function SpreadsheetGrid({
                             cellStyles?.[valueRowIndex]?.[index]?.backgroundColor !== undefined
                         })
                   return (
-                    <div
-                      role="cell"
-                      aria-colindex={columnIndex + 2}
+                    <SpreadsheetCell
                       key={virtualColumn.key}
-                      className={cn(
-                        'flex border-b border-r border-spreadsheet-gridline px-2',
-                        overflowWidth === null ? 'overflow-hidden' : 'overflow-visible',
-                        // Why: an author-set alignment is a decision; inferring
-                        // from the value is only the fallback when there is none.
-                        cellStyle?.horizontalAlignment === undefined
-                          ? getSpreadsheetCellAlignmentClass(cell)
-                          : SPREADSHEET_ALIGNMENT_CLASSES[cellStyle.horizontalAlignment],
-                        cellStyle?.wrapText === true
-                          ? 'items-start py-1 whitespace-pre-wrap break-words'
-                          : 'items-center',
-                        cellStyle?.bold === true && 'font-semibold',
-                        cellStyle?.italic === true && 'italic'
-                      )}
-                      // Why: these colours come from the opened file, not from the
-                      // design system, so no token can express them. A cell that
-                      // declares none keeps the theme's own foreground above.
-                      style={{
-                        ...(cellStyle?.backgroundColor === undefined
-                          ? {}
-                          : {
-                              backgroundColor: cellStyle.backgroundColor,
-                              color: cellStyle.textColor
-                            }),
-                        ...(cellStyle?.fontScale === undefined
-                          ? {}
-                          : { fontSize: Math.round(fontSizePx * cellStyle.fontScale) }),
-                        // Why: an author-set edge replaces the default gridline on
-                        // that side only, so a cell with one underline keeps the
-                        // grid intact everywhere else.
-                        ...buildCellBorderStyle(cellStyle?.borders),
-                        ...(mergePlacement === null
-                          ? {}
-                          : { gridColumn: `span ${mergePlacement.columnSpan}` })
-                      }}
-                      title={cell}
-                    >
-                      <span
-                        className={cn(
-                          cellStyle?.wrapText === true ? 'min-w-0' : 'truncate',
-                          // Why: a label may run across empty columns, but never out
-                          // of its own row — a 24pt title in a short row bled over
-                          // the band below it. The span clips its own height while
-                          // still being allowed to be wider than the cell.
-                          overflowWidth === null ? undefined : 'max-h-full overflow-hidden'
-                        )}
-                        style={overflowWidth === null ? undefined : { maxWidth: overflowWidth }}
-                      >
-                        {cell}
-                      </span>
-                    </div>
+                      cell={cell}
+                      cellStyle={cellStyle}
+                      ariaColumnIndex={columnIndex + 2}
+                      fontSizePx={fontSizePx}
+                      defaultVerticalAlignment={defaultVerticalAlignment}
+                      overflowWidth={overflowWidth}
+                      columnSpan={mergePlacement?.columnSpan}
+                    />
                   )
                 })}
                 <div aria-hidden className="border-b border-spreadsheet-gridline" />

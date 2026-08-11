@@ -16,6 +16,18 @@ describe('getSpreadsheetCellAlignment', () => {
     expect(getSpreadsheetCellAlignment('12%')).toBe('right')
   })
 
+  it('right-aligns grouped thousands, the way a number format writes them', () => {
+    expect(getSpreadsheetCellAlignment('1.234,50')).toBe('right')
+    expect(getSpreadsheetCellAlignment('1,234.50')).toBe('right')
+    expect(getSpreadsheetCellAlignment('1.234.567,89')).toBe('right')
+  })
+
+  it('right-aligns a currency amount, symbol on either side', () => {
+    expect(getSpreadsheetCellAlignment('2347.93 €')).toBe('right')
+    expect(getSpreadsheetCellAlignment('€1.234,50')).toBe('right')
+    expect(getSpreadsheetCellAlignment('$1,234')).toBe('right')
+  })
+
   it('right-aligns dates and times, as a spreadsheet does', () => {
     for (const value of [
       '2025-01-01',
@@ -41,7 +53,6 @@ describe('getSpreadsheetCellAlignment', () => {
       'Region',
       'MD_Monobloc_MD_10',
       '150 m²',
-      '2347.93 €',
       'Sí (350 €)',
       '4 dormitorios',
       'true',

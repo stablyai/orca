@@ -105,6 +105,7 @@ export default function XlsxViewer({ content, filePath }: XlsxViewerProps): Reac
           drawings={activeSheet.drawings}
           sparklines={activeSheet.sparklines}
           headerAlignment="center"
+          defaultVerticalAlignment="bottom"
         />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">

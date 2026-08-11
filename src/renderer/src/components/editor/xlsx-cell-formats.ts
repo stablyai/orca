@@ -14,6 +14,10 @@ export type XlsxCellFormat = {
   borderId: number
   /** `horizontal` from `<alignment>`, when the author set one. */
   horizontalAlignment?: string
+  /** `vertical` from `<alignment>`, when the author set one. */
+  verticalAlignment?: string
+  /** `indent` from `<alignment>`, in the spreadsheet's own indent units. */
+  indent?: number
   wrapText?: boolean
 }
 
@@ -43,13 +47,23 @@ export function parseXlsxCellFormats(stylesXml: string): XlsxCellFormat[] {
   return cellFormats
 }
 
-function readAlignment(
-  cellFormatXml: string
-): Pick<XlsxCellFormat, 'horizontalAlignment' | 'wrapText'> {
-  const alignment: Pick<XlsxCellFormat, 'horizontalAlignment' | 'wrapText'> = {}
+type XlsxAlignment = Pick<
+  XlsxCellFormat,
+  'horizontalAlignment' | 'verticalAlignment' | 'indent' | 'wrapText'
+>
+
+function readAlignment(cellFormatXml: string): XlsxAlignment {
+  const alignment: XlsxAlignment = {}
   forEachXlsxXmlElement(cellFormatXml, 'alignment', (element) => {
     if (element.attributes.horizontal !== undefined) {
       alignment.horizontalAlignment = element.attributes.horizontal
+    }
+    if (element.attributes.vertical !== undefined) {
+      alignment.verticalAlignment = element.attributes.vertical
+    }
+    const indent = Number.parseInt(element.attributes.indent ?? '', 10)
+    if (Number.isInteger(indent) && indent > 0) {
+      alignment.indent = indent
     }
     if (element.attributes.wrapText === '1' || element.attributes.wrapText === 'true') {
       alignment.wrapText = true

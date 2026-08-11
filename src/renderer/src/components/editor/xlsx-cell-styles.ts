@@ -12,6 +12,10 @@ export type XlsxCellStyle = {
   bold?: boolean
   /** Horizontal alignment the author set, which wins over inferring it. */
   horizontalAlignment?: 'left' | 'right' | 'center'
+  /** Vertical alignment the author set; absent leaves the viewer's default. */
+  verticalAlignment?: 'top' | 'middle' | 'bottom'
+  /** Indent level the author set, in the spreadsheet's own indent units. */
+  indent?: number
   wrapText?: boolean
   italic?: boolean
   /** Font size relative to the workbook default; 1 leaves the app's own size. */
@@ -90,6 +94,13 @@ export function parseXlsxCellStyles(
     if (horizontalAlignment !== undefined) {
       style.horizontalAlignment = horizontalAlignment
     }
+    const verticalAlignment = VERTICAL_ALIGNMENTS[cellFormat.verticalAlignment ?? '']
+    if (verticalAlignment !== undefined) {
+      style.verticalAlignment = verticalAlignment
+    }
+    if (cellFormat.indent !== undefined) {
+      style.indent = cellFormat.indent
+    }
     if (cellFormat.wrapText === true) {
       style.wrapText = true
     }
@@ -119,6 +130,15 @@ const HORIZONTAL_ALIGNMENTS: Record<string, 'left' | 'right' | 'center'> = {
   right: 'right',
   center: 'center',
   centerContinuous: 'center'
+}
+
+// Why: `justify` and `distributed` stretch a paragraph to the cell's height,
+// which a read-only row of text has no counterpart for; both fall back to the
+// viewer's default rather than inventing a layout the file did not ask for.
+const VERTICAL_ALIGNMENTS: Record<string, 'top' | 'middle' | 'bottom' | undefined> = {
+  top: 'top',
+  center: 'middle',
+  bottom: 'bottom'
 }
 
 function normalizeHorizontalAlignment(

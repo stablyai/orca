@@ -122,7 +122,18 @@ describe('parseXlsxCellStyles', () => {
 
 describe('parseXlsxCellStyles alignment', () => {
   const ALIGNED_STYLES_XML =
-    '<styleSheet><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><cellXfs count="5"><xf/><xf applyAlignment="1"><alignment horizontal="center"/></xf><xf applyAlignment="1"><alignment horizontal="right" wrapText="1"/></xf><xf applyAlignment="1"><alignment horizontal="justify"/></xf><xf applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf></cellXfs></styleSheet>'
+    '<styleSheet><fonts count="1"><font/></fonts><fills count="1"><fill><patternFill patternType="none"/></fill></fills><cellXfs count="10">' +
+    '<xf/>' +
+    '<xf applyAlignment="1"><alignment horizontal="center"/></xf>' +
+    '<xf applyAlignment="1"><alignment horizontal="right" wrapText="1"/></xf>' +
+    '<xf applyAlignment="1"><alignment horizontal="justify"/></xf>' +
+    '<xf applyAlignment="1"><alignment wrapText="1"/></xf>' +
+    '<xf applyAlignment="1"><alignment vertical="top"/></xf>' +
+    '<xf applyAlignment="1"><alignment vertical="center"/></xf>' +
+    '<xf applyAlignment="1"><alignment vertical="justify"/></xf>' +
+    '<xf applyAlignment="1"><alignment horizontal="left" indent="2"/></xf>' +
+    '<xf applyAlignment="1"><alignment indent="0"/></xf>' +
+    '</cellXfs></styleSheet>'
 
   it('reports the horizontal alignment the author set', () => {
     const styles = parseXlsxCellStyles(ALIGNED_STYLES_XML, [])
@@ -139,6 +150,24 @@ describe('parseXlsxCellStyles alignment', () => {
 
   it('reports wrapText on its own', () => {
     expect(parseXlsxCellStyles(ALIGNED_STYLES_XML, []).getStyle(4)).toEqual({ wrapText: true })
+  })
+
+  it('reports the vertical alignment the author set', () => {
+    const styles = parseXlsxCellStyles(ALIGNED_STYLES_XML, [])
+
+    expect(styles.getStyle(5)).toEqual({ verticalAlignment: 'top' })
+    expect(styles.getStyle(6)).toEqual({ verticalAlignment: 'middle' })
+  })
+
+  it('ignores a vertical alignment a read-only row cannot express', () => {
+    expect(parseXlsxCellStyles(ALIGNED_STYLES_XML, []).getStyle(7)).toBeUndefined()
+  })
+
+  it('reports an indent level, ignoring a zero one', () => {
+    const styles = parseXlsxCellStyles(ALIGNED_STYLES_XML, [])
+
+    expect(styles.getStyle(8)).toEqual({ horizontalAlignment: 'left', indent: 2 })
+    expect(styles.getStyle(9)).toBeUndefined()
   })
 
   it('counts alignment as visual styling', () => {
