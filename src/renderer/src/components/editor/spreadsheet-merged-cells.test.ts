@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   buildSpreadsheetMergeIndex,
-  planSpreadsheetMergePlacement
+  planSpreadsheetMergePlacement,
+  sumSpreadsheetRowHeights
 } from './spreadsheet-merged-cells'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
 
@@ -60,6 +61,73 @@ describe('buildSpreadsheetMergeIndex', () => {
 
     expect(index.find(0, 0)).toBeUndefined()
     expect(index.truncated).toBe(false)
+  })
+})
+
+describe('sumSpreadsheetRowHeights', () => {
+  const merge = (rowIndex: number, rowSpan: number): XlsxMergedRange => ({
+    rowIndex,
+    columnIndex: 1,
+    rowSpan,
+    columnSpan: 4
+  })
+
+  it('gives a merge of a single row exactly that row height', () => {
+    expect(sumSpreadsheetRowHeights(merge(3, 1), () => 24)).toBe(24)
+  })
+
+  it('adds the two rows a merge covers', () => {
+    const heights = [0, 0, 0, 0, 0, 0, 0, 30, 45]
+
+    expect(sumSpreadsheetRowHeights(merge(7, 2), (row) => heights[row] ?? 0)).toBe(75)
+  })
+
+  it('adds all four rows a taller merge covers', () => {
+    expect(sumSpreadsheetRowHeights(merge(2, 4), () => 20)).toBe(80)
+  })
+
+  it('sums uneven row heights instead of averaging or repeating the first', () => {
+    const heights = [24, 28, 40]
+
+    expect(sumSpreadsheetRowHeights(merge(0, 3), (row) => heights[row] ?? 0)).toBe(92)
+  })
+
+  it('starts at the row the merge anchors on, not at the top of the sheet', () => {
+    const heights = new Map([
+      [0, 500],
+      [1, 500],
+      [20, 18],
+      [21, 22]
+    ])
+
+    expect(sumSpreadsheetRowHeights(merge(20, 2), (row) => heights.get(row) ?? 0)).toBe(40)
+  })
+
+  it('counts a row of no height as nothing rather than failing', () => {
+    const heights = [0, 32]
+
+    expect(sumSpreadsheetRowHeights(merge(0, 2), (row) => heights[row] ?? 0)).toBe(32)
+  })
+
+  it('returns nothing for a range that claims to cover no rows', () => {
+    const getRowHeight = vi.fn(() => 24)
+
+    expect(sumSpreadsheetRowHeights(merge(8, 0), getRowHeight)).toBe(0)
+    expect(getRowHeight).not.toHaveBeenCalled()
+  })
+
+  it('asks for each covered row once, in order, and for no other row', () => {
+    const getRowHeight = vi.fn(() => 24)
+
+    sumSpreadsheetRowHeights(merge(7, 3), getRowHeight)
+
+    expect(getRowHeight.mock.calls).toEqual([[7], [8], [9]])
+  })
+
+  it('gives a title merged down two 24px rows the whole 48px band', () => {
+    const titleMerge: XlsxMergedRange = { rowIndex: 7, columnIndex: 1, rowSpan: 2, columnSpan: 4 }
+
+    expect(sumSpreadsheetRowHeights(titleMerge, () => 24)).toBe(48)
   })
 })
 

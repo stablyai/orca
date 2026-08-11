@@ -66,6 +66,24 @@ export function buildSpreadsheetMergeIndex(
   }
 }
 
+/**
+ * Total height of the rows a merge covers.
+ *
+ * The cell that owns a merge's value is given this height so its text can use
+ * the whole band. Without it a large value — a title merged down two rows — is
+ * clipped to the first row, which is not where the author put it.
+ */
+export function sumSpreadsheetRowHeights(
+  merge: XlsxMergedRange,
+  getRowHeight: (rowIndex: number) => number
+): number {
+  let height = 0
+  for (let offset = 0; offset < merge.rowSpan; offset += 1) {
+    height += getRowHeight(merge.rowIndex + offset)
+  }
+  return height
+}
+
 export type SpreadsheetMergePlacement = {
   /** Grid tracks this cell occupies, already clamped to the rendered window. */
   columnSpan: number

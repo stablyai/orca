@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { SpreadsheetColumnResizeHandle } from './SpreadsheetColumnResizeHandle'
 import { useSpreadsheetColumnResize } from './use-spreadsheet-column-resize'
@@ -14,7 +14,8 @@ import {
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
   buildSpreadsheetMergeIndex,
-  planSpreadsheetMergePlacement
+  planSpreadsheetMergePlacement,
+  sumSpreadsheetRowHeights
 } from './spreadsheet-merged-cells'
 import { SpreadsheetGridOverlay } from './SpreadsheetGridOverlay'
 import { buildSpreadsheetOverlayPlacements } from './spreadsheet-grid-overlay'
@@ -126,6 +127,11 @@ export function SpreadsheetGrid({
     [paddedHeader, rows, columnCount, declaredColumnWidths, columnResize.widthOverrides, zoomScale]
   )
   const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
+  const getRowHeightPx = useCallback(
+    (index: number) =>
+      Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
+    [declaredRowHeights, zoomScale]
+  )
   const overlay = useMemo(
     () =>
       buildSpreadsheetOverlayPlacements({
@@ -134,27 +140,16 @@ export function SpreadsheetGrid({
         mergeIndex,
         columnWidths,
         rowCount: rows.length,
-        getRowHeight: (index) =>
-          Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
+        getRowHeight: getRowHeightPx,
         rowNumberColumnPx
       }),
-    [
-      drawings,
-      sparklines,
-      mergeIndex,
-      columnWidths,
-      rows,
-      declaredRowHeights,
-      zoomScale,
-      rowNumberColumnPx
-    ]
+    [drawings, sparklines, mergeIndex, columnWidths, rows, getRowHeightPx, rowNumberColumnPx]
   )
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) =>
-      Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
+    estimateSize: getRowHeightPx,
     overscan: SPREADSHEET_GRID_OVERSCAN,
     getItemKey: (index) => index
   })
@@ -318,8 +313,8 @@ export function SpreadsheetGrid({
                           columnIndex,
                           columnCount,
                           columnWidths,
-                          hasBackground: (index) =>
-                            cellStyles?.[valueRowIndex]?.[index]?.backgroundColor !== undefined
+                          isMerged: (index) =>
+                            mergeIndex.find(virtualRow.index, index) !== undefined
                         })
                   return (
                     <SpreadsheetCell
@@ -331,6 +326,13 @@ export function SpreadsheetGrid({
                       defaultVerticalAlignment={defaultVerticalAlignment}
                       overflowWidth={overflowWidth}
                       columnSpan={mergePlacement?.columnSpan}
+                      rowSpanHeightPx={
+                        merge !== undefined &&
+                        merge.rowSpan > 1 &&
+                        mergePlacement?.showsValue === true
+                          ? sumSpreadsheetRowHeights(merge, getRowHeightPx)
+                          : undefined
+                      }
                     />
                   )
                 })}

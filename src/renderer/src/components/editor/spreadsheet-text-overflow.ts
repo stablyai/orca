@@ -13,8 +13,11 @@ export type SpreadsheetOverflowInput = {
   columnCount: number
   /** Widths in pixels by column index, already zoomed. */
   columnWidths: readonly number[]
-  /** True when the neighbour carries a fill, which stops the overflow. */
-  hasBackground: (columnIndex: number) => boolean
+  /**
+   * True when the neighbour belongs to a merged range, which owns its cell even
+   * when the value lives in the merge's anchor rather than in this row.
+   */
+  isMerged: (columnIndex: number) => boolean
 }
 
 // Why: bound the reach so one long label in a sparse sheet cannot produce a span
@@ -23,22 +26,26 @@ const MAX_OVERFLOW_COLUMNS = 12
 
 /**
  * Returns the width the text may occupy — its own column plus every following
- * empty, unfilled one — or null when no neighbour is free, so the caller can keep
- * the cell clipped rather than opting it into an overflow it does not use.
+ * empty one — or null when no neighbour is free, so the caller can keep the cell
+ * clipped rather than opting it into an overflow it does not use.
+ *
+ * Why a fill does not stop it: a spreadsheet paints an overflowing label straight
+ * over a coloured neighbour, and treating a fill as occupied clipped headings
+ * that sat beside a banded but empty range.
  */
 export function computeSpreadsheetTextOverflowWidth({
   row,
   columnIndex,
   columnCount,
   columnWidths,
-  hasBackground
+  isMerged
 }: SpreadsheetOverflowInput): number | null {
   const ownWidth = columnWidths[columnIndex] ?? 0
   let width = ownWidth
   const lastColumn = Math.min(columnCount - 1, columnIndex + MAX_OVERFLOW_COLUMNS)
 
   for (let next = columnIndex + 1; next <= lastColumn; next += 1) {
-    if ((row[next] ?? '') !== '' || hasBackground(next)) {
+    if ((row[next] ?? '') !== '' || isMerged(next)) {
       break
     }
     width += columnWidths[next] ?? 0

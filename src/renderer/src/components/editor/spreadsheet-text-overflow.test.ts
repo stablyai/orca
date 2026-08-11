@@ -4,14 +4,14 @@ import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow
 function width(
   row: string[],
   columnIndex: number,
-  { filled = [] as number[], widths = [80, 80, 80, 80, 80] } = {}
+  { merged = [] as number[], widths = [80, 80, 80, 80, 80] } = {}
 ): number | null {
   return computeSpreadsheetTextOverflowWidth({
     row,
     columnIndex,
     columnCount: widths.length,
     columnWidths: widths,
-    hasBackground: (index) => filled.includes(index)
+    isMerged: (index) => merged.includes(index)
   })
 }
 
@@ -25,9 +25,54 @@ describe('computeSpreadsheetTextOverflowWidth', () => {
     expect(width(['Gastos', '', 'Previsto', '', ''], 0)).toBe(160)
   })
 
-  it('stops at a column that carries a fill, even when it is empty', () => {
-    // Why: a filled cell is visible, so the text would run over a coloured block.
-    expect(width(['Gastos', '', '', '', ''], 0, { filled: [2] })).toBe(160)
+  it('stops at a merged column, whose value lives in the merge anchor', () => {
+    // Why: a merge owns its cell even when this row reads empty, so the label
+    // would run over another cell's text.
+    expect(width(['Gastos', '', '', '', ''], 0, { merged: [2] })).toBe(160)
+  })
+
+  it('runs over a neighbour that is merely filled, as a spreadsheet does', () => {
+    // Why: a heading beside a banded but empty range was being clipped; Excel
+    // paints the label straight over the colour.
+    expect(width(['Ganancias', '', '', '', ''], 0)).toBe(400)
+  })
+
+  it('reports no overflow when the very next column belongs to a merge', () => {
+    expect(width(['Gastos', '', '', '', ''], 0, { merged: [1] })).toBeNull()
+  })
+
+  it('stops at the first of several merged columns in a row', () => {
+    expect(width(['Gastos', '', '', '', ''], 0, { merged: [2, 3, 4] })).toBe(160)
+  })
+
+  it('runs to the reach limit when the merge sits just past it', () => {
+    const emptyRow = Array.from({ length: 40 }, () => '')
+    emptyRow[0] = 'Título'
+
+    expect(
+      computeSpreadsheetTextOverflowWidth({
+        row: emptyRow,
+        columnIndex: 0,
+        columnCount: 40,
+        columnWidths: Array.from({ length: 40 }, () => 100),
+        isMerged: (index) => index === 13
+      })
+    ).toBe(1300)
+  })
+
+  it('stops one column short when the merge sits on the last column in reach', () => {
+    const emptyRow = Array.from({ length: 40 }, () => '')
+    emptyRow[0] = 'Título'
+
+    expect(
+      computeSpreadsheetTextOverflowWidth({
+        row: emptyRow,
+        columnIndex: 0,
+        columnCount: 40,
+        columnWidths: Array.from({ length: 40 }, () => 100),
+        isMerged: (index) => index === 12
+      })
+    ).toBe(1200)
   })
 
   it('reports no overflow when the next column is occupied', () => {
@@ -55,7 +100,7 @@ describe('computeSpreadsheetTextOverflowWidth', () => {
         columnIndex: 0,
         columnCount: 40,
         columnWidths: widths,
-        hasBackground: () => false
+        isMerged: () => false
       })
     ).toBe(1300)
   })
