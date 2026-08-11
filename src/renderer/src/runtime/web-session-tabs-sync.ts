@@ -2253,9 +2253,11 @@ function findCurrentVisibleUnifiedTabId(args: {
   }
   if (currentVisibleType === 'editor') {
     const fileId = state.activeFileIdByWorktree[worktreeId]
+    // Why: toVisibleTabType maps diff/conflict-review/check-details to editor; only
+    // matching contentType editor left those surfaces looking gone on host snapshots.
     return (
-      nextUnifiedTabs.find((tab) => tab.contentType === 'editor' && tab.entityId === fileId)?.id ??
-      null
+      nextUnifiedTabs.find((tab) => toVisibleTabType(tab) === 'editor' && tab.entityId === fileId)
+        ?.id ?? null
     )
   }
   return null

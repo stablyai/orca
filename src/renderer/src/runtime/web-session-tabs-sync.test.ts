@@ -4508,6 +4508,123 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.activeTabTypeByWorktree).toBeUndefined()
   })
 
+  it('keeps local Diff tab focus when host snapshot is terminal-only (#11231)', () => {
+    // Why: remote SC Diff opens as contentType diff (visible type editor). Host
+    // snapshots are usually terminal-focused and must not steal that surface.
+    const openFile: OpenFile = {
+      id: `${WT}::diff::unstaged::notes.ts`,
+      filePath: '/repo/notes.ts',
+      relativePath: 'notes.ts',
+      worktreeId: WT,
+      language: 'typescript',
+      isDirty: false,
+      runtimeEnvironmentId: ENV,
+      mode: 'diff',
+      diffSource: 'unstaged'
+    }
+    const terminalId = toWebTerminalSurfaceTabId('host-tab-1')
+    const terminalTab: TerminalTab = {
+      id: terminalId,
+      ptyId: 'remote:web-env-1@@terminal-1',
+      worktreeId: WT,
+      title: 'Terminal 1',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW
+    }
+    const terminalUnified: Tab = {
+      id: terminalId,
+      entityId: terminalId,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'terminal',
+      label: 'Terminal 1',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: NOW,
+      isPreview: false,
+      isPinned: false
+    }
+    const diffTab: Tab = {
+      id: 'local-diff-unified',
+      entityId: openFile.id,
+      groupId: 'host-group-1',
+      worktreeId: WT,
+      contentType: 'diff',
+      label: 'notes.ts',
+      customLabel: null,
+      color: null,
+      sortOrder: 1,
+      createdAt: NOW + 1,
+      isPreview: false,
+      isPinned: false
+    }
+
+    const initialState = makeState({
+      activeFileId: openFile.id,
+      activeFileIdByWorktree: { [WT]: openFile.id },
+      activeTabId: terminalId,
+      activeTabIdByWorktree: { [WT]: terminalId },
+      activeTabType: 'editor',
+      activeTabTypeByWorktree: { [WT]: 'editor' },
+      openFiles: [openFile],
+      tabsByWorktree: { [WT]: [terminalTab] },
+      unifiedTabsByWorktree: { [WT]: [terminalUnified, diffTab] },
+      groupsByWorktree: {
+        [WT]: [
+          {
+            id: 'host-group-1',
+            worktreeId: WT,
+            activeTabId: diffTab.id,
+            tabOrder: [terminalId, diffTab.id],
+            recentTabIds: [diffTab.id]
+          }
+        ]
+      }
+    })
+
+    const patch = applyWebSessionTabsSnapshot(
+      initialState,
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'Terminal 1',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1'
+          }
+        ],
+        { activeTabId: HOST_SURFACE_ID, activeTabType: 'terminal' }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    const nextState = { ...initialState, ...patch }
+    // Why: host terminal snapshots must not steal the local Diff surface (contentType
+    // diff maps to visible editor; group activeTabId is what the tab bar follows).
+    expect(nextState.activeTabType).toBe('editor')
+    expect(nextState.activeTabTypeByWorktree[WT]).toBe('editor')
+    expect(nextState.activeFileId).toBe(openFile.id)
+    expect(nextState.activeFileIdByWorktree[WT]).toBe(openFile.id)
+    expect(nextState.groupsByWorktree[WT]?.[0]?.activeTabId).toBe(diffTab.id)
+    expect(nextState.unifiedTabsByWorktree[WT]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: diffTab.id,
+          contentType: 'diff',
+          entityId: openFile.id
+        })
+      ])
+    )
+  })
+
   it('mirrors pending terminal handles without attaching a stale PTY', () => {
     const state = makeState()
     const patch = applyWebSessionTabsSnapshot(
