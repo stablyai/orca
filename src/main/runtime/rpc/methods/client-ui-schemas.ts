@@ -18,7 +18,7 @@ import {
   WORKTREE_CARD_PROPERTIES
 } from '../../../../shared/worktree-card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
-import type { TaskProvider } from '../../../../shared/types'
+import { STATUS_BAR_ITEMS, type TaskProvider } from '../../../../shared/types'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields'
 import { TaskResumeState } from './task-resume-state-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
@@ -58,20 +58,7 @@ const RightSidebarTabParam = z.custom<StaticRightSidebarTab | `plugin:${string}`
   { message: 'Unknown right sidebar tab' }
 )
 const AgentActivityDisplayMode = z.enum(['compact', 'full'])
-const StatusBarItem = z.enum([
-  'claude',
-  'codex',
-  'gemini',
-  'antigravity',
-  'opencode-go',
-  'kimi',
-  'minimax',
-  'grok',
-  'deepseek',
-  'ssh',
-  'resource-usage',
-  'ports'
-])
+const StatusBarItem = z.enum(STATUS_BAR_ITEMS)
 const WorkspaceStatusDefinition = z.object({
   id: z.string(),
   label: z.string(),

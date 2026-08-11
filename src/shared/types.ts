@@ -3359,19 +3359,23 @@ export type WorktreeCardMode = 'Default' | 'Compact'
 
 export type AgentActivityDisplayMode = 'compact' | 'full'
 
-export type StatusBarItem =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'antigravity'
-  | 'opencode-go'
-  | 'kimi'
-  | 'minimax'
-  | 'grok'
-  | 'deepseek'
-  | 'ssh'
-  | 'resource-usage'
-  | 'ports'
+// Single source for the status-bar item set; schemas derive z.enum from this so a
+// new item cannot drift out of the client schema.
+export const STATUS_BAR_ITEMS = [
+  'claude',
+  'codex',
+  'gemini',
+  'antigravity',
+  'opencode-go',
+  'kimi',
+  'minimax',
+  'grok',
+  'deepseek',
+  'ssh',
+  'resource-usage',
+  'ports'
+] as const
+export type StatusBarItem = (typeof STATUS_BAR_ITEMS)[number]
 export type FloatingTerminalTriggerLocation = 'floating-button' | 'status-bar'
 
 export type TaskResumeState = {
