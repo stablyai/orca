@@ -62,15 +62,18 @@ async function click(): Promise<void> {
 }
 
 describe('CopyCommentsPromptButton', () => {
-  it('swaps to the success icon when the copy resolves true', async () => {
+  it('swaps to the success icon and accessible name when the copy resolves true', async () => {
     const onCopy = vi.fn().mockResolvedValue(true)
-    render({ onCopy })
+    render({ label: 'Copy prompt', onCopy })
 
     expect(hasSuccessIcon()).toBe(false)
+    expect(button().getAttribute('aria-label')).toBe('Copy prompt')
     await click()
 
     expect(onCopy).toHaveBeenCalledTimes(1)
     expect(hasSuccessIcon()).toBe(true)
+    // Why: the copied state must reach assistive tech, not only the icon.
+    expect(button().getAttribute('aria-label')).toBe('Copied prompt to clipboard')
   })
 
   it('does not signal success when the copy resolves false', async () => {

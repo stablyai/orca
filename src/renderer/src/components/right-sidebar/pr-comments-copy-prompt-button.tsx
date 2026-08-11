@@ -75,7 +75,9 @@ export function CopyCommentsPromptButton({
           variant="ghost"
           size="icon-xs"
           className="text-muted-foreground hover:text-foreground"
-          aria-label={label}
+          // Why: the success cue is icon-only; reflecting it in the accessible name gives
+          // screen-reader users the same "copied" feedback sighted users get from the swap.
+          aria-label={copied ? copiedLabel : label}
           disabled={disabled}
           title={disabled ? disabledReason : undefined}
           onClick={() => void handleCopy()}
