@@ -4,6 +4,9 @@ import {
   resolveXlsxRelationshipsPartPath
 } from './xlsx-part-paths'
 import { parseXlsxCellStyles, type XlsxCellStyle } from './xlsx-cell-styles'
+import { parseXlsxConditionalFormatting } from './xlsx-conditional-formatting'
+import { applyXlsxConditionalStyles } from './xlsx-conditional-styles'
+import { parseXlsxDifferentialFormats } from './xlsx-differential-formats'
 import { parseXlsxNumberFormats } from './xlsx-number-formats'
 import { expandXlsxCellRange } from './xlsx-cell-reference'
 import { parseXlsxSharedStrings } from './xlsx-shared-strings'
@@ -104,6 +107,7 @@ export async function parseXlsxWorkbook(
         )
   )
   const cellStyles = parseXlsxCellStyles(stylesXml, themePalette)
+  const differentialFormats = parseXlsxDifferentialFormats(stylesXml, themePalette)
   const use1904DateSystem = readUse1904DateSystem(workbookXml)
 
   const sheets: XlsxSheet[] = []
@@ -119,14 +123,25 @@ export async function parseXlsxWorkbook(
     // Why: collecting the numbers behind every cell is only worth it when the sheet
     // actually carries a sparkline, so the cheap text probe gates it.
     const hasSparklines = (worksheetXml ?? '').includes('SPARKLINE(')
+    // Why: a conditional rule compares against the number behind a cell, not its
+    // formatted text, so it needs the same raw values a sparkline does.
+    const conditionalRules =
+      differentialFormats.length === 0 ? [] : parseXlsxConditionalFormatting(worksheetXml ?? '')
     const grid = parseXlsxWorksheetGrid(worksheetXml ?? '', {
-      collectSparklines: hasSparklines,
+      collectSparklines: hasSparklines || conditionalRules.length > 0,
+      collectStyles: conditionalRules.length > 0,
       sharedStrings,
       numberFormats,
       cellStyles,
       use1904DateSystem,
       maxRows: MAX_XLSX_SHEET_ROWS,
       locale
+    })
+    applyXlsxConditionalStyles(grid.styles, {
+      rules: conditionalRules,
+      differentialFormats,
+      rows: grid.rows,
+      numericValues: grid.numericValues
     })
     const layout = parseXlsxWorksheetLayout(worksheetXml ?? '')
     const drawings = await readXlsxSheetDrawings(

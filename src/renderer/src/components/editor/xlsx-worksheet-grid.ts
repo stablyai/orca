@@ -40,6 +40,11 @@ export type XlsxWorksheetContext = {
   /** True when the sheet's XML mentions a sparkline, so formulas are collected. */
   collectSparklines?: boolean
   /**
+   * Forces the per-cell style grid even when no cell format carries one. A sheet
+   * whose only styling is conditional needs the rows to paint the rules onto.
+   */
+  collectStyles?: boolean
+  /**
    * Locale for number formatting. A format code implies the viewer's group and
    * decimal separators, not the file's.
    */
@@ -64,7 +69,7 @@ export function parseXlsxWorksheetGrid(
   const numericValues = new Map<string, number>()
   const sparklineFormulas = new Map<string, string>()
   const collectSparklines = context.collectSparklines === true
-  const collectStyles = context.cellStyles.hasVisualStyles
+  const collectStyles = context.cellStyles.hasVisualStyles || context.collectStyles === true
   let maxColumns = 0
   let truncated = false
 
@@ -152,7 +157,7 @@ function readRowCells(
     }
     cells[columnIndex] = readCellText(cellElement.attributes, cellElement.inner, context)
     if (collector.collectSparklines) {
-      collectSparklineData(cellElement.inner, columnIndex, collector)
+      collectSparklineData(cellElement.attributes, cellElement.inner, columnIndex, collector)
     }
     if (collectStyles) {
       styles[columnIndex] = context.cellStyles.getStyle(readStyleIndex(cellElement.attributes.s))
@@ -185,20 +190,33 @@ function readRowHeight(attributes: Record<string, string>): number | undefined {
 // Why: a sparkline needs the numbers behind the formatted text, and the formula
 // that describes it — neither survives in the rendered cell string.
 function collectSparklineData(
+  cellAttributes: Record<string, string>,
   cellXml: string,
   columnIndex: number,
   collector: XlsxSparklineCollector
 ): void {
   const key = buildCellKey(collector.rowIndex, columnIndex)
-  const rawValue = readFirstElementText(cellXml, 'v')
-  const numeric = rawValue === null ? Number.NaN : Number(rawValue)
-  if (Number.isFinite(numeric)) {
-    collector.numericValues.set(key, numeric)
+  // Why: only a numeric cell holds a number in `<v>`. A shared string keeps its
+  // *index* there, a boolean keeps 0 or 1 and an error keeps a code — reading any
+  // of them as a value would compare a conditional rule against a string's
+  // position in the table.
+  if (isNumericCellType(cellAttributes.t)) {
+    const rawValue = readFirstElementText(cellXml, 'v')
+    const numeric = rawValue === null ? Number.NaN : Number(rawValue)
+    if (Number.isFinite(numeric)) {
+      collector.numericValues.set(key, numeric)
+    }
   }
   const formula = readFirstElementText(cellXml, 'f')
   if (formula !== null && formula.includes('SPARKLINE(')) {
     collector.sparklineFormulas.set(key, formula)
   }
+}
+
+// Why: `n` is the numeric type and an absent `t` defaults to it. Everything else
+// (`s`, `str`, `b`, `e`, `inlineStr`) puts something other than a number in `<v>`.
+function isNumericCellType(cellType: string | undefined): boolean {
+  return cellType === undefined || cellType === 'n'
 }
 
 function readStyleIndex(styleIndexAttribute: string | undefined): number | undefined {

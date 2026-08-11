@@ -347,3 +347,26 @@ describe('parseXlsxWorksheetGrid', () => {
     expect(grid.maxColumns).toBe(1)
   })
 })
+
+describe('parseXlsxWorksheetGrid numeric values', () => {
+  it('collects a raw number only from the cells that hold one', () => {
+    // Why: a shared string keeps its index in <v>, a boolean keeps 0 or 1 and an
+    // error keeps a code — reading any of them would compare a rule against a
+    // string's position in the table.
+    const xml =
+      '<row r="27"><c r="F27" t="s"><v>1</v></c><c r="G27" t="b"><v>1</v></c><c r="H27" t="e"><v>#DIV/0!</v></c><c r="I27"><v>-50</v></c></row>'
+
+    const grid = parseXlsxWorksheetGrid(
+      xml,
+      context({ collectSparklines: true, sharedStrings: ['zero', 'one'] })
+    )
+
+    expect(grid.numericValues).toEqual(new Map([['26:8', -50]]))
+  })
+
+  it('collects nothing when the sheet carries no sparkline', () => {
+    const grid = parseXlsxWorksheetGrid('<row r="1"><c r="A1"><v>7</v></c></row>', context())
+
+    expect(grid.numericValues).toEqual(new Map())
+  })
+})
