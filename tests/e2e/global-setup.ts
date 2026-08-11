@@ -1,7 +1,7 @@
 /**
  * Playwright globalSetup: builds the Electron app and creates a test git repo.
  *
- * Why: _electron.launch() needs the compiled output in out/main/index.js.
+ * Why: _electron.launch() needs the compiled output in out/main/bootstrap.cjs.
  * Running electron-vite build here ensures the tests are always against
  * the current source, without requiring the user to remember a manual step.
  *
@@ -25,13 +25,13 @@ const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
   const root = process.cwd()
-  const outMain = path.join(root, 'out', 'main', 'index.js')
+  const outMain = path.join(root, 'out', 'main', 'bootstrap.cjs')
   const outCli = path.join(root, 'out', 'cli', 'index.js')
   const outWeb = path.join(root, 'out', 'web', 'web-index.html')
 
   // ── 1. Build the Electron app ──────────────────────────────────────
   if (process.env.SKIP_BUILD && existsSync(outMain)) {
-    console.error('[e2e] SKIP_BUILD set and out/main/index.js exists — skipping build')
+    console.error('[e2e] SKIP_BUILD set and out/main/bootstrap.cjs exists — skipping build')
   } else {
     // Why: --mode e2e is the build-time signal that exposes window.__store;
     // the explicit env var keeps older local overrides working too.

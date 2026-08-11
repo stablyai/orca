@@ -16,6 +16,7 @@ import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap
 
 const targetConfig = readFileSync('config/electron-vite-target.config.ts', 'utf8')
 const devRunner = readFileSync('config/scripts/run-electron-vite-dev.mjs', 'utf8')
+const packageJson = JSON.parse(readFileSync('package.json', 'utf8')) as { main?: string }
 
 type BootstrapProcessMock = EventEmitter & {
   env: Record<string, string>
@@ -68,6 +69,16 @@ function failBootstrapWithBanner(options: {
 }
 
 describe('Electron Vite output contract', () => {
+  it('launches through the generated CommonJS bootstrap', () => {
+    expect(packageJson.main).toBe('./out/main/bootstrap.cjs')
+    expect(
+      electronViteConfig.main?.build?.rollupOptions?.plugins?.some(
+        (plugin) =>
+          plugin && typeof plugin === 'object' && plugin.name === 'orca-main-process-bootstrap'
+      )
+    ).toBe(true)
+  })
+
   it('keeps main-process and plain-Node entries at stable CommonJS paths', () => {
     const output = electronViteConfig.main?.build?.rollupOptions?.output
     if (!output || Array.isArray(output)) {

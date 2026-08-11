@@ -125,7 +125,7 @@ test('promotes the headless owner without replacing its daemon terminal', async 
     return
   }
 
-  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const mainPath = path.join(process.cwd(), 'out', 'main', 'bootstrap.cjs')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-serve-promotion-'))
   const homeIsolation = createHeadlessLaunchIsolation(userDataDir)
   const env = homeIsolation.env

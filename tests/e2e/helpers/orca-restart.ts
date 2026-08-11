@@ -135,7 +135,7 @@ export function createRestartSession(
   testInfo: TestInfo,
   extraEnv: Record<string, string> = {}
 ): RestartSession {
-  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const mainPath = path.join(process.cwd(), 'out', 'main', 'bootstrap.cjs')
   const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-restart-'))
   const headful = shouldLaunchHeadful(testInfo)
   const homeIsolation = createRestartLaunchIsolation(userDataDir, headful, extraEnv)

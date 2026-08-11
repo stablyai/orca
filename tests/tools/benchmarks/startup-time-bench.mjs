@@ -26,7 +26,7 @@
  * Prereq (when not using --exe): `pnpm build:electron-vite` so out/ exists.
  * Results: tests/tools/benchmarks/results/startup-<label>-<timestamp>.json
  */
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import {
   existsSync,
   mkdirSync,
@@ -35,13 +35,13 @@ import {
   unlinkSync,
   writeFileSync
 } from 'node:fs'
-import { createRequire } from 'node:module'
 import os from 'node:os'
 import { delimiter, join, resolve } from 'node:path'
+import { runElectronStartupBenchmarkIteration } from './startup-benchmark-electron-launch.mjs'
+import { assertValidStartupBenchmarkSample } from './startup-benchmark-sample.mjs'
 
 const scriptDir = import.meta.dirname
-const repoRoot = resolve(scriptDir, '..', '..')
-const require = createRequire(import.meta.url)
+const repoRoot = resolve(scriptDir, '..', '..', '..')
 
 function parseArgs(argv) {
   const args = {
@@ -364,7 +364,8 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
     ORCA_E2E_HOME_DIR: isolatedHome,
-    ORCA_E2E_HEADLESS: '1'
+    ORCA_E2E_HEADLESS: '1',
+    ORCA_STARTUP_BENCHMARK: '1'
   }
   delete env.CODEX_HOME
   delete env.ORCA_CODEX_HOME
@@ -382,21 +383,6 @@ function buildLaunchEnvironment({ fixtureDir, githubRepos, ghShimDir }) {
     env.GIT_CONFIG_NOSYSTEM = '1'
   }
   return env
-}
-
-function killProcessTree(proc) {
-  if (proc.exitCode !== null || proc.signalCode !== null) {
-    return
-  }
-  if (process.platform === 'win32') {
-    spawnSync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { stdio: 'ignore' })
-  } else {
-    try {
-      proc.kill('SIGKILL')
-    } catch {
-      // already gone
-    }
-  }
 }
 
 function parseStartupLine(line) {
@@ -420,58 +406,6 @@ function parseStartupLine(line) {
     }
   }
   return { event: match[1], details }
-}
-
-function runIteration({ exe, timeoutMs, lingerMs, waitForEvent, launchEnv }) {
-  return new Promise((resolvePromise) => {
-    // Why: npm's `electron` package exposes the platform-specific executable;
-    // hardcoding electron.exe made this benchmark unusable on macOS/Linux.
-    const command = exe ?? require('electron')
-    const commandArgs = exe ? [] : [repoRoot]
-    const events = []
-    const startedAt = process.hrtime.bigint()
-    const child = spawn(command, commandArgs, {
-      env: launchEnv,
-      stdio: ['ignore', 'ignore', 'pipe']
-    })
-    let finished = false
-    let buffer = ''
-    const finish = (outcome) => {
-      if (finished) {
-        return
-      }
-      finished = true
-      clearTimeout(timer)
-      // Keep the app alive briefly so trailing diagnostic lines (and, with
-      // --linger-ms raised, background work like the async ACL grant) finish.
-      setTimeout(() => {
-        killProcessTree(child)
-        resolvePromise({ outcome, events })
-      }, lingerMs)
-    }
-    const timer = setTimeout(() => finish('timeout'), timeoutMs)
-    child.stderr.setEncoding('utf-8')
-    child.stderr.on('data', (chunk) => {
-      buffer += chunk
-      let newlineIndex = buffer.indexOf('\n')
-      while (newlineIndex !== -1) {
-        const line = buffer.slice(0, newlineIndex).trimEnd()
-        buffer = buffer.slice(newlineIndex + 1)
-        newlineIndex = buffer.indexOf('\n')
-        const parsed = parseStartupLine(line)
-        if (!parsed) {
-          continue
-        }
-        const harnessMs = Number(process.hrtime.bigint() - startedAt) / 1e6
-        events.push({ ...parsed, harnessMs: Math.round(harnessMs * 10) / 10 })
-        if (parsed.event === waitForEvent) {
-          finish('ok')
-        }
-      }
-    })
-    child.on('exit', () => finish('early-exit'))
-    child.on('error', () => finish('spawn-error'))
-  })
 }
 
 function eventTime(events, name, key) {
@@ -602,20 +536,28 @@ async function main() {
     ghShimDir
   })
 
-  if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'index.js'))) {
-    throw new Error('out/main/index.js missing — run `pnpm build:electron-vite` first')
+  if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'bootstrap.cjs'))) {
+    throw new Error('out/main/bootstrap.cjs missing — run `pnpm build:electron-vite` first')
   }
 
   const iterations = []
   for (let i = 0; i < args.iterations; i++) {
     process.stdout.write(`[bench] iteration ${i + 1}/${args.iterations}… `)
-    const result = await runIteration({
+    const result = await runElectronStartupBenchmarkIteration({
+      appPath: repoRoot,
       exe: args.exe,
       timeoutMs: args.timeoutMs,
       lingerMs: args.lingerMs,
       waitForEvent: args.waitForEvent,
-      launchEnv
+      launchEnv,
+      parseStartupLine
     })
+    try {
+      assertValidStartupBenchmarkSample(result)
+    } catch (error) {
+      console.log(result.outcome)
+      throw new Error(`Iteration ${i + 1} rejected: ${error.message}`, { cause: error })
+    }
     const phases = derivePhases(result.events)
     iterations.push({ ...result, phases })
     console.log(

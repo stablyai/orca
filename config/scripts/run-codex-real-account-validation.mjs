@@ -333,14 +333,14 @@ export function resolveElectronViteBuildCommand(repoRoot) {
   if (!existsSync(electronViteEntry)) {
     throw new Error(
       `Cannot build the validation app: electron-vite entry not found at ${electronViteEntry}. ` +
-        'Install dependencies (pnpm install) or pass --skip-build with a prebuilt out/main/index.js.'
+        'Install dependencies (pnpm install) or pass --skip-build with a prebuilt out/main/bootstrap.cjs.'
     )
   }
   return { command: process.execPath, args: [electronViteEntry, 'build', '--mode', 'e2e'] }
 }
 
 function buildAppIfNeeded(repoRoot, skipBuild) {
-  const mainPath = path.join(repoRoot, 'out', 'main', 'index.js')
+  const mainPath = path.join(repoRoot, 'out', 'main', 'bootstrap.cjs')
   if (skipBuild) {
     if (!existsSync(mainPath)) {
       throw new Error(`--skip-build requested, but ${mainPath} does not exist`)

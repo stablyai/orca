@@ -183,7 +183,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
     // Establish fixture ordering: registered path cleanup must run only after
     // this Electron fixture has released watchers, terminals, and daemons.
     void registerPostElectronShutdownCleanup
-    const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+    const mainPath = path.join(process.cwd(), 'out', 'main', 'bootstrap.cjs')
     const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-userdata-'))
 
     if (dismissOnboarding) {

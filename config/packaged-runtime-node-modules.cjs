@@ -218,7 +218,11 @@ function verifyPackagedMainRuntimeDeps(resourcesDir, asar = require('@electron/a
     return
   }
 
-  const mainFiles = ['out/main/index.js', 'out/main/agent-hooks/managed-agent-hook-controls.js']
+  const mainFiles = [
+    'out/main/bootstrap.cjs',
+    'out/main/index.js',
+    'out/main/agent-hooks/managed-agent-hook-controls.js'
+  ]
   const entries = asar.listPackage(asarPath)
   const missing = new Set()
 

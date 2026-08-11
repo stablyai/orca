@@ -203,7 +203,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       extraEnv: {},
       userDataDir
     })
-    const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+    const mainPath = path.join(process.cwd(), 'out', 'main', 'bootstrap.cjs')
     app = await electron.launch({
       args: [
         ...getOrcaElectronLaunchArgs(mainPath, false),

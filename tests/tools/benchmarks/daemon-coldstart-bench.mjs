@@ -24,7 +24,7 @@ import os from 'node:os'
 import { join, resolve } from 'node:path'
 
 const scriptDir = import.meta.dirname
-const repoRoot = resolve(scriptDir, '..', '..')
+const repoRoot = resolve(scriptDir, '..', '..', '..')
 
 const CURRENT_PROTOCOL_VERSION = 12
 const LEGACY_PROTOCOL_VERSIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
@@ -302,8 +302,8 @@ async function main() {
   const fixtureDir = resolve(join(os.tmpdir(), 'orca-daemon-bench', 'userdata'))
   ensureFixture(fixtureDir)
 
-  if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'index.js'))) {
-    throw new Error('out/main/index.js missing — run `pnpm build:electron-vite` first')
+  if (!args.exe && !existsSync(join(repoRoot, 'out', 'main', 'bootstrap.cjs'))) {
+    throw new Error('out/main/bootstrap.cjs missing — run `pnpm build:electron-vite` first')
   }
 
   // A live unrelated process whose pid the stale pid files point at — the

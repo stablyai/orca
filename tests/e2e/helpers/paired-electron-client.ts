@@ -157,7 +157,7 @@ export async function launchPairedElectronClient(
     extraEnv: {},
     userDataDir
   })
-  const mainPath = path.join(process.cwd(), 'out', 'main', 'index.js')
+  const mainPath = path.join(process.cwd(), 'out', 'main', 'bootstrap.cjs')
   const app = await electron.launch({
     args: getOrcaElectronLaunchArgs(mainPath, false),
     env: {

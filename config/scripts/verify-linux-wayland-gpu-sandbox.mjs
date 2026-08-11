@@ -20,7 +20,7 @@ import {
 } from './linux-wayland-validation-watchdog.mjs'
 
 const rootDir = path.resolve(fileURLToPath(new URL('../..', import.meta.url)))
-const outMain = path.join(rootDir, 'out', 'main', 'index.js')
+const outMain = path.join(rootDir, 'out', 'main', 'bootstrap.cjs')
 const timeoutMs = 45_000
 const rendererSetupTimeoutMs = 30_000
 const appCloseTimeoutMs = 5_000
@@ -80,7 +80,7 @@ function ensureElectronRuntime() {
 
 function buildAppIfNeeded() {
   if (process.env.SKIP_BUILD === '1' && existsSync(outMain)) {
-    console.log('[wayland-gpu] SKIP_BUILD=1 and out/main/index.js exists; skipping build.')
+    console.log('[wayland-gpu] SKIP_BUILD=1 and out/main/bootstrap.cjs exists; skipping build.')
     return
   }
   run('npx', ['electron-vite', 'build', '--mode', 'e2e'])

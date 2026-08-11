@@ -815,9 +815,12 @@ if (!hasSingleInstanceLock) {
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
-  // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
+  // Why: benchmark IPC disconnect requests a real quit so Node persists caches through its normal exit path.
+  const shouldQuitOnParentDisconnect =
+    !isServeMode && (is.dev || process.env.ORCA_STARTUP_BENCHMARK === '1')
+  // Why: only electron-vite desktop runs should inherit the parent's PID and signal lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
-  installDevParentDisconnectQuit(shouldCoupleToDevParent)
+  installDevParentDisconnectQuit(shouldQuitOnParentDisconnect)
   installDevParentWatchdog(shouldCoupleToDevParent)
   installDevParentSignalQuit(shouldCoupleToDevParent)
   // Why: run after configureDevUserDataPath but before app.setName('Orca') (whenReady), which changes the resolved path on case-sensitive filesystems.
