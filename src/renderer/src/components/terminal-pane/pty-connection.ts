@@ -1264,6 +1264,29 @@ export function connectPanePty(
     const [paneKey, record] = selectedLegacyMatch
     return { paneKey, record }
   }
+  const getShellOwnedSleepingRecordForPane = (
+    state: ReturnType<typeof useAppStore.getState>
+  ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
+    const matchedRecord = getSleepingRecordForPane(state)
+    if (!matchedRecord || matchedRecord.paneKey === cacheKey) {
+      return matchedRecord
+    }
+    const matchedClaimKey = getProviderSessionClaimKey(matchedRecord.record)
+    const hasConflictingLegacySession = Object.entries(state.sleepingAgentSessionsByPaneKey).some(
+      ([paneKey, record]) => {
+        const legacy = parseLegacyNumericPaneKey(paneKey)
+        return (
+          legacy?.tabId === deps.tabId &&
+          record.worktreeId === deps.worktreeId &&
+          (!record.tabId || record.tabId === deps.tabId) &&
+          getProviderSessionClaimKey(record) !== matchedClaimKey
+        )
+      }
+    )
+    // Why: renderer-local numeric pane IDs can be reused, so shell cleanup
+    // requires every same-tab legacy row to identify one provider session.
+    return hasConflictingLegacySession ? null : matchedRecord
+  }
   const isLegacyWorkerAutomaticResumeBlocked = (): boolean =>
     getSleepingRecordForPane(useAppStore.getState())?.record.automaticResumeBlockedBy ===
     'legacy-orchestration-worker'
@@ -2079,7 +2102,7 @@ export function connectPanePty(
     return (
       Boolean(state.paneForegroundAgentByPaneKey[cacheKey]?.agent) ||
       paneHasLiveHookAgentIcon(state) ||
-      Boolean(getSleepingRecordForPane(state)?.record.agent) ||
+      Boolean(getShellOwnedSleepingRecordForPane(state)?.record.agent) ||
       isTuiAgent(registeredLaunchAgent)
     )
   }
@@ -2141,7 +2164,7 @@ export function connectPanePty(
     hasKnownAgentIdentity: paneHasKnownAgentIdentity,
     onConfirmedShellForeground: (reason) => {
       const state = useAppStore.getState()
-      const sleepingRecord = getSleepingRecordForPane(state)
+      const sleepingRecord = getShellOwnedSleepingRecordForPane(state)
       if (sleepingRecord) {
         clearSleepingRecordProviderDuplicates(state, sleepingRecord)
       }
