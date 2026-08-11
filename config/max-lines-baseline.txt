@@ -245,7 +245,6 @@ inline src/renderer/src/components/stats/usage-overview-model.ts
 inline src/renderer/src/components/status-bar/ResourceUsageStatusSegment.tsx
 inline src/renderer/src/components/status-bar/StatusBar.tsx
 inline src/renderer/src/components/status-bar/WorkspaceSpaceManagerPanel.tsx
-inline src/renderer/src/components/tab-bar/TabBar.tsx
 inline src/renderer/src/components/tab-bar/TabBar.windows-shell-launch.test.ts
 inline src/renderer/src/components/tab-group/useTabDragSplit.ts
 inline src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
