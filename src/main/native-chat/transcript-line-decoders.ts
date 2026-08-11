@@ -13,7 +13,8 @@ export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 export {
   createCodexTranscriptLineDecoder,
   decodeCodexTranscriptLine,
-  isCodexPaginatedHistoryMarker
+  isCodexPaginatedHistoryMarker,
+  setCodexTranscriptLineDecoderPaginated
 } from './transcript-line-decoders-codex'
 export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
 export { decodeOmpTranscriptLine } from './transcript-line-decoders-omp'

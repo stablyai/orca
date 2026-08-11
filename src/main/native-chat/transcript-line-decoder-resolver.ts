@@ -6,7 +6,8 @@ import {
   decodeClaudeTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine,
-  isCodexPaginatedHistoryMarker
+  isCodexPaginatedHistoryMarker,
+  setCodexTranscriptLineDecoderPaginated
 } from './transcript-line-decoders'
 
 const FIRST_RECORD_CHUNK_BYTES = 64 * 1024
@@ -14,16 +15,13 @@ const MAX_FIRST_RECORD_BYTES = 2 * 1024 * 1024
 
 export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
 
-export function nativeChatLineDecoderForAgent(
-  agent: AgentType,
-  options: { codexPaginated?: boolean } = {}
-): NativeChatLineDecoder | null {
+export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (transcriptAgent === 'claude') {
     return decodeClaudeTranscriptLine
   }
   if (transcriptAgent === 'codex') {
-    return createCodexTranscriptLineDecoder({ paginated: options.codexPaginated })
+    return createCodexTranscriptLineDecoder()
   }
   if (transcriptAgent === 'grok') {
     return decodeGrokTranscriptLine
@@ -38,11 +36,22 @@ export async function nativeChatLineDecoderForTranscript(
   agent: AgentType,
   filePath: string
 ): Promise<NativeChatLineDecoder | null> {
-  return nativeChatLineDecoderForAgent(agent, {
-    codexPaginated:
-      resolveNativeChatTranscriptAgent(agent) === 'codex' &&
-      (await codexTranscriptStartsPaginated(filePath))
-  })
+  const decode = nativeChatLineDecoderForAgent(agent)
+  if (decode) {
+    await configureNativeChatLineDecoderForTranscript(agent, filePath, decode)
+  }
+  return decode
+}
+
+export async function configureNativeChatLineDecoderForTranscript(
+  agent: AgentType,
+  filePath: string,
+  decode: NativeChatLineDecoder
+): Promise<void> {
+  if (resolveNativeChatTranscriptAgent(agent) !== 'codex') {
+    return
+  }
+  setCodexTranscriptLineDecoderPaginated(decode, await codexTranscriptStartsPaginated(filePath))
 }
 
 async function codexTranscriptStartsPaginated(filePath: string): Promise<boolean> {
@@ -59,7 +68,7 @@ async function codexTranscriptStartsPaginated(filePath: string): Promise<boolean
       }
       const chunk = buffer.subarray(0, bytesRead)
       const newline = chunk.indexOf(0x0a)
-      if (newline >= 0) {
+      if (newline !== -1) {
         parts.push(chunk.subarray(0, newline))
         break
       }

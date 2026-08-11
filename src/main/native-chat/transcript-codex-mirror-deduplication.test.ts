@@ -215,4 +215,31 @@ describe('Codex mirrored transcript messages', () => {
     expect(snapshots).toEqual([[TEXT]])
     expect(appends).toEqual([])
   })
+
+  it('seeds paginated mode before a watcher scans the transcript tail in reverse', async () => {
+    const filePath = await writeFixture(
+      [
+        {
+          type: 'session_meta',
+          payload: { id: 'paginated-session', history_mode: 'paginated' }
+        },
+        responseMessage('model-only copy')
+      ],
+      true
+    )
+    const snapshots: string[][] = []
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'codex',
+      sessionId: 'paginated-session',
+      filePath,
+      initialLimit: 10,
+      onInitialSnapshot: (messages) => snapshots.push(messages.map(textOf)),
+      onAppend: () => {},
+      debounceMs: 5
+    })
+    await waitFor(() => snapshots.length === 1)
+    subscription.unsubscribe()
+
+    expect(snapshots).toEqual([[]])
+  })
 })

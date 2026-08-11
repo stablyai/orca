@@ -66,9 +66,16 @@ export function isCodexTranscriptLineDecoder(decode: CodexTranscriptLineDecoder)
 }
 
 export function resetCodexTranscriptLineDecoder(decode: CodexTranscriptLineDecoder): void {
+  setCodexTranscriptLineDecoderPaginated(decode, false)
+}
+
+export function setCodexTranscriptLineDecoderPaginated(
+  decode: CodexTranscriptLineDecoder,
+  paginated: boolean
+): void {
   const state = codexTranscriptDecoderStates.get(decode)
   if (state) {
-    state.paginated = false
+    state.paginated = paginated
   }
 }
 

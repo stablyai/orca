@@ -11,7 +11,7 @@ import {
   type IncrementalTranscriptState
 } from './transcript-incremental-reader'
 import { createTranscriptNativeWatcher } from './transcript-native-watcher'
-import { resetCodexTranscriptLineDecoder } from './transcript-line-decoders-codex'
+import { configureNativeChatLineDecoderForTranscript } from './transcript-line-decoder-resolver'
 import { readNativeChatTranscriptTailFile } from './transcript-tail-reader'
 import { nativeChatTurnLifecycleDecoderForAgent } from './transcript-turn-lifecycle'
 import type {
@@ -56,6 +56,7 @@ export async function installTranscriptWatcher(
 ): Promise<NativeChatTranscriptSubscription | null> {
   try {
     await stat(filePath)
+    await configureNativeChatLineDecoderForTranscript(args.agent, filePath, decode)
   } catch {
     return null
   }
@@ -159,7 +160,7 @@ export async function installTranscriptWatcher(
     }
     if (contentReplaced) {
       resetIncrementalTranscriptState(state)
-      resetCodexTranscriptLineDecoder(decode)
+      await configureNativeChatLineDecoderForTranscript(args.agent, filePath, decode)
     }
 
     const replacementSnapshot =
