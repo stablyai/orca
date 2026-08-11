@@ -74,6 +74,15 @@ function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean
   }
 }
 
+function getWorktreePinState(flags: Map<string, string | boolean>): boolean | undefined {
+  const pin = flags.get('pin') === true
+  const unpin = flags.get('unpin') === true
+  if (pin && unpin) {
+    throw new RuntimeClientError('invalid_argument', 'Choose either --pin or --unpin, not both.')
+  }
+  return pin ? true : unpin ? false : undefined
+}
+
 function getEnvParentWorkspace(): string | undefined {
   const workspaceId = process.env.ORCA_WORKSPACE_ID
   if (typeof workspaceId === 'string' && isWorkspaceKey(workspaceId)) {
@@ -261,6 +270,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree set': async ({ flags, client, cwd, json }) => {
     assertParentWorktreeFlagsCompatible(flags)
+    const isPinned = getWorktreePinState(flags)
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue', {
       allowNull: true
     })
@@ -271,6 +281,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
+      ...(isPinned === undefined ? {} : { isPinned }),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })

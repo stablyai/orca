@@ -116,6 +116,8 @@ ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
+ORCA worktree set --worktree active --pin --json
+ORCA worktree set --worktree active --unpin --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
@@ -167,6 +169,8 @@ ORCA worktree set --worktree active --comment "fix implemented; running integrat
 Update after meaningful state changes such as repro, fix, validation, handoff, or blocker. Keep comments short/current; failures are best-effort unless Orca state was requested.
 
 Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, `in-review`, `completed`.
+
+Use `--pin` or `--unpin` with `worktree set` to explicitly set a workspace's pin state. The JSON receipt returns the updated worktree, including `isPinned`.
 
 ## Terminals
 
