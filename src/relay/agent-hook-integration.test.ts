@@ -26,7 +26,9 @@ import {
   AGENT_HOOK_NOTIFICATION_METHOD,
   AGENT_HOOK_REQUEST_REPLAY_METHOD
 } from '../shared/agent-hook-relay'
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../shared/agent-status-types'
 import { AgentHookServer } from '../main/agent-hooks/server'
+import { publishAgentHookEnvelope } from './agent-hook-envelope-publication'
 
 const LEAF_7 = '77777777-7777-4777-8777-777777777777'
 const LEAF_9 = '99999999-9999-4999-8999-999999999999'
@@ -57,22 +59,25 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
       onClose: () => {}
     }
 
-    dispatcher = new RelayDispatcher((data: Buffer) => {
-      setImmediate(() => {
-        for (const cb of clientDataCallbacks) {
-          cb(data)
-        }
-      })
-    })
+    dispatcher = new RelayDispatcher(
+      (data: Buffer) => {
+        setImmediate(() => {
+          for (const cb of clientDataCallbacks) {
+            cb(data)
+          }
+        })
+      },
+      {
+        writableHighWaterMark: () => 4096,
+        writableLength: () => 0
+      }
+    )
     relayFeedFn = (data: Buffer) => dispatcher.feed(data)
 
     hookServer = new RelayAgentHookServer({
       endpointDir: tmpDir,
       forward: (envelope) => {
-        dispatcher.notify(
-          AGENT_HOOK_NOTIFICATION_METHOD,
-          envelope as unknown as Record<string, unknown>
-        )
+        publishAgentHookEnvelope(dispatcher, envelope)
       }
     })
     await hookServer.start()
@@ -155,6 +160,42 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     expect(payload.state).toBe('working')
     expect(payload.prompt).toBe('roundtrip')
     expect(payload.agentType).toBe('claude')
+  })
+
+  it('sheds an oversized assistant message through the production publication path', async () => {
+    const events: { payload: { state: string; lastAssistantMessage?: string } }[] = []
+    orcaServer.setListener((event) => {
+      events.push({ payload: event.payload })
+    })
+    const { port, token } = hookServer.getCoordinates()
+    const post = (payload: Record<string, unknown>): Promise<Response> =>
+      fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({ paneKey: `tab-7:${LEAF_7}`, payload })
+      })
+
+    await expect(
+      post({ hook_event_name: 'UserPromptSubmit', prompt: 'bounded publication' })
+    ).resolves.toMatchObject({ status: 204 })
+    await expect(
+      post({
+        hook_event_name: 'Stop',
+        last_assistant_message: 'a'.repeat(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH)
+      })
+    ).resolves.toMatchObject({ status: 204 })
+
+    const start = Date.now()
+    while (events.length < 2 && Date.now() - start < 1500) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    expect(events).toHaveLength(2)
+    expect(events[1].payload.state).toBe('done')
+    expect(events[1].payload.lastAssistantMessage).toBeUndefined()
+    expect(dispatcher.activeClientIds()).toHaveLength(1)
   })
 
   it('clears remote Claude permission when the approved tool starts with matching identity', async () => {

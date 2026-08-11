@@ -59,6 +59,9 @@ function folderHasContradictoryOwner(
   const expectedHostId = toSshExecutionHostId(input.targetId)
   const folders = (input.folderWorkspaces ?? []).filter((folder) => folder.id === folderWorkspaceId)
   for (const folder of folders) {
+    if (isExplicitContradictoryHost(folder.executionHostId, expectedHostId)) {
+      return true
+    }
     if (folder.connectionId?.trim() && folder.connectionId.trim() !== input.targetId) {
       return true
     }

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { GitHubPRAutoMergeAction } from '@/components/github-pr-merge-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { PRInfo, Repo, GitHubPRMergeMethod } from '../../../../shared/types'
@@ -10,6 +10,7 @@ import {
   updateGitHubHostedReviewState
 } from './hosted-review-github-actions'
 import { translate } from '@/i18n/i18n'
+import { buildGitHubPRStackMergeConfirmation } from './github-pr-stack-confirmation'
 
 export type HostedReviewActionInfo = Pick<
   HostedReviewInfo,
@@ -62,6 +63,21 @@ export function useHostedReviewActions({
 
   const handleMerge = useCallback(
     async (method: GitHubPRMergeMethod = defaultMergeMethod) => {
+      if (!isGitLab && githubPR?.stack) {
+        const usesMergeQueue =
+          review.mergeQueueRequired === true || githubPR.mergeQueueRequired === true
+        const confirmed = await confirm(
+          buildGitHubPRStackMergeConfirmation({
+            stack: githubPR.stack,
+            currentPRNumber: review.number,
+            method,
+            usesMergeQueue
+          })
+        )
+        if (!confirmed) {
+          return
+        }
+      }
       setMerging(true)
       setActionError(null)
       try {
@@ -89,7 +105,18 @@ export function useHostedReviewActions({
         setMerging(false)
       }
     },
-    [githubPR?.prRepo, isGitLab, defaultMergeMethod, onRefreshReview, repo, review.number]
+    [
+      confirm,
+      githubPR?.prRepo,
+      githubPR?.mergeQueueRequired,
+      githubPR?.stack,
+      isGitLab,
+      defaultMergeMethod,
+      onRefreshReview,
+      repo,
+      review.mergeQueueRequired,
+      review.number
+    ]
   )
 
   const handleAutoMerge = useCallback(async () => {
@@ -181,7 +208,7 @@ export function useHostedReviewActions({
           toast.success(
             isClosing
               ? translate(
-                  'auto.components.right.sidebar.HostedReviewActions.fa3ee9a515',
+                  'auto.components.right.sidebar.HostedReviewActions.closedToast',
                   '{{value0}} closed',
                   { value0: shortLabel }
                 )

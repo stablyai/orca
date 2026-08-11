@@ -141,6 +141,63 @@ describe('worktree-palette-search', () => {
     expect(searchWorktrees([makeWorktree()], query, repoMap, null, null)).toEqual([])
   })
 
+  it('falls back to branch text when a cleared display name left it undefined', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: 'refs/heads/feature/worktree-jump'
+    })
+
+    expect(() => searchWorktrees([cleared], 'jump', repoMap, null, null)).not.toThrow()
+    // Highlight range indexes the branch-derived label the palette actually renders.
+    expect(searchWorktrees([cleared], 'jump', repoMap, null, null)[0]).toMatchObject({
+      worktreeId: 'wt-1',
+      matchedField: 'displayName',
+      displayNameRange: { start: 'feature/worktree-'.length, end: 'feature/worktree-jump'.length }
+    })
+  })
+
+  it('falls back to the folder name when both display name and branch are missing', () => {
+    const folderWorkspace = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: '',
+      path: '/tmp/design-review'
+    })
+
+    expect(searchWorktrees([folderWorkspace], 'design', repoMap, null, null)[0]).toMatchObject({
+      matchedField: 'displayName',
+      displayNameRange: { start: 0, end: 6 }
+    })
+  })
+
+  it('survives a cleared display name on composite repo/branch queries', () => {
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(() => searchWorktrees([cleared], 'orca/jump', repoMap, null, null)).not.toThrow()
+  })
+
+  it('still lists a branch-less row on the empty query, which renders every row', () => {
+    // Why: the empty query short-circuits before any branch read, so the row reaches the
+    // render loop untouched — the label resolution there has to be guarded too.
+    const cleared = makeWorktree({
+      displayName: undefined as unknown as string,
+      branch: undefined as unknown as string
+    })
+
+    expect(searchWorktrees([cleared], '', repoMap, null, null)).toEqual([
+      {
+        worktreeId: 'wt-1',
+        matchedField: null,
+        displayNameRange: null,
+        branchRange: null,
+        repoRange: null,
+        supportingText: null
+      }
+    ])
+  })
+
   it('returns a truncated comment snippet with the highlighted match range', () => {
     const results = searchWorktrees(
       [

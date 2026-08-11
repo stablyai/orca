@@ -5,7 +5,6 @@ import {
   mkdirSync,
   readdirSync,
   renameSync,
-  rmSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -89,11 +88,4 @@ export function quarantineTerminalHistorySession(
   const quarantineDir = join(ownerDir, randomUUID())
   renameSync(sessionDir, quarantineDir)
   return quarantineDir
-}
-
-export function removeTerminalHistoryQuarantines(basePath: string, sessionId: string): void {
-  rmSync(getTerminalHistoryQuarantineOwnerDir(basePath, sessionId), {
-    recursive: true,
-    force: true
-  })
 }

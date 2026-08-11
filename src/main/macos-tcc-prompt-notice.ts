@@ -14,6 +14,9 @@ import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 /** Why: the first detected dialog identifies an affected user; the notice remains one-time. */
 export const TCC_PROMPT_NOTICE_THRESHOLD = 1
 
+/** Why: re-arm users who may have trusted the former false-positive Full Disk Access badge. */
+export const TCC_PROMPT_NOTICE_VERSION = 2
+
 /** Why: preserve detection when Electron never emits `ready-to-show` without competing with startup. */
 export const TCC_PROMPT_WATCH_START_FALLBACK_MS = 10_000
 
@@ -28,12 +31,20 @@ export type TccPromptNoticeClaim = TccPromptNoticePayload & {
 }
 
 type TccPromptTally = {
+  noticeVersion: number
   promptCount: number
   notified: boolean
   dismissed: boolean
+  acknowledgedAfterClose: boolean
 }
 
-const EMPTY_TALLY: TccPromptTally = { promptCount: 0, notified: false, dismissed: false }
+const EMPTY_TALLY: TccPromptTally = {
+  noticeVersion: TCC_PROMPT_NOTICE_VERSION,
+  promptCount: 0,
+  notified: false,
+  dismissed: false,
+  acknowledgedAfterClose: false
+}
 
 let tally: TccPromptTally = { ...EMPTY_TALLY }
 let mainWindowRef: BrowserWindow | null = null
@@ -50,10 +61,30 @@ function tallyPath(): string {
 function loadTally(): TccPromptTally {
   try {
     const parsed = JSON.parse(readFileSync(tallyPath(), 'utf-8')) as Partial<TccPromptTally>
+    const dismissed = parsed.dismissed === true
+    if (dismissed) {
+      return {
+        noticeVersion: TCC_PROMPT_NOTICE_VERSION,
+        promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
+        notified: true,
+        dismissed: true,
+        acknowledgedAfterClose: true
+      }
+    }
+    if (parsed.noticeVersion !== TCC_PROMPT_NOTICE_VERSION) {
+      return { ...EMPTY_TALLY }
+    }
+    if (typeof parsed.acknowledgedAfterClose !== 'boolean') {
+      // Why: an incomplete tally proves only a past prompt, not that access is still missing.
+      return { ...EMPTY_TALLY }
+    }
+    const acknowledgedAfterClose = parsed.acknowledgedAfterClose === true
     return {
+      noticeVersion: TCC_PROMPT_NOTICE_VERSION,
       promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
-      notified: parsed.notified === true,
-      dismissed: parsed.dismissed === true
+      notified: parsed.notified === true && acknowledgedAfterClose,
+      dismissed: false,
+      acknowledgedAfterClose
     }
   } catch {
     return { ...EMPTY_TALLY }
@@ -108,7 +139,7 @@ export function acknowledgePendingTccPromptNotice(ownerToken: number, claimId: n
     return
   }
   pendingClaim = null
-  tally = { ...tally, notified: true }
+  tally = { ...tally, notified: true, acknowledgedAfterClose: true }
   saveTally()
 }
 
@@ -124,7 +155,7 @@ export function releasePendingTccPromptNotice(ownerToken: number, claimId?: numb
 /** Permanently stops the notice for this user; the watcher shuts down with it. */
 export function dismissTccPromptNotice(): void {
   pendingClaim = null
-  tally = { ...tally, dismissed: true, notified: true }
+  tally = { ...tally, dismissed: true, notified: true, acknowledgedAfterClose: true }
   saveTally()
   stopTccPromptNotice()
 }

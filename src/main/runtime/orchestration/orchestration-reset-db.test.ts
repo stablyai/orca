@@ -53,7 +53,7 @@ describe('OrchestrationDb reset scopes', () => {
 
     db!.resetAll()
 
-    expect(db!.listRuns()).toEqual([expect.objectContaining({ id: LEGACY_RUN_ID, legacy: 1 })])
+    expect(db!.listRuns().runs).toEqual([expect.objectContaining({ id: LEGACY_RUN_ID, legacy: 1 })])
     expect(db!.getTask(state.task.id)).toBeUndefined()
     expect(db!.getWorkerDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getFederatedDispatch(state.started.dispatch.id)).toBeUndefined()

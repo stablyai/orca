@@ -22,8 +22,7 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock,
-    persistUserAgent: vi.fn()
+    clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
 
@@ -160,14 +159,22 @@ function buildExpiredSafariCookie(index: number): Buffer {
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
+  let cookiesGetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-test-'))
+    cookiesGetMock = vi.fn().mockResolvedValue([])
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
-      cookies: { set: cookiesSetMock }
+      cookies: {
+        get: cookiesGetMock,
+        remove: cookiesRemoveMock,
+        set: cookiesSetMock
+      }
     })
   })
 
@@ -221,6 +228,35 @@ describe('importCookiesFromFile', () => {
     expect(firstCall.domain).toBe('.github.com')
     expect(firstCall.secure).toBe(true)
     expect(firstCall.sameSite).toBe('lax')
+  })
+
+  it('sets __Host- cookies host-only so Chromium does not reject them', async () => {
+    const filePath = writeCookieFile([
+      {
+        domain: 'github.com',
+        name: '__Host-user_session_same_site',
+        value: 'sess',
+        path: '/account',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
+      },
+      { domain: '.github.com', name: '_gh_sess', value: 'abc', path: '/settings', secure: true }
+    ])
+
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+    expect(result.ok).toBe(true)
+
+    const hostCall = cookiesSetMock.mock.calls
+      .map((c) => c[0])
+      .find((c) => c.name === '__Host-user_session_same_site')
+    // __Host- prefix requires no Domain attribute and path=/, or Chromium drops it.
+    expect(hostCall).not.toHaveProperty('domain')
+    expect(hostCall.path).toBe('/')
+
+    const normalCall = cookiesSetMock.mock.calls.map((c) => c[0]).find((c) => c.name === '_gh_sess')
+    expect(normalCall.domain).toBe('.github.com')
+    expect(normalCall.path).toBe('/settings')
   })
 
   it('rejects non-JSON files', async () => {
@@ -333,7 +369,7 @@ describe('importCookiesFromFile', () => {
     expect(cookiesSetMock.mock.calls[2][0].url).toBe('http://nodot.com/')
   })
 
-  it('counts cookies that fail to set', async () => {
+  it('rolls back replacement when a cookie fails to set', async () => {
     cookiesSetMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
 
     const filePath = writeCookieFile([
@@ -342,12 +378,8 @@ describe('importCookiesFromFile', () => {
     ])
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(result.summary.importedCookies).toBe(1)
-    expect(result.summary.skippedCookies).toBe(1)
+    expect(result.ok).toBe(false)
+    expect(cookiesRemoveMock).toHaveBeenCalledWith('http://a.com/', 'ok')
   })
 })
 
@@ -392,6 +424,7 @@ describe('importCookiesFromBrowser Chromium', () => {
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
   let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let setUserAgentMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-chromium-cookie-test-'))
@@ -399,6 +432,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
     clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    setUserAgentMock = vi.fn()
     appGetPathMock.mockReset()
     appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
     copyFileSyncMock.mockClear()
@@ -415,7 +449,8 @@ describe('importCookiesFromBrowser Chromium', () => {
         remove: cookiesRemoveMock,
         flushStore: cookiesFlushStoreMock
       },
-      clearStorageData: clearStorageDataMock
+      clearStorageData: clearStorageDataMock,
+      setUserAgent: setUserAgentMock
     })
   })
 
@@ -438,6 +473,12 @@ describe('importCookiesFromBrowser Chromium', () => {
     ]).close()
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    execFileSyncMock.mockImplementation((command: string) => {
+      if (command === 'defaults') {
+        return '120.0.6099.71\n'
+      }
+      throw new Error(`Unexpected command: ${command}`)
+    })
     try {
       expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
       const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
@@ -458,6 +499,7 @@ describe('importCookiesFromBrowser Chromium', () => {
         })
       )
       expect(execFileSyncMock.mock.calls.some(([command]) => command === 'security')).toBe(false)
+      expect(execFileSyncMock.mock.calls.some(([command]) => command === 'defaults')).toBe(false)
       expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
         true
       )
@@ -469,6 +511,9 @@ describe('importCookiesFromBrowser Chromium', () => {
       ).toEqual(sourceFilesBefore)
       expect(cookiesRemoveMock).not.toHaveBeenCalled()
       expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
+      // Why: STA-3514 — imports must never impersonate the source browser; the
+      // session keeps the engine UA the registry set at startup.
+      expect(setUserAgentMock).not.toHaveBeenCalled()
     } finally {
       platformSpy.mockRestore()
       sourceDb.close()

@@ -54,7 +54,7 @@ vi.mock('../startup/hydrate-shell-path', () => ({
   mergePathSegments: mergePathSegmentsMock
 }))
 
-vi.mock('../codex-cli/command', () => ({
+vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 

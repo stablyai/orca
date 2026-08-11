@@ -49,6 +49,10 @@ export type EditorRequestFileCloseDetail = {
   fileId: string
 }
 
+export type EditorRequestCmdSaveDetail = {
+  fileId: string
+}
+
 export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   return (
     file.mode === 'edit' ||
@@ -89,13 +93,17 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
 export function isAutosaveSuspendedForFile(
   file: Pick<
     OpenFile,
-    'externalMutation' | 'pendingDiskBaselineVerification' | 'pendingLiveDiskVerification'
+    | 'externalMutation'
+    | 'pendingDiskBaselineVerification'
+    | 'pendingLiveDiskVerification'
+    | 'pendingOwnerMigration'
   >
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
     file.pendingDiskBaselineVerification === true ||
-    file.pendingLiveDiskVerification === true
+    file.pendingLiveDiskVerification === true ||
+    file.pendingOwnerMigration === true
   )
 }
 

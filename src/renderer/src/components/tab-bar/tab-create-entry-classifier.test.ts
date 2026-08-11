@@ -11,6 +11,15 @@ import {
 const readyFiles = (files: string[]) => ({ files, loading: false, loadError: null })
 
 describe('tab create entry classification', () => {
+  // Kept word-for-word in step with the omnibox placeholder (see
+  // TabBarCreateEntry.keyboard.test.tsx), so the two never drift apart.
+  it('advertises tab search in the empty-query message', () => {
+    expect(classifyTabEntryQuery('', readyFiles([]))).toEqual({
+      kind: 'empty',
+      message: 'Search open tabs, files, URLs, agents…'
+    })
+  })
+
   it('accepts explicit http and https URLs only', () => {
     expect(classifyTabEntryQuery(' https://example.com/docs ', readyFiles([]))).toMatchObject({
       kind: 'explicit-url',

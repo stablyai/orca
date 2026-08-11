@@ -25,18 +25,6 @@ function createDeferredBoolean(): DeferredBoolean {
   return { promise, resolve: resolvePromise }
 }
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 type AccessoryInputCommitHarnessOptions = {
   readonly heldText?: string
   readonly sentText?: string
@@ -105,14 +93,9 @@ function createAccessoryInputCommitHarness({
     return null
   }
 
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  act(() => {
+    renderer = create(createElement(Harness))
+  })
   if (!commit || !renderer) {
     throw new Error('terminal live accessory input hook did not render')
   }

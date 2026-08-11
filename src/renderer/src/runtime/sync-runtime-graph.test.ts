@@ -428,6 +428,29 @@ describe('getRuntimeMobileSessionSyncKey', () => {
     expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
   })
 
+  it('changes and does not skip when a folder workspace is removed', () => {
+    const sharedOverrides = makeSharedOverrides()
+    const folderWorkspace = {
+      id: 'folder-1'
+    } as AppState['folderWorkspaces'][number]
+    const before = makeState({
+      ...sharedOverrides,
+      folderWorkspaces: [folderWorkspace]
+    })
+    const after = makeState({
+      ...sharedOverrides,
+      folderWorkspaces: []
+    })
+
+    expect(canSkipRuntimeMobileSessionSyncKeyBuild(after, before)).toBe(false)
+    expect(
+      runtimeMobileSessionSyncKeysEqual(
+        getRuntimeMobileSessionSyncKey(before),
+        getRuntimeMobileSessionSyncKey(after)
+      )
+    ).toBe(false)
+  })
+
   it('changes when explicit agent status epoch changes', () => {
     const sharedOverrides = makeSharedOverrides()
     const before = getRuntimeMobileSessionSyncKey(
@@ -596,6 +619,54 @@ describe('getRuntimeMobileSessionSyncKey', () => {
 })
 
 describe('buildMobileSessionTabSnapshots', () => {
+  it('does not publish state for a removed folder workspace', () => {
+    const staleFolderKey = 'folder:removed-folder'
+    const state = makeState({
+      folderWorkspaces: [],
+      tabsByWorktree: {
+        [staleFolderKey]: [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)).toEqual([])
+  })
+
+  it('publishes state for a live folder workspace', () => {
+    const folderWorkspaceId = 'live-folder'
+    const folderKey = `folder:${folderWorkspaceId}`
+    const state = makeState({
+      folderWorkspaces: [{ id: folderWorkspaceId } as AppState['folderWorkspaces'][number]],
+      tabsByWorktree: {
+        [folderKey]: [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)).toEqual([
+      expect.objectContaining({ worktree: folderKey })
+    ])
+  })
+
+  it('evicts a removed folder workspace from the snapshot cache', () => {
+    const folderWorkspaceId = 'cache-eviction-folder'
+    const folderKey = `folder:${folderWorkspaceId}`
+    const liveState = makeState({
+      folderWorkspaces: [{ id: folderWorkspaceId } as AppState['folderWorkspaces'][number]],
+      tabsByWorktree: {
+        [folderKey]: [{ id: 'term-1', title: 'Terminal 1' }]
+      } as unknown as AppState['tabsByWorktree']
+    })
+    const removedState = makeState({
+      folderWorkspaces: [],
+      tabsByWorktree: liveState.tabsByWorktree
+    })
+
+    const initial = buildMobileSessionTabSnapshots(liveState)[0]!
+    expect(buildMobileSessionTabSnapshots(removedState)).toEqual([])
+    const restored = buildMobileSessionTabSnapshots(liveState)[0]!
+
+    expect(restored.snapshotVersion).toBeGreaterThan(initial.snapshotVersion)
+  })
+
   it('publishes browser and editor color + pin state from unified tabs', () => {
     const fileId = '/repo/README.md'
     const state = makeState({
@@ -741,9 +812,38 @@ describe('buildMobileSessionTabSnapshots', () => {
       expect.objectContaining({
         type: 'terminal',
         parentTabId: 'term-1',
-        launchDraft: 'https://github.com/o/r/issues/12'
+        launchDraft: 'https://github.com/o/r/issues/12',
+        launchDraftCreatedAt: 1
       })
     ])
+  })
+
+  it('retracts a launch draft as soon as mobile resolves it', () => {
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-1': [{ id: 'term-1', title: 'Terminal 1', launchAgent: 'claude' }]
+      } as unknown as AppState['tabsByWorktree'],
+      terminalLayoutsByTabId: {
+        'term-1': {
+          root: { type: 'leaf', leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: 'pty-1' }
+        }
+      } as unknown as AppState['terminalLayoutsByTabId'],
+      nativeChatLaunchDraftByTabId: {
+        'term-1': {
+          tabId: 'term-1',
+          agent: 'claude',
+          text: 'issue link',
+          createdAt: 1,
+          resolved: true
+        }
+      }
+    })
+
+    expect(buildMobileSessionTabSnapshots(state)[0]?.tabs[0]).not.toHaveProperty('launchDraft')
   })
 
   it('withholds a launch draft seeded for a different agent than the tab runs', () => {

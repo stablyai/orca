@@ -4,12 +4,10 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import {
   activateAndRevealWorktree,
   ensureWorktreeHasInitialTerminal,
-  type ActivateAndRevealResult,
-  type WorktreeStartupPayload
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   attachEphemeralVmRuntimeToWorkspace,
   cleanupEphemeralVmRuntimeForFailedCreate,
@@ -20,53 +18,22 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace-create-error-format'
 import type { CreateWorktreeResult } from '../../../shared/types'
-import type {
-  WorktreeCreationPhase,
-  WorktreeCreationRequest
+import {
+  findPendingLinkedWorkItemCreationId,
+  type WorktreeCreationPhase,
+  type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
+import { resolveBackendDraftStartup } from '@/lib/worktree-draft-startup-view-mode'
+import {
+  buildWorktreeCreationStartupOpt,
+  getInitialWorktreeCreationPhase,
+  getWorktreeCreationIndeterminate
+} from '@/lib/worktree-creation-flow-startup'
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
-}
-
-// Why: mirrors the startup-opt the composer used to build inline. The renderer
-// only seeds the first terminal when the backend did not already spawn it.
-function buildStartupOpt(
-  request: WorktreeCreationRequest,
-  backendSpawned: boolean
-): WorktreeStartupPayload | undefined {
-  const plan = request.startupPlan
-  if (!plan || backendSpawned) {
-    return undefined
-  }
-  return {
-    command: plan.launchCommand,
-    ...(plan.env ? { env: plan.env } : {}),
-    launchConfig: plan.launchConfig,
-    ...(plan.launchToken ? { launchToken: plan.launchToken } : {}),
-    ...(request.agent ? { launchAgent: request.agent } : {}),
-    ...(plan.draftPrompt ? { draftPrompt: plan.draftPrompt } : {}),
-    ...(plan.startupCommandDelivery ? { startupCommandDelivery: plan.startupCommandDelivery } : {}),
-    // Why: command-code shows its prompt in the tab status before the first
-    // hook fires, so the prompt is threaded through here.
-    ...(request.agent === 'command-code' && request.quickPrompt.trim().length > 0
-      ? { initialAgentStatus: { agent: request.agent, prompt: request.quickPrompt.trim() } }
-      : {}),
-    ...(request.quickTelemetry ? { telemetry: request.quickTelemetry } : {})
-  }
-}
-
-function getWorktreeCreationIndeterminate(request: WorktreeCreationRequest): boolean {
-  if (request.worktreeCreateProgressMode) {
-    return request.worktreeCreateProgressMode === 'indeterminate'
-  }
-  return getActiveRuntimeTarget(useAppStore.getState().settings).kind !== 'local'
-}
-
-function getInitialWorktreeCreationPhase(request: WorktreeCreationRequest): WorktreeCreationPhase {
-  return request.ephemeralVmRecipe && !request.ephemeralVmRuntimeId ? 'provisioning-vm' : 'fetching'
 }
 
 // Why: activePendingCreationId can outlive the terminal route when the user
@@ -138,6 +105,7 @@ async function executeWorktreeCreation(
 
   let result: CreateWorktreeResult
   try {
+    const backendStartup = resolveBackendDraftStartup(preparedRequest)
     result = await useAppStore
       .getState()
       .createWorktree(
@@ -157,7 +125,7 @@ async function executeWorktreeCreation(
         preparedRequest.workspaceStatus,
         preparedRequest.linkedGitLabMR,
         preparedRequest.linkedGitLabIssue,
-        preparedRequest.startup,
+        backendStartup,
         preparedRequest.pendingFirstAgentMessageRename,
         creationId,
         preparedRequest.linkedLinearIssueWorkspaceId,
@@ -165,7 +133,19 @@ async function executeWorktreeCreation(
         preparedRequest.linkedBitbucketPR,
         preparedRequest.linkedAzureDevOpsPR,
         preparedRequest.linkedGiteaPR,
-        preparedRequest.compareBaseRef
+        preparedRequest.compareBaseRef,
+        {
+          ...(preparedRequest.linkedWorkItem !== undefined
+            ? { linkedWorkItem: preparedRequest.linkedWorkItem }
+            : {}),
+          ...(preparedRequest.linkedTaskSourceContext !== undefined
+            ? { linkedTaskSourceContext: preparedRequest.linkedTaskSourceContext }
+            : {}),
+          // Why: the remote host must own task-draft startup so its initial terminal is the agent, not an idle fallback shell.
+          ...(!backendStartup && preparedRequest.agent && preparedRequest.launchDraftPrompt
+            ? { startupDraft: preparedRequest.launchDraftPrompt }
+            : {})
+        }
       )
   } catch (error) {
     // Why: a missing entry means the user cancelled mid-flight — abandon
@@ -191,7 +171,6 @@ async function executeWorktreeCreation(
   }
 
   const worktree = result.worktree
-
   // Why: if the user dismissed/cancelled while the create was in flight, the entry
   // is gone. Git already made the worktree on disk, but don't auto-provision (trust
   // write, terminal, agent, note) work they abandoned — it surfaces as a plain row
@@ -207,7 +186,7 @@ async function executeWorktreeCreation(
     // startup, so both halves of the handoff share one renderer-session token.
     preparedRequest.startupPlan.launchToken = createBrowserUuid()
   }
-  const startupOpt = buildStartupOpt(preparedRequest, backendSpawned)
+  const startupOpt = buildWorktreeCreationStartupOpt(preparedRequest, backendSpawned)
 
   if (worktree.path) {
     const repoConnectionId =
@@ -234,7 +213,8 @@ async function executeWorktreeCreation(
       ...(result.setup ? { setup: result.setup } : {}),
       ...(result.defaultTabs ? { defaultTabs: result.defaultTabs } : {}),
       ...(startupOpt ? { startup: startupOpt } : {}),
-      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {})
+      ...(preparedRequest.issueCommand ? { issueCommand: preparedRequest.issueCommand } : {}),
+      ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
     })
     primaryTabId = activation === false ? null : activation.primaryTabId
   } else {
@@ -248,7 +228,10 @@ async function executeWorktreeCreation(
       result.setup,
       preparedRequest.issueCommand,
       result.defaultTabs,
-      { activateCreatedTabs: false }
+      {
+        activateCreatedTabs: false,
+        ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+      }
     )
   }
 
@@ -292,12 +275,24 @@ async function executeWorktreeCreation(
  * immediately and the work outlives the now-closed modal. Progress and errors
  * surface on the pending creation's sidebar row and content panel.
  */
-export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): void {
+export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
+  const store = useAppStore.getState()
+  const existingCreationId = findPendingLinkedWorkItemCreationId(
+    store.pendingWorktreeCreations,
+    request
+  )
+  if (existingCreationId) {
+    store.setActivePendingWorktreeCreation(existingCreationId)
+    store.setActiveView('terminal')
+    store.setSidebarOpen(true)
+    return existingCreationId
+  }
   // Why: crypto.randomUUID is undefined in non-secure browser contexts (LAN web
   // client over plain HTTP). createBrowserUuid falls back to getRandomValues.
   const creationId = createBrowserUuid()
   revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   void executeWorktreeCreation(creationId, request)
+  return creationId
 }
 
 /** Stage a pending entry before async preflight so the UI shows immediate progress. */

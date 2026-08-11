@@ -10,6 +10,11 @@ import {
 } from '@/lib/terminal-theme'
 import { buildFontFamily } from './layout-serialization'
 import { safeFit, safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
+import { canApplyPaneMetricOptions } from '@/lib/pane-manager/pane-fit'
+import {
+  applyOrDeferPaneMetricOptions,
+  paneMetricOptionsAlreadySettled
+} from '@/lib/pane-manager/pane-metric-options-deferral'
 import {
   normalizeTerminalFastScrollSensitivity,
   normalizeTerminalScrollSensitivity,
@@ -174,10 +179,21 @@ export function applyTerminalAppearance(
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
     pane.terminal.options.cursorBlink = settings.terminalCursorBlink
     const paneSize = paneFontSizes.get(pane.id)
-    pane.terminal.options.fontSize = paneSize ?? settings.terminalFontSize
-    pane.terminal.options.fontFamily = buildFontFamily(settings.terminalFontFamily)
-    pane.terminal.options.fontWeight = terminalFontWeights.fontWeight
-    pane.terminal.options.fontWeightBold = terminalFontWeights.fontWeightBold
+    const metricOptions = {
+      fontSize: paneSize ?? settings.terminalFontSize,
+      fontFamily: buildFontFamily(settings.terminalFontFamily),
+      fontWeight: terminalFontWeights.fontWeight,
+      fontWeightBold: terminalFontWeights.fontWeightBold,
+      lineHeight: normalizeTerminalLineHeight(settings.terminalLineHeight)
+    }
+    // Why value-gated: any settings write re-runs this over every mounted pane, and
+    // canApplyPaneMetricOptions forces style+layout; an unchanged no-op deferral
+    // would also arm a pointless refit on the next reveal.
+    // Why deferred: a metric write makes xterm clear/resize/full-refresh, which is
+    // wasted on a pane with no usable box and whose follow-up cols/rows fit can't run.
+    if (!paneMetricOptionsAlreadySettled(pane, metricOptions)) {
+      applyOrDeferPaneMetricOptions(pane, metricOptions, canApplyPaneMetricOptions(pane))
+    }
     pane.terminal.options.scrollSensitivity = normalizeTerminalScrollSensitivity(
       settings.terminalScrollSensitivity
     )
@@ -186,7 +202,6 @@ export function applyTerminalAppearance(
     )
     // Why only 'true': 'left'/'right' are handled in the keydown policy, which needs Option composable at the xterm level.
     pane.terminal.options.macOptionIsMeta = effectiveMacOptionAsAlt === 'true'
-    pane.terminal.options.lineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
     // Why unconditional: the helper no-ops when addon state already matches, so this keeps new panes and live toggles in sync.
     manager.setPaneLigaturesEnabled(pane.id, ligaturesEnabled)
     const transport = paneTransports.get(pane.id)

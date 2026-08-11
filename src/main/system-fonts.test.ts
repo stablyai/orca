@@ -67,6 +67,25 @@ describe('listSystemFontFamilies', () => {
     killMock.mockReset()
   })
 
+  it('sets UTF-8 stdout encoding as the first statement of the Windows font script', async () => {
+    await withPlatform('win32', async () => {
+      execFileMock.mockImplementation((_cmd, _args, _opts, cb) => {
+        cb(null, 'Consolas\n')
+        return { kill: killMock }
+      })
+      const { listSystemFontFamilies } = await import('./system-fonts')
+      await listSystemFontFamilies()
+
+      const args = (execFileMock.mock.calls[0]?.[1] ?? []) as string[]
+      const script = args[args.indexOf('-Command') + 1] ?? ''
+      // Why: match the whole statement, not a substring — anything emitted above it
+      // still leaves in the OEM code page, and a swapped encoding must not slip by.
+      expect(script.trim().split(/\r?\n/)[0]).toBe(
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)'
+      )
+    })
+  })
+
   it('falls back when the platform font command never exits', async () => {
     vi.useFakeTimers()
     execFileMock.mockReturnValue({ kill: killMock })

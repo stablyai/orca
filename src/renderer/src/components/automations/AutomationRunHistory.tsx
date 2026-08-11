@@ -19,7 +19,7 @@ import { translate } from '@/i18n/i18n'
 type AutomationRunHistoryProps = {
   runs: AutomationRun[]
   automationId: string
-  worktreeMap: Map<string, Worktree>
+  worktreeMap: ReadonlyMap<string, Worktree>
   onOpenRun: (run: AutomationRun) => void
 }
 

@@ -6,21 +6,24 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import type {
   CreateWorktreeResult,
+  ReleaseBuildListResult,
   UpdateCheckOptions,
   WorktreeStartupLaunch
 } from '../../shared/types'
+import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
-import { registerRepoHandlers } from '../ipc/repos'
+import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
   getLocalPtyProvider,
   registerPtyHandlers,
+  type CodexHomePtySpawnedLifecycleArgs,
   type GetSelectedCodexHomePath,
   type PrepareCodexSessionResume
 } from '../ipc/pty'
@@ -33,14 +36,18 @@ import type { OrcaRuntimeService, RuntimeWorktreeLifecycleEvent } from '../runti
 import {
   checkForUpdatesFromMenu,
   downloadUpdate,
+  getLinuxPackageInstallInstructions,
   getUpdateStatus,
   quitAndInstall,
   setupAutoUpdater,
+  showLinuxPackage,
   dismissAvailableUpdate,
   dismissNudge,
+  listAvailableReleaseBuilds,
   type UpdateInstallMode
 } from '../updater'
-import { scheduleHistoryGc } from '../terminal-history'
+import { isTrustedUIRenderer } from '../ipc/ui'
+import { scheduleHistoryGc } from '../terminal-history-gc'
 import { hydrateLocalPtyRegistryAtBoot } from '../memory/hydrate-local-pty-registry'
 import type { ClaudeRuntimeAuthPreparation } from '../claude-accounts/runtime-auth-service'
 import { getKnownWorktreeIdsForHistoryGc } from './history-gc-worktree-ids'
@@ -49,6 +56,7 @@ import type {
   RuntimeMarkdownSaveTabResult
 } from '../../shared/mobile-markdown-document'
 import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
+import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
@@ -91,6 +99,8 @@ export function attachMainWindowServices(
     onBeforeRendererReload?: (args: { webContentsId: number; ignoreCache: boolean }) => void
     // Why: lets the PTY orphan sweep skip the one crash-recovery reload (#5787).
     isRecoveryReloadInFlight?: (webContentsId: number) => boolean
+    onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
+    onPtyExit?: (id: string, exitSequence: number) => void
     onBeforeUpdateQuit?: () => void | Promise<void>
     updateInstallMode?: UpdateInstallMode
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
@@ -98,6 +108,8 @@ export function attachMainWindowServices(
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store)
+  // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
+  setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
@@ -116,7 +128,9 @@ export function attachMainWindowServices(
       prepareCodexSessionResume: options?.prepareCodexSessionResume,
       awaitLocalPtyStartup: options?.awaitLocalPtyStartup,
       awaitLocalPtyProviderStartup: options?.awaitLocalPtyProviderStartup,
-      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight
+      isRecoveryReloadInFlight: options?.isRecoveryReloadInFlight,
+      onCodexHomePtySpawned: options?.onCodexHomePtySpawned,
+      onPtyExit: options?.onPtyExit
     }
   )
   // Why: register after registerPtyHandlers so pty:management:* IPC re-installs on macOS re-activation (docs/daemon-staleness-ux.md §Phase 1).
@@ -155,7 +169,7 @@ export function attachMainWindowServices(
         try {
           await options?.onBeforeUpdateQuit?.()
         } finally {
-          store.flush()
+          await store.flushPendingAsync()
         }
       },
       setLastUpdateCheckAt: (timestamp) => {
@@ -174,6 +188,7 @@ export function attachMainWindowServices(
       setDismissedUpdateNudgeId: (id) => {
         store.updateUI({ dismissedUpdateNudgeId: id })
       },
+      getReleaseChannelOverride: () => store.getUI().releaseChannelOverride ?? null,
       installMode: options?.updateInstallMode
     })
     logStartupMilestone('updater-setup-done')
@@ -347,14 +362,20 @@ function registerRuntimeWindowLifecycle(
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
         const requestId = randomUUID()
+        const expectedIdentity = opts.expectedProcessIdentity
+          ? opts.tabId && opts.leafId
+            ? { worktreeId, tabId: opts.tabId, leafId: opts.leafId, ptyId: opts.ptyId }
+            : null
+          : undefined
+        if (expectedIdentity === null) {
+          reject(new Error('terminal_reveal_identity_required'))
+          return
+        }
         const timer = setTimeout(() => {
           ipcMain.removeListener('terminal:tabCreateReply', handler)
           reject(new Error('Terminal reveal timed out'))
         }, 10_000)
-        const handler = (
-          event: Electron.IpcMainEvent,
-          reply: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
+        const handler = (event: Electron.IpcMainEvent, reply: TerminalTabCreateReply): void => {
           // Why: requestId is renderer-supplied, so only the targeted main window may satisfy the reveal.
           if (event.sender !== mainWindow.webContents || reply.requestId !== requestId) {
             return
@@ -365,7 +386,22 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
-          resolve({ tabId: reply.tabId!, title: reply.title })
+          if (
+            expectedIdentity &&
+            (!reply.identity ||
+              reply.identity.worktreeId !== expectedIdentity.worktreeId ||
+              reply.identity.tabId !== expectedIdentity.tabId ||
+              reply.identity.leafId !== expectedIdentity.leafId ||
+              reply.identity.ptyId !== expectedIdentity.ptyId)
+          ) {
+            reject(new Error('terminal_reveal_identity_mismatch'))
+            return
+          }
+          resolve({
+            tabId: reply.tabId!,
+            title: reply.title,
+            ...(reply.identity ? { identity: reply.identity } : {})
+          })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
         send('ui:createTerminal', {
@@ -380,6 +416,7 @@ function registerRuntimeWindowLifecycle(
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           activate: opts.activate !== false,
           ...(opts.presentation ? { presentation: opts.presentation } : {}),
+          ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
           // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
           ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
           ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
@@ -387,8 +424,15 @@ function registerRuntimeWindowLifecycle(
           ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
           ...(opts.splitTelemetrySource !== undefined
             ? { splitTelemetrySource: opts.splitTelemetrySource }
-            : {})
+            : {}),
+          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+      }),
+    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
+      send('agentStatus:legacyWorkerTerminalRecovery', {
+        paneKey,
+        resolution,
+        ...(ptyId ? { ptyId } : {})
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {
@@ -443,6 +487,8 @@ function registerRuntimeWindowLifecycle(
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
       send('runtime:terminalDriverChanged', { ptyId, driver }),
+    nativeChatLaunchDraftResolved: (tabId, resolution) =>
+      send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
@@ -494,6 +540,9 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.removeHandler('updater:quitAndInstall')
   ipcMain.removeHandler('updater:dismissNudge')
   ipcMain.removeHandler('updater:dismissAvailableUpdate')
+  ipcMain.removeHandler('updater:getLinuxPackageInstallInstructions')
+  ipcMain.removeHandler('updater:showLinuxPackage')
+  ipcMain.removeHandler('updater:listBuilds')
 
   ipcMain.handle('updater:getStatus', () => getUpdateStatus())
   ipcMain.handle('updater:getVersion', () => app.getVersion())
@@ -505,4 +554,35 @@ export function registerUpdaterHandlers(_store: Store): void {
   ipcMain.handle('updater:quitAndInstall', () => quitAndInstall())
   ipcMain.handle('updater:dismissNudge', () => dismissNudge())
   ipcMain.handle('updater:dismissAvailableUpdate', () => dismissAvailableUpdate())
+  // Why: the response carries a local package path and the reveal touches the native desktop, so
+  // neither may be reached from a guest, dashboard popout, stale window, or utility renderer.
+  ipcMain.handle('updater:getLinuxPackageInstallInstructions', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return getLinuxPackageInstallInstructions()
+  })
+  ipcMain.handle('updater:showLinuxPackage', (event) => {
+    assertTrustedUpdaterRecoverySender(event)
+    return showLinuxPackage()
+  })
+  ipcMain.handle(
+    'updater:listBuilds',
+    async (_event, channel: ReleaseChannel): Promise<ReleaseBuildListResult> => {
+      if (!RELEASE_CHANNELS.includes(channel)) {
+        return { ok: false, channel, message: `Unknown release channel "${channel}".` }
+      }
+      try {
+        return { ok: true, channel, builds: await listAvailableReleaseBuilds(channel) }
+      } catch (error) {
+        // Why: a network/rate-limit failure is expected here; return it as data so
+        // the picker can render the reason instead of rejecting the invoke.
+        return { ok: false, channel, message: String((error as Error)?.message ?? error) }
+      }
+    }
+  )
+}
+
+function assertTrustedUpdaterRecoverySender(event: IpcMainInvokeEvent): void {
+  if (!isTrustedUIRenderer(event.sender)) {
+    throw new Error('Unauthorized updater package recovery sender')
+  }
 }

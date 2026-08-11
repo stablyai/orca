@@ -59,7 +59,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   const handleConfirm = useCallback(() => {
     if (repoId) {
-      void removeProject(repoId)
+      void removeProject(repoId, { errorFeedback: 'toast' })
     }
     closeModal()
   }, [closeModal, removeProject, repoId])

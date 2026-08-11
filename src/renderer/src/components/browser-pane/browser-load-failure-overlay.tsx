@@ -17,6 +17,7 @@ import {
   isCertificateLoadError,
   type LoadFailureMeta
 } from './browser-notices'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from './browser-page-guest-recovery'
 
 type BrowserLoadFailureOverlayProps = {
   loadError: BrowserLoadError
@@ -148,6 +149,7 @@ export function BrowserLoadFailureOverlay({
       : loadError
   const meta = getLoadErrorMetadata(presentationLoadError)
   const certificateError = isCertificateLoadError(presentationLoadError)
+  const guestRecoveryError = presentationLoadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
   const recoveryHint = formatLoadFailureRecoveryHint(meta, presentationLoadError)
   const activeProceedAttempt =
     proceedAttempt?.challengeId === matchingCertificateFailure?.challengeId ? proceedAttempt : null
@@ -261,11 +263,13 @@ export function BrowserLoadFailureOverlay({
         <h2 className="text-base font-semibold text-foreground">
           {certificateError
             ? translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
-            : meta.host
-              ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
-                  value0: meta.host
-                })
-              : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
+            : guestRecoveryError
+              ? translate('browser.guestRecovery.title', 'Browser page stopped')
+              : meta.host
+                ? translate('browser.loadFailure.cantReachHost', "Can't reach {{value0}}", {
+                    value0: meta.host
+                  })
+                : translate('browser.loadFailure.cantLoadPage', "Can't load this page")}
         </h2>
         <p className="mt-2 text-sm text-muted-foreground">
           {formatLoadFailureDescription(presentationLoadError, meta)}
@@ -312,7 +316,7 @@ export function BrowserLoadFailureOverlay({
             </>
           ) : (
             <>
-              {httpsRecoveryUrl ? (
+              {httpsRecoveryUrl && !guestRecoveryError ? (
                 <Button
                   size="sm"
                   className="h-9 gap-2 px-3"

@@ -107,7 +107,12 @@ export function ContextualTourOverlaySurface({
   const stepKey = `${activeTourId}-${renderState.progress.current}`
   const defaultPrimaryAction = {
     kind: renderState.isLastStep ? 'complete' : 'next',
-    label: renderState.isLastStep ? 'Done' : 'Next'
+    label: renderState.isLastStep
+      ? translate('auto.components.contextual.tours.ContextualTourOverlaySurface.complete', 'Done')
+      : translate(
+          'auto.components.contextual.tours.contextual.tour.overlay.measurement.38b3155418',
+          'Next'
+        )
   } satisfies ContextualTourStepAction
   const primaryAction =
     renderState.primaryAction ?? (renderState.hidePrimaryAction ? null : defaultPrimaryAction)

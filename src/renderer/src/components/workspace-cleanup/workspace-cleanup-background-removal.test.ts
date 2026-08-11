@@ -14,6 +14,12 @@ vi.mock('sonner', () => ({
   }
 }))
 
+vi.mock('../sidebar/preserved-branch-batch-toast', () => ({
+  showPreservedBranchBatchToast: vi.fn()
+}))
+
+import { showPreservedBranchBatchToast } from '../sidebar/preserved-branch-batch-toast'
+
 async function settleBackgroundRemoval(): Promise<void> {
   for (let index = 0; index < 10; index += 1) {
     await Promise.resolve()
@@ -129,6 +135,54 @@ describe('startWorkspaceCleanupBackgroundRemoval', () => {
       removedCount: 2,
       failedCount: 0
     })
+  })
+
+  it('reports all preserved branches in one cleanup result', async () => {
+    const first = makeCandidate()
+    const second = makeCandidate({
+      worktreeId: 'repo-1::/repo/beta',
+      displayName: 'beta',
+      branch: 'beta',
+      path: '/repo/beta'
+    })
+    const firstBranch = {
+      worktreeId: first.worktreeId,
+      branchName: 'feature/alpha',
+      expectedHead: 'alpha-head'
+    }
+    const secondBranch = {
+      worktreeId: second.worktreeId,
+      branchName: 'feature/beta',
+      expectedHead: 'beta-head'
+    }
+    const onResult = vi.fn()
+
+    startWorkspaceCleanupBackgroundRemoval({
+      candidates: [first, second],
+      removeCandidates: vi
+        .fn()
+        .mockResolvedValueOnce({
+          removedIds: [first.worktreeId],
+          failures: [],
+          preservedBranches: [firstBranch]
+        })
+        .mockResolvedValueOnce({
+          removedIds: [second.worktreeId],
+          failures: [],
+          preservedBranches: [secondBranch]
+        }),
+      onProgress: vi.fn(),
+      onResult
+    })
+    await settleBackgroundRemoval()
+
+    expect(onResult).toHaveBeenCalledWith({
+      removedIds: [first.worktreeId, second.worktreeId],
+      failures: [],
+      preservedBranches: [firstBranch, secondBranch]
+    })
+    expect(showPreservedBranchBatchToast).toHaveBeenCalledWith(2, [firstBranch, secondBranch])
+    expect(toast.success).not.toHaveBeenCalledWith('Removed workspaces: 2')
   })
 
   it('removes nested candidates before their parent workspace', async () => {

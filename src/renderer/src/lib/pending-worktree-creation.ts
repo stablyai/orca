@@ -5,6 +5,7 @@ import type {
   TuiAgent,
   WorkspaceCreateTelemetrySource,
   WorkspaceStatus,
+  WorkspaceLinkedItem,
   WorktreeStartupLaunch
 } from '../../../shared/types'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
@@ -32,6 +33,8 @@ export type WorktreeCreationRequest = {
   /** Source host/account that produced the linked task. Kept separate from the
    *  run context so Retry does not infer provider ownership from the run host. */
   taskSourceContext?: TaskSourceContext | null
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedTaskSourceContext?: TaskSourceContext | null
   /** Host/setup where the new workspace should run. Duplicates repoId by design:
    *  repoId keeps old create APIs working, while this records the project-first
    *  host intent for retry, diagnostics, and future metadata writes. */
@@ -118,6 +121,29 @@ export type PendingWorktreeCreation = {
   error?: string
   provisioningLog?: string
   request: WorktreeCreationRequest
+}
+
+export function findPendingLinkedWorkItemCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
+  request: Pick<
+    WorktreeCreationRequest,
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+  >
+): string | null {
+  if (request.linkedIssue == null && request.linkedPR == null) {
+    return null
+  }
+  const hostId = request.workspaceRunContext?.hostId ?? null
+  const match = Object.values(pendingCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR &&
+      (pending.workspaceRunContext?.hostId ?? null) === hostId
+    )
+  })
+  return match?.creationId ?? null
 }
 
 /** Human-readable progress line for an in-flight create, shared by the in-frame

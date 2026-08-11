@@ -7,6 +7,7 @@ describe('SESSION_RELEVANT_FIELDS', () => {
   const fixture: Record<keyof WorkspaceSessionSnapshot, true> = {
     activeRepoId: true,
     activeWorkspaceKey: true,
+    activeWorkspaceExecutionHostId: true,
     activeWorktreeId: true,
     activeTabId: true,
     tabsByWorktree: true,

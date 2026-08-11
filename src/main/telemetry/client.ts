@@ -329,10 +329,6 @@ export function _setShuttingDownForTests(value: boolean): void {
   shuttingDown = value
 }
 
-export function _getSessionIdForTests(): string | null {
-  return sessionId
-}
-
 export function _enableTransportForTests(enabled: boolean): void {
   testTransportEnabled = enabled
 }

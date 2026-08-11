@@ -5,6 +5,7 @@ import type {
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { sessionSortTime } from './session-scanner-accumulator'
+import { aiVaultScanLimit } from '../../shared/ai-vault-session-depth'
 
 export function aiVaultScanIssueResult(args: {
   executionHostId?: ExecutionHostId
@@ -17,12 +18,19 @@ export function aiVaultScanIssueResult(args: {
       {
         ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
         agent: 'codex',
+        kind: 'host',
         path: args.path,
         message: args.message
       }
     ],
     scannedAt: new Date().toISOString()
   }
+}
+
+// A superseded scan has no findings to report; the flag tells the renderer to
+// keep the list it already has rather than paint this empty body.
+export function cancelledAiVaultListResult(): AiVaultListResult {
+  return { sessions: [], issues: [], scannedAt: new Date().toISOString(), cancelled: true }
 }
 
 // Why: the serving-side scan is host-local and cached once for every caller
@@ -50,9 +58,10 @@ export function restampAiVaultListResult(
 
 export function mergeAiVaultListResults(
   results: readonly AiVaultListResult[],
-  rawLimit: number | undefined
+  rawLimit: number | undefined,
+  unlimited = false
 ): AiVaultListResult {
-  const limit = rawLimit && rawLimit > 0 ? Math.floor(rawLimit) : 1000
+  const limit = aiVaultScanLimit({ limit: rawLimit, unlimited })
   const byId = new Map<string, AiVaultSession>()
   const issues: AiVaultScanIssue[] = []
   for (const result of results) {

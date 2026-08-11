@@ -1,11 +1,16 @@
 import type { GlobalSettings } from '../../shared/types'
 import { getSelectedCodexAccountIdForTarget } from '../codex-accounts/runtime-selection'
-import { forgetCodexPaneAccount, getCodexPaneAccount } from './codex-pane-account-registry'
+import {
+  forgetCodexPaneAccount,
+  getCodexPaneAccount,
+  type CodexPaneHomeRoute
+} from './codex-pane-account-registry'
 
 export type StaleCodexPane = {
   ptyId: string
   launchAccountId: string | null
   activeAccountId: string | null
+  reason: 'account-change' | 'home-route-change'
 }
 
 /**
@@ -15,6 +20,7 @@ export type StaleCodexPane = {
 export function listStaleCodexPanes(args: {
   ptyIds: readonly string[]
   settings: GlobalSettings
+  activeHostHomeRoute?: CodexPaneHomeRoute
 }): StaleCodexPane[] {
   const stalePanes: StaleCodexPane[] = []
   for (const ptyId of args.ptyIds) {
@@ -26,8 +32,20 @@ export function listStaleCodexPanes(args: {
       args.settings,
       parseSelectionLaneKey(record.selectionKey)
     )
-    if (record.accountId !== activeAccountId) {
-      stalePanes.push({ ptyId, launchAccountId: record.accountId, activeAccountId })
+    const homeRouteChanged =
+      record.selectionKey === 'host' &&
+      record.homeRoute !== undefined &&
+      record.homeRoute !== 'custom-home' &&
+      args.activeHostHomeRoute !== undefined &&
+      record.homeRoute !== args.activeHostHomeRoute
+    const accountChanged = record.accountId !== activeAccountId
+    if (accountChanged || homeRouteChanged) {
+      stalePanes.push({
+        ptyId,
+        launchAccountId: record.accountId,
+        activeAccountId,
+        reason: accountChanged ? 'account-change' : 'home-route-change'
+      })
     }
   }
   return stalePanes

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import {
   FOCUS_TERMINAL_PANE_EVENT,
   PASTE_TERMINAL_TEXT_EVENT,
@@ -16,23 +16,16 @@ import { useAppStore } from '@/store'
 import { useTerminalScrollVisibilityMemory } from './use-terminal-scroll-visibility-memory'
 import { useTerminalContainerFitSync } from './use-terminal-container-fit-sync'
 import { handleTerminalProgrammaticTextPaste } from './terminal-programmatic-text-paste'
-import { applyTerminalVisibilityTransition } from './apply-terminal-visibility-transition'
-import type {
-  TerminalHiddenReason,
-  TerminalVisibilityPostPaintRecovery
+import {
+  hideTerminalVisibility,
+  resumeTerminalVisibility,
+  type TerminalHiddenReason
 } from './terminal-visibility-resume'
 import { useTerminalWindowWakeRecovery } from './use-terminal-window-wake-recovery'
 import {
   releaseRendererPtyVisibilityClaim,
   setRendererPtyVisibilityClaim
 } from './pty-renderer-delivery-claims'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { getTerminalVisibilityEffectPhase } from './terminal-visibility-effect-phase'
-
-const useTerminalVisibilityEffect =
-  getTerminalVisibilityEffectPhase(getRendererAppPlatform()) === 'layout'
-    ? useLayoutEffect
-    : useEffect
 
 type UseTerminalPaneGlobalEffectsArgs = {
   tabId: string
@@ -88,15 +81,22 @@ export function useTerminalPaneGlobalEffects({
   worktreeIdRef.current = worktreeId
   const cwdRef = useRef(cwd)
   cwdRef.current = cwd
-  // Starts true so initially hidden tabs never allocate WebGL.
+  // Starts true so the first render with isVisible=false triggers a
+  // suspendRendering(). Background worktrees that mount hidden would
+  // otherwise leak WebGL contexts — openTerminal() unconditionally creates
+  // one — and exhaust Chromium's ~8-context budget across worktrees.
   const wasVisibleRef = useRef(true)
   const wasWorktreeActiveRef = useRef(isWorktreeActive)
   const hasCompletedVisibleResumeRef = useRef(false)
   const renderingSuspendedByVisibilityRef = useRef(false)
   const hiddenReasonRef = useRef<TerminalHiddenReason | null>(null)
-  const postPaintVisibilityRecoveryRef = useRef<TerminalVisibilityPostPaintRecovery | null>(null)
   const rendererVisible = isVisible && isWorktreeActive
-  // Why: rebind/active-leaf changes without visibility flips must re-report PTY.
+  // Why: the active pane can rebind to a new PTY (deferred reattach / eager
+  // adopt) or switch active leaf without isActive/isVisible/isWorktreeActive
+  // flipping. Derive the active leaf's live PTY reactively from the same
+  // leaf→PTY binding the reattach path writes, so the active-renderer-pty report
+  // below re-fires on rebind — otherwise main keeps the stale id and the live
+  // PTY loses its interactive reserve.
   const activeLeafPtyId = useAppStore((state) => {
     const layout = state.terminalLayoutsByTabId[tabId]
     const activeLeafId = layout?.activeLeafId
@@ -137,37 +137,53 @@ export function useTerminalPaneGlobalEffects({
     }
   }, [rendererVisible, paneTransportsRef])
 
-  // macOS can rebuild WebGL pre-paint without blocking reveal on slow ANGLE paths.
-  useTerminalVisibilityEffect(() => {
-    isActiveRef.current = isActive
-    isVisibleRef.current = rendererVisible
-    postPaintVisibilityRecoveryRef.current = applyTerminalVisibilityTransition({
-      manager: managerRef.current,
-      rendererVisible,
-      isActive,
-      isWorktreeActive,
-      wasVisibleRef,
-      wasWorktreeActiveRef,
-      hasCompletedVisibleResumeRef,
-      renderingSuspendedByVisibilityRef,
-      hiddenReasonRef,
-      captureViewportPositions,
-      withSuppressedScrollTracking,
-      applyPendingFollowOutputRequests
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isActive, isWorktreeActive, rendererVisible])
-
   useEffect(() => {
-    const recovery = postPaintVisibilityRecoveryRef.current
-    postPaintVisibilityRecoveryRef.current = null
     const manager = managerRef.current
-    if (!recovery || !isVisibleRef.current || !manager) {
+    if (!manager) {
       return
     }
-    // Why: lifecycle effects may replace the manager after layout but before this effect.
-    recovery.run(manager)
-  }, [isActive, isWorktreeActive, rendererVisible, isVisibleRef, managerRef])
+    manager.setAtlasRecoveryVisible?.(rendererVisible)
+    const wasVisible = wasVisibleRef.current
+    const wasWorktreeActive = wasWorktreeActiveRef.current
+    isActiveRef.current = isActive
+    isVisibleRef.current = rendererVisible
+    if (rendererVisible) {
+      const shouldUseLightTabResume =
+        isWorktreeActive &&
+        hasCompletedVisibleResumeRef.current &&
+        !renderingSuspendedByVisibilityRef.current &&
+        (wasVisible || hiddenReasonRef.current === 'tab')
+      resumeTerminalVisibility({
+        manager,
+        isActive,
+        wasVisible,
+        shouldUseLightTabResume,
+        captureViewportPositions,
+        withSuppressedScrollTracking
+      })
+      renderingSuspendedByVisibilityRef.current = false
+      wasVisibleRef.current = true
+      wasWorktreeActiveRef.current = isWorktreeActive
+      hasCompletedVisibleResumeRef.current = true
+      hiddenReasonRef.current = null
+      applyPendingFollowOutputRequests()
+      return
+    } else {
+      const hiddenState = hideTerminalVisibility({
+        manager,
+        wasVisible,
+        wasWorktreeActive,
+        isWorktreeActive,
+        hasCompletedVisibleResume: hasCompletedVisibleResumeRef.current,
+        captureViewportPositions
+      })
+      renderingSuspendedByVisibilityRef.current = hiddenState.renderingSuspended
+      hiddenReasonRef.current = hiddenState.hiddenReason
+    }
+    wasVisibleRef.current = false
+    wasWorktreeActiveRef.current = isWorktreeActive
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, isWorktreeActive, rendererVisible])
 
   useEffect(() => {
     const ptyId = isActive && isVisible && isWorktreeActive ? activeLeafPtyId : null

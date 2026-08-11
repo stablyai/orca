@@ -44,6 +44,19 @@ describe('startup ordering', () => {
     )
   })
 
+  it('requires daemon authority before restored-subagent liveness runs', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const sweepStart = source.indexOf('function reapRestoredSubagentsWithoutLiveAgent()')
+    const sweepEnd = source.indexOf('function startTerminalRuntimeStartupServices()', sweepStart)
+    const sweep = source.slice(sweepStart, sweepEnd)
+
+    expect(sweepStart).toBeGreaterThanOrEqual(0)
+    expect(sweepEnd).toBeGreaterThan(sweepStart)
+    expect(sweep).toContain('const provider = getDaemonProvider()')
+    expect(sweep).toContain('if (!provider) {')
+    expect(sweep).toContain('provider.probePtyLiveness(ptyId)')
+  })
+
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const barrierStart = source.indexOf("ipcMain.handle('app:awaitFirstWindowStartupServices'")
@@ -73,6 +86,42 @@ describe('startup ordering', () => {
     expect(desktopStartup).not.toContain('await managedWslCliReconciliationReady')
     expect(barrier).toContain('managedWslCliStartupBarrierReady')
     expect(barrier).not.toContain('managedWslCliReconciliationReady')
+    expect(barrier).toContain("ipcMain.handle('app:recoverLegacyWorkerTerminalsForRendererStartup'")
+    expect(barrier).toContain('recoverLegacyWorkerTerminalsForRendererStartup({')
+    expect(barrier).toContain('localPtyProviderStartupReady,')
+    expect(barrier).toContain('await runtime?.refreshRestoredOrchestrationAuthority()')
+    expect(barrier).toContain(
+      'return runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })'
+    )
+  })
+
+  it('reconciles retained Codex homes after authoritative daemon inventory', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const daemonInitIndex = source.indexOf('await initDaemonPtyProvider(signal')
+    const retainedPaneGateIndex = source.indexOf(
+      'hasRecordedManagedHostCodexPane()',
+      daemonInitIndex
+    )
+    const inventoryIndex = source.indexOf('await listLiveDaemonPtyIds()', daemonInitIndex)
+    const reconciliation = 'codexRuntimeHome?.reconcileLegacySharedHomeForRetainedPanes()'
+    const reconciliationIndex = source.indexOf(reconciliation, inventoryIndex)
+    const hookReconciliationIndex = source.indexOf(
+      'reconcileRetainedCodexHookHomes({',
+      inventoryIndex
+    )
+    const serveIndex = source.indexOf('if (serveOptions) {', reconciliationIndex)
+    const desktopIndex = source.indexOf('Promise.resolve(openMainWindow())', serveIndex)
+
+    expect(daemonInitIndex).toBeGreaterThanOrEqual(0)
+    expect(retainedPaneGateIndex).toBeGreaterThan(daemonInitIndex)
+    expect(inventoryIndex).toBeGreaterThan(daemonInitIndex)
+    expect(inventoryIndex).toBeGreaterThan(retainedPaneGateIndex)
+    expect(hookReconciliationIndex).toBeGreaterThan(inventoryIndex)
+    expect(hookReconciliationIndex).toBeLessThan(reconciliationIndex)
+    expect(reconciliationIndex).toBeGreaterThan(inventoryIndex)
+    expect(serveIndex).toBeGreaterThan(reconciliationIndex)
+    expect(desktopIndex).toBeGreaterThan(serveIndex)
+    expect(source.split(reconciliation)).toHaveLength(2)
   })
 
   it('exposes managed WSL reconciliation status to headless serve clients and diagnostics', () => {
@@ -114,6 +163,33 @@ describe('startup ordering', () => {
     expect(startIndex).toBeGreaterThan(attachIndex)
   })
 
+  it('wires bounded teardown state to reporting but not recovery or close behavior', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const scopeStart = source.indexOf('function getExpectedTeardownScope(')
+    const scopeEnd = source.indexOf('function markRecoveryReloadInFlight(', scopeStart)
+    const scope = source.slice(scopeStart, scopeEnd)
+    const windowStart = source.indexOf('const window = createMainWindow(store, {')
+    const windowEnd = source.indexOf('onRendererRecoveryExhausted:', windowStart)
+    const windowOptions = source.slice(windowStart, windowEnd)
+    const recorderStart = source.indexOf('function recordProcessGoneCrash(')
+    const recorderEnd = source.indexOf('function shutdownWatchersOnce(', recorderStart)
+    const recorder = source.slice(recorderStart, recorderEnd)
+
+    expect(scopeStart).toBeGreaterThanOrEqual(0)
+    expect(scopeEnd).toBeGreaterThan(scopeStart)
+    expect(scope).toContain('resolveExpectedTeardownScope({')
+    expect(scope).toContain('includeSystemSessionEnd')
+    expect(windowStart).toBeGreaterThanOrEqual(0)
+    expect(windowEnd).toBeGreaterThan(windowStart)
+    expect(windowOptions).toContain('getIsQuitting: () => isQuitting')
+    expect(windowOptions).toContain(
+      'expectedTeardown: getExpectedTeardownScope(webContentsId, false)'
+    )
+    expect(recorderStart).toBeGreaterThanOrEqual(0)
+    expect(recorderEnd).toBeGreaterThan(recorderStart)
+    expect(recorder).toContain('expectedTeardown: getExpectedTeardownScope(webContentsId)')
+  })
+
   it('attaches renderer services before starting the TCC prompt watcher', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const attachIndex = source.indexOf('attachMainWindowServices(')
@@ -132,6 +208,24 @@ describe('startup ordering', () => {
     const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
     expect(source.slice(willQuitStart, windowAllClosedStart)).toContain('stopTccPromptNotice()')
     expect(source.slice(0, willQuitStart)).not.toContain('stopTccPromptNoticeForQuit')
+  })
+
+  it('keeps the power bridge through vetoable before-quit and disposes after commit', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const beforeQuitStart = source.indexOf("app.on('before-quit'")
+    const willQuitStart = source.indexOf("app.on('will-quit'", beforeQuitStart)
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const beforeQuit = source.slice(beforeQuitStart, willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const commitIndex = willQuit.indexOf('quitTeardownStartGate.tryStart(e)')
+    const disposeIndex = willQuit.indexOf('unsubscribeSystemResumeBroadcast?.()')
+
+    expect(beforeQuitStart).toBeGreaterThanOrEqual(0)
+    expect(willQuitStart).toBeGreaterThan(beforeQuitStart)
+    expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(beforeQuit).not.toContain('unsubscribeSystemResumeBroadcast')
+    expect(commitIndex).toBeGreaterThanOrEqual(0)
+    expect(disposeIndex).toBeGreaterThan(commitIndex)
   })
 
   it('starts the automation scheduler before headless serve reports ready', () => {

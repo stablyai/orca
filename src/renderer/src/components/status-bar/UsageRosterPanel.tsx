@@ -80,31 +80,60 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
   return formatResetCountdown(Math.min(...resets) - now)
 }
 
-// Presentational row: a compact header (icon · name · plan · reset) with
-// the per-window metrics beneath, so the reset stays visible and multi-window
-// agents stay short. The wrapper supplies padding + interaction (drill-in
-// submenu or plain clickable row).
+function UsageMetric({
+  section,
+  label,
+  display,
+  showBar = true
+}: {
+  section: UsageSection
+  label: string
+  display: UsagePercentageDisplay
+  showBar?: boolean
+}): React.JSX.Element {
+  const used = clampUsedPercent(section.window.usedPercent)
+  const shown = getDisplayedUsagePercentage(section.window.usedPercent, display)
+
+  return (
+    <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
+      <span className="text-[10px] text-muted-foreground">{label}</span>
+      {showBar ? (
+        <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
+          <span
+            className={`block h-full rounded-full ${barColor(used)}`}
+            style={{ width: `${shown}%` }}
+          />
+        </span>
+      ) : null}
+      <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>{shown}%</span>
+    </span>
+  )
+}
+
 export function UsageRow({
   p,
   display,
   state,
   showSignInAction,
-  now
+  now,
+  mode = 'verbose'
 }: {
   p: ProviderRateLimits
   display: UsagePercentageDisplay
   state: UsageRosterRowState
   showSignInAction: boolean
   now: number
+  mode?: StatusBarUsageMode
 }): React.JSX.Element {
   const sections = usedSections(p)
   const hasUsage = sections.length > 0
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
+  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-1">
+    <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
       <div className="flex items-center gap-2.5">
         <span className="flex size-5 shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
           <ProviderIcon provider={p.provider} />
@@ -124,30 +153,29 @@ export function UsageRow({
               </span>
             ) : null}
           </>
+        ) : tightest ? (
+          <span className="ml-auto">
+            <UsageMetric
+              section={tightest}
+              label={tightest.label}
+              display={display}
+              showBar={false}
+            />
+          </span>
         ) : reset ? (
           <span className="shrink-0 text-[11px] text-muted-foreground">{reset}</span>
         ) : null}
       </div>
-      {hasUsage ? (
+      {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((s) => {
-            const used = clampUsedPercent(s.window.usedPercent)
-            const shown = getDisplayedUsagePercentage(s.window.usedPercent, display)
-            return (
-              <span key={s.label} className="flex items-center gap-1.5">
-                <span className="text-[10px] text-muted-foreground">{shortLabel(p, s)}</span>
-                <span className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
-                  <span
-                    className={`block h-full rounded-full ${barColor(used)}`}
-                    style={{ width: `${shown}%` }}
-                  />
-                </span>
-                <span className={`tabular-nums text-[11px] ${usageTextColorClass(used)}`}>
-                  {shown}%
-                </span>
-              </span>
-            )
-          })}
+          {sections.map((section) => (
+            <UsageMetric
+              key={section.label}
+              section={section}
+              label={shortLabel(p, section)}
+              display={display}
+            />
+          ))}
         </div>
       ) : null}
     </div>
@@ -268,6 +296,7 @@ export function UsageRosterPanel({
             state={state}
             showSignInAction={showSignInAction}
             now={now}
+            mode={statusBarUsageMode}
           />
         )
         if (showSignInAction) {

@@ -196,6 +196,54 @@ describe('durable orchestration mutation ledger', () => {
     db.close()
   })
 
+  it('resumes a pending idempotent worker release after restart', async () => {
+    const db = new OrchestrationDb(':memory:')
+    const runtime = new OrcaRuntimeService()
+    runtime.setOrchestrationDb(db)
+    const params = { dispatch: 'ctx_release' }
+    const callerFingerprint = createHash('sha256').update('caller-token').digest('hex')
+    const payloadHash = createHash('sha256')
+      .update(JSON.stringify({ method: 'orchestration.workerRelease', params }))
+      .digest('hex')
+    db.beginMutationReceipt({
+      callerFingerprint,
+      requestId: 'mutation_release',
+      method: 'orchestration.workerRelease',
+      payloadHash
+    })
+    const effect = vi.fn().mockReturnValue({ state: 'release_pending' })
+    const dispatcher = new RpcDispatcher({
+      runtime,
+      methods: [
+        defineMethod({
+          name: 'orchestration.workerRelease',
+          params: z.object({ dispatch: z.string() }),
+          handler: effect
+        })
+      ]
+    })
+
+    const result = await dispatcher.dispatch({
+      id: 'rpc_release_retry',
+      authToken: 'caller-token',
+      method: 'orchestration.workerRelease',
+      params,
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'mutation_release'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      result: {
+        state: 'release_pending',
+        mutation: { requestId: 'mutation_release', replayed: true }
+      }
+    })
+    expect(effect).toHaveBeenCalledTimes(1)
+    expect(db.getMutationReceipt(callerFingerprint, 'mutation_release')?.state).toBe('completed')
+    db.close()
+  })
+
   it('returns the accepted Dispatch when worker-start was interrupted by restart', async () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
@@ -252,7 +300,10 @@ describe('durable orchestration mutation ledger', () => {
   })
 
   it('recovers a lost ask acceptance without creating a second question', async () => {
-    const db = new OrchestrationDb(':memory:')
+    const dir = mkdtempSync(join(tmpdir(), 'orca-mutation-ask-recovery-'))
+    paths.push(dir)
+    const dbPath = join(dir, 'orchestration.db')
+    const db = new OrchestrationDb(dbPath)
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
@@ -290,7 +341,16 @@ describe('durable orchestration mutation ledger', () => {
     const first = firstDispatcher.dispatch(askRequest, { signal: controller.signal })
     await vi.waitFor(() => expect(db.getInbox(10)).toHaveLength(1))
 
-    const restartedDispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+    const restartedDb = new OrchestrationDb(dbPath)
+    const restartedRuntime = new OrcaRuntimeService()
+    restartedRuntime.setOrchestrationDb(restartedDb)
+    vi.spyOn(restartedRuntime, 'getTerminalPaneKey').mockReturnValue('tab_worker:leaf_worker')
+    vi.spyOn(restartedRuntime, 'getTerminalProcessIncarnation').mockReturnValue('runtime:pty:1')
+    vi.spyOn(restartedRuntime, 'notifyMessageArrived').mockImplementation(() => {})
+    const restartedDispatcher = new RpcDispatcher({
+      runtime: restartedRuntime,
+      methods: ORCHESTRATION_METHODS
+    })
     const recovered = await restartedDispatcher.dispatch({ ...askRequest, id: 'rpc_ask_2' })
     expect(recovered).toMatchObject({
       ok: true,
@@ -304,6 +364,7 @@ describe('durable orchestration mutation ledger', () => {
 
     controller.abort()
     await first
+    restartedDb.close()
     db.close()
   })
 })

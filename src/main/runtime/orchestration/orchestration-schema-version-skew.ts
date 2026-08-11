@@ -2,8 +2,12 @@ import type Database from '../../sqlite/sync-database'
 
 const POST_V6_COLUMNS = [
   ['messages', 'run_id'],
+  ['messages', 'delivery_contract'],
+  ['coordinator_runs', 'scheduler_lost_at'],
   ['tasks', 'run_id'],
   ['dispatch_contexts', 'run_id'],
+  ['dispatch_contexts', 'contract_version'],
+  ['dispatch_contexts', 'launch_token_hash'],
   ['dispatch_contexts', 'capability_hash'],
   ['dispatch_contexts', 'process_incarnation'],
   ['dispatch_contexts', 'capability_revoked_at'],
@@ -14,11 +18,16 @@ const POST_V6_COLUMNS = [
   ['remote_dispatch_attachments', 'to_worker_imported_sequence'],
   ['remote_dispatch_attachments', 'protocol_version'],
   ['federation_relay_items', 'dispatch_id'],
-  ['remote_questions', 'message_id']
+  ['remote_questions', 'message_id'],
+  ['legacy_adoptions', 'source_run_id'],
+  ['legacy_compatibility_principals', 'id'],
+  ['legacy_operation_receipts', 'principal_id'],
+  ['legacy_mail_receipts', 'principal_id']
 ] as const
 
 const POST_V6_INDEXES = [
   'idx_messages_run_sequence',
+  'idx_messages_delivery_contract',
   'idx_tasks_run_status',
   'idx_dispatch_run_status',
   'idx_gates_run_status',
@@ -46,11 +55,39 @@ function messagesAllowQuestions(db: Database.Database): boolean {
   return !!row && row.sql.includes("'question'")
 }
 
+function hasConsistentLegacyAdoption(db: Database.Database): boolean {
+  const sourceRunId = 'run_legacy_local'
+  const sourceGraph = db
+    .prepare(
+      `SELECT 1
+       WHERE EXISTS(SELECT 1 FROM tasks WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM dispatch_contexts WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM decision_gates WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM messages WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM question_threads WHERE run_id = ?)
+          OR EXISTS(SELECT 1 FROM deliveries WHERE run_id = ?)`
+    )
+    .get(sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId, sourceRunId)
+  const adoption = db
+    .prepare('SELECT adopted_run_id FROM legacy_adoptions WHERE source_run_id = ?')
+    .get(sourceRunId) as { adopted_run_id: string } | undefined
+  if (sourceGraph) {
+    return false
+  }
+  if (adoption) {
+    return Boolean(
+      db.prepare('SELECT 1 FROM runs WHERE id = ? AND legacy = 0').get(adoption.adopted_run_id)
+    )
+  }
+  return true
+}
+
 function hasCompletePostV6Schema(db: Database.Database): boolean {
   return (
     POST_V6_COLUMNS.every(([table, column]) => hasOrchestrationColumn(db, table, column)) &&
     POST_V6_INDEXES.every((index) => hasOrchestrationIndex(db, index)) &&
-    messagesAllowQuestions(db)
+    messagesAllowQuestions(db) &&
+    hasConsistentLegacyAdoption(db)
   )
 }
 
@@ -59,9 +96,12 @@ export function resolveOrchestrationMigrationStartVersion(
   storedVersion: number,
   schemaVersion: number
 ): number {
-  if (storedVersion >= schemaVersion || hasCompletePostV6Schema(db)) {
+  if (storedVersion > schemaVersion) {
+    return storedVersion
+  }
+  if (hasCompletePostV6Schema(db)) {
     return storedVersion
   }
   // Why: version-skewed pre-Run databases can claim the post-v6 range while retaining v6 tables.
-  return Math.min(storedVersion, 6)
+  return Math.min(storedVersion, schemaVersion, 6)
 }

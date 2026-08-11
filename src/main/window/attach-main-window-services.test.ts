@@ -12,6 +12,7 @@ const {
   systemPreferencesAskForMediaAccessMock,
   systemPreferencesGetMediaAccessStatusMock,
   registerRepoHandlersMock,
+  setRepoRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
@@ -33,6 +34,7 @@ const {
   systemPreferencesAskForMediaAccessMock: vi.fn(),
   systemPreferencesGetMediaAccessStatusMock: vi.fn(),
   registerRepoHandlersMock: vi.fn(),
+  setRepoRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
@@ -66,7 +68,8 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../ipc/repos', () => ({
-  registerRepoHandlers: registerRepoHandlersMock
+  registerRepoHandlers: registerRepoHandlersMock,
+  setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
 }))
 
 vi.mock('../ipc/worktrees', () => ({
@@ -160,8 +163,10 @@ function createMainWindow(
   }
 }
 
-function createStore(): Store & { flush: MockFn } {
-  return { flush: vi.fn() } as Store & { flush: MockFn }
+function createStore(): Store & { flushPendingAsync: MockFn } {
+  return {
+    flushPendingAsync: vi.fn(() => Promise.resolve())
+  } as Store & { flushPendingAsync: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -211,6 +216,7 @@ describe('attachMainWindowServices', () => {
     systemPreferencesAskForMediaAccessMock.mockReset()
     systemPreferencesGetMediaAccessStatusMock.mockReset()
     registerRepoHandlersMock.mockReset()
+    setRepoRemoteClientNotifierMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
     hydrateLocalPtyRegistryAtBootMock.mockReset()
@@ -222,6 +228,15 @@ describe('attachMainWindowServices', () => {
     releasePendingTccPromptNoticeMock.mockReset()
     systemPreferencesAskForMediaAccessMock.mockResolvedValue(true)
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
+  })
+
+  // #11994: without this wiring, host-local repo IPC mutations never reach paired clients.
+  it('gives the repo IPC handlers the runtime so repo changes reach paired clients', () => {
+    const runtime = createRuntime()
+
+    attachMainWindowServices(createMainWindow() as never, createStore(), runtime as never)
+
+    expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
@@ -299,7 +314,7 @@ describe('attachMainWindowServices', () => {
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
     expect(onBeforeUpdateQuit).toHaveBeenCalledTimes(1)
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
   it('flushes the store before update quit when no cleanup is injected', async () => {
@@ -311,7 +326,7 @@ describe('attachMainWindowServices', () => {
     await fireReadyToShow(mainWindow)
     await setupAutoUpdaterMock.mock.calls[0][1].onBeforeQuit()
 
-    expect(store.flush).toHaveBeenCalledTimes(1)
+    expect(store.flushPendingAsync).toHaveBeenCalledTimes(1)
   })
 
   it('replaces the TCC handlers when the main window is reattached', () => {
@@ -828,5 +843,74 @@ describe('attachMainWindowServices', () => {
 
     await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
     expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+  })
+
+  it('requires an exact renderer identity receipt for recovered worker reveals', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          tabId: string
+          leafId: string
+          expectedProcessIdentity: { terminalHandle: string; incarnationId: string }
+        }
+      ) => Promise<unknown>
+    }
+    const opts = {
+      ptyId: 'pty-worker',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      expectedProcessIdentity: {
+        terminalHandle: 'term_worker',
+        incarnationId: 'inc-worker'
+      }
+    }
+    const mismatch = notifier.revealTerminalSession('worktree-1', opts)
+    const mismatchPayload = sendMock.mock.calls.at(-1)?.[1]
+    const mismatchHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    mismatchHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: mismatchPayload.requestId,
+        tabId: 'tab-worker',
+        identity: {
+          worktreeId: 'worktree-1',
+          tabId: 'tab-worker',
+          leafId: 'leaf-worker',
+          ptyId: 'pty-replacement'
+        }
+      }
+    )
+    await expect(mismatch).rejects.toThrow('terminal_reveal_identity_mismatch')
+
+    const exact = notifier.revealTerminalSession('worktree-1', opts)
+    const exactPayload = sendMock.mock.calls.at(-1)?.[1]
+    const exactHandler = onMock.mock.calls.findLast(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    const identity = {
+      worktreeId: 'worktree-1',
+      tabId: 'tab-worker',
+      leafId: 'leaf-worker',
+      ptyId: 'pty-worker'
+    }
+    exactHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: exactPayload.requestId, tabId: 'tab-worker', identity }
+    )
+    await expect(exact).resolves.toEqual({
+      tabId: 'tab-worker',
+      title: undefined,
+      identity
+    })
   })
 })

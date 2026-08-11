@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  humanizeTerminalError,
   isSshReconnectOwnedTerminalError,
   shouldOfferDaemonRestart,
   stripSshReconnectOwnedErrorLines
@@ -7,6 +8,9 @@ import {
 
 const SSH_FAILURE =
   "SSH connection failed: Error invoking remote method 'ssh:connect': Error: Relay package for linux-x64 not found locally."
+// Relay loss reaches reportError already IPC-wrapped, so the marker is mid-string.
+const RELAY_LOST =
+  "Error invoking remote method 'pty:attach': Error: SSH connection lost, reconnecting..."
 
 describe('isSshReconnectOwnedTerminalError', () => {
   it('matches raw ssh:connect failures and inactive-host messages', () => {
@@ -22,9 +26,32 @@ describe('isSshReconnectOwnedTerminalError', () => {
     ).toBe(true)
   })
 
+  it('matches an IPC-wrapped relay-loss message', () => {
+    expect(isSshReconnectOwnedTerminalError(RELAY_LOST)).toBe(true)
+    expect(isSshReconnectOwnedTerminalError('SSH connection lost, reconnecting...')).toBe(true)
+  })
+
   it('leaves unrelated terminal errors for the toast', () => {
     expect(isSshReconnectOwnedTerminalError('Paste failed.')).toBe(false)
     expect(isSshReconnectOwnedTerminalError('node-pty: open_slave failed: EMFILE')).toBe(false)
+  })
+})
+
+describe('humanizeTerminalError', () => {
+  it('replaces the pane-owner-unverified code with actionable copy', () => {
+    const humanized = humanizeTerminalError('terminal_pane_owner_unverified')
+    expect(humanized).not.toContain('terminal_pane_owner_unverified')
+    expect(humanized).toContain('Reopen this pane to retry')
+  })
+
+  it('humanizes an IPC-wrapped pane-owner-unverified error', () => {
+    const wrapped =
+      "Error invoking remote method 'pty:spawn': Error: terminal_pane_owner_unverified"
+    expect(humanizeTerminalError(wrapped)).not.toContain('terminal_pane_owner_unverified')
+  })
+
+  it('leaves other errors untouched', () => {
+    expect(humanizeTerminalError('Paste failed.')).toBe('Paste failed.')
   })
 })
 
@@ -47,6 +74,11 @@ describe('stripSshReconnectOwnedErrorLines', () => {
         `${SSH_FAILURE}\nPaste failed.\nSSH connection is not active. Use the reconnect dialog.`
       )
     ).toBe('Paste failed.')
+  })
+
+  it('drops an IPC-wrapped relay-loss line and keeps the rest', () => {
+    expect(stripSshReconnectOwnedErrorLines(RELAY_LOST)).toBeNull()
+    expect(stripSshReconnectOwnedErrorLines(`Paste failed.\n${RELAY_LOST}`)).toBe('Paste failed.')
   })
 
   it('leaves an error with no SSH text untouched', () => {

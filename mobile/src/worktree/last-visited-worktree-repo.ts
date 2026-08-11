@@ -2,7 +2,7 @@ import { getRepoIdFromMobileWorktreeId } from '../session/mobile-session-route-h
 
 export const LAST_VISITED_WORKTREE_STORAGE_KEY = 'orca:last-visited-worktree'
 
-type LastVisitedWorktreeRecord = {
+export type LastVisitedWorktreeRecord = {
   hostId: string
   worktreeId: string
 }
@@ -11,7 +11,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
 }
 
-function readLastVisitedWorktreeRecord(raw: string | null): LastVisitedWorktreeRecord | null {
+/** Why exported: home drives its Resume card — and therefore a navigation — off this record,
+ *  so a truncated or older-shaped payload must read as "no history" rather than reach the
+ *  router as a half-built route. */
+export function readLastVisitedWorktreeRecord(
+  raw: string | null
+): LastVisitedWorktreeRecord | null {
   if (!raw) {
     return null
   }
@@ -20,7 +25,10 @@ function readLastVisitedWorktreeRecord(raw: string | null): LastVisitedWorktreeR
     if (
       !isRecord(parsed) ||
       typeof parsed.hostId !== 'string' ||
-      typeof parsed.worktreeId !== 'string'
+      typeof parsed.worktreeId !== 'string' ||
+      // An empty id builds a route to nowhere, so it is history we cannot act on.
+      parsed.hostId === '' ||
+      parsed.worktreeId === ''
     ) {
       return null
     }

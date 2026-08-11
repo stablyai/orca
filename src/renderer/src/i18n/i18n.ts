@@ -95,6 +95,24 @@ export async function setRendererUiLanguage(language: UiLanguage): Promise<void>
 const registeredPluginLanguages = new Set<string>()
 let pluginLanguagePacks: readonly PluginLanguagePackRegistration[] = []
 
+/**
+ * BCP-47 tag for `Intl` formatting. Plugin catalogs register under a synthetic
+ * `plugin<hex>` resource language that `Intl` rejects, so fall back to the tag
+ * the pack declares (for example `ru-RU`) and finally to the default locale.
+ */
+export function getIntlLocale(): string {
+  const active = i18n.language
+  const pack = pluginLanguagePacks.find((entry) => entry.resourceLanguage === active)
+  const candidate = pack?.locale ?? active
+  try {
+    // Why: an empty result means Intl has no data for the tag, so fall through
+    // to the default locale instead of letting Intl pick the runtime one.
+    return Intl.DateTimeFormat.supportedLocalesOf(candidate)[0] ?? DEFAULT_LOCALE
+  } catch {
+    return DEFAULT_LOCALE
+  }
+}
+
 export function resolveRendererResourceLanguage(language: string): string {
   return pluginLanguagePacks.find((pack) => pack.id === language)?.resourceLanguage ?? language
 }

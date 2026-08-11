@@ -6,12 +6,13 @@ import { createTestStore, makeTab } from './store-test-helpers'
 
 const PI_COMPATIBLE_CASES = [
   { agent: 'pi' as const, label: 'Pi' },
-  { agent: 'omp' as const, label: 'OMP' }
+  { agent: 'omp' as const, label: 'OMP' },
+  { agent: 'prime-agent' as const, label: 'Prime Agent' }
 ]
 
-function makePiCompatibleProviderSession(agent: 'pi' | 'omp') {
+function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
   const session = { key: 'session_id' as const, id: `${agent}-session-1` }
-  return agent === 'pi' ? { ...session, transcriptPath: '/tmp/pi-session-1.jsonl' } : session
+  return agent === 'omp' ? session : { ...session, transcriptPath: `/tmp/${agent}-session-1.jsonl` }
 }
 
 describe('recordAgentProviderSession', () => {
@@ -41,7 +42,87 @@ describe('recordAgentProviderSession', () => {
     )
   })
 
-  it('uses the session file as part of Pi resume ownership only', () => {
+  // Why: mobile Chat UI keys its transcript subscription on providerSession.id, so a
+  // metadata-less end-of-turn `done` used to blank the chat every turn (#10630).
+  it('keeps the provider session when the turn completes without session metadata', () => {
+    const store = createTestStore()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'summarize the diff', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        undefined,
+        { providerSession }
+      )
+    store.getState().setAgentStatus('tab-1:leaf-1', {
+      state: 'done',
+      prompt: 'summarize the diff',
+      agentType: 'claude'
+    })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
+      providerSession
+    )
+  })
+
+  // Why: `done` is the resting state, and both OSC 9999 repaints and reconnect snapshot
+  // replays re-deliver a metadata-less `done` onto an already-done row. Retaining only the
+  // first one still blanked the chat the moment a second landed (#10630).
+  it('keeps the provider session across repeated metadata-less done pings', () => {
+    const store = createTestStore()
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'summarize the diff', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        undefined,
+        { providerSession }
+      )
+    for (const prompt of ['summarize the diff', 'summarize the diff again']) {
+      store
+        .getState()
+        .setAgentStatus('tab-1:leaf-1', { state: 'done', prompt, agentType: 'claude' })
+    }
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toEqual(
+      providerSession
+    )
+  })
+
+  // Why: retention stops at the turn boundary. A metadata-less `working` after `done` starts
+  // fresh work, so the finished session must not ride along into it.
+  it('does not carry a completed session into the next turn', () => {
+    const store = createTestStore()
+
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'first', agentType: 'claude' },
+        'Claude',
+        { updatedAt: 10, stateStartedAt: 10 },
+        undefined,
+        { providerSession: { key: 'session_id' as const, id: 'claude-session-1' } }
+      )
+    store
+      .getState()
+      .setAgentStatus('tab-1:leaf-1', { state: 'done', prompt: 'first', agentType: 'claude' })
+    store
+      .getState()
+      .setAgentStatus('tab-1:leaf-1', { state: 'working', prompt: 'second', agentType: 'claude' })
+
+    expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toBeUndefined()
+  })
+
+  it('uses the session file as part of transcript-based resume ownership only', () => {
     const base = {
       paneKey: 'tab-1:leaf-1',
       tabId: 'tab-1',
@@ -53,7 +134,7 @@ describe('recordAgentProviderSession', () => {
       origin: 'live' as const
     }
     const makeRecord = (
-      agent: 'pi' | 'claude',
+      agent: 'pi' | 'prime-agent' | 'claude',
       transcriptPath: string
     ): SleepingAgentSessionRecord => ({
       ...base,
@@ -63,6 +144,9 @@ describe('recordAgentProviderSession', () => {
 
     expect(getProviderSessionClaimKey(makeRecord('pi', '/tmp/first.jsonl'))).not.toBe(
       getProviderSessionClaimKey(makeRecord('pi', '/tmp/second.jsonl'))
+    )
+    expect(getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/first.jsonl'))).not.toBe(
+      getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/second.jsonl'))
     )
     expect(getProviderSessionClaimKey(makeRecord('claude', '/tmp/first.jsonl'))).toBe(
       getProviderSessionClaimKey(makeRecord('claude', '/tmp/second.jsonl'))
@@ -179,6 +263,64 @@ describe('recordAgentProviderSession', () => {
 
     expect(
       store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig
+    ).toBeUndefined()
+  })
+
+  it('preserves the legacy resume fence only for the same Pi session identity', () => {
+    const store = createTestStore()
+    const makeRecord = (transcriptPath: string): SleepingAgentSessionRecord => ({
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'pi',
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-1',
+        transcriptPath
+      },
+      prompt: '',
+      state: 'working',
+      capturedAt: 10,
+      updatedAt: 10,
+      automaticResumeBlockedBy: 'legacy-orchestration-worker',
+      origin: 'live'
+    })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        'tab-1:leaf-1': makeRecord('/tmp/pi-session-1.jsonl')
+      }
+    } as Partial<AppState>)
+
+    store.getState().recordAgentProviderSession(
+      'tab-1:leaf-1',
+      'pi',
+      {
+        key: 'session_id',
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-1.jsonl'
+      },
+      { updatedAt: 20 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
+    )
+
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.automaticResumeBlockedBy
+    ).toBe('legacy-orchestration-worker')
+
+    store.getState().recordAgentProviderSession(
+      'tab-1:leaf-1',
+      'pi',
+      {
+        key: 'session_id',
+        id: 'pi-session-1',
+        transcriptPath: '/tmp/pi-session-2.jsonl'
+      },
+      { updatedAt: 30 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
+    )
+
+    expect(
+      store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.automaticResumeBlockedBy
     ).toBeUndefined()
   })
 

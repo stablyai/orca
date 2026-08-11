@@ -15,8 +15,6 @@ export type TerminalCustomTheme = {
   unsupportedFeatures?: string[]
 }
 
-export type TerminalThemeSelection = string
-
 export type WarpThemeImportSource =
   | { kind: 'auto' }
   | { kind: 'chooseFile' }

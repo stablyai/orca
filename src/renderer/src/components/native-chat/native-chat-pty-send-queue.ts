@@ -9,6 +9,7 @@
 export type NativeChatPtySendQueueHandle = {
   cancel: () => void
   settleAfterMs: number
+  settled: Promise<void>
   bodyStarted: () => boolean
   finished: () => boolean
 }
@@ -97,6 +98,16 @@ export function enqueueNativeChatPtySend(
   const timers: ReturnType<typeof setTimeout>[] = []
   let release: (() => void) | null = null
 
+  const finishEntry = (): void => {
+    if (finished) {
+      return
+    }
+    finished = true
+    const resolve = release
+    release = null
+    resolve?.()
+  }
+
   const delay = (ms: number, fn: () => void): void => {
     const timer = setTimeout(() => {
       if (!cancelled) {
@@ -106,19 +117,17 @@ export function enqueueNativeChatPtySend(
     timers.push(timer)
   }
 
-  const markFinished = (): void => {
-    finished = true
-  }
-
   const markSubmitted = (): void => {
     submitted = true
+    finishEntry()
   }
 
   const execute = (): Promise<void> =>
     new Promise<void>((resolve) => {
       release = resolve
       if (cancelled) {
-        markFinished()
+        release = null
+        finished = true
         resolve()
         return
       }
@@ -126,17 +135,7 @@ export function enqueueNativeChatPtySend(
       start({ isCancelled: () => cancelled, delay, markSubmitted })
       if (durationMs <= 0) {
         markSubmitted()
-        markFinished()
-        resolve()
-        return
       }
-      // Why: always release after the declared duration so a cancel mid-flight
-      // cannot stall the per-pty queue forever.
-      const done = setTimeout(() => {
-        markFinished()
-        resolve()
-      }, durationMs)
-      timers.push(done)
     })
 
   const runPromise =
@@ -148,7 +147,7 @@ export function enqueueNativeChatPtySend(
 
   const settleQueueEntry = (): void => {
     state.depth = Math.max(0, state.depth - 1)
-    markFinished()
+    finished = true
     dropHandle()
     // Why: drop the per-pty record once nothing is in flight so the map does not
     // accumulate one permanent entry per pty over a long, multi-pane session.
@@ -157,7 +156,8 @@ export function enqueueNativeChatPtySend(
     }
   }
 
-  state.tail = runPromise.then(settleQueueEntry, settleQueueEntry)
+  const settled = runPromise.then(settleQueueEntry, settleQueueEntry)
+  state.tail = settled
 
   const handle: NativeChatPtySendQueueHandle = {
     cancel: () => {
@@ -169,20 +169,19 @@ export function enqueueNativeChatPtySend(
         clearTimeout(timer)
       }
       const shouldClear = bodyStarted && !submitted
-      markFinished()
       // Why: refund only THIS sequence's charged window rather than collapsing
       // freeAt to now — later queued sends still hold the line, so a blanket
       // reset would understate the next enqueue's settle time and let a send
       // card drop while a queued Enter is still pending.
       state.freeAt = Math.max(Date.now(), state.freeAt - Math.max(0, durationMs))
-      release?.()
-      release = null
+      finishEntry()
       dropHandle()
       if (shouldClear) {
         options?.onCancelUnsubmitted?.()
       }
     },
     settleAfterMs,
+    settled,
     bodyStarted: () => bodyStarted,
     finished: () => finished
   }

@@ -4,6 +4,7 @@ import type {
   ProjectGroupHeaderDragBucketKey,
   ProjectGroupHeaderDragRect
 } from './project-group-header-drop'
+import { REPO_HEADER_ACTION_SELECTOR } from './project-header-drag-contract'
 import type { ProjectGroup } from '../../../../shared/types'
 
 export type ProjectGroupDragState = {
@@ -50,9 +51,6 @@ export const PROJECT_GROUP_HEADER_DRAG_THRESHOLD_PX = 4
 
 const PROJECT_GROUP_HEADER_DRAG_HANDLE_SELECTOR = '[data-project-group-header-drag-handle]'
 
-const PROJECT_GROUP_HEADER_ACTION_SELECTOR =
-  '[data-repo-header-action], [data-repo-header-collapse-affordance], button, a, input, textarea, select, [contenteditable=""], [contenteditable="true"]'
-
 export function isProjectGroupHeaderDragHandleTarget(
   target: EventTarget | null,
   currentTarget: HTMLElement
@@ -76,7 +74,5 @@ export function isProjectGroupHeaderActionTarget(
   if (!(target instanceof Element) || target === currentTarget) {
     return false
   }
-  return (
-    currentTarget.contains(target) && target.closest(PROJECT_GROUP_HEADER_ACTION_SELECTOR) !== null
-  )
+  return currentTarget.contains(target) && target.closest(REPO_HEADER_ACTION_SELECTOR) !== null
 }

@@ -8,6 +8,16 @@ describe('codex restart notice key', () => {
         previousAccountLabel: 'Account A',
         nextAccountLabel: 'Account B'
       })
-    ).toBe('Account A\u0000Account B')
+    ).toBe('account\u0000Account A\u0000Account B')
+  })
+
+  it('distinguishes a home-route notice from equal account labels', () => {
+    expect(
+      buildCodexRestartNoticeKey({
+        previousAccountLabel: 'System default',
+        nextAccountLabel: 'System default',
+        homeRouteChanged: true
+      })
+    ).toBe('route\u0000System default\u0000System default')
   })
 })

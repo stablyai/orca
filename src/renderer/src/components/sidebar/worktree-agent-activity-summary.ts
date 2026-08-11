@@ -107,10 +107,17 @@ function getWorktreeAgentActivitySummaries(
       runtimeAgentOrchestrationByPaneKey?.[paneKey]
     )
     const worktreeId = resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId, orchestration)
-    if (!worktreeId || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!worktreeId) {
       continue
     }
     const summary = summaryForWorktree(worktreeId)
+    if (entry.restoredUnconfirmed) {
+      addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+      continue
+    }
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      continue
+    }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)

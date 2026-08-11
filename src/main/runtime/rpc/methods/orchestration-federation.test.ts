@@ -8,8 +8,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { RpcDispatcher } from '../dispatcher'
-import type { RpcRequest } from '../core'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { createFederationWorkerStartRequest as startRequest } from './orchestration-federation-test-request'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -95,26 +95,6 @@ describe('orchestration federation', () => {
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     })
     return homeDb.createTask({ spec: 'Audit Windows behavior', runId: run.id })
-  }
-
-  function startRequest(taskId: string, overrides: Record<string, unknown> = {}): RpcRequest {
-    return {
-      id: 'rpc_worker_start',
-      authToken: 'coordinator-token',
-      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-      orchestrationRequestId: 'request_windows_worker',
-      method: 'orchestration.workerStart',
-      params: {
-        task: taskId,
-        from: 'term_coord',
-        on: 'windows',
-        worktree: 'new-top-level',
-        repo: 'id:windows-repo',
-        name: 'windows-audit',
-        agent: 'codex',
-        ...overrides
-      }
-    }
   }
 
   function configureWorkerRuntime(runtime: OrcaRuntimeService): void {
@@ -211,23 +191,42 @@ describe('orchestration federation', () => {
       remote_worktree_id: 'repo::windows-worktree',
       remote_terminal_handle: 'term_windows_worker'
     })
-    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+    const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)
+    expect(attachment).toMatchObject({
       task_id: task.id,
       protocol_version: 2,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
     })
-    expect(JSON.parse(workerDb.getRemoteDispatchAttachment(dispatch.id)?.effects ?? '[]')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-      ])
-    )
+    const fx = JSON.parse(attachment?.effects ?? '[]') as { kind?: string; state?: string }[]
+    expect(fx.some((x) => x.kind === 'dispatch_input' && x.state === 'accepted')).toBe(true)
     expect(workerDb.listTasks()).toHaveLength(0)
+    const create = vi.mocked(workerRuntime.createManagedWorktree).mock.calls[0]?.[0]
+    expect([create.activate, create.runHooks]).toEqual([false, false])
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)
     )
+  })
+
+  it('does not report remotely rejected preferences as effective', async () => {
+    const task = createHomeTask()
+
+    const response = await homeDispatcher.dispatch(
+      startRequest(task.id, { agent: 'grok', model: 'unsupported-model' })
+    )
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'failed',
+        launch: {
+          requested: { agent: 'grok', model: 'unsupported-model', effort: null },
+          effective: null
+        }
+      }
+    })
   })
 
   it('preserves wait-for-setup gating on the connected worker server', async () => {
@@ -509,7 +508,7 @@ describe('orchestration federation', () => {
   it('retries a lost relay acknowledgment without duplicating the home message', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
+    homeRuntime.stopOrchestrationFederationRelay()
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     await workerDispatcher.dispatch({
@@ -527,6 +526,7 @@ describe('orchestration federation', () => {
       }
     })
     loseNextAckResponse = true
+    const remoteCall = vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer')
 
     await expect(homeRuntime.syncOrchestrationFederation()).resolves.toBeUndefined()
     await homeRuntime.syncOrchestrationFederation()
@@ -536,7 +536,10 @@ describe('orchestration federation', () => {
         .getRunMailboxHistory(task.run_id, 10)
         .filter((message) => message.subject === 'Checkpoint')
     ).toHaveLength(1)
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(1)
+    const acknowledgments = remoteCall.mock.calls.filter(
+      ([, method]) => method === 'orchestration.federationAck'
+    )
+    expect(acknowledgments).toHaveLength(2)
   })
 
   it('rejects a reordered relay gap, then converges without loss or duplication', async () => {

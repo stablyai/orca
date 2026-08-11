@@ -1115,6 +1115,7 @@ describe('repos:addRemote', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.removeProject.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
     mockGitProvider.isGitRepoAsync.mockReset()
@@ -2064,6 +2065,76 @@ describe('repos:add + repos:clone', () => {
         host: 'github.acme-corp.com'
       }
     })
+  })
+
+  it('sets up a folder when the selected project exists only on another host', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    mockStore.updateRepo.mockImplementation((id, updates) => {
+      const repo = added.find((entry) => entry.id === id)
+      if (!repo) {
+        return null
+      }
+      Object.assign(repo, updates)
+      return { ...repo }
+    })
+    mockStore.getProjects.mockImplementation(() => {
+      const repo = added.find((entry) => 'upstream' in entry)
+      return repo
+        ? [
+            {
+              id: 'github:github.acme.test/acme/orca',
+              displayName: 'Orca',
+              providerIdentity: {
+                provider: 'github',
+                owner: 'acme',
+                repo: 'orca',
+                host: 'github.acme.test'
+              }
+            }
+          ]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:github.acme.test/acme/orca',
+      projectProviderIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme.test'
+      },
+      hostId: 'local',
+      path: '/tmp/orca-local',
+      kind: 'git'
+    })
+
+    expect(added[0]?.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.acme.test'
+    })
+    expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
+  })
+
+  it('rolls back a new repo when the supplied identity does not match the project', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'github:acme/orca',
+        projectProviderIdentity: { provider: 'github', owner: 'other', repo: 'orca' },
+        hostId: 'local',
+        path: '/tmp/mismatched-project',
+        kind: 'git'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.removeProject).toHaveBeenCalledWith(added[0]?.id)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {

@@ -14,6 +14,7 @@ import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custo
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -23,6 +24,10 @@ import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-con
 import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'
+import {
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../../../../shared/mobile-pairing-custom-address'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -105,6 +110,16 @@ function normalizeSettingsUpdates(
       updates.terminalScrollbackRows
     )
   }
+  if ('mobilePairingCustomAddress' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+      updates.mobilePairingCustomAddress
+    )
+  }
+  if ('mobilePairingCustomAddresses' in updates) {
+    sanitizedUpdates.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+      updates.mobilePairingCustomAddresses
+    )
+  }
   return sanitizedUpdates
 }
 
@@ -119,6 +134,17 @@ async function persistSettingsUpdates(
   set((state) => ({
     settings: (nextSettings as GlobalSettings | undefined) ?? state.settings
   }))
+}
+
+/** Every known host has a recorded status entry, and no entry survives for a host that is gone. */
+function hasCompleteRuntimeStatusCoverage(
+  runtimeEnvironments: AppState['runtimeEnvironments'],
+  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+): boolean {
+  return (
+    new Set(runtimeEnvironments.map(({ id }) => id)).size === runtimeStatusByEnvironmentId.size &&
+    runtimeEnvironments.every(({ id }) => runtimeStatusByEnvironmentId.has(id))
+  )
 }
 
 async function verifyRuntimeEnvironmentReachable(environmentId: string | null): Promise<void> {
@@ -144,12 +170,20 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     try {
       const settings = await window.api.settings.get()
       set({ settings })
-      // Why: best-effort boot probe so sidebar host pickers show live runtime
-      // health before the settings pane is ever opened. Fire-and-forget to keep
-      // startup off the network round-trips.
-      void get().hydrateRuntimeEnvironmentStatuses()
     } catch (err) {
       console.error('Failed to fetch settings:', err)
+    }
+    const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
+      get()
+    // Why: settings refreshes are frequent, but only incomplete host coverage needs
+    // the all-host boot probe. A recorded null still means the host was checked.
+    if (
+      !runtimeEnvironmentCatalogHydrated ||
+      !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
+      // Why: coverage is blind to catalog edits from another client or the orca CLI.
+      isRuntimeCatalogListingStale()
+    ) {
+      void get().hydrateRuntimeEnvironmentStatuses()
     }
   },
 

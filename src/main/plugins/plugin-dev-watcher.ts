@@ -20,6 +20,13 @@ const subscribePluginPath: SubscribePluginPath = (path, onEvent, onInterruption)
     }
   )
 
+// Why: Parcel unsubscribe rejects when the watch root is already gone (common
+// in tests that rm temp dirs). Fire-and-forget callers must not leave that as
+// an unhandled rejection that fails the Vitest process.
+function releaseSubscription(subscription: WatcherProcessSubscription): void {
+  void subscription.unsubscribe().catch(() => undefined)
+}
+
 /** Owns debounced manifest/panel refresh watchers for mutable dev plugins. */
 export class PluginDevWatcher {
   private readonly subscriptions: WatcherProcessSubscription[] = []
@@ -40,7 +47,7 @@ export class PluginDevWatcher {
         failedBeforeReady = true
         if (subscription) {
           this.removeSubscription(subscription)
-          void subscription.unsubscribe()
+          releaseSubscription(subscription)
         }
         onWatcherError?.()
         this.scheduleRefresh(refresh)
@@ -65,7 +72,7 @@ export class PluginDevWatcher {
         .then((created) => {
           subscription = created
           if (generation !== this.generation || failedBeforeReady) {
-            void created.unsubscribe()
+            releaseSubscription(created)
             return
           }
           this.subscriptions.push(created)
@@ -85,7 +92,7 @@ export class PluginDevWatcher {
       this.refreshTimer = null
     }
     for (const subscription of this.subscriptions.splice(0)) {
-      void subscription.unsubscribe()
+      releaseSubscription(subscription)
     }
   }
 

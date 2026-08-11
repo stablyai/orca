@@ -107,6 +107,8 @@ describe('createProjectHeaderDragSession', () => {
   })
 
   it('does not arm a drag session when pressing an svg icon inside an action button', () => {
+    // Why: the row is still the drag handle for hit-testing; action targets must
+    // be filtered even though closest(drag-handle) would match the row.
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')
     const actionButton = document.createElement('button')
@@ -136,5 +138,71 @@ describe('createProjectHeaderDragSession', () => {
     })
 
     expect(session).toBeNull()
+  })
+
+  it('does not arm a drag session when pressing the actions overlay even if the row is the drag handle', () => {
+    // Why: the row keeps data-repo-header-drag-handle so indent/padding can arm
+    // drag; actions must still be excluded via data-repo-header-actions.
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    const dragSurface = document.createElement('div')
+    const label = document.createElement('span')
+    dragSurface.append(label)
+    const actions = document.createElement('div')
+    actions.setAttribute('data-repo-header-actions', '')
+    header.append(dragSurface, actions)
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+
+    const repoById = new Map<string, Repo>([['repo-a', createRepo('repo-a')]])
+    const sidebarRepoHeaderIdsByBucket = new Map([['ungrouped', ['repo-a', 'repo-b']]])
+
+    const sessionFromActions = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: actions,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+    const sessionFromLabel = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 2,
+        clientX: 10,
+        clientY: 20,
+        target: label,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+    const sessionFromRowPadding = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 3,
+        clientX: 10,
+        clientY: 20,
+        target: header,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repoId: 'repo-a',
+      repoById,
+      sidebarRepoHeaderIdsByBucket,
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(sessionFromActions).toBeNull()
+    expect(sessionFromLabel?.repoId).toBe('repo-a')
+    // Why: target === currentTarget is treated as the empty row (not an action).
+    expect(sessionFromRowPadding?.repoId).toBe('repo-a')
   })
 })

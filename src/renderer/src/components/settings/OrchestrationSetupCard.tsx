@@ -77,7 +77,7 @@ export function OrchestrationSetupCard(props: {
       }}
       onRecheck={skill.refresh}
       freshnessSkillName={
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCHESTRATION_SKILL_NAME
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
       }
     />
   )

@@ -511,6 +511,53 @@ describe('attachEditorAutosaveController', () => {
     }
   })
 
+  it('drops an autosave already queued when owner migration starts', async () => {
+    let releaseFirstWrite!: () => void
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    const writeFile = vi.fn().mockReturnValueOnce(firstWrite).mockResolvedValue(undefined)
+    const eventTarget = new EventTarget()
+    vi.stubGlobal('window', {
+      addEventListener: eventTarget.addEventListener.bind(eventTarget),
+      removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
+      dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+      api: { fs: { writeFile } }
+    } satisfies WindowStub)
+
+    const store = createEditorStore()
+    store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      store.getState().setEditorDraft('/repo/file.ts', 'first autosave')
+      store.getState().markFileDirty('/repo/file.ts', true)
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(writeFile).toHaveBeenCalledTimes(1)
+
+      store.getState().setEditorDraft('/repo/file.ts', 'queued autosave')
+      store.getState().markFileDirty('/repo/file.ts', true)
+      await vi.advanceTimersByTimeAsync(1000)
+      store.getState().setRestoredEditorOwnerMigrationPending('/repo/file.ts', true)
+      releaseFirstWrite()
+      for (let index = 0; index < 6; index += 1) {
+        await Promise.resolve()
+      }
+
+      expect(writeFile).toHaveBeenCalledTimes(1)
+      expect(store.getState().editorDrafts['/repo/file.ts']).toBe('queued autosave')
+    } finally {
+      cleanup()
+    }
+  })
+
   it('leaves dirty editor drafts ready for the combined hot-exit checkpoint', async () => {
     const writeFile = vi.fn().mockResolvedValue(undefined)
     const setSync = vi.fn()

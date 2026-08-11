@@ -45,6 +45,121 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
     ).toBe('c:\\users\\example\\.codex')
   })
 
+  it('accepts an extended-length Windows rollout and preserves its original path', async () => {
+    const homePath = 'C:\\Users\\Example\\.codex'
+    const transcriptPath =
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId: 'session-a',
+        transcriptPath,
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
+        fileIsRegular: (filePath) => filePath === transcriptPath
+      })
+    ).resolves.toEqual({ homePath, transcriptPath })
+  })
+
+  it('rejects unsafe or unrelated Windows namespace paths before probing files', () => {
+    const fileIsRegular = vi.fn((): boolean => true)
+    const trustedCodexHomes = ['C:\\Users\\Example\\.codex']
+    const rejectedPaths = [
+      '\\\\?\\D:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+      '\\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy1\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+      '\\\\?\\Volume{00000000-0000-0000-0000-000000000000}\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+      '\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a:stream.jsonl',
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\..\\rollout-a.jsonl'
+    ]
+
+    for (const transcriptPath of rejectedPaths) {
+      expect(
+        resolveTrustedCodexSessionResumeHome({
+          transcriptPath,
+          trustedCodexHomes,
+          fileIsRegular
+        })
+      ).toBeNull()
+    }
+    expect(fileIsRegular).not.toHaveBeenCalled()
+  })
+
+  it('rejects a missing or non-regular extended-length rollout', () => {
+    expect(
+      resolveTrustedCodexSessionResumeHome({
+        transcriptPath:
+          '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+        trustedCodexHomes: ['C:\\Users\\Example\\.codex'],
+        fileIsRegular: () => false
+      })
+    ).toBeNull()
+  })
+
+  // Why: the sessions root is folded too, so the home side must accept the extended spelling.
+  it('accepts a normal-form rollout under an extended-length trusted home', () => {
+    const homePath = '\\\\?\\C:\\Users\\Example\\.codex'
+    expect(
+      resolveTrustedCodexSessionResumeHome({
+        transcriptPath: 'C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-a.jsonl',
+        trustedCodexHomes: [homePath],
+        fileIsRegular: () => true
+      })
+    ).toBe(homePath)
+  })
+
+  // Why: the .zst sibling is derived from the persisted path, so a folded
+  // comparison copy must never leak into the probed or returned path.
+  it('follows a compressed extended-length rollout without losing the extended spelling', async () => {
+    const homePath = 'C:\\Users\\Example\\.codex'
+    const plainPath =
+      '\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-session.jsonl'
+    const compressedPath = `${plainPath}.zst`
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId: 'session-a',
+        transcriptPath: plainPath,
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
+        fileIsRegular: (filePath) => filePath === compressedPath
+      })
+    ).resolves.toEqual({ homePath, transcriptPath: compressedPath })
+  })
+
+  // Why: the id scan is a second call site of the same check, once per directory entry.
+  it('accepts extended-length scan entries but not device-namespace entries', async () => {
+    const sessionId = '019f81b9-19a9-7651-a8d1-352d9420bd11'
+    const homePath = 'C:\\Users\\Example\\.codex'
+    const extendedEntry = `\\\\?\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
+        fileIsRegular: () => true,
+        listSessionFiles: async function* (): AsyncIterable<string> {
+          yield extendedEntry
+        }
+      })
+    ).resolves.toEqual({ homePath, transcriptPath: extendedEntry })
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId,
+        transcriptPath: undefined,
+        trustedCodexHomes: [homePath],
+        ...withoutHomeRanking,
+        fileIsRegular: () => true,
+        listSessionFiles: async function* (): AsyncIterable<string> {
+          yield `\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
+        }
+      })
+    ).resolves.toBeNull()
+  })
+
   it('rejects paths outside trusted homes or outside the rollout layout', () => {
     const fileIsRegular = vi.fn((): boolean => true)
     expect(
@@ -219,6 +334,25 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         trustedCodexHomes: ['/managed/origin/home', '/managed/other/home'],
         ...withoutHomeRanking,
         fileIsRegular: () => false,
+        listSessionFiles
+      })
+    ).resolves.toBeNull()
+    expect(listSessionFiles).not.toHaveBeenCalled()
+  })
+
+  it('does not scan another home after rejecting extended-length provenance', async () => {
+    const listSessionFiles = vi.fn((): AsyncIterable<string> => {
+      throw new Error('must not scan')
+    })
+
+    await expect(
+      findTrustedCodexSessionResume({
+        sessionId: '019f81b9-19a9-7651-a8d1-352d9420bd11',
+        transcriptPath:
+          '\\\\?\\D:\\Other\\.codex\\sessions\\2026\\07\\20\\rollout-019f81b9-19a9-7651-a8d1-352d9420bd11.jsonl',
+        trustedCodexHomes: ['C:\\Users\\Example\\.codex'],
+        ...withoutHomeRanking,
+        fileIsRegular: () => true,
         listSessionFiles
       })
     ).resolves.toBeNull()
@@ -443,6 +577,14 @@ describe('claimsCodexRolloutLayout', () => {
   it('is true for a rollout under a home Orca no longer trusts, so resume cannot silently fall through to the selected account', () => {
     expect(
       claimsCodexRolloutLayout('/removed/account/home/sessions/2026/07/20/rollout-a.jsonl')
+    ).toBe(true)
+  })
+
+  it('is true for an ADS-shaped rollout that provenance trust rejects', () => {
+    expect(
+      claimsCodexRolloutLayout(
+        'C:\\Users\\example\\.codex\\sessions\\2026\\07\\20\\rollout-a:stream.jsonl'
+      )
     ).toBe(true)
   })
 

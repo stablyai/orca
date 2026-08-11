@@ -54,6 +54,8 @@ type RuntimeHostStatus = {
 
 type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
 
+export type ExecutionHostSource = 'configured-only' | 'include-references'
+
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
   return trimmed ? trimmed : null
@@ -177,6 +179,7 @@ function addRuntimeHost(
 export function buildExecutionHostRegistry(args: {
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  hostSource?: ExecutionHostSource
   sshTargetLabels?: ReadonlyMap<string, string>
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
   runtimeEnvironments?: readonly RuntimeEnvironmentSummary[]
@@ -219,7 +222,7 @@ export function buildExecutionHostRegistry(args: {
 
   const focusedHost = getSettingsFocusedExecutionHostId(args.settings)
   const parsedFocusedHost = parseExecutionHostId(focusedHost)
-  if (parsedFocusedHost?.kind === 'runtime') {
+  if (parsedFocusedHost?.kind === 'runtime' && args.hostSource !== 'configured-only') {
     addRuntimeHost(
       hosts,
       parsedFocusedHost.environmentId,
@@ -230,21 +233,23 @@ export function buildExecutionHostRegistry(args: {
   }
 
   const sshTargetIds = new Set<string>()
-  for (const repo of args.repos) {
-    const parsedHost = parseExecutionHostId(repo.executionHostId)
-    if (parsedHost?.kind === 'runtime') {
-      addRuntimeHost(
-        hosts,
-        parsedHost.environmentId,
-        parsedHost.environmentId,
-        undefined,
-        args.runtimeStatusByEnvironmentId
-      )
-    }
-    // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
-    // targets are hidden, so they must not become visible SSH run-target hosts here.
-    if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
-      sshTargetIds.add(parsedHost.targetId)
+  if (args.hostSource !== 'configured-only') {
+    for (const repo of args.repos) {
+      const parsedHost = parseExecutionHostId(repo.executionHostId)
+      if (parsedHost?.kind === 'runtime') {
+        addRuntimeHost(
+          hosts,
+          parsedHost.environmentId,
+          parsedHost.environmentId,
+          undefined,
+          args.runtimeStatusByEnvironmentId
+        )
+      }
+      // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
+      // targets are hidden, so they must not become visible SSH run-target hosts here.
+      if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
+        sshTargetIds.add(parsedHost.targetId)
+      }
     }
   }
   for (const targetId of args.sshTargetLabels?.keys() ?? []) {
@@ -253,10 +258,12 @@ export function buildExecutionHostRegistry(args: {
       sshTargetIds.add(normalized)
     }
   }
-  for (const repo of args.repos) {
-    const targetId = normalizeHostPart(repo.connectionId)
-    if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
-      sshTargetIds.add(targetId)
+  if (args.hostSource !== 'configured-only') {
+    for (const repo of args.repos) {
+      const targetId = normalizeHostPart(repo.connectionId)
+      if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
+        sshTargetIds.add(targetId)
+      }
     }
   }
 

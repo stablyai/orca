@@ -59,6 +59,8 @@ describe('orca computer action CLI routing', () => {
         'Finder',
         '--element-index',
         '3',
+        '--modifiers',
+        'CmdOrCtrl+Shift',
         '--json'
       ],
       '/tmp/repo/src'
@@ -73,6 +75,7 @@ describe('orca computer action CLI routing', () => {
       y: undefined,
       clickCount: undefined,
       mouseButton: undefined,
+      modifiers: 'CmdOrCtrl+Shift',
       noScreenshot: undefined
     })
   })

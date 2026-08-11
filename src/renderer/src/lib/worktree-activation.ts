@@ -19,6 +19,7 @@ import { buildSetupRunnerCommand } from './setup-runner'
 import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import type { PendingSidebarWorktreeReveal } from '@/store/slices/ui'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
@@ -56,6 +57,8 @@ import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 
 /** Telemetry threaded from the launch site to `pty:spawn`; main fires `agent_started`
  *  only after the spawn succeeds. See telemetry-plan.md§Agent launch semantics. */
@@ -70,16 +73,52 @@ export type WorktreeStartupPayload = {
   launchToken?: string
   launchAgent?: TuiAgent
   draftPrompt?: string
+  /**
+   * The unsent launch context, for the initial view-mode decision ONLY.
+   *
+   * Deliberately separate from `draftPrompt`, which drives the bracketed paste
+   * in pty-connection: an argv-prefill launch already carries the draft inside
+   * `command`, so reusing `draftPrompt` here would paste it a second time.
+   * Set this on every draft launch; set `draftPrompt` only for paste delivery.
+   */
+  launchDraftText?: string
   startupCommandDelivery?: StartupCommandDelivery
   initialAgentStatus?: { agent: TuiAgent; prompt: string }
   sessionOptions?: Record<string, SessionOptionValue>
   telemetry?: AgentStartedTelemetry
 }
 
+/**
+ * The unsent launch context a startup payload carries, whichever way the agent
+ * receives it: argv prefill sets only `launchDraftText`, post-ready paste sets
+ * `draftPrompt`. Gating on `draftPrompt` alone silently misses every
+ * argv-prefill launch.
+ */
+export function resolveStartupLaunchDraftText(
+  startup: Pick<WorktreeStartupPayload, 'draftPrompt' | 'launchDraftText'> | undefined
+): string | undefined {
+  return startup?.draftPrompt ?? startup?.launchDraftText
+}
+
+/** Shared by both tab-creation sites so the draft gate can't drift between them. */
+function draftViewModeProps(draftText: string | undefined): {
+  promptDelivery?: 'draft'
+  launchDraftText?: string
+} {
+  return draftText == null ? {} : { promptDelivery: 'draft', launchDraftText: draftText }
+}
+
 // Why: accept either a main-generated runner script or a plain TaskPage command string, so callers needn't synthesize a runner file.
 export type IssueCommandLaunch =
   | WorktreeSetupLaunch
   | { command: string; env?: Record<string, string> }
+
+function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
+  return getSetupRunnerCommandPlatformForPath(
+    setup.runnerScriptPath,
+    navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
+  )
+}
 
 type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   tabsByWorktree: Record<string, { id: string }[]>
@@ -132,6 +171,11 @@ type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
   settings?: Pick<GlobalSettings, 'experimentalNativeChat' | 'openAgentTabsInChatByDefault'> | null
 }
 
+type InitialTerminalOptions = {
+  activateCreatedTabs?: boolean
+  backendStartupTerminalSpawned?: boolean
+}
+
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
  * The caller passes only `worktreeId`; the helper derives `repoId` and returns early
@@ -166,11 +210,17 @@ export function activateAndRevealFolderWorkspace(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
+    executionHostId?: ExecutionHostId
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
+  const folderWorkspaceOwner = findFolderWorkspaceOwner(
+    state,
+    folderWorkspaceId,
+    opts?.executionHostId
+  )
   const folderWorkspace = state.folderWorkspaces.find(
-    (workspace) => workspace.id === folderWorkspaceId
+    (workspace) => workspace === folderWorkspaceOwner
   )
   if (!folderWorkspace) {
     return false
@@ -187,7 +237,13 @@ export function activateAndRevealFolderWorkspace(
     { runtimeEnvironmentId }
   )
   if (folderWorkspaceActivationBlocked(pathStatus)) {
-    toast.error(getFolderWorkspacePathStatusTitle(pathStatus) ?? 'Cannot open folder workspace', {
+    const title =
+      getFolderWorkspacePathStatusTitle(pathStatus) ??
+      translate(
+        'auto.lib.worktree.activation.cannotOpenFolderWorkspace',
+        'Cannot open folder workspace'
+      )
+    toast.error(title, {
       description: getFolderWorkspacePathStatusDescription(pathStatus) ?? folderWorkspace.folderPath
     })
     return false
@@ -197,7 +253,7 @@ export function activateAndRevealFolderWorkspace(
     state.setActiveView('terminal')
   }
 
-  state.setActiveFolderWorkspace(folderWorkspaceId)
+  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   state.markWorktreeVisited(workspaceKey)
@@ -227,10 +283,12 @@ export function activateAndRevealWorktree(
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     notifyHostRuntime?: boolean
     revealInSidebar?: boolean
+    executionHostId?: ExecutionHostId
+    backendStartupTerminalSpawned?: boolean
   }
 ): ActivateAndRevealResult | false {
   const state = useAppStore.getState()
-  const wt = state.getKnownWorktreeById(worktreeId)
+  const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
   if (!wt) {
     return false
   }
@@ -242,6 +300,7 @@ export function activateAndRevealWorktree(
     !hasActivationWork &&
     state.activeRepoId === wt.repoId &&
     state.activeWorktreeId === worktreeId &&
+    state.activeWorkspaceExecutionHostId === (opts?.executionHostId ?? null) &&
     state.activeView === 'terminal'
 
   // 1. Set activeRepoId if crossing repos
@@ -255,7 +314,7 @@ export function activateAndRevealWorktree(
   }
 
   // 3. Core activation: setActiveWorktree also restores per-worktree state, clears unread, bumps dead PTY generations, refreshes GitHub
-  state.setActiveWorktree(worktreeId)
+  state.setActiveWorktree(worktreeId, opts?.executionHostId)
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(postActivationState, wt.id)
   if (opts?.notifyHostRuntime !== false && isWebRuntimeSessionActive(ownerRuntimeEnvironmentId)) {
@@ -286,7 +345,8 @@ export function activateAndRevealWorktree(
     opts?.startup,
     opts?.setup,
     opts?.issueCommand,
-    opts?.defaultTabs
+    opts?.defaultTabs,
+    opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : undefined
   )
   if (primaryTabId && opts?.initialCwd) {
     useAppStore.getState().queueTabInitialCwd(primaryTabId, opts.initialCwd)
@@ -318,7 +378,7 @@ export function activateAndRevealWorktree(
     }
   }
 
-  if (opts?.notifyHostRuntime !== false) {
+  if (opts?.notifyHostRuntime !== false && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(worktreeId)
   }
 
@@ -379,7 +439,7 @@ export function ensureWorktreeHasInitialTerminal(
   setup?: WorktreeSetupLaunch,
   issueCommand?: IssueCommandLaunch,
   defaultTabs?: WorktreeDefaultTabsLaunch,
-  opts?: { activateCreatedTabs?: boolean }
+  opts?: InitialTerminalOptions
 ): string | null {
   const { renderableTabCount } = store.reconcileWorktreeTabModel(worktreeId)
   // Why: creating a terminal just because the legacy terminal slice is empty gives editor/browser-only worktrees an unexpected extra tab.
@@ -391,14 +451,12 @@ export function ensureWorktreeHasInitialTerminal(
   let wrappedSetupCommandStr: string | undefined
 
   if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForPath(
-      setup.runnerScriptPath,
-      navigator.userAgent.includes('Windows') ? 'windows' : 'posix'
-    )
+    const platform = getSetupRunnerCommandPlatformForLaunch(setup)
     const sequenced = createSequencedSetupAgentCommands({
       runnerScriptPath: setup.runnerScriptPath,
       startupCommand: startup.command,
-      platform
+      platform,
+      shell: setup.shell
     })
     sequencedStartup = {
       ...startup,
@@ -408,8 +466,12 @@ export function ensureWorktreeHasInitialTerminal(
     wrappedSetupCommandStr = sequenced.setupCommand
   }
 
-  // Why: web clients mirror the server's session tabs, so avoid spawning a duplicate host terminal before the mirror lands.
-  if (isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))) {
+  const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
+  // Why: explicit spawn evidence survives the new-worktree ownership race; active web sessions provide the same authority for later activations.
+  if (
+    backendStartupTerminalSpawned ||
+    isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))
+  ) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       queueSetupAndIssueCommands(
@@ -421,6 +483,9 @@ export function ensureWorktreeHasInitialTerminal(
         wrappedSetupCommandStr,
         opts
       )
+      return existingTerminalTabId
+    }
+    if (existingTerminalTabId && backendStartupTerminalSpawned) {
       return existingTerminalTabId
     }
     if (setup || issueCommand) {
@@ -488,7 +553,9 @@ export function ensureWorktreeHasInitialTerminal(
           launchAgent,
           ...initialAgentTabViewModeProps(store.settings ?? null, {
             agent: launchAgent,
-            promptDelivery: sequencedStartup?.draftPrompt != null ? 'draft' : undefined,
+            // Why: argv-prefill launches carry the draft in `command` and set no
+            // draftPrompt, so gating on draftPrompt alone misses them entirely.
+            ...draftViewModeProps(resolveStartupLaunchDraftText(sequencedStartup)),
             nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
               getConnectionId(worktreeId)
             )
@@ -533,7 +600,7 @@ function applyDefaultTerminalTabs(
   issueCommand: IssueCommandLaunch | undefined,
   defaultTabs: WorktreeDefaultTabsLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
-  opts: { activateCreatedTabs?: boolean } | undefined
+  opts: InitialTerminalOptions | undefined
 ): string | null {
   if (!defaultTabs || store.defaultTerminalTabsAppliedByWorktreeId[worktreeId]) {
     return null
@@ -560,7 +627,9 @@ function applyDefaultTerminalTabs(
             launchAgent,
             ...initialAgentTabViewModeProps(store.settings ?? null, {
               agent: launchAgent,
-              promptDelivery: isStartupTab && startup?.draftPrompt != null ? 'draft' : undefined,
+              ...draftViewModeProps(
+                isStartupTab ? resolveStartupLaunchDraftText(startup) : undefined
+              ),
               nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
                 getConnectionId(worktreeId)
               )
@@ -620,14 +689,16 @@ function queueSetupAndIssueCommands(
   setup: WorktreeSetupLaunch | undefined,
   issueCommand: IssueCommandLaunch | undefined,
   wrappedSetupCommandStr: string | undefined,
-  opts: { activateCreatedTabs?: boolean } | undefined
+  opts: InitialTerminalOptions | undefined
 ): void {
   // Why: setup launch location is user-configurable — 'new-tab' keeps setup output off the primary pane; splits keep it adjacent.
   if (setup) {
     const mode = useAppStore.getState().settings?.setupScriptLaunchMode ?? 'new-tab'
     const setupCommand = {
       command:
-        wrappedSetupCommandStr ?? setup.command ?? buildSetupRunnerCommand(setup.runnerScriptPath),
+        wrappedSetupCommandStr ??
+        setup.command ??
+        buildSetupRunnerCommand(setup.runnerScriptPath, setup.shell),
       env: setup.envVars
     }
     if (mode === 'new-tab') {
@@ -656,7 +727,7 @@ function queueSetupAndIssueCommands(
     const queuedIssueCommand =
       'runnerScriptPath' in issueCommand
         ? {
-            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath),
+            command: buildSetupRunnerCommand(issueCommand.runnerScriptPath, issueCommand.shell),
             env: issueCommand.envVars
           }
         : { command: issueCommand.command, env: issueCommand.env }

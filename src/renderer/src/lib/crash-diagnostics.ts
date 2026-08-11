@@ -59,10 +59,6 @@ export function installRendererCrashDiagnostics(surface: RendererSurface = 'main
   }
 }
 
-export function _disposeRendererCrashDiagnosticsForTests(): void {
-  disposeRendererCrashDiagnostics()
-}
-
 function disposeRendererCrashDiagnostics(): void {
   if (!rendererCrashDiagnosticsInstalled || typeof window === 'undefined') {
     return

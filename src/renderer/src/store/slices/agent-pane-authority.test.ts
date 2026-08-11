@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import {
+  countAgentPaneAuthorityAliasesForTests,
+  forgetAgentPaneAuthorityAliasesByTabIds,
   resetAgentPaneAuthorityAliasesForTests,
-  resolveAgentPaneAuthorityKey
+  resolveAgentPaneAuthorityKey,
+  transferAgentPaneAuthorityAlias
 } from './agent-pane-authority'
 import { createTestStore } from './store-test-helpers'
 
@@ -69,6 +72,39 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
+  it('can retire live pane authority while retaining a migration recovery fence', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
+    store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
+    store.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [TARGET]: {
+          paneKey: TARGET,
+          tabId: 'tab-target',
+          worktreeId: 'wt-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+        }
+      }
+    })
+
+    store.getState().retireAgentPaneAuthority(TARGET, { preserveSleepingAgentSession: true })
+
+    const state = store.getState()
+    expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
+    expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toMatchObject({
+      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+    })
+    expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
+    expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
+  })
+
   it('keeps a physical pane routed through chained detaches until its current owner closes', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
@@ -97,6 +133,7 @@ describe('agent pane authority', () => {
     store.getState().dropAgentStatusByTabPrefix('tab-source')
 
     expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(FINAL)
+    expect(resolveAgentPaneAuthorityKey(TARGET)).toBe(FINAL)
     expect(store.getState().sleepingAgentSessionsByPaneKey[FINAL]).toMatchObject({
       paneKey: FINAL,
       tabId: 'tab-final',
@@ -121,5 +158,48 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[SOURCE]).toBeUndefined()
     expect(store.getState().agentStatusByPaneKey[FINAL]).toBeUndefined()
     expect(store.getState().recentlyRetiredAgentStatusPaneKeys[SOURCE]).toBe(true)
+  })
+
+  it('forgets aliases for purged tabs and caps unbounded detach churn', () => {
+    const leafId = '66666666-6666-4666-8666-666666666666'
+    transferAgentPaneAuthorityAlias({
+      fromPaneKey: makePaneKey('tab-purged', leafId),
+      toPaneKey: makePaneKey('tab-kept', leafId),
+      ptyId: 'pty-1'
+    })
+    expect(countAgentPaneAuthorityAliasesForTests()).toBe(1)
+
+    forgetAgentPaneAuthorityAliasesByTabIds(['tab-kept'])
+    expect(countAgentPaneAuthorityAliasesForTests()).toBe(0)
+
+    // Why: pty exit and workspace purge do not retire, so the cap is the backstop.
+    for (let index = 0; index < 600; index += 1) {
+      transferAgentPaneAuthorityAlias({
+        fromPaneKey: makePaneKey(`tab-from-${index}`, leafId),
+        toPaneKey: makePaneKey(`tab-to-${index}`, leafId),
+        ptyId: `pty-${index}`
+      })
+    }
+    expect(countAgentPaneAuthorityAliasesForTests()).toBeLessThanOrEqual(512)
+    expect(resolveAgentPaneAuthorityKey(makePaneKey('tab-from-599', leafId))).toBe(
+      makePaneKey('tab-to-599', leafId)
+    )
+  })
+
+  it('clears the alias when a pane moves back to a key it previously left', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(SOURCE, { state: 'working', prompt: 'source' })
+
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: SOURCE, toPaneKey: TARGET, ptyId: 'pty-1' })
+    store
+      .getState()
+      .transferAgentPaneAuthority({ fromPaneKey: TARGET, toPaneKey: SOURCE, ptyId: 'pty-1' })
+
+    expect(resolveAgentPaneAuthorityKey(SOURCE)).toBe(SOURCE)
+    expect(resolveAgentPaneAuthorityKey(TARGET)).toBe(SOURCE)
+    store.getState().setAgentStatus(SOURCE, { state: 'done', prompt: 'back home' })
+    expect(store.getState().agentStatusByPaneKey[SOURCE]?.prompt).toBe('back home')
   })
 })

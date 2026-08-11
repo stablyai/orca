@@ -26,6 +26,7 @@ import type {
   BrowserCookieImportResult,
   BrowserCertificateProceedResult,
   BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope,
   BrowserViewportOverride
 } from '../../shared/types'
@@ -45,6 +46,9 @@ let agentBrowserBridgeRef: AgentBrowserBridge | null = null
 const pendingTabRegistrations = new Map<string, Set<() => void>>()
 const pendingWorktreeTabRegistrations = new Map<string, Set<() => void>>()
 const pendingAnyTabRegistrations = new Set<() => void>()
+const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
+const grabModeOperationByPageId = new Map<string, Promise<void>>()
+const GRAB_REGISTRATION_WAIT_MS = 1_000
 
 function waitForRegistrationSet(
   registrationResolvers: Set<() => void>,
@@ -84,6 +88,14 @@ function isLiveBrowserWebContentsId(webContentsId: number | null | undefined): b
   return Boolean(guest && !guest.isDestroyed())
 }
 
+type BrowserGuestRegistrationArgs = {
+  browserPageId: string
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId?: string | null
+  webContentsId: number
+}
+
 function hasRegisteredTabForWorktree(worktreeId: string): boolean {
   for (const [browserPageId, webContentsId] of browserManager.getWebContentsIdByTabId()) {
     if (
@@ -100,6 +112,10 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
   if (isLiveBrowserWebContentsId(browserManager.getGuestWebContentsId(browserPageId))) {
     return Promise.resolve()
   }
+  return waitForNextTabRegistration(browserPageId, timeoutMs)
+}
+
+function waitForNextTabRegistration(browserPageId: string, timeoutMs: number): Promise<void> {
   let registrationResolvers = pendingTabRegistrations.get(browserPageId)
   if (!registrationResolvers) {
     registrationResolvers = new Set()
@@ -107,6 +123,24 @@ export function waitForTabRegistration(browserPageId: string, timeoutMs = 8_000)
   }
   return waitForRegistrationSet(registrationResolvers, timeoutMs, () => {
     pendingTabRegistrations.delete(browserPageId)
+  })
+}
+
+function queueGrabModeOperation(
+  browserPageId: string,
+  operation: () => Promise<BrowserSetGrabModeResult>
+): Promise<BrowserSetGrabModeResult> {
+  const previous = grabModeOperationByPageId.get(browserPageId) ?? Promise.resolve()
+  const result = previous.then(operation)
+  const completion = result.then(
+    () => {},
+    () => {}
+  )
+  grabModeOperationByPageId.set(browserPageId, completion)
+  return result.finally(() => {
+    if (grabModeOperationByPageId.get(browserPageId) === completion) {
+      grabModeOperationByPageId.delete(browserPageId)
+    }
   })
 }
 
@@ -168,7 +202,12 @@ function isTrustedBrowserRenderer(sender: Electron.WebContents): boolean {
 }
 
 export function registerBrowserHandlers(): void {
+  grabModeIntentByPageId.clear()
+  // Why: a stale in-flight chain from a prior registration would block new operations forever.
+  grabModeOperationByPageId.clear()
   ipcMain.removeHandler('browser:registerGuest')
+  ipcMain.removeHandler('browser:isGuestRegistered')
+  ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:setViewportOverride')
@@ -183,46 +222,86 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
 
+  const registerGuest = (
+    event: Electron.IpcMainInvokeEvent,
+    args: BrowserGuestRegistrationArgs,
+    repairPolicies: boolean
+  ): boolean => {
+    if (!isTrustedBrowserRenderer(event.sender)) {
+      return false
+    }
+    if (
+      !args ||
+      typeof args.browserPageId !== 'string' ||
+      typeof args.workspaceId !== 'string' ||
+      typeof args.worktreeId !== 'string' ||
+      typeof args.webContentsId !== 'number'
+    ) {
+      return false
+    }
+    if (repairPolicies) {
+      const guest = webContents.fromId(args.webContentsId)
+      if (
+        !guest ||
+        guest.isDestroyed() ||
+        guest.getType() !== 'webview' ||
+        guest.hostWebContents?.id !== event.sender.id
+      ) {
+        return false
+      }
+      browserManager.attachGuestPolicies(guest)
+    }
+    // Why: when Chromium swaps a guest's renderer process (navigation,
+    // crash recovery), the renderer re-registers the same browserPageId
+    // with a new webContentsId. The bridge must destroy the old session's
+    // proxy (its webContents is gone) and let the next command recreate it.
+    const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
+    const profile = browserSessionRegistry.getProfile(args.sessionProfileId ?? 'default')
+    const registered = browserManager.registerGuest({
+      ...args,
+      userAgentMode: profile?.userAgentMode,
+      rendererWebContentsId: event.sender.id
+    })
+    if (!registered) {
+      return false
+    }
+    if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
+      agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
+    }
+    const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
+    pendingTabRegistrations.delete(args.browserPageId)
+    resolvePendingRegistrations(pendingResolves)
+    const pendingWorktreeResolves = pendingWorktreeTabRegistrations.get(args.worktreeId)
+    pendingWorktreeTabRegistrations.delete(args.worktreeId)
+    resolvePendingRegistrations(pendingWorktreeResolves)
+    const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
+    pendingAnyTabRegistrations.clear()
+    resolvePendingRegistrations(pendingAnyResolves)
+    return true
+  }
+
+  ipcMain.handle('browser:registerGuest', (event, args: BrowserGuestRegistrationArgs) =>
+    registerGuest(event, args, false)
+  )
+
+  ipcMain.handle('browser:repairGuestRegistration', (event, args: BrowserGuestRegistrationArgs) =>
+    registerGuest(event, args, true)
+  )
+
   ipcMain.handle(
-    'browser:registerGuest',
-    (
-      event,
-      args: {
-        browserPageId: string
-        workspaceId: string
-        worktreeId: string
-        sessionProfileId?: string | null
-        webContentsId: number
-      }
-    ) => {
-      if (!isTrustedBrowserRenderer(event.sender)) {
+    'browser:isGuestRegistered',
+    (event, args: { browserPageId?: unknown; webContentsId?: unknown }): boolean => {
+      if (
+        !isTrustedBrowserRenderer(event.sender) ||
+        typeof args?.browserPageId !== 'string' ||
+        typeof args.webContentsId !== 'number'
+      ) {
         return false
       }
-      // Why: when Chromium swaps a guest's renderer process (navigation,
-      // crash recovery), the renderer re-registers the same browserPageId
-      // with a new webContentsId. The bridge must destroy the old session's
-      // proxy (its webContents is gone) and let the next command recreate it.
-      const previousWcId = browserManager.getGuestWebContentsId(args.browserPageId)
-      const registered = browserManager.registerGuest({
-        ...args,
-        rendererWebContentsId: event.sender.id
-      })
-      if (!registered) {
-        return false
-      }
-      if (agentBrowserBridgeRef && previousWcId !== null && previousWcId !== args.webContentsId) {
-        agentBrowserBridgeRef.onProcessSwap(args.browserPageId, args.webContentsId, previousWcId)
-      }
-      const pendingResolves = pendingTabRegistrations.get(args.browserPageId)
-      pendingTabRegistrations.delete(args.browserPageId)
-      resolvePendingRegistrations(pendingResolves)
-      const pendingWorktreeResolves = pendingWorktreeTabRegistrations.get(args.worktreeId)
-      pendingWorktreeTabRegistrations.delete(args.worktreeId)
-      resolvePendingRegistrations(pendingWorktreeResolves)
-      const pendingAnyResolves = new Set(pendingAnyTabRegistrations)
-      pendingAnyTabRegistrations.clear()
-      resolvePendingRegistrations(pendingAnyResolves)
-      return true
+      return (
+        browserManager.getGuestWebContentsId(args.browserPageId) === args.webContentsId &&
+        isLiveBrowserWebContentsId(args.webContentsId)
+      )
     }
   )
 
@@ -237,6 +316,9 @@ export function registerBrowserHandlers(): void {
       agentBrowserBridgeRef.onTabClosed(wcId)
     }
     browserManager.unregisterGuest(args.browserPageId)
+    grabModeIntentByPageId.delete(args.browserPageId)
+    // Why: don't let a reused browserPageId queue behind the destroyed guest's pending chain.
+    grabModeOperationByPageId.delete(args.browserPageId)
     return true
   })
 
@@ -370,12 +452,44 @@ export function registerBrowserHandlers(): void {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return { ok: false, reason: 'not-authorized' }
       }
-      const guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      const intent = {
+        generation: (grabModeIntentByPageId.get(args.browserPageId)?.generation ?? 0) + 1,
+        enabled: args.enabled
+      }
+      grabModeIntentByPageId.set(args.browserPageId, intent)
+      const isCurrentIntent = (): boolean =>
+        grabModeIntentByPageId.get(args.browserPageId) === intent
+      let guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      if (!guest && args.enabled) {
+        // Why: fast file:// pages can expose the toolbar before did-attach registration reaches main.
+        await waitForNextTabRegistration(args.browserPageId, GRAB_REGISTRATION_WAIT_MS).catch(
+          () => {}
+        )
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      }
       if (!guest) {
+        if (!args.enabled) {
+          return { ok: true }
+        }
         return { ok: false, reason: 'not-ready' }
       }
-      const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
-      return success ? { ok: true } : { ok: false, reason: 'not-ready' }
+      return queueGrabModeOperation(args.browserPageId, async () => {
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        guest = browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+        if (!guest) {
+          return args.enabled ? { ok: false, reason: 'not-ready' } : { ok: true }
+        }
+        const success = await browserManager.setGrabMode(args.browserPageId, args.enabled, guest)
+        if (!isCurrentIntent()) {
+          return { ok: true }
+        }
+        return success ? { ok: true } : { ok: false, reason: 'injection-failed' }
+      })
     }
   )
 
@@ -473,12 +587,17 @@ export function registerBrowserHandlers(): void {
     'browser:session:createProfile',
     (
       event,
-      args: { scope: BrowserSessionProfileScope; label: string }
+      args: {
+        scope: BrowserSessionProfileScope
+        label: string
+      } & BrowserSessionProfileCreateOptions
     ): BrowserSessionProfile | null => {
       if (!isTrustedBrowserRenderer(event.sender)) {
         return null
       }
-      return browserSessionRegistry.createProfile(args.scope, args.label)
+      return browserSessionRegistry.createProfile(args.scope, args.label, {
+        userAgentMode: args.userAgentMode
+      })
     }
   )
 

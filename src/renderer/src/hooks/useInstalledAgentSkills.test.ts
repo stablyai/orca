@@ -5,7 +5,8 @@ import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   _installedAgentSkillDiscoveryInternalsForTests,
   hasInstalledAgentSkill,
-  hasInstalledAgentSkillNamed
+  hasInstalledAgentSkillNamed,
+  notifyInstalledAgentSkillsRefreshed
 } from './useInstalledAgentSkills'
 
 afterEach(() => {
@@ -221,6 +222,31 @@ describe('discoverInstalledAgentSkills', () => {
     const freshResult = discoveryResult([skill({ name: 'orca-cli' })])
     secondScan.resolve(freshResult)
     await expect(forcedRefresh).resolves.toBe(freshResult)
+  })
+
+  it('lets completed-scan broadcasts reuse the cached result', async () => {
+    const discover = vi
+      .fn<() => Promise<SkillDiscoveryResult>>()
+      .mockResolvedValue(discoveryResult([skill({ name: 'orca-linear' })]))
+    vi.stubGlobal('window', {
+      api: { skills: { discover } },
+      dispatchEvent: vi.fn(),
+      CustomEvent: class {}
+    })
+
+    await _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(true)
+    notifyInstalledAgentSkillsRefreshed()
+    const fromSubscribers = [1, 2, 3].map(() =>
+      _installedAgentSkillDiscoveryInternalsForTests.discoverInstalledAgentSkills(false)
+    )
+
+    expect(discover).toHaveBeenCalledTimes(1)
+    for (const pending of fromSubscribers) {
+      await expect(pending).resolves.toMatchObject({
+        skills: [expect.objectContaining({ name: 'orca-linear' })]
+      })
+    }
+    expect(discover).toHaveBeenCalledTimes(1)
   })
 
   it('caches host and WSL discovery results separately', async () => {

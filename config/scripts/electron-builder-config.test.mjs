@@ -154,7 +154,12 @@ describe('electron-builder config', () => {
 
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/package.json', 'out/cli/**', 'out/shared/**'])
+      expect.arrayContaining([
+        'out/package.json',
+        'out/cli/**',
+        'out/shared/**',
+        'out/main/claude-accounts/keychain.js'
+      ])
     )
   })
 
@@ -166,11 +171,9 @@ describe('electron-builder config', () => {
     )
   })
 
-  // Why: the watchdog only arms in packaged builds, and its ELECTRON_RUN_AS_NODE
-  // fork resolves the entry from app.asar.unpacked — inside the asar it never runs.
-  it('unpacks the forked main-thread hang-watchdog entry', () => {
-    expect(electronBuilderConfig.asarUnpack).toEqual(
-      expect.arrayContaining(['out/main/main-thread-hang-watchdog-entry.js'])
+  it('keeps the worker-thread hang watchdog inside app.asar', () => {
+    expect(electronBuilderConfig.asarUnpack).not.toContain(
+      'out/main/main-thread-hang-watchdog-entry.js'
     )
   })
 
@@ -298,40 +301,42 @@ describe('electron-builder config', () => {
     expect(findAsarEntry(['/out/main/index.js'], 'out/main/index.js')).toBe('/out/main/index.js')
   })
 
-  it('prunes non-target node-pty prebuilds from packaged runtime resources', async () => {
+  it('prunes non-target node-pty architecture outputs from packaged runtime resources', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-node-pty-prune-'))
     try {
-      const prebuildsDir = join(resourcesDir, 'node_modules', 'node-pty', 'prebuilds')
+      const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
+      const prebuildsDir = join(nodePtyDir, 'prebuilds')
+      const binDir = join(nodePtyDir, 'bin')
       await mkdir(join(prebuildsDir, 'darwin-arm64'), { recursive: true })
       await mkdir(join(prebuildsDir, 'darwin-x64'), { recursive: true })
       await mkdir(join(prebuildsDir, 'linux-x64'), { recursive: true })
       await mkdir(join(prebuildsDir, 'win32-x64'), { recursive: true })
-      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party', 'conpty'), {
+      await mkdir(join(binDir, 'darwin-arm64-148'), { recursive: true })
+      await mkdir(join(binDir, 'darwin-x64-148'), { recursive: true })
+      await mkdir(join(nodePtyDir, 'third_party', 'conpty'), {
         recursive: true
       })
-      await mkdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps', 'winpty'), {
-        recursive: true
-      })
+      await mkdir(join(nodePtyDir, 'deps', 'winpty'), { recursive: true })
 
-      prunePackagedNodePty(resourcesDir, 'darwin')
+      prunePackagedNodePty(resourcesDir, 'darwin', 3)
 
-      await expect(readdir(prebuildsDir).then((entries) => entries.sort())).resolves.toEqual([
-        'darwin-arm64',
-        'darwin-x64'
-      ])
-      await expect(
-        readdir(join(resourcesDir, 'node_modules', 'node-pty', 'third_party'))
-      ).resolves.toEqual([])
-      await expect(
-        readdir(join(resourcesDir, 'node_modules', 'node-pty', 'deps'))
-      ).resolves.toEqual([])
+      await expect(readdir(prebuildsDir)).resolves.toEqual(['darwin-arm64'])
+      await expect(readdir(binDir)).resolves.toEqual(['darwin-arm64-148'])
+      await expect(readdir(join(nodePtyDir, 'third_party'))).resolves.toEqual([])
+      await expect(readdir(join(nodePtyDir, 'deps'))).resolves.toEqual([])
+      expect(() => prunePackagedNodePty(resourcesDir, 'darwin', 4)).toThrow(
+        'Unsupported packaged runtime architecture: 4'
+      )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }
   })
 
   it('copies the Windows node-pty ConPTY runtime beside the rebuilt addon', async () => {
-    for (const arch of ['x64', 'arm64']) {
+    for (const [arch, electronArch] of [
+      ['x64', 1],
+      ['arm64', 3]
+    ]) {
       const resourcesDir = await mkdtemp(join(tmpdir(), `orca-node-pty-conpty-${arch}-`))
       try {
         const nodePtyDir = join(resourcesDir, 'node_modules', 'node-pty')
@@ -350,7 +355,7 @@ describe('electron-builder config', () => {
           )
         }
 
-        prunePackagedNodePty(resourcesDir, 'win32', arch)
+        prunePackagedNodePty(resourcesDir, 'win32', electronArch)
 
         await expect(readFile(join(releaseDir, 'conpty', 'conpty.dll'), 'utf8')).resolves.toBe(
           `dll payload ${arch}`
@@ -378,7 +383,7 @@ describe('electron-builder config', () => {
     ).toBe(true)
   })
 
-  it('prunes non-target @parcel/watcher platform subpackages from packaged runtime resources', async () => {
+  it('prunes non-target @parcel/watcher architecture subpackages', async () => {
     const resourcesDir = await mkdtemp(join(tmpdir(), 'orca-parcel-watcher-prune-'))
     try {
       const parcelDir = join(resourcesDir, 'node_modules', '@parcel')
@@ -389,13 +394,15 @@ describe('electron-builder config', () => {
       await mkdir(join(parcelDir, 'watcher-linux-arm64-glibc'), { recursive: true })
       await mkdir(join(parcelDir, 'watcher-win32-x64'), { recursive: true })
 
-      prunePackagedParcelWatcher(resourcesDir, 'linux')
+      prunePackagedParcelWatcher(resourcesDir, 'linux', 'arm64')
 
       await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
         'watcher',
-        'watcher-linux-arm64-glibc',
-        'watcher-linux-x64-glibc'
+        'watcher-linux-arm64-glibc'
       ])
+      expect(() => prunePackagedParcelWatcher(resourcesDir, 'linux', 'universal')).toThrow(
+        'Unsupported packaged runtime architecture: universal'
+      )
     } finally {
       await rm(resourcesDir, { recursive: true, force: true })
     }
@@ -411,7 +418,7 @@ describe('electron-builder config', () => {
       // A hypothetical future @parcel/* runtime dep that is NOT a watcher subpackage.
       await mkdir(join(parcelDir, 'transformer-js'), { recursive: true })
 
-      prunePackagedParcelWatcher(resourcesDir, 'linux')
+      prunePackagedParcelWatcher(resourcesDir, 'linux', 1)
 
       await expect(readdir(parcelDir).then((entries) => entries.sort())).resolves.toEqual([
         'transformer-js',
@@ -477,6 +484,20 @@ describe('electron-builder config', () => {
     }
   })
 
+  it('fails when the packaged resources directory is missing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
+    try {
+      await expect(
+        electronBuilderConfig.afterPack({
+          appOutDir: root,
+          electronPlatformName: 'win32'
+        })
+      ).rejects.toThrow(/Missing packaged resources directory/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it.skipIf(process.platform === 'win32')(
     'marks packaged Unix CLI launchers executable',
     async () => {
@@ -500,11 +521,25 @@ describe('electron-builder config', () => {
           'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
           'utf8'
         )
+        const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+        await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
+        await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
+        await writeFile(
+          join(unpackedCliDir, 'index.js'),
+          [
+            'const args = process.argv.slice(2)',
+            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'computer-use' }] }))",
+            "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
+            'else console.log(JSON.stringify({ executed: false }))'
+          ].join('\n'),
+          'utf8'
+        )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
 
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
-          electronPlatformName: 'linux'
+          electronPlatformName: 'linux',
+          arch: 1
         })
 
         expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
@@ -513,4 +548,39 @@ describe('electron-builder config', () => {
       }
     }
   )
+
+  // Why: the .deb/.rpm update-recovery path keys entirely off the resources/package-type marker that
+  // app-builder-lib's FpmTarget writes. If packaging silently stops shipping an fpm target, or adds
+  // one the recovery path does not cover, getLinuxRootPackageType() returns null, autoInstallOnAppQuit
+  // quietly goes back to true, and no unit test notices.
+  describe('linux root-package update recovery contract', () => {
+    // FpmTarget writes resources/package-type only for targets it supports auto-update for.
+    const MARKER_TARGETS = new Set(['deb', 'rpm', 'pacman'])
+    const RECOVERABLE_TARGETS = new Set(['deb', 'rpm'])
+    const linuxTargets = electronBuilderConfig.linux.target.map((entry) =>
+      typeof entry === 'string' ? entry : entry.target
+    )
+
+    it('still ships an AppImage plus at least one root-package target', () => {
+      expect(linuxTargets).toContain('AppImage')
+      expect(linuxTargets.some((target) => MARKER_TARGETS.has(target))).toBe(true)
+    })
+
+    it('ships no root-package target the recovery path cannot recover', () => {
+      const unrecoverable = linuxTargets.filter(
+        (target) => MARKER_TARGETS.has(target) && !RECOVERABLE_TARGETS.has(target)
+      )
+      expect(unrecoverable).toEqual([])
+    })
+
+    it('accepts exactly the markers electron-updater maps to a root-package updater', async () => {
+      const source = await readFile(
+        new URL('../../src/main/linux-update-package-type.ts', import.meta.url),
+        'utf8'
+      )
+      for (const target of linuxTargets.filter((entry) => RECOVERABLE_TARGETS.has(entry))) {
+        expect(source).toContain(`value === '${target}'`)
+      }
+    })
+  })
 })

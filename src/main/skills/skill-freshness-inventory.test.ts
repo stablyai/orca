@@ -15,6 +15,7 @@ import {
   MAXIMUM_REPOSITORY_SKILL_ROOTS
 } from './skill-freshness-inventory'
 import { describeObservedSkillFile, skillPackageDigest } from './skill-package-identity'
+import { MAXIMUM_PLUGIN_SCAN_ENTRIES } from './skill-plugin-cache-scan'
 import { getSkillFreshnessDisplayStatus } from '../../renderer/src/lib/skill-freshness-display-status'
 
 const temporaryDirectories: string[] = []
@@ -245,6 +246,165 @@ describe('read-only skill freshness inventory', () => {
     // The user-visible verdict, across both halves of the fix: the row must read
     // up to date, not amber "may be modified… remove it" over the CLI's own install.
     expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('reads up to date after the OS drops a sidecar into an untouched install', async () => {
+    const test = await fixture()
+    const directory = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.currentMarkdown
+    )
+    // What one Finder visit leaves behind. Sorts before SKILL.md, which is what made the
+    // index-aligned snapshot comparison miss and report the copy as modified.
+    await writeFile(join(directory, '.DS_Store'), Buffer.from([0, 1, 2, 3]))
+    // No lock trust available here: the recorded hash is a different tree, so this proves
+    // the identity fix alone carries it rather than falling through to newer-known.
+    await writeSkillLockHash(test.homeDir, 'a'.repeat(40))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations.map((entry) => entry.status)).toEqual(['current'])
+    // The whole point: no amber, and nothing offered to "fix" a copy that is already right.
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+    expect(inventory.eligibleUpdateNames).toEqual([])
+  })
+
+  it('scopes the lock hash to the current bundle, not every path a revision ever shipped', async () => {
+    // A file revision 1 shipped and the current revision dropped is a stale leftover, not
+    // part of what the updater installed. Scoping to the union of all revisions would drag
+    // it back into the hash on the accident of its name, and the copy the CLI just wrote
+    // would read "may be modified".
+    const test = await fixture()
+    const legacy = describeObservedSkillFile(
+      'references/legacy.md',
+      Buffer.from('dropped after rev 1\n'),
+      false
+    )
+    const registryPath = join(test.resourceRoot, 'skills', 'snapshot-registry.json')
+    const registry = JSON.parse(await readFile(registryPath, 'utf8'))
+    registry.skills['orca-cli'][0].files.push(legacy)
+    await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`)
+
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    // The lock records the source tree — SKILL.md alone, no leftover.
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(join(canonical, 'references', 'legacy.md'), 'dropped after rev 1\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('trusts the updater lock for upstream bytes beside an agent CLI sidecar (#12694)', async () => {
+    // The reported folder shape after a successful update: `skills update` wrote
+    // source-repo HEAD no bundle knows yet, and Codex's own agents/openai.yaml sits
+    // beside it. The lock records the source tree — SKILL.md alone — so a folder hash
+    // taken over the sidecar too can never match it, and the copy the command just
+    // wrote would be reported as a failed update.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    const sourceTree = await test.writeSkill(join(test.root, 'source'), upstreamMarkdown)
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(sourceTree))
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still trusts the lock when the upstream revision added a file (#11220 guard)', async () => {
+    // The other half of the sidecar fix: scoping the lock hash to official paths alone
+    // would drop a file upstream genuinely shipped, and that file IS in the lock's tree.
+    // A clean install would then read "may be modified" and its update run report failure.
+    const test = await fixture()
+    const upstreamMarkdown = `${test.newerMarkdown}\nUpstream edit no bundle has shipped.\n`
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      upstreamMarkdown
+    )
+    await mkdir(join(canonical, 'references'), { recursive: true })
+    await writeFile(
+      join(canonical, 'references', 'new.md'),
+      'Shipped upstream, no bundle knows it\n'
+    )
+    await writeSkillLockHash(test.homeDir, await gitTreeShaOf(canonical))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'newer-known'
+    })
+    expect(getSkillFreshnessDisplayStatus(inventory, 'orca-cli')).toBe('up-to-date')
+  })
+
+  it('still withholds an unwinnable update when a sidecar sits beside the stale copy', async () => {
+    // Recognising the copy is only half the job: the lock already names the revision the
+    // source has, so `skills update` would compare lock to source, see no work and write
+    // nothing. Offering it promises a button that can never finish. A sidecar must not
+    // make the placement unidentifiable and retire that guard.
+    const test = await fixture()
+    const canonical = await test.writeSkill(
+      join(test.homeDir, '.agents', 'skills'),
+      test.oldMarkdown
+    )
+    await mkdir(join(canonical, 'agents'), { recursive: true })
+    await writeFile(join(canonical, 'agents', 'openai.yaml'), 'display_name: test\n')
+    // The fixture's synthetic tree sha for revision 2 — the revision on disk is 1.
+    await writeSkillLockHash(test.homeDir, (2).toString(16).padStart(40, '0'))
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    expect(inventory.installations[0]).toMatchObject({
+      topology: 'canonical-copy',
+      status: 'outdated',
+      installedReleaseRevision: 1
+    })
+    expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
   it('still flags canonical bytes that do not match what the lock says was installed', async () => {
@@ -495,10 +655,14 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.eligibleUpdateNames).toEqual([])
   })
 
-  it('keeps a plugin-cache copy with known official files unrecognized', async () => {
+  it('reads a plugin-cache copy with untouched official files as current', async () => {
+    // The deliberate posture change behind #12694: an unlisted neighbour is not evidence
+    // of an edit, so the bytes Orca owns decide alone — here and in every scope, not just
+    // the canonical copy the updater writes. The drifted-SKILL.md case above still fails
+    // closed, which is what keeps "unrecognized" meaningful.
     const test = await fixture()
     await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
-    const modifiedRoot = join(
+    const withSidecarRoot = join(
       test.homeDir,
       '.codex',
       'plugins',
@@ -507,9 +671,9 @@ describe('read-only skill freshness inventory', () => {
       'modified',
       'orca-cli'
     )
-    await mkdir(modifiedRoot, { recursive: true })
-    await writeFile(join(modifiedRoot, 'SKILL.md'), test.currentMarkdown)
-    await writeFile(join(modifiedRoot, 'README.md'), 'Modified official package\n')
+    await mkdir(withSidecarRoot, { recursive: true })
+    await writeFile(join(withSidecarRoot, 'SKILL.md'), test.currentMarkdown)
+    await writeFile(join(withSidecarRoot, 'README.md'), 'Neighbouring file Orca never shipped\n')
 
     const inventory = await inventorySkillFreshness({
       currentAppVersion: '2.0.0',
@@ -521,8 +685,8 @@ describe('read-only skill freshness inventory', () => {
     expect(inventory.installations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          unresolvedPath: modifiedRoot,
-          status: 'unrecognized'
+          unresolvedPath: withSidecarRoot,
+          status: 'current'
         })
       ])
     )
@@ -704,6 +868,44 @@ describe('read-only skill freshness inventory', () => {
         reason: 'depth-limit',
         errorCode: null
       })
+    ])
+  })
+
+  it('invents no installations when the plugin cache trips the entry budget (#10918)', async () => {
+    const test = await fixture()
+    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+    const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+    await mkdir(pluginCache, { recursive: true })
+    // Why: the production bound, not an injected one — #10918 is the real constant
+    // collapsing the scan to the cache root, and only a real cache proves that path.
+    const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
+      join(pluginCache, `entry-${index}`)
+    )
+    for (let index = 0; index < entries.length; index += 512) {
+      await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
+    }
+
+    const inventory = await inventorySkillFreshness({
+      currentAppVersion: '2.0.0',
+      homeDir: test.homeDir,
+      repos: [],
+      resourceRoot: test.resourceRoot
+    })
+
+    // Why: assert the bound actually tripped first — if the fixture stopped reaching it,
+    // the placement assertion below would still pass and cover nothing.
+    expect(inventory.scanIssues).toEqual([
+      expect.objectContaining({
+        rootId: 'codex-plugin-cache',
+        path: pluginCache,
+        reason: 'entry-limit',
+        errorCode: null
+      })
+    ])
+    // Why: the truncated root is not evidence of a copy. Fabricating one per manifest name
+    // is what pinned an unclearable "Needs attention" on every card in #10918.
+    expect(inventory.installations).toEqual([
+      expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
     ])
   })
 })
