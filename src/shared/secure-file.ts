@@ -123,7 +123,7 @@ export function writeSecureFile(
       rememberHardenedPath(targetPath, false)
     }
     if (options.durable && process.platform !== 'win32') {
-      flushFile(dir)
+      flushDirectory(dir)
     }
   } catch (error) {
     rmSync(tmpFile, { force: true })
@@ -137,6 +137,14 @@ function flushFile(path: string): void {
     fsyncSync(descriptor)
   } finally {
     closeSync(descriptor)
+  }
+}
+
+function flushDirectory(directory: string): void {
+  try {
+    flushFile(directory)
+  } catch {
+    // Directory fsync is unsupported on some POSIX and remote filesystems.
   }
 }
 

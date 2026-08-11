@@ -63,6 +63,14 @@ function flushPath(path: string): void {
   }
 }
 
+function flushDirectory(directory: string): void {
+  try {
+    flushPath(directory)
+  } catch {
+    // Some POSIX and remote filesystems reject directory fsync; the file fsync remains mandatory.
+  }
+}
+
 function removeTemporaryIntents(directory: string): void {
   for (const name of readdirSync(directory)) {
     if (name.endsWith('.tmp')) {
@@ -82,7 +90,7 @@ function writeIntent(path: string, directory: string, intent: ArtifactCreateInte
     flushPath(temporaryPath)
     renameSync(temporaryPath, path)
     if (process.platform !== 'win32') {
-      flushPath(directory)
+      flushDirectory(directory)
     }
   } catch (error) {
     rmSync(temporaryPath, { force: true })
@@ -226,7 +234,7 @@ export function removeArtifactCreateIntent(
   if (readIntent(path).idempotencyKey === expectedIdempotencyKey) {
     rmSync(path, { force: true })
     if (process.platform !== 'win32') {
-      flushPath(intentDirectory(profileId, userDataPath))
+      flushDirectory(intentDirectory(profileId, userDataPath))
     }
   }
 }
@@ -242,6 +250,6 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
     }
   }
   if (process.platform !== 'win32') {
-    flushPath(directory)
+    flushDirectory(directory)
   }
 }
