@@ -62,7 +62,42 @@ const TRANSLATABLE_PLUGIN_CHROME = new Set([
   'auto.components.settings.plugins.search.install',
   'auto.components.settings.plugins.search.permissions',
   'auto.components.settings.plugins.search.logs',
-  'auto.components.settings.plugins.search.development'
+  'auto.components.settings.plugins.search.development',
+
+  // Maturity badge on the pane heading. Says how finished the feature is, not
+  // what a plugin may do.
+  'auto.components.settings.PluginsSettingsSection.experimental',
+
+  // The install form: tab labels, field labels, placeholders, and the "you
+  // left this blank" validation. `gitRefRequired` stays protected — it argues
+  // why pinning a ref matters, which is a security claim.
+  'auto.components.settings.PluginInstallDialog.cancel',
+  'auto.components.settings.PluginInstallDialog.gitLabel',
+  'auto.components.settings.PluginInstallDialog.gitPlaceholder',
+  'auto.components.settings.PluginInstallDialog.gitTab',
+  'auto.components.settings.PluginInstallDialog.gitUrlRequired',
+  'auto.components.settings.PluginInstallDialog.install',
+  'auto.components.settings.PluginInstallDialog.installing',
+  'auto.components.settings.PluginInstallDialog.localLabel',
+  'auto.components.settings.PluginInstallDialog.localPlaceholder',
+  'auto.components.settings.PluginInstallDialog.localRequired',
+  'auto.components.settings.PluginInstallDialog.localTab',
+  'auto.components.settings.PluginInstallDialog.source',
+  'auto.components.settings.PluginInstallDialog.title',
+
+  // Log affordances and runtime state on an installed row. Trust state stays
+  // protected — `blocked`, `bundled`, `dev`, `needsReview`, `invalid`,
+  // `viewAdvisory` — as do the enable, remove and rollback actions: those are
+  // what the reader weighs when deciding whether this plugin should run.
+  'auto.components.settings.PluginSettingsRow.hideLogs',
+  'auto.components.settings.PluginSettingsRow.loadingLogs',
+  'auto.components.settings.PluginSettingsRow.logCount',
+  'auto.components.settings.PluginSettingsRow.moreActions',
+  'auto.components.settings.PluginSettingsRow.noLogs',
+  'auto.components.settings.PluginSettingsRow.restartCount',
+  'auto.components.settings.PluginSettingsRow.restarting',
+  'auto.components.settings.PluginSettingsRow.running',
+  'auto.components.settings.PluginSettingsRow.viewLogs'
 ])
 
 /** True when a protected-prefix path is plugin chrome a language pack may translate. */

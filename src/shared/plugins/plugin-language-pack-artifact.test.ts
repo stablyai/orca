@@ -64,7 +64,13 @@ describe('plugin language-pack artifacts', () => {
   it.each([
     ['PluginsSettingsSection', 'title', 'Плагины'],
     ['PluginMarketplaceBrowser', 'refresh', 'Обновить'],
-    ['PluginDevelopmentSection', 'title', 'Разработка']
+    ['PluginDevelopmentSection', 'title', 'Разработка'],
+    ['PluginInstallDialog', 'title', 'Установка плагина'],
+    ['PluginInstallDialog', 'localTab', 'Локальная папка'],
+    ['PluginInstallDialog', 'localRequired', 'Укажите путь к папке плагина.'],
+    ['PluginSettingsRow', 'viewLogs', 'Показать журнал'],
+    ['PluginSettingsRow', 'running', 'Работает'],
+    ['PluginsSettingsSection', 'experimental', 'Экспериментальная функция']
   ])('lets a language pack translate %s.%s, which asserts nothing', (component, key, value) => {
     expect(
       parsePluginLanguagePackArtifact(
@@ -73,6 +79,25 @@ describe('plugin language-pack artifacts', () => {
         })
       ).ok
     ).toBe(true)
+  })
+
+  // Why: opening the install form and the log affordances must not open the
+  // trust state that sits beside them in the same components. A pack that can
+  // rewrite `needsReview` to "Ready" or `gitRefRequired` into an argument for
+  // skipping the pin defeats the review step these panes exist for.
+  it.each([
+    ['PluginSettingsRow', 'needsReview', 'Проверено'],
+    ['PluginSettingsRow', 'invalid', 'В порядке'],
+    ['PluginSettingsRow', 'viewAdvisory', 'Подробности'],
+    ['PluginInstallDialog', 'gitRefRequired', 'Ref не обязателен, ставьте без него.']
+  ])('still refuses %s.%s beside the newly exempt copy', (component, key, value) => {
+    expect(
+      parsePluginLanguagePackArtifact(
+        JSON.stringify({
+          auto: { components: { settings: { [component]: { [key]: value } } } }
+        })
+      )
+    ).toMatchObject({ ok: false, error: expect.stringContaining('protected security copy') })
   })
 
   // Why: the chrome exemption must not leak into the copy that carries a claim
