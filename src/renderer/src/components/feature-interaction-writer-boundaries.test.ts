@@ -53,20 +53,22 @@ describe('feature interaction writer boundaries', () => {
   it('records GitHub provider-depth for inline item mutation success paths', () => {
     const source = componentSource('TaskPage.tsx')
     const githubWriter = "recordFeatureInteraction('github-tasks')"
-    const mutationSections = [
-      sourceBetween(source, 'function GHAssigneesCell', 'const triggerContent ='),
-      sourceBetween(source, 'function PRReviewCell', 'const requestReviewer ='),
-      sourceBetween(source, 'function PRMergeCell', 'const handleAutoMerge'),
+    // Why: table cells route success telemetry through the optimistic mutation
+    // hook so provider-depth recording stays on one confirm path.
+    const hookSource = readFileSync(
+      join(COMPONENT_ROOT, '../hooks/useTaskPageGitHubWorkItemMutation.ts'),
+      'utf8'
+    )
+    expect(
+      sourceBetween(hookSource, "if (confirmed === 'confirmed')", 'return confirmed')
+    ).toContain(githubWriter)
+    expect(
       sourceBetween(
         source,
         'const handleOpenOrUseGitHubWorkItem',
         'const openComposerForGitLabItem'
       )
-    ]
-
-    for (const section of mutationSections) {
-      expect(section).toContain(githubWriter)
-    }
+    ).toContain(githubWriter)
   })
 
   it('threads GitHub task source context through inline task mutations', () => {
@@ -205,8 +207,11 @@ describe('feature interaction writer boundaries', () => {
     const taskPageSource = componentSource('TaskPage.tsx')
     const jiraWriter = "recordFeatureInteraction('jira-tasks')"
 
+    // End boundary is the declaration after the handler: the Jira connect flow
+    // now lives in the shared JiraConnectDialog, so handleJiraConnect (the prior
+    // marker) no longer exists in TaskPage.
     expect(
-      sourceBetween(taskPageSource, 'const handleUseJiraItem', 'const handleJiraConnect')
+      sourceBetween(taskPageSource, 'const handleUseJiraItem', 'const taskPageListChromeHidden')
     ).toContain(jiraWriter)
   })
 

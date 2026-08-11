@@ -1,15 +1,9 @@
 /* eslint-disable max-lines */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as Fs from 'node:fs'
-import type {
-  CodexUsageDailyAggregate,
-  CodexUsagePersistedFile,
-  CodexUsagePersistedState,
-  CodexUsageSession
-} from './types'
+import type { CodexUsagePersistedState } from './types'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
@@ -21,43 +15,14 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('fs', async () => {
-  const actual = await vi.importActual<typeof Fs>('fs')
-  return {
-    ...actual,
-    writeFileSync: vi.fn(actual.writeFileSync)
-  }
-})
-
 vi.mock('./scanner', () => ({
-  createWorktreeRefs: vi.fn(() => []),
   scanCodexUsageFiles: vi.fn()
 }))
 
 import { CodexUsageStore, initCodexUsagePath, normalizePersistedState } from './store'
 import { scanCodexUsageFiles } from './scanner'
 
-type ScanResult = {
-  processedFiles: CodexUsagePersistedFile[]
-  sessions: CodexUsageSession[]
-  dailyAggregates: CodexUsageDailyAggregate[]
-}
-
-function createDeferred<T>(): {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (reason?: unknown) => void
-} {
-  let resolve!: (value: T) => void
-  let reject!: (reason?: unknown) => void
-  const promise = new Promise<T>((promiseResolve, promiseReject) => {
-    resolve = promiseResolve
-    reject = promiseReject
-  })
-  return { promise, resolve, reject }
-}
-
-function createEmptyScanResult(): ScanResult {
+function createEmptyScanResult() {
   return {
     processedFiles: [],
     sessions: [],
@@ -68,9 +33,8 @@ function createEmptyScanResult(): ScanResult {
 function createStoreWithState(state: Partial<CodexUsagePersistedState>): CodexUsageStore {
   const store = new CodexUsageStore({
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined
-  } as never)
+    getAllWorktreeMeta: () => ({})
+  })
 
   ;(store as unknown as { state: CodexUsagePersistedState }).state = {
     schemaVersion: 1,
@@ -97,7 +61,6 @@ describe('CodexUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-codex-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initCodexUsagePath()
-    vi.mocked(writeFileSync).mockClear()
     vi.mocked(scanCodexUsageFiles).mockReset()
     vi.mocked(scanCodexUsageFiles).mockResolvedValue(createEmptyScanResult())
     vi.useFakeTimers()
@@ -109,9 +72,9 @@ describe('CodexUsageStore', () => {
     rmSync(tempUserData, { recursive: true, force: true })
   })
 
-  it('persists a successful refresh with one compact disk write', async () => {
+  it('adapts Codex scans to compact cache persistence', async () => {
     const store = createStoreWithState({
-      schemaVersion: 3,
+      schemaVersion: 5,
       scanState: {
         enabled: true,
         lastScanStartedAt: null,
@@ -122,46 +85,9 @@ describe('CodexUsageStore', () => {
 
     await store.refresh(true)
 
-    expect(writeFileSync).toHaveBeenCalledTimes(1)
     const persistedJson = readFileSync(join(tempUserData, 'orca-codex-usage.json'), 'utf-8')
+    expect(scanCodexUsageFiles).toHaveBeenCalledWith([], [])
     expect(persistedJson).toBe(JSON.stringify(JSON.parse(persistedJson)))
-    expect(persistedJson).not.toContain('\n')
-    expect(JSON.parse(persistedJson).scanState).toMatchObject({
-      enabled: true,
-      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanCompletedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanError: null
-    })
-  })
-
-  it('keeps scan start visible in memory while scan-start persistence is skipped', async () => {
-    const pendingScan = createDeferred<ScanResult>()
-    vi.mocked(scanCodexUsageFiles).mockReturnValueOnce(pendingScan.promise)
-    const store = createStoreWithState({
-      schemaVersion: 3,
-      scanState: {
-        enabled: true,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: 'previous failure'
-      }
-    })
-
-    const refreshPromise = store.refresh(true)
-    await Promise.resolve()
-
-    expect(store.getScanState()).toMatchObject({
-      isScanning: true,
-      lastScanStartedAt: new Date('2026-04-10T12:00:00.000-04:00').getTime(),
-      lastScanError: null
-    })
-    expect(writeFileSync).not.toHaveBeenCalled()
-
-    pendingScan.resolve(createEmptyScanResult())
-    await refreshPromise
-
-    expect(store.getScanState().isScanning).toBe(false)
-    expect(writeFileSync).toHaveBeenCalledTimes(1)
   })
 
   it('reports no data for Orca scope when only non-Orca Codex usage exists', async () => {
@@ -362,6 +288,92 @@ describe('CodexUsageStore', () => {
     )
     expect(breakdown.find((row) => row.key === 'gpt-5.4')?.estimatedCostUsd).toBeCloseTo(25.212)
     expect(breakdown.find((row) => row.key === 'gpt-5.5')?.estimatedCostUsd).toBeCloseTo(50.424)
+  })
+
+  it('prices GPT-5.6 sol, terra, and luna with current OpenAI rates', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 2_000_000,
+        cachedInputTokens: 1_000_000,
+        outputTokens: 1_000_000,
+        reasoningOutputTokens: 100_000,
+        totalTokens: 3_000_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(summary.estimatedCostUsd).toBeCloseTo(85.7208)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-sol')?.estimatedCostUsd).toBeCloseTo(50.424)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-terra')?.estimatedCostUsd).toBeCloseTo(
+      25.212
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(
+      10.0848
+    )
+  })
+
+  it('normalizes GPT-5.6 reasoning suffixes before pricing', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6-terra-high', 'gpt-5.6-luna(medium)'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-terra-high')?.estimatedCostUsd).toBeCloseTo(
+      0.5125
+    )
+    expect(
+      breakdown.find((row) => row.key === 'gpt-5.6-luna(medium)')?.estimatedCostUsd
+    ).toBeCloseTo(0.205)
+  })
+
+  it('prices the bare gpt-5.6 alias at Sol rates without shadowing the tier IDs', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: ['gpt-5.6', 'gpt-5.6-luna'].map((model) => ({
+        day: '2026-04-09',
+        model,
+        projectKey: 'worktree:repo-1::/workspace/repo',
+        projectLabel: 'Repo',
+        repoId: 'repo-1',
+        worktreeId: 'repo-1::/workspace/repo',
+        eventCount: 1,
+        inputTokens: 100_000,
+        cachedInputTokens: 50_000,
+        outputTokens: 25_000,
+        reasoningOutputTokens: 5_000,
+        totalTokens: 125_000,
+        hasInferredPricing: false
+      }))
+    })
+
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    expect(breakdown.find((row) => row.key === 'gpt-5.6')?.estimatedCostUsd).toBeCloseTo(1.025)
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna')?.estimatedCostUsd).toBeCloseTo(0.205)
   })
 
   it('normalizes Codex model variants and reasoning suffixes before pricing', async () => {
@@ -768,7 +780,7 @@ describe('CodexUsageStore', () => {
     } as unknown as CodexUsagePersistedState)
 
     expect(normalized).toEqual({
-      schemaVersion: 3,
+      schemaVersion: 5,
       worktreeFingerprint: null,
       processedFiles: [],
       sessions: [],

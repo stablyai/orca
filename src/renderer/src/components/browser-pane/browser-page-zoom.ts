@@ -63,11 +63,37 @@ export function setBrowserPageZoomLevel(
       return null
     }
     const next = normalizeBrowserPageZoomLevel(level)
+    // Why compare first: Chromium's HostZoomMap is keyed by host per partition,
+    // so a no-op write still overwrites the host-wide zoom a sibling tab on the
+    // same hostname set. Only write when this pane actually needs to move.
+    if (normalizeBrowserPageZoomLevel(webview.getZoomLevel()) === next) {
+      return next
+    }
     webview.setZoomLevel(next)
     return next
   } catch {
     return null
   }
+}
+
+// Why module-level: the guest webview outlives its React pane (a worktree
+// switch or a Settings visit unmounts the chrome and parks the viewport), so a
+// pane-local ref re-seeds from the shared Settings default on every remount and
+// retroactively hijacks a tab the user already zoomed.
+const explicitPaneZoomLevels = new Map<string, number>()
+
+/** The level this tab holds because the USER zoomed it, or null while it is
+ *  still sitting on the configured new-tab seed. */
+export function getExplicitBrowserPageZoomLevel(browserPageId: string): number | null {
+  return explicitPaneZoomLevels.get(browserPageId) ?? null
+}
+
+export function rememberExplicitBrowserPageZoomLevel(browserPageId: string, level: number): void {
+  explicitPaneZoomLevels.set(browserPageId, level)
+}
+
+export function forgetExplicitBrowserPageZoomLevel(browserPageId: string): void {
+  explicitPaneZoomLevels.delete(browserPageId)
 }
 
 export function getBrowserPageZoomIndicatorState({
@@ -79,14 +105,6 @@ export function getBrowserPageZoomIndicatorState({
     ariaHidden: !feedbackVisible,
     opacityClassName: feedbackVisible ? 'opacity-100' : 'opacity-0'
   }
-}
-
-export function dispatchBrowserPageZoomEvent(detail: BrowserPageZoomEventDetail): void {
-  window.dispatchEvent(
-    new CustomEvent<BrowserPageZoomEventDetail>(ORCA_BROWSER_PAGE_ZOOM_EVENT, {
-      detail
-    })
-  )
 }
 
 export function addBrowserPageZoomEventListener(

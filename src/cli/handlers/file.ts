@@ -1,5 +1,6 @@
 import type { GitStatusEntry, GitStatusResult } from '../../shared/git-status-types'
-import type { RuntimeFileOpenResult } from '../../shared/runtime-types'
+import type { RuntimeFileOpenResult, RuntimeWorktreeRecord } from '../../shared/runtime-types'
+import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
 import type { CommandHandler, HandlerContext } from '../dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { printResult } from '../format'
@@ -43,6 +44,28 @@ async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): 
     )
   }
   return await resolveCurrentWorktreeSelector(cwd, client)
+}
+
+async function resolveFilePath(
+  ctx: HandlerContext,
+  worktree: string,
+  path: string
+): Promise<string> {
+  if (!isRuntimePathAbsolute(path)) {
+    return path
+  }
+  // Why: only in-worktree absolute paths should be relativized here; outside paths must reach the runtime guard unchanged.
+  const result = await ctx.client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+    worktree
+  })
+  const relativePath = relativePathInsideRoot(result.result.worktree.path, path)
+  if (relativePath === '') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'The selected worktree root is a directory, not a file-open target.'
+    )
+  }
+  return relativePath ?? path
 }
 
 function getOpenChangedMode(flags: Map<string, string | boolean>): OpenChangedMode {
@@ -137,8 +160,9 @@ function formatFileDiff(result: RuntimeFileOpenResult): string {
 
 export const FILE_HANDLERS: Record<string, CommandHandler> = {
   'file open': async (ctx) => {
-    const relativePath = getRequiredStringFlag(ctx.flags, 'path')
+    const path = getRequiredStringFlag(ctx.flags, 'path')
     const worktree = await getFileWorktreeSelector(ctx)
+    const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.open', {
       worktree,
       relativePath
@@ -146,9 +170,10 @@ export const FILE_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, ctx.json, formatFileOpen)
   },
   'file diff': async (ctx) => {
-    const relativePath = getRequiredStringFlag(ctx.flags, 'path')
+    const path = getRequiredStringFlag(ctx.flags, 'path')
     const staged = ctx.flags.get('staged') === true
     const worktree = await getFileWorktreeSelector(ctx)
+    const relativePath = await resolveFilePath(ctx, worktree, path)
     const result = await ctx.client.call<RuntimeFileOpenResult>('files.openDiff', {
       worktree,
       relativePath,

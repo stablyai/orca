@@ -4,17 +4,40 @@ export function getMobileWorkspaceLineageGroupKey(worktreeId: string): string {
   return `workspace-lineage:${encodeURIComponent(worktreeId)}`
 }
 
+function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
+  if (
+    worktree.lineageWorktreeInstanceId === undefined &&
+    worktree.parentWorktreeInstanceId === undefined
+  ) {
+    return true
+  }
+  // Why: desktop rejects stale lineage when a path is reused by a new workspace
+  // instance; mobile needs the same guard before nesting parent/child rows.
+  return (
+    worktree.worktreeInstanceId === worktree.lineageWorktreeInstanceId &&
+    parent.worktreeInstanceId === worktree.parentWorktreeInstanceId
+  )
+}
+
 export function applyMobileWorkspaceLineage(
   worktrees: readonly Worktree[],
   collapsedGroups: ReadonlySet<string> = new Set()
 ): Worktree[] {
   const visibleIds = new Set(worktrees.map((worktree) => worktree.worktreeId))
+  const worktreeById = new Map(worktrees.map((worktree) => [worktree.worktreeId, worktree]))
   const childrenByParentId = new Map<string, Worktree[]>()
   const childIds = new Set<string>()
 
   for (const worktree of worktrees) {
     const parentId = worktree.parentWorktreeId
-    if (!parentId || parentId === worktree.worktreeId || !visibleIds.has(parentId)) {
+    const parent = parentId ? worktreeById.get(parentId) : undefined
+    if (
+      !parentId ||
+      parentId === worktree.worktreeId ||
+      !visibleIds.has(parentId) ||
+      !parent ||
+      !hasValidLineageParent(worktree, parent)
+    ) {
       continue
     }
     childIds.add(worktree.worktreeId)

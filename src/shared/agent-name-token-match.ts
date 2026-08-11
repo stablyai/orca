@@ -33,7 +33,7 @@ export const AGENT_NAMES = [
 // `openclaude.exe`; still reject arbitrary dotted path fragments.
 const WINDOWS_EXECUTABLE_SUFFIX_RE = String.raw`(?:\.(?:exe|cmd|bat|ps1))`
 
-function buildAgentNameRe(name: string): RegExp {
+export function buildAgentNameRe(name: string): RegExp {
   return new RegExp(
     `(?<![\\w./\\\\-])${name}(?:${WINDOWS_EXECUTABLE_SUFFIX_RE})?(?![\\w./\\\\-])`,
     'i'

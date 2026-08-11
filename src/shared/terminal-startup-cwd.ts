@@ -1,43 +1,41 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from './constants'
-import { isPathInsideOrEqual, resolveRuntimePath } from './cross-platform-path'
+import { resolveRuntimePath } from './cross-platform-path'
 import { parseWorkspaceKey } from './workspace-scope'
 import { splitWorktreeIdForFilesystem } from './worktree-id'
 
-export type TerminalStartupCwdOptions = {
-  // Why: the string containment check can't see symlinks; only local callers
-  // can canonicalize — SSH worktree paths live on the remote host.
-  canonicalizePath?: (path: string) => string | null
+export type TerminalStartupCwdMissingDirFallback = {
+  // Why: only local callers can probe the filesystem — SSH/remote worktree
+  // paths live on another host — so the existence check is injected.
+  directoryExists: (path: string) => boolean
+  onFallbackToWorkspaceRoot?: (missingCwd: string) => void
 }
 
 export function resolveTerminalStartupCwd(
   worktreePath: string,
   requestedCwd?: string | null,
-  options?: TerminalStartupCwdOptions
+  missingDirFallback?: TerminalStartupCwdMissingDirFallback
 ): string | undefined {
   const trimmedCwd = requestedCwd?.trim()
   if (!trimmedCwd) {
     return undefined
   }
+  // Why: resolve relative requests against the worktree root and normalize
+  // `..`; the cwd is intentionally not constrained to the worktree, so opening
+  // or splitting a terminal outside it (e.g. after `cd ..`) is allowed. (#7685)
   const resolvedCwd = resolveRuntimePath(worktreePath, trimmedCwd)
-  if (!isPathInsideOrEqual(worktreePath, resolvedCwd)) {
-    // Why: remote/session clients can request terminal cwd; never let that
-    // become a shell outside the selected workspace.
-    throw new Error('Terminal cwd must be inside the selected worktree.')
-  }
-  const canonicalizePath = options?.canonicalizePath
-  if (canonicalizePath) {
-    const canonicalWorktreePath = canonicalizePath(worktreePath)
-    const canonicalCwd = canonicalizePath(resolvedCwd)
-    if (
-      canonicalWorktreePath &&
-      canonicalCwd &&
-      !isPathInsideOrEqual(canonicalWorktreePath, canonicalCwd)
-    ) {
-      // Why: a symlink escaping the worktree can be legitimate (e.g. a pnpm
-      // store link), so fall back to the default cwd instead of failing the
-      // spawn — but never grant the requested out-of-worktree shell.
-      return undefined
-    }
+  if (
+    missingDirFallback &&
+    resolvedCwd !== worktreePath &&
+    !missingDirFallback.directoryExists(resolvedCwd) &&
+    missingDirFallback.directoryExists(worktreePath)
+  ) {
+    // Why: a persisted/inherited startup folder can be deleted later; spawning
+    // into it fails on every retry and bricks terminal creation for that tab
+    // (#7239), so recover at the workspace root. If the root is missing too
+    // (unmounted volume, stopped WSL distro), keep the requested cwd so the
+    // provider surfaces its normal error instead of a misleading fallback.
+    missingDirFallback.onFallbackToWorkspaceRoot?.(resolvedCwd)
+    return worktreePath
   }
   return resolvedCwd
 }
@@ -46,15 +44,14 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
   workspaceId?: string
   requestedCwd?: string | null
   resolveFolderWorkspacePath?: (folderWorkspaceId: string) => string | null | undefined
-  canonicalizePath?: (path: string) => string | null
+  missingDirFallback?: TerminalStartupCwdMissingDirFallback
 }): string | undefined {
   if (!args.requestedCwd || args.requestedCwd.trim().length === 0) {
     return undefined
   }
   if (args.workspaceId === FLOATING_TERMINAL_WORKTREE_ID) {
-    // Why: floating terminals have no worktree root to contain within; their
-    // cwd was already validated against the trusted-directory grants in
-    // resolveFloatingTerminalCwd.
+    // Why: floating terminals have no worktree root; their cwd was already
+    // resolved against the trusted-directory grants in resolveFloatingTerminalCwd.
     return args.requestedCwd
   }
   const workspacePath = resolveTerminalWorkspacePath(
@@ -62,14 +59,11 @@ export function resolveTerminalStartupCwdForWorkspace(args: {
     args.resolveFolderWorkspacePath
   )
   if (!workspacePath) {
-    // Why: without a resolvable workspace root we cannot enforce the
-    // in-worktree containment check, so refuse the requested cwd rather
-    // than trusting an unvalidated path.
+    // Why: without a worktree root we can't anchor a relative request, so fall
+    // back to the provider default rather than guessing a base.
     return undefined
   }
-  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd, {
-    canonicalizePath: args.canonicalizePath
-  })
+  return resolveTerminalStartupCwd(workspacePath, args.requestedCwd, args.missingDirFallback)
 }
 
 function resolveTerminalWorkspacePath(

@@ -33,6 +33,15 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
+  /** Maps REMOVED target IDs to their last known label (from re-adoption
+   * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
+   * for a workspace still pinned to a deleted target. */
+  removedSshTargetLabels: Map<string, string>
+  /** True once a target list actually loaded (even an empty one). Distinguishes
+   * "this client knows the target set" from "never hydrated" (e.g. a paired
+   * client on a host without the ssh RPC), so absence from sshTargetLabels
+   * only counts as removal evidence when this is set. */
+  sshTargetsHydrated: boolean
   remoteWorkspaceHydratedTargetIds: Set<string>
   remoteWorkspaceSyncStatusByTargetId: Record<string, RemoteWorkspaceSyncStatus>
   sshCredentialQueue: SshCredentialRequest[]
@@ -50,6 +59,7 @@ export type SshSlice = {
   detectedPortsByConnection: Record<string, EnrichedDetectedPort[]>
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
+  setRemovedSshTargetLabels: (labels: Record<string, string>) => void
   setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
@@ -62,9 +72,21 @@ export type SshSlice = {
   setDetectedPorts: (targetId: string, ports: EnrichedDetectedPort[]) => void
 }
 
+const targetConnectionGeneration = new Map<string, number>()
+
+export function getLocalSshTargetConnectionGeneration(targetId: string): number {
+  return targetConnectionGeneration.get(targetId) ?? 0
+}
+
+function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
+  targetConnectionGeneration.set(targetId, getLocalSshTargetConnectionGeneration(targetId) + 1)
+}
+
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
+  removedSshTargetLabels: new Map(),
+  sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
   remoteWorkspaceSyncStatusByTargetId: {},
   sshCredentialQueue: [],
@@ -79,24 +101,36 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
       if (sshConnectionStatesEqual(previous, state)) {
         return s
       }
+      advanceLocalSshTargetConnectionGeneration(targetId)
       next.set(targetId, state)
+      const didReconnect = previous?.status !== 'connected' && state.status === 'connected'
+      let blockedConnections = s.transientClearedAgentStatusConnectionIds
+      if (didReconnect && targetId in blockedConnections) {
+        blockedConnections = { ...blockedConnections }
+        delete blockedConnections[targetId]
+      }
       return {
         sshConnectionStates: next,
-        sshConnectedGeneration:
-          previous?.status !== 'connected' && state.status === 'connected'
-            ? s.sshConnectedGeneration + 1
-            : s.sshConnectedGeneration
+        sshConnectedGeneration: didReconnect
+          ? s.sshConnectedGeneration + 1
+          : s.sshConnectedGeneration,
+        transientClearedAgentStatusConnectionIds: blockedConnections
       }
     }),
 
   setSshTargetLabels: (labels) => set({ sshTargetLabels: labels }),
+  setRemovedSshTargetLabels: (labels) =>
+    set({ removedSshTargetLabels: new Map(Object.entries(labels)) }),
   setSshTargetsMetadata: (targets) =>
     set((s) => {
       if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
-        return s
+        // Why: an unchanged (even empty) list is still a successful load — the
+        // hydration flag must flip on the first fetch of an empty target set.
+        return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {
-        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label]))
+        sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
+        sshTargetsHydrated: true
       }
     }),
   clearRemovedSshTargetState: (targetId) =>

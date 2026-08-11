@@ -4,11 +4,17 @@ import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import {
   classifyPrSidebarFailure,
+  emptyPrSidebarDetails,
+  isPrSidebarDetailsPlaceholder,
+  prSidebarDetailsNeedFetch,
   loadPrSidebarData,
   loadPrSidebarDetails,
+  resolvePrSidebarDetailsAfterPhase2,
   shouldApplyResult,
+  shouldSoftRefreshPrSidebarOnHeadChange,
   type PrSidebarLoadDeps
 } from './mobile-pr-sidebar-state'
+import { buildMobilePrSidebarIdentity } from './use-mobile-pr-sidebar-controller'
 
 function ok<T>(result: T): GitHubPrReadOutcome<T> {
   return { ok: true, result }
@@ -198,5 +204,86 @@ describe('shouldApplyResult', () => {
   it('applies only the latest load sequence', () => {
     expect(shouldApplyResult(3, 3)).toBe(true)
     expect(shouldApplyResult(2, 3)).toBe(false)
+  })
+})
+
+describe('shouldSoftRefreshPrSidebarOnHeadChange', () => {
+  it('restarts ready/none/loading so mid-flight head advances are not stuck', () => {
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('ready')).toBe(true)
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('none')).toBe(true)
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('loading')).toBe(true)
+  })
+
+  it('skips hidden and terminal failures (chip bootstrap / retry own those)', () => {
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('hidden')).toBe(false)
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('error')).toBe(false)
+    expect(shouldSoftRefreshPrSidebarOnHeadChange('blocked')).toBe(false)
+  })
+})
+
+describe('resolvePrSidebarDetailsAfterPhase2', () => {
+  it('prefers a successful fetch over prior details', () => {
+    const prior = emptyPrSidebarDetails(PR)
+    expect(resolvePrSidebarDetailsAfterPhase2({ fetched: DETAILS, prior, pr: PR })).toBe(DETAILS)
+  })
+
+  it('keeps prior details when the fetch is non-fatal null', () => {
+    const prior = emptyPrSidebarDetails(PR)
+    expect(resolvePrSidebarDetailsAfterPhase2({ fetched: null, prior, pr: PR })).toBe(prior)
+  })
+
+  it('uses empty details when phase 2 fails with nothing prior (no forever spinner)', () => {
+    const empty = resolvePrSidebarDetailsAfterPhase2({
+      fetched: null,
+      prior: null,
+      pr: PR
+    })
+    expect(empty.body).toBe('')
+    expect(empty.comments).toEqual([])
+    expect(empty.item.number).toBe(7)
+    expect(empty.item.type).toBe('pr')
+    expect(isPrSidebarDetailsPlaceholder(empty)).toBe(true)
+  })
+})
+
+describe('isPrSidebarDetailsPlaceholder / prSidebarDetailsNeedFetch', () => {
+  it('detects the synthetic hyphen id, not the host pr:n shape', () => {
+    const placeholder = emptyPrSidebarDetails(PR)
+    expect(isPrSidebarDetailsPlaceholder(placeholder)).toBe(true)
+    expect(isPrSidebarDetailsPlaceholder(DETAILS)).toBe(false)
+    // Host work-item ids use a colon (`pr:7`); placeholders use a hyphen (`pr-7`).
+    expect(
+      isPrSidebarDetailsPlaceholder({
+        ...DETAILS,
+        item: { ...DETAILS.item, id: `pr:${PR.number}` }
+      })
+    ).toBe(false)
+  })
+
+  it('needs fetch for null and placeholders, not real details', () => {
+    expect(prSidebarDetailsNeedFetch(null)).toBe(true)
+    expect(prSidebarDetailsNeedFetch(undefined)).toBe(true)
+    expect(prSidebarDetailsNeedFetch(emptyPrSidebarDetails(PR))).toBe(true)
+    expect(prSidebarDetailsNeedFetch(DETAILS)).toBe(false)
+  })
+})
+
+describe('buildMobilePrSidebarIdentity', () => {
+  it('keys identity on worktree + branch, not head SHA', () => {
+    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })).toBe('w1\u0000feat')
+    // Head advances on commit must not form a new identity — soft refresh keeps ready UI.
+    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })).toBe(
+      buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'feat' })
+    )
+  })
+
+  it('is null without a branch and changes when branch or worktree changes', () => {
+    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: null })).toBeNull()
+    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'a' })).not.toBe(
+      buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'b' })
+    )
+    expect(buildMobilePrSidebarIdentity({ worktreeId: 'w1', branch: 'a' })).not.toBe(
+      buildMobilePrSidebarIdentity({ worktreeId: 'w2', branch: 'a' })
+    )
   })
 })

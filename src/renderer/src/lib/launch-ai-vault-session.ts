@@ -1,32 +1,82 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  createWebRuntimeSessionTerminal,
+  isWebRuntimeSessionActive
+} from '@/runtime/web-runtime-session'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
-import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../shared/agent-session-resume'
 import type { TabSplitDirection } from '@/store/slices/tabs'
+import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session'
+
+export type LaunchAiVaultSessionInNewTabResult =
+  | { tabId: string; groupId?: string }
+  | { tabId: null; groupId?: string; runtimeLaunch: Promise<WebRuntimeTerminalCreateOutcome> }
 
 export function launchAiVaultSessionInNewTab(args: {
   agent: AiVaultAgent
   worktreeId: string
   command: string
+  cwd?: string
   env?: Record<string, string>
+  envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  providerSession?: AgentProviderSessionMetadata
   targetGroupId?: string
   splitDirection?: TabSplitDirection
-}): { tabId: string; groupId?: string } {
+}): LaunchAiVaultSessionInNewTabResult {
   const store = useAppStore.getState()
   let targetGroupId = args.targetGroupId
+  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
+  if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
+    const runtimeLaunch = createWebRuntimeSessionTerminal({
+      worktreeId: args.worktreeId,
+      environmentId: runtimeEnvironmentId,
+      ...(targetGroupId ? { targetGroupId } : {}),
+      agentSessionKind: 'resume',
+      launchAgent: args.agent,
+      command: args.command,
+      ...(args.cwd ? { cwd: args.cwd } : {}),
+      ...(args.env ? { env: args.env } : {}),
+      ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
+      ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+      ...(args.providerSession ? { providerSession: args.providerSession } : {}),
+      ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
+      activate: true
+    })
+    const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
+      if (outcome.status === 'created') {
+        useAppStore.getState().setActiveTabType('terminal')
+      }
+      return outcome
+    })
+    return {
+      tabId: null,
+      ...(targetGroupId ? { groupId: targetGroupId } : {}),
+      runtimeLaunch: observedRuntimeLaunch
+    }
+  }
+
   if (args.splitDirection && targetGroupId) {
     targetGroupId =
       store.createEmptySplitGroup(args.worktreeId, targetGroupId, args.splitDirection) ??
       targetGroupId
   }
 
-  const tab = store.createTab(args.worktreeId, targetGroupId)
+  const tab = args.cwd
+    ? store.createTab(args.worktreeId, targetGroupId, undefined, { startupCwd: args.cwd })
+    : store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
     ...(args.env ? { env: args.env } : {}),
+    ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
     ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),
+    ...(args.providerSession ? { resumeProviderSession: args.providerSession } : {}),
     telemetry: {
       agent_kind: tuiAgentToAgentKind(args.agent),
       launch_source: 'sidebar',

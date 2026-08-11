@@ -1,8 +1,12 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import {
+  agentSubagentsEqual,
+  isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
+  AGENT_STATUS_MAX_SUBAGENTS,
   AGENT_STATUS_TOOL_NAME_MAX_LENGTH,
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH,
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,
@@ -13,6 +17,26 @@ import {
 
 afterEach(() => {
   vi.restoreAllMocks()
+})
+
+describe('isFreshNonDoneAgentStatus', () => {
+  it('treats a within-TTL working entry as fresh', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 1_000 }, 2_000)).toBe(true)
+  })
+
+  it('never treats a restored-unconfirmed entry as fresh, regardless of age', () => {
+    expect(
+      isFreshNonDoneAgentStatus(
+        { state: 'working', updatedAt: 1_999, restoredUnconfirmed: true },
+        2_000
+      )
+    ).toBe(false)
+  })
+
+  it('stays false for done and for stale entries', () => {
+    expect(isFreshNonDoneAgentStatus({ state: 'done', updatedAt: 2_000 }, 2_000)).toBe(false)
+    expect(isFreshNonDoneAgentStatus({ state: 'working', updatedAt: 0 }, 10_000, 5_000)).toBe(false)
+  })
 })
 
 describe('parseAgentStatusPayload', () => {
@@ -53,6 +77,17 @@ describe('parseAgentStatusPayload', () => {
     expect(parseAgentStatusPayload('')).toBeNull()
   })
 
+  it('rejects excessive nesting before JSON.parse', () => {
+    const parseSpy = vi.spyOn(JSON, 'parse')
+    const depth = AGENT_STATUS_JSON_STRUCTURE_LIMITS.nestingDepth + 1
+    try {
+      expect(parseAgentStatusPayload(`${'['.repeat(depth)}0${']'.repeat(depth)}`)).toBeNull()
+      expect(parseSpy).not.toHaveBeenCalled()
+    } finally {
+      parseSpy.mockRestore()
+    }
+  })
+
   it('returns null for non-object JSON', () => {
     expect(parseAgentStatusPayload('"just a string"')).toBeNull()
     expect(parseAgentStatusPayload('42')).toBeNull()
@@ -83,6 +118,67 @@ describe('parseAgentStatusPayload', () => {
     const longString = 'x'.repeat(300)
     const result = parseAgentStatusPayload(`{"state":"working","prompt":"${longString}"}`)
     expect(result!.prompt).toHaveLength(AGENT_STATUS_MAX_FIELD_LENGTH)
+  })
+
+  // Why: dispatch preambles bury the task body after multi-KB CLI text; naive head-truncation would keep only boilerplate.
+  it('compacts Orca dispatch preambles so the task body survives 200-char truncation', () => {
+    const longCliNoise = Array.from(
+      { length: 50 },
+      (_, i) => `orca orchestration send --to term_parent --type heartbeat --phase step-${i}`
+    ).join('\n')
+    const result = parseAgentStatusPayload(
+      JSON.stringify({
+        state: 'working',
+        prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task_compact_1
+
+=== CLI COMMANDS ===
+${longCliNoise}
+
+=== TASK ===
+Fix dispatch fallback preview for normalized status prompts`
+      })
+    )
+    expect(result).not.toBeNull()
+    expect(result!.prompt.length).toBeLessThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH)
+    expect(result!.prompt.includes('\n')).toBe(false)
+    expect(result!.prompt.startsWith('You are working inside Orca, a multi-agent IDE.')).toBe(true)
+    expect(result!.prompt).toContain('Your task ID is: task_compact_1')
+    expect(result!.prompt).toContain('=== TASK ===')
+    expect(result!.prompt).toContain('Fix dispatch fallback preview')
+    expect(result!.prompt).not.toContain('CLI COMMANDS')
+    expect(result!.prompt).not.toContain('heartbeat')
+  })
+
+  it('ignores task-marker text inside base-drift commit subjects', () => {
+    const result = normalizeAgentStatusPayload({
+      state: 'working',
+      // Why: CRLF covers Windows hook payloads; commit text must not impersonate the task separator.
+      prompt: [
+        'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.',
+        'Your task ID is: task_drift_marker',
+        '',
+        '--- BASE DRIFT ---',
+        '  - docs: explain === TASK === marker parsing',
+        '---',
+        '',
+        '=== TASK ===',
+        'Fix the actual dispatch fallback preview'
+      ].join('\r\n')
+    })
+
+    expect(result!.prompt).toContain('=== TASK === Fix the actual dispatch fallback preview')
+    expect(result!.prompt).not.toContain('marker parsing')
+  })
+
+  it('keeps dispatch detection bounded for oversized whitespace prompts', () => {
+    const trimStartSpy = vi.spyOn(String.prototype, 'trimStart')
+    const prompt = ' '.repeat(1_000_000)
+
+    expect(normalizeAgentStatusPayload({ state: 'working', prompt })!.prompt).toBe('')
+    expect(
+      trimStartSpy.mock.contexts.some((context) => String(context).length === prompt.length)
+    ).toBe(false)
   })
 
   it('defaults missing prompt to empty string', () => {
@@ -118,9 +214,7 @@ describe('parseAgentStatusPayload', () => {
   })
 
   it('collapses newlines in agentType (single-line field)', () => {
-    // Why: pins the regression the parser comment on agent-status-types.ts calls
-    // out — a payload with agentType: "claude\nrogue" must not leak the newline
-    // into UI rendering or equality checks.
+    // Why: agentType is single-line; a newline must not leak into UI rendering or equality checks.
     const result = parseAgentStatusPayload('{"state":"working","agentType":"claude\\nrogue"}')
     expect(result!.agentType).toBe('claude rogue')
   })
@@ -149,8 +243,7 @@ describe('parseAgentStatusPayload', () => {
       questions: [{ question: 'Pick one', options: ['a', 'b'] }]
     })
     const result = parseAgentStatusPayload(JSON.stringify({ state: 'waiting', interactivePrompt }))
-    // Why: the value is raw JSON the client parses back — content (including
-    // any embedded newlines) must survive untouched, unlike toolInput.
+    // Why: interactivePrompt is raw JSON the client parses back, so content must survive untouched (unlike toolInput).
     expect(result!.interactivePrompt).toBe(interactivePrompt)
   })
 
@@ -255,9 +348,7 @@ describe('parseAgentStatusPayload', () => {
   })
 
   it('preserves paragraph breaks in lastAssistantMessage', () => {
-    // Why: the assistant message is rendered with `whitespace-pre-wrap` in the
-    // dashboard row so the user sees the same paragraph structure the agent
-    // produced. Collapsing newlines would destroy that structure.
+    // Why: assistant message renders with whitespace-pre-wrap, so paragraph breaks must survive.
     const result = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"Summary line.\\n\\nDetails paragraph."}'
     )
@@ -292,13 +383,7 @@ describe('parseAgentStatusPayload', () => {
   })
 
   it('folds Unicode line/paragraph separators into \\n and caps blank-line runs in lastAssistantMessage', () => {
-    // Why: U+2028 and U+2029 render as real line breaks under
-    // `whitespace-pre-wrap`. Without folding them to `\n`, a payload with
-    // many separators would bypass the `\n{3,}` → `\n\n` safeguard and let
-    // an agent emit arbitrarily many paragraph breaks. Pin that the
-    // multiline normalizer treats these code points the same way the
-    // single-line normalizer does (strip/convert), so the blank-line cap
-    // applies.
+    // Why: U+2028/U+2029 render as line breaks under whitespace-pre-wrap; fold to \n so the blank-line cap applies.
     const resultLineSep = parseAgentStatusPayload(
       '{"state":"done","lastAssistantMessage":"a\u2028\u2028\u2028\u2028b"}'
     )
@@ -336,9 +421,22 @@ describe('parseAgentStatusPayload', () => {
     }
   })
 
+  it('preserves sessionBoundary=true only on done (stale-signal suppression like interrupted)', () => {
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":true}')!.sessionBoundary
+    ).toBe(true)
+    for (const state of ['working', 'blocked', 'waiting'] as const) {
+      const result = parseAgentStatusPayload(`{"state":"${state}","sessionBoundary":true}`)
+      expect(result!.sessionBoundary).toBeUndefined()
+    }
+    // Why: parser uses `=== true`, so truthy sentinels don't count.
+    expect(
+      parseAgentStatusPayload('{"state":"done","sessionBoundary":"true"}')!.sessionBoundary
+    ).toBeUndefined()
+  })
+
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {
-    // Why: the parser uses `=== true` to guard against agents that surface a
-    // string or numeric truthy sentinel; only an explicit boolean counts.
+    // Why: parser uses `=== true`, so truthy string/number sentinels don't count.
     expect(
       parseAgentStatusPayload('{"state":"done","interrupted":"true"}')!.interrupted
     ).toBeUndefined()
@@ -349,42 +447,27 @@ describe('parseAgentStatusPayload', () => {
   })
 
   it('never leaves a lone high surrogate when truncating mid surrogate-pair', () => {
-    // Why: prepend a single-code-unit character so truncation at the (even)
-    // AGENT_STATUS_MAX_FIELD_LENGTH cap lands ON a high surrogate rather than
-    // between complete pairs. Without this prefix the test would pass even if
-    // the surrogate guard were removed, because the last code unit would
-    // always be a low surrogate.
+    // Why: prepend one code unit so truncation lands ON a high surrogate, else the test passes without the guard.
     const prompt = `x${'😀'.repeat(AGENT_STATUS_MAX_FIELD_LENGTH)}`
     const result = parseAgentStatusPayload(JSON.stringify({ state: 'working', prompt }))
     expect(result!.prompt.length).toBeLessThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH)
-    // Why: pins the guard as load-bearing — a future change that over-trims
-    // (e.g., drops more than one trailing code unit by accident) would leave
-    // the non-malformed assertions happy but silently shrink the output.
-    // The surrogate-pair guard may drop at most ONE trailing high surrogate,
-    // so the result must still reach `max - 1`.
+    // Why: guard drops at most ONE trailing high surrogate, so output must still reach max - 1.
     expect(result!.prompt.length).toBeGreaterThanOrEqual(AGENT_STATUS_MAX_FIELD_LENGTH - 1)
     const len = result!.prompt.length
     const last = result!.prompt.charCodeAt(len - 1)
     const secondLast = len >= 2 ? result!.prompt.charCodeAt(len - 2) : 0
     const isLoneHighSurrogate = last >= 0xd800 && last <= 0xdbff
     expect(isLoneHighSurrogate).toBe(false)
-    // Why: if the last char is a low surrogate, its preceding char must be a
-    // high surrogate — otherwise we'd have a dangling low surrogate, which is
-    // also malformed UTF-16. Pin both directions so the guard is actually load-bearing.
+    // Why: a trailing low surrogate must follow a high surrogate, else it's also malformed UTF-16.
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
     }
   })
 
   it('never leaves a lone high surrogate in lastAssistantMessage truncation', () => {
-    // Why: the multiline normalizer has the same surrogate-pair guard as the
-    // single-line path; cover both so a refactor can't drop the protection
-    // on one side. Emoji count chosen to land truncation inside a pair.
+    // Why: cover the multiline surrogate-pair guard too, so a refactor can't drop it on one side.
     const surrogatePairs = Math.floor(AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH / 2) + 1
-    // Why: prepend a single-code-unit character so truncation at the (even)
-    // cap lands ON a high surrogate rather than between complete pairs. Without
-    // this prefix the test would pass even if the surrogate guard were removed,
-    // because the last code unit would always be a low surrogate.
+    // Why: prepend one code unit so truncation lands ON a high surrogate, else the test passes without the guard.
     const message = `x${'😀'.repeat(surrogatePairs)}`
     const result = parseAgentStatusPayload(
       JSON.stringify({ state: 'done', lastAssistantMessage: message })
@@ -392,11 +475,7 @@ describe('parseAgentStatusPayload', () => {
     expect(result!.lastAssistantMessage!.length).toBeLessThanOrEqual(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
     )
-    // Why: pins the guard as load-bearing — a future change that over-trims
-    // (e.g., drops more than one trailing code unit by accident) would leave
-    // the non-malformed assertions happy but silently shrink the output.
-    // The surrogate-pair guard may drop at most ONE trailing high surrogate,
-    // so the result must still reach `max - 1`.
+    // Why: guard drops at most ONE trailing high surrogate, so output must still reach max - 1.
     expect(result!.lastAssistantMessage!.length).toBeGreaterThanOrEqual(
       AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH - 1
     )
@@ -405,11 +484,137 @@ describe('parseAgentStatusPayload', () => {
     const secondLast = len >= 2 ? result!.lastAssistantMessage!.charCodeAt(len - 2) : 0
     const isLoneHighSurrogate = last >= 0xd800 && last <= 0xdbff
     expect(isLoneHighSurrogate).toBe(false)
-    // Why: if the last char is a low surrogate, its preceding char must be a
-    // high surrogate — otherwise we'd have a dangling low surrogate, which is
-    // also malformed UTF-16. Pin both directions so the guard is actually load-bearing.
+    // Why: a trailing low surrogate must follow a high surrogate, else it's also malformed UTF-16.
     if (last >= 0xdc00 && last <= 0xdfff) {
       expect(secondLast >= 0xd800 && secondLast <= 0xdbff).toBe(true)
+    }
+  })
+
+  it('normalizes the subagents field, dropping invalid entries and bounding count', () => {
+    const result = parseAgentStatusPayload(
+      JSON.stringify({
+        state: 'working',
+        subagents: [
+          { id: 'a1', state: 'working', startedAt: 100, agentType: 'general-purpose' },
+          { id: 'r1', state: 'idle', startedAt: 'nope', description: 'line\none' },
+          { id: '', state: 'working', startedAt: 1 },
+          { id: 'bad-state', state: 'running', startedAt: 1 },
+          'garbage',
+          ...Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 5 }, (_, i) => ({
+            id: `extra-${i}`,
+            state: 'idle',
+            startedAt: i
+          }))
+        ]
+      })
+    )
+    expect(result?.subagents?.length).toBe(AGENT_STATUS_MAX_SUBAGENTS)
+    expect(result?.subagents?.[0]).toEqual({
+      id: 'a1',
+      state: 'working',
+      startedAt: 100,
+      agentType: 'general-purpose',
+      model: undefined,
+      description: undefined
+    })
+    // Why: non-finite startedAt coerces to 0; descriptions fold to one line.
+    expect(result?.subagents?.[1]).toMatchObject({
+      id: 'r1',
+      startedAt: 0,
+      description: 'line one'
+    })
+  })
+
+  it('omits subagents when absent or empty', () => {
+    expect(parseAgentStatusPayload('{"state":"done"}')?.subagents).toBeUndefined()
+    expect(parseAgentStatusPayload('{"state":"done","subagents":[]}')?.subagents).toBeUndefined()
+  })
+})
+
+describe('agentSubagentsEqual', () => {
+  const snapshot = { id: 'a1', state: 'working' as const, startedAt: 1 }
+
+  it('compares structurally and treats undefined/empty as distinct from populated', () => {
+    expect(agentSubagentsEqual(undefined, undefined)).toBe(true)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot }])).toBe(true)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot, state: 'idle' }])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], [{ ...snapshot, model: 'gpt-5.4-mini' }])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], undefined)).toBe(false)
+    expect(agentSubagentsEqual(undefined, [snapshot])).toBe(false)
+    expect(agentSubagentsEqual([snapshot], [snapshot, { ...snapshot, id: 'b' }])).toBe(false)
+  })
+})
+
+// Why: the per-source hook normalizers construct these literals and validate them
+// directly. This pins that the direct path stays identical to the JSON round trip
+// they used to take, including where stringify would have altered the payload.
+describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
+  const CASES: Record<string, unknown>[] = [
+    { state: 'working', prompt: 'p', agentType: 'grok', toolName: 'sh', toolInput: 'ls' },
+    { state: 'done', prompt: '', agentType: 'devin', interrupted: true },
+    // stringify DROPS undefined-valued keys; the direct path passes them through
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'cursor',
+      toolName: undefined,
+      toolInput: undefined,
+      interactivePrompt: undefined,
+      lastAssistantMessage: undefined,
+      interrupted: undefined
+    },
+    // raw JSON inside a field exercises the structure scanner's in-string path
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'copilot',
+      interactivePrompt: JSON.stringify({ q: 'pick {one}', options: ['a', 'b'] })
+    },
+    {
+      state: 'working',
+      prompt: 'a\r\nb c',
+      agentType: 'gemini',
+      lastAssistantMessage: 'emoji \u{1f389} \u65e5\u672c\u8a9e\r\n\r\n\r\nmulti'
+    },
+    { state: 'working', prompt: 'p', agentType: 'amp', lastAssistantMessage: 'x'.repeat(50_000) },
+    { state: 'done', prompt: 'p', agentType: 'hermes', toolName: '', toolInput: '' },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'droid',
+      toolInput: '{"nested":{"deep":{"deeper":[1,2,3]}}}'
+    },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'kimi',
+      lastAssistantMessage: '"escaped" quotes and \\ backslashes'
+    },
+    { state: 'working', prompt: 'p', agentType: 'opencode' },
+    { state: 'done', prompt: 'p', agentType: 'antigravity', interrupted: false },
+    { state: 'working', prompt: 'p', agentType: 'pi', toolName: 'x'.repeat(9000) },
+    { state: 'working', prompt: 'x'.repeat(9000), agentType: 'omp' },
+    {
+      state: 'working',
+      prompt: 'p',
+      agentType: 'command-code',
+      lastAssistantMessage: 'tail with \u001b[0m escape codes'
+    },
+    // a lone surrogate is the case where stringify and a raw read could diverge
+    { state: 'working', prompt: 'p', agentType: 'grok', lastAssistantMessage: 'lone \ud800 pair' }
+  ]
+
+  it('produces identical output for every normalizer literal shape', () => {
+    for (const [index, payload] of CASES.entries()) {
+      expect({
+        index,
+        agent: payload.agentType,
+        value: normalizeAgentStatusPayload(payload)
+      }).toEqual({
+        index,
+        agent: payload.agentType,
+        value: parseAgentStatusPayload(JSON.stringify(payload))
+      })
     }
   })
 })

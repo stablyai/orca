@@ -6,6 +6,7 @@ import type {
   WorkspaceLineage
 } from '../../../../shared/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 
 function makeFolder(id = 'folder-1'): FolderWorkspace {
@@ -165,5 +166,111 @@ describe('getAttachedWorktreesForFolderWorkspace', () => {
     expect(result.lineageChildrenByParentId.get(parent.id)?.map((worktree) => worktree.id)).toEqual(
       [nested.id]
     )
+  })
+
+  it('includes an exact inline-only legacy descendant under an attached root', () => {
+    const parent = makeWorktree({
+      id: 'repo-1::/parent',
+      instanceId: 'parent'
+    })
+    const nested = makeWorktree({
+      id: 'repo-1::/nested',
+      instanceId: 'nested'
+    })
+    const inlineNested = {
+      ...nested,
+      lineage: makeWorktreeLineage(nested, parent)
+    } as Worktree
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {},
+      worktreesByRepo: { 'repo-1': [parent, inlineNested] }
+    })
+
+    expect(result.lineageChildrenByParentId.get(parent.id)?.map((worktree) => worktree.id)).toEqual(
+      [nested.id]
+    )
+  })
+
+  it('keeps a stale side-map entry authoritative over valid inline lineage', () => {
+    const parent = makeWorktree({ id: 'repo-1::/parent', instanceId: 'parent' })
+    const nested = makeWorktree({ id: 'repo-1::/nested', instanceId: 'nested' })
+    const inlineNested = {
+      ...nested,
+      lineage: makeWorktreeLineage(nested, parent)
+    } as Worktree
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {
+        [nested.id]: {
+          ...makeWorktreeLineage(nested, parent),
+          parentWorktreeInstanceId: 'stale-parent'
+        }
+      },
+      worktreesByRepo: { 'repo-1': [parent, inlineNested] }
+    })
+
+    expect(result.lineageChildrenByParentId.size).toBe(0)
+  })
+
+  it('rejects nested descendants across host or project boundaries', () => {
+    const parent = makeWorktree({
+      id: 'repo-1::/parent',
+      instanceId: 'parent',
+      hostId: LOCAL_EXECUTION_HOST_ID,
+      projectId: 'project-1'
+    })
+    const hostChild = makeWorktree({
+      id: 'repo-1::/host-child',
+      instanceId: 'host-child',
+      hostId: toSshExecutionHostId('other')
+    })
+    const projectChild = makeWorktree({
+      id: 'repo-1::/project-child',
+      instanceId: 'project-child',
+      projectId: 'project-2'
+    })
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {
+        [hostChild.id]: makeWorktreeLineage(hostChild, parent),
+        [projectChild.id]: makeWorktreeLineage(projectChild, parent)
+      },
+      worktreesByRepo: { 'repo-1': [parent, hostChild, projectChild] }
+    })
+
+    expect(result.lineageChildrenByParentId.size).toBe(0)
+  })
+
+  it('does not attach cyclic legacy descendants', () => {
+    const parent = makeWorktree({ id: 'repo-1::/parent', instanceId: 'parent' })
+    const nested = makeWorktree({ id: 'repo-1::/nested', instanceId: 'nested' })
+
+    const result = getAttachedWorktreesForFolderWorkspace({
+      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
+      activeWorktreeId: null,
+      folderWorkspaces: [makeFolder()],
+      workspaceLineageByChildKey: { [parent.id]: makeWorkspaceLineage(parent) },
+      worktreeLineageById: {
+        [parent.id]: makeWorktreeLineage(parent, nested),
+        [nested.id]: makeWorktreeLineage(nested, parent)
+      },
+      worktreesByRepo: { 'repo-1': [parent, nested] }
+    })
+
+    expect(result.lineageChildrenByParentId.size).toBe(0)
+    expect(result.rootChildWorktrees.map((worktree) => worktree.id)).toEqual([parent.id])
   })
 })

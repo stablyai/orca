@@ -1,3 +1,12 @@
+import {
+  isMcpConfigInspectionNameWithinLimit,
+  isMcpConfigInspectionTextWithinLimit,
+  MCP_CONFIG_INSPECTION_MAX_SERVERS
+} from './mcp-config-inspection-limits'
+import { summarizeMcpServer } from './mcp-server-inspection'
+
+export { maskMcpEnv } from './mcp-server-inspection'
+
 export type McpConfigFormat = 'workspace' | 'cursor' | 'claude'
 
 export type McpConfigCandidate = {
@@ -100,17 +109,21 @@ export function canInspectLocalMcpConfigRoot(rootPath: string, isWindowsHost: bo
   return !/^(?:[A-Za-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/.test(rootPath)
 }
 
-const SENSITIVE_ENV_KEY_PATTERN =
-  /(api[_-]?key|auth|bearer|cookie|credential|password|private[_-]?key|secret|session|token)/i
-const SENSITIVE_ENV_VALUE_PATTERN =
-  /(sk-[A-Za-z0-9_-]{12,}|gh[pousr]_[A-Za-z0-9_]{12,}|xox[baprs]-[A-Za-z0-9-]{12,})/
-
 export function inspectMcpConfigContent(
   candidate: McpConfigCandidate,
   content: string | null
 ): McpConfigInspection {
   if (content === null) {
     return { candidate, exists: false, status: 'missing', servers: [] }
+  }
+  if (!isMcpConfigInspectionTextWithinLimit(content)) {
+    return {
+      candidate,
+      exists: true,
+      status: 'invalid',
+      servers: [],
+      error: 'MCP config exceeds the inspection size limit.'
+    }
   }
 
   let parsed: unknown
@@ -130,29 +143,40 @@ export function inspectMcpConfigContent(
   if (!rawServers) {
     return { candidate, exists: true, status: 'valid', servers: [] }
   }
+  const serverEntries = collectMcpServerEntries(rawServers)
+  if (!serverEntries) {
+    return {
+      candidate,
+      exists: true,
+      status: 'invalid',
+      servers: [],
+      error: 'MCP server collection exceeds the inspection limits.'
+    }
+  }
 
   return {
     candidate,
     exists: true,
     status: 'valid',
-    servers: Object.entries(rawServers).map(([name, entry]) => summarizeMcpServer(name, entry))
+    servers: serverEntries.map(([name, entry]) => summarizeMcpServer(name, entry))
   }
 }
 
-export function maskMcpEnv(env: unknown): Record<string, string> | undefined {
-  if (!env || typeof env !== 'object' || Array.isArray(env)) {
-    return undefined
+function collectMcpServerEntries(rawServers: Record<string, unknown>): [string, unknown][] | null {
+  const entries: [string, unknown][] = []
+  for (const name in rawServers) {
+    if (!Object.prototype.hasOwnProperty.call(rawServers, name)) {
+      continue
+    }
+    if (
+      entries.length >= MCP_CONFIG_INSPECTION_MAX_SERVERS ||
+      !isMcpConfigInspectionNameWithinLimit(name)
+    ) {
+      return null
+    }
+    entries.push([name, rawServers[name]])
   }
-
-  const masked: Record<string, string> = {}
-  for (const [key, rawValue] of Object.entries(env)) {
-    const value = typeof rawValue === 'string' ? rawValue : String(rawValue)
-    masked[key] =
-      SENSITIVE_ENV_KEY_PATTERN.test(key) || SENSITIVE_ENV_VALUE_PATTERN.test(value)
-        ? '••••••••'
-        : value
-  }
-  return masked
+  return entries
 }
 
 function getRelativeParentDir(relativePath: string): string {
@@ -181,95 +205,4 @@ function extractObjectAtPath(
   return current && typeof current === 'object' && !Array.isArray(current)
     ? (current as Record<string, unknown>)
     : null
-}
-
-function summarizeMcpServer(name: string, entry: unknown): McpServerSummary {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
-    return {
-      name,
-      transport: 'unknown',
-      status: 'invalid',
-      issue: 'Server entry must be an object.'
-    }
-  }
-
-  const raw = entry as Record<string, unknown>
-  const command = readCommand(raw)
-  const url = readUrl(raw)
-  const transport = resolveTransport(raw, command, url)
-  const enabled = raw.enabled !== false && raw.disabled !== true
-  const env = maskMcpEnv(raw.env)
-
-  if (transport === 'unknown') {
-    return {
-      name,
-      transport,
-      status: 'invalid',
-      env,
-      issue: 'Missing command or URL.'
-    }
-  }
-
-  if (transport === 'http' && !url) {
-    return {
-      name,
-      transport,
-      status: 'invalid',
-      env,
-      issue: 'Missing URL.'
-    }
-  }
-
-  if (transport === 'stdio' && !command) {
-    return {
-      name,
-      transport,
-      status: 'invalid',
-      env,
-      issue: 'Missing command.'
-    }
-  }
-
-  return {
-    name,
-    transport,
-    status: enabled ? 'enabled' : 'disabled',
-    command,
-    url,
-    env
-  }
-}
-
-function readCommand(raw: Record<string, unknown>): string | undefined {
-  if (typeof raw.command === 'string') {
-    return raw.command
-  }
-  if (Array.isArray(raw.command) && typeof raw.command[0] === 'string') {
-    return raw.command[0]
-  }
-  return undefined
-}
-
-function readUrl(raw: Record<string, unknown>): string | undefined {
-  if (typeof raw.url === 'string') {
-    return raw.url
-  }
-  if (typeof raw.httpUrl === 'string') {
-    return raw.httpUrl
-  }
-  return undefined
-}
-
-function resolveTransport(
-  raw: Record<string, unknown>,
-  command: string | undefined,
-  url: string | undefined
-): McpServerTransport {
-  if (raw.type === 'http' || raw.type === 'remote' || url) {
-    return 'http'
-  }
-  if (raw.type === 'local' || command) {
-    return 'stdio'
-  }
-  return 'unknown'
 }

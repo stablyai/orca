@@ -1,16 +1,8 @@
-/* eslint-disable max-lines -- Why: relay hook parsing, replay cache, endpoint
-   writing, and assistant-message retry state are one lifecycle unit; splitting
-   them would obscure cleanup ordering across remote PTY reconnects. */
-// Why: relay-side adapter for the shared agent-hook listener pipeline. Hosts
-// a loopback HTTP server (same shape as Orca's main-process server: bind
-// 127.0.0.1:0, bearer-token auth, /hook/<source> routing) and forwards every
-// parsed payload via a callback so `relay.ts` can re-emit it as an
-// `agent.hook` JSON-RPC notification across the existing SSH channel.
-//
-// Per-instance state (warn-once Sets, last-status cache, last-prompt /
-// last-tool caches) lives on `HookListenerState`. The cache is bounded to one
-// entry per paneKey — see docs/design/agent-status-over-ssh.md §5 (Path 3,
-// request-driven replay) for the rationale.
+/* eslint-disable max-lines -- Why: parsing, replay cache, endpoint writing, and retry state are one lifecycle unit; splitting obscures cleanup ordering across reconnects. */
+// Relay-side adapter for the shared agent-hook listener: hosts a loopback HTTP server and
+// forwards each parsed payload via a callback so `relay.ts` re-emits it as an `agent.hook`
+// JSON-RPC notification over the SSH channel. Replay cache is bounded one-entry-per-paneKey —
+// see docs/design/agent-status-over-ssh.md §5 (Path 3, request-driven replay) for the rationale.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -22,10 +14,13 @@ import {
   clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
+  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
   normalizeHookPayload,
+  preparePendingGrokResultDiscovery,
   readRequestBody,
+  resolveCachedClaudeCompactOwnership,
   resolveHookSource,
   writeEndpointFile,
   type AgentHookEventPayload,
@@ -39,20 +34,18 @@ import {
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void
 
-// Why: relay's userData equivalent. Lives under $HOME so each user on a
-// shared dev box gets their own dir, owned 0o700. Mirrors RELAY_REMOTE_DIR
-// from `ssh-relay-deploy.ts` but stays local to this module — the hook
-// server is the only consumer.
+// Why: relay's userData equivalent under $HOME so each user on a shared dev box gets their own 0o700 dir.
 const RELAY_HOOKS_DIR_NAME = '.orca-relay'
 const RELAY_HOOKS_SUBDIR = 'agent-hooks'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
+const CODEX_SUBAGENT_POLL_MS = 1_000
 
-// Why: cap env/version metadata at 64 chars so a misbehaving agent CLI
-// cannot grow lastEnvelopeMetaByPaneKey unboundedly per pane via the cache
-// + replay path. Canonical values are short ('production'/'development',
-// '1'/'999'); anything longer is treated as absent.
+// Why: cap metadata to prevent a misbehaving CLI growing the cache unboundedly.
 const MAX_HOOK_META_LEN = 64
+
+// Why: WSL lacks per-pane teardown, so cap replay-cache recency.
+const MAX_CACHED_PANES = 256
 
 function defaultEndpointDir(): string {
   return join(homedir(), RELAY_HOOKS_DIR_NAME, RELAY_HOOKS_SUBDIR)
@@ -81,11 +74,13 @@ export function endpointDirForRelaySocket(sockPath: string): string {
 export type RelayHookServerOptions = {
   /** Where to put endpoint.env / endpoint.cmd. Defaults to `$HOME/.orca-relay/agent-hooks`. */
   endpointDir?: string
-  /** Env tag forwarded into hook payloads. Defaults to "remote", a relay
-   *  location marker that main excludes from dev-vs-prod mismatch warnings. */
+  /** Env tag forwarded into hook payloads. Defaults to "remote", which main excludes from dev-vs-prod mismatch warnings. */
   env?: string
-  /** Called once per parsed payload. The relay wires this to
-   *  `dispatcher.notify('agent.hook', envelope)`. */
+  /** Fixed auth token. WSL relay passes the host-issued token (already in guest env via WSLENV) so unmodified hook clients authenticate. Defaults to a fresh UUID. */
+  token?: string
+  /** Preferred bind port. WSL relay passes the Windows listener's port so env-sourced client coords stay truthful; falls back to :0 if occupied. Defaults to :0. */
+  preferredPort?: number
+  /** Called once per parsed payload; the relay wires this to `dispatcher.notify('agent.hook', envelope)`. */
   forward: RelayHookForward
 }
 
@@ -102,24 +97,25 @@ export class RelayAgentHookServer {
   private endpointFilePath: string
   private endpointFileWritten = false
   private state: HookListenerState = createHookListenerState()
-  // Why: the shared `HookListenerState.lastStatusByPaneKey` cache only stores
-  // `AgentHookEventPayload` (no wire-envelope fields). Replay must still emit
-  // the original `source`/`env`/`version` so Orca's warn-once diagnostics fire
-  // identically to the live POST path. Keep this as a per-instance sidecar map
-  // so the shared listener type stays unchanged. Invariant: every key present
-  // in `state.lastStatusByPaneKey` must also be present here — populated and
-  // cleared in lockstep on the live POST path, clearPaneState, and stop().
+  // Why: retain envelope metadata so replays match live POSTs.
+  // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
   private lastEnvelopeMetaByPaneKey: Map<
     string,
     { source: AgentHookSource; env?: string; version?: string }
   > = new Map()
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward
+  private fixedToken: string | undefined
+  private preferredPort: number
+  private portFallbackApplied = false
 
   constructor(options: RelayHookServerOptions) {
     this.env = options.env ?? REMOTE_AGENT_HOOK_ENV
     this.endpointDir = options.endpointDir ?? defaultEndpointDir()
     this.endpointFilePath = join(this.endpointDir, getEndpointFileName())
+    this.fixedToken = options.token
+    this.preferredPort = options.preferredPort ?? 0
     this.forward = options.forward
   }
 
@@ -127,16 +123,36 @@ export class RelayAgentHookServer {
     if (this.server) {
       return
     }
-    this.token = randomUUID()
+    this.token = this.fixedToken ?? randomUUID()
     this.endpointFileWritten = false
+    this.portFallbackApplied = false
+    try {
+      await this.listenOn(this.preferredPort)
+    } catch (err) {
+      // Why: fall back to an ephemeral port on EADDRINUSE; clients use the endpoint file.
+      if (this.preferredPort > 0 && (err as NodeJS.ErrnoException)?.code === 'EADDRINUSE') {
+        this.portFallbackApplied = true
+        await this.listenOn(0)
+      } else {
+        throw err
+      }
+    }
+    if (options.publishEndpoint !== false) {
+      this.publishEndpointFile()
+    }
+  }
+
+  /** True when the preferred port was occupied and the server fell back to an ephemeral bind. */
+  get usedPortFallback(): boolean {
+    return this.portFallbackApplied
+  }
+
+  private listenOn(port: number): Promise<void> {
     this.server = createServer((req, res) => this.handleRequest(req, res))
-    await new Promise<void>((resolve, reject) => {
+    return new Promise<void>((resolve, reject) => {
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
-        // Why: null the server reference on bind failure so a subsequent
-        // start() can retry. Without this, a failed bind (e.g. EMFILE) leaves
-        // this.server populated and the early-return at the top of start()
-        // wedges the relay into a permanently broken state until stop() runs.
+        // Why: clear failed server refs so later start() calls can retry.
         this.server = null
         reject(err)
       }
@@ -149,16 +165,11 @@ export class RelayAgentHookServer {
         if (address && typeof address === 'object') {
           this.port = address.port
         }
-        if (options.publishEndpoint !== false) {
-          this.publishEndpointFile()
-        }
         resolve()
       }
       this.server!.once('error', onStartupError)
-      // Why: bind 127.0.0.1:0 so the OS assigns a free port. Loopback only —
-      // the agent CLI inside the same remote box reaches us via curl
-      // 127.0.0.1:PORT; nobody outside the box can.
-      this.server!.listen(0, '127.0.0.1', onListening)
+      // Why: loopback only — reachable by the in-box agent CLI (127.0.0.1), not from outside the box.
+      this.server!.listen(port, '127.0.0.1', onListening)
     })
   }
 
@@ -186,24 +197,21 @@ export class RelayAgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
+    for (const timer of this.codexSubagentPollTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.codexSubagentPollTimers.clear()
     clearAllListenerCaches(this.state)
     this.lastEnvelopeMetaByPaneKey.clear()
   }
 
-  /** Request-driven replay: walks the per-paneKey last-payload cache and
-   *  forwards each entry as a fresh notification. Called after Orca has
-   *  re-wired its `agent.hook` handler on the new mux post-`--connect`.
-   *  The relay-driver issues the replay forwards BEFORE returning from the
-   *  request handler so the response strictly trails all replayed
-   *  notifications on the dispatcher's single write callback. */
+  /** Request-driven replay: re-forwards each cached paneKey payload as a fresh notification. Forwards are
+   *  issued before the request handler returns, so the response trails all replayed notifications. */
   replayCachedPayloadsForPanes(): number {
     let count = 0
     for (const [paneKey, event] of this.state.lastStatusByPaneKey.entries()) {
       const meta = this.lastEnvelopeMetaByPaneKey.get(paneKey)
-      // Why: invariant — every paneKey in the shared status cache is populated
-      // in lockstep with `lastEnvelopeMetaByPaneKey`. If meta is missing,
-      // something has drifted; skip rather than fall back to a guessed source
-      // that would mis-tag the event downstream.
+      // Why: invariant — status-cache keys always have meta; if it drifted, skip rather than guess a source that mis-tags downstream.
       if (!meta) {
         continue
       }
@@ -213,17 +221,15 @@ export class RelayAgentHookServer {
     return count
   }
 
-  /** Drop a paneKey's cached entries on PTY exit so a terminated pane never
-   *  resurfaces as a ghost event on a later reconnect. Symmetric with the
-   *  local server's clearPaneState on PTY teardown. */
+  /** Drop a paneKey's cached entries on PTY exit so a terminated pane can't resurface as a ghost event on reconnect. */
   clearPaneState(paneKey: string): void {
     this.clearAssistantMessageRetry(paneKey)
+    this.clearCodexSubagentPoll(paneKey)
     clearPaneCacheState(this.state, paneKey)
     this.lastEnvelopeMetaByPaneKey.delete(paneKey)
   }
 
-  /** Env vars to inject into every relay-spawned PTY so the hook script /
-   *  in-process plugin POSTs to this loopback server. */
+  /** Env vars to inject into relay-spawned PTYs so the hook script/plugin POSTs back to this loopback server. */
   buildPtyEnv(): Record<string, string> {
     if (this.port <= 0 || !this.token) {
       return {}
@@ -270,22 +276,22 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
-      const event = normalizeHookPayload(this.state, source, body, this.env)
+      const event = normalizeHookPayload(this.state, source, body, this.env, {
+        allowUnanchoredPreCompact: true,
+        allowUnanchoredPostCompact: true
+      })
       if (event) {
-        // TODO: once normalizeHookPayload returns validated env/version, drop
-        // bodyEnv/bodyVersion and source those from the listener result instead.
+        // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
         const env = this.bodyEnv(body)
         const version = this.bodyVersion(body)
         this.applyEvent(event, source, env, version)
         this.scheduleAssistantMessageRetry(source, body, event, env, version)
+        this.scheduleCodexSubagentPoll(source, body, event, env, version)
       }
       res.writeHead(204)
       res.end()
     } catch (err) {
-      // Why: agent hooks must fail open — return success on parse / size /
-      // timeout errors so a buggy agent script never blocks the agent run.
-      // Log the swallowed error to stderr so future programmer bugs are not
-      // invisible (the 204 response would otherwise mask them entirely).
+      // Why: hooks fail open (204 on any error) so a buggy agent never blocks the run; still log so the 204 doesn't mask bugs.
       process.stderr.write(
         `[relay-hook-server] hook request failed: ${err instanceof Error ? err.message : String(err)}\n`
       )
@@ -311,10 +317,14 @@ export class RelayAgentHookServer {
       hasExplicitPrompt: event.hasExplicitPrompt,
       promptInteractionKey: event.promptInteractionKey,
       hookEventName: event.hookEventName,
+      providerPromptId: event.providerPromptId,
+      compactTrigger: event.compactTrigger,
       toolUseId: event.toolUseId,
       toolAgentId: event.toolAgentId,
       toolAgentType: event.toolAgentType,
+      claudeRunningNonAgentTask: event.claudeRunningNonAgentTask,
       ...(event.providerSession ? { providerSession: event.providerSession } : {}),
+      ...(event.providerSessionOnly ? { providerSessionOnly: true } : {}),
       isReplay: options.isReplay === true ? true : undefined,
       env,
       version,
@@ -332,8 +342,20 @@ export class RelayAgentHookServer {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.clearAssistantMessageRetry(event.paneKey)
     }
-    this.state.lastStatusByPaneKey.set(event.paneKey, event)
+    const previous = this.state.lastStatusByPaneKey.get(event.paneKey)
+    const cachedEvent = resolveCachedClaudeCompactOwnership(previous, event)
+    // Why: delete-then-set makes Map insertion order = recency, so the cap below evicts the longest-idle pane.
+    this.state.lastStatusByPaneKey.delete(event.paneKey)
+    this.state.lastStatusByPaneKey.set(event.paneKey, cachedEvent)
+    this.lastEnvelopeMetaByPaneKey.delete(event.paneKey)
     this.lastEnvelopeMetaByPaneKey.set(event.paneKey, { source, env, version })
+    while (this.state.lastStatusByPaneKey.size > MAX_CACHED_PANES) {
+      const oldest = this.state.lastStatusByPaneKey.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.clearPaneState(oldest)
+    }
     this.forwardEvent(event, source, env, version)
   }
 
@@ -346,13 +368,61 @@ export class RelayAgentHookServer {
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
+  private clearCodexSubagentPoll(paneKey: string): void {
+    const timer = this.codexSubagentPollTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.codexSubagentPollTimers.delete(paneKey)
+  }
+
+  private scheduleCodexSubagentPoll(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env?: string,
+    version?: string
+  ): void {
+    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
+    if (source !== 'codex') {
+      return
+    }
+    this.clearCodexSubagentPoll(original.paneKey)
+    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.codexSubagentPollTimers.delete(original.paneKey)
+      if (!this.server || this.state.lastStatusByPaneKey.get(original.paneKey) !== original) {
+        return
+      }
+      const event = normalizeHookPayload(this.state, source, body, this.env)
+      if (!event) {
+        return
+      }
+      const subagentsChanged =
+        JSON.stringify(event.payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged ? event : original
+      if (subagentsChanged) {
+        this.applyEvent(event, source, env, version)
+      }
+      this.scheduleCodexSubagentPoll(source, body, next, env, version)
+    }, CODEX_SUBAGENT_POLL_MS)
+    this.codexSubagentPollTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  }
+
   private scheduleAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: AgentHookEventPayload,
     env?: string,
     version?: string,
-    attempt = 1
+    attempt = 1,
+    discoveryReady = false
   ): void {
     if (
       original.payload.lastAssistantMessage ||
@@ -362,26 +432,36 @@ export class RelayAgentHookServer {
       return
     }
     this.clearAssistantMessageRetry(original.paneKey)
+    if (!discoveryReady) {
+      const discovery = preparePendingGrokResultDiscovery(source, body)
+      if (discovery) {
+        // Why: slug-group discovery can outlive the bounded flush timers, so its completion drives the first retry.
+        void discovery
+          .then(() => {
+            if (this.server) {
+              this.applyAssistantMessageRetry(source, body, original, env, version, 1, true)
+            }
+          })
+          .catch((err) => {
+            process.stderr.write(
+              `[relay-hook-server] Grok result discovery failed: ${err instanceof Error ? err.message : String(err)}\n`
+            )
+          })
+        return
+      }
+    }
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        const current = this.state.lastStatusByPaneKey.get(original.paneKey)
-        if (
-          !current ||
-          current.payload.agentType !== original.payload.agentType ||
-          current.payload.prompt !== original.payload.prompt ||
-          current.payload.lastAssistantMessage
-        ) {
-          return
-        }
-        const event = normalizeHookPayload(this.state, source, body, this.env)
-        if (!event?.payload.lastAssistantMessage) {
-          this.scheduleAssistantMessageRetry(source, body, original, env, version, attempt + 1)
-          return
-        }
-        // Why: the relay runs on SSH targets too; retry from a timer so a delayed
-        // transcript/chat-history write does not block the remote hook server.
-        this.applyEvent(event, source, env, version)
+        this.applyAssistantMessageRetry(
+          source,
+          body,
+          original,
+          env,
+          version,
+          attempt + 1,
+          discoveryReady
+        )
       } catch (err) {
         process.stderr.write(
           `[relay-hook-server] assistant message retry failed: ${err instanceof Error ? err.message : String(err)}\n`
@@ -392,6 +472,41 @@ export class RelayAgentHookServer {
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+  }
+
+  private applyAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: AgentHookEventPayload,
+    env: string | undefined,
+    version: string | undefined,
+    nextAttempt: number,
+    requireExactOriginal: boolean
+  ): void {
+    const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+    if (
+      !current ||
+      (requireExactOriginal && current !== original) ||
+      current.payload.agentType !== original.payload.agentType ||
+      current.payload.prompt !== original.payload.prompt ||
+      current.payload.lastAssistantMessage
+    ) {
+      return
+    }
+    const event = normalizeHookPayload(this.state, source, body, this.env)
+    if (!event?.payload.lastAssistantMessage) {
+      this.scheduleAssistantMessageRetry(
+        source,
+        body,
+        original,
+        env,
+        version,
+        nextAttempt,
+        requireExactOriginal
+      )
+      return
+    }
+    this.applyEvent(event, source, env, version)
   }
 
   private bodyEnv(body: unknown): string | undefined {

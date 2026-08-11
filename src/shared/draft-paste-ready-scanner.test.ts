@@ -5,6 +5,9 @@ const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const SHOW_CURSOR = '\x1b[?25h'
 const HIDE_CURSOR = '\x1b[?25l'
 const CODEX_PROMPT = '\x1b[1m›\x1b[0m Ask Codex to do anything'
+const GROK_ALT_SCREEN_ENTER = '\x1b[?1049h\x1b[?2004h\x1b[?25l'
+const GROK_ALT_SCREEN_LEAVE = '\x1b[?1049l\x1b[?25h'
+const GROK_COMPOSER_FRAME = '\x1b[38;2;80;80;88m│\x1b[38;2;200;200;200m❯ \x1b[0m'
 
 describe('createDraftPasteReadyScanner', () => {
   describe('render-cursor-after-bracketed-paste (opencode / mimo-code)', () => {
@@ -116,6 +119,120 @@ describe('createDraftPasteReadyScanner', () => {
         armQuietTimer: false
       })
       expect(scanner.observe('noise')).toEqual({ ready: false, armQuietTimer: false })
+    })
+  })
+
+  describe('grok-composer-prompt', () => {
+    it('is ready on the composer glyph after the alternate-screen switch', () => {
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe(GROK_ALT_SCREEN_ENTER)).toEqual({ ready: false, armQuietTimer: true })
+      expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
+    })
+
+    it('ignores a shell prompt glyph emitted before grok takes the screen', () => {
+      // Why: `❯` is starship's / pure's default prompt too, and that prompt —
+      // with its own DECSET 2004 — renders in the normal buffer while the shell
+      // still owns the PTY. Firing there would paste the draft into the shell.
+      // The shell's 2004 still arms the quiet floor, exactly as it does today
+      // for every agent on the default signal.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe(`${DECSET_BRACKETED_PASTE}\x1b[32m❯\x1b[0m grok\r\n`)).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+      expect(scanner.observe(GROK_ALT_SCREEN_ENTER)).toEqual({ ready: false, armQuietTimer: true })
+      expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
+    })
+
+    it('resolves from a single replayed buffer holding both markers (SSH/remote replay path)', () => {
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe(`${GROK_ALT_SCREEN_ENTER}logo frames${GROK_COMPOSER_FRAME}`)).toEqual({
+        ready: true,
+        armQuietTimer: false
+      })
+    })
+
+    it('keeps arming the quiet window so a missed composer frame still delivers', () => {
+      // Why: grok renders differentially — the glyph is painted once, so a
+      // scanner that attached after that frame would otherwise wait out the
+      // caller's hard timeout. Output only goes quiet once startup settles.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      scanner.observe(GROK_ALT_SCREEN_ENTER)
+      expect(scanner.observe('logo shimmer frame')).toEqual({ ready: false, armQuietTimer: true })
+    })
+
+    it('arms the quiet window from DECSET 2004 when grok renders inline', () => {
+      // Why: `--no-alt-screen` / `[ui] screen_mode = "minimal"` emits no 1049h,
+      // so the glyph never anchors. The quiet window must still arm off 2004 or
+      // readiness never resolves and the main-process caller drops the draft.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe(DECSET_BRACKETED_PASTE)).toEqual({ ready: false, armQuietTimer: true })
+      expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: false, armQuietTimer: true })
+    })
+
+    it('does not treat a legacy-console `> ` prompt as the glyph', () => {
+      // grok draws `> ` instead of `❯` on legacy Windows consoles; it is too
+      // generic to match, so those launches ride the quiet window.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      scanner.observe(GROK_ALT_SCREEN_ENTER)
+      expect(scanner.observe('\x1b[38;2;80;80;88m│\x1b[0m> ')).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+    })
+
+    it('disarms when grok leaves the alternate screen before painting a composer', () => {
+      // Why: grok entering the alt screen and then dying hands the terminal back to
+      // the shell. A latched anchor would treat the shell's `❯` prompt as grok's
+      // composer and paste the draft into the shell.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      scanner.observe(GROK_ALT_SCREEN_ENTER)
+      expect(scanner.observe(GROK_ALT_SCREEN_LEAVE)).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+      expect(scanner.observe(`\x1b[32m❯\x1b[0m `)).toEqual({ ready: false, armQuietTimer: true })
+    })
+
+    it('ignores a shell prompt after an rc-file program used the alternate screen', () => {
+      // Why: a pager/editor launched from the user's shell rc enters and leaves the
+      // alt screen before grok is even launched; the prompt that follows is the
+      // shell's, so the anchor must not survive the leave.
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(
+        scanner.observe(`rc pager${GROK_ALT_SCREEN_ENTER}paged${GROK_ALT_SCREEN_LEAVE}`)
+      ).toEqual({ ready: false, armQuietTimer: true })
+      expect(scanner.observe(`${DECSET_BRACKETED_PASTE}\x1b[32m❯\x1b[0m grok\r\n`)).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+      // grok's own launch still resolves normally afterwards.
+      expect(scanner.observe(GROK_ALT_SCREEN_ENTER)).toEqual({ ready: false, armQuietTimer: true })
+      expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
+    })
+
+    it('ignores a glyph that precedes the alt-screen switch inside one chunk', () => {
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe(`❯ ${GROK_ALT_SCREEN_ENTER}`)).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+    })
+
+    it('does not fire on a glyph that lands after the leave inside one chunk', () => {
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      scanner.observe(GROK_ALT_SCREEN_ENTER)
+      expect(scanner.observe(`${GROK_ALT_SCREEN_LEAVE}\x1b[32m❯\x1b[0m `)).toEqual({
+        ready: false,
+        armQuietTimer: true
+      })
+    })
+
+    it('detects the alt-screen anchor split across a chunk boundary', () => {
+      const scanner = createDraftPasteReadyScanner('grok-composer-prompt')
+      expect(scanner.observe('\x1b[?10')).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe('49h')).toEqual({ ready: false, armQuietTimer: false })
+      expect(scanner.observe(GROK_COMPOSER_FRAME)).toEqual({ ready: true, armQuietTimer: false })
     })
   })
 

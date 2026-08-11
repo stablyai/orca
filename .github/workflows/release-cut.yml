@@ -41,6 +41,16 @@ on:
         required: false
         default: false
         type: boolean
+      version_suffix:
+        description: Extra prerelease identifier appended to an rc version (e.g. "perf" -> 1.2.3-rc.4.perf). Applies to kind=rc, or to an explicit version that is a bare X.Y.Z-rc.N.
+        required: false
+        type: string
+        default: ''
+      version:
+        description: Exact version to cut (e.g. 1.4.155 or 1.4.155-rc.4), bypassing kind-based computation. Use to leapfrog a deleted/rolled-back stable that regressed the release list. Must be greater than the latest published stable, and an -rc.N must be above the highest RC already cut for its own base.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: write
@@ -62,7 +72,34 @@ jobs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
+      # Why: downstream SignPath Slack pings need the cut source (not only the
+      # new tag) so approvers know what they're signing and who cut it.
+      source_ref: ${{ steps.resolve.outputs.ref }}
+      source_sha: ${{ steps.resolve.outputs.sha }}
+      source_short_sha: ${{ steps.resolve.outputs.short_sha }}
     steps:
+      # Why inlined (not m-s-abeer/update-gha-summary-with-workflow-inputs):
+      # this job runs with contents:write and secret scope, so avoid executing
+      # any external (mutable @v1) action here. Surfaces every
+      # workflow_dispatch input as a table for audit; the resolved commit /
+      # branch / tag enrichment is written later in "Resolve ref SHA".
+      # Inputs are passed as JSON via env and parsed by jq as data — never
+      # interpolated into the shell — to avoid injection from dispatch values.
+      - name: Summarize workflow inputs
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUTS_JSON: ${{ toJSON(inputs) }}
+        run: |
+          {
+            echo "## Workflow inputs"
+            echo ""
+            echo "| Input | Value |"
+            echo "| --- | --- |"
+            # Values are data from env JSON; wrap in backticks for readability.
+            # Newlines collapsed so a multi-line input cannot break the table.
+            jq -r '(. // {}) | to_entries[] | "| `\(.key)` | `\(.value | tostring | gsub("\n"; " "))` |"' <<<"$INPUTS_JSON"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Checkout ref
         uses: actions/checkout@v6
         with:
@@ -81,9 +118,21 @@ jobs:
 
       - name: Resolve ref SHA
         id: resolve
+        env:
+          # Why: keep the caller's ref as data (env) so we can label it in the
+          # summary without shell-interpolating a dispatch-controlled string
+          # into the script body.
+          INPUT_REF: ${{ github.event_name == 'schedule' && 'main' || inputs.ref }}
+          REPO: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
+          set -euo pipefail
+          input_ref="${INPUT_REF:-main}"
           sha="$(git rev-parse HEAD)"
+          short_sha="$(git rev-parse --short=12 HEAD)"
+          echo "ref=$input_ref" >>"$GITHUB_OUTPUT"
           echo "sha=$sha" >>"$GITHUB_OUTPUT"
+          echo "short_sha=$short_sha" >>"$GITHUB_OUTPUT"
 
           # Why: only push the version-bump commit back to main when the
           # caller is releasing the exact tip of main. For any older or
@@ -95,6 +144,96 @@ jobs:
           else
             echo "push_main=false" >>"$GITHUB_OUTPUT"
           fi
+
+          # Always surface the resolved commit in the job summary, plus any
+          # branches/tags that currently point at it (clickable). The raw
+          # `ref` input alone is ambiguous (branch vs tag vs SHA); for SHA
+          # inputs it also hides the human-readable names operators need
+          # when auditing RC cuts.
+          repo_url="${SERVER_URL}/${REPO}"
+
+          branches="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/remotes/origin/*' \
+              | sed 's|^origin/||' \
+              | grep -vx 'HEAD' \
+              | sort -u \
+              || true
+          )"
+          tags="$(
+            git for-each-ref --format='%(refname:short)' --points-at="$sha" 'refs/tags/*' \
+              | sort -u \
+              || true
+          )"
+
+          # Build comma-separated markdown links. Branch/tag names go in the
+          # URL path as-is (slashes must stay literal for GitHub tree URLs).
+          linkify_names() {
+            local url_kind="$1"
+            local names="$2"
+            if [[ -z "${names//[$'\t\r\n']/}" ]]; then
+              printf '_none_'
+              return
+            fi
+            local first=1
+            while IFS= read -r name; do
+              [[ -z "$name" ]] && continue
+              local path_name url
+              path_name="${name// /%20}"
+              case "$url_kind" in
+                branch) url="${repo_url}/tree/${path_name}" ;;
+                tag) url="${repo_url}/releases/tag/${path_name}" ;;
+                *) url="${repo_url}" ;;
+              esac
+              if [[ "$first" -eq 1 ]]; then
+                first=0
+              else
+                printf ', '
+              fi
+              printf '[`%s`](%s)' "$name" "$url"
+            done <<<"$names"
+          }
+
+          branch_md="$(linkify_names branch "$branches")"
+          tag_md="$(linkify_names tag "$tags")"
+
+          # When no branch tip matches (historical SHA cuts), fall back to
+          # name-rev so the summary still shows something like `main~3`.
+          contains_md="_none_"
+          if [[ "$branch_md" == "_none_" ]]; then
+            approx="$(git name-rev --name-only --no-undefined --refs='refs/remotes/origin/*' "$sha" 2>/dev/null || true)"
+            if [[ -n "$approx" ]]; then
+              # name-rev prints remotes/origin/<branch>[~N]; strip to branch[~N].
+              approx="${approx#remotes/origin/}"
+              approx="${approx#origin/}"
+              contains_md="\`${approx}\`"
+            fi
+          fi
+
+          input_kind="ref"
+          if git rev-parse -q --verify "refs/remotes/origin/${input_ref}" >/dev/null 2>&1; then
+            input_kind="branch"
+          elif git rev-parse -q --verify "refs/tags/${input_ref}" >/dev/null 2>&1; then
+            input_kind="tag"
+          elif [[ "$input_ref" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            input_kind="sha"
+          fi
+
+          {
+            echo "## Resolved source"
+            echo ""
+            echo "Every cut resolves to a commit. Branch/tag rows list refs whose tip is that commit."
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Input ref | \`${input_ref}\` (${input_kind}) |"
+            echo "| Commit | [\`${short_sha}\`](${repo_url}/commit/${sha}) |"
+            echo "| Branches at commit | ${branch_md} |"
+            echo "| Tags at commit | ${tag_md} |"
+            if [[ "$branch_md" == "_none_" ]]; then
+              echo "| Also on | ${contains_md} |"
+            fi
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Compute RC slot
         id: slot
@@ -192,6 +331,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           KIND: ${{ github.event_name == 'schedule' && 'rc' || inputs.kind }}
+          VERSION_SUFFIX: ${{ github.event_name == 'schedule' && '' || inputs.version_suffix }}
+          EXPLICIT_VERSION: ${{ github.event_name == 'schedule' && '' || inputs.version }}
         run: |
           set -euo pipefail
 
@@ -252,6 +393,23 @@ jobs:
 
           highest_rc_for_base() {
             node config/scripts/release-rc-history.mjs "$1"
+          }
+
+          require_valid_version_suffix() {
+            # Why a dot-appended identifier (rc.N.perf): it sorts just
+            # above its own base rc.N but BELOW rc.N+1, so suffixed side-
+            # branch builds never outrank the main RC series and cannot
+            # hijack the update channel; clients find them by matching the
+            # identifier ("perf") in the prerelease components.
+            # Why the numeric alternation rather than plain [0-9A-Za-z]+:
+            # semver forbids a leading zero on an all-digit identifier, and
+            # `npm version` silently renormalizes rc.4.01 to rc.4.1 while the
+            # tag step keeps the literal input — so the shipped package.json
+            # version and its own release tag would name different releases.
+            if [[ ! "$1" =~ ^(0|[1-9][0-9]*|[0-9A-Za-z]*[A-Za-z][0-9A-Za-z]*)$ ]]; then
+              echo "::error::version_suffix (or the trailing .identifier in version) must be alphanumeric with no leading zero on an all-digit identifier, got: $1" >&2
+              exit 1
+            fi
           }
 
           current_package_stable() {
@@ -330,7 +488,14 @@ jobs:
             # floor for the current ref so the next cut cannot reuse an older
             # stable number just because the public release was nuked.
             if semver_gt "$package_stable" "$latest_stable"; then
-              if [[ "$KIND" != "rc" ]]; then
+              # Skip floor-tag recovery when an explicit version is requested:
+              # recover_unpublished_tag can exit 0, which would recover the
+              # package-floor tag instead of cutting the requested version —
+              # defeating the very rollback scenario the override exists for.
+              # We still raise latest_stable to the floor below so the explicit
+              # version is gated against it; the collision recovery for the
+              # requested tag runs later.
+              if [[ "$KIND" != "rc" && -z "${EXPLICIT_VERSION:-}" ]]; then
                 package_tag="v$package_stable"
                 if git rev-parse "$package_tag" >/dev/null 2>&1; then
                   recover_unpublished_tag "$package_tag" "current ref stable tag is newer than latest published stable" || true
@@ -342,6 +507,98 @@ jobs:
             fi
           fi
 
+          # Explicit version override (manual dispatch only).
+          #
+          # Why: kind-based math derives the next number from the latest
+          # *published* stable. When a shipped stable is deleted (e.g. a
+          # rolled-back 1.4.154), the release list regresses to the prior
+          # stable, so a kind cut recomputes a number at or below the nuked one
+          # and strands every client that already installed the deleted build.
+          # The package.json floor above only recovers this when the deleted
+          # version's bump commit is on the ref being cut, which a hotfix cut
+          # from an older RC ref does not carry. An explicit version lets a
+          # human assert the exact target (e.g. leapfrog to 1.4.155); the
+          # updater-safety gate and tag-collision recovery below still apply.
+          new=""
+          if [[ -n "${EXPLICIT_VERSION:-}" ]]; then
+            explicit="${EXPLICIT_VERSION#v}"
+            # Why the optional trailing identifier: it lets an operator name a
+            # suffixed side-branch RC (X.Y.Z-rc.N.perf) directly, the same shape
+            # the rc path cuts. Note this only ever admits one *above* the
+            # series head — the gate below refuses a suffixed rc at or below it
+            # just like a bare one, so this is a second spelling of
+            # `version=X.Y.Z-rc.N` + `version_suffix`, not a way back into a
+            # series that already shipped.
+            # Why rc.(0|[1-9][0-9]{0,8}): the `-le` below compares with bash's
+            # machine-width integers, so both ends of that range fall *open* on
+            # exactly the RCs this gate must catch. A leading zero (rc.08) is an
+            # invalid octal literal, and the failed test makes the `if` false.
+            # Past INTMAX the literal wraps two's-complement, so whether it
+            # reads as above or below the published rc depends on the value:
+            # rc.99999999999999999999 wraps to 7766279631452241919 and sails
+            # through. The cut then lands a tag that pins highest_rc_for_base
+            # at 1e20 forever, and every later cut wraps to a *lower* rc that
+            # sorts below it, so the fleet never updates again. Nine digits is
+            # far above any real series and exact in bash math either way.
+            if [[ ! "$explicit" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-rc\.(0|[1-9][0-9]{0,8})(\.[0-9A-Za-z]+)?)?$ ]]; then
+              echo "::error::version must be X.Y.Z, X.Y.Z-rc.N, or X.Y.Z-rc.N.suffix, got: $EXPLICIT_VERSION" >&2
+              exit 1
+            fi
+            # Why route the embedded identifier through the same validator the
+            # kind path uses: the regex above only checks shape, and rc.4.01
+            # is a shape-valid identifier that is not valid semver.
+            if [[ "$explicit" == *-rc.*.* ]]; then
+              require_valid_version_suffix "${explicit##*.}"
+            fi
+            # Same updater-safety gate the kind path enforces: stable line must
+            # strictly increase over the latest published stable (prerelease
+            # identifiers ignored for the comparison).
+            if ! semver_gt "$explicit" "$latest_stable"; then
+              echo "::error::Refusing explicit version $explicit: not greater than latest stable $latest_stable." >&2
+              exit 1
+            fi
+            # Why a second gate for prereleases: semver_gt compares through
+            # strip_pre(), so the stable-line check reads 1.4.156-rc.0 as
+            # 1.4.156 and waves it past a 1.4.155 stable even when rc.0..rc.3
+            # already shipped — republishing an RC *below* what clients run,
+            # the same regression class as the rc.4 cut that orphaned live
+            # daemons. Anchor on the same rc history the kind path uses so the
+            # override can only ever advance the series it targets.
+            if [[ "$explicit" == *-rc.* ]]; then
+              explicit_base="${explicit%%-*}"
+              explicit_rc="${explicit#*-rc.}"
+              explicit_rc="${explicit_rc%%.*}"
+              highest_explicit_rc="$(highest_rc_for_base "$explicit_base")"
+              if [[ -n "$highest_explicit_rc" && "$explicit_rc" -le "$highest_explicit_rc" ]]; then
+                # Why the remedy is spelled this narrowly: kind=rc derives its
+                # base from bump(latest_stable, patch), so it can only resume a
+                # series on that base. A minor/major series (1.5.0-rc.N) exists
+                # only because this override created it, and pointing an
+                # operator at kind=rc there would cut an unrelated release.
+                echo "::error::Refusing explicit version $explicit: rc.$explicit_rc is not above rc.$highest_explicit_rc, the highest already cut for $explicit_base. Request rc.$((highest_explicit_rc + 1)) or higher. If you are resuming an unpublished tag and $explicit_base is the next patch after latest stable $latest_stable, dispatch kind=rc instead, which recovers that tag when it was cut from the ref you dispatch; otherwise cut rc.$((highest_explicit_rc + 1)) and leave the unpublished tag alone." >&2
+                exit 1
+              fi
+            fi
+            new="$explicit"
+            # Why here too: the suffix append below lives in the kind path the
+            # override skips, so an operator passing both inputs used to get
+            # their suffix silently dropped. Only a bare rc can take one — a
+            # stable X.Y.Z.perf is not valid semver, and re-suffixing an
+            # already-suffixed rc would produce rc.N.perf.perf.
+            if [[ -n "${VERSION_SUFFIX:-}" ]]; then
+              # Same bounded rc pattern as the shape check above, so the two
+              # cannot drift apart under a later edit.
+              if [[ ! "$explicit" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.(0|[1-9][0-9]{0,8})$ ]]; then
+                echo "::error::version_suffix applies only to a bare X.Y.Z-rc.N version, got: $explicit" >&2
+                exit 1
+              fi
+              require_valid_version_suffix "$VERSION_SUFFIX"
+              new="${new}.${VERSION_SUFFIX}"
+            fi
+            echo "Explicit version override: $new"
+          fi
+
+          if [[ -z "$new" ]]; then
           case "$KIND" in
             rc)
               # Why: RCs always stabilize the *next* patch after whatever
@@ -365,6 +622,10 @@ jobs:
                   recover_unpublished_tag "$existing_rc_tag" "latest RC in series" || true
                 fi
                 new="${base}-rc.$((highest_rc + 1))"
+              fi
+              if [[ -n "${VERSION_SUFFIX:-}" ]]; then
+                require_valid_version_suffix "$VERSION_SUFFIX"
+                new="${new}.${VERSION_SUFFIX}"
               fi
               ;;
             patch|minor|major)
@@ -407,6 +668,7 @@ jobs:
               exit 1
               ;;
           esac
+          fi
 
           # Orphan-tag recovery.
           #
@@ -454,7 +716,19 @@ jobs:
           # message and tag name explicitly (avoids npm's `v1.2.3` prefix
           # assumptions and any lifecycle scripts that would run on bump).
           npm version "$VERSION" --no-git-tag-version --allow-same-version
-          git add package.json
+          # Why: the cut is the only point where committed skill bytes become a
+          # released revision. Without this row the ledger never advances, so the
+          # next skill change rebuilds the revision this tag ships over different
+          # bytes and every install of it stops matching a known snapshot.
+          # --release is provenance-only: it fails if the content-addressed
+          # artifacts do not already match this ref and writes just the mapping
+          # row, so the version commit stays skill-independent. Node built-ins
+          # only, so this needs no install.
+          if ! node config/scripts/generate-skill-bundle-manifest.mjs --release "$VERSION"; then
+            echo "::error::Refusing to record release provenance for v$VERSION: the committed skill artifacts do not match this ref. Land a regeneration on main, then re-run the cut." >&2
+            exit 1
+          fi
+          git add package.json resources/skills/release-mapping.json
           commit_message="release: v$VERSION"
           if [[ "$EVENT_NAME" == "schedule" ]]; then
             commit_message="$commit_message [rc-slot:$SLOT]"
@@ -466,6 +740,22 @@ jobs:
             git commit --allow-empty -m "$commit_message"
           else
             git commit -m "$commit_message"
+          fi
+          # Why: a lint that greps this file cannot see a path built from an env
+          # var, a composite action, or concatenation, and `git commit` has forms
+          # (-a, -i, --only, a pathspec) that commit the working tree rather than
+          # the index. Assert what the commit actually carries, so the tag can
+          # only ever ship the version bump and the provenance row, no matter
+          # which step staged what or how the commit was spelled.
+          # -F because the allowlist is literal: unanchored, `.` would match any
+          # character and quietly admit a path like `packageXjson`.
+          # -m --first-parent: plain diff-tree prints NOTHING for a merge commit,
+          # which would make this guard pass silently rather than fail closed.
+          committed="$(git diff-tree --no-commit-id --name-only -r -m --first-parent HEAD |
+            grep -vxF -e 'package.json' -e 'resources/skills/release-mapping.json' || true)"
+          if [[ -n "$committed" ]]; then
+            echo "::error::Release commit carries unexpected paths: $(echo "$committed" | tr '\n' ' ')Only package.json and the skill release-mapping row may ship in a version commit." >&2
+            exit 1
           fi
           git tag -a "v$VERSION" -m "v$VERSION"
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
@@ -494,7 +784,7 @@ jobs:
             echo "## Release E2E Signal"
             echo ""
             echo "- Terminal rendering golden is release-blocking."
-            echo "- Full E2E is diagnostic/non-blocking release evidence."
+            echo "- Full E2E runs separately after publication and cannot change the release result."
             echo "- Terminal rendering release evidence is diagnostic/non-blocking."
             echo ""
             echo "Publishing behavior is controlled by the existing job dependencies; this summary does not change release gating."
@@ -523,15 +813,6 @@ jobs:
           fi
 
           node config/scripts/create-draft-release.mjs "$TAG"
-
-  # Why: tag-scoped E2E gives release visibility, but the suite is flaky enough
-  # that publish-release must not depend on it.
-  e2e:
-    needs: cut
-    if: needs.cut.outputs.should_release == 'true'
-    uses: ./.github/workflows/e2e.yml
-    with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
 
   terminal-rendering-golden:
     needs: cut
@@ -719,6 +1000,10 @@ jobs:
               ~/.cache/electron-builder
 
     runs-on: ${{ matrix.os }}
+    # Why: hosted runners hard-cap jobs at 6h; the Windows SignPath waits
+    # (1h inner + 4h installer) are budgeted to fit under this with the
+    # build itself, so a slow approval can't kill the job mid-flow.
+    timeout-minutes: 360
 
     permissions:
       actions: read
@@ -729,6 +1014,27 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      # Why: `uses: ./…` resolves from the checked-out tag, not from the workflow
+      # ref, so cutting from an older/off-main ref whose tree predates a composite
+      # action would fail the step with "Can't find 'action.yml'". Restore the
+      # actions directory from the commit this workflow file itself came from.
+      - name: Restore composite actions from the workflow ref
+        if: matrix.platform == 'win'
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          action_path=".github/actions/install-signpath-module/action.yml"
+          if [ -f "$action_path" ]; then
+            echo "Composite actions already present at the cut ref."
+            exit 0
+          fi
+          echo "Cut ref predates $action_path; restoring it from $WORKFLOW_SHA."
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- .github/actions
+          test -f "$action_path"
 
       # pnpm must be on PATH before setup-node so setup-node can locate the store for caching.
       - name: Setup pnpm
@@ -804,7 +1110,10 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
-          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]; then
+          # Why the optional trailing identifier: suffixed side-branch RCs
+          # (vX.Y.Z-rc.N.perf) are rc-channel prerelease builds — same telemetry
+          # identity as plain RCs.
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+(\.[0-9A-Za-z]+)?$ ]]; then
             identity=rc
           elif [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             identity=stable
@@ -837,6 +1146,20 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
+
+      - name: Gate runtime file-watcher process isolation
+        if: runner.os == 'Linux'
+        run: |
+          # Why: #8212 is a native-process crash contract. Prove both the Node
+          # host and the exact Electron runtime survive SIGSEGV before packaging.
+          node config/scripts/runtime-file-watcher-fault-harness.mjs
+          ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs
+
+      - name: Gate SSH relay watcher process isolation
+        run: |
+          # Why: the remote native watcher shares a daemon with live PTYs.
+          # Kill only its child and require both PTY and watch recovery before packaging.
+          node config/scripts/relay-watcher-fault-harness.mjs
 
       - name: Publish release artifacts (Linux)
         if: matrix.platform == 'linux-x64' || matrix.platform == 'linux-arm64'
@@ -881,83 +1204,270 @@ jobs:
 
       - name: Install SignPath PowerShell module
         if: matrix.platform == 'win'
+        uses: ./.github/actions/install-signpath-module
+
+      # ── Windows inner-binary signing (issue #7785) ─────────────────────
+      # Why: SignPath cannot deep-sign inside NSIS installers, so inner PE
+      # files (Orca.exe, node-pty *.node, DLLs) are signed via a separate zip
+      # request, then the installer is rebuilt from the signed tree before the
+      # existing installer signing request below. Every step in this chain is
+      # fail-open (continue-on-error + outcome gating): any failure ships the
+      # original installer with unsigned inner binaries, exactly like releases
+      # did before this chain existed. Rehearsed end to end in run 28988432001
+      # (.github/workflows/windows-signing-rehearsal.yml).
+
+      # Why: only unsigned PE files go to SignPath. Files that already carry a
+      # valid signature (Microsoft's OpenConsole.exe) must keep their signer.
+      - name: Stage unsigned inner PE files for signing
+        id: stage-inner
+        if: matrix.platform == 'win'
+        continue-on-error: true
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-          # Why: force TLS 1.2 so gallery downloads work on older hosted images.
-          [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+          $root = Resolve-Path 'dist/win-unpacked'
+          $stage = New-Item -ItemType Directory -Force -Path 'signing-stage'
+          $list = New-Object System.Collections.Generic.List[string]
+          $skipped = New-Object System.Collections.Generic.List[string]
 
-          # Why: on some hosted Windows images `Register-PSRepository -Default`
-          # fails inside the legacy nuget.exe provider with "Missing option value
-          # for: '-source'", so PSGallery is never registered and the install
-          # below dies with "No repository with the name 'PSGallery'". PSResourceGet
-          # (bundled with PowerShell 7.4+) has PSGallery registered by default and
-          # avoids that code path, so prefer it and fall back to PowerShellGet only
-          # when it is absent.
-          $useResourceGet = $null -ne (Get-Command -Name Install-PSResource -ErrorAction SilentlyContinue)
-
-          if ($useResourceGet) {
-            if ($null -eq (Get-PSResourceRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSResourceRepository -PSGallery -Trusted
-            } else {
-              Set-PSResourceRepository -Name PSGallery -Trusted
+          Get-ChildItem -Path $root -Recurse -File |
+            Where-Object { $_.Extension -in '.exe', '.dll', '.node' } |
+            ForEach-Object {
+              $relative = [System.IO.Path]::GetRelativePath($root, $_.FullName)
+              $signature = Get-AuthenticodeSignature -FilePath $_.FullName
+              if ($signature.Status -eq 'Valid') {
+                $skipped.Add("$relative  <already signed: $($signature.SignerCertificate.Subject)>")
+                return
+              }
+              $destination = Join-Path $stage.FullName $relative
+              New-Item -ItemType Directory -Force -Path (Split-Path $destination) | Out-Null
+              Copy-Item -Path $_.FullName -Destination $destination -Force
+              $list.Add($relative)
             }
+
+          if (-not ($list -contains 'Orca.exe')) {
+            throw 'Orca.exe was not staged for signing; unpacked layout changed?'
+          }
+          if (-not ($list | Where-Object { $_ -like '*conpty_console_list.node' })) {
+            throw 'node-pty conpty_console_list.node was not staged; this is the file from issue #7785.'
+          }
+
+          Set-Content -Path 'inner-signing-list.txt' -Value ($list -join "`n")
+          Write-Host "Staged $($list.Count) unsigned PE files for signing:"
+          $list | ForEach-Object { Write-Host "  $_" }
+          Write-Host "Skipped $($skipped.Count) already-signed files:"
+          $skipped | ForEach-Object { Write-Host "  $_" }
+
+      - name: Upload unsigned inner binaries for SignPath
+        id: upload-unsigned-inner
+        if: matrix.platform == 'win' && steps.stage-inner.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-unsigned-${{ needs.cut.outputs.tag }}
+          path: signing-stage/**
+          if-no-files-found: error
+
+      - name: Submit inner binaries signing request
+        id: submit-inner-signing
+        if: matrix.platform == 'win' && steps.upload-unsigned-inner.outcome == 'success'
+        continue-on-error: true
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          project-slug: orca
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-inner-binaries-zip
+          github-artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+          wait-for-completion: false
+
+      - name: Notify Slack that inner-binary signing is waiting for approval
+        id: notify-inner-signing
+        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SIGNPATH_ORGANIZATION_ID: c37aa192-a27a-4377-9c90-5d6c95912dc0
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+          SIGNPATH_REQUEST_URL: ${{ steps.submit-inner-signing.outputs.signing-request-web-url }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
+            throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
+          }
+
+          $requestUrl = $env:SIGNPATH_REQUEST_URL
+          if ([string]::IsNullOrWhiteSpace($requestUrl)) {
+            $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
+          }
+
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
           } else {
-            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force | Out-Null
-            if ($null -eq (Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue)) {
-              Register-PSRepository -Default -InstallationPolicy Trusted
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` inner-binaries signing request (1 of 2) is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
+          $payload = @{
+            text = $message
+            blocks = @(
+              @{
+                type = 'section'
+                text = @{
+                  type = 'mrkdwn'
+                  text = $message
+                }
+              }
+            )
+          } | ConvertTo-Json -Depth 5
+
+          Invoke-RestMethod -Method Post -Uri $env:SLACK_WEBHOOK_URL -ContentType 'application/json' -Body $payload
+
+      # Why gate on the notify outcome too: if nobody was told to approve,
+      # don't hold the release for the approval window — fall through and
+      # ship like today instead. The 1h wait (vs the installer's 4h) keeps
+      # both waits plus the build inside the 360-minute job cap; missing it
+      # falls through to today's unsigned-inner flow rather than blocking.
+      - name: Download signed inner binaries from SignPath
+        id: download-signed-inner
+        if: matrix.platform == 'win' && steps.submit-inner-signing.outcome == 'success' && steps.notify-inner-signing.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          SIGNPATH_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
+        run: |
+          Get-SignedArtifact `
+            -OrganizationId c37aa192-a27a-4377-9c90-5d6c95912dc0 `
+            -ApiToken $env:SIGNPATH_API_TOKEN `
+            -SigningRequestId $env:SIGNPATH_REQUEST_ID `
+            -OutputArtifactPath signed-inner.zip `
+            -Force `
+            -WaitForCompletionTimeoutInSeconds 3600
+
+          New-Item -ItemType Directory -Path signed-inner -Force
+          Expand-Archive -Path signed-inner.zip -DestinationPath signed-inner -Force
+
+      # Why: copy back strictly by the staged list so a layout mismatch in the
+      # returned artifact fails loudly (into fail-open) instead of silently
+      # shipping a mix of signed and unsigned binaries.
+      - name: Restore signed inner binaries into unpacked app
+        id: restore-signed-inner
+        if: matrix.platform == 'win' && steps.download-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $root = Resolve-Path 'dist/win-unpacked'
+          $failures = New-Object System.Collections.Generic.List[string]
+          foreach ($relative in Get-Content 'inner-signing-list.txt') {
+            $signed = Get-ChildItem -Path signed-inner -Recurse -File |
+              Where-Object { [System.IO.Path]::GetRelativePath((Resolve-Path 'signed-inner'), $_.FullName).TrimStart('\', '/') -like "*$relative" } |
+              Select-Object -First 1
+            if ($null -eq $signed) {
+              $failures.Add("missing from signed artifact: $relative")
+              continue
             }
-            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            $signature = Get-AuthenticodeSignature -FilePath $signed.FullName
+            if ($null -eq $signature.SignerCertificate) {
+              $failures.Add("returned without a signature: $relative")
+              continue
+            }
+            Copy-Item -Path $signed.FullName -Destination (Join-Path $root $relative) -Force
+            Write-Host ("{0,-14} {1}  <{2}>" -f $signature.Status, $relative, $signature.SignerCertificate.Subject)
+          }
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Host "::error::$_" }
+            throw "Signed inner artifact did not round-trip cleanly ($($failures.Count) failures)."
           }
 
-          $trimChars = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-          $documentsRoot = [System.IO.Path]::GetFullPath([Environment]::GetFolderPath('MyDocuments')).TrimEnd($trimChars)
-          $currentUserModuleRoot = $env:PSModulePath -split [System.IO.Path]::PathSeparator |
-            Where-Object {
-              if ([string]::IsNullOrWhiteSpace($_)) {
-                $false
-              } else {
-                $candidate = [System.IO.Path]::GetFullPath($_).TrimEnd($trimChars)
-                $candidate.StartsWith($documentsRoot, [System.StringComparison]::OrdinalIgnoreCase)
-              }
-            } |
-            Select-Object -First 1
-
-          if ([string]::IsNullOrWhiteSpace($currentUserModuleRoot)) {
-            throw 'Unable to resolve the current-user PowerShell module root from PSModulePath.'
+      # Why this step exists: electron-builder's CopyElevateHelper re-copies a
+      # pristine elevate.exe from its download cache over resources\elevate.exe
+      # on EVERY nsis pack — including the --prepackaged rebuild below — which
+      # clobbered the SignPath signature in v1.4.129-rc.4. There is no supported
+      # way to disable just the copy, so we overwrite the cache's copy with our
+      # signed one (identical bytes plus signature) so the clobber becomes a
+      # no-op. Known quirk: the cache persists across releases via actions/cache,
+      # so later runs may see elevate.exe as already signed and skip staging it —
+      # that is fine (the signature is timestamped) and the evidence gate checks
+      # elevate.exe in the shipped installer unconditionally. If this ever causes
+      # trouble, delete this step; the only effect is elevate.exe shipping
+      # unsigned again, which the evidence gate will flag.
+      - name: Replace cached elevate.exe with the signed copy
+        id: sign-elevate-cache
+        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $signed = 'dist/win-unpacked/resources/elevate.exe'
+          if (-not (Test-Path $signed)) {
+            Write-Host '::warning::No elevate.exe in win-unpacked resources; nothing to protect from the rebuild clobber.'
+            exit 0
+          }
+          $signature = Get-AuthenticodeSignature -FilePath $signed
+          $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
+          if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
+            Write-Host "::warning::win-unpacked elevate.exe is not SignPath-signed ($($signature.Status), $subject); skipping cache swap."
+            exit 0
+          }
+          $cached = @(Get-ChildItem "$env:LOCALAPPDATA\electron-builder\Cache\nsis" -Recurse -Filter elevate.exe -ErrorAction SilentlyContinue)
+          if ($cached.Count -eq 0) {
+            Write-Host '::warning::No cached elevate.exe found (electron-builder cache layout changed?); the rebuild will pack the unsigned copy and the evidence gate will flag it.'
+            exit 0
+          }
+          foreach ($file in $cached) {
+            Copy-Item -Path $signed -Destination $file.FullName -Force
+            Write-Host "Replaced $($file.FullName) with the SignPath-signed copy."
           }
 
-          $signPathModulePath = Join-Path -Path $currentUserModuleRoot -ChildPath 'SignPath'
+      - name: Rebuild NSIS installer from signed unpacked app
+        id: rebuild-nsis-signed
+        if: matrix.platform == 'win' && steps.restore-signed-inner.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          # Why: keep the pre-rebuild artifacts so a failed rebuild can fall
+          # back to shipping them unchanged (fail-open).
+          New-Item -ItemType Directory -Path prepack-backup -Force | Out-Null
+          Copy-Item 'dist/orca-windows-setup.exe' 'prepack-backup/orca-windows-setup.exe' -Force
+          Copy-Item 'dist/latest.yml' 'prepack-backup/latest.yml' -Force
 
-          for ($attempt = 1; $attempt -le 3; $attempt++) {
-            if ($attempt -eq 2) {
-              Start-Sleep -Seconds 15
-            } elseif ($attempt -eq 3) {
-              Start-Sleep -Seconds 30
-            }
-
-            try {
-              if ($useResourceGet) {
-                Install-PSResource -Name SignPath -Version '[4.0.0,5.0.0)' -Repository PSGallery -Scope CurrentUser -TrustRepository -Reinstall -ErrorAction Stop
-              } else {
-                Install-Module -Name SignPath -Repository PSGallery -MinimumVersion 4.0.0 -MaximumVersion 4.999.999 -Scope CurrentUser -Force -AllowClobber -ErrorAction Stop
-              }
-              Import-Module SignPath -ErrorAction Stop
-              Get-Command -Name Get-SignedArtifact -Module SignPath -ErrorAction Stop
-              break
-            } catch {
-              if ($attempt -eq 3) {
-                throw
-              }
-
-              Write-Warning "SignPath PowerShell module preflight attempt $attempt failed: $_"
-              if (Test-Path -LiteralPath $signPathModulePath) {
-                Write-Warning "Removing current-user SignPath module directory before retry: $signPathModulePath"
-                Remove-Item -LiteralPath $signPathModulePath -Recurse -Force
-              }
-            }
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never --prepackaged "$env:GITHUB_WORKSPACE\dist\win-unpacked"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path 'dist/orca-windows-setup.exe')) {
+            throw 'electron-builder --prepackaged did not produce dist/orca-windows-setup.exe'
           }
 
+      - name: Roll back to original installer after failed rebuild
+        if: matrix.platform == 'win' && steps.rebuild-nsis-signed.outcome == 'failure'
+        shell: pwsh
+        run: |
+          if (Test-Path 'prepack-backup/orca-windows-setup.exe') {
+            Copy-Item 'prepack-backup/orca-windows-setup.exe' 'dist/orca-windows-setup.exe' -Force
+            Copy-Item 'prepack-backup/latest.yml' 'dist/latest.yml' -Force
+            Write-Warning 'Restored pre-rebuild installer; this release ships with unsigned inner binaries.'
+          }
+      # ── End Windows inner-binary signing ───────────────────────────────
       - name: Upload unsigned Windows installer for SignPath
         if: matrix.platform == 'win'
         id: upload-unsigned-windows-installer
@@ -991,7 +1501,14 @@ jobs:
           SIGNPATH_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
           SIGNPATH_REQUEST_URL: ${{ steps.submit-signing-request.outputs.signing-request-web-url }}
           TAG: ${{ needs.cut.outputs.tag }}
+          SOURCE_REF: ${{ needs.cut.outputs.source_ref }}
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
+          SOURCE_SHORT_SHA: ${{ needs.cut.outputs.source_short_sha }}
+          # Prefer triggering_actor so re-runs name who re-ran; fall back to actor.
+          CUT_BY: ${{ github.triggering_actor || github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
           GITHUB_RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          INNER_SIGNING_SUBMITTED: ${{ steps.submit-inner-signing.outcome == 'success' }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
             throw 'SLACK_WEBHOOK_URL secret is required so release approvers know when SignPath is waiting.'
@@ -1002,7 +1519,28 @@ jobs:
             $requestUrl = "https://app.signpath.io/Web/$env:SIGNPATH_ORGANIZATION_ID/SigningRequests/$env:SIGNPATH_REQUEST_ID"
           }
 
-          $message = "Orca Windows release $env:TAG is ready for SignPath approval.`n<$requestUrl|Open SignPath signing request>`n<$env:GITHUB_RUN_URL|Open GitHub Actions run>"
+          # Why: releases where inner signing fell through have only this one request.
+          $stage = if ($env:INNER_SIGNING_SUBMITTED -eq 'true') { 'installer signing request (2 of 2)' } else { 'signing request' }
+          # Why: approvers need tag + source ref/commit + who cut, not only the tag.
+          $sourceRef = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_REF)) { $env:SOURCE_REF } else { 'unknown' }
+          $shortSha = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHORT_SHA)) {
+            $env:SOURCE_SHORT_SHA
+          } elseif (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            $env:SOURCE_SHA.Substring(0, [Math]::Min(12, $env:SOURCE_SHA.Length))
+          } else {
+            'unknown'
+          }
+          $commitLink = if (-not [string]::IsNullOrWhiteSpace($env:SOURCE_SHA)) {
+            "<$($env:REPO_URL)/commit/$($env:SOURCE_SHA)|``$shortSha``>"
+          } else {
+            "``$shortSha``"
+          }
+          $cutBy = if (-not [string]::IsNullOrWhiteSpace($env:CUT_BY)) {
+            "<https://github.com/$($env:CUT_BY)|@$($env:CUT_BY)>"
+          } else {
+            'unknown'
+          }
+          $message = "Orca Windows release ``$($env:TAG)`` $stage is ready for SignPath approval.`nSource: ``$sourceRef`` @ $commitLink · cut by $cutBy`n<$requestUrl|Open SignPath signing request>`n<$($env:GITHUB_RUN_URL)|Open GitHub Actions run>"
           $payload = @{
             text = $message
             blocks = @(
@@ -1046,7 +1584,8 @@ jobs:
           }
 
           Copy-Item -Path $signedInstaller.FullName -Destination 'dist/orca-windows-setup.exe' -Force
-          & 'node_modules/app-builder-bin/win/x64/app-builder.exe' blockmap --input 'dist/orca-windows-setup.exe' --output 'dist/orca-windows-setup.exe.blockmap'
+          node config/scripts/generate-windows-blockmap.mjs 'dist/orca-windows-setup.exe' 'dist/orca-windows-setup.exe.blockmap'
+          if ($LASTEXITCODE -ne 0) { throw "blockmap generation failed with exit code $LASTEXITCODE" }
 
           $installer = Get-Item 'dist/orca-windows-setup.exe'
           $blockmap = Get-Item 'dist/orca-windows-setup.exe.blockmap'
@@ -1084,6 +1623,154 @@ jobs:
             throw "Unexpected Windows signer: $($signature.SignerCertificate.Subject)"
           }
           $signature.SignerCertificate | Format-List Subject,Issuer,NotBefore,NotAfter,Thumbprint
+
+      # Why: evidence gate for inner-binary signing (issue #7785, supersedes
+      # PR #7170's Orca.exe-only gate — this covers every staged .exe/.dll/.node
+      # by extracting the shipped installer). Warn-only until the flow has been
+      # proven on a real release, then flip ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED
+      # to 'true' so unsigned inner binaries block the release.
+      - name: Verify Windows inner binary signatures
+        if: matrix.platform == 'win'
+        shell: pwsh
+        env:
+          ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED: 'false'
+          INNER_SIGNING_COMPLETED: ${{ steps.rebuild-nsis-signed.outcome == 'success' }}
+        run: |
+          $required = $env:ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED -eq 'true'
+
+          # Why: a fail-open gate that writes nothing is indistinguishable from a
+          # gate that passed. Always leave a verdict in the evidence artifact and
+          # the job summary so a silent degradation is visible (#6487).
+          # Why best-effort: while warn-only, a disk-full or permission error
+          # writing the verdict must not become the thing that fails the release.
+          function Add-GateEvidence([string]$line) {
+            try {
+              Add-Content -Path 'inner-signing-evidence.txt' -Value "`n$line" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not append to the inner-signing evidence file: $_"
+            }
+          }
+
+          function Add-GateSummary([string]$verdict) {
+            if (-not $env:GITHUB_STEP_SUMMARY) { return }
+            try {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "**Windows inner-binary signing:** $verdict" -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not write inner-signing verdict to the job summary: $_"
+            }
+          }
+
+          function Write-GateVerdict([string]$verdict) {
+            try {
+              Set-Content -Path 'inner-signing-evidence.txt' -Value $verdict -ErrorAction Stop
+            } catch {
+              Write-Host "::warning::Could not persist inner-signing verdict: $_"
+            }
+            Add-GateSummary $verdict
+          }
+
+          if ($env:INNER_SIGNING_COMPLETED -ne 'true') {
+            $message = 'Windows inner-binary signing did not complete; this release ships unsigned inner binaries (fail-open, issue #7785).'
+            Write-GateVerdict "NOT VERIFIED — $message"
+            if ($required) { throw $message }
+            Write-Host "::warning::$message"
+            exit 0
+          }
+
+          # Why try/catch: while the gate is warn-only, even an unexpected
+          # script error (extraction hiccup, missing file) must not block
+          # the release — only the flip to required makes failures fatal.
+          # Why tracked separately: a required-mode signature failure must not be
+          # rewritten as ERRORED by the catch below, which would replace the
+          # per-file report with an exception string and lose the diagnostics.
+          $policyFailure = $null
+
+          try {
+            $report = New-Object System.Collections.Generic.List[string]
+            $failures = New-Object System.Collections.Generic.List[string]
+
+            # Why: verify the files a user actually gets on disk, not the build
+            # tree — 7z parses the NSIS exe directly as its embedded payload.
+            # Resolve 7za via app-builder-lib; electron-builder 26.9+ dropped the
+            # bundled 7zip-bin package the old hardcoded path relied on (#6487).
+            $7zaOutput = node config/scripts/resolve-7za-path.mjs
+            $7zaExitCode = $LASTEXITCODE
+            if ($7zaExitCode -ne 0) {
+              throw "The 7za resolver exited with code $7zaExitCode for the inner-binary evidence gate."
+            }
+            $7za = ($7zaOutput | Out-String).Trim()
+            if ([string]::IsNullOrWhiteSpace($7za) -or -not (Test-Path -LiteralPath $7za -PathType Leaf)) {
+              throw "The 7za resolver returned an invalid path for the inner-binary evidence gate: $7za"
+            }
+            New-Item -ItemType Directory -Path inner-evidence-extract -Force | Out-Null
+            & $7za x 'dist/orca-windows-setup.exe' '-oinner-evidence-extract' -y | Out-Null
+
+            $root = Resolve-Path 'inner-evidence-extract'
+            # Why elevate.exe is always appended: staging skips already-signed
+            # files, and the persisted electron-builder cache can carry a
+            # previously signed elevate.exe — so it may be absent from the list
+            # in some runs, yet it is the file most at risk of losing its
+            # signature in the NSIS rebuild. Verify it in every release.
+            $targets = @(Get-Content 'inner-signing-list.txt')
+            if ($targets -notcontains 'resources\elevate.exe') {
+              $targets += 'resources\elevate.exe'
+            }
+            foreach ($relative in $targets) {
+              $path = Join-Path $root $relative
+              if (-not (Test-Path $path)) {
+                $failures.Add("missing from installer payload: $relative")
+                continue
+              }
+              $signature = Get-AuthenticodeSignature -FilePath $path
+              $subject = if ($null -eq $signature.SignerCertificate) { '<none>' } else { $signature.SignerCertificate.Subject }
+              $line = "{0,-14} {1}  <{2}>" -f $signature.Status, $relative, $subject
+              $report.Add($line)
+              Write-Host $line
+              if ($signature.Status -ne 'Valid' -or $subject -notlike '*CN=SignPath Foundation*') {
+                $failures.Add("not signed by SignPath Foundation: $relative ($($signature.Status), $subject)")
+              }
+            }
+
+            Set-Content -Path 'inner-signing-evidence.txt' -Value ($report -join "`n")
+            if ($failures.Count -gt 0) {
+              $failures | ForEach-Object { Write-Host "::warning::$_" }
+              $message = "Windows inner-binary evidence gate found $($failures.Count) problems."
+              # Why assigned before any I/O: a write that throws here would reach
+              # the catch with $policyFailure still null, so a required-mode
+              # signature failure would be re-reported as ERRORED and the per-file
+              # report overwritten — the exact masking the hoist exists to prevent.
+              if ($required) {
+                $policyFailure = $message
+              } else {
+                Write-Host "::warning::$message Fail-open until ORCA_WINDOWS_INNER_SIGNATURE_REQUIRED is 'true'."
+              }
+              Add-GateEvidence "VERDICT: FAILED — $message"
+              Add-GateSummary "FAILED — $message"
+            } else {
+              $ok = "All $($targets.Count) inner binaries in the shipped installer are signed by SignPath Foundation."
+              Add-GateEvidence "VERDICT: PASSED — $ok"
+              Add-GateSummary "PASSED — $ok"
+              Write-Host $ok
+            }
+          } catch {
+            Write-GateVerdict "ERRORED — $_"
+            if ($required) { throw }
+            Write-Host "::warning::Windows inner-binary evidence gate errored: $_ (fail-open, issue #7785)."
+          }
+
+          # Outside the catch so the FAILED evidence report survives intact.
+          if ($policyFailure) { throw $policyFailure }
+
+      - name: Upload Windows inner signing evidence
+        if: always() && matrix.platform == 'win'
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-windows-inner-signing-evidence-${{ needs.cut.outputs.tag }}
+          path: |
+            inner-signing-evidence.txt
+            inner-signing-list.txt
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Publish signed Windows release artifacts
         if: matrix.platform == 'win'
@@ -1236,6 +1923,32 @@ jobs:
             --draft=false \
             --prerelease="$prerelease" \
             --repo "$GITHUB_REPOSITORY"
+
+  post-release-e2e:
+    needs:
+      - cut
+      - publish-release
+    if: ${{ needs.cut.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch tag-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$TAG" \
+              --raw-field "ref=refs/tags/$TAG"; then
+              echo "Dispatched post-release E2E for $TAG."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-release E2E for $TAG after 3 attempts."
 
   homebrew-bump-published-rc-draft:
     needs:

@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: this integration-style RPC test keeps the request/response contract together so regressions in the external CLI surface are easier to spot. */
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync } from 'node:fs'
+import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection, type Socket } from 'node:net'
@@ -10,14 +11,26 @@ import Database from '../sqlite/sync-database'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db'
 import * as runtimeMetadataModule from './runtime-metadata'
-import { readRuntimeMetadata } from './runtime-metadata'
+import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata, OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import {
+  TerminalStreamOpcode,
+  decodeTerminalStreamFrame,
+  decodeTerminalStreamText,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  encodeTerminalStreamText
+} from '../../shared/terminal-stream-protocol'
 import { decrypt, deriveSharedKey, encrypt, generateKeyPair } from './rpc/e2ee-crypto'
+import { WebSocketTransport } from './rpc/ws-transport'
 import { DeviceRegistry } from './device-registry'
+import { DEVICE_REGISTRY_FILENAME, E2EE_KEYPAIR_FILENAME } from './mobile-pairing-files'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../shared/protocol-version'
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue([
+vi.mock('../git/worktree', () => {
+  const worktrees = [
     {
       path: '/tmp/worktree-a',
       head: 'abc',
@@ -25,9 +38,12 @@ vi.mock('../git/worktree', () => ({
       isBare: false,
       isMainWorktree: false
     }
-  ]),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+  ]
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 async function sendRequest(
   endpoint: string,
@@ -38,7 +54,7 @@ async function sendRequest(
     let buffer = ''
     socket.setEncoding('utf8')
     socket.once('error', reject)
-    socket.on('data', (chunk) => {
+    socket.on('data', (chunk: string) => {
       buffer += chunk
       const newlineIndex = buffer.indexOf('\n')
       if (newlineIndex === -1) {
@@ -49,7 +65,7 @@ async function sendRequest(
       resolve(JSON.parse(message) as Record<string, unknown>)
     })
     socket.on('connect', () => {
-      socket.write(`${JSON.stringify(request)}\n`)
+      socket.write(`${JSON.stringify(withCurrentOrchestrationContract(request))}\n`)
     })
   })
 }
@@ -100,10 +116,18 @@ function openFramedSession(endpoint: string, request: Record<string, unknown>): 
       }
     })
     socket.on('connect', () => {
-      socket.write(`${JSON.stringify(request)}\n`)
+      socket.write(`${JSON.stringify(withCurrentOrchestrationContract(request))}\n`)
     })
   })
   return { socket, frames, done }
+}
+
+function withCurrentOrchestrationContract(
+  request: Record<string, unknown>
+): Record<string, unknown> {
+  return typeof request.method === 'string' && request.method.startsWith('orchestration.')
+    ? { ...request, orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION }
+    : request
 }
 
 function sleep(ms: number): Promise<void> {
@@ -117,6 +141,18 @@ async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<voi
       throw new Error('timed out waiting for condition')
     }
     await sleep(20)
+  }
+}
+
+function seedSupervisedAskWorkers(db: OrchestrationDb, workerHandles: string[]): void {
+  const run = db.createRun({
+    objective: 'Exercise ask admission',
+    coordinatorHandle: 'term_coord',
+    coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  })
+  for (const workerHandle of workerHandles) {
+    const task = db.createTask({ spec: 'Wait for coordinator input', runId: run.id })
+    db.createDispatchContext(task.id, workerHandle)
   }
 }
 
@@ -330,6 +366,133 @@ describe('OrcaRuntimeRpcServer', () => {
     })
   })
 
+  it('reclaims runtime metadata clobbered by a second instance that has since died', async () => {
+    // Why: #7848 — a launch that slips past the single-instance lock republishes
+    // orca-runtime.json with its own pid, so the CLI reports stale_bootstrap
+    // against this still-serving runtime once that instance exits.
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
+    await server.start()
+    const published = readRuntimeMetadata(userDataPath)
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_second_instance',
+      pid: 99999999,
+      transports: [{ kind: 'unix', endpoint: join(userDataPath, 'o-99999999-rt2.sock') }],
+      authToken: 'second-instance-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(readRuntimeMetadata(userDataPath)).toEqual(published)
+
+    await server.stop()
+  })
+
+  it('leaves runtime metadata owned by a live sibling runtime untouched', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: a synthetic owned pid frees the always-alive process.pid to stand in for
+    // the sibling — Windows never assigns pid 1, so hardcoding it there reads as dead.
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      pid: 4242
+    })
+    await server.start()
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_live_sibling',
+      pid: process.pid,
+      transports: [{ kind: 'unix', endpoint: join(userDataPath, `o-${process.pid}-rt2.sock`) }],
+      authToken: 'sibling-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_live_sibling' })
+
+    await server.stop()
+  })
+
+  it('stops reclaiming runtime metadata after the server is stopped', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({ runtime: new OrcaRuntimeService(), userDataPath })
+    await server.start()
+    const watch = server['metadataOwnershipWatch']
+    if (!watch) {
+      throw new Error('start() must arm the metadata ownership watch')
+    }
+    // Why: the republish guard alone would keep this test green, so assert the timer teardown itself.
+    const watchStop = vi.spyOn(watch, 'stop')
+    await server.stop()
+
+    writeRuntimeMetadata(userDataPath, {
+      runtimeId: 'rt_second_instance',
+      pid: 99999999,
+      transports: [],
+      authToken: 'second-instance-token',
+      startedAt: 1
+    })
+    server.checkRuntimeMetadataOwnership()
+
+    expect(watchStop).toHaveBeenCalledTimes(1)
+    expect(server['metadataOwnershipWatch']).toBeNull()
+    expect(readRuntimeMetadata(userDataPath)).toMatchObject({ runtimeId: 'rt_second_instance' })
+  })
+
+  it('flushes a lastSeen refresh scheduled while transports stop', async () => {
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: false
+    })
+    let pending = false
+    const timeline: string[] = []
+    server['deviceRegistry'] = {
+      flushPendingLastSeen: vi.fn(() => {
+        timeline.push(pending ? 'flush-pending' : 'flush-empty')
+        pending = false
+      })
+    } as unknown as DeviceRegistry
+    let finishSecondStop: () => void = () => {}
+    const secondStop = new Promise<void>((resolve) => {
+      finishSecondStop = resolve
+    })
+    server['activeTransports'] = [
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('failed-transport-stop')
+          throw new Error('transport stop failed')
+        })
+      },
+      {
+        start: vi.fn(async () => {}),
+        stop: vi.fn(async () => {
+          timeline.push('second-transport-started')
+          await secondStop
+          timeline.push('second-transport-stopped')
+          pending = true
+        })
+      }
+    ]
+
+    const stopping = server.stop()
+    await vi.waitFor(() => expect(timeline).toContain('second-transport-started'))
+    expect(timeline).not.toContain('flush-empty')
+    finishSecondStop()
+    await expect(stopping).rejects.toThrow('transport stop failed')
+
+    expect(timeline).toEqual([
+      'failed-transport-stop',
+      'second-transport-started',
+      'second-transport-stopped',
+      'flush-pending'
+    ])
+    expect(pending).toBe(false)
+  })
+
   it('creates a pairing offer for the active WebSocket transport', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -356,6 +519,95 @@ describe('OrcaRuntimeRpcServer', () => {
     }
 
     await server.stop()
+  })
+
+  it('reports why pairing is unavailable before the WebSocket listener is ready', () => {
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-')),
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    expect(server.createPairingOffer({ name: 'Early test' })).toMatchObject({
+      available: false,
+      reason: 'websocket_unavailable',
+      guidance: expect.any(String)
+    })
+  })
+
+  it('reports an E2EE identity initialization failure after the local transport starts', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    mkdirSync(join(userDataPath, E2EE_KEYPAIR_FILENAME))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      await server.start()
+      expect(server.createPairingOffer({ name: 'E2EE failure test' })).toMatchObject({
+        available: false,
+        reason: 'e2ee_key_unavailable',
+        guidance: expect.any(String)
+      })
+    } finally {
+      errorSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('reports a registry persistence failure without retaining a ghost credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    mkdirSync(join(userDataPath, DEVICE_REGISTRY_FILENAME))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    try {
+      expect(server.createPairingOffer({ name: 'Registry failure test' })).toMatchObject({
+        available: false,
+        reason: 'device_registry_unavailable',
+        guidance: expect.any(String)
+      })
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+    } finally {
+      errorSpy.mockRestore()
+      await server.stop()
+    }
+  })
+
+  it('rejects wildcard advertised addresses before minting a device credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+      expect(server.createPairingOffer({ address: '0.0.0.0', name: 'Invalid test' })).toMatchObject(
+        {
+          available: false,
+          reason: 'invalid_advertised_endpoint',
+          guidance: expect.any(String)
+        }
+      )
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+    } finally {
+      await server.stop()
+    }
   })
 
   it('includes a web client URL when the web bundle is served by the runtime', async () => {
@@ -492,6 +744,1111 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('adds only the exact optional relay object to GUI mobile pairing offers', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const relay = {
+      v: 1 as const,
+      directorUrl: 'https://relay.example.com',
+      cellUrl: 'https://cell.example.com',
+      assignmentEpoch: 7,
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      inviteToken: 'A'.repeat(43),
+      inviteExpiresAt: Date.now() + 60_000,
+      e2eeFraming: 2 as const
+    }
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay,
+        binding: {
+          relayHostId: relay.relayHostId,
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        name: 'Mobile test'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const parsed = parsePairingCode(offer.pairingUrl)
+      expect(parsed).toEqual(
+        expect.objectContaining({ endpoint: offer.endpoint, scope: 'mobile', relay })
+      )
+      expect(parsed).not.toHaveProperty('endpoints')
+      expect(offer.connectionMode).toBe('automatic')
+      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.relayBinding).toEqual({
+        relayHostId: relay.relayHostId,
+        relayDeviceId: offer.deviceId,
+        ownerIdentityKey: 'user\0profile\0org'
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('queues the old Relay binding when a stable provider changes accounts', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let relayHostId = 'AbCdEf0123_-xyZ9'
+    let ownerIdentityKey = 'user-a\0profile-a\0org'
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId,
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId,
+          relayDeviceId,
+          ownerIdentityKey
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(first.available).toBe(true)
+      if (!first.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const firstBinding = server.getDeviceRegistry()?.getDevice(first.deviceId)?.relayBinding
+      expect(firstBinding).toBeTruthy()
+      if (!firstBinding) {
+        throw new Error('Relay binding unavailable')
+      }
+      relayHostId = 'ZyXwVu9876_-abcD'
+      ownerIdentityKey = 'user-b\0profile-b\0org'
+
+      const second = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(second.available).toBe(true)
+      if (!second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(second.deviceId).toBe(first.deviceId)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(onDeviceRevokeQueued).toHaveBeenCalledWith(expect.objectContaining(firstBinding))
+      expect(server.getDeviceRegistry()?.getDevice(second.deviceId)?.relayBinding).toEqual({
+        relayHostId,
+        relayDeviceId: second.deviceId,
+        ownerIdentityKey
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('refuses a silent LAN QR when relay invite minting fails under Anywhere', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: vi.fn().mockRejectedValue(new Error('relay offline')),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      // Why: Anywhere must not ship a scannable local-only code under the Relay label.
+      expect(offer.available).toBe(false)
+      if (offer.available) {
+        throw new Error('expected relay mint failure')
+      }
+      expect(offer.reason).toBe('relay_mint_failed')
+      expect(offer.relayFailure).toMatchObject({
+        code: 'relay_mint_failed',
+        stage: 'create_pairing_relay'
+      })
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('reports a missing Relay provider without creating a fallback QR', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(offer).toMatchObject({
+        available: false,
+        reason: 'relay_mint_failed',
+        relayFailure: {
+          code: 'relay_provider_unavailable',
+          stage: 'provider_missing',
+          message: 'Orca Relay is not available on this desktop'
+        }
+      })
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('preserves an existing Relay QR when a same-mode remint fails', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const createPairingRelay = vi
+      .fn()
+      .mockImplementationOnce(async (relayDeviceId: string) => ({
+        relay: {
+          v: 1 as const,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2 as const
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }))
+      .mockRejectedValueOnce(new Error('relay offline'))
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(first.available).toBe(true)
+      if (!first.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const second = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(second.available).toBe(false)
+      expect(server.getDeviceRegistry()?.getDevice(first.deviceId)?.relayBinding).toBeTruthy()
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')?.deviceId).toBe(first.deviceId)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('coalesces concurrent mobile Relay mints for the shared pending credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveFirst: (() => void) | undefined
+    const firstMint = new Promise<void>((resolve) => {
+      resolveFirst = resolve
+    })
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
+      await firstMint
+      return {
+        relay: {
+          v: 1 as const,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2 as const
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
+      const second = server.createMobilePairingOffer({ address: '100.64.1.20', rotate: true })
+      await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledTimes(1))
+      resolveFirst?.()
+      const [firstOffer, secondOffer] = await Promise.all([first, second])
+      expect(firstOffer.available).toBe(true)
+      expect(secondOffer.available).toBe(true)
+      if (!firstOffer.available || !secondOffer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(secondOffer.deviceId).toBe(firstOffer.deviceId)
+      expect(secondOffer.pairingUrl).toBe(firstOffer.pairingUrl)
+      expect(createPairingRelay).toHaveBeenCalledTimes(1)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('supersedes an older concurrent Relay rotation for a different address', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveFirst: (() => void) | undefined
+    const firstMint = new Promise<void>((resolve) => {
+      resolveFirst = resolve
+    })
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
+      if (createPairingRelay.mock.calls.length === 1) {
+        await firstMint
+      }
+      return {
+        relay: {
+          v: 1 as const,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2 as const
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        rotate: true
+      })
+      await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledOnce())
+      const second = server.createMobilePairingOffer({
+        address: '100.64.1.21',
+        rotate: true
+      })
+      resolveFirst?.()
+      await expect(first).resolves.toMatchObject({
+        available: false,
+        relayFailure: { code: 'relay_request_superseded' }
+      })
+      const secondOffer = await second
+      expect(secondOffer.available).toBe(true)
+      if (!secondOffer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(secondOffer.endpoint).toContain('100.64.1.21')
+      expect(createPairingRelay).toHaveBeenCalledTimes(2)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('supersedes an older concurrent Relay mint for a different address without rotate', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveFirst: (() => void) | undefined
+    const firstMint = new Promise<void>((resolve) => {
+      resolveFirst = resolve
+    })
+    const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
+      if (createPairingRelay.mock.calls.length === 1) {
+        await firstMint
+      }
+      return {
+        relay: {
+          v: 1 as const,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2 as const
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = server.createMobilePairingOffer({ address: '100.64.1.20' })
+      await vi.waitFor(() => expect(createPairingRelay).toHaveBeenCalledOnce())
+      const second = server.createMobilePairingOffer({ address: '100.64.1.21' })
+      resolveFirst?.()
+      await expect(first).resolves.toMatchObject({
+        available: false,
+        relayFailure: { code: 'relay_request_superseded' }
+      })
+      const secondOffer = await second
+      expect(secondOffer.available).toBe(true)
+      if (!secondOffer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(secondOffer.endpoint).toContain('100.64.1.21')
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('lets LAN supersede a pending Relay mint without waiting for it', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveRelay: (() => void) | undefined
+    const relayGate = new Promise<void>((resolve) => {
+      resolveRelay = resolve
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => {
+        await relayGate
+        return {
+          relay: {
+            v: 1,
+            directorUrl: 'https://relay.example.com',
+            cellUrl: 'https://cell.example.com',
+            assignmentEpoch: 7,
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            inviteToken: 'A'.repeat(43),
+            inviteExpiresAt: Date.now() + 60_000,
+            e2eeFraming: 2
+          },
+          binding: {
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            relayDeviceId,
+            ownerIdentityKey: 'user\0profile\0org'
+          }
+        }
+      },
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const relayOffer = server.createMobilePairingOffer({ address: '100.64.1.20' })
+      await vi.waitFor(() =>
+        expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).not.toBeNull()
+      )
+      const localOffer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(localOffer.available).toBe(true)
+      if (!localOffer.available) {
+        throw new Error('LAN pairing unavailable')
+      }
+      expect(localOffer.connectionMode).toBe('local-only')
+      resolveRelay?.()
+      const staleRelayOffer = await relayOffer
+      expect(staleRelayOffer.available).toBe(false)
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')?.deviceId).toBe(
+        localOffer.deviceId
+      )
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('revokes a Relay invite when binding persistence throws', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const registry = server.getDeviceRegistry()
+      if (!registry) {
+        throw new Error('Device registry unavailable')
+      }
+      vi.spyOn(registry, 'setRelayBinding').mockImplementation(() => {
+        throw new Error('disk full')
+      })
+      const offer = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(offer.available).toBe(false)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(registry.getPendingDevice('mobile')).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('revokes a Relay result from a provider replaced during minting', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveRelay: (() => void) | undefined
+    const relayGate = new Promise<void>((resolve) => {
+      resolveRelay = resolve
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => {
+        await relayGate
+        return {
+          relay: {
+            v: 1,
+            directorUrl: 'https://relay.example.com',
+            cellUrl: 'https://cell.example.com',
+            assignmentEpoch: 7,
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            inviteToken: 'A'.repeat(43),
+            inviteExpiresAt: Date.now() + 60_000,
+            e2eeFraming: 2
+          },
+          binding: {
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            relayDeviceId,
+            ownerIdentityKey: 'user\0profile\0org'
+          }
+        }
+      },
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offerPromise = server.createMobilePairingOffer({ address: '100.64.1.20' })
+      await vi.waitFor(() =>
+        expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).not.toBeNull()
+      )
+      const onDeviceRevokeQueued = vi.fn()
+      server.setMobileRelayPairingProvider({
+        createPairingRelay: vi.fn(),
+        onDeviceRevokeQueued,
+        getEndpoints: vi.fn(),
+        provisionRelay: vi.fn()
+      })
+      resolveRelay?.()
+      await expect(offerPromise).resolves.toMatchObject({ available: false })
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('retains a minted Relay binding on the device when cleanup cannot be queued', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    let resolveRelay: (() => void) | undefined
+    const relayGate = new Promise<void>((resolve) => {
+      resolveRelay = resolve
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => {
+        await relayGate
+        return {
+          relay: {
+            v: 1,
+            directorUrl: 'https://relay.example.com',
+            cellUrl: 'https://cell.example.com',
+            assignmentEpoch: 7,
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            inviteToken: 'A'.repeat(43),
+            inviteExpiresAt: Date.now() + 60_000,
+            e2eeFraming: 2
+          },
+          binding: {
+            relayHostId: 'AbCdEf0123_-xyZ9',
+            relayDeviceId,
+            ownerIdentityKey: 'user\0profile\0org'
+          }
+        }
+      },
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const registry = server.getDeviceRegistry()
+      if (!registry) {
+        throw new Error('Device registry unavailable')
+      }
+      const offerPromise = server.createMobilePairingOffer({ address: '100.64.1.20' })
+      await vi.waitFor(() => expect(registry.getPendingDevice('mobile')).not.toBeNull())
+      const deviceId = registry.getPendingDevice('mobile')?.deviceId
+      vi.spyOn(server.getRelayRevokeOutbox(), 'enqueue').mockImplementation(() => {
+        throw new Error('disk full')
+      })
+      // Why: swapping the provider supersedes the in-flight mint.
+      server.setMobileRelayPairingProvider({
+        createPairingRelay: vi.fn(),
+        onDeviceRevokeQueued: vi.fn(),
+        getEndpoints: vi.fn(),
+        provisionRelay: vi.fn()
+      })
+      resolveRelay?.()
+      await expect(offerPromise).resolves.toMatchObject({ available: false })
+      expect(registry.getDevice(deviceId ?? '')?.relayBinding).toMatchObject({
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        relayDeviceId: deviceId
+      })
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('queues cloud cleanup when a minted Relay binding cannot be persisted', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async () => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId: 'wrong-device',
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(offer.available).toBe(false)
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(server.getDeviceRegistry()?.getPendingDevice('mobile')).toBeNull()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('persists local-only pairing and never mints or later binds Relay', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const createPairingRelay = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay,
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(parsePairingCode(offer.pairingUrl)).not.toHaveProperty('relay')
+      expect(createPairingRelay).not.toHaveBeenCalled()
+      expect(offer.connectionMode).toBe('local-only')
+      expect(server.getDeviceRegistry()?.getMobilePairingConnectionMode(offer.deviceId)).toBe(
+        'local-only'
+      )
+      expect(
+        server.setMobileRelayBinding(offer.deviceId, {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId: offer.deviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        })
+      ).toBe(false)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('normalizes untrusted pairing modes to automatic at the runtime boundary', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const offer = await server.createMobilePairingOffer({
+        connectionMode: 'renderer-controlled-value' as never
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(offer.connectionMode).toBe('automatic')
+      expect(server.getDeviceRegistry()?.getMobilePairingConnectionMode(offer.deviceId)).toBe(
+        'automatic'
+      )
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('revokes and rotates a pending Relay code when switching it to local-only', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const anywhere = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(anywhere.available).toBe(true)
+      if (!anywhere.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const local = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(local.available).toBe(true)
+      if (!local.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(local.deviceId).not.toBe(anywhere.deviceId)
+      expect(server.getDeviceRegistry()?.getDevice(anywhere.deviceId)).toBeNull()
+      expect(onDeviceRevokeQueued).toHaveBeenCalledOnce()
+      expect(parsePairingCode(local.pairingUrl)).not.toHaveProperty('relay')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('rotates a pending local-only code when switching it back to Anywhere', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const local = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(local.available).toBe(true)
+      if (!local.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const anywhere = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(anywhere.available).toBe(true)
+      if (!anywhere.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      // Why: a QR displayed under the local-only pledge must not become an
+      // anywhere-capable credential; the policy switch mints a fresh token.
+      expect(anywhere.deviceId).not.toBe(local.deviceId)
+      expect(server.getDeviceRegistry()?.getDevice(local.deviceId)).toBeNull()
+      expect(anywhere.connectionMode).toBe('automatic')
+      expect(parsePairingCode(anywhere.pairingUrl)).toHaveProperty('relay')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('reuses the pending token when the requested mode is unchanged', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const onDeviceRevokeQueued = vi.fn()
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued,
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(first.available).toBe(true)
+      if (!first.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      // Why: a same-mode remint (e.g. two windows converging after a
+      // preference sync) must not race rotations off each other's token.
+      const second = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(second.available).toBe(true)
+      if (!second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(second.deviceId).toBe(first.deviceId)
+      expect(onDeviceRevokeQueued).not.toHaveBeenCalled()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('records cloud cleanup before rotating or deleting the local mobile credential', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const registryPresence: boolean[] = []
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: async (relayDeviceId) => ({
+        relay: {
+          v: 1,
+          directorUrl: 'https://relay.example.com',
+          cellUrl: 'https://cell.example.com',
+          assignmentEpoch: 7,
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          inviteToken: 'A'.repeat(43),
+          inviteExpiresAt: Date.now() + 60_000,
+          e2eeFraming: 2
+        },
+        binding: {
+          relayHostId: 'AbCdEf0123_-xyZ9',
+          relayDeviceId,
+          ownerIdentityKey: 'user\0profile\0org'
+        }
+      }),
+      onDeviceRevokeQueued: (item) => {
+        registryPresence.push(server.getDeviceRegistry()?.getDevice(item.relayDeviceId) !== null)
+      },
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    })
+
+    await server.start()
+    try {
+      const first = await server.createMobilePairingOffer({ address: '100.64.1.20' })
+      expect(first.available).toBe(true)
+      if (!first.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const second = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        rotate: true
+      })
+      expect(second.available).toBe(true)
+      if (!second.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      expect(server.getDeviceRegistry()?.getDevice(first.deviceId)).toBeNull()
+      await expect(server.revokeMobileDevice(second.deviceId)).resolves.toBe(true)
+      expect(server.getDeviceRegistry()?.getDevice(second.deviceId)).toBeNull()
+      expect(registryPresence).toEqual([true, true])
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds pairing RPC providers to the immutable authenticated socket context', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    const getEndpoints = vi.fn().mockResolvedValue({ v: 1, relay: null })
+    const provisionRelay = vi.fn().mockResolvedValue({
+      v: 1,
+      reqId: 'install-1',
+      authorizationMode: 'authenticated-direct',
+      currentVersion: 1,
+      resumeExpiresAt: Date.now() + 60_000
+    })
+    server.setMobileRelayPairingProvider({
+      createPairingRelay: vi.fn(),
+      onDeviceRevokeQueued: vi.fn(),
+      getEndpoints,
+      provisionRelay
+    })
+
+    await server.start()
+    try {
+      const offer = server.createPairingOffer({
+        address: '127.0.0.1',
+        scope: 'mobile'
+      })
+      expect(offer.available).toBe(true)
+      if (!offer.available) {
+        throw new Error('WebSocket pairing unavailable')
+      }
+      const session = await authenticateMobileWsSession(offer.pairingUrl)
+      const responses = createEncryptedWsResponseReader(session)
+      sendEncryptedWsRequest(session, {
+        id: 'endpoints-1',
+        method: 'pairing.getEndpoints',
+        params: { installReqId: 'status-1' }
+      })
+      await expect(responses.next('endpoints-1')).resolves.toMatchObject({
+        ok: true,
+        result: { v: 1, relay: null }
+      })
+      sendEncryptedWsRequest(session, {
+        id: 'provision-1',
+        method: 'pairing.provisionRelay',
+        params: { reqId: 'install-1', newResumeTokenHash: 'A'.repeat(43) }
+      })
+      await expect(responses.next('provision-1')).resolves.toMatchObject({ ok: true })
+
+      const [endpointContext, endpointParams] = getEndpoints.mock.calls[0]!
+      expect(endpointContext).toEqual({
+        deviceId: offer.deviceId,
+        connectionId: expect.any(String),
+        transport: { transport: 'direct' }
+      })
+      expect(endpointParams).toEqual({ installReqId: 'status-1' })
+      expect(provisionRelay).toHaveBeenCalledWith(endpointContext, {
+        reqId: 'install-1',
+        newResumeTokenHash: 'A'.repeat(43)
+      })
+      responses.dispose()
+      session.ws.close()
+      await waitForWsClose(session.ws)
+    } finally {
+      await server.stop()
+    }
+  })
+
   it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService()
@@ -524,12 +1881,16 @@ describe('OrcaRuntimeRpcServer', () => {
         })
       )
       expect(JSON.parse(await nextWsMessage(ws))).toEqual({ type: 'e2ee_ready' })
-      expect(server['e2eeChannels'].size).toBe(1)
-      expect(server['wsConnectionIds'].size).toBe(1)
+      expect(server['mobileSocketWiring']?.channelCount).toBe(1)
+      expect(server['mobileSocketWiring']?.connectionCount).toBe(1)
 
       ws.close()
       await waitForWsClose(ws)
-      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+      await waitFor(
+        () =>
+          server['mobileSocketWiring']?.channelCount === 0 &&
+          server['mobileSocketWiring']?.connectionCount === 0
+      )
     } finally {
       await server.stop()
     }
@@ -561,9 +1922,13 @@ describe('OrcaRuntimeRpcServer', () => {
       const first = await authenticateMobileWs(offer.pairingUrl)
       const second = await authenticateMobileWs(offer.pairingUrl)
 
-      expect(server.revokeMobileDevice(offer.deviceId)).toBe(true)
+      await expect(server.revokeMobileDevice(offer.deviceId)).resolves.toBe(true)
       await Promise.all([waitForWsClose(first), waitForWsClose(second)])
-      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+      await waitFor(
+        () =>
+          server['mobileSocketWiring']?.channelCount === 0 &&
+          server['mobileSocketWiring']?.connectionCount === 0
+      )
 
       expect(disconnectSpy).toHaveBeenCalledTimes(1)
     } finally {
@@ -595,7 +1960,7 @@ describe('OrcaRuntimeRpcServer', () => {
         throw new Error('WebSocket pairing unavailable')
       }
 
-      expect(server.revokeMobileDevice(offer.deviceId)).toBe(false)
+      await expect(server.revokeMobileDevice(offer.deviceId)).resolves.toBe(false)
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
     } finally {
       await server.stop()
@@ -629,7 +1994,11 @@ describe('OrcaRuntimeRpcServer', () => {
 
       expect(server.revokeRuntimeAccess(offer.deviceId)).toBe(true)
       await Promise.all([waitForWsClose(first), waitForWsClose(second)])
-      await waitFor(() => server['e2eeChannels'].size === 0 && server['wsConnectionIds'].size === 0)
+      await waitFor(
+        () =>
+          server['mobileSocketWiring']?.channelCount === 0 &&
+          server['mobileSocketWiring']?.connectionCount === 0
+      )
 
       expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)).toBeNull()
     } finally {
@@ -709,17 +2078,21 @@ describe('OrcaRuntimeRpcServer', () => {
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
-    server['wsConnectionIds'].set(ws as unknown as WebSocket, 'conn-test')
+    server['mobileSocketWiring'] = {
+      getConnectionId: () => 'conn-test'
+    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     const replies: Record<string, unknown>[] = []
 
     try {
       const first = server['handleWebSocketMessage'](
-        JSON.stringify({
-          id: 'req_wait',
-          method: 'orchestration.check',
-          deviceToken: entry.token,
-          params: { terminal: 'term_wait', wait: true, timeoutMs: 10_000 }
-        }),
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'req_wait',
+            method: 'orchestration.check',
+            deviceToken: entry.token,
+            params: { terminal: 'term_wait', wait: true, timeoutMs: 10_000 }
+          })
+        ),
         (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
         () => {},
         undefined,
@@ -729,12 +2102,14 @@ describe('OrcaRuntimeRpcServer', () => {
       await waitFor(() => server['activeLongPolls'] === 1)
 
       await server['handleWebSocketMessage'](
-        JSON.stringify({
-          id: 'req_busy',
-          method: 'orchestration.check',
-          deviceToken: entry.token,
-          params: { terminal: 'term_busy', wait: true, timeoutMs: 10_000 }
-        }),
+        JSON.stringify(
+          withCurrentOrchestrationContract({
+            id: 'req_busy',
+            method: 'orchestration.check',
+            deviceToken: entry.token,
+            params: { terminal: 'term_busy', wait: true, timeoutMs: 10_000 }
+          })
+        ),
         (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
         () => {},
         undefined,
@@ -762,6 +2137,95 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('applies the ask sub-cap on the WebSocket path and releases both counters on close', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService()
+    const db = new OrchestrationDb(':memory:')
+    runtime.setOrchestrationDb(db)
+    seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2'])
+    // Why: cap 4 → ask sub-cap 2, so the third ask must be shed while waits keep the other half.
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: false,
+      longPollCap: 4
+    })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    // Why: 'runtime' scope, not 'mobile' — orchestration.ask is absent from the mobile allowlist.
+    const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
+    const ws = new FakeWebSocket()
+    server['mobileSocketWiring'] = {
+      getConnectionId: () => 'conn-test'
+    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
+    const replies: Record<string, unknown>[] = []
+    const push = (response: string): void => {
+      replies.push(JSON.parse(response) as Record<string, unknown>)
+    }
+    const dispatch = (id: string, method: string, params: unknown): Promise<void> =>
+      server['handleWebSocketMessage'](
+        JSON.stringify(
+          withCurrentOrchestrationContract({ id, method, deviceToken: entry.token, params })
+        ),
+        push,
+        () => {},
+        undefined,
+        ws as unknown as WebSocket
+      )
+
+    try {
+      const asks = [0, 1].map((i) =>
+        dispatch(`req_ask_${i}`, 'orchestration.ask', {
+          from: `term_w${i}`,
+          to: 'term_coord',
+          question: 'proceed?',
+          timeoutMs: 10_000
+        })
+      )
+      // Why: gate on the pre-existing total so a missing sub-cap fails on the shed below, not here.
+      await waitFor(() => server['activeLongPolls'] === 2)
+
+      await dispatch('req_ask_overflow', 'orchestration.ask', {
+        from: 'term_w2',
+        to: 'term_coord',
+        question: 'proceed?',
+        timeoutMs: 10_000
+      })
+      expect(replies).toContainEqual(
+        expect.objectContaining({
+          id: 'req_ask_overflow',
+          ok: false,
+          error: expect.objectContaining({
+            code: 'runtime_busy',
+            message: 'orchestration.ask capacity reached; retry with backoff'
+          })
+        })
+      )
+      // Shedding the ask must not burn a slot from the reserved half.
+      expect(server['activeLongPolls']).toBe(2)
+      expect(server['activeAskLongPolls']).toBe(2)
+
+      const wait = dispatch('req_check_wait', 'orchestration.check', {
+        terminal: 'term_other',
+        wait: true,
+        timeoutMs: 10_000
+      })
+      await waitFor(() => server['activeLongPolls'] === 3)
+      expect(server['activeAskLongPolls']).toBe(2)
+
+      ws.readyState = 3
+      ws.emit('close')
+      await Promise.all([...asks, wait])
+
+      expect(server['activeLongPolls']).toBe(0)
+      expect(server['activeAskLongPolls']).toBe(0)
+      expect(replies).toContainEqual(expect.objectContaining({ id: 'req_ask_0', ok: true }))
+      expect(replies).toContainEqual(expect.objectContaining({ id: 'req_check_wait', ok: true }))
+    } finally {
+      db.close()
+      await server.stop()
+    }
+  })
+
   it('shares one socket close listener across concurrent WebSocket dispatches', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
@@ -769,7 +2233,9 @@ describe('OrcaRuntimeRpcServer', () => {
     server['deviceRegistry'] = new DeviceRegistry(userDataPath)
     const entry = server['deviceRegistry']!.addDevice('runtime-test', 'runtime')
     const ws = new FakeWebSocket()
-    server['wsConnectionIds'].set(ws as unknown as WebSocket, 'conn-test')
+    server['mobileSocketWiring'] = {
+      getConnectionId: () => 'conn-test'
+    } as unknown as NonNullable<(typeof server)['mobileSocketWiring']>
     let activeDispatches = 0
     ;(
       server as unknown as {
@@ -835,6 +2301,17 @@ describe('OrcaRuntimeRpcServer', () => {
     const pushRuntimeGit = vi.fn().mockResolvedValue({ ok: true })
     const selectClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const selectCodexAccount = vi.fn().mockResolvedValue({ ok: true })
+    const expectedCodexResetScope = {
+      target: { runtime: 'host' as const, wslDistro: null },
+      accountId: 'codex-account',
+      accountRevision: 42,
+      offerRevision: 'v1:offer'
+    }
+    const consumeCodexRateLimitResetCredit = vi.fn().mockResolvedValue({
+      outcome: 'reset',
+      scope: expectedCodexResetScope,
+      snapshot: { claude: null, codex: null }
+    })
     const removeClaudeAccount = vi.fn().mockResolvedValue({ ok: true })
     const readTerminal = vi.fn().mockResolvedValue({ tail: ['ok'] })
     const getRuntimeGitStatus = vi
@@ -923,6 +2400,7 @@ describe('OrcaRuntimeRpcServer', () => {
       pushRuntimeGit,
       selectClaudeAccount,
       selectCodexAccount,
+      consumeCodexRateLimitResetCredit,
       removeClaudeAccount,
       readTerminal,
       getRuntimeGitStatus,
@@ -1558,6 +3036,19 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     await server['handleWebSocketMessage'](
       JSON.stringify({
+        id: 'req_consume_codex_reset',
+        method: 'accounts.consumeCodexResetCredit',
+        deviceToken: mobile.token,
+        params: {
+          idempotencyKey: '11111111-1111-4111-8111-111111111111',
+          expectedScope: expectedCodexResetScope
+        }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
         id: 'req_remove_claude',
         method: 'accounts.removeClaude',
         deviceToken: mobile.token,
@@ -1612,6 +3103,20 @@ describe('OrcaRuntimeRpcServer', () => {
         method: 'browser.viewport',
         deviceToken: mobile.token,
         params: { worktree: 'id:wt-1', page: 'page-1', width: 390, height: 844 }
+      }),
+      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      () => {}
+    )
+    await server['handleWebSocketMessage'](
+      JSON.stringify({
+        id: 'req_browser_certificate_proceed',
+        method: 'browser.certificate.proceed',
+        deviceToken: mobile.token,
+        params: {
+          worktree: 'id:wt-1',
+          page: 'page-1',
+          challengeId: 'challenge-1'
+        }
       }),
       (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
       () => {}
@@ -1747,6 +3252,9 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_claude', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_select_codex', ok: true }))
+    expect(replies).toContainEqual(
+      expect.objectContaining({ id: 'req_consume_codex_reset', ok: true })
+    )
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_terminal_read', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_files_open_diff', ok: true }))
     expect(replies).toContainEqual(expect.objectContaining({ id: 'req_git_diff', ok: true }))
@@ -1755,6 +3263,13 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_browser_viewport', ok: true })
+    )
+    expect(replies).toContainEqual(
+      expect.objectContaining({
+        id: 'req_browser_certificate_proceed',
+        ok: false,
+        error: expect.objectContaining({ code: 'forbidden' })
+      })
     )
     expect(replies).toContainEqual(
       expect.objectContaining({ id: 'req_browser_dialog_accept', ok: true })
@@ -1771,6 +3286,10 @@ describe('OrcaRuntimeRpcServer', () => {
     )
     expect(selectClaudeAccount).toHaveBeenCalledWith('claude-account')
     expect(selectCodexAccount).toHaveBeenCalledWith(null)
+    expect(consumeCodexRateLimitResetCredit).toHaveBeenCalledWith(
+      '11111111-1111-4111-8111-111111111111',
+      expectedCodexResetScope
+    )
     expect(readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
     expect(getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
     expect(pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined, undefined)
@@ -1858,7 +3377,8 @@ describe('OrcaRuntimeRpcServer', () => {
       path: 'src/app.ts',
       line: 10,
       startLine: undefined,
-      body: 'please fix'
+      body: 'please fix',
+      prRepo: null
     })
     expect(addRepoPRReviewCommentReply).toHaveBeenCalledWith('id:repo-1', {
       prNumber: 456,
@@ -1875,19 +3395,22 @@ describe('OrcaRuntimeRpcServer', () => {
       oldPath: undefined,
       status: 'modified',
       headSha: 'abc123',
-      baseSha: 'def456'
+      baseSha: 'def456',
+      prRepo: null
     })
     expect(rerunRepoPRChecks).toHaveBeenCalledWith('id:repo-1', 456, {
       headSha: 'abc123',
-      failedOnly: true
+      failedOnly: true,
+      prRepo: null
     })
-    expect(resolveRepoReviewThread).toHaveBeenCalledWith('id:repo-1', 'thread-1', true)
+    expect(resolveRepoReviewThread).toHaveBeenCalledWith('id:repo-1', 'thread-1', true, null)
     expect(setRepoPRFileViewed).toHaveBeenCalledWith('id:repo-1', {
       pullRequestId: 'PR_kw',
       path: 'src/app.ts',
-      viewed: true
+      viewed: true,
+      prRepo: null
     })
-    expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'])
+    expect(requestRepoPRReviewers).toHaveBeenCalledWith('id:repo-1', 456, ['alex'], null)
     expect(mergeRepoPR).toHaveBeenCalledWith('id:repo-1', 456, 'squash', null)
     expect(addGitLabRepoIssueComment).toHaveBeenCalledWith('id:repo-1', 123, 'done', undefined)
     expect(addGitLabRepoMRComment).toHaveBeenCalledWith('id:repo-1', 456, 'ship it', undefined)
@@ -1950,6 +3473,47 @@ describe('OrcaRuntimeRpcServer', () => {
         error: expect.objectContaining({ code: 'unauthorized' })
       })
     )
+  })
+
+  it('rejects unpaired terminal creates before runtime dispatch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const createMobileSessionTerminal = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createMobileSessionTerminal
+    } as unknown as OrcaRuntimeService
+    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath, enableWebSocket: false })
+    server['deviceRegistry'] = new DeviceRegistry(userDataPath)
+    const replies: Record<string, unknown>[] = []
+    const send = async (id: string, deviceToken?: string): Promise<void> => {
+      await server['handleWebSocketMessage'](
+        JSON.stringify({
+          id,
+          method: 'session.tabs.createTerminal',
+          ...(deviceToken ? { deviceToken } : {}),
+          params: { worktree: 'id:wt-1' }
+        }),
+        (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+        () => {}
+      )
+    }
+
+    await send('req_missing')
+    await send('req_invalid', 'invalid-token')
+
+    expect(replies).toEqual([
+      expect.objectContaining({
+        id: 'req_missing',
+        error: expect.objectContaining({ code: 'unauthorized' }),
+        ok: false
+      }),
+      expect.objectContaining({
+        id: 'req_invalid',
+        error: expect.objectContaining({ code: 'unauthorized' }),
+        ok: false
+      })
+    ])
+    expect(createMobileSessionTerminal).not.toHaveBeenCalled()
   })
 
   it('allows runtime-scoped WebSocket tokens to use the full RPC surface', async () => {
@@ -2490,11 +4054,37 @@ describe('OrcaRuntimeRpcServer', () => {
         }
       ])
 
+      // Pins the opt-out half of the compat contract: the request above omits
+      // the flag and still gets layouts; only an explicit `false` drops them.
+      const optedOutResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_out',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: false }
+      })
+      const optedOut = optedOutResponse.result as {
+        visualLayouts?: unknown[]
+        terminals: unknown[]
+      }
+      expect(optedOutResponse).toMatchObject({ id: 'req_list_layout_opt_out', ok: true })
+      expect(optedOut.visualLayouts).toBeUndefined()
+      expect(optedOut.terminals).toHaveLength(result.terminals.length)
+
+      const explicitIncludeResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_list_layout_opt_in',
+        authToken: metadata!.authToken,
+        method: 'terminal.list',
+        params: { worktree: `id:${worktreeId}`, includeVisualLayouts: true }
+      })
+      expect(
+        (explicitIncludeResponse.result as { visualLayouts?: unknown[] }).visualLayouts
+      ).toHaveLength(1)
+
       const resolvePaneResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
         id: 'req_resolve_pane',
         authToken: metadata!.authToken,
         method: 'terminal.resolvePane',
-        params: { paneKey: `tab-right:${bottomLeaf}` }
+        params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId }
       })
       expect(resolvePaneResponse).toMatchObject({
         id: 'req_resolve_pane',
@@ -2504,9 +4094,22 @@ describe('OrcaRuntimeRpcServer', () => {
             handle: handleByLeaf.get(bottomLeaf),
             tabId: 'tab-right',
             leafId: bottomLeaf,
-            ptyId: 'pty-bottom'
+            ptyId: 'pty-bottom',
+            worktreeId
           }
         }
+      })
+
+      const wrongOwnerResponse = await sendRequest(metadata!.transports[0]!.endpoint, {
+        id: 'req_resolve_pane_wrong_owner',
+        authToken: metadata!.authToken,
+        method: 'terminal.resolvePane',
+        params: { paneKey: `tab-right:${bottomLeaf}`, worktreeId: 'other-worktree' }
+      })
+      expect(wrongOwnerResponse).toMatchObject({
+        id: 'req_resolve_pane_wrong_owner',
+        ok: false,
+        error: { message: 'terminal_not_found' }
       })
     } finally {
       await server.stop()
@@ -2538,6 +4141,7 @@ describe('OrcaRuntimeRpcServer', () => {
       params: {
         worktree: 'id:repo-1::/tmp/worktree-a',
         command: "claude 'work on the issue'",
+        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
         tabId: 'laptop-tab',
         leafId,
         presentation: 'background'
@@ -2557,6 +4161,11 @@ describe('OrcaRuntimeRpcServer', () => {
     expect(
       (createResponse.result as { terminal?: { warning?: string } } | undefined)?.terminal?.warning
     ).toBeUndefined()
+    expect(spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
+      })
+    )
     runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
     runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
 
@@ -2760,6 +4369,362 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
+  it('authorizes a mobile artifact tap after first-connect backfill even once the raw window scrolls', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      write: () => true,
+      kill: () => true,
+      getCwd: async () => '/tmp/worktree-a',
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    // Real artifact under the temp root so the grant path stats it.
+    const artifactPath = join(tmpdir(), `orca-artifact-${process.pid}-${Date.now()}.json`)
+    await writeFile(artifactPath, '{"ok":true}')
+
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          title: 'Agent',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: 'repo-1::/tmp/worktree-a',
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    // Path printed before any mobile client exists: tracking is inactive, so
+    // only the retained raw window knows it at connect time.
+    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
+
+    await server.start()
+    const offer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'phone',
+      scope: 'mobile'
+    })
+    expect(offer.available).toBe(true)
+    if (!offer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    // Full direct E2EE authentication drives MobileSocketWiring.onReady (the
+    // relay transport attaches through the same wiring), which must backfill
+    // candidates from the raw window without any direct activation call.
+    const phone = await authenticateMobileWsSession(offer.pairingUrl)
+    const phoneResponses = createEncryptedWsResponseReader(phone)
+    try {
+      // Post-connect pathless output scrolls the artifact out of the raw
+      // 64KiB window; only the connect-time backfilled candidate can answer.
+      runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
+
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_terminals',
+        method: 'terminal.list',
+        params: { worktree: 'id:repo-1::/tmp/worktree-a' }
+      })
+      const listResponse = await phoneResponses.next('phone_terminals')
+      const handle = (listResponse.result as { terminals: { handle: string }[] }).terminals[0]!
+        .handle
+      expect(handle).toBeTruthy()
+
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_tap',
+        method: 'files.resolveTerminalPath',
+        params: {
+          worktree: 'id:repo-1::/tmp/worktree-a',
+          pathText: artifactPath,
+          terminal: handle
+        }
+      })
+      await expect(phoneResponses.next('phone_tap')).resolves.toMatchObject({
+        ok: true,
+        result: {
+          exists: true,
+          isDirectory: false,
+          openTarget: {
+            kind: 'absolute-file',
+            provider: 'local',
+            grantId: expect.any(String)
+          }
+        }
+      })
+    } finally {
+      phoneResponses.dispose()
+      phone.ws.close()
+      await server.stop()
+      await rm(artifactPath, { force: true })
+    }
+  })
+
+  it('completes remote E2EE authentication against a runtime proxy without activateRecentPtyPathCandidateTracking', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
+    // activation is a local-host concern, so the proxy legitimately lacks
+    // activateRecentPtyPathCandidateTracking and onReady must not throw.
+    const runtimeProxy = {
+      getRuntimeId: () => 'proxy-runtime-test',
+      getStartedAt: () => 1,
+      getStatus: () => ({ graphStatus: 'unavailable' }),
+      cleanupSubscriptionsForConnection: () => {},
+      cancelMobileDictationForConnection: () => {},
+      onClientDisconnected: () => {}
+    } as unknown as OrcaRuntimeService
+    expect(
+      (runtimeProxy as { activateRecentPtyPathCandidateTracking?: unknown })
+        .activateRecentPtyPathCandidateTracking
+    ).toBeUndefined()
+    const server = new OrcaRuntimeRpcServer({
+      runtime: runtimeProxy,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    const offer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'remote',
+      scope: 'runtime'
+    })
+    expect(offer.available).toBe(true)
+    if (!offer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    // Real E2EE pairing + authentication drives MobileSocketWiring.onReady
+    // before e2ee_authenticated is sent; a throwing onReady never authenticates.
+    const session = await authenticateMobileWsSession(offer.pairingUrl)
+    const responses = createEncryptedWsResponseReader(session)
+    try {
+      sendEncryptedWsRequest(session, { id: 'proxy_status', method: 'status.get' })
+      await expect(responses.next('proxy_status')).resolves.toMatchObject({
+        id: 'proxy_status',
+        ok: true,
+        result: { graphStatus: 'unavailable' }
+      })
+    } finally {
+      responses.dispose()
+      session.ws.close()
+      await server.stop()
+    }
+  })
+
+  it('keeps active runtime multiplex streams responsive while a background stream is ACK-limited over WebSocket', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const writes: { terminal: string; text: string }[] = []
+    const runtime = new OrcaRuntimeService(makeStore() as never)
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'multiplex-background-pty' })
+      .mockResolvedValueOnce({ id: 'multiplex-active-pty' })
+    runtime.setPtyController({
+      spawn,
+      write: (ptyId, data) => {
+        writes.push({ terminal: ptyId, text: data })
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const phoneOffer = server.createPairingOffer({
+      address: '127.0.0.1',
+      name: 'phone',
+      scope: 'mobile'
+    })
+    expect(phoneOffer.available).toBe(true)
+    if (!phoneOffer.available) {
+      throw new Error('WebSocket pairing unavailable')
+    }
+    const pairing = parsePairingCode(phoneOffer.pairingUrl)
+    expect(pairing).toBeTruthy()
+    if (!pairing) {
+      throw new Error('Pairing URL did not parse')
+    }
+
+    const metadata = readRuntimeMetadata(userDataPath)
+    const laptopEndpoint = metadata!.transports[0]!.endpoint
+    const laptopAuthToken = metadata!.authToken
+    const worktree = 'id:repo-1::/tmp/worktree-a'
+    const backgroundLeafId = '11111111-1111-4111-8111-111111111111'
+    const activeLeafId = '22222222-2222-4222-8222-222222222222'
+    const backgroundCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_background',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'background',
+        tabId: 'multiplex-background-tab',
+        leafId: backgroundLeafId
+      }
+    })
+    const activeCreateResponse = await sendRequest(laptopEndpoint, {
+      id: 'laptop_create_active',
+      authToken: laptopAuthToken,
+      method: 'terminal.create',
+      params: {
+        worktree,
+        command: 'active',
+        tabId: 'multiplex-active-tab',
+        leafId: activeLeafId,
+        activate: true
+      }
+    })
+    const backgroundTerminal = (backgroundCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+    const activeTerminal = (activeCreateResponse.result as { terminal: { handle: string } })
+      .terminal
+
+    const responses: Record<string, unknown>[] = []
+    const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
+    const onError = vi.fn()
+    const subscription = await subscribeRemoteRuntimeRequest(
+      pairing,
+      'terminal.multiplex',
+      {},
+      15_000,
+      {
+        onResponse: (response) => responses.push(response as Record<string, unknown>),
+        onBinary: (bytes) => binaryFrames.push(bytes),
+        onError
+      }
+    )
+
+    try {
+      await vi.waitFor(() =>
+        expect(
+          responses.some(
+            (response) => (response.result as { type?: string } | undefined)?.type === 'ready'
+          )
+        ).toBe(true)
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 1,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 21,
+            terminal: backgroundTerminal.handle,
+            client: { id: 'desktop-background', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 2,
+          opcode: TerminalStreamOpcode.Subscribe,
+          streamId: 0,
+          payload: encodeTerminalStreamJson({
+            streamId: 22,
+            terminal: activeTerminal.handle,
+            client: { id: 'desktop-active', type: 'desktop' },
+            capabilities: { ackOutput: 1 }
+          })
+        })
+      )
+      await vi.waitFor(() => {
+        const subscribedStreamIds = responses
+          .map((response) => response.result as { type?: string; streamId?: number } | undefined)
+          .filter((result) => result?.type === 'subscribed')
+          .map((result) => result?.streamId)
+        expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
+      })
+      binaryFrames.splice(0)
+
+      const backgroundOutput = 'B'.repeat(700 * 1024)
+      runtime.onPtyData('multiplex-background-pty', backgroundOutput, 1)
+      await vi.waitFor(() => {
+        const backgroundFrames = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        const backgroundBytes = backgroundFrames.reduce(
+          (total, frame) => total + (frame?.payload.byteLength ?? 0),
+          0
+        )
+        expect(backgroundBytes).toBeGreaterThan(0)
+        expect(backgroundBytes).toBeLessThan(backgroundOutput.length)
+      })
+
+      const frameCountBeforeActive = binaryFrames.length
+      runtime.onPtyData('multiplex-active-pty', 'ACTIVE_MULTIPLEX_READY\r\n', 2)
+      await vi.waitFor(() => {
+        const activeOutput = binaryFrames
+          .slice(frameCountBeforeActive)
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 22)
+          .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .join('')
+        expect(activeOutput).toContain('ACTIVE_MULTIPLEX_READY')
+      })
+
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 3,
+          opcode: TerminalStreamOpcode.Input,
+          streamId: 22,
+          payload: encodeTerminalStreamText('still interactive\r')
+        })
+      )
+      await vi.waitFor(() =>
+        expect(writes).toContainEqual({
+          terminal: 'multiplex-active-pty',
+          text: 'still interactive\r'
+        })
+      )
+
+      const backgroundBytesBeforeAck = binaryFrames
+        .map((frame) => decodeTerminalStreamFrame(frame))
+        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+        .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+      subscription.sendBinary(
+        encodeTerminalStreamFrame({
+          seq: 4,
+          opcode: TerminalStreamOpcode.Ack,
+          streamId: 21,
+          payload: encodeTerminalStreamJson({ bytes: backgroundBytesBeforeAck })
+        })
+      )
+      await vi.waitFor(() => {
+        const backgroundBytesAfterAck = binaryFrames
+          .map((frame) => decodeTerminalStreamFrame(frame))
+          .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+          .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
+        expect(backgroundBytesAfterAck).toBeGreaterThan(backgroundBytesBeforeAck)
+      })
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      subscription.close()
+      await server.stop()
+    }
+  })
+
   it('serves worktree.ps from the runtime summary builder', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore({ isUnread: true }) as never)
@@ -2867,7 +4832,7 @@ describe('OrcaRuntimeRpcServer', () => {
       let buffer = ''
       socket.setEncoding('utf8')
       socket.once('error', reject)
-      socket.on('data', (chunk) => {
+      socket.on('data', (chunk: string) => {
         buffer += chunk
         const newlineIndex = buffer.indexOf('\n')
         if (newlineIndex === -1) {
@@ -2929,6 +4894,62 @@ describe('OrcaRuntimeRpcServer', () => {
         expect(terminals[0]).toMatchObject({ id: 'req_wait', ok: true })
         // Why: 300ms wait with 50ms keepalive → expect roughly 5 keepalives;
         // assert ≥3 to tolerate scheduler jitter without flaking.
+        expect(keepalives.length).toBeGreaterThanOrEqual(3)
+      } finally {
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('emits keepalive frames while orchestration.ask blocks for a reply', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const askerPaneKey = 'tab_asker:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
+        handle === 'term_asker' ? askerPaneKey : null
+      )
+      const run = db.createRun({
+        objective: 'Keepalive test',
+        coordinatorHandle: 'term_nobody',
+        coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+      })
+      const task = db.createTask({ spec: 'Wait for an answer', runId: run.id })
+      db.createDispatchContext(task.id, 'term_asker', askerPaneKey)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 50
+      })
+      await server.start()
+
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        // Why: no reply is ever sent, so ask blocks the full window on the same
+        // hold-the-socket path check --wait uses. Without ask in the long-poll
+        // set the 30s idle timer would tear this down before it keepalives.
+        const session = openFramedSession(metadata!.transports[0]!.endpoint, {
+          id: 'req_ask',
+          authToken: metadata!.authToken,
+          method: 'orchestration.ask',
+          params: {
+            to: 'term_nobody',
+            from: 'term_asker',
+            question: 'ping?',
+            timeoutMs: 300
+          }
+        })
+        await session.done
+
+        const keepalives = session.frames.filter((f) => f._keepalive === true)
+        const terminals = session.frames.filter((f) => f.ok !== undefined)
+        expect(terminals).toHaveLength(1)
+        expect(terminals[0]).toMatchObject({
+          id: 'req_ask',
+          ok: true,
+          result: { timedOut: true }
+        })
         expect(keepalives.length).toBeGreaterThanOrEqual(3)
       } finally {
         db.close()
@@ -3239,6 +5260,167 @@ describe('OrcaRuntimeRpcServer', () => {
       }
     })
 
+    it('reserves long-poll headroom for terminal.wait when orchestration.ask floods', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      seedSupervisedAskWorkers(db, ['term_w0', 'term_w1', 'term_w2', 'term_w3'])
+      // Why: cap 4 → ask sub-cap 2, so 4 concurrent asks can only take half the budget.
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 4
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            title: 'Terminal 1',
+            activeLeafId: 'pane:1',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab-1',
+            worktreeId: 'repo-1::/tmp/worktree-a',
+            leafId: 'pane:1',
+            paneRuntimeId: 1,
+            ptyId: 'pty-1'
+          }
+        ]
+      })
+      await server.start()
+
+      const asks: ReturnType<typeof openFramedSession>[] = []
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+        const listResponse = await sendRequest(endpoint, {
+          id: 'req_list',
+          authToken: metadata!.authToken,
+          method: 'terminal.list'
+        })
+        const handle = (listResponse.result as { terminals: { handle: string }[] }).terminals[0]!
+          .handle
+
+        // Four workers block in ask; distinct `from` handles so no reply wakes another.
+        for (let i = 0; i < 4; i++) {
+          asks.push(
+            openFramedSession(endpoint, {
+              id: `req_ask_${i}`,
+              authToken: metadata!.authToken,
+              method: 'orchestration.ask',
+              params: {
+                from: `term_w${i}`,
+                to: 'term_coord',
+                question: 'proceed?',
+                timeoutMs: 10_000
+              }
+            })
+          )
+        }
+        // Let every ask reach the admission fence before probing the reserved half.
+        await waitFor(() => server['activeLongPolls'] >= 2)
+        await sleep(100)
+
+        // The reserved half still admits a terminal.wait from any other client.
+        const admitted = openFramedSession(endpoint, {
+          id: 'req_terminal_wait',
+          authToken: metadata!.authToken,
+          method: 'terminal.wait',
+          params: { terminal: handle, for: 'tui-idle', timeoutMs: 50 }
+        })
+        await admitted.done
+        expect(admitted.frames.find((f) => f.ok !== undefined)).toMatchObject({
+          id: 'req_terminal_wait',
+          ok: false,
+          error: { code: 'timeout' }
+        })
+
+        // …and a check --wait too, which shares the same reserved class.
+        const check = openFramedSession(endpoint, {
+          id: 'req_check_wait',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_other', wait: true, timeoutMs: 100 }
+        })
+        await check.done
+        expect(check.frames.find((f) => f.ok !== undefined)).toMatchObject({
+          id: 'req_check_wait',
+          ok: true
+        })
+
+        // Overflow asks are shed, not queued: the sub-cap holds at half the budget.
+        expect(server['activeAskLongPolls']).toBe(2)
+        const shed = asks
+          .map((a) => a.frames.find((f) => f.ok !== undefined))
+          .filter((f) => f !== undefined)
+        expect(shed).toHaveLength(2)
+        expect(shed[0]).toMatchObject({ ok: false, error: { code: 'runtime_busy' } })
+      } finally {
+        for (const ask of asks) {
+          ask.socket.destroy()
+        }
+        await Promise.all(asks.map((ask) => ask.done))
+        db.close()
+        await server.stop()
+      }
+    })
+
+    it('keeps the full cap available to terminal.wait and check --wait', async () => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+      const runtime = new OrcaRuntimeService()
+      const db = new OrchestrationDb(':memory:')
+      runtime.setOrchestrationDb(db)
+      const server = new OrcaRuntimeRpcServer({
+        runtime,
+        userDataPath,
+        keepaliveIntervalMs: 1000,
+        longPollCap: 4
+      })
+      await server.start()
+
+      const waits: ReturnType<typeof openFramedSession>[] = []
+      try {
+        const metadata = readRuntimeMetadata(userDataPath)
+        const endpoint = metadata!.transports[0]!.endpoint
+
+        // The ask sub-cap must not narrow the budget for the reserved class.
+        for (let i = 0; i < 4; i++) {
+          waits.push(
+            openFramedSession(endpoint, {
+              id: `req_wait_${i}`,
+              authToken: metadata!.authToken,
+              method: 'orchestration.check',
+              params: { terminal: `term_${i}`, wait: true, timeoutMs: 10_000 }
+            })
+          )
+        }
+        await waitFor(() => server['activeLongPolls'] === 4)
+        expect(server['activeAskLongPolls']).toBe(0)
+
+        const overflow = await sendRequest(endpoint, {
+          id: 'req_overflow',
+          authToken: metadata!.authToken,
+          method: 'orchestration.check',
+          params: { terminal: 'term_overflow', wait: true, timeoutMs: 5_000 }
+        })
+        expect(overflow).toMatchObject({ ok: false, error: { code: 'runtime_busy' } })
+      } finally {
+        for (const wait of waits) {
+          wait.socket.destroy()
+        }
+        await Promise.all(waits.map((wait) => wait.done))
+        db.close()
+        await server.stop()
+      }
+    })
+
     it('does not emit keepalive frames for short RPCs', async () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
       const runtime = new OrcaRuntimeService()
@@ -3379,5 +5561,522 @@ describe('OrcaRuntimeRpcServer', () => {
         realPrototype.exec = originalExec
       }
     })
+  })
+})
+
+describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
+  const wsTransportOf = (server: OrcaRuntimeRpcServer): WebSocketTransport | undefined =>
+    (server['activeTransports'] as unknown[]).find(
+      (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
+    )
+
+  it('binds the listener to loopback on a fresh desktop with no paired device', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(0)
+      // Why: the exposure regression — before STA-2370 this bound 0.0.0.0 with zero devices paired.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('widens the listener to all interfaces when a mobile pairing offer is created', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const loopbackPort = wsTransportOf(server)?.resolvedPort
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('0.0.0.0')
+      // Why: the widen reuses the same port so the QR's already-advertised endpoint stays valid.
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup when exposeNetworkByDefault is set (orca serve)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      exposeNetworkByDefault: true
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(new URL(server.getWebSocketEndpoint()!).hostname).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup when a previously-connected device can reconnect', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: a device that has actually connected (lastSeenAt > 0) may reconnect, so the listener must be
+    // reachable at startup without waiting for a new pairing action.
+    const registry = new DeviceRegistry(userDataPath)
+    const device = registry.getOrCreatePendingDevice('Paired phone', 'mobile')
+    registry.updateLastSeen(device.deviceId)
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(
+        server
+          .getDeviceRegistry()
+          ?.listDevices()
+          .some((d) => d.lastSeenAt > 0)
+      ).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('stays on loopback at startup for a pending device that has never connected', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: a pending device (offer created but never connected: lastSeenAt === 0) is not a reconnect, so
+    // the listener must stay loopback — this distinguishes the reconnect widen from a blanket any-device
+    // widen (a revert to listDevices().length > 0 would wrongly expose the LAN here).
+    const registry = new DeviceRegistry(userDataPath)
+    registry.getOrCreatePendingDevice('Pending phone', 'mobile')
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(server.getDeviceRegistry()?.listDevices()).toHaveLength(1)
+      expect(
+        server
+          .getDeviceRegistry()
+          ?.listDevices()
+          .every((d) => d.lastSeenAt === 0)
+      ).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('stays on loopback at startup after a "This computer only" grant has connected', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: the local web client authenticating marks its grant lastSeenAt > 0 like any other socket, so a
+    // blanket "any connected device" widen republished the runtime on every interface one launch later —
+    // exactly what the user declined by picking "This computer only".
+    const registry = new DeviceRegistry(userDataPath)
+    const device = registry.getOrCreatePendingDevice('Runtime local', 'runtime', 'this-computer')
+    registry.updateLastSeen(device.deviceId)
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why: registries written by older desktops only ever held network-reach grants; a missing field must
+    // keep the reconnect widen or an already-paired phone would be stranded by the upgrade.
+    const legacyDevice = {
+      deviceId: 'legacy-device',
+      name: 'Legacy phone',
+      token: 'legacy-token',
+      scope: 'mobile',
+      pairedAt: Date.now(),
+      lastSeenAt: Date.now()
+    }
+    await writeFile(
+      join(userDataPath, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([legacyDevice]),
+      'utf-8'
+    )
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('upgrades a reused pending grant to network reach so its link survives a relaunch', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    let deviceId: string
+    try {
+      const local = server.createPairingOffer({
+        address: '127.0.0.1',
+        scope: 'runtime',
+        reach: 'this-computer'
+      })
+      expect(local.available).toBe(true)
+      // Why: without `rotate` the same pending token is re-advertised, now for off-host reach. The mark must
+      // widen with it — keeping it this-computer would leave the LAN link unserved after the next launch.
+      const network = server.createPairingOffer({
+        address: '100.64.1.20',
+        scope: 'runtime',
+        reach: 'network'
+      })
+      expect(network.available).toBe(true)
+      deviceId = network.available ? network.deviceId : ''
+      expect(deviceId).toBe(local.available ? local.deviceId : '')
+      server.getDeviceRegistry()?.updateLastSeen(deviceId)
+    } finally {
+      await server.stop()
+    }
+
+    const relaunched = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await relaunched.start()
+    try {
+      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await relaunched.stop()
+    }
+  })
+
+  it('keeps the pinned port when a later widen tears down a live loopback client', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const loopbackPort = wsTransportOf(server)!.resolvedPort
+      // Why: a "This computer only" link never widens, so unlike before, a local client can already be
+      // connected when a later LAN offer opts in. The rebind terminates it (ws cannot move a listener), so
+      // the port must be reused or the already-issued local link could never reconnect.
+      const client = new WebSocket(`ws://127.0.0.1:${loopbackPort}`)
+      await new Promise<void>((resolve, reject) => {
+        client.once('open', () => resolve())
+        client.once('error', reject)
+      })
+      const closed = new Promise<void>((resolve) => client.once('close', () => resolve()))
+
+      await server.ensureNetworkExposure()
+      await closed
+
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+
+      const reconnected = new WebSocket(`ws://127.0.0.1:${loopbackPort}`)
+      await new Promise<void>((resolve, reject) => {
+        reconnected.once('open', () => resolve())
+        reconnected.once('error', reject)
+      })
+      reconnected.close()
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('keeps the same MobileSocketWiring instance across a pairing widen (relay capture stays valid)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const wiringBeforeWiden = server.getMobileSocketWiring()
+      expect(wiringBeforeWiden).not.toBeNull()
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+
+      // Why: DesktopRelayService captures the wiring once at construction and hands it to every relay
+      // broker, so the widen must swap the transport under the SAME wiring — replacing the wiring would
+      // strand relay sockets on a dead object (lost connection IDs, binary handling, revocation targeting).
+      expect(server.getMobileSocketWiring()).toBe(wiringBeforeWiden)
+
+      // Why: object identity alone would pass even if the post-widen transport were never re-attached to the
+      // captured wiring. Prove the swap functionally — route a revocation through the pre-widen wiring and
+      // assert it reaches the NEW (0.0.0.0) transport, confirming attachTransport ran on the same wiring
+      // after the rebind. A revert that leaves the wiring pointed at the stopped loopback transport fails here.
+      const widenedTransport = wsTransportOf(server)
+      expect(widenedTransport).toBeDefined()
+      const terminateSpy = vi.spyOn(widenedTransport!, 'terminateClientConnections')
+      wiringBeforeWiden!.terminateDeviceConnections('device-token-xyz')
+      expect(terminateSpy).toHaveBeenCalledWith('device-token-xyz')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('coalesces concurrent pairing widens into a single rebind', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      const widenSpy = vi.spyOn(
+        server as unknown as { widenWebSocketBind: () => Promise<void> },
+        'widenWebSocketBind'
+      )
+
+      await Promise.all([server.ensureNetworkExposure(), server.ensureNetworkExposure()])
+
+      // Why: two racing pairing offers must share one rebind via networkExposurePromise — two competing
+      // stop/start races would fight for the port and could strand the listener on a random one.
+      expect(widenSpy).toHaveBeenCalledTimes(1)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('reports pairing unavailable but keeps a serving loopback listener when the widen bind fails', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      const loopbackPort = wsTransportOf(server)?.resolvedPort
+      // Why: force the wide bind to throw AFTER the loopback listener is stopped, then let the loopback
+      // recovery bind through — proving no stranded/closed socket and a retry-able state.
+      const target = server as unknown as {
+        startWebSocketTransport: (opts: { host: string }) => Promise<unknown>
+        wsBoundHost: string | null
+      }
+      const original = target.startWebSocketTransport.bind(server)
+      vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
+        if (opts.host === '0.0.0.0') {
+          throw new Error('injected wide bind failure')
+        }
+        return original(opts)
+      })
+
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      // Why: a failed widen must NOT advertise a LAN endpoint with no LAN listener behind it — the offer is
+      // reported unavailable (STA-2370). A revert that swallows the widen failure would return available:true.
+      expect(offer.available).toBe(false)
+      if (!offer.available) {
+        expect(offer.reason).toBe('network_exposure_failed')
+      }
+      // Why: the listener must keep serving on loopback (same port) rather than being left stranded/closed.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+      // Why: wsBoundHost stays loopback so a later pairing offer retries the widen.
+      expect(target.wsBoundHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('keeps the widened listener tracked when persisting pairing metadata fails', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    try {
+      // Why: fail metadata publication AFTER the wide bind already succeeded. The live 0.0.0.0 listener must
+      // stay tracked in activeTransports — a revert that runs loopback recovery here orphans a running wide
+      // listener (an untracked 0.0.0.0 socket outside stop(): the exact STA-2370 exposure).
+      const target = server as unknown as {
+        writeMetadata: () => void
+        wsBoundHost: string | null
+        activeTransports: unknown[]
+      }
+      let injected = false
+      const originalWrite = target.writeMetadata.bind(server)
+      vi.spyOn(target, 'writeMetadata').mockImplementation(() => {
+        if (!injected && target.wsBoundHost === '0.0.0.0') {
+          injected = true
+          throw new Error('injected metadata write failure')
+        }
+        return originalWrite()
+      })
+
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(injected).toBe(true)
+      // Why: only metadata persistence failed; the wide bind succeeded, so pairing is available and the wide
+      // listener is tracked (not orphaned) — bound to all interfaces, exactly one WebSocket transport.
+      expect(offer.available).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      expect(target.activeTransports.filter((t) => t instanceof WebSocketTransport)).toHaveLength(1)
+    } finally {
+      await server.stop()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('does not strand a wide listener when stop() races an in-flight widen', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+
+    const target = server as unknown as {
+      startWebSocketTransport: (opts: {
+        host: string
+      }) => Promise<{ transport: WebSocketTransport; endpoint: string }>
+      activeTransports: unknown[]
+    }
+    const original = target.startWebSocketTransport.bind(server)
+    let releaseWideStart: () => void = () => {}
+    const wideStartGate = new Promise<void>((resolve) => {
+      releaseWideStart = resolve
+    })
+    let wideStopSpy: ReturnType<typeof vi.spyOn> | null = null
+    vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
+      if (opts.host === '0.0.0.0') {
+        // Why: hold the widen mid-flight (loopback already stopped) so stop() must race the rebind.
+        await wideStartGate
+        const result = await original(opts)
+        wideStopSpy = vi.spyOn(result.transport, 'stop')
+        return result
+      }
+      return original(opts)
+    })
+
+    // Why: begin a pairing widen but do not await it, then start shutdown while it is still in-flight.
+    const widen = server.ensureNetworkExposure()
+    const stopping = server.stop()
+    releaseWideStart()
+    await Promise.all([widen.catch(() => {}), stopping])
+
+    try {
+      // Why: STA-2370 — stop() must fence and await the in-flight widen so the freshly-bound wide listener is
+      // snapshotted and stopped, never written back into the cleared arrays as a live 0.0.0.0 leak. A revert
+      // (no fence) leaves the wide transport in activeTransports after stop() and never calls its stop().
+      expect(target.activeTransports).toHaveLength(0)
+      expect(wideStopSpy).not.toBeNull()
+      expect(wideStopSpy).toHaveBeenCalled()
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('refuses to widen a pairing offer that arrives after the server has stopped', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+
+    await server.start()
+    const widenSpy = vi.spyOn(
+      server as unknown as { widenWebSocketBind: () => Promise<void> },
+      'widenWebSocketBind'
+    )
+    await server.stop()
+
+    // Why: STA-2370 — the `stopping` fence must reject a widen that arrives on its own AFTER shutdown, not
+    // only one already in-flight during stop() (covered above via the pending-exposure await). Reverting the
+    // `stopping` guard alone still passes the race test, but here ensureNetworkExposure would re-enter
+    // widenWebSocketBind and re-open a 0.0.0.0 listener on a server that is supposed to be down.
+    await server.ensureNetworkExposure()
+    expect(widenSpy).not.toHaveBeenCalled()
   })
 })

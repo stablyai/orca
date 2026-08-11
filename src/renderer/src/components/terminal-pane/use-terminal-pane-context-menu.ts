@@ -35,12 +35,16 @@ import {
   prepareAgentSessionForkFromPane,
   type PreparedAgentSessionFork
 } from './terminal-agent-session-fork'
+import { prepareAgentSessionContinuationFromPane } from './terminal-agent-session-continuation'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
 import { copyTerminalHandleForPane } from './terminal-handle-copy'
+import { runCopyPaneId, runTerminalCopy } from './terminal-copy-rejection-guards'
+import { copyTerminalSelection } from './terminal-selection-copy'
 
 const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
 
@@ -70,6 +74,7 @@ type UseTerminalPaneContextMenuDeps = {
   onClearPaneTitle: (paneId: number) => void
   onPasteError: (message: string) => void
   onAgentSessionForkReady: (fork: PreparedAgentSessionFork) => void
+  onAgentSessionContinuationReady: (request: AgentSessionContinuationRequest) => void
   forceBracketedMultilineTextPaste: boolean
   rightClickToPaste: boolean
 }
@@ -84,6 +89,7 @@ type TerminalMenuState = {
   onContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onPaneTitleContextMenu: (event: React.MouseEvent<HTMLElement>, paneId: number) => void
   onCopy: () => Promise<void>
+  onSelectAll: () => void
   onCopyTerminalId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
@@ -93,8 +99,9 @@ type TerminalMenuState = {
   onClosePane: () => void
   onClearScreen: () => void
   onForkAgentSession: () => Promise<void>
+  onContinueAgentSessionInNewSession: () => void
   onCopyAgentSessionContext: () => Promise<void>
-  onQuickCommand: (command: TerminalQuickCommand) => void
+  onQuickCommand: (command: TerminalQuickCommand, historyId: string) => void
   onToggleExpand: () => void
   onSetTitle: () => void
   onClearPaneTitle: () => void
@@ -117,6 +124,7 @@ export function useTerminalPaneContextMenu({
   onClearPaneTitle,
   onPasteError,
   onAgentSessionForkReady,
+  onAgentSessionContinuationReady,
   forceBracketedMultilineTextPaste,
   rightClickToPaste
 }: UseTerminalPaneContextMenuDeps): TerminalMenuState {
@@ -154,15 +162,23 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
-    const selection = pane.terminal.getSelection()
-    if (selection) {
-      await window.api.ui.writeClipboardText(selection)
+    await runTerminalCopy({
+      selection: pane.terminal.getSelection(),
+      writeClipboardText: window.api.ui.writeTerminalClipboardText,
+      // Why: Radix returns focus to the menu trigger (the pane container) on
+      // close, but xterm.js only accepts input when its own helper textarea is
+      // focused. Without this, the user has to click the pane again before
+      // typing works (see #592).
+      focus: () => pane.terminal.focus()
+    })
+  }
+
+  const onSelectAll = (): void => {
+    const pane = resolveMenuPane()
+    if (pane) {
+      pane.terminal.selectAll()
+      pane.terminal.focus()
     }
-    // Why: Radix returns focus to the menu trigger (the pane container) on
-    // close, but xterm.js only accepts input when its own helper textarea is
-    // focused. Without this, the user has to click the pane again before
-    // typing works (see #592).
-    pane.terminal.focus()
   }
 
   const onCopyPaneId = async (): Promise<void> => {
@@ -170,16 +186,29 @@ export function useTerminalPaneContextMenu({
     if (!pane) {
       return
     }
-    // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
-    // remounts; the numeric PaneManager id is only a local runtime handle.
-    await window.api.ui.writeClipboardText(makePaneKey(tabId, pane.leafId))
-    toast.success(
-      translate(
-        'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
-        'Pane ID copied'
-      )
-    )
-    pane.terminal.focus()
+    await runCopyPaneId({
+      // Why: orchestration targets use ORCA_PANE_KEY, which survives renderer
+      // remounts; the numeric PaneManager id is only a local runtime handle.
+      paneKey: makePaneKey(tabId, pane.leafId),
+      writeClipboardText: window.api.ui.writeTerminalClipboardText,
+      onSuccess: () =>
+        toast.success(
+          translate(
+            'auto.components.terminal.pane.use.terminal.pane.context.menu.a29b9faa01',
+            'Pane ID copied'
+          )
+        ),
+      // Why: claiming success after a failed write is the exact silent lie this
+      // fallback exists to remove, so report it the way Copy Terminal ID does.
+      onError: () =>
+        toast.error(
+          translate(
+            'auto.components.terminal.pane.use.terminal.pane.context.menu.pane.id.copy.failed',
+            'Unable to copy pane ID'
+          )
+        ),
+      focus: () => pane.terminal.focus()
+    })
   }
 
   const getShortcutPlatform = (): NodeJS.Platform => {
@@ -265,7 +294,7 @@ export function useTerminalPaneContextMenu({
         tabId,
         leafId: pane.leafId,
         callRuntime: window.api.runtime.call,
-        writeClipboardText: window.api.ui.writeClipboardText
+        writeClipboardText: window.api.ui.writeTerminalClipboardText
       })
       toast.success(
         translate(
@@ -400,6 +429,25 @@ export function useTerminalPaneContextMenu({
     }
   }
 
+  const onContinueAgentSessionInNewSession = (): void => {
+    const pane = resolveMenuPane()
+    if (!pane) {
+      return
+    }
+    const initialCwd = paneCwdRef.current.get(pane.id)?.cwd || fallbackCwd
+    const request = prepareAgentSessionContinuationFromPane({
+      pane,
+      tabId,
+      worktreeId,
+      groupId,
+      workspacePath: fallbackCwd,
+      initialCwd
+    })
+    if (request) {
+      onAgentSessionContinuationReady(request)
+    }
+  }
+
   // Why: the captured session transcript is often wanted on its own — to paste
   // into another tool — so copy the bounded transcript directly, without the
   // fork prompt's framing or the fork dialog detour (issue #5020).
@@ -411,9 +459,9 @@ export function useTerminalPaneContextMenu({
     await copyAgentSessionContextFromPane(pane)
   }
 
-  const onQuickCommand = (command: TerminalQuickCommand): void => {
+  const onQuickCommand = (command: TerminalQuickCommand, historyId: string): void => {
     if (isTerminalAgentQuickCommand(command)) {
-      runQuickCommandInNewTab({ command, worktreeId, groupId })
+      runQuickCommandInNewTab({ command, worktreeId, groupId, historyId })
       return
     }
 
@@ -480,19 +528,21 @@ export function useTerminalPaneContextMenu({
         : null
     contextPaneIdRef.current = clickedPane?.id ?? null
 
-    // Why: Windows terminals treat right-click as copy-or-paste depending on
-    // whether text is selected. With a selection, right-click copies it and
-    // clears the selection; without one, it pastes. Ctrl+right-click still
-    // reaches the app menu so the menu remains discoverable.
+    // Why: when users opt into terminal-style right-click, a selection copies
+    // and no selection pastes. Ctrl+right-click keeps the app menu reachable.
     if (rightClickToPaste && !event.ctrlKey) {
       event.stopPropagation()
       if (!clickedPane) {
         return
       }
-      const selection = clickedPane.terminal.getSelection()
-      if (selection) {
-        void window.api.ui.writeClipboardText(selection)
-        clickedPane.terminal.clearSelection()
+      if (clickedPane.terminal.getSelection()) {
+        void copyTerminalSelection({
+          terminal: clickedPane.terminal,
+          writeClipboardText: window.api.ui.writeTerminalClipboardText,
+          clearSelectionOnSuccess: true
+        }).catch(() => {
+          /* ignore clipboard write failures */
+        })
       } else {
         void pasteResolvedPane('right-click')
       }
@@ -547,6 +597,7 @@ export function useTerminalPaneContextMenu({
     onContextMenuCapture,
     onPaneTitleContextMenu,
     onCopy,
+    onSelectAll,
     onCopyTerminalId,
     onCopyPaneId,
     onPaste,
@@ -556,6 +607,7 @@ export function useTerminalPaneContextMenu({
     onClosePane,
     onClearScreen,
     onForkAgentSession,
+    onContinueAgentSessionInNewSession,
     onCopyAgentSessionContext,
     onQuickCommand,
     onToggleExpand,

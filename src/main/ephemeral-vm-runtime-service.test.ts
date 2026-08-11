@@ -83,6 +83,9 @@ describe('ephemeral VM runtime service', () => {
     const recipe: OrcaVmRecipe = {
       id: 'cloud-sandbox',
       name: 'Cloud Sandbox',
+      // Repo-owned recipes predate plugin bounds; snapshotting must not fail
+      // after create has already provisioned external resources.
+      description: 'x'.repeat(2_048),
       create: nodeCommand(startPath),
       destroy: nodeCommand(cleanupPath)
     }
@@ -104,6 +107,7 @@ describe('ephemeral VM runtime service', () => {
     expect(provisioned.runtime).toMatchObject({
       id: provisioned.start.context.instanceId,
       recipeId: 'cloud-sandbox',
+      recipe,
       repoId: 'repo-1',
       projectId: 'project-1',
       workspaceName: 'Fix Login Race',

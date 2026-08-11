@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -6,7 +7,21 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './session-scanner-accumulator'
+import {
+  codexRolloutHardlinkIdentity,
+  dedupeCodexRolloutFileAliases,
+  dedupeCodexSessionsBySessionId
+} from './codex-session-root-dedup'
+import {
+  createAntigravityWorkspaceResolver,
+  type AntigravityWorkspaceResolver
+} from './session-scanner-antigravity-history'
+import { antigravityHistoryPathForBrainDir } from './session-scanner-antigravity-paths'
 import { codexHomeForSessionsDir } from './session-scanner-codex-paths'
+import {
+  ensureSessionParseCacheLoaded,
+  scheduleSessionParseCachePersist
+} from './session-parse-cache-persistence'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
@@ -24,13 +39,11 @@ import type {
   SessionParseResult
 } from './session-scanner-types'
 import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
+import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 
-const DEFAULT_LIMIT = 1000
-const DEFAULT_SCAN_LIMIT_PER_AGENT = 1000
 const SESSION_PARSE_CONCURRENCY = 8
-// Upper bound on extra in-scope transcripts discovered and parsed past the
-// recency cap; guards against a pathological scoped history directory.
-const SCOPE_PARSE_LIMIT = 2000
+const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
 /**
  * Scan all supported AI agent session stores and return a unified, sorted,
@@ -48,51 +61,83 @@ export async function scanAiVaultSessions(
   // "one core pegged" reports need to show whether transcript scanning is the
   // subsystem burning CPU, and how much of each scan the cache absorbed.
   return withSpan('aiVault.scan', async (span) => {
-    const limit = clampPositiveInteger(options.limit, DEFAULT_LIMIT)
-    const limitPerAgent = clampPositiveInteger(options.limitPerAgent, DEFAULT_SCAN_LIMIT_PER_AGENT)
+    const limit = options.unlimited
+      ? Number.POSITIVE_INFINITY
+      : clampPositiveInteger(options.limit, DEFAULT_AI_VAULT_SCAN_LIMIT)
+    const limitPerAgent = options.unlimited
+      ? Number.POSITIVE_INFINITY
+      : clampPositiveInteger(options.limitPerAgent, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER)
     const platform = options.platform ?? process.platform
     const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
     const issues: AiVaultScanIssue[] = []
     const parseStats = createSessionParseStats()
+    const antigravityWorkspaceResolver = createAntigravityWorkspaceResolver(readOptionalTextFile)
+    // Why: persisted entries must be seeded before any candidate is parsed, or
+    // the cold scan gains nothing from the cache file (#9210).
+    throwIfAiVaultScanCancelled(options.signal)
+    await ensureSessionParseCacheLoaded()
     const discoveries = await discoverAiVaultSessionSources({ options, limitPerAgent, issues })
+    throwIfAiVaultScanCancelled(options.signal)
 
-    const candidates = discoveries
-      .flatMap((discovery) =>
-        discovery.files.map(
-          (file): SessionFileCandidate => ({
-            agent: discovery.agent,
-            file,
-            codexHome:
-              discovery.agent === 'codex'
-                ? codexHomeForSessionsDir(discovery.rootDir, DEFAULT_CODEX_HOME_DIR)
-                : null
-          })
+    const candidates = dedupeCodexRolloutFileAliases(
+      discoveries
+        .flatMap((discovery) =>
+          discovery.files.map(
+            (file): SessionFileCandidate => ({
+              agent: discovery.agent,
+              file,
+              codexHome:
+                discovery.agent === 'codex'
+                  ? codexHomeForSessionsDir(
+                      discovery.rootDir,
+                      options.defaultCodexHomeDir ?? DEFAULT_CODEX_HOME_DIR
+                    )
+                  : null,
+              antigravityHistoryPath:
+                discovery.agent === 'antigravity'
+                  ? antigravityHistoryPathForBrainDir(discovery.rootDir)
+                  : undefined
+            })
+          )
         )
-      )
-      .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs)
+        .sort((left, right) => right.file.mtimeMs - left.file.mtimeMs),
+      {
+        isCodex: (candidate) => candidate.agent === 'codex',
+        getFilePath: (candidate) => candidate.file.path,
+        getCodexHome: (candidate) => candidate.codexHome,
+        getHardlinkIdentity: (candidate) => codexRolloutHardlinkIdentity(candidate.file)
+      }
+    )
 
     const parsedSessions = await parseSessionCandidates({
-      candidates,
+      candidates: candidates.slice(0, limit * SESSION_PARSE_CANDIDATE_MULTIPLIER),
       limit,
       platform,
       executionHostId,
       issues,
-      parseStats
+      parseStats,
+      signal: options.signal,
+      antigravityWorkspaceResolver
     })
 
-    const cappedSessions = parsedSessions
+    const cappedSessions = dedupeCodexSessionsBySessionId(parsedSessions)
       .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
       .slice(0, limit)
 
     const scopeSessions = await scanInScopeSessions({
       discoveries,
       scopePaths: options.scopePaths ?? [],
+      limit,
       alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
       platform,
       executionHostId,
       issues,
-      parseStats
+      parseStats,
+      signal: options.signal
     })
+    // Scope discovery can return without parsing anything, so an abort landing
+    // here would otherwise persist and return a cancelled scan as complete.
+    throwIfAiVaultScanCancelled(options.signal)
 
     span.setAttribute('candidates', candidates.length)
     span.setAttribute('reused', parseStats.reused)
@@ -100,6 +145,8 @@ export async function scanAiVaultSessions(
     span.setAttribute('fullParses', parseStats.fullParses)
     span.setAttribute('bytesRead', parseStats.bytesRead)
     span.setAttribute('issues', issues.length)
+
+    scheduleSessionParseCachePersist(parseStats)
 
     return {
       sessions: mergeSessions(cappedSessions, scopeSessions),
@@ -132,11 +179,13 @@ function mergeSessions(
 async function scanInScopeSessions(args: {
   discoveries: SessionFileDiscovery[]
   scopePaths: readonly string[]
+  limit: number
   alreadyParsedFilePaths: ReadonlySet<string>
   platform: NodeJS.Platform
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
+  signal?: AbortSignal
 }): Promise<AiVaultSession[]> {
   if (args.scopePaths.length === 0) {
     return []
@@ -147,7 +196,7 @@ async function scanInScopeSessions(args: {
   const files = await discoverInScopeClaudeFiles({
     rootDirs: claudeRootDirs,
     scopePaths: args.scopePaths,
-    limit: SCOPE_PARSE_LIMIT,
+    limit: args.limit,
     excludedFilePaths: args.alreadyParsedFilePaths,
     issues: args.issues
   })
@@ -164,7 +213,8 @@ async function scanInScopeSessions(args: {
     platform: args.platform,
     executionHostId: args.executionHostId,
     issues: args.issues,
-    parseStats: args.parseStats
+    parseStats: args.parseStats,
+    signal: args.signal
   })
 }
 
@@ -175,11 +225,14 @@ async function parseSessionCandidates(args: {
   executionHostId: ExecutionHostId
   issues: AiVaultScanIssue[]
   parseStats: SessionParseStats
+  signal?: AbortSignal
+  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 }): Promise<AiVaultSession[]> {
   const sessions: AiVaultSession[] = []
   let index = 0
 
   while (index < args.candidates.length) {
+    throwIfAiVaultScanCancelled(args.signal)
     if (canStopParsingSessions(sessions, args.limit, args.candidates[index]?.file.mtimeMs)) {
       break
     }
@@ -190,7 +243,13 @@ async function parseSessionCandidates(args: {
     const batch = args.candidates.slice(index, index + batchSize)
     const results = await Promise.all(
       batch.map((candidate) =>
-        parseSessionCandidate(candidate, args.platform, args.executionHostId, args.parseStats)
+        parseSessionCandidate(
+          candidate,
+          args.platform,
+          args.executionHostId,
+          args.parseStats,
+          args.antigravityWorkspaceResolver
+        )
       )
     )
 
@@ -203,9 +262,17 @@ async function parseSessionCandidates(args: {
       }
     }
 
+    // Why: cross-volume backfill copies have no shared inode, so collapse
+    // parsed aliases before they can crowd the unique-session parse budget.
+    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+    sessions.splice(0, sessions.length, ...uniqueSessions)
+
     index += batchSize
   }
 
+  // An abort can land while the final batch settles; observe it here so a
+  // partial parse is never cached or returned as a complete scan.
+  throwIfAiVaultScanCancelled(args.signal)
   return sessions
 }
 
@@ -213,10 +280,14 @@ async function parseSessionCandidate(
   candidate: SessionFileCandidate,
   platform: NodeJS.Platform,
   executionHostId: ExecutionHostId,
-  parseStats: SessionParseStats
+  parseStats: SessionParseStats,
+  antigravityWorkspaceResolver?: AntigravityWorkspaceResolver
 ): Promise<SessionParseResult> {
   try {
-    const session = await parseAgentSessionFileCached(candidate, platform, parseStats)
+    let session = await parseAgentSessionFileCached(candidate, platform, parseStats)
+    if (session && candidate.antigravityHistoryPath && antigravityWorkspaceResolver) {
+      session = await antigravityWorkspaceResolver.enrich(session, candidate.antigravityHistoryPath)
+    }
     return {
       session: session ? withSessionExecutionHost(session, executionHostId) : null,
       issue: null
@@ -231,6 +302,14 @@ async function parseSessionCandidate(
         message: errorMessage(err)
       }
     }
+  }
+}
+
+async function readOptionalTextFile(path: string): Promise<string | null> {
+  try {
+    return await readFile(path, 'utf-8')
+  } catch {
+    return null
   }
 }
 

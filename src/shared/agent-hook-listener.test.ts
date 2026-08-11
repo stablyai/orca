@@ -6,22 +6,46 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync }
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  clearClaudeAnsweredQuestionWait,
+  clearPaneCacheState,
   createHookListenerState,
   getEndpointFileName,
   hasPendingAgentResultText,
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots,
   HOOK_REQUEST_MAX_BYTES,
   isShellSafeEndpointValue,
   normalizeHookPayload,
   parseFormEncodedBody,
+  preparePendingGrokResultDiscovery,
   readRequestBody,
   resolveHookSource,
   writeEndpointFile,
   type HookListenerState
 } from './agent-hook-listener'
+import {
+  clearGrokSessionPathLookupCacheForTests,
+  findGrokChatHistoryBySessionId
+} from './grok-session-paths'
+import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { makePaneKey } from './stable-pane-id'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+const CLAUDE_PROMPT_ID = '22222222-2222-4222-8222-222222222222'
+const CLAUDE_PREVIOUS_PROMPT_ID = '33333333-3333-4333-8333-333333333333'
+
+function normalizeAndAccept(
+  state: HookListenerState,
+  source: Parameters<typeof normalizeHookPayload>[1],
+  payload: Record<string, unknown>
+): ReturnType<typeof normalizeHookPayload> {
+  const event = normalizeHookPayload(state, source, { paneKey: PANE_KEY, payload }, 'production')
+  if (event) {
+    state.lastStatusByPaneKey.set(PANE_KEY, event)
+  }
+  return event
+}
 
 type FakeIncomingMessage = EventEmitter & {
   headers: IncomingHttpHeaders
@@ -51,6 +75,7 @@ describe('shared agent-hook-listener', () => {
   })
 
   afterEach(() => {
+    clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
   })
 
@@ -90,6 +115,7 @@ describe('shared agent-hook-listener', () => {
     expect(resolveHookSource('/hook/hermes')).toBe('hermes')
     expect(resolveHookSource('/hook/pi')).toBe('pi')
     expect(resolveHookSource('/hook/omp')).toBe('omp')
+    expect(resolveHookSource('/hook/prime-agent')).toBe('prime-agent')
     expect(resolveHookSource('/hook/command-code')).toBe('command-code')
     expect(resolveHookSource('/hook/mimo-code')).toBe('mimo-code')
     expect(resolveHookSource('/hook/unknown')).toBeNull()
@@ -125,6 +151,45 @@ describe('shared agent-hook-listener', () => {
     expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('hello')
     expect(event!.payload.agentType).toBe('claude')
+  })
+
+  it('normalizes a BOM-prefixed Cursor hook payload to a working state', () => {
+    const event = normalizeHookPayload(
+      state,
+      'cursor',
+      {
+        paneKey: PANE_KEY,
+        payload: '\uFEFF{"hook_event_name":"beforeSubmitPrompt","prompt":"Synthetic Cursor prompt"}'
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      agentType: 'cursor',
+      state: 'working',
+      prompt: 'Synthetic Cursor prompt'
+    })
+    expect(event?.hookEventName).toBe('beforeSubmitPrompt')
+  })
+
+  // Why: pins the allowance to exactly one leading U+FEFF, so nobody widens it into a trim.
+  it('still rejects a hook payload that is malformed once the BOM is removed', () => {
+    const bom = '\uFEFF'
+    const body = '{"hook_event_name":"beforeSubmitPrompt"}'
+    for (const payload of [
+      `${bom}${bom}${body}`,
+      `${bom}not json`,
+      ` ${bom}${body}`,
+      `{"hook_event_name"${bom}:"beforeSubmitPrompt"}`
+    ]) {
+      const event = normalizeHookPayload(
+        state,
+        'cursor',
+        { paneKey: PANE_KEY, payload },
+        'production'
+      )
+      expect(event).toBeNull()
+    }
   })
 
   it('normalizes Gemini BeforeTool to working with tool fields', () => {
@@ -170,11 +235,72 @@ describe('shared agent-hook-listener', () => {
     )
 
     expect(event?.payload.toolName).toBe('AskUserQuestion')
+    // Why: the auto-allowed AskUserQuestion PreToolUse is a human-input boundary,
+    // so it must read as waiting (amber attention) rather than a working spinner.
+    expect(event?.payload.state).toBe('waiting')
     const expected = JSON.stringify(questions)
     expect(event?.payload.interactivePrompt).toBe(expected)
     // Why: must NOT be truncated to the 160-char toolInput preview cap.
     expect(expected.length).toBeGreaterThan(200)
     expect(event?.payload.interactivePrompt!.length).toBe(expected.length)
+  })
+
+  it('maps Claude AskUserQuestion PreToolUse to waiting, then back to working on answer', () => {
+    const question = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_response: { selected: ['a'] }
+        }
+      },
+      'production'
+    )
+
+    expect(question?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'waiting',
+      toolName: 'AskUserQuestion'
+    })
+    expect(answered?.payload).toMatchObject({
+      agentType: 'claude',
+      state: 'working',
+      toolName: 'AskUserQuestion'
+    })
+  })
+
+  it('keeps a normal Claude PreToolUse tool call as working', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.toolName).toBe('Bash')
   })
 
   it('leaves interactivePrompt undefined for a normal tool call', () => {
@@ -265,6 +391,90 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.interactivePrompt).toBeUndefined()
   })
 
+  it('keeps AskUserQuestion visible through a late parallel sibling completion', () => {
+    const questions = { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+    const question = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PermissionRequest',
+          tool_name: 'AskUserQuestion',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    const siblingCompletion = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'Bash',
+          tool_use_id: 'tool-sibling',
+          tool_input: { command: 'sleep 5' }
+        }
+      },
+      'production'
+    )
+
+    expect(siblingCompletion?.payload).toMatchObject({
+      state: 'waiting',
+      toolName: 'AskUserQuestion',
+      interactivePrompt: question?.payload.interactivePrompt
+    })
+  })
+
+  it('clears AskUserQuestion when its own PostToolUse arrives', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-question'
+        }
+      },
+      'production'
+    )
+
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('does not re-assert the AskUserQuestion prompt on PostToolUse', () => {
     // The question was answered, so PostToolUse must clear the live card instead
     // of re-deriving the `{questions}` prompt from the carried tool input.
@@ -298,6 +508,247 @@ describe('shared agent-hook-listener', () => {
     )
     expect(event?.payload.state).toBe('waiting')
     expect(event?.payload.interactivePrompt).toBe(JSON.stringify(properties))
+  })
+
+  it('maps Pi tool_call ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'What is your priority?',
+          options: ['A', 'B', 'C']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('maps Pi tool_execution_start ask_user_question to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'Pick a path',
+          options: ['path-1', 'path-2']
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('keeps Pi regular tool_call notifications as working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: 'git status'
+    })
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps Pi ask_user_question blocked when tool_input is missing', () => {
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question'
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user_question'
+    })
+    expect(blocked?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('clears Pi ask_user_question blocked once the tool_execution_end arrives', () => {
+    const questions = {
+      questions: [{ question: 'Ship it?', options: ['yes', 'no'] }]
+    }
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload.state).toBe('blocked')
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+
+    // Why: the answered question must leave the blocked/needs-attention state so
+    // the notification and attention sort clear; tool_execution_end is working.
+    const cleared = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_execution_end',
+          tool_name: 'ask_user_question'
+        }
+      },
+      'production'
+    )
+    expect(cleared?.payload.state).toBe('working')
+    expect(cleared?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('marks Pi done when agent_end follows an ask_user_question block', () => {
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'pi',
+      { ...base, payload: { hook_event_name: 'agent_end' } },
+      'production'
+    )
+    expect(done?.payload.state).toBe('done')
+    expect(done?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('clears the ask_user_question interactivePrompt when a regular Pi tool runs next', () => {
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+        }
+      },
+      'production'
+    )
+    // Why: a follow-up regular tool must not inherit the prior question's blocked
+    // state or its live interactivePrompt card.
+    const working = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'pi',
+      toolName: 'bash',
+      toolInput: 'ls'
+    })
+    expect(working?.payload.interactivePrompt).toBeUndefined()
   })
 
   it('normalizes OMP Pi-compatible hooks with OMP attribution', () => {
@@ -346,6 +797,159 @@ describe('shared agent-hook-listener', () => {
       agentType: 'omp',
       toolName: 'bash',
       toolInput: 'pnpm test'
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user_question',
+          tool_input: {
+            questions: [
+              {
+                question: 'Choose',
+                options: ['x', 'y']
+              }
+            ]
+          }
+        }
+      },
+      'production'
+    )
+    expect(tool?.payload).toMatchObject({
+      state: 'working',
+      agentType: 'omp',
+      toolName: 'ask_user_question'
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('captures Pi session ids on Pi-compatible status events', () => {
+    const event = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'before_agent_start',
+          prompt: 'resume this task',
+          session_id: 'pi-session-1',
+          session_file: '/tmp/pi-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload).toMatchObject({
+      state: 'working',
+      prompt: 'resume this task',
+      agentType: 'pi'
+    })
+    expect(event?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'pi-session-1',
+      transcriptPath: '/tmp/pi-session-1.jsonl'
+    })
+  })
+
+  it('clears Pi turn cache and emits only resume identity on session_start', () => {
+    const start = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'before_agent_start', prompt: 'stale turn' }
+      },
+      'production'
+    )
+    expect(start?.payload.prompt).toBe('stale turn')
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'pi-session-2',
+          session_file: '/tmp/pi-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      providerSession: {
+        key: 'session_id',
+        id: 'pi-session-2',
+        transcriptPath: '/tmp/pi-session-2.jsonl'
+      },
+      payload: { state: 'done', prompt: '', agentType: 'pi' }
+    })
+
+    const next = normalizeHookPayload(
+      state,
+      'pi',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'tool_call', tool_name: 'bash' } },
+      'production'
+    )
+    expect(next?.payload.prompt).toBe('')
+  })
+
+  it('normalizes Prime status and session identity without Pi-only ask-user behavior', () => {
+    const tool = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'tool_call',
+          prompt: 'prime task',
+          tool_name: 'ask_user_question',
+          tool_input: { questions: [{ question: 'Choose', options: ['x'] }] },
+          session_id: 'prime-session-1',
+          session_file: '/tmp/prime-session-1.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(tool).toMatchObject({
+      source: 'prime-agent',
+      providerSession: {
+        key: 'session_id',
+        id: 'prime-session-1',
+        transcriptPath: '/tmp/prime-session-1.jsonl'
+      },
+      payload: { state: 'working', agentType: 'prime-agent', prompt: 'prime task' }
+    })
+    expect(tool?.payload.interactivePrompt).toBeUndefined()
+
+    const sessionStart = normalizeHookPayload(
+      state,
+      'prime-agent',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'session_start',
+          session_id: 'prime-session-2',
+          session_file: '/tmp/prime-session-2.jsonl'
+        }
+      },
+      'production'
+    )
+    expect(sessionStart).toMatchObject({
+      providerSessionOnly: true,
+      payload: { state: 'done', prompt: '', agentType: 'prime-agent' }
     })
   })
 
@@ -552,6 +1156,342 @@ describe('shared agent-hook-listener', () => {
     }
   })
 
+  it('reads the last assistant message behind an oversized line without quadratic copying', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-assistant-huge-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const originalConcat = Buffer.concat
+    let concatenatedBytes = 0
+    try {
+      // The shared backward reader (readLastTextFromTranscriptOnce) stitches a
+      // line spanning many read blocks. Re-joining the carry per block copies
+      // O(line^2); the chunk list defers to one join.
+      const lineBytes = 2 * 1024 * 1024
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: 'answer behind a huge line' }]
+        })}\n${JSON.stringify({
+          role: 'user',
+          content: [{ type: 'text', text: 'x'.repeat(lineBytes) }]
+        })}\n`
+      )
+
+      Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
+        const joined = originalConcat(list as Uint8Array[], totalLength)
+        concatenatedBytes += joined.length
+        return joined
+      }) as typeof Buffer.concat
+
+      const done = normalizeHookPayload(
+        state,
+        'claude',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: { hook_event_name: 'Stop', transcript_path: transcriptPath }
+        },
+        'production'
+      )
+
+      expect(done?.payload.lastAssistantMessage).toBe('answer behind a huge line')
+      // Linear copies once (~lineBytes); the quadratic form copied many times that.
+      expect(concatenatedBytes).toBeLessThan(lineBytes * 4)
+    } finally {
+      Buffer.concat = originalConcat
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  // Why these three: the prompt read scans backward from EOF and stops at the
+  // first user line, so the cases that can break are a prompt spanning a chunk
+  // boundary, a later prompt that must win over an earlier one, and the byte
+  // offset in interactionKey, which the old forward pass computed absolutely.
+  it('reads a Command Code prompt that straddles the backward-scan chunk boundary', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-chunk-straddle-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const promptLine = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'straddling prompt' }]
+      })
+      // Place the prompt so it spans the 64 KiB read boundary counted back from
+      // EOF: the scan must stitch the two reads together to see the whole line.
+      const chunkBytes = 64 * 1024
+      const bytesAfterPrompt = chunkBytes - Math.floor(Buffer.byteLength(promptLine) / 2)
+      const tail = Array.from({ length: 271 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'t'.repeat(180)}${index}` }]
+        })
+      )
+      let tailText = `${tail.join('\n')}\n`
+      const padBytes = bytesAfterPrompt - Buffer.byteLength(tailText)
+      expect(padBytes).toBeGreaterThan(0)
+      tailText = `${'x'.repeat(padBytes - 1)}\n${tailText}`
+      expect(Buffer.byteLength(tailText)).toBe(bytesAfterPrompt)
+      const head = Array.from({ length: 200 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'h'.repeat(180)}${index}` }]
+        })
+      )
+      writeFileSync(transcriptPath, `${head.join('\n')}\n${promptLine}\n${tailText}`)
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload.prompt).toBe('straddling prompt')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a prompt behind one oversized line without quadratic carry copying', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-huge-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    const originalConcat = Buffer.concat
+    let concatenatedBytes = 0
+    try {
+      // A single tool result spanning many 64 KiB read blocks. Re-joining the
+      // accumulated carry per block copies O(line^2) bytes; the chunk list defers
+      // to one join, so total copied bytes stay proportional to the line.
+      const lineBytes = 2 * 1024 * 1024
+      const hugeLine = JSON.stringify({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'x'.repeat(lineBytes) }]
+      })
+      const promptLine = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'prompt behind a huge tool result' }]
+      })
+      writeFileSync(transcriptPath, `${promptLine}\n${hugeLine}\n`)
+
+      Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
+        const joined = originalConcat(list as Uint8Array[], totalLength)
+        concatenatedBytes += joined.length
+        return joined
+      }) as typeof Buffer.concat
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt).toBe('prompt behind a huge tool result')
+      // Linear copies once (~lineBytes). The quadratic form copied ~16x that at
+      // this size and grows with the square, so 4x separates them decisively.
+      expect(concatenatedBytes).toBeLessThan(lineBytes * 4)
+    } finally {
+      Buffer.concat = originalConcat
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('reads a Command Code prompt line that spans several read blocks', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-long-line-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      // A prompt longer than one 64 KiB block: the scan sees consecutive blocks
+      // with no newline at all and must stitch them before parsing.
+      const promptText = `pasted prompt ${'W'.repeat(150 * 1024)}`
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'earlier' }] })}\n${JSON.stringify(
+          { role: 'user', content: [{ type: 'text', text: promptText }] }
+        )}\n${JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'tail' }] })}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt.startsWith('pasted prompt WWW')).toBe(true)
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('ignores a Command Code prompt older than the transcript scan cap', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-over-cap-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      // The only user line sits beyond the 4 MB cap, so the bounded scan must not
+      // reach it — dropping the cap would restore the unbounded read this avoids.
+      const filler = JSON.stringify({
+        role: 'assistant',
+        content: [{ type: 'text', text: 'f'.repeat(64 * 1024) }]
+      })
+      const lines = [
+        JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'ancient prompt' }] })
+      ]
+      for (let index = 0; index < 80; index += 1) {
+        lines.push(filler)
+      }
+      writeFileSync(transcriptPath, `${lines.join('\n')}\n`)
+      expect(statSync(transcriptPath).size).toBeGreaterThan(4 * 1024 * 1024)
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+
+      expect(tool?.payload.prompt ?? '').toBe('')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('resolves the last Command Code prompt, not an earlier one', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-last-prompt-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      writeFileSync(
+        transcriptPath,
+        `${[
+          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'first ask' }] }),
+          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'first answer' }] }),
+          JSON.stringify({ role: 'user', content: [{ type: 'text', text: 'second ask' }] }),
+          JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'second answer' }] })
+        ].join('\n')}\n`
+      )
+
+      const tool = normalizeHookPayload(
+        state,
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )
+      expect(tool?.payload.prompt).toBe('second ask')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('keys the Command Code interaction by the absolute prompt line offset', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-command-code-offset-'))
+    const transcriptPath = join(tmpDir, 'transcript.jsonl')
+    try {
+      const prompt = JSON.stringify({
+        role: 'user',
+        content: [{ type: 'text', text: 'same text' }]
+      })
+      const answer = JSON.stringify({ role: 'assistant', content: [{ type: 'text', text: 'a' }] })
+      // Why past one chunk: the offset is absolute over the whole file, so the
+      // prompt must sit beyond a single backward-scan read for a chunk-relative
+      // offset to be distinguishable from the correct one.
+      const filler = Array.from({ length: 900 }, (_value, index) =>
+        JSON.stringify({
+          role: 'assistant',
+          content: [{ type: 'text', text: `${'f'.repeat(200)}${index}` }]
+        })
+      )
+      const head = `${filler.join('\n')}\n`
+      writeFileSync(transcriptPath, `${head}${prompt}\n${answer}\n`)
+      const promptOffset = Buffer.byteLength(head)
+      expect(promptOffset).toBeGreaterThan(64 * 1024)
+
+      const key = normalizeHookPayload(
+        createHookListenerState(),
+        'command-code',
+        {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt',
+          env: 'production',
+          version: '1',
+          payload: {
+            hook_event_name: 'PreToolUse',
+            transcript_path: transcriptPath,
+            tool_name: 'shell_command',
+            tool_input: { command: 'pwd' }
+          }
+        },
+        'production'
+      )?.promptInteractionKey
+
+      // The offset segment must be the prompt line's real position in the file;
+      // a chunk-relative value would make two turns collide across reads.
+      // Key shape: command-code-transcript-<pathHash>-<offset>-<textHash>.
+      expect(key?.split('-')[4]).toBe(String(promptOffset))
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
   it('trims surrounding whitespace from extracted prompt text', () => {
     const event = normalizeHookPayload(
       state,
@@ -598,6 +1538,96 @@ describe('shared agent-hook-listener', () => {
       agentType: 'claude'
     })
     expect(event?.payload.lastAssistantMessage).toBeUndefined()
+  })
+
+  it('maps Claude SessionStart to an idle done row so a resumed session earns its sidebar row before the first prompt', () => {
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'SessionStart',
+          source: 'resume',
+          session_id: '44444444-4444-4444-8444-444444444444'
+        }
+      },
+      'production'
+    )
+
+    // Why: 'working' would show a phantom spinner on an idle TUI; a session-boundary
+    // 'done' renders the row idle, which is the truth at SessionStart.
+    expect(event?.payload).toMatchObject({
+      state: 'done',
+      prompt: '',
+      agentType: 'claude',
+      sessionBoundary: true
+    })
+    expect(event?.payload.interrupted).toBeUndefined()
+    expect(event?.hookEventName).toBe('SessionStart')
+    // Why: SessionStart carries resume identity, so in-app resume works before any prompt.
+    expect(event?.providerSession).toMatchObject({
+      key: 'session_id',
+      id: '44444444-4444-4444-8444-444444444444'
+    })
+  })
+
+  it('resets stale Claude turn state when SessionStart announces a new session on the pane', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'fix bug' })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'ls' }
+    })
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'SubagentStart', agent_id: 'agent-1' })
+
+    const event = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'SessionStart',
+      source: 'startup'
+    })
+
+    // Why: a new process owns the pane; stale prompt/tool/children must not survive
+    // into the fresh session's idle row or gate it back up to 'working'.
+    expect(event?.payload.state).toBe('done')
+    expect(event?.payload.prompt).toBe('')
+    expect(event?.payload.toolName).toBeUndefined()
+    expect(event?.payload.subagents).toBeUndefined()
+  })
+
+  it('keeps the running Claude turn when SessionStart comes from a compact restart or a child session', () => {
+    normalizeAndAccept(state, 'claude', { hook_event_name: 'UserPromptSubmit', prompt: 'say hi' })
+
+    const compacted = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart', source: 'compact' } },
+      'production'
+    )
+    // Why: unknown/missing sources fail closed — only startup/resume/clear are idle boundaries.
+    const unknownSource = normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'SessionStart' } },
+      'production'
+    )
+    const child = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: { hook_event_name: 'SessionStart', source: 'startup', agent_id: 'agent-7' }
+      },
+      'production'
+    )
+    const stopped = normalizeAndAccept(state, 'claude', { hook_event_name: 'Stop' })
+
+    // Why: auto-compact restarts mid-turn (PreCompact/PostCompact own that lifecycle) and a
+    // child-attributed SessionStart must not flip the lead's live turn to an idle row.
+    expect(compacted).toBeNull()
+    expect(unknownSource).toBeNull()
+    expect(child).toBeNull()
+    expect(stopped?.payload).toMatchObject({ state: 'done', prompt: 'say hi' })
+    expect(stopped?.payload.sessionBoundary).toBeUndefined()
   })
 
   it('normalizes Devin documented lifecycle events', () => {
@@ -695,6 +1725,69 @@ describe('shared agent-hook-listener', () => {
     expect(stopped?.payload).toMatchObject({ agentType: 'kimi', state: 'done' })
     // The Claude-shaped session_id is captured for provider-session resume.
     expect(stopped?.providerSession).toMatchObject({ key: 'session_id', id: 'session_abc' })
+  })
+
+  // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
+  // guards so a Kimi-only regression cannot slip past the Claude-only tests (issue #11352).
+  it('ignores harness-injected UserPromptSubmit for Kimi', () => {
+    normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: [{ type: 'text', text: 'list the files here' }]
+        }
+      },
+      'production'
+    )
+    const harness = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt:
+            'This session is being continued from a previous conversation that ran out of context.'
+        }
+      },
+      'production'
+    )
+    expect(harness).toBeNull()
+    const tool = normalizeHookPayload(
+      state,
+      'kimi',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'Bash',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(tool).not.toBeNull()
+    expect(tool!.payload.state).toBe('working')
+    expect(tool!.payload.prompt).toBe('list the files here')
+    expect(tool!.payload.agentType).toBe('kimi')
+  })
+
+  it('ignores unproven Kimi compact lifecycle events', () => {
+    const pre = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual'
+    })
+    const post = normalizeAndAccept(state, 'kimi', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual'
+    })
+
+    expect(pre).toBeNull()
+    expect(post).toBeNull()
+    expect(state.lastStatusByPaneKey.has(PANE_KEY)).toBe(false)
   })
 
   it('normalizes MiMo Code OpenCode-compatible lifecycle events as mimo-code status', () => {
@@ -808,15 +1901,13 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('keeps the cached prompt when a harness-injected turn fires UserPromptSubmit', () => {
+  it('resumes work for task notifications without replacing the cached prompt', () => {
     normalizeHookPayload(
       state,
       'claude',
       { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
       'production'
     )
-    // Why: the harness injects background task notifications as user turns;
-    // they must not replace the user's real prompt in status labels.
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -835,7 +1926,7 @@ describe('shared agent-hook-listener', () => {
     expect(event!.hasExplicitPrompt).toBe(false)
   })
 
-  it('resolves an empty prompt for a harness-injected turn with nothing cached', () => {
+  it('emits a harness-injected UserPromptSubmit with an empty uncached prompt', () => {
     const event = normalizeHookPayload(
       state,
       'claude',
@@ -849,8 +1940,125 @@ describe('shared agent-hook-listener', () => {
       'production'
     )
     expect(event).not.toBeNull()
+    expect(event!.payload.state).toBe('working')
     expect(event!.payload.prompt).toBe('')
     expect(event!.hasExplicitPrompt).toBe(false)
+  })
+
+  it('does not leave working after a compact-summary UserPromptSubmit (issue #11352)', () => {
+    // Live repro: after /compact Claude injects "This session is being continued…" with no Stop.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt:
+            'This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.'
+        }
+      },
+      'production'
+    )
+    expect(event).toBeNull()
+  })
+
+  it('maps an identity-matched Claude manual compact lifecycle', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'work before compact',
+      prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const pre = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(pre).not.toBeNull()
+    expect(pre!.payload.state).toBe('working')
+    expect(pre!.payload.agentType).toBe('claude')
+
+    const post = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(post).not.toBeNull()
+    expect(post!.payload.state).toBe('done')
+    expect(post!.payload.agentType).toBe('claude')
+  })
+
+  it('keeps the preceding user prompt on the completed compact row', () => {
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'work before compact',
+      prompt_id: CLAUDE_PREVIOUS_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PreCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    const post = normalizeAndAccept(state, 'claude', {
+      hook_event_name: 'PostCompact',
+      trigger: 'manual',
+      prompt_id: CLAUDE_PROMPT_ID,
+      session_id: 'session-a'
+    })
+    expect(post).not.toBeNull()
+    expect(post!.payload.state).toBe('done')
+    expect(post!.payload.prompt).toBe('work before compact')
+  })
+
+  it('treats a custom-element paste as an explicit user turn, not machinery', () => {
+    normalizeHookPayload(
+      state,
+      'claude',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'UserPromptSubmit', prompt: 'fix login' } },
+      'production'
+    )
+    // Why: a real prompt starting with an unknown kebab tag (<my-custom-element>)
+    // is the user's turn — it must reset the cached prompt and count as explicit,
+    // so interrupt recovery does not leave the pane visibly done.
+    const event = normalizeHookPayload(
+      state,
+      'claude',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'UserPromptSubmit',
+          prompt: '<my-custom-element> render this component'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    expect(event!.payload.prompt).toBe('<my-custom-element> render this component')
+    expect(event!.hasExplicitPrompt).toBe(true)
+  })
+
+  it('treats a Grok user_query prompt as an explicit user turn', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'user_prompt_submit',
+          prompt: '<user_query>fix the bug</user_query>'
+        }
+      },
+      'production'
+    )
+    expect(event).not.toBeNull()
+    // Grok wraps the real typed prompt; the envelope is stripped but it stays explicit.
+    expect(event!.payload.prompt).toBe('fix the bug')
+    expect(event!.hasExplicitPrompt).toBe(true)
   })
 
   it('isolates caches between listener instances', () => {
@@ -1359,6 +2567,18 @@ describe('shared agent-hook-listener', () => {
     ).toBe(false)
   })
 
+  it('lets Copilot Stop consume a generic message without scheduling transcript retry', () => {
+    expect(
+      hasPendingAgentResultText('copilot', {
+        payload: {
+          hookEventName: 'Stop',
+          message: 'Copilot final response',
+          transcript_path: '/tmp/copilot-transcript.jsonl'
+        }
+      })
+    ).toBe(false)
+  })
+
   it('normalizes Grok hookEventName payloads and keeps prompt across tool events', () => {
     const prompt = normalizeHookPayload(
       state,
@@ -1399,6 +2619,179 @@ describe('shared agent-hook-listener', () => {
       agentType: 'grok',
       toolName: 'run_terminal_cmd',
       toolInput: 'pnpm test'
+    })
+  })
+
+  it('previews Grok-native tool names (run_terminal_command / search_replace)', () => {
+    const shell = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'run_terminal_command',
+          tool_input: { command: 'git status' }
+        }
+      },
+      'production'
+    )
+    const edit = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          toolName: 'search_replace',
+          toolInput: { path: 'src/app.ts', old_string: 'a', new_string: 'b' }
+        }
+      },
+      'production'
+    )
+    expect(shell?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'run_terminal_command',
+      toolInput: 'git status'
+    })
+    expect(edit?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'search_replace',
+      toolInput: 'src/app.ts'
+    })
+  })
+
+  it('maps Grok ask_user_question PreToolUse to waiting with interactivePrompt', () => {
+    const questions = [
+      {
+        question: 'Ship to which region?',
+        options: [{ label: 'us-east', description: 'US East' }]
+      }
+    ]
+    const waiting = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'PreToolUse',
+          tool_name: 'ask_user_question',
+          tool_input: { questions }
+        }
+      },
+      'production'
+    )
+    const answered = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use',
+          toolName: 'ask_user_question',
+          toolInput: { questions },
+          toolResponse: { selected: ['us-east'] }
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'waiting',
+      toolName: 'ask_user_question'
+    })
+    expect(waiting?.payload.interactivePrompt).toContain('Ship to which region?')
+    expect(answered?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'working',
+      toolName: 'ask_user_question'
+    })
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('does not recreate a Grok question card on post_tool_use_failure', () => {
+    const event = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use_failure',
+          toolName: 'ask_user_question',
+          toolInput: { questions: [{ question: 'Retry?', options: ['yes', 'no'] }] },
+          error: 'cancelled'
+        }
+      },
+      'production'
+    )
+
+    expect(event?.payload.state).toBe('working')
+    expect(event?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('surfaces the Grok tool-failure error and clears stale tool fields', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'pre_tool_use',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' }
+        }
+      },
+      'production'
+    )
+    const failed = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hookEventName: 'post_tool_use_failure',
+          toolName: 'run_terminal_command',
+          toolInput: { command: 'pnpm build' },
+          error: 'command exited with code 1'
+        }
+      },
+      'production'
+    )
+    // Why: keeping toolName set would let the compact sidebar show the tool
+    // instead of the failure text, hiding the error from the user.
+    expect(failed?.payload).toMatchObject({
+      state: 'working',
+      lastAssistantMessage: 'command exited with code 1'
+    })
+    expect(failed?.payload.toolName).toBeUndefined()
+    expect(failed?.payload.toolInput).toBeUndefined()
+  })
+
+  it('maps Grok StopFailure to done', () => {
+    normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'UserPromptSubmit', prompt: 'do work' }
+      },
+      'production'
+    )
+    const done = normalizeHookPayload(
+      state,
+      'grok',
+      {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'StopFailure', error: 'api timeout' }
+      },
+      'production'
+    )
+    expect(done?.payload).toMatchObject({
+      agentType: 'grok',
+      state: 'done',
+      prompt: 'do work'
     })
   })
 
@@ -1539,7 +2932,7 @@ describe('shared agent-hook-listener', () => {
     expect(event).toBeNull()
   })
 
-  it('reads Grok final assistant text from chat history on Stop', () => {
+  it('enriches Grok Stop from chat history despite a generic status message', () => {
     const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-session-'))
     const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf528'
     const cwd = join(tmpDir, 'workspace')
@@ -1563,18 +2956,82 @@ describe('shared agent-hook-listener', () => {
         'production'
       )
 
+      const body = {
+        paneKey: PANE_KEY,
+        payload: { hookEventName: 'Stop', sessionId, cwd, message: 'Session completed' }
+      }
+      expect(hasPendingAgentResultText('grok', body)).toBe(true)
+      const done = normalizeHookPayload(state, 'grok', body, 'production')
+
+      expect(done?.payload.state).toBe('done')
+      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses the hook envelope Grok home instead of the listener service environment', () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-envelope-home-'))
+    const serviceGrokHome = join(tmpDir, 'service-grok')
+    const hookGrokHome = join(tmpDir, 'hook-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf529'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(hookGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      vi.stubEnv('GROK_HOME', serviceGrokHome)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'from effective Grok home' })}\n`
+      )
+
       const done = normalizeHookPayload(
         state,
         'grok',
         {
           paneKey: PANE_KEY,
+          grokHome: hookGrokHome,
           payload: { hookEventName: 'Stop', sessionId, cwd }
         },
         'production'
       )
 
-      expect(done?.payload.state).toBe('done')
-      expect(done?.payload.lastAssistantMessage).toBe('Hi! How can I help you today?')
+      expect(done?.payload.lastAssistantMessage).toBe('from effective Grok home')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    'relative/grok-home',
+    join(tmpdir(), 'x'.repeat(4096)),
+    `${join(tmpdir(), 'grok-home')}\ninvalid`
+  ])('ignores invalid hook-envelope Grok home %s', (grokHome) => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-invalid-home-'))
+    const serviceGrokHome = join(tmpDir, 'service-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf530'
+    const cwd = join(tmpDir, 'workspace')
+    const sessionDir = join(serviceGrokHome, 'sessions', encodeURIComponent(cwd), sessionId)
+    try {
+      vi.stubEnv('GROK_HOME', serviceGrokHome)
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'fallback result' })}\n`
+      )
+
+      const done = normalizeHookPayload(
+        state,
+        'grok',
+        {
+          paneKey: PANE_KEY,
+          grokHome,
+          payload: { hookEventName: 'Stop', sessionId, cwd }
+        },
+        'production'
+      )
+
+      expect(done?.payload.lastAssistantMessage).toBe('fallback result')
     } finally {
       rmSync(tmpDir, { recursive: true, force: true })
     }
@@ -1620,6 +3077,50 @@ describe('shared agent-hook-listener', () => {
         }
       })
     ).toBe(true)
+  })
+
+  it('enriches a long-cwd Grok result after async discovery completes', async () => {
+    const tmpDir = mkdtempSync(join(tmpdir(), 'orca-grok-pending-home-'))
+    const hookGrokHome = join(tmpDir, 'hook-grok')
+    const sessionId = '019e37f4-5135-7b63-a4ab-6d13aa6bf531'
+    const cwd = `/${'long-workspace/'.repeat(30)}`
+    const sessionDir = join(hookGrokHome, 'sessions', 'workspace-slug', sessionId)
+    try {
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'chat_history.jsonl'),
+        `${JSON.stringify({ type: 'assistant', content: 'from slug session' })}\n`
+      )
+
+      const body = {
+        paneKey: PANE_KEY,
+        grokHome: hookGrokHome,
+        payload: { hookEventName: 'SessionEnd', sessionId, cwd }
+      }
+      const discovery = preparePendingGrokResultDiscovery('grok', body)
+      expect(discovery).not.toBeNull()
+      await discovery
+      await expect(
+        findGrokChatHistoryBySessionId(join(hookGrokHome, 'sessions'), sessionId)
+      ).resolves.toBe(join(sessionDir, 'chat_history.jsonl'))
+
+      const done = normalizeHookPayload(state, 'grok', body, 'production')
+      expect(done?.payload.lastAssistantMessage).toBe('from slug session')
+    } finally {
+      rmSync(tmpDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not schedule Grok discovery for an invalid session id', () => {
+    expect(
+      hasPendingAgentResultText('grok', {
+        payload: {
+          hookEventName: 'SessionEnd',
+          sessionId: '../escape',
+          cwd: '/tmp/workspace'
+        }
+      })
+    ).toBe(false)
   })
 
   it('normalizes Hermes pre_llm_call to a working turn with prompt text', () => {
@@ -1761,6 +3262,82 @@ describe('shared agent-hook-listener', () => {
     expect(next?.payload.toolInput).toBeUndefined()
   })
 
+  it('maps Codex request_user_input PreToolUse to waiting with the question card, then clears on the answer', () => {
+    // Real Codex 0.145 shapes: PreToolUse fires while blocked on the answer (no Stop),
+    // PostToolUse carries the answers, Stop ends the turn.
+    const questions = {
+      questions: [
+        {
+          id: 'color_preference',
+          header: 'Color',
+          question: 'Which color do you prefer: red or blue?',
+          options: [{ label: 'Blue', description: 'Choose blue.' }]
+        }
+      ]
+    }
+    const waiting = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(waiting?.payload.state).toBe('waiting')
+    expect(waiting?.payload.toolName).toBe('request_user_input')
+    expect(waiting?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+
+    const answered = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PostToolUse',
+          tool_name: 'request_user_input',
+          tool_input: questions,
+          tool_response: '{"answers":{"color_preference":{"answers":["Blue"]}}}',
+          tool_use_id: 'call_1'
+        }
+      },
+      'production'
+    )
+    expect(answered?.payload.state).toBe('working')
+    expect(answered?.payload.interactivePrompt).toBeUndefined()
+
+    const stop = normalizeHookPayload(
+      state,
+      'codex',
+      { paneKey: PANE_KEY, payload: { hook_event_name: 'Stop' } },
+      'production'
+    )
+    expect(stop?.payload.state).toBe('done')
+  })
+
+  it('keeps ordinary Codex PreToolUse mapped to working', () => {
+    const working = normalizeHookPayload(
+      state,
+      'codex',
+      {
+        paneKey: PANE_KEY,
+        payload: {
+          hook_event_name: 'PreToolUse',
+          tool_name: 'shell',
+          tool_input: { command: 'ls' }
+        }
+      },
+      'production'
+    )
+    expect(working?.payload.state).toBe('working')
+    expect(working?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('clears stale Droid tool input when a same-tool update has explicit unpreviewable input', () => {
     normalizeHookPayload(
       state,
@@ -1824,6 +3401,565 @@ describe('shared agent-hook-listener', () => {
     expect(done?.payload.lastAssistantMessage).toBe('Hermes is wired up.')
   })
 
+  describe('claude subagent tracking', () => {
+    const claudeEvent = (
+      payload: Record<string, unknown>,
+      paneKey: string = PANE_KEY
+    ): ReturnType<typeof normalizeHookPayload> =>
+      normalizeHookPayload(state, 'claude', { paneKey, payload }, 'production')
+
+    it('keeps Stop as done when background_tasks is empty', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'ship it' })
+      const stop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it.each([
+      {
+        label: 'a running shell task',
+        eventName: 'Stop',
+        payload: { background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }] }
+      },
+      {
+        label: 'a pending session cron',
+        eventName: 'StopFailure',
+        payload: { session_crons: [{ id: 'cron-1' }] }
+      }
+    ])(
+      'reports Stop as working for $label without adding a subagent row',
+      ({ eventName, payload }) => {
+        claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'run in background' })
+        const stop = claudeEvent({ hook_event_name: eventName, ...payload })
+        expect(stop?.payload.state).toBe('working')
+        expect(stop?.payload.subagents).toBeUndefined()
+      }
+    )
+
+    it('reports Stop as working while a background subagent is still running', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'review the PR' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'a1',
+            type: 'subagent',
+            status: 'running',
+            description: 'Review loop',
+            agent_type: 'general-purpose'
+          }
+        ]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        {
+          id: 'a1',
+          state: 'working',
+          startedAt: expect.any(Number),
+          agentType: 'general-purpose',
+          description: 'Review loop'
+        }
+      ])
+
+      // Why: the child finishing wakes the lead; its final Stop reports an
+      // empty roster and the pane resolves to done with no child rows left.
+      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      const finalStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(finalStop?.payload.state).toBe('done')
+      expect(finalStop?.payload.subagents).toBeUndefined()
+    })
+
+    it('emits a status refresh with the lead state on subagent lifecycle events', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'kick off reviewers' })
+      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+
+      const spawned = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'r1',
+        agent_type: 'code-reviewer'
+      })
+      // Why: lead already stopped, but a live child means the pane is working.
+      expect(spawned?.payload.state).toBe('working')
+      expect(spawned?.payload.prompt).toBe('kick off reviewers')
+      expect(spawned?.payload.subagents).toEqual([
+        {
+          id: 'r1',
+          state: 'working',
+          startedAt: expect.any(Number),
+          agentType: 'code-reviewer',
+          description: undefined
+        }
+      ])
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'r1' })
+      expect(stopped?.payload.state).toBe('done')
+      // Why: a finished one-shot leaves the sidebar instead of squatting as a
+      // permanent idle row for the rest of the session.
+      expect(stopped?.payload.subagents).toBeUndefined()
+    })
+
+    it('keeps gating on tracked children when background_tasks is absent (older Claude)', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([expect.objectContaining({ id: 'a1' })])
+    })
+
+    it('marks subagent-origin tool events as child activity without adopting them as lead state', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+
+      // Why: hook events from inside a subagent carry agent_id; they must keep
+      // the child row live but not overwrite what the lead was last doing.
+      const childTool = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a9',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'pnpm test' }
+      })
+      expect(childTool?.payload.state).toBe('working')
+      expect(childTool?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a9', state: 'working' })
+      ])
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a9' })
+      // Why: the lead's own last state was done, so with no working children
+      // the pane settles back to done rather than a phantom working spinner.
+      expect(stopped?.payload.state).toBe('done')
+    })
+
+    it('parks a teammate as a persistent idle row across its stop/idle/lead-Stop cycle', () => {
+      // Why: the interactive agent-teams shape observed live on 2.1.217 —
+      // lifecycle events use `a<name>-<hex>` agent ids while background_tasks
+      // uses unrelated `type: "teammate"` task ids. SubagentStop + TeammateIdle
+      // fire at every TURN end while the teammate stays alive awaiting mail,
+      // so the row must park idle and survive lead Stops, not vanish.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn probe' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aprobe1-6d3cb5b52120b7bf',
+        agent_type: 'probe1'
+      })
+      const teammateTask = {
+        id: 'tlkjjs0jv',
+        type: 'teammate',
+        status: 'running',
+        description: 'Run the shell command: sleep 25.'
+      }
+      const spawnStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [teammateTask]
+      })
+      expect(spawnStop?.payload.state).toBe('working')
+      expect(spawnStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'working' })
+      ])
+
+      // Turn boundary: the row parks idle instead of leaving the sidebar.
+      const stopped = claudeEvent({
+        hook_event_name: 'SubagentStop',
+        agent_id: 'aprobe1-6d3cb5b52120b7bf',
+        agent_type: 'probe1',
+        background_tasks: [teammateTask]
+      })
+      expect(stopped?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+
+      claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'probe1',
+        team_name: 'session-56c87269'
+      })
+
+      // The confirmed idle row survives the lead Stop (its teammate task is
+      // still listed) without pinning the pane working.
+      const wakeStop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [teammateTask]
+      })
+      expect(wakeStop?.payload.state).toBe('done')
+      expect(wakeStop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'aprobe1-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+    })
+
+    it('parks a working teammate via TeammateIdle when its id prefix matches the name', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'spawn reviewer' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'areviewer-6d3cb5b52120b7bf',
+        agent_type: 'security-reviewer'
+      })
+      // Lead turn ends while the teammate works; pane stays working.
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'trev', type: 'teammate', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+
+      // Why: teammate name and agent type are separate Agent-tool inputs; the
+      // lifecycle id embeds the former while the hook reports the latter.
+      // TeammateIdle keyed by name parks it via the id prefix (fallback when
+      // its SubagentStop was lost), so the pane settles back to the lead's
+      // done state while the row stays visible as idle.
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'reviewer',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
+      ])
+      expect(idled?.payload.state).toBe('done')
+    })
+
+    it('scopes subagent rosters per pane', () => {
+      claudeEvent(
+        { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'general-purpose' },
+        PANE_KEY
+      )
+      const otherPane = makePaneKey('tab-2', '22222222-2222-4222-8222-222222222222')
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'other' }, otherPane)
+      const otherStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] }, otherPane)
+      expect(otherStop?.payload.state).toBe('done')
+      expect(otherStop?.payload.subagents).toBeUndefined()
+    })
+
+    it('clears roster state when the pane cache is cleared', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      clearPaneCacheState(state, PANE_KEY)
+      const stop = claudeEvent({ hook_event_name: 'Stop' })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('does not clear a live AskUserQuestion card on subagent lifecycle events', () => {
+      const question = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+      })
+      expect(question?.payload.state).toBe('waiting')
+
+      const spawned = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      expect(spawned?.payload.state).toBe('waiting')
+      expect(spawned?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+
+      // Why: child-origin tool events must not overwrite the lead's cached
+      // question card or read as the lead's own working state either.
+      const childTool = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+      expect(childTool?.payload.state).toBe('waiting')
+      expect(childTool?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+      expect(childTool?.payload.toolName).toBe('AskUserQuestion')
+    })
+
+    it('keeps a child AskUserQuestion visible through its parallel sibling completion', () => {
+      const question = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        tool_use_id: 'question-1',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Pick', options: ['a', 'b'] }] }
+      })
+
+      const siblingCompletion = claudeEvent({
+        hook_event_name: 'PostToolUse',
+        agent_id: 'a1',
+        tool_use_id: 'sibling-1',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 5' }
+      })
+
+      expect(siblingCompletion?.payload.state).toBe('waiting')
+      expect(siblingCompletion?.payload.interactivePrompt).toBe(question?.payload.interactivePrompt)
+      expect(siblingCompletion?.payload.toolName).toBe('AskUserQuestion')
+    })
+
+    it('preserves the interrupted flag across a gated working window', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'long job' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      const interruptedStop = claudeEvent({ hook_event_name: 'Stop', is_interrupt: true })
+      // Why: the child is still running, so the pane stays working and the
+      // parse layer clamps `interrupted` off this intermediate emit.
+      expect(interruptedStop?.payload.state).toBe('working')
+      expect(interruptedStop?.payload.interrupted).toBeUndefined()
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+      // Why: the user's cancellation must survive to the terminal done so the
+      // row reads "Interrupted by user" instead of a normal completion.
+      expect(drained?.payload.interrupted).toBe(true)
+    })
+
+    it('releases a child-owned wait when the blocked child stops without another tool event', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
+      const blocked = claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a-blocked',
+        agent_type: 'general-purpose',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(blocked?.payload.state).toBe('waiting')
+
+      // Why: the blocked child dying (killed, errored) must not pin the
+      // permission wait on the pane forever.
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
+      expect(stopped?.payload.state).toBe('working')
+    })
+
+    it('restores a finished lead to done after a child permission wait clears', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+
+      const blocked = claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(blocked?.payload.state).toBe('waiting')
+
+      const approved = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'rm -rf build' }
+      })
+      expect(approved?.payload.state).toBe('working')
+
+      // Why: the lead already stopped before the wait; draining the child
+      // must resolve to done, not pin the pane on an invented 'working'.
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+    })
+
+    it('resolves to done when a blocked child dies after the lead finished', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'bg task' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a1', type: 'subagent', status: 'running' }]
+      })
+      claudeEvent({
+        hook_event_name: 'PermissionRequest',
+        agent_id: 'a1',
+        tool_name: 'Bash',
+        tool_input: { command: 'sleep 999' }
+      })
+
+      const stopped = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(stopped?.payload.state).toBe('done')
+    })
+
+    it('removes a snapshot-seeded child missing from a present background_tasks list', () => {
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      // Why: teams sessions never send an EMPTY list — the alive teammate
+      // entry must not keep a phantom pre-restart child gating the pane.
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive' }
+        ]
+      })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('keeps a snapshot-seeded child working while background_tasks still lists it', () => {
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        { id: 'a77', state: 'working', startedAt: 1000, agentType: 'general-purpose' }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'a77', type: 'subagent', status: 'running' }]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a77', state: 'working' })
+      ])
+    })
+
+    it('keeps a live child omitted by the background task snapshot cap', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'alive-after-cap',
+        agent_type: 'general-purpose'
+      })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: Array.from({ length: AGENT_STATUS_MAX_SUBAGENTS + 1 }, (_, index) => ({
+          id: index === AGENT_STATUS_MAX_SUBAGENTS ? 'alive-after-cap' : `a${index}`,
+          type: 'subagent',
+          status: 'running'
+        }))
+      })
+
+      // Why: the inventory was capped before this id, so omission cannot
+      // prove the lifecycle-tracked child finished or was killed.
+      expect(stop?.payload.subagents).toContainEqual(
+        expect.objectContaining({ id: 'alive-after-cap', state: 'working' })
+      )
+      expect(stop?.payload.state).toBe('working')
+    })
+
+    it('does not adopt a known child turn-boundary event as the lead state', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'general-purpose'
+      })
+      // Why: a CLI that stops converting child Stops to SubagentStop must not
+      // retire the pane while the lead still works.
+      const childStop = claudeEvent({ hook_event_name: 'Stop', agent_id: 'a1' })
+      expect(childStop?.payload.state).toBe('working')
+      expect(childStop?.payload.prompt).toBe('go')
+
+      const leadStop = claudeEvent({ hook_event_name: 'Stop', background_tasks: [] })
+      expect(leadStop?.payload.state).toBe('done')
+    })
+
+    it('scopes TeammateIdle to the exact teammate name for hyphen-prefix names', () => {
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'alane-hooks-6d3cb5b5',
+        agent_type: 'lane-hooks'
+      })
+      // Why: teammate "lane" must not idle "lane-hooks"'s rows via the
+      // `a<name>-` prefix — the id suffix after the name is hyphen-free hex.
+      const idledOther = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'lane',
+        team_name: 'session-x'
+      })
+      expect(idledOther?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'working' })
+      ])
+
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'lane-hooks',
+        team_name: 'session-x'
+      })
+      // Why: the exact-name match parks the row idle (turn over, still alive).
+      expect(idled?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'alane-hooks-6d3cb5b5', state: 'idle' })
+      ])
+    })
+
+    it('keeps an inferred interrupt terminal across later child lifecycle events', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'cancel me' })
+      claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'aprobe-1',
+        agent_type: 'probe'
+      })
+      claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'aprobe-1' })
+      markClaudeLeadTurnInterrupted(state, PANE_KEY)
+
+      const idled = claudeEvent({
+        hook_event_name: 'TeammateIdle',
+        teammate_name: 'probe',
+        team_name: 'session-x'
+      })
+      expect(idled?.payload.state).toBe('done')
+      expect(idled?.payload.interrupted).toBe(true)
+    })
+
+    it('does not resurrect persisted idle child rows after a restart', () => {
+      // Why: the roster tracks only working children now. A persisted idle
+      // snapshot (from a build that kept idle rows) is a finished child, so
+      // hydration must drop it — otherwise restart would re-pile the exact
+      // squatting rows this fix removes.
+      seedClaudeSubagentRosterFromSnapshots(state, PANE_KEY, [
+        {
+          id: 'aprobe2-6d3cb5b52120b7bf',
+          state: 'idle',
+          startedAt: 1000,
+          agentType: 'security-reviewer'
+        }
+      ])
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'after restart' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          { id: 'tlkjjs0jv', type: 'teammate', status: 'running', description: 'alive teammate' }
+        ]
+      })
+      expect(stop?.payload.state).toBe('done')
+      expect(stop?.payload.subagents).toBeUndefined()
+    })
+
+    it('rebuilds a running one-shot subagent from background_tasks after restart', () => {
+      // Why: fresh listener state (post-restart) has no roster; a Stop that
+      // reports a running non-teammate task must resurrect the child row and
+      // keep the pane working rather than declaring done.
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'resume' })
+      const stop = claudeEvent({
+        hook_event_name: 'Stop',
+        background_tasks: [
+          {
+            id: 'a77',
+            type: 'subagent',
+            status: 'running',
+            description: 'long build',
+            agent_type: 'general-purpose'
+          }
+        ]
+      })
+      expect(stop?.payload.state).toBe('working')
+      expect(stop?.payload.subagents).toEqual([
+        expect.objectContaining({ id: 'a77', state: 'working', description: 'long build' })
+      ])
+    })
+  })
+
   describe('writeEndpointFile', () => {
     let dir: string
     beforeEach(() => {
@@ -1862,6 +3998,62 @@ describe('shared agent-hook-listener', () => {
         version: '1'
       })
       expect(ok).toBe(false)
+    })
+  })
+
+  describe('clearClaudeAnsweredQuestionWait', () => {
+    const claudeEvent = (
+      payload: Record<string, unknown>
+    ): ReturnType<typeof normalizeHookPayload> =>
+      normalizeHookPayload(state, 'claude', { paneKey: PANE_KEY, payload }, 'production')
+
+    it('restores working for an answered lead question and drops the card', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'pick a color' })
+      const wait = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        tool_input: { questions: [{ question: 'Red or Blue?' }] }
+      })
+      expect(wait?.payload.state).toBe('waiting')
+      expect(wait?.payload.interactivePrompt).toBeDefined()
+
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+
+      // Why: a child-driven refresh re-emits the cached lead state; the linger
+      // bug would come back if it could resurrect the dismissed question.
+      const childDriven = claudeEvent({
+        hook_event_name: 'SubagentStart',
+        agent_id: 'a1',
+        agent_type: 'probe'
+      })
+      expect(childDriven?.payload.state).toBe('working')
+      expect(childDriven?.payload.toolName).toBeUndefined()
+      expect(childDriven?.payload.interactivePrompt).toBeUndefined()
+    })
+
+    it('restores the stashed lead state for an answered child question', () => {
+      claudeEvent({ hook_event_name: 'UserPromptSubmit', prompt: 'go' })
+      claudeEvent({ hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'probe' })
+      claudeEvent({ hook_event_name: 'Stop' })
+      const wait = claudeEvent({
+        hook_event_name: 'PreToolUse',
+        tool_name: 'AskUserQuestion',
+        agent_id: 'a1',
+        tool_input: { questions: [{ question: 'Continue?' }] }
+      })
+      expect(wait?.payload.state).toBe('waiting')
+
+      // Why: the lead already finished; the answer resumes the child, so the
+      // emitted state is gated up to working only while that child still runs.
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
+      expect(state.claudeLeadStateByPaneKey.get(PANE_KEY)).toEqual({ state: 'done' })
+
+      const drained = claudeEvent({ hook_event_name: 'SubagentStop', agent_id: 'a1' })
+      expect(drained?.payload.state).toBe('done')
+    })
+
+    it('falls back to working when no lead record exists', () => {
+      expect(clearClaudeAnsweredQuestionWait(state, PANE_KEY)).toEqual({ state: 'working' })
     })
   })
 })

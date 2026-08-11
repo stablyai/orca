@@ -23,7 +23,13 @@ export type FileContent = {
   isBinary: boolean
   isImage?: boolean
   mimeType?: string
+  fileIdentity?: string
   loadError?: string
+  /** Superseded by an external change; still rendered until the lazy reload lands. */
+  isStale?: boolean
 }
 
-export type DiffContent = GitDiffResult
+export type DiffContent = GitDiffResult & {
+  /** Superseded by an external change; still rendered until the lazy reload lands. */
+  isStale?: boolean
+}

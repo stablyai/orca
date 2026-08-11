@@ -80,6 +80,51 @@ describe('PrActionsEngine — transport-rejection-normalized outcomes settle cle
     expect(engine.error).toBe('socket hung up')
     expect(engine.busy).toBeNull()
   })
+
+  it('surfaces a refetch throw as error without rejecting the action promise', async () => {
+    const engine = new PrActionsEngine({
+      mutations: {
+        mergePR: async () => ({ ok: true }),
+        setPRAutoMerge: async () => ({ ok: true }),
+        updatePRState: async () => ({ ok: true }),
+        requestReviewers: async () => ({ ok: true }),
+        removeReviewers: async () => ({ ok: true }),
+        rerunChecks: async () => ({ ok: true })
+      },
+      prNumber: 1,
+      refetch: async () => {
+        throw new Error('refresh failed')
+      },
+      onChange: () => {}
+    })
+    await expect(engine.merge()).resolves.toBeUndefined()
+    expect(engine.error).toBe('refresh failed')
+    expect(engine.busy).toBeNull()
+  })
+
+  it('does not notify on no-op setError(null) at action start', async () => {
+    const onChange = vi.fn()
+    const engine = new PrActionsEngine({
+      mutations: {
+        mergePR: async () => ({ ok: true }),
+        setPRAutoMerge: async () => ({ ok: true }),
+        updatePRState: async () => ({ ok: true }),
+        requestReviewers: async () => ({ ok: true }),
+        removeReviewers: async () => ({ ok: true }),
+        rerunChecks: async () => ({ ok: true })
+      },
+      prNumber: 1,
+      refetch: () => {},
+      onChange
+    })
+    // Idle: error is already null. Action start must only notify for busy, not a
+    // redundant clearError path.
+    onChange.mockClear()
+    const p = engine.merge()
+    // First notify is setBusy only (setError(null) no-ops).
+    expect(onChange).toHaveBeenCalledTimes(1)
+    await p
+  })
 })
 
 describe('PrActionsEngine — PR identity changes', () => {
@@ -148,6 +193,45 @@ describe('PrActionsEngine — PR identity changes', () => {
       onChange
     })
     expect(engine.resolveReviewerRequested('alice', false)).toBe(false)
+
+    slow.resolve({ ok: true })
+    await action
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('clears in-flight state when only the GitHub host changes', async () => {
+    const slow = deferred<GitHubPrMutationOutcome>()
+    const mutations: PrActionMutations = {
+      mergePR: async () => ({ ok: true }),
+      setPRAutoMerge: async () => slow.promise,
+      updatePRState: async () => ({ ok: true }),
+      requestReviewers: async () => ({ ok: true }),
+      removeReviewers: async () => ({ ok: true }),
+      rerunChecks: async () => ({ ok: true })
+    }
+    const refetch = vi.fn()
+    const onChange = vi.fn()
+    const baseConfig = {
+      mutations,
+      prNumber: 1,
+      refetch,
+      onChange
+    }
+    const engine = new PrActionsEngine({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets' }
+    })
+
+    const action = engine.setAutoMerge(true)
+    expect(engine.resolveAutoMerge(false)).toBe(true)
+    expect(engine.isBusy({ kind: 'autoMerge' })).toBe(true)
+
+    engine.updateConfig({
+      ...baseConfig,
+      prRepo: { owner: 'acme', repo: 'widgets', host: 'github.acme.test' }
+    })
+    expect(engine.resolveAutoMerge(false)).toBe(false)
+    expect(engine.busy).toBeNull()
 
     slow.resolve({ ok: true })
     await action

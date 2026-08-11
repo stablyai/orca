@@ -1,14 +1,94 @@
 import { readFileSync } from 'node:fs'
 import { Script } from 'node:vm'
 import { parse } from 'acorn'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { XTERM_HTML } from './terminal-webview-html'
+import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
 
 const terminalHtmlSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
+
+function createWebglRecoveryHarness(failSecondAttach = false) {
+  const variablesStart = terminalHtmlSource.indexOf('  var webglAddon = null;')
+  const variablesEnd = terminalHtmlSource.indexOf(
+    '\n',
+    terminalHtmlSource.indexOf('  var webglRecoveryTimer = null;')
+  )
+  expect(variablesStart).toBeGreaterThanOrEqual(0)
+  expect(variablesEnd).toBeGreaterThan(variablesStart)
+
+  const timers: Array<() => void> = []
+  const addons: Array<{
+    clearTextureAtlas: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+    fireContextLoss: () => void
+  }> = []
+  const term = {
+    rows: 24,
+    refresh: vi.fn(),
+    loadAddon: vi.fn(() => {
+      if (failSecondAttach && addons.length === 2) {
+        throw new Error('retry unavailable')
+      }
+    })
+  }
+  function WebglAddon() {
+    let contextLoss = () => {}
+    const addon = {
+      clearTextureAtlas: vi.fn(),
+      dispose: vi.fn(),
+      fireContextLoss: () => contextLoss()
+    }
+    addons.push(addon)
+    return Object.assign(addon, {
+      onContextLoss: (listener: () => void) => {
+        contextLoss = listener
+      }
+    })
+  }
+  let visibilityChange = () => {}
+  const document = {
+    addEventListener: vi.fn((eventName: string, listener: () => void) => {
+      if (eventName === 'visibilitychange') {
+        visibilityChange = listener
+      }
+    }),
+    visibilityState: 'hidden'
+  }
+  const applyTerminalTheme = vi.fn()
+  const flog = vi.fn()
+  const terminalThemeInput = { mode: 'dark' }
+  const context = {
+    applyTerminalTheme,
+    clearTimeout: vi.fn(),
+    document,
+    flog,
+    setTimeout: (callback: () => void) => {
+      timers.push(callback)
+      return timers.length
+    },
+    term,
+    terminalGeneration: 1,
+    terminalThemeInput,
+    window: { WebglAddon: { WebglAddon } }
+  }
+  new Script(`${terminalHtmlSource.slice(variablesStart, variablesEnd)}
+${TERMINAL_WEBGL_RECOVERY_JS}
+attachWebglAddon(true);`).runInNewContext(context)
+  return {
+    addons,
+    applyTerminalTheme,
+    document,
+    fireVisibilityChange: () => visibilityChange(),
+    flog,
+    term,
+    terminalThemeInput,
+    timers
+  }
+}
 
 describe('terminal WebView bundled engine', () => {
   it('keeps the assembled terminal HTML free of external engine URLs', () => {
@@ -105,5 +185,58 @@ describe('terminal WebView bundled engine', () => {
     const capSites = terminalHtmlSource.match(/__engineErrors\.length < 20/g) ?? []
     expect(capSites.length).toBe(2)
     expect(terminalHtmlSource).toContain('nonFatalErrorNotifies > 5')
+  })
+
+  it('recreates WebGL once after context loss, then stays on the DOM renderer', () => {
+    const { addons, flog, term, timers } = createWebglRecoveryHarness()
+
+    expect(addons).toHaveLength(1)
+    addons[0]?.fireContextLoss()
+    expect(flog).toHaveBeenCalledWith(
+      'webgl-context-loss',
+      expect.objectContaining({ retry: true })
+    )
+    expect(addons[0]?.dispose).toHaveBeenCalledTimes(1)
+    expect(term.refresh).toHaveBeenCalledTimes(1)
+    expect(timers).toHaveLength(1)
+
+    timers.shift()?.()
+    expect(addons).toHaveLength(2)
+    expect(addons[1]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(term.refresh).toHaveBeenCalledTimes(2)
+    addons[1]?.fireContextLoss()
+    expect(addons[1]?.dispose).toHaveBeenCalledTimes(1)
+    expect(term.refresh).toHaveBeenCalledTimes(3)
+    expect(timers).toHaveLength(0)
+  })
+
+  it('falls back to a refreshed DOM renderer when the delayed WebGL retry fails', () => {
+    const { addons, term, timers } = createWebglRecoveryHarness(true)
+
+    addons[0]?.fireContextLoss()
+    timers.shift()?.()
+
+    expect(addons).toHaveLength(2)
+    expect(addons[1]?.dispose).toHaveBeenCalledTimes(1)
+    expect(term.refresh).toHaveBeenCalledTimes(2)
+  })
+
+  it('reapplies theme, clears the active atlas, and refreshes when visible', () => {
+    const harness = createWebglRecoveryHarness()
+
+    harness.fireVisibilityChange()
+    expect(harness.applyTerminalTheme).not.toHaveBeenCalled()
+
+    harness.document.visibilityState = 'visible'
+    harness.fireVisibilityChange()
+
+    expect(harness.applyTerminalTheme).toHaveBeenCalledWith(harness.terminalThemeInput)
+    expect(harness.addons[0]?.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(harness.term.refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('answers native readiness probes from the live document', () => {
+    expect(terminalHtmlSource).toContain("if (msg.type === 'ping')")
+    expect(terminalHtmlSource).toContain("notify({ type: 'pong', pingId: msg.id })")
   })
 })

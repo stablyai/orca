@@ -89,6 +89,148 @@ describe('CdpWsProxy', () => {
     client.close()
   })
 
+  it('routes Playwright nested browser and page sessions on the proxy path', async () => {
+    const client = await connect(endpoint)
+
+    const primaryPageAttachResponse = await sendAndReceive(client, {
+      id: 31,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(primaryPageAttachResponse).toEqual({
+      id: 31,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+
+    const attachResponse = await sendAndReceive(client, {
+      id: 32,
+      method: 'Target.attachToBrowserTarget',
+      params: {}
+    })
+
+    expect(attachResponse).toEqual({
+      id: 32,
+      result: { sessionId: 'orca-proxy-browser-session' }
+    })
+    expect(getSendCommandMethods(mock)).not.toContain('Target.attachToBrowserTarget')
+
+    const pageAttachResponse = await sendAndReceive(client, {
+      id: 33,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true },
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    expect(pageAttachResponse).toEqual({
+      id: 33,
+      result: { sessionId: 'orca-proxy-session-2' },
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    const sessionResponse = await sendAndReceive(client, {
+      id: 34,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.title' },
+      sessionId: 'orca-proxy-session-2'
+    })
+
+    expect(sessionResponse).toEqual({
+      id: 34,
+      result: {},
+      sessionId: 'orca-proxy-session-2'
+    })
+    expect(getSendCommandCalls(mock)).toContainEqual([
+      'Runtime.evaluate',
+      { expression: 'document.title' }
+    ])
+
+    const detachResponse = await sendAndReceive(client, {
+      id: 35,
+      method: 'Target.detachFromTarget',
+      params: { sessionId: 'orca-proxy-session-2' },
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    expect(detachResponse).toEqual({
+      id: 35,
+      result: {},
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    const primaryPageResponse = await sendAndReceive(client, {
+      id: 36,
+      method: 'Runtime.evaluate',
+      params: { expression: 'document.URL' },
+      sessionId: 'orca-proxy-session'
+    })
+
+    expect(primaryPageResponse).toEqual({
+      id: 36,
+      result: {},
+      sessionId: 'orca-proxy-session'
+    })
+
+    const browserSessionResponse = await sendAndReceive(client, {
+      id: 37,
+      method: 'Target.getTargets',
+      params: {},
+      sessionId: 'orca-proxy-browser-session'
+    })
+
+    expect(browserSessionResponse).toMatchObject({
+      id: 37,
+      sessionId: 'orca-proxy-browser-session'
+    })
+    client.close()
+  })
+
+  it('preserves Target.attachToTarget and clears the synthetic session on Target.detachFromTarget', async () => {
+    const client = await connect(endpoint)
+
+    const attachResponse = await sendAndReceive(client, {
+      id: 33,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(attachResponse).toEqual({
+      id: 33,
+      result: { sessionId: 'orca-proxy-session' }
+    })
+
+    const detachResponse = await sendAndReceive(client, {
+      id: 34,
+      method: 'Target.detachFromTarget',
+      params: { sessionId: 'orca-proxy-session' }
+    })
+
+    expect(detachResponse).toEqual({ id: 34, result: {} })
+
+    const rootEventPromise = new Promise<Record<string, unknown>>((resolve) => {
+      client.once('message', (data) => resolve(JSON.parse(data.toString())))
+    })
+    mock.emit('message', {}, 'Runtime.executionContextCreated', { context: { id: 1 } })
+
+    const rootEvent = await rootEventPromise
+    expect(rootEvent).toEqual({
+      method: 'Runtime.executionContextCreated',
+      params: { context: { id: 1 } }
+    })
+
+    const reattachResponse = await sendAndReceive(client, {
+      id: 35,
+      method: 'Target.attachToTarget',
+      params: { targetId: 'orca-proxy-target', flatten: true }
+    })
+
+    expect(reattachResponse).toEqual({
+      id: 35,
+      result: { sessionId: 'orca-proxy-session-2' }
+    })
+    client.close()
+  })
+
   it('returns an error instead of crashing when a command arrives after tab destruction', async () => {
     const client = await connect(endpoint)
     mock.destroy()

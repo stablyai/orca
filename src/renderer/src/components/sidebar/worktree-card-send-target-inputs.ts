@@ -11,6 +11,16 @@ export type SendTargetInputsState = Pick<
   | 'runtimePaneTitlesByTabId'
 >
 
+export type SendTargetControlInputsState = Pick<
+  AppState,
+  'agentSendPopoverTargetMode' | 'agentStatusEpoch'
+>
+
+export type SendTargetControlInputs = {
+  targetMode: AppState['agentSendPopoverTargetMode']
+  agentStatusEpoch: number
+}
+
 // Why: shared stable reference returned whenever the send-target popover isn't
 // targeting this card. useShallow keeps the same result across unrelated
 // pane-title / agent-status churn, so idle agent bodies stop re-rendering.
@@ -21,6 +31,13 @@ export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {}
+})
+
+// Why: the picker mode and freshness epoch are irrelevant to every card except
+// its current target. Keep inactive bodies stable across both global writes.
+export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.freeze({
+  targetMode: null,
+  agentStatusEpoch: 0
 })
 
 /**
@@ -44,4 +61,15 @@ export function selectSendTargetInputs(
     ptyIdsByTabId: s.ptyIdsByTabId,
     runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId
   }
+}
+
+export function selectSendTargetControlInputs(
+  s: SendTargetControlInputsState,
+  worktreeId: string
+): SendTargetControlInputs {
+  const targetMode = s.agentSendPopoverTargetMode
+  if (targetMode?.worktreeId !== worktreeId) {
+    return EMPTY_SEND_TARGET_CONTROL_INPUTS
+  }
+  return { targetMode, agentStatusEpoch: s.agentStatusEpoch }
 }

@@ -1,16 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildPosixCommandPathLookupScript } from '../shared/posix-command-path-lookup'
 
 const { execFileAsyncMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn()
 }))
 
-const { isPwshAvailableMock, isWslAvailableMock, listWslDistrosMock, isGitBashAvailableMock } =
-  vi.hoisted(() => ({
-    isPwshAvailableMock: vi.fn(),
-    isWslAvailableMock: vi.fn(),
-    listWslDistrosMock: vi.fn(),
-    isGitBashAvailableMock: vi.fn()
-  }))
+const {
+  isPwshAvailableAsyncMock,
+  isWslAvailableAsyncMock,
+  listWslDistrosAsyncMock,
+  isGitBashAvailableMock
+} = vi.hoisted(() => ({
+  isPwshAvailableAsyncMock: vi.fn(),
+  isWslAvailableAsyncMock: vi.fn(),
+  listWslDistrosAsyncMock: vi.fn(),
+  isGitBashAvailableMock: vi.fn()
+}))
 
 vi.mock('child_process', () => {
   const execFileWithPromisify = Object.assign(vi.fn(), {
@@ -19,10 +24,10 @@ vi.mock('child_process', () => {
   return { execFile: execFileWithPromisify }
 })
 
-vi.mock('../main/pwsh', () => ({ isPwshAvailable: isPwshAvailableMock }))
+vi.mock('../main/pwsh', () => ({ isPwshAvailableAsync: isPwshAvailableAsyncMock }))
 vi.mock('../main/wsl', () => ({
-  isWslAvailable: isWslAvailableMock,
-  listWslDistros: listWslDistrosMock
+  isWslAvailableAsync: isWslAvailableAsyncMock,
+  listWslDistrosAsync: listWslDistrosAsyncMock
 }))
 vi.mock('../main/git-bash', () => ({ isGitBashAvailable: isGitBashAvailableMock }))
 
@@ -38,7 +43,8 @@ function lookupArgs(command: string, mode: '-lc' | '-ilc' = '-lc'): string[] {
   return [
     mode,
     [
-      `if resolved=$(command -v ${command} 2>/dev/null); then`,
+      buildPosixCommandPathLookupScript({ kind: 'literal', value: command }),
+      'if [ -n "$resolved" ]; then',
       'printf \'__ORCA_AGENT_PATH__%s\\n\' "$resolved"',
       'fi'
     ].join('\n')
@@ -59,9 +65,9 @@ function fishLookupArgs(command: string): string[] {
 
 beforeEach(() => {
   execFileAsyncMock.mockReset()
-  isPwshAvailableMock.mockReset()
-  isWslAvailableMock.mockReset()
-  listWslDistrosMock.mockReset()
+  isPwshAvailableAsyncMock.mockReset()
+  isWslAvailableAsyncMock.mockReset()
+  listWslDistrosAsyncMock.mockReset()
   isGitBashAvailableMock.mockReset()
 })
 
@@ -77,14 +83,14 @@ describe('buildCommandLookupSpec', () => {
   it('falls back to sh for POSIX probes without a configured shell', () => {
     expect(buildCommandLookupSpec('codex', 'linux', {}, null)).toEqual({
       file: '/bin/sh',
-      args: lookupArgs("'codex'")
+      args: lookupArgs('codex')
     })
   })
 
   it('uses the configured remote shell for POSIX probes', () => {
     expect(buildCommandLookupSpec('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual({
       file: '/bin/zsh',
-      args: lookupArgs("'codex'", '-ilc')
+      args: lookupArgs('codex', '-ilc')
     })
   })
 
@@ -93,7 +99,7 @@ describe('buildCommandLookupSpec', () => {
       buildCommandLookupSpec("agent'cli", 'linux', { SHELL: '/bin/bash' }, '/bin/bash')
     ).toEqual({
       file: '/bin/bash',
-      args: lookupArgs("'agent'\\''cli'", '-ilc')
+      args: lookupArgs("agent'cli", '-ilc')
     })
   })
 })
@@ -101,8 +107,8 @@ describe('buildCommandLookupSpec', () => {
 describe('buildCommandLookupSpecs', () => {
   it('falls back to inherited PATH after a trusted configured POSIX shell', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/bin/zsh' }, '/bin/zsh')).toEqual([
-      { file: '/bin/zsh', args: lookupArgs("'codex'", '-ilc') },
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/bin/zsh', args: lookupArgs('codex', '-ilc') },
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
@@ -115,15 +121,15 @@ describe('buildCommandLookupSpecs', () => {
         '/opt/homebrew/bin/zsh'
       )
     ).toEqual([
-      { file: '/opt/homebrew/bin/zsh', args: lookupArgs("'codex'", '-ilc') },
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/opt/homebrew/bin/zsh', args: lookupArgs('codex', '-ilc') },
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
   it('allows conservative system shell paths when account lookup is unavailable', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/usr/bin/bash' }, null)[0]).toEqual({
       file: '/usr/bin/bash',
-      args: lookupArgs("'codex'", '-ilc')
+      args: lookupArgs('codex', '-ilc')
     })
   })
 
@@ -136,14 +142,14 @@ describe('buildCommandLookupSpecs', () => {
 
   it('ignores untrusted temp shell paths even when the basename is supported', () => {
     expect(buildCommandLookupSpecs('codex', 'linux', { SHELL: '/tmp/zsh' }, '/bin/bash')).toEqual([
-      { file: '/bin/sh', args: lookupArgs("'codex'") }
+      { file: '/bin/sh', args: lookupArgs('codex') }
     ])
   })
 
   it('ignores untrusted home-bin shell paths even when the basename is supported', () => {
     expect(
       buildCommandLookupSpecs('codex', 'linux', { SHELL: '/home/test/bin/bash' }, '/bin/bash')
-    ).toEqual([{ file: '/bin/sh', args: lookupArgs("'codex'") }])
+    ).toEqual([{ file: '/bin/sh', args: lookupArgs('codex') }])
   })
 })
 
@@ -160,17 +166,12 @@ describe('isCommandOnPathForRelay', () => {
         accountLoginShell: '/bin/zsh'
       })
     ).resolves.toBe(true)
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(
-      1,
-      '/bin/zsh',
-      lookupArgs("'codex'", '-ilc'),
-      {
-        encoding: 'utf-8',
-        env: expect.objectContaining({ SHELL: '/bin/zsh' }),
-        timeout: 5000
-      }
-    )
-    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, '/bin/sh', lookupArgs("'codex'"), {
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(1, '/bin/zsh', lookupArgs('codex', '-ilc'), {
+      encoding: 'utf-8',
+      env: expect.objectContaining({ SHELL: '/bin/zsh' }),
+      timeout: 5000
+    })
+    expect(execFileAsyncMock).toHaveBeenNthCalledWith(2, '/bin/sh', lookupArgs('codex'), {
       encoding: 'utf-8',
       env: expect.objectContaining({ SHELL: '/bin/zsh' }),
       timeout: 5000
@@ -203,7 +204,7 @@ describe('isCommandOnPathForRelay', () => {
       })
     ).resolves.toBe(true)
     expect(execFileAsyncMock).toHaveBeenCalledTimes(1)
-    expect(execFileAsyncMock).toHaveBeenCalledWith('/bin/sh', lookupArgs("'codex'"), {
+    expect(execFileAsyncMock).toHaveBeenCalledWith('/bin/sh', lookupArgs('codex'), {
       encoding: 'utf-8',
       env: expect.objectContaining({ SHELL: '/tmp/zsh' }),
       timeout: 5000
@@ -236,15 +237,95 @@ describe('hasAbsoluteCommandPath', () => {
 })
 
 describe('PreflightHandler', () => {
+  it('honors required commands when reporting detected agents', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      const script = String(args[1])
+      if (script.includes("'orca'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/orca\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    await expect(
+      handler!({
+        commands: [
+          { id: 'claude-agent-teams', cmd: 'orca', requiredCommands: ['claude'] },
+          { id: 'claude', cmd: 'claude' }
+        ]
+      })
+    ).resolves.toEqual({ agents: [] })
+  })
+
+  it('does not report platform-unsupported agents on native Windows SSH hosts', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      if (String(args[0]) === 'claude') {
+        return { stdout: 'C:\\Users\\test\\AppData\\Roaming\\npm\\claude.cmd\r\n' }
+      }
+      if (String(args[0]) === 'orca') {
+        return { stdout: 'C:\\Program Files\\Orca\\orca.cmd\r\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    try {
+      new PreflightHandler(dispatcher as never)
+      const handler = requestHandlers.get('preflight.detectAgents')
+      expect(handler).toBeDefined()
+      await expect(
+        handler!({
+          commands: [
+            {
+              id: 'claude-agent-teams',
+              cmd: 'orca',
+              requiredCommands: ['claude'],
+              unsupportedRuntimes: ['win32']
+            },
+            { id: 'claude', cmd: 'claude' }
+          ]
+        })
+      ).resolves.toEqual({ agents: ['claude'] })
+    } finally {
+      Object.defineProperty(process, 'platform', {
+        configurable: true,
+        value: originalPlatform
+      })
+    }
+  })
+
   it('reports remote Windows shell capabilities through the SSH preflight path', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
     })
-    isWslAvailableMock.mockReturnValue(true)
-    listWslDistrosMock.mockReturnValue(['Ubuntu'])
-    isPwshAvailableMock.mockReturnValue(true)
+    isWslAvailableAsyncMock.mockResolvedValue(true)
+    listWslDistrosAsyncMock.mockResolvedValue(['Ubuntu'])
+    isPwshAvailableAsyncMock.mockResolvedValue(true)
     isGitBashAvailableMock.mockReturnValue(true)
 
     const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()

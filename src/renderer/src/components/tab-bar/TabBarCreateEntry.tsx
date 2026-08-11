@@ -1,7 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
-import { getTabEntryOptions, type TabCreateEntryArgs } from './tab-create-entry-action'
+import {
+  createTabEntryAllowAbsolutePathsSelector,
+  getTabEntryOptions,
+  isTabEntryAbsolutePathLike,
+  type TabCreateEntryArgs
+} from './tab-create-entry-action'
 import {
   findMatchingTabAgentLaunchOptions,
   type TabAgentLaunchOption
@@ -21,11 +26,26 @@ import {
   RESULT_LISTBOX_ID,
   resultOptionDomId
 } from './TabBarCreateEntryRow'
+import { dropFileEntriesCoveredByTabResults } from './open-tab-entry-dedupe'
+import { activateOpenTabSearchResult } from './open-tab-selection-routing'
+import type { OpenTabSearchResult } from './open-tab-search'
+import { useOpenTabSearch } from './use-open-tab-search'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { useAppStore } from '@/store'
+
+// Leads with tabs: the omnibox now jumps to open tabs before it creates anything.
+function omniboxPlaceholder(): string {
+  return translate(
+    'auto.components.tab.bar.TabBarCreateEntry.0e5b7a3f16',
+    'Search open tabs, files, URLs, agents…'
+  )
+}
 
 const EMPTY_AGENT_OPTIONS: readonly TabAgentLaunchOption[] = []
 const EMPTY_MENU_OPTIONS: readonly TabCreateMenuOption[] = []
+const EMPTY_TAB_RESULTS: readonly OpenTabSearchResult[] = []
 
 type TabBarCreateEntryProps = {
   agentOptions?: readonly TabAgentLaunchOption[]
@@ -37,6 +57,8 @@ type TabBarCreateEntryProps = {
   onOpenDefaultTerminal?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   onQueryChange?: (query: string) => void
+  /** Runs after the menu closes, so the tab jumped to actually takes focus. */
+  onQueueSwitchFocus?: (focus: () => void) => void
   onSelectMenuOption?: (option: TabCreateMenuOption) => void
   worktreeId: string
 }
@@ -51,17 +73,38 @@ export default function TabBarCreateEntry({
   onOpenDefaultTerminal,
   onOpenEntry,
   onQueryChange,
+  onQueueSwitchFocus,
   onSelectMenuOption,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [selectedIndex, setSelectedIndex] = useState(0)
-  const [selectedIndexQuery, setSelectedIndexQuery] = useState(query)
+  const [switchError, setSwitchError] = useState<string | null>(null)
+  // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
+  const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
   const [lastMenuOpen, setLastMenuOpen] = useState(menuOpen)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileList = useRuntimeFileListForWorktree({ enabled: menuOpen, worktreeId })
+  const tabSearch = useOpenTabSearch({ enabled: menuOpen, query, worktreeId })
+  // Why gate on the query: the search defers, so its rows can still describe an
+  // earlier query — Enter must never submit a tab the current query never matched.
+  const tabResults = tabSearch.query === query ? tabSearch.results : EMPTY_TAB_RESULTS
+  const shouldResolveAbsolutePaths = menuOpen && isTabEntryAbsolutePathLike(query.trim())
+  const allowAbsolutePathsSelector = useMemo(
+    () =>
+      createTabEntryAllowAbsolutePathsSelector(worktreeId, {
+        skip: !shouldResolveAbsolutePaths
+      }),
+    [shouldResolveAbsolutePaths, worktreeId]
+  )
+  const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
+  // Why the worktree path: editor↔file dedupe folds case by the worktree's
+  // filesystem, which a Windows client's own platform does not describe.
+  const worktreePath = useAppStore((state) =>
+    menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
+  )
+  const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
 
   // Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
   // first item should return to the search box so the keyboard trip isn't
@@ -105,29 +148,32 @@ export default function TabBarCreateEntry({
     [menuOptions, query]
   )
   const options = useMemo(() => {
-    const entryOptions = getTabEntryOptions(query, fileList)
+    const entryOptions = dropFileEntriesCoveredByTabResults(
+      getTabEntryOptions(query, fileList, 4, {
+        allowAbsolutePaths,
+        localPlatform
+      }),
+      tabResults,
+      worktreePath
+    )
     if (matchingMenuOptions.length === 0) {
       return entryOptions
     }
     // Why: a matched create-menu action should win over a generic new-file fallback.
     return entryOptions.filter((option) => option.classification.kind !== 'new-file')
-  }, [fileList, matchingMenuOptions.length, query])
+  }, [
+    allowAbsolutePaths,
+    fileList,
+    localPlatform,
+    matchingMenuOptions.length,
+    query,
+    tabResults,
+    worktreePath
+  ])
   const matchingAgentOptions = useMemo(
     () => findMatchingTabAgentLaunchOptions(query, agentOptions),
     [agentOptions, query]
   )
-
-  useEffect(() => {
-    onQueryChange?.(query)
-  }, [onQueryChange, query])
-
-  if (selectedIndexQuery !== query) {
-    setSelectedIndexQuery(query)
-    if (selectedIndex !== 0) {
-      // Why: the first filtered action should be highlighted on the same paint as the new query.
-      setSelectedIndex(0)
-    }
-  }
 
   if (lastMenuOpen !== menuOpen) {
     setLastMenuOpen(menuOpen)
@@ -135,13 +181,18 @@ export default function TabBarCreateEntry({
       setQuery('')
       setPending(false)
       setError(null)
-      setSelectedIndex(0)
+      setSwitchError(null)
+      setPinnedOptionId(null)
     }
   }
 
   const disabled = !onOpenEntry
   const hasQuery = query.trim().length > 0
   const activeOptions: ActiveOption[] = [
+    ...tabResults.map((option) => ({
+      kind: 'tab' as const,
+      option
+    })),
     ...matchingMenuOptions.map((option) => ({
       kind: 'menu' as const,
       option
@@ -155,15 +206,21 @@ export default function TabBarCreateEntry({
       option
     }))
   ]
-  const activeSelectedIndex = Math.min(selectedIndex, Math.max(activeOptions.length - 1, 0))
+  // Why pin by id (not index): deferred tab rows prepend and would steal a
+  // user-moved highlight if we kept a raw index. Null pin follows top rank.
+  const pinnedOptionIndex = pinnedOptionId
+    ? activeOptions.findIndex((option) => getActiveOptionId(option) === pinnedOptionId)
+    : -1
+  const activeSelectedIndex = Math.max(pinnedOptionIndex, 0)
   const selectedActiveOption = activeOptions[activeSelectedIndex]
   const statusOption = options.find(
     (option) => option.classification.kind === 'empty' || option.classification.kind === 'blocked'
   )
   const statusMessage =
-    statusOption?.classification.kind === 'empty' || statusOption?.classification.kind === 'blocked'
+    statusOption != null &&
+    (statusOption.classification.kind === 'empty' || statusOption.classification.kind === 'blocked')
       ? statusOption.classification.message
-      : 'Open any file, URL, agent, ...'
+      : omniboxPlaceholder()
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -177,6 +234,18 @@ export default function TabBarCreateEntry({
         return
       }
       setError(statusMessage)
+      return
+    }
+    if (selectedOption.kind === 'tab') {
+      const outcome = activateOpenTabSearchResult(selectedOption.option)
+      if (outcome.status === 'failed') {
+        setSwitchError(outcome.message)
+        return
+      }
+      if (outcome.focus) {
+        onQueueSwitchFocus?.(outcome.focus)
+      }
+      onDidOpenEntry?.()
       return
     }
     if (selectedOption.kind === 'menu') {
@@ -221,10 +290,10 @@ export default function TabBarCreateEntry({
           if (activeOptions.length > 0) {
             event.preventDefault()
             event.stopPropagation()
-            setSelectedIndex((current) => {
-              const delta = event.key === 'ArrowDown' ? 1 : -1
-              return (current + delta + activeOptions.length) % activeOptions.length
-            })
+            const delta = event.key === 'ArrowDown' ? 1 : -1
+            const nextIndex =
+              (activeSelectedIndex + delta + activeOptions.length) % activeOptions.length
+            setPinnedOptionId(getActiveOptionId(activeOptions[nextIndex]))
             return
           }
           // Why: with no result rows the static create/agent items render below;
@@ -249,8 +318,14 @@ export default function TabBarCreateEntry({
           ref={inputRef}
           value={query}
           onChange={(event) => {
-            setQuery(event.target.value)
+            const nextQuery = event.target.value
+            // Why: the parent query only changes in response to typing, so publish
+            // it in this event rather than a later effect after the render commits.
+            setQuery(nextQuery)
+            onQueryChange?.(nextQuery)
+            setPinnedOptionId(null)
             setError(null)
+            setSwitchError(null)
           }}
           disabled={disabled}
           role="combobox"
@@ -260,17 +335,21 @@ export default function TabBarCreateEntry({
           aria-activedescendant={
             activeOptions.length > 0 && !error ? resultOptionDomId(activeSelectedIndex) : undefined
           }
-          aria-label={translate(
-            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
-          )}
+          aria-label={omniboxPlaceholder()}
           aria-invalid={error ? true : undefined}
-          placeholder={translate(
-            'auto.components.tab.bar.TabBarCreateEntry.39676a184c',
-            'Open any file, URL, agent, ...'
-          )}
+          placeholder={omniboxPlaceholder()}
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
+      </div>
+      {/* Above the list, not instead of it: a stale switch target must not wipe
+          the rows the user can still act on. The live region stays mounted so a
+          screen reader announces the failure instead of missing the insertion. */}
+      <div role="status">
+        {switchError ? (
+          <div className="mt-1 px-1">
+            <EntryStatusRow message={switchError} />
+          </div>
+        ) : null}
       </div>
       {error || activeOptions.length > 0 || hasQuery ? (
         <div

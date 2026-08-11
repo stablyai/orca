@@ -58,7 +58,7 @@ describe('CommandCodeHookService', () => {
       expect(config.hooks.PreToolUse[0].hooks[0].command).toContain(join(homeDir, '.orca'))
     }
     if (process.platform !== 'win32') {
-      expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -x /)
+      expect(config.hooks.PreToolUse[0].hooks[0].command).toMatch(/^if \[ -f /)
     }
   })
 

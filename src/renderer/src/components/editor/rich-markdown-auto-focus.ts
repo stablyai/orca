@@ -5,20 +5,33 @@ import type { Editor } from '@tiptap/react'
  * immediately (matching MonacoEditor's behavior). Guards against focus theft
  * from modals/dialogs and skips scrollIntoView to avoid racing with
  * useEditorScrollRestore.
+ *
+ * `force` marks an explicit user handoff (Explorer open): it bypasses the theft
+ * guard and claims DOM focus in this tick, because `commands.focus()` defers the
+ * real `view.focus()` by a further frame. `shouldFocus` lets the caller retire a
+ * handoff that expired while the frame was pending.
  */
-export function autoFocusRichEditor(nextEditor: Editor, rootEl: HTMLElement | null): () => void {
+export function autoFocusRichEditor(
+  nextEditor: Editor,
+  rootEl: HTMLElement | null,
+  force = false,
+  shouldFocus: () => boolean = () => true
+): () => void {
+  // Why: Tiptap can recreate the instance before its deferred focus lands, losing explicit handoffs.
+  if (force && !nextEditor.isDestroyed && shouldFocus()) {
+    nextEditor.view?.dom?.focus?.({ preventScroll: true })
+  }
   let frameId: number | null = requestAnimationFrame(() => {
     frameId = null
-    if (nextEditor.isDestroyed) {
+    if (nextEditor.isDestroyed || !shouldFocus()) {
       return
     }
-    // Why: don't steal focus if something outside the editor root is already
-    // focused (modal, rename dialog, sidebar search input, etc.). Only
-    // auto-focus when focus is nowhere or already inside the editor.
     const active = document.activeElement
-    const isNeutralFocus =
-      active === null || active === document.body || (rootEl?.contains(active) ?? false)
-    if (!isNeutralFocus) {
+    // Why: explicit file-open requests may hand focus to the editor; ordinary
+    // lazy mounts must still leave unrelated fields and dialogs alone.
+    const canTakeFocus =
+      force || active === null || active === document.body || (rootEl?.contains(active) ?? false)
+    if (!canTakeFocus) {
       return
     }
     // Why: pass 'start' (not null) to resolve to a proper TextSelection at

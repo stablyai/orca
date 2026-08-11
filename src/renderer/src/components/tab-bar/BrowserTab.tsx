@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Copy, Pin, PinOff } from 'lucide-react'
+import {
+  Globe,
+  X,
+  ExternalLink,
+  Copy,
+  CopyX,
+  Pin,
+  PinOff,
+  PanelLeftClose,
+  PanelRightClose
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +37,8 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { cn } from '@/lib/utils'
 
 function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -106,9 +118,13 @@ export default function BrowserTab({
   isActive,
   isPinned,
   hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
   onActivate,
   onClose,
+  onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -119,9 +135,13 @@ export default function BrowserTab({
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
+  tabCount: number
   onActivate: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseToRight: () => void
+  onCloseToLeft: () => void
   onDuplicate: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
@@ -275,41 +295,51 @@ export default function BrowserTab({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          className={cn(
+            'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
+            TAB_CONTEXT_MENU_CONTENT_CLASS
+          )}
           sideOffset={0}
           align="start"
         >
+          <TabWorkspaceLayoutMenuSection
+            unifiedTabId={dragData.unifiedTabId}
+            groupId={dragData.groupId}
+            trailingSeparator
+          />
           <DropdownMenuItem onSelect={onDuplicate}>
-            <Copy className="mr-1.5 size-3.5" />
+            <Copy className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={onTogglePin}>
-            {isPinned ? (
-              <PinOff className="mr-1.5 size-3.5" />
-            ) : (
-              <Pin className="mr-1.5 size-3.5" />
-            )}
+            {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             {isPinned
               ? translate('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
               : translate('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
           </DropdownMenuItem>
-          <TabWorkspaceLayoutMenuSection
-            unifiedTabId={dragData.unifiedTabId}
-            groupId={dragData.groupId}
-          />
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => !isPinned && onClose()} disabled={isPinned}>
+            <X className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+            <CopyX className="size-3.5" />
+            {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
+            <PanelRightClose className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+            <PanelLeftClose className="size-3.5" />
+            {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
             disabled={!isHttpUrl}
           >
-            <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+            <ExternalLink className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
           </DropdownMenuItem>
         </DropdownMenuContent>

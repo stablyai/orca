@@ -77,6 +77,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
+  it('omits Linux-only snap/Linuxbrew dirs but keeps Nix on packaged darwin runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    // Why: neither has a macOS installer, so both are phantom PATH entries.
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    // Why: Nix does ship a macOS default profile, so it stays seeded.
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/opt/homebrew/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
+  it('keeps snap, Linuxbrew, and Nix dirs for packaged linux runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).toContain('/snap/bin')
+    expect(segments).toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/snap/bin'))
+    expect(segments.indexOf('/home/linuxbrew/.linuxbrew/bin')).toBeLessThan(
+      segments.indexOf('/nix/var/nix/profiles/default/bin')
+    )
+  })
+
+  it('omits snap/Linuxbrew but keeps Nix on non-Linux POSIX platforms', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('freebsd')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
   it('leaves PATH untouched when the app is not packaged', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -110,6 +170,74 @@ describe('patchPackagedProcessPath', () => {
 })
 
 describe('configureDevUserDataPath', () => {
+  it('forces Electron home into the disposable E2E profile', async () => {
+    const { app } = await import('electron')
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const tempRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-home-'))
+    const e2eRoot = join(tempRoot, 'user-data')
+    const e2eHome = join(tempRoot, 'home')
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = e2eHome
+    process.env.HOME = e2eHome
+    process.env.USERPROFILE = e2eHome
+
+    try {
+      configureDevUserDataPath(true)
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true })
+      if (originalE2EUserDataDir === undefined) {
+        delete process.env.ORCA_E2E_USER_DATA_DIR
+      } else {
+        process.env.ORCA_E2E_USER_DATA_DIR = originalE2EUserDataDir
+      }
+      if (originalE2EHomeDir === undefined) {
+        delete process.env.ORCA_E2E_HOME_DIR
+      } else {
+        process.env.ORCA_E2E_HOME_DIR = originalE2EHomeDir
+      }
+      if (originalHome === undefined) {
+        delete process.env.HOME
+      } else {
+        process.env.HOME = originalHome
+      }
+      if (originalUserProfile === undefined) {
+        delete process.env.USERPROFILE
+      } else {
+        process.env.USERPROFILE = originalUserProfile
+      }
+    }
+
+    expect(app.setPath).toHaveBeenCalledWith('home', e2eHome)
+    expect(app.setPath).toHaveBeenCalledWith('userData', e2eRoot)
+  })
+
+  it('rejects an E2E launch whose Node home escaped the disposable profile', async () => {
+    const { configureDevUserDataPath } = await import('./configure-process')
+    const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR
+    const originalE2EHomeDir = process.env.ORCA_E2E_HOME_DIR
+    const originalHome = process.env.HOME
+    const originalUserProfile = process.env.USERPROFILE
+    const e2eRoot = mkdtempSync(join(tmpdir(), 'orca-configure-e2e-escape-'))
+    process.env.ORCA_E2E_USER_DATA_DIR = e2eRoot
+    process.env.ORCA_E2E_HOME_DIR = join(e2eRoot, 'home')
+    process.env.HOME = join(e2eRoot, 'escaped-home')
+    process.env.USERPROFILE = join(e2eRoot, 'escaped-home')
+
+    try {
+      expect(() => configureDevUserDataPath(true)).toThrow(/disposable home boundary/)
+    } finally {
+      rmSync(e2eRoot, { recursive: true, force: true })
+      restoreEnv('ORCA_E2E_USER_DATA_DIR', originalE2EUserDataDir)
+      restoreEnv('ORCA_E2E_HOME_DIR', originalE2EHomeDir)
+      restoreEnv('HOME', originalHome)
+      restoreEnv('USERPROFILE', originalUserProfile)
+    }
+  })
+
   it('uses an explicit dev userData override when provided', async () => {
     const { app } = await import('electron')
     const { configureDevUserDataPath } = await import('./configure-process')
@@ -151,6 +279,14 @@ describe('configureDevUserDataPath', () => {
     expect(app.setPath).not.toHaveBeenCalled()
   })
 })
+
+function restoreEnv(key: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[key]
+  } else {
+    process.env[key] = value
+  }
+}
 
 describe('configureOrcaUserDataPathEnv', () => {
   it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
@@ -297,6 +433,20 @@ describe('enableMainProcessGpuFeatures', () => {
     expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('enable-unsafe-webgpu')
   })
 
+  it('opts hidden pages out of intensive wake-up throttling', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    enableMainProcessGpuFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      'IntensiveWakeUpThrottling'
+    )
+  })
+
   it('raises the WebGL context budget above the 16-context Blink default', async () => {
     const { app } = await import('electron')
     const { enableMainProcessGpuFeatures } = await import('./configure-process')
@@ -306,6 +456,29 @@ describe('enableMainProcessGpuFeatures', () => {
     enableMainProcessGpuFeatures()
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('max-active-webgl-contexts', '128')
+  })
+
+  it('disables Skia Graphite only on macOS without disabling hardware acceleration', async () => {
+    const { app } = await import('electron')
+    const { enableMainProcessGpuFeatures } = await import('./configure-process')
+
+    delete process.env.ORCA_E2E_USER_DATA_DIR
+    vi.mocked(app.disableHardwareAcceleration).mockClear()
+
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      setPlatform(platform)
+      vi.mocked(app.commandLine.appendSwitch).mockClear()
+
+      enableMainProcessGpuFeatures()
+
+      if (platform === 'darwin') {
+        expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-skia-graphite')
+      } else {
+        expect(app.commandLine.appendSwitch).not.toHaveBeenCalledWith('disable-skia-graphite')
+      }
+    }
+
+    expect(app.disableHardwareAcceleration).not.toHaveBeenCalled()
   })
 
   it('disables the GPU sandbox on Linux Wayland without disabling acceleration', async () => {

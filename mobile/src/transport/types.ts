@@ -1,4 +1,17 @@
 import { z } from 'zod'
+import {
+  PairingOfferSchema,
+  type PairingOffer
+} from '../../../src/shared/mobile-relay-pairing-offer'
+import {
+  MobileAccessEndpointSchema,
+  type MobileAccessEndpoint,
+  type MobileRelayHostOverlay
+} from './mobile-relay-host-overlay'
+import { MobileRelayEndpointSchema } from '../../../src/shared/mobile-relay-credential-contract'
+
+export { PairingOfferSchema }
+export type { PairingOffer }
 
 export type RpcRequest = {
   id: string
@@ -24,17 +37,6 @@ export type RpcFailure = {
 
 export type RpcResponse = RpcSuccess | RpcFailure
 
-const PAIRING_OFFER_VERSION = 2
-
-export const PairingOfferSchema = z.object({
-  v: z.literal(PAIRING_OFFER_VERSION),
-  endpoint: z.string().min(1),
-  deviceToken: z.string().min(1),
-  publicKeyB64: z.string().min(1)
-})
-
-export type PairingOffer = z.infer<typeof PairingOfferSchema>
-
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
 export type ConnectionLogEntry = {
@@ -57,6 +59,10 @@ export type ConnectionState =
   | 'reconnecting'
   | 'auth-failed'
 
+// Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
+// network-change nudge marks the socket suspect enough to replace it.
+export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
+
 export type HostProfile = {
   id: string
   name: string
@@ -64,6 +70,16 @@ export type HostProfile = {
   deviceToken: string
   publicKeyB64: string
   lastConnected: number
+  endpoints?: MobileAccessEndpoint[]
+  relayHostId?: MobileRelayHostOverlay['relayHostId']
+  relay?: MobileRelayHostOverlay['relay']
+}
+
+export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
+
+export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
+  credentialStatus: HostCredentialStatus
+  profile: HostProfile | null
 }
 
 export const HostProfileSchema = z.object({
@@ -72,7 +88,13 @@ export const HostProfileSchema = z.object({
   endpoint: z.string().min(1),
   deviceToken: z.string().min(1),
   publicKeyB64: z.string().min(1),
-  lastConnected: z.number().finite()
+  lastConnected: z.number().finite(),
+  endpoints: z.array(MobileAccessEndpointSchema).min(1).max(16).optional(),
+  relayHostId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{16}$/)
+    .optional(),
+  relay: MobileRelayEndpointSchema.optional()
 })
 
 // Why: persisted host record after the v0.0.3 keychain split. The

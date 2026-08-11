@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
+import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
-import { hardenExistingSecureFile, writeSecureJsonFile } from './secure-file'
+import { classifyRemotePairingHostname } from './remote-pairing-address'
+import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
+import { hardenExistingSecureFile } from './secure-file'
 import {
   createEnvironmentFromPairingOffer,
   getPreferredPairingOffer,
@@ -14,6 +18,7 @@ import {
 } from './runtime-environments'
 
 const ENVIRONMENTS_FILE = 'orca-environments.json'
+export const MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES = 1024 * 1024
 
 export type RuntimeEnvironmentStoreErrorCode = 'invalid_argument' | 'runtime_error'
 
@@ -37,7 +42,13 @@ export function listEnvironments(userDataPath: string): KnownRuntimeEnvironment[
 
 export function addEnvironmentFromPairingCode(
   userDataPath: string,
-  args: { name: string; pairingCode: string; now?: number; source?: RuntimeEnvironmentSource }
+  args: {
+    name: string
+    pairingCode: string
+    now?: number
+    source?: RuntimeEnvironmentSource
+    connectionDependency?: 'ssh-tunnel'
+  }
 ): KnownRuntimeEnvironment {
   const offer = parsePairingCode(args.pairingCode)
   if (!offer) {
@@ -61,7 +72,8 @@ export function addEnvironmentFromPairingCode(
     now,
     offer,
     runtimeId: null,
-    ...(args.source ? { source: args.source } : {})
+    ...(args.source ? { source: args.source } : {}),
+    ...getPairingConnectionDependency(args.connectionDependency, offer)
   })
   const next = {
     version: 1 as const,
@@ -99,18 +111,21 @@ export function updateEnvironmentFromPairingCode(
   const store = readEnvironmentStore(userDataPath)
   const existing = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
+  const previousPairingRevision = existing.pairingRevision ?? existing.createdAt
   const environment = createEnvironmentFromPairingOffer({
     id: existing.id,
     name: existing.name,
     now: existing.createdAt,
     offer,
     runtimeId: existing.runtimeId,
-    ...(existing.source ? { source: existing.source } : {})
+    ...(existing.source ? { source: existing.source } : {}),
+    ...getPairingConnectionDependency(existing.connectionDependency, offer)
   })
   const next = {
     ...environment,
     createdAt: existing.createdAt,
     updatedAt: now,
+    pairingRevision: Math.max(now, previousPairingRevision + 1),
     lastUsedAt: existing.lastUsedAt
   }
   writeEnvironmentStore(userDataPath, {
@@ -120,6 +135,23 @@ export function updateEnvironmentFromPairingCode(
       .sort((a, b) => a.name.localeCompare(b.name))
   })
   return next
+}
+
+function getPairingConnectionDependency(
+  dependency: 'ssh-tunnel' | undefined,
+  offer: PairingOffer
+): { connectionDependency?: 'ssh-tunnel' } {
+  if (!dependency) {
+    return {}
+  }
+  try {
+    const endpoint = new URL(offer.endpoint)
+    return classifyRemotePairingHostname(endpoint.hostname) === 'loopback'
+      ? { connectionDependency: dependency }
+      : {}
+  } catch {
+    return {}
+  }
 }
 
 export function resolveEnvironment(
@@ -144,17 +176,19 @@ const LAST_USED_PERSIST_INTERVAL_MS = 60_000
 export function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
-  args: { runtimeId?: string | null; now?: number } = {}
+  args: { runtimeId?: string | null; pairedDeviceId?: string; now?: number } = {}
 ): void {
   const store = readEnvironmentStore(userDataPath)
   const environment = resolveEnvironmentFromStore(store, selector)
   const now = args.now ?? Date.now()
   const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
+  const pairedDeviceIdChanged =
+    args.pairedDeviceId != null && args.pairedDeviceId !== environment.pairedDeviceId
   const lastUsedIsFresh =
     environment.lastUsedAt != null &&
     now >= environment.lastUsedAt &&
     now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
-  if (!runtimeIdChanged && lastUsedIsFresh) {
+  if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
     return
   }
   const next = store.environments.map((entry) =>
@@ -162,6 +196,7 @@ export function markEnvironmentUsed(
       ? {
           ...entry,
           runtimeId: args.runtimeId ?? entry.runtimeId,
+          ...(args.pairedDeviceId ? { pairedDeviceId: args.pairedDeviceId } : {}),
           lastUsedAt: now,
           updatedAt: now
         }
@@ -198,7 +233,13 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
   }
   try {
     hardenExistingSecureFile(path)
-    const parsed = RuntimeEnvironmentStoreSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
+    const parsed = RuntimeEnvironmentStoreSchema.parse(
+      JSON.parse(
+        readNodeFileSyncWithinLimit(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES).buffer.toString(
+          'utf8'
+        )
+      )
+    )
     return {
       version: 1,
       environments: parsed.environments
@@ -215,5 +256,19 @@ function readEnvironmentStore(userDataPath: string): RuntimeEnvironmentStore {
 
 function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentStore): void {
   const path = getEnvironmentStorePath(userDataPath)
-  writeSecureJsonFile(path, RuntimeEnvironmentStoreSchema.parse(store))
+  try {
+    writeSecureJsonFileWithinLimit(
+      path,
+      RuntimeEnvironmentStoreSchema.parse(store),
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+    )
+  } catch (error) {
+    if (error instanceof JsonStringifyByteLimitError) {
+      throw new RuntimeEnvironmentStoreError(
+        'runtime_error',
+        `Could not write Orca environments at ${path}; the store exceeds its durable capacity.`
+      )
+    }
+    throw error
+  }
 }

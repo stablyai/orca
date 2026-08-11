@@ -142,6 +142,12 @@ export function mergeSnapshotAndSessions(
   // sessions do not appear as Resource Manager orphans before their pane mounts.
   const index = buildResourceSessionBindingIndex(ctx)
   const boundPtyIds = index.boundPtyIds
+  // Why: the daemon list is the only place agent ownership is reported. Snapshot-derived rows
+  // describe the same sessions by id, so carry it across rather than inventing an answer; a
+  // session the daemon never listed is 'unknown', not 'absent'.
+  const ownershipBySessionId = new Map(
+    daemonSessions.map((session) => [session.id, session.agentOwnership])
+  )
 
   function isRepoRemote(repoId: string): boolean {
     // Why: missing entry === we don't know about this repo (typically the
@@ -202,6 +208,7 @@ export function mergeSnapshotAndSessions(
           pid: s.pid,
           label: resolveSnapshotSessionLabel(s, wt.worktreeId, ctx),
           bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
+          agentOwnership: ownershipBySessionId.get(s.sessionId) ?? 'unknown',
           tabId,
           cpu: s.cpu,
           memory: s.memory,
@@ -218,7 +225,8 @@ export function mergeSnapshotAndSessions(
         history: wt.history,
         hasLocalSamples: true,
         isRemote: isRepoRemote(wt.repoId),
-        sessions
+        sessions,
+        browsers: []
       })
     }
   }
@@ -276,7 +284,8 @@ export function mergeSnapshotAndSessions(
         history: [],
         hasLocalSamples: false,
         isRemote: repoIsRemote,
-        sessions: []
+        sessions: [],
+        browsers: []
       }
       repo.worktrees.push(row)
     }
@@ -287,6 +296,7 @@ export function mergeSnapshotAndSessions(
       pid: 0,
       label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx),
       bound: ctx.workspaceSessionReady && boundPtyIds.has(session.id),
+      agentOwnership: session.agentOwnership,
       tabId,
       cpu: null,
       memory: null,
@@ -294,7 +304,35 @@ export function mergeSnapshotAndSessions(
     })
   }
 
-  // ── Step 3: per-repo aggregates. Remote children are identified by the
+  // ── Step 3: add browser resources, including browser-only workspaces.
+  for (const [worktreeId, browsers] of Object.entries(ctx.browserTabsByWorktree ?? {})) {
+    const worktree = ctx.worktreeById?.get(worktreeId)
+    if (!worktree || browsers.length === 0) {
+      continue
+    }
+    const repoName = ctx.repoDisplayNameById.get(worktree.repoId) || worktree.repoId
+    const repo = ensureRepo(worktree.repoId, repoName)
+    let row = findWorktreeRow(repo, worktreeId)
+    if (!row) {
+      row = {
+        worktreeId,
+        worktreeName: worktree.displayName,
+        repoId: worktree.repoId,
+        repoName,
+        cpu: null,
+        memory: null,
+        history: [],
+        hasLocalSamples: false,
+        isRemote: isRepoRemote(worktree.repoId),
+        sessions: [],
+        browsers: []
+      }
+      repo.worktrees.push(row)
+    }
+    row.browsers = browsers
+  }
+
+  // ── Step 4: per-repo aggregates. Remote children are identified by the
   //   repo's connectionId, not by missing data — `!hasLocalSamples` would
   //   mislabel warm-reattached local PTYs. The aggregate still skips rows
   //   we can't sample (worktree.cpu === null) so the numbers stay honest.

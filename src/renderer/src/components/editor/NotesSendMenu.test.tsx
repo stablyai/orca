@@ -134,8 +134,7 @@ vi.mock('./ReviewNotesSendMenuContent', () => ({
 vi.mock('@/lib/active-agent-note-send', () => ({
   activeAgentNotesSendFailureMessage: (status: string) => status,
   getActiveTerminalNoteTarget: () => null,
-  sendNotesToActiveAgentSession: vi.fn(),
-  useCanSendNotesToActiveTerminal: () => false
+  sendNotesToActiveAgentSession: vi.fn()
 }))
 
 vi.mock('sonner', () => ({
@@ -359,6 +358,36 @@ describe('NotesSendMenu', () => {
       2,
       expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
     )
+  })
+
+  it('opens and reports handled when an open request arrives with deliverable notes', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({ openRequestNonce: 1, onOpenRequestHandled })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).toHaveBeenCalledWith(
+      expect.objectContaining({ prompt: 'prompt-all', label: 'All unsent notes' })
+    )
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the open request handled without opening when nothing is deliverable', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({
+      openRequestNonce: 1,
+      onOpenRequestHandled,
+      scopes: [{ id: 'all', label: 'All unsent notes', notes: [], prompt: '' }]
+    })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a null open request', () => {
+    const onOpenRequestHandled = vi.fn()
+    renderMenu({ openRequestNonce: null, onOpenRequestHandled })
+
+    expect(storeMocks.openAgentSendPopoverTargetMode).not.toHaveBeenCalled()
+    expect(onOpenRequestHandled).not.toHaveBeenCalled()
   })
 
   it('closes when another target mode becomes active and cleans up on unmount', () => {

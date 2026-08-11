@@ -16,7 +16,7 @@ export type FeatureTipsAppOpenDecision =
 export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
   // Why: unsupported launch modes cannot complete setup, but an installed
   // launcher still needs attention until it is reachable on PATH.
-  return !status.supported || (status.state === 'installed' && status.pathConfigured)
+  return !status.supported || (status.state === 'installed' && status.pathConfigured === true)
 }
 
 export function getFeatureTipsAppOpenDecision(args: {

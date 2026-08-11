@@ -538,6 +538,62 @@ describe('AutomationService', () => {
     expect(getAutomationRunUsage).toHaveBeenCalledTimes(1)
   })
 
+  it('does not throw when retention evicts the run during usage collection', async () => {
+    vi.setSystemTime(new Date('2026-05-13T10:00:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Costed check',
+      prompt: 'Check spend',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const base = Date.now()
+    const run = store.createAutomationRun(automation, base, 'manual')
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      error: null
+    })
+    // While usage collection is awaited the run is already final, so a
+    // scheduler tick creating newer runs can prune it away mid-flight.
+    const getAutomationRunUsage = vi.fn().mockImplementation(async () => {
+      for (let i = 1; i <= 120; i++) {
+        const later = store.createAutomationRun(automation, base + i * 60_000)
+        store.updateAutomationRun({
+          runId: later.id,
+          status: 'completed',
+          workspaceId: 'wt1',
+          error: null
+        })
+      }
+      return null
+    })
+    const service = new AutomationService(store, {
+      tickMs: 60_000,
+      claudeUsage: { getAutomationRunUsage } as never
+    })
+
+    const updated = await service.markDispatchResult({
+      runId: run.id,
+      status: 'completed',
+      workspaceId: 'wt1',
+      terminalSessionId: 'tab-1',
+      error: null
+    })
+
+    expect(updated.id).toBe(run.id)
+    // The run really was evicted; the usage write was skipped instead of throwing.
+    expect(store.listAutomationRuns(automation.id).some((entry) => entry.id === run.id)).toBe(false)
+  })
+
   it('records unsupported usage cleanly for completed agents without local usage stores', async () => {
     vi.setSystemTime(new Date('2026-05-13T10:00:00'))
     const store = await createStore()

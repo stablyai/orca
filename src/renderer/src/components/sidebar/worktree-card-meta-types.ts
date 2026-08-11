@@ -1,5 +1,9 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AutomationWorkspaceProvenance, IssueInfo } from '../../../../shared/types'
+import type {
+  AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
+  IssueInfo
+} from '../../../../shared/types'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import type { WorktreeCardDetailsHoverControl } from './worktree-card-details-hover-state'
 
@@ -21,12 +25,20 @@ export type WorktreeCardLinearIssueDisplay = {
   labels?: string[]
 }
 
+export type WorktreeCardJiraIssueDisplay = {
+  identifier: string
+  title: string
+  url: string
+}
+
 export type WorktreeCardMetaBadgesProps = {
   issue: WorktreeCardIssueDisplay | null
   linearIssue: WorktreeCardLinearIssueDisplay | null
+  jiraIssue?: WorktreeCardJiraIssueDisplay | null
   review: WorktreeCardPrDisplay | null
   comment: string | null
   automationProvenance?: AutomationWorkspaceProvenance | null
+  cliProvenance?: CliWorkspaceProvenance | null
 }
 
 export type WorktreeCardMetaBadgesRootProps = WorktreeCardMetaBadgesProps &

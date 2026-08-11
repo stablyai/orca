@@ -34,6 +34,111 @@ const SEARCH_ENGINE_URLS: Record<SearchEngine, string> = {
 
 export const DEFAULT_SEARCH_ENGINE: SearchEngine = 'google'
 
+export function classifySchemeLessLocalDevAddress(rawInput: string): URL | null {
+  const trimmed = rawInput.trim()
+  if (!LOCAL_ADDRESS_PATTERN.test(trimmed)) {
+    return null
+  }
+  try {
+    return new URL(`http://${trimmed}`)
+  } catch {
+    return null
+  }
+}
+
+function normalizeCertificateHostname(hostname: string): string {
+  const lower = hostname.trim().toLowerCase()
+  const unbracketed = lower.startsWith('[') && lower.endsWith(']') ? lower.slice(1, -1) : lower
+  return unbracketed.endsWith('.') ? unbracketed.slice(0, -1) : unbracketed
+}
+
+function isValidDnsName(name: string): boolean {
+  if (name.length === 0 || name.length > 253) {
+    return false
+  }
+  return name
+    .split('.')
+    .every(
+      (label) =>
+        label.length > 0 && label.length <= 63 && /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+    )
+}
+
+function isIpv4Loopback(hostname: string): boolean {
+  const octets = hostname.split('.')
+  if (octets.length !== 4 || octets.some((octet) => !/^\d{1,3}$/.test(octet))) {
+    return false
+  }
+  const values = octets.map(Number)
+  return (
+    values[0] === 127 &&
+    values.every((value, index) => value >= 0 && value <= 255 && octets[index] === String(value))
+  )
+}
+
+export function isEligibleLocalCertificateHost(hostname: string): boolean {
+  const normalized = normalizeCertificateHostname(hostname)
+  if (normalized === '::1' || isIpv4Loopback(normalized)) {
+    return true
+  }
+  if (!isValidDnsName(normalized)) {
+    return false
+  }
+  return normalized === 'localhost' || normalized.endsWith('.localhost')
+}
+
+function isWildcardBindHost(hostname: string): boolean {
+  const normalized = normalizeCertificateHostname(hostname)
+  return normalized === '0.0.0.0' || normalized === '::'
+}
+
+export function toHttpsRecoveryUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.protocol !== 'http:' || !isEligibleLocalCertificateHost(parsed.hostname)) {
+      return null
+    }
+    parsed.protocol = 'https:'
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+export function toSecureCertificateEndpoint(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'wss:') {
+      return null
+    }
+    const normalizedHostname = normalizeCertificateHostname(parsed.hostname)
+    if (!normalizedHostname) {
+      return null
+    }
+    const endpointHost = normalizedHostname.includes(':')
+      ? `[${normalizedHostname}]`
+      : normalizedHostname
+    return `https://${endpointHost}:${parsed.port || '443'}`
+  } catch {
+    return null
+  }
+}
+
+// Why: a remote-owned browser page's loopback URL is unreachable from the
+// desktop system browser, so Open Externally is offered only for publicly
+// reachable (non-loopback) failure URLs.
+export function resolveRemoteFailureExternalUrl(rawUrl: string): string | null {
+  try {
+    const parsed = new URL(rawUrl)
+    if (isWildcardBindHost(parsed.hostname) || isEligibleLocalCertificateHost(parsed.hostname)) {
+      return null
+    }
+  } catch {
+    return null
+  }
+  return normalizeExternalBrowserUrl(rawUrl)
+}
+
 export function normalizeKagiSessionLink(rawLink: string): string | null {
   const trimmed = rawLink.trim()
   if (!trimmed) {
@@ -163,12 +268,9 @@ export function normalizeBrowserNavigationUrl(
     return ORCA_BROWSER_BLANK_URL
   }
 
-  if (LOCAL_ADDRESS_PATTERN.test(trimmed)) {
-    try {
-      return new URL(`http://${trimmed}`).toString()
-    } catch {
-      return null
-    }
+  const localDevAddress = classifySchemeLessLocalDevAddress(trimmed)
+  if (localDevAddress) {
+    return localDevAddress.toString()
   }
 
   if (WINDOWS_UNC_PATH_PATTERN.test(trimmed)) {

@@ -1,14 +1,17 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { Repo, TerminalTab, Worktree } from '../../../shared/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { isGitRepoKind } from '../../../shared/repo-kind'
 import type { AppState } from './types'
 import {
   getAllWorktreesFromState,
   getProjectHostSetupProjectionFromState,
   getWorktreeMapFromState,
   resetFloatingVisibleTabCountSelectorCacheForTest,
-  selectFloatingVisibleTabCount
+  selectRepoByIdForActiveWorkspace,
+  selectFloatingVisibleTabCount,
+  selectFloatingWorkspaceHasUnread
 } from './selectors'
 import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 
@@ -260,6 +263,146 @@ describe('store selectors', () => {
     expect(getProjectHostSetupProjectionFromState({ repos: [...repos] })).not.toBe(projection)
   })
 
+  it('does not fall back to a same-ID local repo when the active runtime row is absent', () => {
+    const local = makeRepo({
+      id: 'same-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const activeState = {
+      activeRepoId: 'same-repo',
+      activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-1')
+    }
+
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local, runtime] }, 'same-repo')
+    ).toBe(runtime)
+    expect(
+      selectRepoByIdForActiveWorkspace({ ...activeState, repos: [local] }, 'same-repo')
+    ).toBeNull()
+  })
+
+  it('keeps the repo when a paired-hub worktree reports a different execution host', () => {
+    // Why: withRepoHostOwnership deliberately keeps an SSH worktree's own host while its repo stays hub-owned.
+    const repo = makeRepo({
+      id: 'hub-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const local = makeRepo({
+      id: 'hub-repo',
+      path: '/local/repo',
+      displayName: 'local',
+      executionHostId: 'local'
+    })
+    const activeState = {
+      activeRepoId: 'hub-repo',
+      activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+    }
+
+    for (const repos of [[repo], [local, repo], [repo, local]]) {
+      expect(selectRepoByIdForActiveWorkspace({ ...activeState, repos }, 'hub-repo')).toBe(repo)
+    }
+    // Why: useGitStatusPolling gates every lane on this exact expression, so a null repo silently stops polling.
+    const activeRepo = selectRepoByIdForActiveWorkspace(
+      { ...activeState, repos: [repo] },
+      'hub-repo'
+    )
+    expect(activeRepo ? isGitRepoKind(activeRepo) : false).toBe(true)
+  })
+
+  it('fails a paired-hub repo fallback closed when rival HUB rows share the repo ID', () => {
+    const repoForHub = (environmentId: string) =>
+      makeRepo({
+        id: 'hub-repo',
+        path: `/hub/${environmentId}/repo`,
+        displayName: environmentId,
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [repoForHub('hub-a'), repoForHub('hub-b')],
+          activeRepoId: 'hub-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('shared-private-target')
+        },
+        'hub-repo'
+      )
+    ).toBeNull()
+  })
+
+  it('still prefers the host-matching row when one repo ID spans hosts', () => {
+    const hub = makeRepo({
+      id: 'shared-repo',
+      path: '/hub/repo',
+      displayName: 'hub',
+      executionHostId: toRuntimeExecutionHostId('hub-a')
+    })
+    const ssh = makeRepo({
+      id: 'shared-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('hub-private-target')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [hub, ssh],
+          activeRepoId: 'shared-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('hub-private-target')
+        },
+        'shared-repo'
+      )
+    ).toBe(ssh)
+  })
+
+  it('keeps every non-paired-hub host mismatch failing closed', () => {
+    // Why: the paired-hub exemption is ssh-selection-over-runtime-repo only; anything else is a wrong host.
+    const runtime = makeRepo({
+      id: 'same-repo',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      executionHostId: toRuntimeExecutionHostId('env-1')
+    })
+    const ssh = makeRepo({
+      id: 'ssh-repo',
+      path: '/ssh/repo',
+      displayName: 'ssh',
+      executionHostId: toSshExecutionHostId('target-1')
+    })
+
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [runtime],
+          activeRepoId: 'same-repo',
+          activeWorkspaceExecutionHostId: toRuntimeExecutionHostId('env-2')
+        },
+        'same-repo'
+      )
+    ).toBeNull()
+    expect(
+      selectRepoByIdForActiveWorkspace(
+        {
+          repos: [ssh],
+          activeRepoId: 'ssh-repo',
+          activeWorkspaceExecutionHostId: toSshExecutionHostId('target-2')
+        },
+        'ssh-repo'
+      )
+    ).toBeNull()
+  })
+
   it('prefers hydrated project host setup state when present', () => {
     const repos = [
       makeRepo({
@@ -455,5 +598,72 @@ describe('store selectors', () => {
     expect(getProjectHostSetupProjectionFromState({ repos, projects, projectHostSetups })).toBe(
       projection
     )
+  })
+})
+
+describe('selectFloatingWorkspaceHasUnread', () => {
+  const FLOATING = FLOATING_TERMINAL_WORKTREE_ID
+
+  type UnreadState = Parameters<typeof selectFloatingWorkspaceHasUnread>[0]
+
+  function makeState(overrides: Partial<UnreadState>): UnreadState {
+    return {
+      tabsByWorktree: {},
+      unreadTerminalTabs: {},
+      unreadAgentCompletionPanes: {},
+      ...overrides
+    } as UnreadState
+  }
+
+  function floatingTab(id: string): TerminalTab {
+    return { id, title: id, ptyId: null } as unknown as TerminalTab
+  }
+
+  it('is false when the floating workspace has no tabs', () => {
+    expect(selectFloatingWorkspaceHasUnread(makeState({}))).toBe(false)
+  })
+
+  it('is true for a bell — an unread floating tab', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { ft1: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('is true for an agent completion — an unread floating pane', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadAgentCompletionPanes: { 'ft1:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('stays true while any of several floating tabs is still unacknowledged', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1'), floatingTab('ft2'), floatingTab('ft3')] },
+      unreadTerminalTabs: { ft3: true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(true)
+  })
+
+  it('ignores unread that belongs to non-floating (main workspace) tabs', () => {
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft1')] },
+      unreadTerminalTabs: { 'main-tab': true },
+      unreadAgentCompletionPanes: { 'main-tab:leaf-x': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
+  })
+
+  it('does not light for a stale unread entry whose floating tab no longer exists', () => {
+    // Mirrors closing a floating tab: the tab is gone from tabsByWorktree, so even
+    // a lingering map entry (there should be none — closeTab purges) cannot show.
+    const state = makeState({
+      tabsByWorktree: { [FLOATING]: [floatingTab('ft-live')] },
+      unreadTerminalTabs: { 'ft-closed': true },
+      unreadAgentCompletionPanes: { 'ft-closed:leaf-a': true }
+    })
+    expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
 })

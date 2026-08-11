@@ -46,6 +46,18 @@ describe('getGitCloneFailureMessage', () => {
     )
   })
 
+  it('scrubs credential-bearing clone URLs before surfacing the fatal line', () => {
+    // Clone errors echo the URL the user typed — the most likely git error to
+    // embed a live token — and the message reaches dialogs and bug reports.
+    const stderr =
+      'Cloning into repo...\n' +
+      "fatal: repository 'https://user:ghp_secret123@github.com/org/repo.git/' not found\n"
+
+    expect(getGitCloneFailureMessage(stderr)).toBe(
+      "fatal: repository 'https://github.com/org/repo.git/' not found"
+    )
+  })
+
   it('summarizes CRLF-heavy stderr without line-array splitting', () => {
     const splitSpy = vi.spyOn(String.prototype, 'split')
     const stderr = `${'remote: counting objects\r\n'.repeat(10_000)}fatal: repository not found\r\n`

@@ -11,26 +11,30 @@ import {
 } from './local-preflight-context'
 
 function makeState(args: {
-  repoPath?: string | null
+  repoPath?: string
   worktreePath?: string | null
   repo?: Partial<Repo>
   worktree?: Partial<Worktree>
 }): AppState {
   const repoId = 'repo-1'
   const worktreeId = `${repoId}::worktree-1`
+  const repos: AppState['repos'] =
+    args.repoPath === undefined
+      ? []
+      : [
+          {
+            id: repoId,
+            path: args.repoPath,
+            displayName: repoId,
+            badgeColor: 'blue',
+            addedAt: 1,
+            ...args.repo
+          }
+        ]
   return {
     activeRepoId: repoId,
     activeWorktreeId: args.worktreePath === undefined ? null : worktreeId,
-    repos:
-      args.repoPath === undefined
-        ? []
-        : [
-            {
-              id: repoId,
-              path: args.repoPath,
-              ...args.repo
-            }
-          ],
+    repos,
     worktreesByRepo:
       args.worktreePath === undefined
         ? {}
@@ -408,6 +412,43 @@ describe('local preflight context', () => {
         }
       }
     })
+  })
+
+  it('uses the target worktree runtime for local agent checks', () => {
+    const state = {
+      ...makeState({
+        repoPath: 'C:\\Users\\alice\\active',
+        worktreePath: 'C:\\Users\\alice\\active'
+      }),
+      repos: [
+        { id: 'repo-1', path: 'C:\\Users\\alice\\active' },
+        { id: 'repo-2', path: 'C:\\Users\\alice\\target' }
+      ],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'repo-1::worktree-1',
+            repoId: 'repo-1',
+            path: 'C:\\Users\\alice\\active'
+          }
+        ],
+        'repo-2': [
+          {
+            id: 'repo-2::worktree-1',
+            repoId: 'repo-2',
+            path: 'C:\\Users\\alice\\target'
+          }
+        ]
+      },
+      projects: [
+        { id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } },
+        { id: 'repo-2', localWindowsRuntimePreference: { kind: 'windows-host' } }
+      ]
+    } as unknown as AppState
+
+    const context = getLocalAgentPreflightContext(state, 'win32', {}, 'repo-2::worktree-1')
+
+    expect(localPreflightContextKey(context)).toBe('repo-2:windows-host')
   })
 
   it('resolves a project host override for a specific worktree over a WSL default', () => {

@@ -25,14 +25,21 @@ function areWorktreesEqual(left: Worktree, right: Worktree): boolean {
     left.repoId === right.repoId &&
     left.repo === right.repo &&
     left.branch === right.branch &&
+    (left.hostId ?? null) === (right.hostId ?? null) &&
+    (left.terminalPlatform ?? null) === (right.terminalPlatform ?? null) &&
     left.displayName === right.displayName &&
     (left.workspaceStatus ?? null) === (right.workspaceStatus ?? null) &&
     (left.sortOrder ?? null) === (right.sortOrder ?? null) &&
     (left.manualOrder ?? null) === (right.manualOrder ?? null) &&
+    (left.lastActivityAt ?? null) === (right.lastActivityAt ?? null) &&
+    (left.createdAt ?? null) === (right.createdAt ?? null) &&
     left.path === right.path &&
     (left.isArchived ?? false) === (right.isArchived ?? false) &&
     (left.isMainWorktree ?? false) === (right.isMainWorktree ?? false) &&
     (left.hasHostSidebarActivity ?? false) === (right.hasHostSidebarActivity ?? false) &&
+    (left.worktreeInstanceId ?? null) === (right.worktreeInstanceId ?? null) &&
+    (left.lineageWorktreeInstanceId ?? null) === (right.lineageWorktreeInstanceId ?? null) &&
+    (left.parentWorktreeInstanceId ?? null) === (right.parentWorktreeInstanceId ?? null) &&
     (left.parentWorktreeId ?? null) === (right.parentWorktreeId ?? null) &&
     areStringArraysEqual(left.childWorktreeIds ?? [], right.childWorktreeIds ?? []) &&
     left.liveTerminalCount === right.liveTerminalCount &&

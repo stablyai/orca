@@ -17,7 +17,8 @@ import {
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
   status: 'undetermined',
-  canAskAgain: true
+  canAskAgain: true,
+  authorizationReflectsUserChoice: false
 }
 
 export default function NotificationsScreen() {
@@ -69,7 +70,7 @@ export default function NotificationsScreen() {
   const notificationsBlocked = permissionState.status === 'denied'
   const hint = notificationsBlocked
     ? 'Notifications are disabled in system settings.'
-    : 'Receive notifications when an agent task completes on your desktop.'
+    : 'Get notified on this device when an agent needs your input or finishes a task.'
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -82,7 +83,7 @@ export default function NotificationsScreen() {
 
       <View style={styles.section}>
         <View style={styles.row}>
-          <Text style={styles.rowLabel}>Push Notifications</Text>
+          <Text style={styles.rowLabel}>Agent notifications</Text>
           <Switch
             value={switchEnabled}
             disabled={notificationsBlocked}

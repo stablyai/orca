@@ -1,6 +1,6 @@
 import { appendFile, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import {
@@ -55,6 +55,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
   it('reuses unchanged files, resumes appends, and matches cold parses exactly', async () => {
     const root = await makeTempDir()
     const path = join(root, fixture.fileName)
+    await mkdir(dirname(path), { recursive: true })
     await writeFile(path, `${fixture.seedLines.join('\n')}\n`)
 
     const stats = createSessionParseStats()
@@ -87,6 +88,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
   it('includes a trailing unterminated line without double-counting it later', async () => {
     const root = await makeTempDir()
     const path = join(root, fixture.fileName)
+    await mkdir(dirname(path), { recursive: true })
     const lastSeedLine = fixture.seedLines.at(-1)
     const headLines = fixture.seedLines.slice(0, -1)
     await writeFile(path, `${[...headLines, ''].join('\n')}${lastSeedLine}`)
@@ -106,6 +108,7 @@ describe.each(allIncrementalAgentFixtures())('incremental parse parity: $agent',
   it('tolerates a mid-write truncated trailing line and never double-counts it', async () => {
     const root = await makeTempDir()
     const path = join(root, fixture.fileName)
+    await mkdir(dirname(path), { recursive: true })
     // A writer caught mid-record: the trailing line is invalid JSON.
     await writeFile(path, `${fixture.seedLines.join('\n')}\n{"type":"user","mess`)
 
@@ -180,19 +183,18 @@ describe('codex-specific resume behavior', () => {
     )
     expect(seeded?.title).toBe('codex seed question')
 
-    // Codex names the thread lazily; the next (incremental) parse must adopt it.
+    // Codex names the thread lazily; an unchanged transcript must still adopt it.
     await writeFile(
       join(codexHome, 'session_index.jsonl'),
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed thread title' })}\n`
     )
-    await appendFile(path, `${fixture.appendLines.join('\n')}\n`)
     const stats = createSessionParseStats()
     const renamed = await parseAgentSessionFileCached(
       await candidateFor('codex', path, codexHome),
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)

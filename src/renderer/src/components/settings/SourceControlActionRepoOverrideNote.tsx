@@ -33,6 +33,9 @@ function getRecipeOverrideFieldLabel(field: SourceControlActionRecipeOverrideFie
         'Command template'
       )
   }
+  // Fail at compile time if the override-field union grows a new variant.
+  const _exhaustive: never = field
+  return _exhaustive
 }
 
 function getRecipeOverrideFieldSummary(fields: SourceControlActionRecipeOverrideField[]): string {

@@ -16,6 +16,8 @@ vi.mock('child_process', () => {
 })
 
 import { detectWslCommandsOnPath } from './preflight-wsl-agent-detection'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
 
 function lastShCommandPayload(): string {
   const call = execFileAsyncMock.mock.calls.at(-1)
@@ -47,6 +49,20 @@ describe('detectWslCommandsOnPath', () => {
     expect(payload).toContain('fi\ndone')
   })
 
+  it('uses the shared alias- and function-neutral PATH lookup', async () => {
+    execFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
+
+    await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
+
+    const payload = lastShCommandPayload()
+    const lookupScript = buildPosixCommandPathLookupScript({
+      kind: 'shell-variable',
+      name: 'cmd'
+    })
+    expect(payload).toContain(escapeWslShCommandForWindows(lookupScript))
+    expect(payload).not.toContain('type -P')
+  })
+
   it('parses detected commands from prefixed stdout', async () => {
     execFileAsyncMock.mockResolvedValue({
       stdout:
@@ -62,11 +78,11 @@ describe('detectWslCommandsOnPath', () => {
 
   it('ignores commands whose resolved path is not absolute', async () => {
     execFileAsyncMock.mockResolvedValue({
-      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n',
+      stdout: '__ORCA_AGENT_PATH__claude\tclaude\n' + '__ORCA_AGENT_PATH__codex\tC:\\spoof\n',
       stderr: ''
     })
 
-    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude'])
+    const found = await detectWslCommandsOnPath({ distro: 'Ubuntu' }, ['claude', 'codex'])
 
     expect(found).toEqual(new Set())
   })

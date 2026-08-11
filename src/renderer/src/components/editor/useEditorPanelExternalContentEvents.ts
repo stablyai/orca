@@ -13,14 +13,23 @@ import { isReloadableSingleFileDiffTab } from './editor-panel-diff-reload'
 
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
+export type EditorPanelContentLoadOptions = {
+  force?: boolean
+  externalEventGeneration?: number
+}
+
 type UseEditorPanelExternalContentEventsParams = {
-  loadDiffContent: (file: OpenFile | null, options?: { force?: boolean }) => Promise<void>
+  activeContentFileIdRef: MutableRefObject<string | null>
+  invalidateContent: (fileIds: string[]) => void
+  invalidateDiffContent: (fileIds: string[]) => void
+  isVisibleRef: MutableRefObject<boolean>
+  loadDiffContent: (file: OpenFile | null, options?: EditorPanelContentLoadOptions) => Promise<void>
   loadFileContent: (
     filePath: string,
     id: string,
     worktreeId?: string,
     relativePath?: string,
-    options?: { force?: boolean }
+    options?: EditorPanelContentLoadOptions
   ) => Promise<void>
   openFilesRef: MutableRefObject<OpenFile[]>
   editorViewModeRef: MutableRefObject<EditorViewModeByFile>
@@ -28,7 +37,24 @@ type UseEditorPanelExternalContentEventsParams = {
   setDiffContents: Dispatch<SetStateAction<Record<string, DiffContent>>>
 }
 
+const externalEventGenerations = new WeakMap<Event, number>()
+let externalEventGenerationCounter = 0
+
+function getExternalEventGeneration(event: Event): number {
+  const existing = externalEventGenerations.get(event)
+  if (existing !== undefined) {
+    return existing
+  }
+  const generation = ++externalEventGenerationCounter
+  externalEventGenerations.set(event, generation)
+  return generation
+}
+
 export function useEditorPanelExternalContentEvents({
+  activeContentFileIdRef,
+  invalidateContent,
+  invalidateDiffContent,
+  isVisibleRef,
   loadDiffContent,
   loadFileContent,
   openFilesRef,
@@ -42,25 +68,62 @@ export function useEditorPanelExternalContentEvents({
       if (!detail) {
         return
       }
+      const eventGeneration = getExternalEventGeneration(event)
+      const invalidatedDiffFileIds: string[] = []
+      const invalidatedFileIds: string[] = []
       for (const file of getOpenFilesForExternalFileChange(openFilesRef.current, detail)) {
+        // Why: a dirty file keeps its unsaved buffer (issue #7265) — it is
+        // marked changed-on-disk upstream and resolves via the editor banner,
+        // a save, or a later clean reload. Reloading here would clobber it.
+        if (file.isDirty) {
+          continue
+        }
+        if (!isVisibleRef.current || file.id !== activeContentFileIdRef.current) {
+          invalidatedFileIds.push(file.id)
+          continue
+        }
         if (file.mode === 'edit' || file.mode === 'markdown-preview') {
           // Why: external writes must replace any in-flight pre-change read so
           // the tab shows the new on-disk content, not a stale dedupe result.
           void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-            force: true
+            force: true,
+            externalEventGeneration: eventGeneration
           })
           if (editorViewModeRef.current[file.id] === 'changes') {
-            void loadDiffContent(file, { force: true })
+            void loadDiffContent(file, {
+              force: true,
+              externalEventGeneration: eventGeneration
+            })
+          } else {
+            invalidatedDiffFileIds.push(file.id)
           }
         } else if (isReloadableSingleFileDiffTab(file)) {
-          void loadDiffContent(file, { force: true })
+          void loadDiffContent(file, {
+            force: true,
+            externalEventGeneration: eventGeneration
+          })
         }
+      }
+      if (invalidatedFileIds.length > 0) {
+        invalidateContent(invalidatedFileIds)
+      }
+      if (invalidatedDiffFileIds.length > 0) {
+        invalidateDiffContent(invalidatedDiffFileIds)
       }
     }
     window.addEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
     return () =>
       window.removeEventListener(ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT, handler as EventListener)
-  }, [editorViewModeRef, loadDiffContent, loadFileContent, openFilesRef])
+  }, [
+    activeContentFileIdRef,
+    editorViewModeRef,
+    invalidateContent,
+    invalidateDiffContent,
+    isVisibleRef,
+    loadDiffContent,
+    loadFileContent,
+    openFilesRef
+  ])
 
   useEffect(() => {
     const handler = (event: Event): void => {

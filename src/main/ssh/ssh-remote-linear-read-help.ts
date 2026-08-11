@@ -5,6 +5,9 @@ export function getRemoteLinearReadHelp(commandPath: string[]): string | null {
   if (matchesRemoteCommand(commandPath, 'linear', 'issue')) {
     return LINEAR_ISSUE_HELP
   }
+  if (matchesRemoteCommand(commandPath, 'linear', 'list-issues')) {
+    return LINEAR_MCP_ISSUE_LIST_HELP
+  }
   if (matchesRemoteCommand(commandPath, 'linear', 'search')) {
     return LINEAR_SEARCH_HELP
   }
@@ -41,6 +44,10 @@ const LINEAR_HELP = `orca linear
 Usage: orca linear <command> [options]
 
 Commands:
+  save-issue         Create or update a Linear issue
+  list-issues        List Linear issues with MCP-compatible filters
+  relation add       Add a Linear issue relation
+  relation remove    Remove a Linear issue relation
   issue              Read Linear issue context for agents
   search             Search connected Linear workspaces
   team list          List connected Linear teams
@@ -69,7 +76,7 @@ Run \`orca linear <command> --help\` for command-specific usage.`
 
 const LINEAR_ISSUE_HELP = `orca linear issue
 
-Usage: orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--full] [--workspace <id>] [--json]
+Usage: orca linear issue [<id>] [--current] [--comments] [--children] [--depth <n>] [--attachments] [--relations] [--activity] [--full] [--workspace <id>] [--json]
 
 Read Linear issue context for agents
 
@@ -84,6 +91,7 @@ Options:
   --depth <n>            Child issue depth for --children/--full
   --attachments          Include attachment metadata and URLs
   --relations            Include blocking, related, and duplicate links
+  --activity             Include issue field-change history
   --full                 Include all supported V1 issue context within caps
   --workspace <id>      Connected Linear workspace id
   --id <id>             Linear issue key, id, or URL
@@ -92,6 +100,12 @@ Examples:
   $ orca linear issue ENG-123
   $ orca linear issue --current --comments
   $ orca linear issue https://linear.app/acme/issue/ENG-123 --full --json`
+
+const LINEAR_MCP_ISSUE_LIST_HELP = `orca linear list-issues
+
+Usage: orca linear list-issues [--team <team>] [--cycle <cycle>] [--label <label>] [--limit <n>] [--query <text>] [--state <state>] [--cursor <cursor>] [--order-by createdAt|updatedAt] [--project <project>] [--release <release>] [--assignee <user|me|null>] [--delegate <user|me|null>] [--parent-id <issue|null>] [--priority <0-4>] [--created-at <datetime|duration>] [--updated-at <datetime|duration>] [--include-archived] [--workspace <id>|all] [--json]
+
+List Linear issues with MCP-compatible filters and cursor pagination`
 
 const LINEAR_SEARCH_HELP = `orca linear search
 

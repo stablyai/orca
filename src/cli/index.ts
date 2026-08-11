@@ -5,27 +5,54 @@ import {
   normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
+  specPaths,
   validateCommandAndFlags
 } from './args'
 import { dispatch } from './dispatch'
 import { reportCliError } from './format'
 import { printHelp } from './help'
-import { RuntimeClient } from './runtime-client'
+import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
 
+const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
+
 function shouldIgnoreRemoteSelection(commandPath: string[]): boolean {
   return (
+    commandPath[0] === 'account' ||
+    commandPath[0] === 'artifacts' ||
     commandPath[0] === 'environment' ||
     commandPath[0] === 'serve' ||
     commandPath[0] === 'agent' ||
-    commandPath[0] === 'vm'
+    commandPath[0] === 'vm' ||
+    commandPath[0] === 'agent-context'
   )
 }
 
-export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
+// Why: the RuntimeClient graph is 153 of the CLI's 199 eager modules (zod via
+// shared/pairing, ws + tweetnacl via websocket-transport). Loading it here
+// rather than at module scope means --help, `help <cmd>`, and command/flag
+// errors — which all return before this call — never pay for it. Awaited
+// before dispatch so `ctx.client` stays a synchronous getter.
+async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
+  return (await import('./runtime-client.js')).RuntimeClient
+}
+
+// Why: the SSH relay bridge executes this CLI on the Orca host while the
+// caller's shell cwd lives on the remote machine (which cannot be chdir'd
+// into). ORCA_CLI_CWD carries that remote cwd so cwd-based selectors like
+// `--worktree active` resolve against the caller's directory.
+function resolveInvocationCwd(): string {
+  const override = process.env.ORCA_CLI_CWD
+  return typeof override === 'string' && override.length > 0 ? override : process.cwd()
+}
+
+export async function main(
+  argv = process.argv.slice(2),
+  cwd = resolveInvocationCwd()
+): Promise<void> {
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
@@ -34,7 +61,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
-  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv))
+  const parsed = normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, COMMAND_PATHS))
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
@@ -58,6 +85,7 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     // lookup so users do not get misleading "Orca is not running" failures for
     // simple command typos or unsupported flags.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = shouldIgnoreRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
@@ -65,19 +93,23 @@ export async function main(argv = process.argv.slice(2), cwd = process.cwd()): P
     // so the RuntimeClient default parameter does not re-activate the
     // ORCA_PAIRING_CODE / ORCA_ENVIRONMENT env-var fallback for commands
     // that must run locally (environment / serve).
-    const client = new RuntimeClient(
-      undefined,
-      undefined,
-      typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
-      typeof environmentSelector === 'string'
-        ? environmentSelector
-        : ignoreRemoteSelection
-          ? null
-          : undefined
-    )
+    let client: RuntimeClient | undefined
     await dispatch(parsed.commandPath, {
       flags: parsed.flags,
-      client,
+      // Why: local-only handlers must not resolve runtime metadata just to dispatch.
+      get client() {
+        client ??= new RuntimeClientClass(
+          undefined,
+          undefined,
+          typeof pairingCode === 'string' ? pairingCode : ignoreRemoteSelection ? null : undefined,
+          typeof environmentSelector === 'string'
+            ? environmentSelector
+            : ignoreRemoteSelection
+              ? null
+              : undefined
+        )
+        return client
+      },
       cwd,
       json
     })
@@ -91,7 +123,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
   try {
     // Why: everything after `orca claude-teams` belongs to Claude Code, not
     // Orca's own flag parser, so new Claude flags work without Orca changes.
-    const client = new RuntimeClient(undefined, undefined, null, null)
+    const client = new (await loadRuntimeClientClass())(undefined, undefined, null, null)
     await dispatch(['claude-teams'], {
       flags: new Map(),
       client,
@@ -107,7 +139,7 @@ async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {
 
 async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
   try {
-    const client = new RuntimeClient(undefined, 10_000)
+    const client = new (await loadRuntimeClientClass())(undefined, 10_000)
     const response = await client.call<{
       tmux: { stdout: string; stderr: string; exitCode: number }
     }>(

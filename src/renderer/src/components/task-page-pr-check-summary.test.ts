@@ -20,7 +20,8 @@ describe('deriveTaskPagePRCheckSummary', () => {
       total: 0,
       passed: 0,
       failed: 0,
-      pending: 0
+      pending: 0,
+      neutral: 0
     })
   })
 
@@ -36,11 +37,12 @@ describe('deriveTaskPagePRCheckSummary', () => {
       total: 3,
       passed: 1,
       failed: 1,
-      pending: 1
+      pending: 1,
+      neutral: 0
     })
   })
 
-  it('treats neutral and skipped checks as passed for the compact PR table label', () => {
+  it('keeps neutral checks out of passed while skipped checks pass', () => {
     expect(
       deriveTaskPagePRCheckSummary([
         check({ conclusion: 'success' }),
@@ -50,9 +52,10 @@ describe('deriveTaskPagePRCheckSummary', () => {
     ).toEqual({
       state: 'success',
       total: 3,
-      passed: 3,
+      passed: 2,
       failed: 0,
-      pending: 0
+      pending: 0,
+      neutral: 1
     })
   })
 
@@ -67,7 +70,23 @@ describe('deriveTaskPagePRCheckSummary', () => {
       total: 2,
       passed: 1,
       failed: 1,
-      pending: 0
+      pending: 0,
+      neutral: 0
+    })
+  })
+
+  it('keeps unknown completed outcomes neutral', () => {
+    expect(
+      deriveTaskPagePRCheckSummary([
+        check({ conclusion: 'future_state' as PRCheckDetail['conclusion'] })
+      ])
+    ).toEqual({
+      state: 'neutral',
+      total: 1,
+      passed: 0,
+      failed: 0,
+      pending: 0,
+      neutral: 1
     })
   })
 })

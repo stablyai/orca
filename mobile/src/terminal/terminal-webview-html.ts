@@ -1,13 +1,20 @@
-// xterm.js WebView document + default Tokyonight theme. Extracted from
-// TerminalWebView.tsx to keep that file within the max-lines budget.
+// xterm.js WebView document + default Tokyonight theme; extracted from TerminalWebView.tsx for the max-lines budget.
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
 import { colors } from '../theme/mobile-theme'
 import { TERMINAL_TEXT_SCALES } from '../storage/preferences'
 import { TERMINAL_PATH_TAP_JS } from './terminal-path-tap-injected'
+import { TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS } from './terminal-keyboard-avoidance-metrics-injected'
 import { XTERM_ENGINE_CSS, XTERM_ENGINE_JS } from './terminal-webview-engine.generated'
 import { TERMINAL_REFLOW_JS } from './terminal-webview-reflow-injected'
+import { TERMINAL_SURFACE_SWAP_JS } from './terminal-webview-surface-swap-injected'
 import { TERMINAL_TAP_DISPATCH_JS } from './terminal-webview-tap-dispatch-injected'
+import { TERMINAL_WEBVIEW_THEME_JS } from './terminal-webview-theme-injected'
+import { TERMINAL_QUERY_REPLY_JS } from './terminal-webview-query-reply-injected'
 import { URL_TAP_WEBVIEW_JS } from './terminal-webview-url-tap'
+import { TERMINAL_WEBGL_RECOVERY_JS } from './terminal-webview-webgl-recovery-injected'
+import { TERMINAL_MOUSE_CLICK_DRAG_JS } from './terminal-webview-mouse-click-drag-injected'
+import { TERMINAL_MOUSE_REPORT_CELL_JS } from './terminal-webview-mouse-report-cell-injected'
+import { TERMINAL_WHEEL_SCROLL_JS } from './terminal-webview-wheel-scroll-injected'
 
 const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   background: colors.terminalBg,
@@ -34,15 +41,14 @@ const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {
   brightWhite: '#c0caf5'
 }
 
-// Why: TUI apps (Claude Code / Ink) emit escape codes with absolute cursor
-// positioning designed for the desktop's terminal dimensions (~150+ cols).
-// We initialize xterm at the desktop's exact cols/rows so those escape codes
-// render correctly, then use a measured CSS transform: scale() to fit the
-// canvas into the phone viewport. The scale is computed after xterm opens
-// by measuring the rendered surface width, not hardcoded, so it adapts to
-// any terminal column count (80, 150, 200+). All touch gestures (scroll,
-// pinch-to-zoom, pan) are handled by custom JS rather than native WebView
-// behavior, so they work correctly with the CSS scale transform.
+export const MOBILE_TERMINAL_CARET_OPTIONS = {
+  cursorBlink: false,
+  cursorStyle: 'bar',
+  showCursorImmediately: true,
+  cursorInactiveStyle: 'block'
+} as const
+
+// Why: TUI escape codes assume the desktop's cols/rows, so init xterm at those dims and fit the phone via a measured CSS scale() instead of resizing.
 export const XTERM_HTML = `<!DOCTYPE html>
 <html>
 <head>
@@ -213,7 +219,8 @@ window.onerror = function(msg) {
   var CLAUDE_STATUS_DOT_PATTERN = new RegExp(CLAUDE_STATUS_DOT + '[' + TEXT_PRESENTATION_SELECTOR + EMOJI_PRESENTATION_SELECTOR + ']*', 'g');
   var statusDotPendingSelector = false;
   var PRIVATE_MODE_SCAN_TAIL_LIMIT = 4096;
-  var term = null;
+  var term = null; ${TERMINAL_QUERY_REPLY_JS}
+  ${TERMINAL_SURFACE_SWAP_JS}
   var scrollIndicator = document.getElementById('scroll-indicator');
   var scrollThumb = document.getElementById('scroll-thumb');
   var scrollIndicatorHideTimer = null;
@@ -281,6 +288,7 @@ window.onerror = function(msg) {
         if (cols < MIN_FIT_COLS) return;
         var rows = Math.max(8, Math.floor(window.innerHeight / cellH));
         term.resize(cols, rows);
+        emitKeyboardAvoidanceMetrics();
       }
       applyFitScale('text-scale');
     });
@@ -292,7 +300,11 @@ window.onerror = function(msg) {
   var initRows = 24;
   var terminalGeneration = 0;
   var defaultTheme = ${JSON.stringify(DEFAULT_TERMINAL_THEME)};
+  var terminalThemeInput = null;
   var terminalTheme = defaultTheme;
+  var terminalMinimumContrastRatio = 3;
+  var webglAddon = null;
+  var webglRecoveryTimer = null;
   var activeAltScreenSnapshot = false;
   var trackedMouseTrackingMode = 'none';
   var sgrMouseMode = false;
@@ -380,27 +392,7 @@ window.onerror = function(msg) {
     }, 550);
   }
 
-  function normalizeTerminalTheme(input) {
-    var source = input && typeof input === 'object' && input.theme && typeof input.theme === 'object'
-      ? input.theme
-      : null;
-    if (!source) return defaultTheme;
-    var next = {};
-    var keys = Object.keys(defaultTheme);
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-      if (typeof source[key] === 'string') next[key] = source[key];
-    }
-    return Object.assign({}, defaultTheme, next);
-  }
-
-  function applyTerminalTheme(input) {
-    terminalTheme = normalizeTerminalTheme(input);
-    var background = terminalTheme.background || '${colors.terminalBg}';
-    document.documentElement.style.background = background;
-    document.body.style.background = background;
-    if (term) term.options.theme = terminalTheme;
-  }
+${TERMINAL_WEBVIEW_THEME_JS}
 
   function getCellHeight() {
     if (!term || !term._core) return 15;
@@ -614,6 +606,10 @@ window.onerror = function(msg) {
     writeQueue.push(normalizeStatusDotPresentation(data));
   }
 
+  function enqueueWriteBoundary(callback) {
+    writeQueue.push(callback);
+  }
+
   function nextQueuedWrite() {
     if (writeQueueHead >= writeQueue.length) {
       resetWriteQueue();
@@ -659,6 +655,7 @@ window.onerror = function(msg) {
     if (!ready || !term || writesDraining || gen !== terminalGeneration) return;
     var next = nextQueuedWrite();
     if (typeof next !== 'string') {
+      if (typeof next === 'function') return next(), pumpWrites(gen);
       var callbacks = afterDrainCallbacks;
       afterDrainCallbacks = [];
       for (var i = 0; i < callbacks.length; i++) callbacks[i]();
@@ -679,6 +676,8 @@ window.onerror = function(msg) {
     pumpWrites(terminalGeneration);
   }
 
+${TERMINAL_WEBGL_RECOVERY_JS}
+
   function init(cols, rows, initialData, nextTheme, nextFontScale, preserveScroll, nextOscLinks) {
     if (typeof nextFontScale === 'number' && nextFontScale > 0) currentTextScale = nextFontScale;
     // Why: a width-reflow re-stream rewraps the same content at new cols.
@@ -688,6 +687,11 @@ window.onerror = function(msg) {
     var scrollAnchorRows = prevB ? Math.max(0, (prevB.baseY || 0) - (prevB.viewportY || 0)) : -1;
     terminalGeneration++;
     var gen = terminalGeneration;
+    // Why: snapshot replay can contain old queries whose replies must never
+    // re-enter the live PTY. Each replacement terminal earns authority anew.
+    resetTerminalDataReplyAuthority();
+    cancelWebglContextRecovery();
+    webglAddon = null;
     ready = false;
     resetWriteQueue();
     statusDotPendingSelector = false;
@@ -696,6 +700,7 @@ window.onerror = function(msg) {
     initRows = rows || 24;
     firstDataPending = true;
     smoothScrollOffsetY = 0;
+    wheelAccumDeltaY = 0;
     mouseModeScanTail = '';
     trackedMouseTrackingMode = 'none';
     sgrMouseMode = false;
@@ -715,44 +720,36 @@ window.onerror = function(msg) {
     initialOscLinks = Array.isArray(nextOscLinks) ? nextOscLinks : [];
     initialOscLinkRowOffset = 0;
     initialOscLinkEvictionReady = false;
-    var oldTerm = term;
-    var oldSurface = surface;
-    var nextSurface = null;
-    disposeTermObservers();
-    if (oldTerm) {
-      nextSurface = document.createElement('div');
-      nextSurface.id = 'terminal-surface';
-      nextSurface.style.visibility = 'hidden';
-      nextSurface.style.position = 'absolute';
-      nextSurface.style.left = '0';
-      nextSurface.style.top = '0';
-      document.getElementById('terminal-container').appendChild(nextSurface);
-      surface = nextSurface;
-      attachSurfaceEventHandlers(surface);
-      oldSurface.removeAttribute('id');
-    }
+    var surfaceSwap = beginTerminalSurfaceSwap();
+    var nextSurface = surfaceSwap.nextSurface;
 
     applyTerminalTheme(nextTheme);
     term = new Terminal({
       cols: cols || 80,
       rows: rows || 24,
       theme: terminalTheme,
+      minimumContrastRatio: terminalMinimumContrastRatio,
       fontFamily: terminalFontFamily,
       fontSize: fontPxForScale(currentTextScale),
       fontWeight: '300',
       fontWeightBold: '500',
       scrollback: 5000,
-      disableStdin: true,
-      cursorBlink: false,
-      cursorStyle: 'bar',
-      cursorInactiveStyle: 'none',
+      // Why: xterm suppresses parser-generated query replies when disableStdin
+      // is true. Native accepts only validated reply grammars from onData.
+      disableStdin: false,
+      cursorBlink: ${MOBILE_TERMINAL_CARET_OPTIONS.cursorBlink},
+      cursorStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorStyle)},
+      // Native TextInput owns focus; initialize xterm's otherwise-gated main-buffer caret.
+      showCursorImmediately: ${MOBILE_TERMINAL_CARET_OPTIONS.showCursorImmediately},
+      // A full inactive cell remains visible under the terminal's phone-fit scale.
+      cursorInactiveStyle: ${JSON.stringify(MOBILE_TERMINAL_CARET_OPTIONS.cursorInactiveStyle)},
       convertEol: false,
       allowProposedApi: true
     });
+    var nextTerm = term;
+    pendingTerm = nextTerm;
     term.open(surface);
-    if (window.WebglAddon && window.WebglAddon.WebglAddon) {
-      try { var webglAddon = new window.WebglAddon.WebglAddon(); term.loadAddon(webglAddon); if (webglAddon.onContextLoss) webglAddon.onContextLoss(function() { try { webglAddon && webglAddon.dispose && webglAddon.dispose(); } catch (e) {} }); } catch (e) {}
-    }
+    attachWebglAddon(true);
     if (window.Unicode11Addon && window.Unicode11Addon.Unicode11Addon) try { term.loadAddon(new window.Unicode11Addon.Unicode11Addon()); term.unicode.activeVersion = '11'; } catch (e) {}
     if (typeof replayData === 'string' && replayData.length > 0) {
       enqueueWrite(replayData);
@@ -762,6 +759,7 @@ window.onerror = function(msg) {
     resetEvictionCounter();
     cancelSelect();
     attachTermObservers();
+    attachTerminalQueryReplyBridge(term, gen);
 
     requestAnimationFrame(function() {
       if (gen !== terminalGeneration) return;
@@ -769,14 +767,7 @@ window.onerror = function(msg) {
       everReady = true;
       afterWritesDrained(function() {
         if (gen !== terminalGeneration) return;
-        if (nextSurface && oldSurface) {
-          nextSurface.style.visibility = 'visible';
-          nextSurface.style.position = '';
-          nextSurface.style.left = '';
-          nextSurface.style.top = '';
-          oldSurface.remove();
-          if (oldTerm) oldTerm.dispose();
-        }
+        commitTerminalSurfaceSwap(surfaceSwap, nextTerm);
         // Why: restore the reader's place after the rewrapped buffer replays.
         // Replay lands at bottom, so only act when they were scrolled up (rows>0).
         if (scrollAnchorRows > 0 && term && term.buffer && term.buffer.active) {
@@ -813,6 +804,7 @@ window.onerror = function(msg) {
     if (!term) return;
     initRows = rows || initRows;
     term.resize(cols || term.cols, rows || term.rows);
+    emitKeyboardAvoidanceMetrics();
     applyFitScale('resize-msg');
     notify({ type: 'ready', cols: cols, rows: rows });
   }
@@ -936,7 +928,9 @@ window.onerror = function(msg) {
       handledMessageIds.push(msg.id);
       if (handledMessageIds.length > 256) handledMessageIds.shift();
     }
-    if (msg.type === 'init') {
+    if (msg.type === 'ping') {
+      notify({ type: 'pong', pingId: msg.id });
+    } else if (msg.type === 'init') {
       init(msg.cols, msg.rows, msg.initialData, msg.terminalTheme, msg.fontScale, msg.preserveScroll, msg.oscLinks);
     } else if (msg.type === 'set-font-scale') {
       // Why: ignore RN echoing back the value a pinch just set (msg.fontScale ===
@@ -954,7 +948,7 @@ window.onerror = function(msg) {
       write(msg.data);
     } else if (msg.type === 'clear') {
       terminalGeneration++;
-      resetWriteQueue();
+      resetWriteQueue(); resumeTerminalDataReplyAuthority(); // Why: clear drops the replay boundary.
       statusDotPendingSelector = false;
       afterDrainCallbacks = [];
       writesDraining = false;
@@ -967,6 +961,7 @@ window.onerror = function(msg) {
       initialOscLinkEvictionReady = false;
       if (term) { term.clear(); term.reset(); }
       emitModesIfChanged();
+      emitKeyboardAvoidanceMetrics();
       resetEvictionCounter();
       if (selMode === 'select') {
         notify({ type: 'selection-evicted' });
@@ -1109,17 +1104,7 @@ window.onerror = function(msg) {
     sgrMousePixelsMode: false
   };
 
-  function emitKeyboardAvoidanceMetrics() {
-    if (!term) return;
-    var alt = false;
-    try { alt = term.buffer && term.buffer.active && term.buffer.active.type === 'alternate'; } catch (e) {}
-    notify({
-      type: 'keyboard-avoidance-metrics',
-      cursorY: term.buffer && term.buffer.active ? term.buffer.active.cursorY : 0,
-      rows: term.rows || 0,
-      altScreen: alt
-    });
-  }
+  ${TERMINAL_KEYBOARD_AVOIDANCE_METRICS_JS}
 
   function attachTermObservers() {
     if (!term) return;
@@ -1164,31 +1149,7 @@ window.onerror = function(msg) {
     return { col: col, row: viewportRow + viewportY };
   }
 
-  function viewportToMouseReportCell(clientX, clientY) {
-    if (!term) return null;
-    var cellW = getCellWidth();
-    var cellH = getCellHeight();
-    if (cellW <= 0 || cellH <= 0) return null;
-    if (typeof clientX !== 'number') clientX = window.innerWidth / 2;
-    if (typeof clientY !== 'number') clientY = window.innerHeight / 2;
-    var total = getTotalScale();
-    if (total <= 0) total = 1;
-    var sx = (clientX - panX) / total;
-    var sy = (clientY - panY) / total;
-    var maxX = Math.max(0, term.cols * cellW - 1);
-    var maxY = Math.max(0, term.rows * cellH - 1);
-    if (sx < 0) sx = 0;
-    if (sx > maxX) sx = maxX;
-    if (sy < 0) sy = 0;
-    if (sy > maxY) sy = maxY;
-    var col = Math.floor(sx / cellW);
-    var row = Math.floor(sy / cellH);
-    if (col < 0) col = 0;
-    if (col > term.cols - 1) col = term.cols - 1;
-    if (row < 0) row = 0;
-    if (row > term.rows - 1) row = term.rows - 1;
-    return { col: col, row: row, x: Math.floor(sx), y: Math.floor(sy) };
-  }
+  ${TERMINAL_MOUSE_REPORT_CELL_JS}
 
   function isAlternateBufferActive() {
     try {
@@ -1655,6 +1616,14 @@ window.onerror = function(msg) {
   // terminal-webview-tap-dispatch-injected.ts (extracted for max-lines).
   ${TERMINAL_TAP_DISPATCH_JS}
 
+  // External mouse / trackpad scroll: see
+  // terminal-webview-wheel-scroll-injected.ts (extracted for max-lines).
+  ${TERMINAL_WHEEL_SCROLL_JS}
+
+  // External mouse click/drag: see
+  // terminal-webview-mouse-click-drag-injected.ts (extracted for max-lines).
+  ${TERMINAL_MOUSE_CLICK_DRAG_JS}
+
   btnCopy.addEventListener('click', function(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -1710,6 +1679,9 @@ window.onerror = function(msg) {
     // replacement needs gesture handlers or tab-switch replays stop scrolling.
     targetSurface.addEventListener('mousedown', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
     targetSurface.addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); }, true);
+
+    attachSurfaceWheelHandler(targetSurface);
+    attachSurfaceMouseClickDragHandler(targetSurface);
 
     targetSurface.addEventListener('touchstart', function(e) {
       if (dispatcherShouldBlockSurface()) return;
@@ -1908,6 +1880,5 @@ window.onerror = function(msg) {
 </body>
 </html>`
 
-// Why: WebView treats source identity as page identity on some platforms; keep
-// parent/session re-renders from reloading xterm and forcing fresh snapshots.
+// Why: some WebViews treat source identity as page identity; keep this stable so re-renders don't reload xterm.
 export const XTERM_WEBVIEW_SOURCE = { html: XTERM_HTML }

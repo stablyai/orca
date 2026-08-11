@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { toast } from 'sonner'
-import { getConnectionId } from '@/lib/connection-context'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 import { translate } from '@/i18n/i18n'
-import { getRightSidebarWorktreeRuntimeSettings } from './file-explorer-runtime-owner'
+import type { FileExplorerOperationOwner } from './file-explorer-types'
+import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
 
 type UseFileExplorerImportParams = {
   worktreePath: string | null
@@ -12,6 +12,7 @@ type UseFileExplorerImportParams = {
   refreshDir: (dirPath: string) => Promise<void>
   clearNativeDragState: () => void
   setSelectedPath: (path: string | null) => void
+  operationOwner?: FileExplorerOperationOwner
 }
 
 /**
@@ -28,7 +29,8 @@ export function useFileExplorerImport({
   activeWorktreeId,
   refreshDir,
   clearNativeDragState,
-  setSelectedPath
+  setSelectedPath,
+  operationOwner
 }: UseFileExplorerImportParams): void {
   // Refs to avoid re-subscribing IPC listener on every render
   const worktreePathRef = useRef(worktreePath)
@@ -41,6 +43,8 @@ export function useFileExplorerImport({
   clearNativeDragStateRef.current = clearNativeDragState
   const setSelectedPathRef = useRef(setSelectedPath)
   setSelectedPathRef.current = setSelectedPath
+  const operationOwnerRef = useRef(operationOwner)
+  operationOwnerRef.current = operationOwner
 
   useEffect(() => {
     return window.api.ui.onFileDrop((data) => {
@@ -59,19 +63,24 @@ export function useFileExplorerImport({
       }
 
       const { paths, destinationDir } = data
-      const connectionId = getConnectionId(wtId) ?? undefined
 
       void (async () => {
         try {
+          const operationGuard = captureFileExplorerOperationGuard(wtId, operationOwnerRef.current)
+          operationGuard.assertCurrent()
           const { results } = await importExternalPathsToRuntime(
             {
-              settings: getRightSidebarWorktreeRuntimeSettings(wtId),
+              settings: operationGuard.route.settings,
               worktreeId: wtId,
               worktreePath: worktreePathRef.current,
-              connectionId
+              connectionId: operationGuard.route.connectionId,
+              expectedExecutionHostId: operationGuard.route.expectedExecutionHostId,
+              expectedSshTargetId: operationGuard.route.expectedSshTargetId,
+              expectedSshConnectionGeneration: operationGuard.route.expectedSshConnectionGeneration
             },
             paths,
-            destinationDir
+            destinationDir,
+            { assertCurrent: operationGuard.assertCurrent }
           )
 
           // Refresh the destination directory once per gesture

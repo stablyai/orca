@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from './agent-status'
-import { createTestStore } from './store-test-helpers'
+import { createTestStore, makeTab } from './store-test-helpers'
 
 // Why: split out from agent-status.test.ts to keep each file under the
 // repo's 300-line cap for test files. This suite covers the new
@@ -126,6 +126,72 @@ describe('dropAgentStatus + retention suppressor', () => {
     // as the live-only case).
     expect(s.agentStatusEpoch).toBe(agentEpochBefore + 1)
     expect(s.sortEpoch).toBe(sortEpochBefore + 1)
+  })
+
+  it('closeTab drops completed worktree-attributed orphan rows', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [
+          makeTab({ id: 'tab-closed', worktreeId: 'wt-1' }),
+          makeTab({ id: 'tab-live', worktreeId: 'wt-1' })
+        ],
+        'wt-2': []
+      }
+    })
+    store
+      .getState()
+      .setAgentStatus('tab-closed:0', { state: 'done', prompt: 'closed', agentType: 'pi' })
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-orphan:0',
+        { state: 'done', prompt: 'orphan', agentType: 'pi' },
+        undefined,
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-active-child:0',
+        { state: 'working', prompt: 'active child', agentType: 'pi' },
+        undefined,
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-live:0',
+        { state: 'done', prompt: 'open tab', agentType: 'pi' },
+        undefined,
+        undefined,
+        { worktreeId: 'wt-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-other-orphan:0',
+        { state: 'done', prompt: 'other worktree', agentType: 'pi' },
+        undefined,
+        undefined,
+        { worktreeId: 'wt-2' }
+      )
+
+    store.getState().closeTab('tab-closed')
+
+    const s = store.getState()
+    expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
+    expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
+    expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
+    // No suppressor for the orphan: its tab is already gone, so retention sync
+    // never re-surfaces it and a suppressor would leak permanently.
+    expect(s.retentionSuppressedPaneKeys['tab-orphan:0']).toBeUndefined()
+    expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
+    expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
+    expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
   })
 
   it('on a paneKey with neither live nor retained entry: no-op (same state reference, no epoch bumps)', () => {

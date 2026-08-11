@@ -11,7 +11,10 @@ type TrackerHarness = {
   tracker: TerminalImeCompositionTracker
   element: HTMLElement
   advance: (ms: number) => void
-  composition: (type: 'compositionstart' | 'compositionupdate' | 'compositionend', data: string) => void
+  composition: (
+    type: 'compositionstart' | 'compositionupdate' | 'compositionend',
+    data: string
+  ) => void
   input: (inputType: string) => void
   blur: () => void
 }

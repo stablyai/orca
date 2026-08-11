@@ -114,10 +114,33 @@ describe('ai vault session storage compatibility', () => {
     ).toBe(true)
   })
 
-  it('never allows runtime or unknown targets', () => {
+  it('allows runtime sessions only on the matching runtime target', () => {
     expect(
-      canResumeAiVaultSessionOnTarget({ sessionFilePath: wslSessionFile, targetStatus: 'runtime' })
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'runtime:env-1',
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-1'
+      })
+    ).toBe(true)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: '/home/ada/.codex/sessions/remote.jsonl',
+        sessionExecutionHostId: 'runtime:env-1',
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-2'
+      })
     ).toBe(false)
+    expect(
+      canResumeAiVaultSessionOnTarget({
+        sessionFilePath: wslSessionFile,
+        targetStatus: 'runtime',
+        targetExecutionHostId: 'runtime:env-1'
+      })
+    ).toBe(false)
+  })
+
+  it('never allows unknown targets', () => {
     expect(
       canResumeAiVaultSessionOnTarget({ sessionFilePath: hostSessionFile, targetStatus: 'unknown' })
     ).toBe(false)
@@ -149,8 +172,11 @@ describe('ai vault resume target ownership', () => {
       true
     )
     expect(
-      isUnsupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
+      isSupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
     ).toBe(true)
+    expect(
+      isUnsupportedAiVaultResumeRepo({ connectionId: null, executionHostId: 'runtime:env-1' })
+    ).toBe(false)
   })
 
   it('resolves runtime-owned worktree targets through their repo owner', () => {

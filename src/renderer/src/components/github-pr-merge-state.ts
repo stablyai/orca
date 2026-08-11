@@ -1,6 +1,6 @@
 import type {
   CheckStatus,
-  GitHubPRCheckSummary,
+  ProviderCheckSummary,
   PRMergeableState,
   PRReviewDecision,
   PRState
@@ -14,7 +14,7 @@ export type GitHubPRMergeStateInput = {
   mergeStateStatus?: string | null
   reviewDecision?: PRReviewDecision | null
   checksStatus?: CheckStatus
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null

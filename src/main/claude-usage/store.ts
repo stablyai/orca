@@ -1,13 +1,11 @@
-/* eslint-disable max-lines -- Why: this store is the single main-process owner for Claude usage persistence, scan gating, and query semantics. Keeping those policy decisions together avoids split-brain range/scope logic across multiple files. */
+/* eslint-disable max-lines -- Why: Claude pricing, range, scope, breakdown, and automation-attribution policies remain one cohesive store. */
 import { app } from 'electron'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
   ClaudeUsageBreakdownRow,
   ClaudeUsageDailyPoint,
   ClaudeUsageRange,
-  ClaudeUsageScanState,
   ClaudeUsageScope,
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
@@ -15,12 +13,15 @@ import type {
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { ClaudeUsagePersistedState } from './types'
-import { createWorktreeRefs, getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
+import { getSessionProjectLabel, scanClaudeUsageFiles } from './scanner'
+import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 
-const SCHEMA_VERSION = 3
-const STALE_MS = 5 * 60_000
+// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
+// caches either lack ownership or used narrower keys and can under/over-count
+// after fork reclaim (#8006).
+const SCHEMA_VERSION = 5
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
 // Why: capture the path after configureDevUserDataPath() but before app.setName()
@@ -56,6 +57,11 @@ const SONNET_LONG_CONTEXT_PRICING = {
 } satisfies Partial<ClaudeModelPricing>
 
 const MODEL_PRICING: Record<string, ClaudeModelPricing> = {
+  'claude-fable-5': { input: 10, output: 50, cacheRead: 1, cacheWrite: 12.5 },
+  'claude-opus-5': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
+  // Why: Sonnet 5 bills its full 1M window at flat rates, so no long-context tier here.
+  // Why: standard rates, not the $2/$10 introductory rate ending 2026-08-31 — no date dimension.
+  'claude-sonnet-5': { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
   'claude-opus-4-8': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-7': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
   'claude-opus-4-6': { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
@@ -120,6 +126,21 @@ function getDefaultState(): ClaudeUsagePersistedState {
   }
 }
 
+function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsagePersistedState {
+  if (state.schemaVersion === SCHEMA_VERSION) {
+    return state
+  }
+  // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
+  const defaults = getDefaultState()
+  return {
+    ...defaults,
+    scanState: {
+      ...defaults.scanState,
+      enabled: state.scanState.enabled ?? defaults.scanState.enabled
+    }
+  }
+}
+
 export function initClaudeUsagePath(): void {
   _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
 }
@@ -153,6 +174,12 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (alias) {
     return alias
   }
+  if (hasClaudeModelVersion(lower, 'fable', '5')) {
+    return 'claude-fable-5'
+  }
+  if (hasClaudeModelVersion(lower, 'opus', '5')) {
+    return 'claude-opus-5'
+  }
   if (hasClaudeModelVersion(lower, 'opus', '4-8')) {
     return 'claude-opus-4-8'
   }
@@ -175,6 +202,9 @@ function normalizeModelForPricing(model: string | null): string | null {
     // Why: new Opus 4 point releases now share the current low Opus pricing;
     // avoid overbilling unknown future Claude Code model IDs as legacy Opus 4.
     return 'claude-opus-4-8'
+  }
+  if (hasClaudeModelVersion(lower, 'sonnet', '5')) {
+    return 'claude-sonnet-5'
   }
   if (hasClaudeModelVersion(lower, 'sonnet', '4-6')) {
     return 'claude-sonnet-4-6'
@@ -269,121 +299,22 @@ function estimateCostUsd(
   )
 }
 
-function getRangeCutoff(range: ClaudeUsageRange): string | null {
-  if (range === 'all') {
-    return null
-  }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getLocalDay(timestamp: string): string | null {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
-  const rows = [...worktreesByRepo.entries()]
-    .flatMap(([repoId, worktrees]) =>
-      worktrees.map((worktree) =>
-        JSON.stringify({
-          repoId,
-          worktreeId: worktree.worktreeId,
-          path: worktree.path,
-          displayName: worktree.displayName
-        })
-      )
-    )
-    .sort()
-  return JSON.stringify(rows)
-}
-
-export class ClaudeUsageStore {
-  private state: ClaudeUsagePersistedState
-  private readonly store: Store
-  private scanPromise: Promise<void> | null = null
-
-  constructor(store: Store) {
-    this.store = store
-    this.state = this.load()
-  }
-
-  private load(): ClaudeUsagePersistedState {
-    try {
-      const usageFile = getClaudeUsageFile()
-      if (!existsSync(usageFile)) {
-        return getDefaultState()
-      }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as ClaudeUsagePersistedState
-      if (parsed.schemaVersion !== SCHEMA_VERSION) {
-        // Why: scanner semantics affect persisted totals, so old Claude caches
-        // must be rebuilt after parser/source changes instead of reused briefly.
-        // Preserve scanState.enabled so existing users keep tracking on across
-        // schema bumps; the next refresh will repopulate the analytics.
-        const defaults = getDefaultState()
-        return {
-          ...defaults,
-          scanState: {
-            ...defaults.scanState,
-            enabled: parsed.scanState?.enabled ?? defaults.scanState.enabled
-          }
-        }
-      }
-      return {
-        ...getDefaultState(),
-        ...parsed,
-        scanState: {
-          ...getDefaultState().scanState,
-          ...parsed.scanState
-        }
-      }
-    } catch (error) {
-      // Why: Claude usage is a local analytics feature, not primary workspace
-      // state. A corrupt cache should degrade to a fresh rebuild instead of
-      // preventing Orca from booting, but we leave the file on disk for debugging.
-      console.error('[claude-usage] Failed to load persisted state, starting fresh:', error)
-      return getDefaultState()
-    }
-  }
-
-  private writeToDisk(): void {
-    const usageFile = getClaudeUsageFile()
-    const dir = dirname(usageFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    // Why: scans can refresh while the app is in active use. Use the same
-    // atomic temp-file pattern as the main store so a crash or concurrent write
-    // cannot leave a truncated analytics file as the common failure mode.
-    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state, null, 2), 'utf-8')
-    renameSync(tmpFile, usageFile)
-  }
-
-  async setEnabled(enabled: boolean): Promise<ClaudeUsageScanState> {
-    this.state.scanState.enabled = enabled
-    this.writeToDisk()
-    return this.getScanState()
-  }
-
-  getScanState(): ClaudeUsageScanState {
-    return {
-      ...this.state.scanState,
-      isScanning: this.scanPromise !== null,
-      hasAnyClaudeData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
-    }
+export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
+  'processedFiles',
+  ClaudeUsagePersistedState,
+  'hasAnyClaudeData'
+> {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+    super(store, {
+      logTag: '[claude-usage]',
+      resolveCacheFile: getClaudeUsageFile,
+      createDefaultState: getDefaultState,
+      normalizeState: normalizePersistedState,
+      sourceKey: 'processedFiles',
+      dataPresenceKey: 'hasAnyClaudeData',
+      jsonIndent: 2,
+      scan: scanClaudeUsageFiles
+    })
   }
 
   getSnapshot(
@@ -399,58 +330,6 @@ export class ClaudeUsageStore {
       projectBreakdown: this.buildBreakdown(scope, range, 'project'),
       recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
-  }
-
-  async refresh(force = false): Promise<ClaudeUsageScanState> {
-    if (!this.state.scanState.enabled) {
-      return this.getScanState()
-    }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
-    if (!force && this.state.scanState.lastScanCompletedAt) {
-      const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
-        return this.getScanState()
-      }
-    }
-    await this.runScan()
-    return this.getScanState()
-  }
-
-  private async runScan(): Promise<void> {
-    if (this.scanPromise) {
-      await this.scanPromise
-      return
-    }
-
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-    this.writeToDisk()
-
-    this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanClaudeUsageFiles(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
-        )
-        this.state.processedFiles = result.processedFiles
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
-        this.state.scanState.lastScanError = null
-        this.writeToDisk()
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
-      } finally {
-        this.scanPromise = null
-      }
-    })()
-
-    await this.scanPromise
   }
 
   async getSummary(scope: ClaudeUsageScope, range: ClaudeUsageRange): Promise<ClaudeUsageSummary> {
@@ -820,7 +699,7 @@ export class ClaudeUsageStore {
   }
 
   private getFilteredDaily(scope: ClaudeUsageScope, range: ClaudeUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((entry) => {
       if (cutoff && entry.day < cutoff) {
         return false
@@ -833,12 +712,12 @@ export class ClaudeUsageStore {
   }
 
   private getFilteredSessions(scope: ClaudeUsageScope, range: ClaudeUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
       // Why: daily aggregates use local calendar days, so session filtering has
       // to use the same conversion or the sessions table/counts can disagree
       // with the chart around UTC day boundaries.
-      const day = getLocalDay(session.lastTimestamp)
+      const day = getLocalUsageDay(session.lastTimestamp)
       if (!day) {
         return false
       }
@@ -859,11 +738,5 @@ export class ClaudeUsageStore {
     return (
       Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
     )
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-    return getWorktreeFingerprint(worktreesByRepo)
   }
 }

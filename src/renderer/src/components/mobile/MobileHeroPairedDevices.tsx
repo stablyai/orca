@@ -1,12 +1,8 @@
 import { Smartphone, Trash2 } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { PairedMobileDevice } from './paired-mobile-devices'
 
-export type PairedDevice = {
-  deviceId: string
-  name: string
-  pairedAt: number
-  lastSeenAt: number
-}
+export type PairedDevice = PairedMobileDevice
 
 type HeroPairedProps = {
   devices: readonly PairedDevice[]

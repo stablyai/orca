@@ -23,7 +23,14 @@ const appStoreSnapshot: {
   sshConnectionStates: Map<string, { remotePlatform?: NodeJS.Platform }>
   worktreesByRepo: Record<
     string,
-    { id: string; repoId: string; path?: string; projectId?: string }[]
+    {
+      id: string
+      repoId: string
+      path?: string
+      projectId?: string
+      hostId?: 'local' | `runtime:${string}` | `ssh:${string}`
+      runtimeOwnerEnvironmentId?: string
+    }[]
   >
   unifiedTabsByWorktree: Record<string, unknown[]>
   activeGroupIdByWorktree: Record<string, string>
@@ -129,20 +136,7 @@ vi.mock('zustand/react/shallow', () => ({
   useShallow: (selector: unknown) => selector
 }))
 
-vi.mock('lucide-react', () => ({
-  FilePlus: function FilePlus() {
-    return null
-  },
-  Globe: function Globe() {
-    return null
-  },
-  Plus: function Plus() {
-    return null
-  },
-  TerminalSquare: function TerminalSquare() {
-    return null
-  }
-}))
+vi.mock('lucide-react', async () => (await import('./lucide-icon-stub-fixture')).stubEveryIcon())
 
 vi.mock('@dnd-kit/sortable', () => ({
   SortableContext: function SortableContext(props: { children?: unknown }) {
@@ -396,6 +390,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell,
       onNewBrowserTab: () => {},
@@ -467,6 +462,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -534,6 +530,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -562,6 +559,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'web-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'web-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -587,6 +594,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -619,6 +627,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'desktop-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'desktop-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -644,6 +662,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: () => {},
       onNewBrowserTab: () => {},
@@ -696,6 +715,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell,
       onNewBrowserTab: () => {},
@@ -759,6 +779,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell,
       onNewBrowserTab: () => {},
@@ -828,6 +849,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: vi.fn(),
       onNewBrowserTab: () => {},
@@ -864,6 +886,16 @@ describe('TabBar PowerShell launch wiring', () => {
       }
     })
     appStoreSnapshot.activeRuntimeEnvironmentId = 'serve-env-1'
+    appStoreSnapshot.worktreesByRepo = {
+      fixture: [
+        {
+          id: 'wt-1',
+          repoId: 'fixture',
+          hostId: 'local',
+          runtimeOwnerEnvironmentId: 'serve-env-1'
+        }
+      ]
+    }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
     await capabilities.loadWindowsTerminalCapabilities({
       force: true,
@@ -889,6 +921,7 @@ describe('TabBar PowerShell launch wiring', () => {
       onClose: () => {},
       onCloseOthers: () => {},
       onCloseToRight: () => {},
+      onCloseToLeft: () => {},
       onNewTerminalTab: () => {},
       onNewTerminalWithShell: vi.fn(),
       onNewBrowserTab: () => {},

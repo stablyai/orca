@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+
 import { resolveSessionFilePath } from './session-file-resolver'
 
 let tempRoots: string[] = []
@@ -38,6 +39,90 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('resolves OpenClaude sessions from the Claude transcript layout', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-openclaude-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    const projectDir = join(claudeProjectsDir, '-Users-ada-repo')
+    await mkdir(projectDir, { recursive: true })
+    const target = join(projectDir, 'sess-openclaude.jsonl')
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('openclaude', 'sess-openclaude', { claudeProjectsDir })
+    ).resolves.toBe(target)
+  })
+
+  it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const sessionDir = join(grokSessionsDir, encodeURIComponent('/tmp/work'), 'sess-grok-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(target, '{"type":"user","content":"hi"}\n')
+
+    const resolved = await resolveSessionFilePath('grok', 'sess-grok-1', { grokSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
+  it('resolves Grok chat_history by session id under a long-cwd slug group', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-long-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const sessionDir = join(grokSessionsDir, 'slug-hash-ab12', 'sess-long-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(join(grokSessionsDir, 'slug-hash-ab12', '.cwd'), `/${'x'.repeat(400)}\n`)
+    await writeFile(target, '{"type":"assistant","content":"ok"}\n')
+
+    await expect(resolveSessionFilePath('grok', 'sess-long-1', { grokSessionsDir })).resolves.toBe(
+      target
+    )
+  })
+
+  it('ignores nested Grok decoys outside the direct group/session layout', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-decoy-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    const decoy = join(
+      grokSessionsDir,
+      'group',
+      'other-session',
+      'nested',
+      'sess-decoy',
+      'chat_history.jsonl'
+    )
+    await mkdir(dirname(decoy), { recursive: true })
+    await writeFile(decoy, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('grok', 'sess-decoy', { grokSessionsDir })
+    ).resolves.toBeNull()
+  })
+
+  it('rejects unsafe Grok session ids before filesystem discovery', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-invalid-')
+    const grokSessionsDir = join(root, 'grok-sessions')
+    await mkdir(grokSessionsDir, { recursive: true })
+
+    await expect(
+      resolveSessionFilePath('grok', '../escape', { grokSessionsDir })
+    ).resolves.toBeNull()
+  })
+
+  it('resolves Grok sessions under GROK_HOME when no override is passed', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-grok-home-')
+    const sessionsDir = join(root, 'sessions')
+    const sessionDir = join(sessionsDir, encodeURIComponent('/repo'), 'sess-env-1')
+    await mkdir(sessionDir, { recursive: true })
+    const target = join(sessionDir, 'chat_history.jsonl')
+    await writeFile(target, '{}\n')
+    const previous = process.env.GROK_HOME
+    process.env.GROK_HOME = root
+    try {
+      await expect(resolveSessionFilePath('grok', 'sess-env-1')).resolves.toBe(target)
+    } finally {
+      restoreEnv('GROK_HOME', previous)
+    }
+  })
+
   it('matches Codex rollout files by session id suffix', async () => {
     const root = await makeRoot('orca-native-chat-resolve-codex-')
     const codexSessionsDir = join(root, 'codex-sessions')
@@ -50,6 +135,58 @@ describe('resolveSessionFilePath', () => {
       codexSessionsDirs: [codexSessionsDir]
     })
     expect(resolved).toBe(target)
+  })
+
+  it('matches omp transcripts by session id suffix inside the per-cwd directory', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omp-')
+    const ompSessionsDir = join(root, 'omp-sessions')
+    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
+    await mkdir(cwdDir, { recursive: true })
+    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-1.jsonl')
+    await writeFile(target, '{}\n')
+
+    const resolved = await resolveSessionFilePath('omp', 'sess-omp-1', { ompSessionsDir })
+    expect(resolved).toBe(target)
+  })
+
+  it('never descends into an omp session artifact dir', async () => {
+    // Why: a session's task-subagent transcripts sit in its same-named
+    // `<stamp>_<uuid>/` artifact dir, and a label-named child CAN end in
+    // `_<session id>`. Asserting the parent wins would only prove the prune on a
+    // filesystem that happens to enumerate the dir first, so give the id exactly
+    // one match — inside the artifact dir. Pruned resolves to null; descending
+    // finds the child, whatever order readdir returns.
+    const root = await makeRoot('orca-native-chat-resolve-omp-artifact-')
+    const ompSessionsDir = join(root, 'omp-sessions')
+    const cwdDir = join(ompSessionsDir, '-Users-ada-repo')
+    const stem = '2026-07-16T00-27-02-222Z_019fd8e2-fd56-7000-acfe-2e497adfa83c'
+    await mkdir(join(cwdDir, stem), { recursive: true })
+    await writeFile(join(cwdDir, `${stem}.jsonl`), '{}\n')
+    await writeFile(join(cwdDir, stem, 'worker_sess-omp-child.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('omp', 'sess-omp-child', { ompSessionsDir })
+    ).resolves.toBeNull()
+    // The parent transcript itself still resolves through the pruned walk.
+    await expect(
+      resolveSessionFilePath('omp', '019fd8e2-fd56-7000-acfe-2e497adfa83c', { ompSessionsDir })
+    ).resolves.toBe(join(cwdDir, `${stem}.jsonl`))
+  })
+
+  it('honors OMP_CODING_AGENT_DIR when resolving omp transcripts', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-omp-env-')
+    const cwdDir = join(root, 'omp-sessions', '-Users-ada-repo')
+    await mkdir(cwdDir, { recursive: true })
+    const target = join(cwdDir, '2026-07-16T00-27-02-222Z_sess-omp-env.jsonl')
+    await writeFile(target, '{}\n')
+
+    const previous = process.env.OMP_CODING_AGENT_DIR
+    process.env.OMP_CODING_AGENT_DIR = join(root, 'omp-sessions')
+    try {
+      await expect(resolveSessionFilePath('omp', 'sess-omp-env')).resolves.toBe(target)
+    } finally {
+      restoreEnv('OMP_CODING_AGENT_DIR', previous)
+    }
   })
 
   it('resolves a rollout from the orca-managed Codex home (ORCA_USER_DATA_PATH)', async () => {

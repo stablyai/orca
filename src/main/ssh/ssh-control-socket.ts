@@ -28,7 +28,8 @@ const CONTROL_SOCKET_PATH_MAX_LENGTH = UNIX_SOCKET_PATH_LIMIT - OPENSSH_CONTROL_
 
 export function getControlSocketPath(
   target: SshTarget,
-  resolvedConfig?: SystemSshResolvedConfig | null
+  resolvedConfig?: SystemSshResolvedConfig | null,
+  gssapiOnly = false
 ): string | null {
   if (process.platform === 'win32') {
     return null
@@ -58,7 +59,9 @@ export function getControlSocketPath(
       identityAgent: target.identityAgent || '',
       identitiesOnly: target.identitiesOnly || false
     },
-    resolved: normalizeResolvedConfig(resolvedConfig)
+    resolved: normalizeResolvedConfig(resolvedConfig),
+    // Why: a Kerberos-only session must not reuse a master authenticated by a key.
+    gssapiOnly
   })
   const hash = createHash('sha256').update(key).digest('hex').slice(0, 16)
   const socketPath = pathJoin(dir, hash)

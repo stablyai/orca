@@ -79,6 +79,9 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
           : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={refreshComputerUseSkill}
+      freshnessSkillName={
+        activeSkillRuntime.canUseLocalSkillFreshness ? COMPUTER_USE_SKILL_NAME : undefined
+      }
     />
   )
 }

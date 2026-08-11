@@ -10,6 +10,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: Record<string, unknown>
     clearTabLaunchAgent: ReturnType<typeof vi.fn>
     ptyIdsByTabId: Record<string, string[]>
+    retainedAgentsByPaneKey: Record<string, unknown>
     renamingTabId: string | null
     keybindings: Record<string, unknown>
     repos: unknown[]
@@ -21,6 +22,7 @@ const storeState = vi.hoisted(
     agentStatusByPaneKey: {},
     clearTabLaunchAgent: vi.fn(),
     ptyIdsByTabId: {} as Record<string, string[]>,
+    retainedAgentsByPaneKey: {},
     renamingTabId: null as string | null,
     keybindings: {},
     repos: [],
@@ -72,6 +74,18 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
   },
@@ -81,8 +95,20 @@ vi.mock('lucide-react', () => ({
   PanelBottomClose: function PanelBottomClose(props: Record<string, unknown>) {
     return { type: 'PanelBottomClose', props }
   },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
+  },
   PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
     return { type: 'PanelRightClose', props }
+  },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  MessageSquare: function MessageSquare(props: Record<string, unknown>) {
+    return { type: 'MessageSquare', props }
+  },
+  Pencil: function Pencil(props: Record<string, unknown>) {
+    return { type: 'Pencil', props }
   },
   Pin: function Pin(props: Record<string, unknown>) {
     return { type: 'Pin', props }
@@ -95,6 +121,9 @@ vi.mock('lucide-react', () => ({
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
+  },
+  SquareTerminal: function SquareTerminal(props: Record<string, unknown>) {
+    return { type: 'SquareTerminal', props }
   }
 }))
 
@@ -221,6 +250,7 @@ async function renderSortableTab({
     groupId: 'group-1',
     tabCount: 1,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
     isActive: true,
     isPinned: false,
     isExpanded: false,
@@ -228,6 +258,7 @@ async function renderSortableTab({
     onClose: vi.fn(),
     onCloseOthers: vi.fn(),
     onCloseToRight: vi.fn(),
+    onCloseToLeft: vi.fn(),
     onSetCustomTitle,
     onSetTabColor: vi.fn(),
     onTogglePin: vi.fn(),

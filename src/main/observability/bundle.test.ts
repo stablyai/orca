@@ -140,6 +140,53 @@ describe('bundle — collection', () => {
     expect(bundle.payload).not.toContain('"name":"old"')
   })
 
+  it('merges the daemon lifecycle log, bounded by the same lookback', () => {
+    const daemonFile = join(dir, 'daemon.log')
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+    writeFileSync(
+      daemonFile,
+      makeNDJSON([
+        { src: 'daemon', ts: new Date().toISOString(), pid: 1, event: 'startup' },
+        {
+          src: 'daemon',
+          // 1h ago — outside the 30m window, must be dropped.
+          ts: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+          pid: 1,
+          event: 'session-exited'
+        }
+      ])
+    )
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      daemonLogFilePath: daemonFile,
+      daemonLogMaxFiles: 3,
+      lookbackMinutes: 30,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev'
+    })
+    expect(bundle.payload).toContain('"event":"startup"')
+    expect(bundle.payload).toContain('"name":"recent"')
+    expect(bundle.payload).not.toContain('"event":"session-exited"')
+  })
+
+  it('collects no daemon log lines when no daemon log path is given', () => {
+    writeFileSync(traceFile, makeNDJSON([makeSpan({ name: 'recent' })]))
+    const bundle = collectBundle({
+      traceFilePath: traceFile,
+      maxFiles: 10,
+      appVersion: '1',
+      platform: 'darwin',
+      arch: 'arm64',
+      osRelease: '24',
+      orcaChannel: 'dev'
+    })
+    expect(bundle.payload).not.toContain('"src":"daemon"')
+  })
+
   it('runs the redactor on the merged payload (belt-and-suspenders)', () => {
     // Simulate a sink-write bug that leaked a secret through. The bundle
     // pass should still strip it.

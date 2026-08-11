@@ -162,12 +162,19 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       : localBranch)
 
   switch (provider) {
+    case null:
+      return null
     case 'github':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(
         githubHeadRef(baseRepo, headRepo, headBranch)
       )}?expand=1`
     case 'gitlab':
-      return appendQuery(`${baseRepo.webBaseUrl}/-/merge_requests/new`, {
+      // Why: the source branch lives in the head repo, so the New-MR page must
+      // be opened on that project — a fork's branch is invisible to the base
+      // project and its /-/merge_requests/new page would 404 the source_branch.
+      // GitLab defaults the target to the fork's upstream. headRepo === baseRepo
+      // for the non-fork case, so this is a no-op there.
+      return appendQuery(`${headRepo.webBaseUrl}/-/merge_requests/new`, {
         'merge_request[source_branch]': headBranch,
         'merge_request[target_branch]': baseBranch
       })
@@ -183,7 +190,5 @@ export function buildSourceControlManualReviewUrl(input: ManualReviewUrlInput): 
       })
     case 'gitea':
       return `${baseRepo.webBaseUrl}/compare/${encodeCompareRef(baseBranch)}...${encodeCompareRef(headBranch)}`
-    default:
-      return null
   }
 }

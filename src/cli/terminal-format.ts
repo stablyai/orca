@@ -164,10 +164,16 @@ export function formatTerminalSplit(result: { split: RuntimeTerminalSplit }): st
 }
 
 export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): string {
+  if (result.focus.navigated === false) {
+    return `Focus request for terminal ${result.focus.handle} was superseded or host navigation was skipped (tab ${result.focus.tabId}).`
+  }
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
 }
 
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
+  if (result.close.closeMode === 'tab') {
+    return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
+  }
   const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
   return `Closed terminal ${result.close.handle}.${ptyNote}`
 }

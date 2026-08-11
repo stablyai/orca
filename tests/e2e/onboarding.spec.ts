@@ -12,6 +12,7 @@ import { waitForSessionReady } from './helpers/store'
 import type { Page } from '@stablyai/playwright-test'
 import type { GlobalSettings, TuiAgent } from '../../src/shared/types'
 import { ONBOARDING_FINAL_STEP } from '../../src/shared/constants'
+import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../src/shared/pairing'
 
 type OnboardingState = {
   closedAt: number | null
@@ -62,6 +63,10 @@ async function expectOnboardingNotificationSoundMenuClosed(page: Page): Promise<
 
 async function expectOnboardingSkipConfirmationClosed(page: Page): Promise<void> {
   await expect(page.getByRole('dialog', { name: /Skip onboarding\?/i })).toHaveCount(0)
+}
+
+async function expectOnboardingSkipConfirmationOpen(page: Page): Promise<void> {
+  await expect(page.getByRole('dialog', { name: /Skip onboarding\?/i })).toBeVisible()
 }
 
 async function expectOnboardingNotificationSound(page: Page, name: RegExp): Promise<void> {
@@ -417,43 +422,38 @@ test.describe('Onboarding flow', () => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
-    await orcaPage.evaluate(async () => {
+    // Why: since #10011 `settings:set` strips activeRuntimeEnvironmentId — the
+    // durable Active Server preference is only writable through its dedicated
+    // handler, which resolves the id against the main-process environment
+    // store. So the host has to be registered for real, not faked in the
+    // renderer. Pairing is offline (no live server needed).
+    const pairingCode = encodePairingOffer({
+      v: PAIRING_OFFER_VERSION,
+      scope: 'runtime',
+      endpoint: 'wss://e2e.invalid/ws',
+      deviceToken: 'e2e-device-token',
+      publicKeyB64: 'ZTJlLXB1YmxpYy1rZXk'
+    })
+    const environmentId = await orcaPage.evaluate(async (code) => {
       const store = window.__store
       if (!store) {
         throw new Error('window.__store is not available')
       }
+      const { environment } = await window.api.runtimeEnvironments.addFromPairingCode({
+        name: 'E2E Server',
+        pairingCode: code
+      })
       // Why: after #5071 the server-path add step gates on the registered
       // runtime-environment list (store.runtimeEnvironments), not just the
-      // activeRuntimeEnvironmentId setting. Seed a redacted environment so the
-      // host option exists and the "on host" add UI renders.
-      const now = Date.now()
-      store.getState().setRuntimeEnvironments([
-        {
-          id: 'env-e2e',
-          name: 'E2E Server',
-          createdAt: now,
-          updatedAt: now,
-          lastUsedAt: null,
-          runtimeId: null,
-          source: 'manual',
-          endpoints: [
-            {
-              id: 'ws-env-e2e',
-              kind: 'websocket',
-              label: 'WebSocket',
-              endpoint: 'wss://e2e.invalid/ws'
-            }
-          ],
-          preferredEndpointId: 'ws-env-e2e'
-        }
-      ])
+      // activeRuntimeEnvironmentId setting.
+      store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
       // Why: a runtime host is only auto-selectable (health 'available') when it
       // has a live, protocol-compatible status; without one it reads
       // 'disconnected' and the Add Project dialog falls back to Local Mac.
       // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
-      store.getState().setRuntimeEnvironmentStatus('env-e2e', {
+      store.getState().setRuntimeEnvironmentStatus(environment.id, {
         status: {
-          runtimeId: 'env-e2e-runtime',
+          runtimeId: `${environment.id}-runtime`,
           rendererGraphEpoch: 0,
           graphStatus: 'ready',
           authoritativeWindowId: null,
@@ -462,15 +462,23 @@ test.describe('Onboarding flow', () => {
           runtimeProtocolVersion: 3,
           minCompatibleRuntimeClientVersion: 1
         },
-        checkedAt: now
+        checkedAt: Date.now()
       })
-      await store.getState().updateSettings({ activeRuntimeEnvironmentId: 'env-e2e' })
-    })
+      // Why: the store's switchRuntimeEnvironment probes reachability, which a
+      // synthetic host can't satisfy — write the preference directly and push
+      // the returned settings in rather than refetching (fetchSettings would
+      // kick off a status hydrate that clobbers the seeded 'available' health).
+      const settings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+        environmentId: environment.id
+      })
+      store.setState({ settings })
+      return environment.id
+    }, pairingCode)
     await expect
       .poll(async () => (await getSettings(orcaPage)).activeRuntimeEnvironmentId, {
         timeout: 5_000
       })
-      .toBe('env-e2e')
+      .toBe(environmentId)
 
     await onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON).click()
 
@@ -617,32 +625,49 @@ test.describe('Onboarding flow', () => {
       .toBe(1)
   })
 
-  test('final notification step does not offer a skip or dismiss action', async ({ orcaPage }) => {
+  test('final notification step can be dismissed via Escape or click-off', async ({ orcaPage }) => {
     await expect(orcaPage.getByRole('heading', { name: /Pick your default agent/i })).toBeVisible({
       timeout: 15_000
     })
 
-    // Advance through the optional preference step. The final notification step
-    // finishes onboarding, so no skip/dismiss path should be available there.
+    // Advance to the final notification step. Its primary button hands off to
+    // Add Project, so the footer offers no "Skip to project setup" shortcut —
+    // but click-off and Escape must still open the skip-confirmation dialog like
+    // every other step, so the modal never feels stuck.
     await continueOnboarding(orcaPage)
     await expect(orcaPage.getByRole('heading', { name: /Make it feel like home/i })).toBeVisible()
     await continueFromThemeToNotifications(orcaPage)
 
+    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
     await expect(onboardingFooterButton(orcaPage, SKIP_TO_PROJECT_SETUP_BUTTON)).toHaveCount(0)
-    await expect(onboardingFooterButton(orcaPage, /Skip all onboarding/i)).toHaveCount(0)
-    await orcaPage.keyboard.press('Escape')
-    await expectOnboardingSkipConfirmationClosed(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
-    await orcaPage.locator('[data-onboarding-overlay]').click({ position: { x: 8, y: 40 } })
-    await expectOnboardingSkipConfirmationClosed(orcaPage)
-    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 
-    await continueOnboarding(orcaPage)
-    await expectAddProjectDialog(orcaPage)
-    const final = await getOnboardingState(orcaPage)
-    expect(final.closedAt).not.toBeNull()
-    expect(final.outcome).toBe('completed')
-    expect(final.checklist.dismissed).toBe(false)
-    expect(final.lastCompletedStep).toBe(ONBOARDING_FINAL_STEP)
+    // Escape opens the confirmation; "No, keep going" returns to the step with
+    // onboarding still open.
+    await orcaPage.keyboard.press('Escape')
+    await expectOnboardingSkipConfirmationOpen(orcaPage)
+    await orcaPage.getByRole('button', { name: /No, keep going/i }).click()
+    await expectOnboardingSkipConfirmationClosed(orcaPage)
+    await expect(orcaPage.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
+    expect((await getOnboardingState(orcaPage)).closedAt).toBeNull()
+
+    // Click-off opens the confirmation; Skip dismisses onboarding outright (no
+    // Add Project handoff — that is the primary button's job).
+    await orcaPage.locator('[data-onboarding-overlay]').click({ position: { x: 8, y: 40 } })
+    await expectOnboardingSkipConfirmationOpen(orcaPage)
+    await orcaPage.getByRole('button', { name: /^Skip$/ }).click()
+
+    await expect
+      .poll(
+        async () => {
+          const state = await getOnboardingState(orcaPage)
+          return {
+            closedAt: state.closedAt === null ? null : 'set',
+            outcome: state.outcome,
+            dismissed: state.checklist.dismissed
+          }
+        },
+        { timeout: 5_000 }
+      )
+      .toEqual({ closedAt: 'set', outcome: 'dismissed', dismissed: true })
   })
 })

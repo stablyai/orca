@@ -1,7 +1,5 @@
 /**
  * Ripgrep-based file listing for Quick Open.
- * Extracted from fs-handler-utils.ts to keep it under 300 lines (oxlint max-lines).
- *
  * Why a full rewrite vs. the older execFile+maxBuffer version: on a home-dir
  * worktree over SSH, rg descended into every dotfile cache, hit the timeout,
  * and silently resolved with a partial list — Quick Open then showed "No
@@ -16,19 +14,32 @@
  *     denied on a single subdir is expected on home-dir roots)
  */
 import { spawn, type ChildProcess } from 'node:child_process'
+import { fileListingCancellationError } from '../shared/file-listing-cancellation'
 import {
   buildRgArgsForQuickOpen,
   normalizeQuickOpenRgLine,
   shouldExcludeQuickOpenRelPath,
   shouldIncludeQuickOpenPath
 } from '../shared/quick-open-filter'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableAfterLaunchFailure,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess,
+  RipgrepUnavailableError
+} from '../shared/ripgrep-process-availability'
 
 export const LIST_FILES_TIMEOUT_MS = 25_000
 
 export function listFilesWithRg(
   rootPath: string,
-  excludePathPrefixes: readonly string[] = []
+  excludePathPrefixes: readonly string[] = [],
+  options: { signal?: AbortSignal; maxResults?: number } = {}
 ): Promise<string[]> {
+  const { signal, maxResults } = options
+  if (signal?.aborted) {
+    return Promise.reject(fileListingCancellationError(signal))
+  }
   return new Promise((resolve, reject) => {
     const files = new Set<string>()
     let done = false
@@ -61,6 +72,9 @@ export function listFilesWithRg(
         return true
       }
       files.add(relPath)
+      if (maxResults !== undefined && files.size >= maxResults) {
+        finishAtLimit()
+      }
       return true
     }
 
@@ -69,6 +83,9 @@ export function listFilesWithRg(
         let passBuf = ''
         let passDone = false
         let passFileCount = 0
+        let processErrorObserved = false
+        let unavailableExitObserved = false
+        let launchFailureCheck: Promise<void> | null = null
         // --no-messages: permission-denied noise on the remote (e.g. .ssh,
         // root-owned mounts) would otherwise flood stderr.
         // cwd: rootPath — root-relative exclude globs like `!packages/app/**`
@@ -89,6 +106,10 @@ export function listFilesWithRg(
           child.stderr!.off('data', handleStderrData)
           child.off('error', handleError)
           child.off('close', handleClose)
+          absorbPendingRipgrepSpawnError(child, {
+            errorObserved: processErrorObserved,
+            unavailableExitObserved
+          })
         }
         const rejectPass = (error: Error): void => {
           if (passDone) {
@@ -107,6 +128,16 @@ export function listFilesWithRg(
           cleanup()
           passResolve()
         }
+        const rejectLaunchFailure = (error: Error): void => {
+          if (launchFailureCheck) {
+            return
+          }
+          launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then(
+            (unavailable) => {
+              rejectPass(unavailable ? new RipgrepUnavailableError() : error)
+            }
+          )
+        }
         children.push({
           child,
           isDone: () => passDone,
@@ -116,7 +147,7 @@ export function listFilesWithRg(
         timer = setTimeout(() => {
           // Discard residual buffer on abnormal exit — a truncated byte
           // sequence could look like a valid path.
-          child.kill()
+          killSpawnedRipgrepProcess(child)
           rejectPass(new Error('rg list timed out'))
         }, LIST_FILES_TIMEOUT_MS)
 
@@ -128,6 +159,9 @@ export function listFilesWithRg(
             if (processLine(passBuf.substring(start, idx))) {
               passFileCount++
             }
+            if (done) {
+              return
+            }
             start = idx + 1
             idx = passBuf.indexOf('\n', start)
           }
@@ -137,10 +171,26 @@ export function listFilesWithRg(
           /* drain to prevent backpressure stalls */
         }
         function handleError(err: Error): void {
+          processErrorObserved = true
+          if (isRipgrepUnavailableExit(child, null, null)) {
+            passBuf = ''
+            rejectLaunchFailure(err)
+            return
+          }
           rejectPass(err)
         }
         function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
           if (passDone) {
+            return
+          }
+          if (
+            isRipgrepUnavailableExit(child, code, signal, {
+              classifyNativeLauncherExit: true
+            })
+          ) {
+            unavailableExitObserved = true
+            passBuf = ''
+            rejectLaunchFailure(new Error(`rg exited with code ${code}`))
             return
           }
           // Why signal != null is a failure: the only way spawn gets a signal
@@ -177,7 +227,7 @@ export function listFilesWithRg(
         child.once('close', handleClose)
       })
 
-    const killSurvivors = (): void => {
+    const killSurvivors = (reason: string): void => {
       // Why: when one pass rejects, Promise.all surfaces the error immediately
       // but the sibling rg keeps running up to LIST_FILES_TIMEOUT_MS. Kill it
       // so repeated Quick Open opens don't pile up orphan rg processes on the
@@ -187,18 +237,54 @@ export function listFilesWithRg(
           continue
         }
         if (entry.child.exitCode === null && entry.child.signalCode === null) {
-          entry.child.kill()
+          killSpawnedRipgrepProcess(entry.child)
         }
-        entry.reject(new Error('rg list canceled after sibling failure'))
+        entry.reject(new Error(reason))
       }
     }
 
-    Promise.all([runPass(primary), runPass(ignoredPass)])
+    function finishAtLimit(): void {
+      if (done) {
+        return
+      }
+      done = true
+      signal?.removeEventListener('abort', onAbort)
+      killSurvivors('rg list reached bounded result limit')
+      resolve(Array.from(files).slice(0, maxResults))
+    }
+
+    // Why: a cancelled scan (workspace switch, superseded request) must stop
+    // its rg children immediately instead of letting them walk the tree to
+    // completion and flood the relay with stdout it will only discard.
+    const onAbort = (): void => {
+      if (done) {
+        return
+      }
+      done = true
+      killSurvivors('rg list cancelled')
+      reject(fileListingCancellationError(signal))
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+
+    const primaryPass = runPass(primary)
+    const passes =
+      maxResults === undefined
+        ? children[0]?.child.pid === undefined
+          ? primaryPass
+          : Promise.all([primaryPass, runPass(ignoredPass)])
+        : // Why: deterministic primary-first budgeting prevents a large ignored
+          // tree from starving ordinary source paths on a remote host.
+          primaryPass.then(() =>
+            files.size < maxResults ? runPass(ignoredPass) : Promise.resolve()
+          )
+
+    passes
       .then(() => {
         if (done) {
           return
         }
         done = true
+        signal?.removeEventListener('abort', onAbort)
         resolve(Array.from(files))
       })
       .catch((err) => {
@@ -206,7 +292,8 @@ export function listFilesWithRg(
           return
         }
         done = true
-        killSurvivors()
+        signal?.removeEventListener('abort', onAbort)
+        killSurvivors('rg list canceled after sibling failure')
         reject(err instanceof Error ? err : new Error(String(err)))
       })
   })

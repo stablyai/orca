@@ -1,44 +1,17 @@
 import type { GitHubPRMergeMethod, PRState } from '../../../src/shared/types'
+import { githubRepoIdentityKey } from '../../../src/shared/github-repository-identity-key'
 import { classifyPrSidebarFailure } from './mobile-pr-sidebar-state'
 import { createOptimisticField, type OptimisticField } from './optimistic-write-sequence'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
+import type { PrActionMutations } from './pr-action-mutation-contract'
+
+export type { PrActionMutations } from './pr-action-mutation-contract'
 
 // Pure (React-free) engine for the PR mutation actions: owns optimistic fields,
 // busy/error/blocked state, and the success/transient/permanent routing. The hook
 // is a thin adapter that subscribes to `onChange` and exposes these methods. Kept
 // React-free so the U6 action logic is unit-testable with injected fakes.
-
-export type PrActionMutations = {
-  mergePR: (args: {
-    prNumber: number
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  setPRAutoMerge: (args: {
-    prNumber: number
-    enabled: boolean
-    method?: GitHubPRMergeMethod
-    prRepo?: GitHubPrRepoSlug | null
-  }) => Promise<GitHubPrMutationOutcome>
-  updatePRState: (args: {
-    prNumber: number
-    state: 'open' | 'closed'
-  }) => Promise<GitHubPrMutationOutcome>
-  requestReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  removeReviewers: (args: {
-    prNumber: number
-    reviewers: string[]
-  }) => Promise<GitHubPrMutationOutcome>
-  rerunChecks: (args: {
-    prNumber: number
-    headSha?: string | null
-    failedOnly?: boolean
-  }) => Promise<GitHubPrMutationOutcome>
-}
 
 export type PrActionBusyKey =
   | { kind: 'merge' }
@@ -68,7 +41,7 @@ export type PrActionsEngineConfig = {
 }
 
 function prActionsIdentity(cfg: PrActionsEngineConfig): string {
-  const repo = cfg.prRepo ? `${cfg.prRepo.owner}/${cfg.prRepo.repo}` : ''
+  const repo = cfg.prRepo ? githubRepoIdentityKey(cfg.prRepo) : ''
   return `${cfg.prNumber}:${repo}`
 }
 
@@ -129,7 +102,12 @@ export class PrActionsEngine {
     return f
   }
 
+  // Why: action start pairs setBusy + setError(null); skip notify when unchanged
+  // so we don't force a full PR panel re-render for free.
   private setBusy(key: PrActionBusyKey | null): void {
+    if (key === null ? this.busy === null : busyKeyEquals(this.busy, key)) {
+      return
+    }
     this.busy = key
     this.cfg.onChange()
   }
@@ -143,6 +121,9 @@ export class PrActionsEngine {
   }
 
   private setError(message: string | null): void {
+    if (this.error === message) {
+      return
+    }
     this.error = message
     this.cfg.onChange()
   }
@@ -180,7 +161,14 @@ export class PrActionsEngine {
     }
     if (outcome.ok) {
       handlers.onSuccess()
-      await this.cfg.refetch()
+      // Why: void engine.merge() callers are fire-and-forget; refetch must not LogBox.
+      try {
+        await this.cfg.refetch()
+      } catch (err) {
+        if (this.identity === identity) {
+          this.setError(err instanceof Error ? err.message : 'Failed to refresh pull request.')
+        }
+      }
       return
     }
     // Both failure classes clear optimism to authoritative; only the message
@@ -205,6 +193,10 @@ export class PrActionsEngine {
         prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
+    } catch (err) {
+      if (this.identity === identity) {
+        this.setError(err instanceof Error ? err.message : 'Failed to merge pull request.')
+      }
     } finally {
       this.clearBusyIfOwned(identity, { kind: 'merge' })
     }
@@ -241,7 +233,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.updatePRState({
         prNumber: cfg.prNumber,
-        state
+        state,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => this.stateField.settleSuccess(seq),
@@ -262,7 +255,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.requestReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -283,7 +277,8 @@ export class PrActionsEngine {
     try {
       const outcome = await cfg.mutations.removeReviewers({
         prNumber: cfg.prNumber,
-        reviewers: [login]
+        reviewers: [login],
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, {
         onSuccess: () => field.settleSuccess(seq),
@@ -303,7 +298,8 @@ export class PrActionsEngine {
       const outcome = await cfg.mutations.rerunChecks({
         prNumber: cfg.prNumber,
         headSha: cfg.headSha,
-        failedOnly: true
+        failedOnly: true,
+        prRepo: cfg.prRepo
       })
       await this.settle(identity, outcome, { onSuccess: () => {}, onRevert: () => {} })
     } finally {

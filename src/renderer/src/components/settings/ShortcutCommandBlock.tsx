@@ -106,6 +106,8 @@ export function ShortcutCommandBlock({
     />
   )
 
+  // Why: ShortcutsPane already filters rows against the global query;
+  // forceVisible skips the re-match here that would hide rows it kept.
   return (
     <SearchableSetting
       title={item.title}
@@ -115,6 +117,7 @@ export function ShortcutCommandBlock({
         { value0: groupTitle }
       )}
       keywords={[...item.searchKeywords]}
+      forceVisible
       className="group/shortcut flex max-w-none flex-col"
     >
       <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">

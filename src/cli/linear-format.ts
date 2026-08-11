@@ -3,8 +3,11 @@ import type {
   LinearCommentAddResult,
   LinearCreateResult,
   LinearIssueListResult,
+  LinearMcpIssueListResult,
   LinearIssueContextResult,
   LinearIssueTaskUpdateResult,
+  LinearIssueRelationWriteResult,
+  LinearSaveIssueResult,
   LinearProjectListResult,
   LinearSearchIssueSummary,
   LinearSearchResult,
@@ -53,6 +56,9 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
   }
   if (sections.relations) {
     lines.push(`Relations: ${sections.relations.returned}`)
+  }
+  if (sections.activity) {
+    lines.push(`Activity: ${sections.activity.returned}`)
   }
   if (result.inlineMedia?.length) {
     lines.push(`Inline media: ${result.inlineMedia.length} (use --json for URLs)`)
@@ -111,6 +117,28 @@ export function formatLinearIssueList(result: LinearIssueListResult): string {
   return result.issues.map(formatSearchRow).join('\n')
 }
 
+export function formatLinearMcpIssueList(result: LinearMcpIssueListResult): string {
+  if (result.issues.length === 0) {
+    return 'No Linear issues found.'
+  }
+  return result.issues.map(formatSearchRow).join('\n')
+}
+
+export function printLinearMcpIssueListWarnings(result: LinearMcpIssueListResult): void {
+  if (result.meta.hasMore) {
+    const workspaceHint =
+      result.meta.nextCursor && result.meta.workspaceId !== 'all' && result.meta.workspaceId
+        ? `; continue with --workspace ${result.meta.workspaceId}`
+        : ''
+    console.error(
+      `warning: more results available; next cursor: ${result.meta.nextCursor ?? 'n/a'}${workspaceHint}`
+    )
+  }
+  for (const error of result.meta.workspaceErrors) {
+    console.error(`warning: ${error.workspace.name} unavailable for Linear: ${error.message}`)
+  }
+}
+
 export function formatLinearProjectList(result: LinearProjectListResult): string {
   return formatLinearProjectListRows(result)
 }
@@ -130,16 +158,33 @@ export function formatLinearAttach(result: LinearAttachResult): string {
   return `Attached ${result.attachment.title} to ${result.issue.identifier}${suffix}.`
 }
 
-export function formatLinearCreate(result: LinearCreateResult): string {
+export function formatLinearCreate(result: LinearCreateResult | LinearSaveIssueResult): string {
   const parent = result.issue.parent ? ` under ${result.issue.parent.identifier}` : ''
   const project = result.issue.project?.name ? ` in ${result.issue.project.name}` : ''
   const suffix = result.meta.deduplicated ? ' (already created)' : ''
   return `Created ${result.issue.identifier}${parent}${project}: ${result.issue.title}${suffix}.`
 }
 
+export function formatLinearSaveIssue(result: LinearSaveIssueResult): string {
+  if (result.meta.created) {
+    return formatLinearCreate(result)
+  }
+  return `Saved ${result.issue.identifier}: ${result.issue.title}.`
+}
+
 export function formatLinearTaskUpdate(result: LinearIssueTaskUpdateResult): string {
   const suffix = result.meta.alreadySet ? ' (already set)' : ''
   return `Updated ${result.issue.identifier} ${taskOperationLabel(result.operation)}${suffix}.`
+}
+
+export function formatLinearRelationWrite(result: LinearIssueRelationWriteResult): string {
+  const verb = result.operation === 'add' ? 'Added' : 'Removed'
+  const suffix = result.meta.alreadySet
+    ? result.operation === 'add'
+      ? ' (already present)'
+      : ' (already absent)'
+    : ''
+  return `${verb} ${result.issue.identifier} ${result.relation.relationship} ${result.relatedIssue.identifier}${suffix}.`
 }
 
 export function printLinearIssueWarnings(result: LinearIssueContextResult): void {

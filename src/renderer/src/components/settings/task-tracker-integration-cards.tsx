@@ -8,8 +8,10 @@ import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
 import { useIntegrationSubordinateRowClass } from './integration-card-presentation'
+import { LinearAgentSkillInstallCta } from './linear-agent-skill-install-cta'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
+import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { translate } from '@/i18n/i18n'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
@@ -67,6 +69,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
 
   return (
     <IntegrationCardShell
+      settingsSectionId={LINEAR_INTEGRATION_SECTION_ID}
       icon={<LinearIcon className="size-5" />}
       name="Linear"
       description={
@@ -88,7 +91,17 @@ export function LinearIntegrationCard(): React.JSX.Element {
       }
       checking={checking}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={connected ? 'Connected' : 'Not connected'}
+      statusLabel={
+        connected
+          ? translate(
+              'auto.components.settings.task.tracker.integration.cards.statusConnected',
+              'Connected'
+            )
+          : translate(
+              'auto.components.settings.task.tracker.integration.cards.statusNotConnected',
+              'Not connected'
+            )
+      }
       actions={
         !checking ? (
           <Button
@@ -200,6 +213,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
             </Button>
           </>
         ) : null}
+        <LinearAgentSkillInstallCta settings={settings} />
       </IntegrationCardDetails>
 
       <LinearApiKeyDialog

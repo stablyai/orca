@@ -21,3 +21,35 @@ export function scheduleSharedControlStableReset(args: {
   }
   return timer
 }
+
+// Why: owns the ready-stable timer's lifecycle so the connection only wires
+// state accessors; scheduling always replaces any earlier pending timer.
+export class SharedControlReadyStableResetTimer {
+  private timer: ReturnType<typeof setTimeout> | null = null
+
+  constructor(private readonly delayMs: number) {}
+
+  schedule(args: {
+    getState: () => SharedControlConnectionState
+    getSocket: () => WebSocket | null
+    reset: () => void
+  }): void {
+    this.clear()
+    this.timer = scheduleSharedControlStableReset({
+      delayMs: this.delayMs,
+      getState: args.getState,
+      getSocket: args.getSocket,
+      reset: args.reset,
+      clearCurrent: () => {
+        this.timer = null
+      }
+    })
+  }
+
+  clear(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+  }
+}

@@ -110,7 +110,7 @@ Don't add a fourth level. If something needs more emphasis than "floating," you'
 
 Use the shadcn primitives in `src/renderer/src/components/ui/` before writing anything custom. The shadcn-style wrappers in this folder follow a consistent pattern:
 
-- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner`, `repo-multi-combobox`, `team-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
+- Most carry a `data-slot="<name>"` attribute on their root for CSS targeting — do not strip it. (The non-shadcn helpers in this folder — `sonner` and `repo-multi-combobox` — don't follow this pattern and shouldn't be modeled when adding new primitives that should.)
 - Use `cn()` for class merging. Pass user `className` last so callers can override.
 - Use `class-variance-authority` (CVA) for variants when there are multiple.
 
@@ -148,7 +148,7 @@ When a control has multiple plausible primitives, use this fork:
 | Drawer / panel sliding in from an edge                       | `Sheet`                                                              | `Dialog` centered                     |
 | Single choice from a known list                              | `Select`                                                             | Custom listbox                        |
 | Single choice with search / fuzzy filtering                  | `Command` inside `Popover`                                           | `Select` (no search)                  |
-| Multi-select with search                                     | `repo-multi-combobox` / `team-multi-combobox` (mirror their pattern) | Roll a new one                        |
+| Multi-select with search                                     | `repo-multi-combobox` (mirror its pattern)                           | Roll a new one                        |
 | Transient confirmation ("Saved", "Copied")                   | `sonner` toast                                                       | `Dialog`, inline banner               |
 | Persistent inline status ("3 errors")                        | inline text + `Badge`                                                | toast (toasts disappear)              |
 
@@ -225,7 +225,7 @@ Three scrollbar classes are defined globally in `main.css`:
 
 - **`.scrollbar-sleek`** — the default thin, neutral scrollbar for sidebars, lists, popovers. Pair with `.scrollbar-sleek-parent` on a hover-target ancestor if you want the thumb to fade in only on parent hover.
 - **`.scrollbar-editor`** — slightly heavier, used inside Monaco-adjacent surfaces.
-- **`.worktree-sidebar-scrollbar`** — reserves the gutter but keeps the thumb invisible until the parent (`.scrollbar-sleek-parent`) is hovered. Used only in the worktree sidebar so the chrome stays still.
+- **`.worktree-sidebar-scrollbar`** — no reserved gutter: paired with `overflow-y-auto`, the scrollbar (and its width) exists only while content actually overflows, so a short list stays flush with the fixed header controls and classic-scrollbar Windows shows no arrow buttons on empty lists. The thumb stays invisible until the parent (`.scrollbar-sleek-parent`) is hovered. Used only in the worktree sidebar.
 
 Apply one of these to overflow containers; don't write a fourth style.
 

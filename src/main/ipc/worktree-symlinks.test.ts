@@ -12,11 +12,15 @@ import {
   chmodSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
+  createWorktreeSharedPaths,
   createWorktreeSymlinks,
+  worktreeSymlinkTypeCandidates,
+  findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
 } from './worktree-symlinks'
@@ -29,6 +33,7 @@ function createApfsCloneDeps(options: {
   uuid?: string
   onCp?: (args: readonly string[]) => void
   onDiskutil?: () => void
+  diskutilError?: Error
 }): ApfsCloneDepsForTest {
   const execFileAsync = vi.fn<ApfsCloneDepsForTest['execFileAsync']>(async (file, args) => {
     if (file === '/bin/df') {
@@ -40,6 +45,9 @@ function createApfsCloneDeps(options: {
       }
     }
     if (file === '/usr/sbin/diskutil') {
+      if (options.diskutilError) {
+        throw options.diskutilError
+      }
       options.onDiskutil?.()
       return {
         stdout: `<plist><dict><key>FilesystemName</key><string>APFS</string></dict></plist>`,
@@ -300,7 +308,7 @@ describe('createWorktreeSymlinks', () => {
       apfsCloneDeps: deps
     })
 
-    expect(cpArgs).toEqual(['-n', '-c', '-R', source, worktree])
+    expect(cpArgs).toEqual(['-n', '-c', '-R', `${source}${sep}.`, target])
     expect(readFileSync(join(target, 'primary-marker'), 'utf8')).toBe('USER\n')
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
@@ -388,6 +396,263 @@ describe('createWorktreeSymlinks', () => {
   })
 })
 
+// Why: a plain `fs.symlink` needs Developer Mode or admin on Windows, so an
+// ordinary Windows user gets EPERM and silently ends up with no shared
+// directory at all. A junction needs no privilege — but it cannot target a UNC
+// path, which is exactly where a WSL project's repo lives, so the symlink has
+// to stay as a fallback rather than be replaced.
+describe('worktreeSymlinkTypeCandidates', () => {
+  it('tries a junction before a symlink for a directory on Windows', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', true)).toEqual(['junction', 'dir'])
+  })
+
+  it('keeps the symlink fallback so a UNC (WSL) target still works', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', true).at(-1)).toBe('dir')
+  })
+
+  it('never uses a junction for a file, which junctions cannot represent', () => {
+    expect(worktreeSymlinkTypeCandidates('win32', false)).toEqual(['file'])
+  })
+
+  it('makes exactly one attempt off Windows, where the type is ignored', () => {
+    expect(worktreeSymlinkTypeCandidates('darwin', true)).toEqual(['dir'])
+    expect(worktreeSymlinkTypeCandidates('linux', true)).toEqual(['dir'])
+    expect(worktreeSymlinkTypeCandidates('linux', false)).toEqual(['file'])
+  })
+})
+
+describe('createWorktreeSharedPaths', () => {
+  let root: string
+  let primary: string
+  let worktree: string
+  let warn: ReturnType<typeof vi.spyOn>
+  let error: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-sharedpaths-'))
+    primary = join(root, 'primary')
+    worktree = join(root, 'worktree')
+    mkdirSync(primary, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
+    error.mockRestore()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  // Why: an APFS clone would give the worktree its own node_modules, defeating
+  // one-install-serves-all. Share mode must symlink even where cloning works.
+  posixIt('symlinks on macOS instead of APFS clone-copying', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'marker'), 'ORIG\n')
+    const cloneWorktreePath = vi.fn()
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
+  })
+
+  posixIt('shares one directory so worktree writes reach the primary checkout', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], { platform: 'linux' })
+
+    writeFileSync(join(worktree, 'node_modules', 'installed'), 'SHARED\n')
+    expect(readFileSync(join(primary, 'node_modules', 'installed'), 'utf8')).toBe('SHARED\n')
+  })
+
+  posixIt('skips a path already materialized by the per-user symlink pass', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    mkdirSync(join(worktree, 'node_modules'))
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(false)
+  })
+
+  it('rejects unsafe paths without touching the filesystem', async () => {
+    writeFileSync(join(root, 'outside.txt'), 'DO_NOT_TOUCH')
+
+    await createWorktreeSharedPaths(primary, worktree, ['../outside.txt', '/etc/passwd'], {
+      platform: 'linux'
+    })
+
+    expect(readFileSync(join(root, 'outside.txt'), 'utf8')).toBe('DO_NOT_TOUCH')
+    expect(warn).toHaveBeenCalled()
+  })
+})
+
+describe('createWorktreeCopiedPaths', () => {
+  let root: string
+  let primary: string
+  let worktree: string
+  let warn: ReturnType<typeof vi.spyOn>
+  let error: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'orca-copiedpaths-'))
+    primary = join(root, 'primary')
+    worktree = join(root, 'worktree')
+    mkdirSync(primary, { recursive: true })
+    mkdirSync(worktree, { recursive: true })
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    warn.mockRestore()
+    error.mockRestore()
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('copies a file so worktree edits never leak back to the primary checkout', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
+    writeFileSync(join(worktree, '.env'), 'SECRET=2\n')
+    expect(readFileSync(join(primary, '.env'), 'utf8')).toBe('SECRET=1\n')
+  })
+
+  it('copies a directory recursively without symlinking', async () => {
+    mkdirSync(join(primary, '.vscode'))
+    writeFileSync(join(primary, '.vscode', 'settings.json'), '{}')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.vscode'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, '.vscode')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.vscode', 'settings.json'), 'utf8')).toBe('{}')
+  })
+
+  it('creates parent directories lazily for nested paths', async () => {
+    mkdirSync(join(primary, 'apps', 'web'), { recursive: true })
+    writeFileSync(join(primary, 'apps', 'web', '.env'), 'A=1')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['apps/web/.env'], { platform: 'linux' })
+
+    expect(readFileSync(join(worktree, 'apps', 'web', '.env'), 'utf8')).toBe('A=1')
+  })
+
+  // Finding 1 regression: a symlinked include entry must become an independent
+  // copy, not a symlink, or worktree edits would leak back into the shared target.
+  posixIt('dereferences a symlinked file entry so edits do not leak to the primary', async () => {
+    writeFileSync(join(primary, '.env.shared'), 'SECRET=1\n')
+    symlinkSync(join(primary, '.env.shared'), join(primary, '.env'))
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    writeFileSync(join(worktree, '.env'), 'SECRET=2\n')
+    expect(readFileSync(join(primary, '.env.shared'), 'utf8')).toBe('SECRET=1\n')
+  })
+
+  posixIt('dereferences a symlinked directory entry into an independent copy', async () => {
+    mkdirSync(join(primary, '.cache-real'))
+    writeFileSync(join(primary, '.cache-real', 'f'), 'ORIG\n')
+    symlinkSync(join(primary, '.cache-real'), join(primary, '.cache'), 'dir')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.cache'], { platform: 'linux' })
+
+    expect(lstatSync(join(worktree, '.cache')).isSymbolicLink()).toBe(false)
+    writeFileSync(join(worktree, '.cache', 'f'), 'CHANGED\n')
+    expect(readFileSync(join(primary, '.cache-real', 'f'), 'utf8')).toBe('ORIG\n')
+  })
+
+  it('preserves a pre-existing target in the worktree (no clobber)', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    writeFileSync(join(worktree, '.env'), 'MINE=1\n')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], { platform: 'linux' })
+
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('MINE=1\n')
+  })
+
+  it('rejects traversal and treats absolute paths as repo-relative', async () => {
+    writeFileSync(join(root, 'outside.txt'), 'OUT=1')
+
+    await createWorktreeCopiedPaths(primary, worktree, ['../outside.txt', '/etc/passwd'], {
+      platform: 'linux'
+    })
+
+    expect(existsSync(join(worktree, 'outside.txt'))).toBe(false)
+    // `/etc/passwd` → `etc/passwd`, absent from primary → silently skipped.
+    expect(existsSync(join(worktree, 'etc'))).toBe(false)
+    expect(warn).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to a real copy, not a symlink, when macOS clone-copy is unavailable', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async () => {
+      throw new Error('clonefile unsupported')
+    })
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
+  })
+
+  it('uses APFS clone-copy for configured paths on macOS', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
+      writeFileSync(target, 'CLONED=1\n')
+    })
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
+      platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).toHaveBeenCalledWith(
+      join(primary, '.env'),
+      join(worktree, '.env'),
+      false
+    )
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('CLONED=1\n')
+  })
+
+  // Perf: the df+diskutil volume probe must not scale with the number of copied
+  // paths — one probe per distinct volume, cached across the materialization.
+  it('probes each APFS volume once regardless of how many paths are copied', async () => {
+    for (const name of ['.env', '.env.local', 'config.json', 'secrets.json']) {
+      writeFileSync(join(primary, name), `${name}\n`)
+    }
+    const deps = createApfsCloneDeps({ onCp: () => {} })
+
+    await createWorktreeCopiedPaths(
+      primary,
+      worktree,
+      ['.env', '.env.local', 'config.json', 'secrets.json'],
+      { platform: 'darwin', apfsCloneDeps: deps }
+    )
+
+    const execFileAsyncMock = vi.mocked(deps.execFileAsync)
+    const dfCalls = execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/df').length
+    const diskutilCalls = execFileAsyncMock.mock.calls.filter(
+      ([file]) => file === '/usr/sbin/diskutil'
+    ).length
+    // 4 paths would be 8 df + 8 diskutil un-cached; source+worktree share one
+    // tmp volume, so caching collapses this to a single probe pair.
+    expect(dfCalls).toBeLessThanOrEqual(2)
+    expect(diskutilCalls).toBeLessThanOrEqual(2)
+    // The copies themselves still happen per path.
+    expect(execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/cp')).toHaveLength(4)
+  })
+})
+
 describe('removeWorktreeSymlinks', () => {
   let root: string
   let primary: string
@@ -432,6 +697,16 @@ describe('removeWorktreeSymlinks', () => {
 
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('identifies only actual symlinks for removal preflight', async () => {
+    writeFileSync(join(primary, '.env'), 'PRIMARY=1\n')
+    symlinkSync(join(primary, '.env'), join(worktree, '.env'))
+    writeFileSync(join(worktree, 'config.json'), '{}\n')
+
+    await expect(
+      findExistingWorktreeSymlinkPaths(worktree, ['.env', 'config.json', 'missing'])
+    ).resolves.toEqual(['.env'])
   })
 
   it('leaves APFS clone-copied regular files for git removal to judge', async () => {

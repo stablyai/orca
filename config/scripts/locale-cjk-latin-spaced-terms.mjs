@@ -46,5 +46,16 @@ export const CJK_LATIN_SPACED_TERMS = [
   'PowerShell',
   'Git AI Author',
   'Token',
-  'token'
+  'token',
+  'fast-forward',
+  'Cookie',
+  'Cookies',
+  'upstream',
+  'origin',
+  'Hermes',
+  'DuckDuckGo',
+  'Mermaid',
+  'VS Code',
+  'IDE',
+  'Git'
 ]

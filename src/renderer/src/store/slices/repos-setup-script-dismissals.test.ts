@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/types'
 import { getSetupScriptPromptDismissalKey } from '../../lib/setup-script-prompt'
 import { createTestStore } from './store-test-helpers'
+import { getRepoHostIdentityForParts } from './repo-host-identity'
 
 const localRepo: Repo = {
   id: 'local-repo',
@@ -27,19 +28,20 @@ beforeEach(() => {
 describe('repo setup script prompt dismissals', () => {
   it('keeps only current setup prompt dismissals for fetched repos', async () => {
     reposList.mockResolvedValue([localRepo])
+    const localIdentity = getRepoHostIdentityForParts(localRepo.id, 'local')
     const store = createTestStore()
     store.setState({
       setupScriptPromptDismissedRepoIds: [
         localRepo.id,
-        getSetupScriptPromptDismissalKey(localRepo.id),
-        getSetupScriptPromptDismissalKey('stale-repo')
+        getSetupScriptPromptDismissalKey(localIdentity),
+        getSetupScriptPromptDismissalKey(getRepoHostIdentityForParts('stale-repo', 'local'))
       ]
     })
 
     await store.getState().fetchRepos()
 
     expect(store.getState().setupScriptPromptDismissedRepoIds).toEqual([
-      getSetupScriptPromptDismissalKey(localRepo.id)
+      getSetupScriptPromptDismissalKey(localIdentity)
     ])
   })
 })

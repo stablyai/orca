@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { LogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import {
@@ -65,6 +66,26 @@ describe('rpc wrappers', () => {
     const client = clientWith([ok(setup)])
     await expect(fetchDictationSetup(client)).resolves.toEqual(setup)
     expect(client.calls[0]).toEqual({ method: 'speech.models.list', params: null })
+  })
+
+  it('retries the idempotent setup read once after logical-client cutover', async () => {
+    const setup: MobileSpeechSetup = { enabled: false, selectedModelId: '', models: [] }
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValueOnce(new LogicalClientCutoverError())
+      .mockResolvedValueOnce(ok(setup))
+
+    await expect(fetchDictationSetup({ sendRequest })).resolves.toEqual(setup)
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(sendRequest).toHaveBeenNthCalledWith(1, 'speech.models.list', null)
+    expect(sendRequest).toHaveBeenNthCalledWith(2, 'speech.models.list', null)
+  })
+
+  it('does not retry unrelated setup-read failures', async () => {
+    const sendRequest = vi.fn().mockRejectedValue(new Error('offline'))
+
+    await expect(fetchDictationSetup({ sendRequest })).rejects.toThrow('offline')
+    expect(sendRequest).toHaveBeenCalledOnce()
   })
 
   it('starts a download', async () => {

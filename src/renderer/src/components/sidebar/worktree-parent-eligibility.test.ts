@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
-import { getEligibleWorktreeParents } from './worktree-parent-candidates'
+import { getEligibleWorktreeParents, isEligibleWorktreeParent } from './worktree-parent-candidates'
 
 function makeWorktree(id: string, repoId = 'repo'): Worktree {
   return {
@@ -207,6 +207,34 @@ describe('canAssignWorktreeParent', () => {
         ])
       }).map((worktree) => worktree.id)
     ).toEqual([sameHost.id])
+  })
+
+  it('excludes a candidate across a known project boundary for picker and direct drop checks', () => {
+    const child = { ...makeWorktree('child'), projectId: 'project-a' }
+    const sameProject = { ...makeWorktree('same-project'), projectId: 'project-a' }
+    const otherProject = { ...makeWorktree('other-project'), projectId: 'project-b' }
+    const worktrees = [child, sameProject, otherProject]
+    const worktreeMap = makeMap(worktrees)
+    const repoMap = makeRepoMap()
+
+    expect(
+      getEligibleWorktreeParents({
+        child,
+        worktrees,
+        lineageById: {},
+        worktreeMap,
+        repoMap
+      }).map((worktree) => worktree.id)
+    ).toEqual([sameProject.id])
+    expect(
+      isEligibleWorktreeParent({
+        child,
+        candidateParent: otherProject,
+        lineageById: {},
+        worktreeMap,
+        repoMap
+      })
+    ).toBe(false)
   })
 
   it('excludes archived worktrees from picker candidates', () => {

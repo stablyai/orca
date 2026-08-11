@@ -11,7 +11,7 @@ import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField
 
 type TerminalQuickCommandAdvancedSectionProps = {
   draft: TerminalQuickCommand
-  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
   selectedRepoId: string

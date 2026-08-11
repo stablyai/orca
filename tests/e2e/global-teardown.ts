@@ -32,7 +32,7 @@ export default function globalTeardown(): void {
     }
 
     rmSync(testRepoDir, { recursive: true, force: true })
-    console.log(`[e2e] Cleaned up test repo at ${testRepoDir}`)
+    console.error(`[e2e] Cleaned up test repo at ${testRepoDir}`)
   }
 
   rmSync(TEST_REPO_PATH_FILE, { force: true })

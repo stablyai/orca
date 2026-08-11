@@ -33,6 +33,16 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     expected: { pathText: 'src/components/Button.tsx', line: 12, column: 7 }
   },
   {
+    name: 'relative markdown path with line',
+    lineText: 'documented in docs/terminal-scroll-intent-architecture.md:230',
+    tapText: 'terminal-scroll',
+    expected: {
+      pathText: 'docs/terminal-scroll-intent-architecture.md',
+      line: 230,
+      column: null
+    }
+  },
+  {
     name: 'tilde path',
     lineText: 'wrote ~/Documents/notes.md',
     tapText: 'notes',

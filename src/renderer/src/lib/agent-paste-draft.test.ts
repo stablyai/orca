@@ -8,6 +8,7 @@ import {
   iterateAgentDraftPasteContentChunks,
   pasteDraftToAgentPtyWhenReady,
   pasteDraftWhenAgentReady,
+  POST_PASTE_SUBMIT_DELAY_MS,
   sendAgentDraftPasteContent,
   sendBracketedPasteToRunningAgent,
   submitPromptToAgentPty
@@ -540,6 +541,35 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenNthCalledWith(2, {}, 'pty-1', '\r')
   })
 
+  it('holds the PTY transaction across the paste and its submit Enter', async () => {
+    const writes: string[] = []
+    testState.sendRuntimePtyInputVerified.mockImplementation(
+      async (_settings: unknown, _ptyId: string, data: string) => {
+        writes.push(data)
+        return true
+      }
+    )
+
+    const submit = sendBracketedPasteToRunningAgent({ ptyId: 'pty-1', content: ISSUE_URL })
+    await flushMicrotasks()
+    // Competing chunked paste on the same PTY: it must not open a frame the Enter can land in.
+    const competing = sendAgentDraftPasteContent(
+      {},
+      'pty-1',
+      'y'.repeat(AGENT_DRAFT_PASTE_DIRECT_MAX_BYTES + 1)
+    )
+    await flushMicrotasks(10)
+    expect(writes).toEqual([PASTED_ISSUE_URL])
+
+    await vi.advanceTimersByTimeAsync(POST_PASTE_SUBMIT_DELAY_MS)
+    await expect(submit).resolves.toBe(true)
+    await expect(competing).resolves.toBe(true)
+
+    expect(writes.indexOf('\r')).toBe(1)
+    expect(writes.at(2)).toBe('\x1b[200~')
+    expect(writes.at(-1)).toBe('\x1b[201~')
+  })
+
   it('submits to an exact PTY even when it is not the first PTY in the tab', async () => {
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-left', 'pty-right'] }
     testState.appState.tabsByWorktree = {
@@ -605,6 +635,21 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(testState.sendRuntimePtyInputVerified).toHaveBeenLastCalledWith({}, 'pty-1', '\r')
   })
 
+  it('normalizes multiline running-agent drafts like terminal paste', async () => {
+    const promise = sendBracketedPasteToRunningAgent({
+      ptyId: 'pty-1',
+      content: 'line one\r\nline two\nline three'
+    })
+
+    expect(testState.sendRuntimePtyInputVerified).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      '\x1b[200~line one\rline two\rline three\x1b[201~'
+    )
+    await vi.advanceTimersByTimeAsync(50)
+    await expect(promise).resolves.toBe(true)
+  })
+
   it('closes bracketed paste and does not submit when a chunked draft write is rejected', async () => {
     testState.sendRuntimePtyInputVerified
       .mockResolvedValueOnce(true)
@@ -636,6 +681,13 @@ describe('pasteDraftWhenAgentReady', () => {
     expect(chunks.at(-1)).toBe('\x1b[201~')
     expect(chunks.slice(1, -1).join('')).toBe('before␛[201~after😀')
     expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
+  })
+
+  it('normalizes agent draft line endings before a CRLF chunk boundary', () => {
+    const chunks = chunkAgentDraftPasteContent('abc\r\ndef\nghi', 4)
+
+    expect(chunks).toEqual(['\x1b[200~', 'abc\r', 'def\r', 'ghi', '\x1b[201~'])
+    expect(chunks.join('')).not.toContain('\n')
   })
 
   it('chunks escape-heavy agent draft paste without per-character string sanitizer scans', () => {

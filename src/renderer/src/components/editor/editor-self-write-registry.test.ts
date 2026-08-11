@@ -4,7 +4,8 @@ import {
   __getSelfWriteRegistrySizeForTests,
   clearSelfWrite,
   hasRecentSelfWrite,
-  recordSelfWrite
+  recordSelfWrite,
+  SELF_WRITE_REMOTE_TTL_MS
 } from './editor-self-write-registry'
 
 describe('editor self-write registry', () => {
@@ -76,5 +77,16 @@ describe('editor self-write registry', () => {
     expect(__getSelfWriteRegistrySizeForTests()).toBe(256)
     expect(hasRecentSelfWrite('/repo/0.md')).toBe(false)
     expect(hasRecentSelfWrite('/repo/259.md')).toBe(true)
+  })
+
+  it('keeps remote-TTL stamps alive past the local window', () => {
+    // Why: SSH/runtime watcher echoes can land seconds after the write; the
+    // longer TTL keeps them recognized as Orca's own save.
+    recordSelfWrite('/repo/remote.md', 'content', 'env-1', SELF_WRITE_REMOTE_TTL_MS)
+
+    vi.advanceTimersByTime(751)
+    expect(hasRecentSelfWrite('/repo/remote.md', 'env-1')).toBe(true)
+    vi.advanceTimersByTime(SELF_WRITE_REMOTE_TTL_MS)
+    expect(hasRecentSelfWrite('/repo/remote.md', 'env-1')).toBe(false)
   })
 })

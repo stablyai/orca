@@ -362,7 +362,7 @@ describe('TerminalPane PowerShell version setting', () => {
     expect(collectText(element)).not.toContain('WSL')
   })
 
-  it('does not show WSL distro choices for a persisted legacy WSL shell', () => {
+  it('shows a persisted WSL default without PowerShell or distro sub-settings', () => {
     const element = TerminalPane({
       settings: {
         terminalScrollbackRows: 5_000,
@@ -383,6 +383,9 @@ describe('TerminalPane PowerShell version setting', () => {
     const text = collectText(element)
     expect(text).toContain('PowerShell')
     expect(text).toContain('Command Prompt')
+    expect(text).toContain('WSL')
+    expect(hasShellIconFor(element, 'wsl.exe')).toBe(true)
+    expect(text).not.toContain('PowerShell Version')
     expect(text).not.toContain('Choose which WSL distribution')
     expect(text).not.toContain('Windows default')
     expect(text).not.toContain('Ubuntu')

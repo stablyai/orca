@@ -147,6 +147,9 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  if (props.surface === 'modal') {
+    await import('./LinearAgentSkillSetupDialog')
+  }
   await act(async () => {})
   return container
 }
@@ -178,6 +181,7 @@ function findBodyButton(label: string): HTMLButtonElement | undefined {
 }
 
 async function settleRender(): Promise<void> {
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
   await act(async () => {})
 }
@@ -253,12 +257,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     const unlinked = await renderPrompt({ linked: false, remote: false })
     expect(unlinked.textContent).not.toContain('Set up Linear agent skill')
 
-    await act(async () => {
-      root?.unmount()
-    })
-    root = null
-    unlinked.remove()
-    container = null
+    await unmountPrompt()
 
     const ready = await renderPrompt({ linked: true, remote: false })
     expect(ready.textContent).not.toContain('Set up Linear agent skill')
@@ -343,6 +342,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
     expect(mocks.panelProps.at(-1)).toEqual(
@@ -425,7 +425,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     expect(mocks.getWslCliStatus).not.toHaveBeenCalled()
   })
 
-  it('opens the terminal setup panel in a dialog only after the user asks to set up', async () => {
+  it('keeps the prompt usable and loads the lazy setup dialog only when requested', async () => {
     const rendered = await renderPrompt({ linked: true, remote: false })
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).toBeNull()
@@ -436,6 +436,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     await act(async () => {
       setupButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await settleRender()
 
     expect(document.body.querySelector('[data-testid="linear-skill-inline-panel"]')).not.toBeNull()
     expect(document.body.textContent).toContain('orca-linear')
@@ -452,7 +453,7 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
   })
 
-  it('auto-opens as a modal-only prompt and treats Not now as a casual close', async () => {
+  it('auto-opens as a modal-only prompt and treats the × close as a casual snooze', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
     expect(container?.textContent).not.toContain('Set up Linear agent skill')
@@ -461,17 +462,21 @@ describe('LinearAgentSkillSetupPrompt', () => {
     )
     expect(document.body.textContent).toContain('Orca CLI and Linear agent skill are missing.')
     expect(document.body.textContent).toContain('Mock install')
+    // Why: the permanent opt-out is an EyeOff icon (no visible text); the casual
+    // dismiss is the dialog ×. Neither "Not now" nor any dismiss label shows as text.
+    expect(document.body.textContent).not.toContain('Not now')
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
         preInstallNotice: 'CLI registration notice'
       })
     )
 
-    const notNowButton = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => button.textContent === 'Not now'
+    // Why: the × must snooze for the session, not persist a permanent dismissal.
+    const closeButton = Array.from(document.body.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Close'
     )
     await act(async () => {
-      notNowButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      closeButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
 
     expect(window.localStorage.getItem(HOST_DISMISS_STORAGE_KEY)).toBeNull()
@@ -911,8 +916,9 @@ describe('LinearAgentSkillSetupPrompt', () => {
   it('permanently dismisses the modal-only prompt when requested', async () => {
     await renderPrompt({ linked: true, remote: false, surface: 'modal' })
 
-    const dismissButton = Array.from(document.body.querySelectorAll('button')).find(
-      (button) => button.textContent === "Don't show again"
+    // Why: permanent dismiss is now an EyeOff icon button (aria-label, no text).
+    const dismissButton = document.body.querySelector<HTMLButtonElement>(
+      'button[aria-label="Don\'t show again"]'
     )
     await act(async () => {
       dismissButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

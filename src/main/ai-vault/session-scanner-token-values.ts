@@ -1,5 +1,5 @@
 import type { CodexUsageSnapshot } from './session-scanner-types'
-import { asRecord } from './session-scanner-values'
+import { asRecord } from './session-scanner-record-value'
 
 export function tokenTotal(value: unknown): number {
   const usage = asRecord(value)

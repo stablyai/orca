@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'
 import {
   dedupeTabOrder,
   getPersistedEditFileIdsByWorktree,
@@ -73,6 +74,11 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.quickCommandLabel?.trim())
         .map((tab) => [tab.id, tab.quickCommandLabel!.trim()])
     )
+    const aiVaultTitleByTerminalId = new Map(
+      (session.tabsByWorktree[worktreeId] ?? [])
+        .filter((tab) => tab.aiVaultTitle)
+        .map((tab) => [tab.id, tab.aiVaultTitle!])
+    )
     tabsByWorktree[worktreeId] = [...tabs]
       .map((tab) => ({
         ...tab,
@@ -86,9 +92,11 @@ function hydrateUnifiedFormat(
           ? tab.quickCommandLabel.trim()
           : quickCommandLabelByTerminalId.get(tab.entityId)
         const generatedLabel = generatedTitleByTerminalId.get(tab.entityId)
+        const aiVaultTitle = tab.aiVaultTitle ?? aiVaultTitleByTerminalId.get(tab.entityId)
         return {
           ...tab,
           ...(quickCommandLabel ? { quickCommandLabel } : {}),
+          ...(aiVaultTitle ? { aiVaultTitle } : {}),
           ...(!tab.generatedLabel?.trim() && generatedLabel ? { generatedLabel } : {})
         }
       })
@@ -169,14 +177,11 @@ function hydrateUnifiedFormat(
     const hydratedLayout = session.tabGroupLayouts?.[worktreeId]
       ? pruneTabGroupLayoutForGroups(session.tabGroupLayouts[worktreeId], hydratedGroupIds)
       : null
-    layoutByWorktree[worktreeId] = hydratedLayout ?? {
-      type: 'leaf',
-      // Why: if transient-only groups were removed during hydration, the
-      // persisted split tree can collapse to a single surviving group. The
-      // fallback leaf keeps restore aligned with the remaining real tabs.
-      groupId: hydratedGroups[0].id
-    }
+    // A partial layout must still render every surviving group.
+    layoutByWorktree[worktreeId] = layoutSpanningGroups(hydratedGroups, hydratedLayout)
   }
+
+  adoptGrouplessTabs(tabsByWorktree, groupsByWorktree, activeGroupIdByWorktree, layoutByWorktree)
 
   return {
     unifiedTabsByWorktree: tabsByWorktree,

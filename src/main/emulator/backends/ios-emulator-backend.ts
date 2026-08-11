@@ -23,6 +23,7 @@ import {
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
+import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
 import { hideNativeSimulatorApp } from '../simulator-app-visibility'
 import type {
   BackendAvailability,
@@ -37,12 +38,11 @@ import type {
 export class IosEmulatorBackend implements EmulatorBackend {
   readonly kind = 'ios' as const
   readonly streamCodec = 'mjpeg' as const
-  // iOS exposes ax/permissions/etc. via `exec`; explicit verbs are Android-only for v1.
   readonly capabilities: EmulatorBackendCapabilities = {
     install: false,
     launch: false,
     permissions: false,
-    accessibilityTree: false,
+    accessibilityTree: true,
     logcat: false
   }
 
@@ -174,6 +174,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
     const udid = await this.resolveDeviceId(deviceId)
     const rawArgs = stripEmulatorTargetArgs(parseServeSimCommandArgs(command.trim()))
     return this.execServeSim([...rawArgs, '-d', udid], { json: true })
+  }
+
+  async accessibilityTree(_deviceId: string, axUrl?: string): Promise<unknown> {
+    if (!axUrl) {
+      throw new EmulatorError(
+        'emulator_no_active',
+        'No active iOS emulator AX endpoint — attach the simulator first.'
+      )
+    }
+    return requestServeSimAccessibilityTree(axUrl)
   }
 
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {

@@ -66,6 +66,14 @@ export type ClaudeUsagePersistedState = {
 export type ClaudeUsagePersistedFile = ClaudeUsageProcessedFile & {
   sessions: ClaudeUsageSession[]
   dailyAggregates: ClaudeUsageDailyAggregate[]
+  /** Dedupe keys (message.id:requestId) this file counted. Forked/resumed
+   *  sessions copy earlier turns into new files; ownership keeps each turn
+   *  counted by exactly one cached file across incremental scans. */
+  ownedDedupeKeys: string[]
+  /** True when this file saw turns already claimed by another file. When that
+   *  owner disappears, only deferred files need reparse to reclaim — not the
+   *  entire transcript corpus. */
+  hasDeferredClaims: boolean
 }
 
 export type ClaudeUsageParsedTurn = {

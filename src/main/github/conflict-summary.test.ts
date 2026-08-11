@@ -328,4 +328,21 @@ describe('getPRConflictSummary caching', () => {
     await expect(deriveSummary()).resolves.toEqual(expectedSummary)
     expect(spawnCount('merge-base')).toBe(2)
   })
+
+  it('does not repeat merge-tree --write-tree after an old-Git rejection', async () => {
+    mockGitDispatch({
+      'merge-tree': () =>
+        Promise.reject(
+          Object.assign(new Error('unknown option'), {
+            stdout: 'usage: git merge-tree <base-tree> <branch1> <branch2>'
+          })
+        )
+    })
+
+    await expect(deriveSummary('head-oid-1')).resolves.toBeUndefined()
+    await expect(deriveSummary('head-oid-2')).resolves.toBeUndefined()
+
+    expect(spawnCount('merge-base')).toBe(2)
+    expect(spawnCount('merge-tree')).toBe(1)
+  })
 })

@@ -199,13 +199,6 @@ export function mapGhosttyToOrca(
       return { colorOverrides: { cursorAccent: normalizeHex(v) } }
     },
 
-    'bold-color': (v) => {
-      if (!HEX_COLOR_RE.test(v)) {
-        return null
-      }
-      return { colorOverrides: { bold: normalizeHex(v) } }
-    },
-
     'mouse-hide-while-typing': (v) => {
       if (v !== 'true' && v !== 'false') {
         return null
@@ -285,6 +278,13 @@ export function mapGhosttyToOrca(
     // Passing the same string inverts the semantics, and correctly inverting a
     // character set is non-trivial. Treat as unsupported to avoid silent misbehavior.
     if (key === 'selection-word-chars') {
+      unsupportedKeys.push(key)
+      continue
+    }
+
+    // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032), so importing
+    // bold-color would render as a no-op; report it as unsupported instead of silently dropping.
+    if (key === 'bold-color') {
       unsupportedKeys.push(key)
       continue
     }

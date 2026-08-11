@@ -1,5 +1,6 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
+import type { StyleProp, ViewStyle } from 'react-native'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -13,8 +14,32 @@ export type TerminalModes = {
 
 export type TerminalKeyboardAvoidanceMetrics = {
   cursorY: number
+  // Main-buffer TUIs can render footer rows below the caret.
+  contentBottomRow: number
   rows: number
   altScreen: boolean
+}
+
+export function parseTerminalKeyboardAvoidanceMetrics(
+  msg: Record<string, unknown>
+): TerminalKeyboardAvoidanceMetrics {
+  const rows = toNonNegativeInteger(msg.rows)
+  const maxRow = Math.max(0, rows - 1)
+  const cursorY = Math.min(toNonNegativeInteger(msg.cursorY), maxRow)
+  const contentBottomRow =
+    msg.contentBottomRow === undefined
+      ? cursorY
+      : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
+  return {
+    cursorY,
+    contentBottomRow,
+    rows,
+    altScreen: msg.altScreen === true
+  }
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme
@@ -27,6 +52,7 @@ export type TerminalSelectionEvents = {
   onKeyboardAvoidanceMetrics?: (metrics: TerminalKeyboardAvoidanceMetrics) => void
   onHaptic?: (kind: 'selection' | 'success' | 'error' | 'edge-bump') => void
   onTerminalInput?: (bytes: string) => void
+  onTerminalQueryReply?: (bytes: string) => void
   onTerminalTap?: () => void
   // Tap landed on a detected file path; RN resolves + opens it.
   onFileTap?: (pathText: string, line: number | null, column: number | null) => void
@@ -37,7 +63,20 @@ export type TerminalSelectionEvents = {
   onTextScaleChange?: (scale: number) => void
 }
 
+export type TerminalWebViewProps = {
+  style?: StyleProp<ViewStyle>
+  terminalTheme?: MobileTerminalTheme
+  // Why: baseline zoom multiplier applied on top of fit-to-width scale; raw
+  // xterm fontSize alone cannot drive apparent size because fitting cancels it.
+  textScale?: number
+  onWebReady?: () => void
+  onEngineError?: (message: string) => void
+} & TerminalSelectionEvents
+
 export type TerminalWebViewHandle = {
+  // Why: iOS can preserve the native view while discarding its JS/backing-store
+  // state; foreground recovery must wait for the document to answer before replay.
+  prepareForForegroundRecovery: () => void
   write: (data: string) => void
   init: (
     cols: number,

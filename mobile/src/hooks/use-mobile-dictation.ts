@@ -1,7 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-// Why: import from 'buffer' (the npm polyfill), not 'node:buffer' — Metro
-// can't resolve Node's builtin in a React Native bundle.
-import { Buffer } from 'buffer'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   addExpoTwoWayAudioEventListener,
   initialize,
@@ -9,45 +6,27 @@ import {
   tearDown,
   toggleRecording
 } from '@orca/expo-two-way-audio'
-import type { RpcClient } from '../transport/rpc-client'
+import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
+import { enqueueMobileDictationAudioChunk } from './mobile-dictation-audio-chunk'
+import { createMobileDictationKeepAwakeOwner } from './mobile-dictation-keep-awake'
+import { useMobileDictationForegroundKeepAwake } from './mobile-dictation-foreground-keep-awake'
 import {
-  MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
-  MOBILE_DICTATION_PCM_SAMPLE_RATE,
-  MobileDictationPendingAudioBudget
-} from './mobile-dictation-pending-audio-budget'
+  DICTATION_FINISH_TIMEOUT_MS,
+  createMobileDictationId,
+  isCurrentMobileDictationFinish
+} from './mobile-dictation-session-state'
+import { startMobileDictationDesktopSession } from './mobile-dictation-desktop-start'
+import type {
+  DictationStatus,
+  UseMobileDictationOptions,
+  UseMobileDictationResult
+} from './mobile-dictation-session-state'
 
-type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
-
-type UseMobileDictationOptions = {
-  client: RpcClient | null
-  enabled: boolean
-  onTranscript: (text: string) => void
-  onError?: (error: Error) => void
-}
-
-export type UseMobileDictationResult = {
-  status: DictationStatus
-  isStarting: boolean
-  isRecording: boolean
-  isProcessing: boolean
-  error: string | null
-  start: () => Promise<void>
-  stop: () => Promise<void>
-  cancel: () => Promise<void>
-}
-
-const DICTATION_FINISH_TIMEOUT_MS = 75_000
-
-function bytesToBase64(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString('base64')
-}
-
-function createDictationId(): string {
-  return `mobile-dictation-${Date.now()}-${Math.random().toString(36).slice(2)}`
-}
+export type { UseMobileDictationResult } from './mobile-dictation-session-state'
 
 export function useMobileDictation(options: UseMobileDictationOptions): UseMobileDictationResult {
   const { client, enabled, onTranscript, onError } = options
+  const keepAwakeOwner = useMemo(createMobileDictationKeepAwakeOwner, [])
   const [status, setStatus] = useState<DictationStatus>('idle')
   const [error, setError] = useState<string | null>(null)
   const activeIdRef = useRef<string | null>(null)
@@ -77,6 +56,23 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     onErrorRef.current?.(normalized)
   }, [])
 
+  const closeDictationAudio = useCallback(
+    (dictationId?: string | null) => {
+      acceptingChunksRef.current = false
+      pendingChunksRef.current.clear()
+      pendingAudioBudgetRef.current.reset()
+      try {
+        toggleRecording(false)
+      } catch (err) {
+        // Cleanup must keep going when native recording shutdown throws, or
+        // the wake tag and dictation state would leak.
+        console.error('Failed to stop microphone recording', err)
+      }
+      void keepAwakeOwner.release(dictationId ?? undefined).catch(() => undefined)
+    },
+    [keepAwakeOwner]
+  )
+
   const failActiveDictation = useCallback(
     (dictationId: string, err: unknown) => {
       const client = clientRef.current
@@ -84,51 +80,32 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         return
       }
       activeIdRef.current = null
-      acceptingChunksRef.current = false
-      pendingChunksRef.current.clear()
-      pendingAudioBudgetRef.current.reset()
-      toggleRecording(false)
+      closeDictationAudio(dictationId)
       if (client && dictationId) {
         void client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
       }
       reportError(err)
     },
-    [reportError]
+    [closeDictationAudio, reportError]
   )
 
   useEffect(() => {
+    // Microphone events are a hot path; reuse this wiring instead of allocating
+    // a queue object and release predicate for every audio chunk.
+    const audioChunkQueue = {
+      pendingChunks: pendingChunksRef.current,
+      pendingAudioBudget: pendingAudioBudgetRef.current,
+      shouldReleaseBudget: (id: string) =>
+        activeIdRef.current === id || finishingIdRef.current === id,
+      failActiveDictation
+    }
     const sub = addExpoTwoWayAudioEventListener('onMicrophoneData', (event) => {
       const client = clientRef.current
       const dictationId = activeIdRef.current
       if (!client || !dictationId || !enabledRef.current || !acceptingChunksRef.current) {
         return
       }
-      const raw = event.data
-      const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw)
-      const byteLength = bytes.byteLength
-      if (!pendingAudioBudgetRef.current.tryReserve(byteLength)) {
-        failActiveDictation(dictationId, new Error(MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE))
-        return
-      }
-      const sendChunk = client
-        .sendRequest('speech.dictation.chunk', {
-          dictationId,
-          audioBase64: bytesToBase64(bytes),
-          sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE
-        })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error(response.error.message)
-          }
-        })
-        .catch((err) => failActiveDictation(dictationId, err))
-        .finally(() => {
-          if (activeIdRef.current === dictationId || finishingIdRef.current === dictationId) {
-            pendingAudioBudgetRef.current.release(byteLength)
-          }
-          pendingChunksRef.current.delete(sendChunk)
-        })
-      pendingChunksRef.current.add(sendChunk)
+      enqueueMobileDictationAudioChunk(client, dictationId, event, audioChunkQueue)
     })
     return () => sub.remove()
   }, [failActiveDictation, reportError])
@@ -168,40 +145,41 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       throw new Error('Failed to initialize microphone')
     }
 
-    const dictationId = createDictationId()
+    const dictationId = createMobileDictationId()
     activeIdRef.current = dictationId
-    try {
-      const response = await client.sendRequest('speech.dictation.start', { dictationId })
-      if (!response.ok) {
-        throw new Error(response.error.message)
-      }
-    } catch (err) {
-      if (activeIdRef.current === dictationId) {
-        activeIdRef.current = null
-      }
-      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
-      setStatus('idle')
-      throw err
-    }
-    if (
-      generationRef.current !== generation ||
-      !enabledRef.current ||
-      activeIdRef.current !== dictationId
-    ) {
-      await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
-      if (activeIdRef.current === dictationId) {
-        activeIdRef.current = null
-      }
-      setStatus('idle')
-      return
-    }
 
-    acceptingChunksRef.current = true
-    pendingChunksRef.current.clear()
-    pendingAudioBudgetRef.current.reset()
-    toggleRecording(true)
-    setStatus('recording')
-  }, [])
+    await startMobileDictationDesktopSession({
+      client,
+      dictationId,
+      generation,
+      getCurrentGeneration: () => generationRef.current,
+      getEnabled: () => enabledRef.current,
+      getActiveId: () => activeIdRef.current,
+      clearActiveId: (id) => {
+        if (activeIdRef.current === id) {
+          activeIdRef.current = null
+        }
+      },
+      setIdle: () => setStatus('idle'),
+      keepAwakeOwner,
+      commitRecordingStart: () => {
+        acceptingChunksRef.current = true
+        pendingChunksRef.current.clear()
+        pendingAudioBudgetRef.current.reset()
+        if (!toggleRecording(true)) {
+          return false
+        }
+        setStatus('recording')
+        return true
+      },
+      rollbackRecordingStart: () => {
+        acceptingChunksRef.current = false
+        pendingChunksRef.current.clear()
+        pendingAudioBudgetRef.current.reset()
+        toggleRecording(false)
+      }
+    })
+  }, [keepAwakeOwner])
 
   const stop = useCallback(async () => {
     const client = clientRef.current
@@ -215,14 +193,20 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     finishingIdRef.current = dictationId
     setStatus('processing')
     acceptingChunksRef.current = false
-    toggleRecording(false)
     try {
+      // Inside the try so a throwing native shutdown still runs the finally
+      // release and error cleanup.
+      toggleRecording(false)
       await Promise.allSettled(Array.from(pendingChunksRef.current))
       if (
-        generationRef.current !== generation ||
-        activeIdRef.current !== dictationId ||
-        finishingIdRef.current !== dictationId ||
-        !enabledRef.current
+        !isCurrentMobileDictationFinish(
+          generationRef.current,
+          generation,
+          enabledRef.current,
+          activeIdRef.current,
+          finishingIdRef.current,
+          dictationId
+        )
       ) {
         return
       }
@@ -235,10 +219,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
         throw new Error(response.error.message)
       }
       if (
-        generationRef.current !== generation ||
-        activeIdRef.current !== dictationId ||
-        finishingIdRef.current !== dictationId ||
-        !enabledRef.current
+        !isCurrentMobileDictationFinish(
+          generationRef.current,
+          generation,
+          enabledRef.current,
+          activeIdRef.current,
+          finishingIdRef.current,
+          dictationId
+        )
       ) {
         return
       }
@@ -257,11 +245,14 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     } catch (err) {
       failActiveDictation(dictationId, err)
     } finally {
+      // Hold the wake tag through chunk drain and the finish RPC: a screen
+      // lock mid-processing suspends the app and loses the transcript.
+      void keepAwakeOwner.release(dictationId).catch(() => undefined)
       if (finishingIdRef.current === dictationId) {
         finishingIdRef.current = null
       }
     }
-  }, [failActiveDictation])
+  }, [failActiveDictation, keepAwakeOwner])
 
   const cancel = useCallback(async () => {
     const client = clientRef.current
@@ -269,16 +260,15 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
     generationRef.current += 1
     activeIdRef.current = null
     finishingIdRef.current = null
-    acceptingChunksRef.current = false
-    pendingChunksRef.current.clear()
-    pendingAudioBudgetRef.current.reset()
-    toggleRecording(false)
+    closeDictationAudio(dictationId)
     if (client && dictationId) {
       await client.sendRequest('speech.dictation.cancel', { dictationId }).catch(() => undefined)
     }
     setStatus('idle')
     setError(null)
-  }, [])
+  }, [closeDictationAudio])
+
+  useMobileDictationForegroundKeepAwake(keepAwakeOwner, activeIdRef)
 
   useEffect(() => {
     const sub = addExpoTwoWayAudioEventListener('onAudioInterruption', (event) => {
@@ -301,10 +291,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
       generationRef.current += 1
       activeIdRef.current = null
       finishingIdRef.current = null
-      acceptingChunksRef.current = false
-      pendingChunksRef.current.clear()
-      pendingAudioBudgetRef.current.reset()
-      toggleRecording(false)
+      closeDictationAudio(dictationId)
       void tearDown()
       if (clientRef.current && dictationId) {
         void clientRef.current
@@ -312,7 +299,7 @@ export function useMobileDictation(options: UseMobileDictationOptions): UseMobil
           .catch(() => undefined)
       }
     }
-  }, [])
+  }, [closeDictationAudio])
 
   return {
     status,

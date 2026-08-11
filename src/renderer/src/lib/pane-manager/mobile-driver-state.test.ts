@@ -5,6 +5,7 @@ import {
   hydrateDrivers,
   isPtyLocked,
   onDriverChange,
+  replaceDriverPtyId,
   setDriverForPty
 } from './mobile-driver-state'
 
@@ -38,6 +39,16 @@ describe('mobile-driver-state', () => {
 
     expect(getDriverForPty('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-1' })
     expect(getDriverForPty('pty-2')).toEqual({ kind: 'desktop' })
+  })
+
+  it('moves a presence lock when a provider replaces the PTY identity', () => {
+    setDriverForPty('pty-old', { kind: 'mobile', clientId: 'phone-1' })
+
+    replaceDriverPtyId('pty-old', 'pty-new')
+
+    expect(getDriverForPty('pty-old')).toEqual({ kind: 'idle' })
+    expect(getDriverForPty('pty-new')).toEqual({ kind: 'mobile', clientId: 'phone-1' })
+    expect([...getAllDrivers().keys()]).toEqual(['pty-new'])
   })
 
   it('hydrates driver snapshots and notifies affected listeners', () => {

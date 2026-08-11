@@ -24,7 +24,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
         })
       },
       store: {
-        flush: vi.fn(() => {
+        flushPendingOrThrowAsync: vi.fn(async () => {
           calls.push('flush')
         })
       }
@@ -43,7 +43,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
         syncActiveWslSelectionsBeforeRestart
       },
       store: {
-        flush: vi.fn()
+        flushPendingOrThrowAsync: vi.fn()
       }
     })
 
@@ -70,7 +70,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
         })
       },
       store: {
-        flush: vi.fn(() => {
+        flushPendingOrThrowAsync: vi.fn(async () => {
           calls.push('flush')
         })
       }
@@ -81,7 +81,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
 
   it('continues after WSL Codex preservation fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const flush = vi.fn()
+    const flushPendingOrThrowAsync = vi.fn()
 
     await preserveAgentAuthBeforeRestart({
       codexRuntimeHome: {
@@ -91,25 +91,25 @@ describe('preserveAgentAuthBeforeRestart', () => {
         })
       },
       store: {
-        flush
+        flushPendingOrThrowAsync
       }
     })
 
-    expect(flush).toHaveBeenCalledTimes(1)
+    expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(warn.mock.calls)).not.toContain('token-secret')
   })
 
   it('flushes the store when auth services are missing', async () => {
-    const flush = vi.fn()
+    const flushPendingOrThrowAsync = vi.fn()
 
-    await preserveAgentAuthBeforeRestart({ store: { flush } })
+    await preserveAgentAuthBeforeRestart({ store: { flushPendingOrThrowAsync } })
 
-    expect(flush).toHaveBeenCalledTimes(1)
+    expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
   })
 
   it('logs secret-free warnings and does not throw when sync fails', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const flush = vi.fn()
+    const flushPendingOrThrowAsync = vi.fn()
 
     await expect(
       preserveAgentAuthBeforeRestart({
@@ -124,11 +124,11 @@ describe('preserveAgentAuthBeforeRestart', () => {
             throw new Error('claude-token-secret')
           })
         },
-        store: { flush }
+        store: { flushPendingOrThrowAsync }
       })
     ).resolves.toBeUndefined()
 
-    expect(flush).toHaveBeenCalledTimes(1)
+    expect(flushPendingOrThrowAsync).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledTimes(2)
     expect(JSON.stringify(warn.mock.calls)).not.toContain('token-secret')
   })
@@ -150,7 +150,7 @@ describe('preserveAgentAuthBeforeRestart', () => {
         })
       },
       store: {
-        flush: vi.fn(() => {
+        flushPendingOrThrowAsync: vi.fn(async () => {
           calls.push('flush')
         })
       }
@@ -168,5 +168,20 @@ describe('preserveAgentAuthBeforeRestart', () => {
     await Promise.resolve()
 
     expect(calls).toEqual(['claude-start', 'flush', 'claude-finish'])
+  })
+
+  it('bounds a store flush that never settles', async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const preservation = preserveAgentAuthBeforeRestart({
+      store: { flushPendingOrThrowAsync: vi.fn(() => new Promise<void>(() => {})) }
+    })
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await preservation
+
+    expect(warn).toHaveBeenCalledWith(
+      '[agent-auth-restart] Store persistence exceeded 2000ms; continuing restart/update'
+    )
   })
 })

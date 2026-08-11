@@ -5,13 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../shared/types'
 import type { Store } from './persistence'
 
-const { listRepoWorktreesMock, getSshFilesystemProviderMock, getSshGitProviderMock } = vi.hoisted(
-  () => ({
-    listRepoWorktreesMock: vi.fn(),
-    getSshFilesystemProviderMock: vi.fn(),
-    getSshGitProviderMock: vi.fn()
-  })
-)
+const {
+  listRepoWorktreesMock,
+  getLocalProjectWorktreeGitOptionsMock,
+  getSshFilesystemProviderMock,
+  getSshGitProviderMock
+} = vi.hoisted(() => ({
+  listRepoWorktreesMock: vi.fn(),
+  getLocalProjectWorktreeGitOptionsMock: vi.fn(),
+  getSshFilesystemProviderMock: vi.fn(),
+  getSshGitProviderMock: vi.fn()
+}))
 
 vi.mock('./repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
@@ -30,6 +34,10 @@ vi.mock('./providers/ssh-filesystem-dispatch', () => ({
 
 vi.mock('./providers/ssh-git-dispatch', () => ({
   getSshGitProvider: getSshGitProviderMock
+}))
+
+vi.mock('./project-runtime-git-options', () => ({
+  getLocalProjectWorktreeGitOptions: getLocalProjectWorktreeGitOptionsMock
 }))
 
 import { analyzeWorkspaceSpace, WorkspaceSpaceScanCancelledError } from './workspace-space-analysis'
@@ -58,6 +66,7 @@ describe('analyzeWorkspaceSpace', () => {
     vi.setSystemTime(new Date('2026-05-14T12:00:00Z'))
     tempDir = await mkdtemp(join(tmpdir(), 'orca-space-'))
     listRepoWorktreesMock.mockReset()
+    getLocalProjectWorktreeGitOptionsMock.mockReset().mockReturnValue({})
     getSshFilesystemProviderMock.mockReset()
     getSshGitProviderMock.mockReset()
   })
@@ -123,6 +132,50 @@ describe('analyzeWorkspaceSpace', () => {
     expect(result.reclaimableBytes).toBe(feature?.sizeBytes)
   })
 
+  it('omits prunable worktree registrations from the Space scan', async () => {
+    // Why: a prunable registration has no directory to size or reclaim (issue
+    // #8389); before this filter it rendered as a dead "Missing" row whose
+    // checkbox stayed disabled with no prune/remove action.
+    const root = tempDir!
+    const mainPath = join(root, 'repo')
+    const stalePath = join(root, 'stale')
+    await mkdir(join(mainPath, 'src'), { recursive: true })
+    await writeSizedFile(join(mainPath, 'src', 'main.ts'), 256)
+
+    const repo: Repo = {
+      id: 'repo-1',
+      path: mainPath,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    listRepoWorktreesMock.mockResolvedValue([
+      {
+        path: mainPath,
+        head: 'a',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      },
+      {
+        path: stalePath,
+        head: 'b',
+        branch: 'refs/heads/stale',
+        isBare: false,
+        prunable: true,
+        prunableReason: 'gitdir file points to non-existent location',
+        isMainWorktree: false
+      }
+    ])
+
+    const result = await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(result.worktreeCount).toBe(1)
+    expect(result.worktrees.find((row) => row.path === stalePath)).toBeUndefined()
+    expect(result.worktrees.find((row) => row.path === mainPath)?.status).toBe('ok')
+    expect(result.repos[0]?.unavailableWorktreeCount).toBe(0)
+  })
+
   it('reports scan progress as repos and worktrees are scanned', async () => {
     const root = tempDir!
     const repoPath = join(root, 'repo')
@@ -185,6 +238,71 @@ describe('analyzeWorkspaceSpace', () => {
       analyzeWorkspaceSpace(createStore([repo]), { signal: controller.signal })
     ).rejects.toBeInstanceOf(WorkspaceSpaceScanCancelledError)
     expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('aborts every in-flight local worktree list when the scan is cancelled', async () => {
+    const repos: Repo[] = [
+      {
+        id: 'repo-1',
+        path: join(tempDir!, 'repo-1'),
+        displayName: 'one',
+        badgeColor: '#000',
+        addedAt: 0
+      },
+      {
+        id: 'repo-2',
+        path: join(tempDir!, 'repo-2'),
+        displayName: 'two',
+        badgeColor: '#000',
+        addedAt: 0
+      }
+    ]
+    const capturedSignals: AbortSignal[] = []
+    let markBothStarted!: () => void
+    const bothStarted = new Promise<void>((resolve) => {
+      markBothStarted = resolve
+    })
+    listRepoWorktreesMock.mockImplementation((_repo: Repo, options?: { signal?: AbortSignal }) => {
+      const signal = options?.signal
+      if (!signal) {
+        throw new Error('expected cancellation signal')
+      }
+      capturedSignals.push(signal)
+      if (capturedSignals.length === repos.length) {
+        markBothStarted()
+      }
+      return new Promise<never>((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    const controller = new AbortController()
+
+    const scan = analyzeWorkspaceSpace(createStore(repos), { signal: controller.signal })
+    await bothStarted
+    controller.abort()
+
+    await expect(scan).rejects.toBeInstanceOf(WorkspaceSpaceScanCancelledError)
+    expect(capturedSignals).toHaveLength(2)
+    expect(capturedSignals.every((signal) => signal.aborted)).toBe(true)
+  })
+
+  it('routes local worktree listing through the selected WSL distro', async () => {
+    const repo: Repo = {
+      id: 'repo-1',
+      path: tempDir!,
+      displayName: 'orca',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    getLocalProjectWorktreeGitOptionsMock.mockReturnValue({ wslDistro: 'Ubuntu' })
+    listRepoWorktreesMock.mockResolvedValue([])
+
+    await analyzeWorkspaceSpace(createStore([repo]))
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledWith(repo, {
+      wslDistro: 'Ubuntu',
+      signal: undefined
+    })
   })
 
   it('isolates missing worktrees as row-level scan failures', async () => {
@@ -330,6 +448,51 @@ describe('analyzeWorkspaceSpace', () => {
     expect(readDir).not.toHaveBeenCalled()
     expect(stat).not.toHaveBeenCalled()
     expect(result.worktrees[0]?.sizeBytes).toBe(4096)
+  })
+
+  it('bounds concurrent SSH fallback traversals in the main process', async () => {
+    // Why: each fallback traversal holds its own admission budget, so repo ×
+    // worktree concurrency alone would stack six of them on the desktop heap.
+    const repos: Repo[] = ['ssh-1', 'ssh-2'].map((connectionId) => ({
+      id: `repo-${connectionId}`,
+      path: `/remote/${connectionId}`,
+      displayName: connectionId,
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId
+    }))
+    getSshGitProviderMock.mockReturnValue({
+      listWorktrees: vi.fn(async (repoPath: string) =>
+        [0, 1, 2].map((index) => ({
+          path: `${repoPath}/worktree-${index}`,
+          head: 'c',
+          branch: `refs/heads/worktree-${index}`,
+          isBare: false,
+          isMainWorktree: false
+        }))
+      )
+    })
+
+    const releases: (() => void)[] = []
+    let active = 0
+    let peak = 0
+    const stat = vi.fn(async () => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise<void>((resolve) => releases.push(resolve))
+      active -= 1
+      return { size: 0, type: 'directory' as const, mtime: 0 }
+    })
+    getSshFilesystemProviderMock.mockReturnValue({ readDir: vi.fn(async () => []), stat })
+
+    const scan = analyzeWorkspaceSpace(createStore(repos))
+    for (let index = 0; index < 6; index += 1) {
+      await vi.waitFor(() => expect(releases.length).toBeGreaterThan(index))
+      releases[index]!()
+    }
+
+    await expect(scan).resolves.toMatchObject({ scannedWorktreeCount: 6 })
+    expect(peak).toBe(2)
   })
 
   it('reports disconnected SSH repos without failing the whole analysis', async () => {

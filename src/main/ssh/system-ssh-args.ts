@@ -5,21 +5,30 @@ export type SystemSshBuildArgsOptions = {
   resolvedConfig?: SystemSshResolvedConfig | null
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
+  gssapiOnly?: boolean
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
   const args: string[] = []
 
-  args.push('-o', 'BatchMode=no')
+  args.push('-o', options?.gssapiOnly ? 'BatchMode=yes' : 'BatchMode=no')
+  if (options?.gssapiOnly) {
+    // Why: the probe must neither authenticate with a key nor open an OpenSSH
+    // credential prompt; failure belongs to Orca's existing ssh2 prompt path.
+    args.push('-o', 'GSSAPIAuthentication=yes')
+    args.push('-o', 'PreferredAuthentications=gssapi-with-mic')
+  }
   // Forward stdin/stdout for relay communication
   args.push('-T')
 
   // Why: ControlMaster multiplexes all SSH exec commands over a single connection,
   // eliminating the ~9s handshake overhead per command. Without this, each
   // spawnSystemSshCommand call opens a new TCP connection.
-  const forceDisableControlMaster =
-    options?.disableControlMaster === true || target.systemSshConnectionReuse === false
   const controlPath = getOrcaControlSocketPath(target, options)
+  const forceDisableControlMaster =
+    options?.disableControlMaster === true ||
+    target.systemSshConnectionReuse === false ||
+    (options?.gssapiOnly === true && controlPath === null)
   if (forceDisableControlMaster) {
     // Why: muxed OpenSSH forwards remain registered on the master after the
     // client exits. Also honors the per-target compatibility opt-out even if
@@ -53,6 +62,12 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
     args.push('-o', 'IdentitiesOnly=yes')
   }
 
+  if (!useConfigHost && target.gssapiAuthentication && !options?.gssapiOnly) {
+    // Why: manual targets bypass ssh_config, so Kerberos auth must be
+    // requested explicitly; config-backed hosts inherit it from their entry.
+    args.push('-o', 'GSSAPIAuthentication=yes')
+  }
+
   if (!useConfigHost && target.jumpHost) {
     args.push('-J', target.jumpHost)
   }
@@ -62,7 +77,9 @@ export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOpti
   }
 
   const host = target.configHost || target.host
-  const userHost = target.username ? `${target.username}@${host}` : host
+  // Why: OpenSSH owns User for config-backed aliases; imported fallback values
+  // must not override a fresh wildcard, Include, or Match result.
+  const userHost = useConfigHost ? host : target.username ? `${target.username}@${host}` : host
   args.push('--', userHost)
 
   return args
@@ -75,7 +92,7 @@ export function getOrcaControlSocketPath(
   if (shouldDisableOrcaControlMaster(target, options)) {
     return null
   }
-  return getControlSocketPath(target, options?.resolvedConfig)
+  return getControlSocketPath(target, options?.resolvedConfig, options?.gssapiOnly === true)
 }
 
 export function getSystemSshBuildArgsFromOperationOptions(
@@ -90,6 +107,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.suppressOrcaControlMaster === true) {
     buildArgsOptions.suppressOrcaControlMaster = true
+  }
+  if (options?.gssapiOnly === true) {
+    buildArgsOptions.gssapiOnly = true
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }
@@ -107,7 +127,7 @@ function shouldDisableOrcaControlMaster(
     options?.suppressOrcaControlMaster === true ||
     target.systemSshConnectionReuse === false ||
     unresolvedConfigBackedTarget ||
-    hasUserConfiguredControlMaster(options?.resolvedConfig)
+    (hasUserConfiguredControlMaster(options?.resolvedConfig) && options?.gssapiOnly !== true)
   )
 }
 
@@ -148,7 +168,9 @@ function shouldUseOpenSshConfigHost(target: SshTarget): boolean {
   return isOpenSshConfigBackedTarget(target)
 }
 
-function isOpenSshConfigBackedTarget(target: SshTarget): boolean {
+export function isOpenSshConfigBackedTarget(
+  target: Pick<SshTarget, 'source' | 'configHost' | 'host'>
+): boolean {
   if (target.source === 'ssh-config') {
     return true
   }

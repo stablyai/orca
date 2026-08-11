@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -23,14 +23,18 @@ export default function PinnedTabCloseDialog(): React.JSX.Element {
   const dismissPinnedTabClose = useAppStore((state) => state.dismissPinnedTabClose)
   const updateSettings = useAppStore((state) => state.updateSettings)
   const [dontAskAgain, setDontAskAgain] = useState(false)
+  const [previousRequest, setPreviousRequest] = useState(request)
 
   const tabLabel = request?.tabLabel.trim()
 
-  useEffect(() => {
+  // Why: a new store request is a new confirmation, so reset its checkbox before
+  // paint while keeping a cancelled request's state inert until the next open.
+  if (request !== previousRequest) {
+    setPreviousRequest(request)
     if (request !== null) {
       setDontAskAgain(false)
     }
-  }, [request])
+  }
 
   const handleConfirm = (): void => {
     if (dontAskAgain) {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
-import { Markdown } from '@tiptap/markdown'
+import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import {
   collapseEmptyListContinuationParagraph,
   commitEmptyOrderedListMarkerAsText,
@@ -10,12 +10,12 @@ import {
   isSingleEmptyTopLevelOrderedList
 } from './rich-markdown-list-continuation'
 
-const extensions = [StarterKit, Markdown.configure({ markedOptions: { gfm: true } })]
-
 function createEditor(content: object): Editor {
+  // Why: each Editor needs its own marked registry; sharing one module-scoped
+  // extension accumulates tokenizer state across tests.
   return new Editor({
     element: null,
-    extensions,
+    extensions: [StarterKit, createIsolatedMarkdownExtensionForTests()],
     content
   })
 }

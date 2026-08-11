@@ -1,14 +1,10 @@
 // Pure: turn raw composer text into the exact PTY bytes to write. Kept separate
 // from the React composer so the byte rules are unit-testable without a DOM.
 
-import { sanitizeBracketedPasteText } from '../terminal-pane/terminal-bracketed-paste'
-
-// Why: bracketed-paste markers let modern agent TUIs (Claude / Codex / etc.)
-// treat injected multi-line text as one atomic paste instead of running each
-// embedded newline as a line-edit / submit. Mirrors agent-paste-draft.ts and
-// terminal-bracketed-paste.ts so native input is byte-identical to a real paste.
-const BRACKETED_PASTE_BEGIN = '\x1b[200~'
-const BRACKETED_PASTE_END = '\x1b[201~'
+import {
+  sanitizeBracketedPasteText,
+  wrapTerminalBracketedPasteText
+} from '../terminal-pane/terminal-bracketed-paste'
 
 // Why: carriage return (not \n) is what xterm/agent composers treat as the
 // submit/Enter key over a PTY.
@@ -36,20 +32,18 @@ export const NATIVE_CHAT_SUBMIT = SUBMIT
  * write (mirrors orca-runtime's writeTerminalAction Enter handling).
  */
 export function buildNativeChatPasteBytes(text: string): string {
-  // Why: a stray ESC in the draft (e.g. pasted scrollback carrying its own
-  // `\x1b[201~`) would otherwise close the bracketed-paste frame early and run
-  // the tail as live keystrokes. Sanitize ESC on both branches before framing.
-  const safe = sanitizeBracketedPasteText(text)
-  if (isMultilineDraft(safe)) {
-    return `${BRACKETED_PASTE_BEGIN}${safe}${BRACKETED_PASTE_END}`
+  if (isMultilineDraft(text)) {
+    return wrapTerminalBracketedPasteText(text)
   }
-  return safe
+  // Why: sanitize even unframed text so pasted scrollback cannot carry a raw
+  // terminal escape into the agent composer.
+  return sanitizeBracketedPasteText(text)
 }
 
 /** Image attachments must look like a real terminal image paste to Claude/Codex
  *  TUIs. A plain typed path (or @file mention) is treated as text/file-read. */
 export function buildNativeChatImagePasteBytes(filePath: string): string {
-  return `${BRACKETED_PASTE_BEGIN}${sanitizeBracketedPasteText(filePath)}${BRACKETED_PASTE_END}`
+  return wrapTerminalBracketedPasteText(filePath)
 }
 
 /**

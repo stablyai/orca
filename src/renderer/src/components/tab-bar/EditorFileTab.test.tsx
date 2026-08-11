@@ -58,8 +58,26 @@ vi.mock('@dnd-kit/sortable', () => ({
 }))
 
 vi.mock('lucide-react', () => ({
+  ArrowDown: function ArrowDown(props: Record<string, unknown>) {
+    return { type: 'ArrowDown', props }
+  },
+  ArrowLeft: function ArrowLeft(props: Record<string, unknown>) {
+    return { type: 'ArrowLeft', props }
+  },
+  ArrowRight: function ArrowRight(props: Record<string, unknown>) {
+    return { type: 'ArrowRight', props }
+  },
+  ArrowUp: function ArrowUp(props: Record<string, unknown>) {
+    return { type: 'ArrowUp', props }
+  },
   Columns2: function Columns2(props: Record<string, unknown>) {
     return { type: 'Columns2', props }
+  },
+  CopyX: function CopyX(props: Record<string, unknown>) {
+    return { type: 'CopyX', props }
+  },
+  PanelLeftClose: function PanelLeftClose(props: Record<string, unknown>) {
+    return { type: 'PanelLeftClose', props }
   },
   Copy: function Copy(props: Record<string, unknown>) {
     return { type: 'Copy', props }
@@ -69,6 +87,12 @@ vi.mock('lucide-react', () => ({
   },
   Eye: function Eye(props: Record<string, unknown>) {
     return { type: 'Eye', props }
+  },
+  ListX: function ListX(props: Record<string, unknown>) {
+    return { type: 'ListX', props }
+  },
+  PanelRightClose: function PanelRightClose(props: Record<string, unknown>) {
+    return { type: 'PanelRightClose', props }
   },
   GitCompareArrows: function GitCompareArrows(props: Record<string, unknown>) {
     return { type: 'GitCompareArrows', props }
@@ -230,10 +254,14 @@ async function renderEditorFileTab(
     isActive: true,
     isPinned: false,
     hasTabsToRight: false,
+    hasTabsToLeft: false,
+    tabCount: 1,
     statusByRelativePath: new Map(),
     onActivate,
     onClose: () => {},
+    onCloseOthers: () => {},
     onCloseToRight: () => {},
+    onCloseToLeft: () => {},
     onCloseAll: () => {},
     onMakePermanent,
     onTogglePin: () => {},

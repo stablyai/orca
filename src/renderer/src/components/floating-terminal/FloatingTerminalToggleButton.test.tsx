@@ -88,6 +88,18 @@ vi.mock('./FloatingTerminalIconContextMenu', () => ({
   }
 }))
 
+const storeState = vi.hoisted(() => ({ hasFloatingUnread: false }))
+
+vi.mock('@/store', () => ({
+  useAppStore: <T,>(selector: (state: typeof storeState) => T): T => selector(storeState)
+}))
+
+// The real selector is covered in store/selectors.test.ts; here it just reads
+// the mocked flag so the dot's show/hide logic can be exercised in isolation.
+vi.mock('@/store/selectors', () => ({
+  selectFloatingWorkspaceHasUnread: (state: typeof storeState): boolean => state.hasFloatingUnread
+}))
+
 function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   if (node == null || typeof node === 'string' || typeof node === 'number') {
     return
@@ -114,6 +126,16 @@ function findByProp(node: unknown, propName: string): ReactElementLike {
   if (!found) {
     throw new Error(`${propName} not found`)
   }
+  return found
+}
+
+function hasProp(node: unknown, propName: string): boolean {
+  let found = false
+  visit(node, (entry) => {
+    if (entry.props[propName]) {
+      found = true
+    }
+  })
   return found
 }
 
@@ -231,5 +253,45 @@ describe('FloatingTerminalToggleButton positioning', () => {
       FLOATING_TERMINAL_TRIGGER_POSITION_STORAGE_KEY,
       '{"anchorX":"right","anchorY":"bottom","offsetX":124,"offsetY":172}'
     )
+  })
+})
+
+describe('FloatingTerminalToggleButton attention dot', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    hookRuntime.effects = []
+    hookRuntime.layoutEffects = []
+    hookRuntime.index = 0
+    hookRuntime.values = []
+    storeState.hasFloatingUnread = false
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      innerHeight: 800,
+      innerWidth: 1200,
+      localStorage: { getItem: vi.fn(() => null), setItem: vi.fn() },
+      removeEventListener: vi.fn()
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders the attention dot when closed with pending floating activity', async () => {
+    storeState.hasFloatingUnread = true
+    const element = await renderToggle(false)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(true)
+  })
+
+  it('hides the dot when the panel is open even with pending activity', async () => {
+    storeState.hasFloatingUnread = true
+    const element = await renderToggle(true)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
+  })
+
+  it('hides the dot when there is no pending activity', async () => {
+    storeState.hasFloatingUnread = false
+    const element = await renderToggle(false)
+    expect(hasProp(element, 'data-floating-terminal-attention')).toBe(false)
   })
 })

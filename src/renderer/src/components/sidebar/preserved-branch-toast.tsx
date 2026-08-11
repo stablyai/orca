@@ -63,7 +63,7 @@ function PreservedBranchToastBody({
         <div className="flex min-w-0 overflow-hidden">
           <Button
             type="button"
-            variant="default"
+            variant="destructive"
             size="sm"
             className="w-full min-w-0"
             onClick={onForceDelete}

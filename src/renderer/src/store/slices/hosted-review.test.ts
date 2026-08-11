@@ -4,6 +4,7 @@ import type { AppState } from '../types'
 import {
   createHostedReviewSlice,
   getHostedReviewCacheKey,
+  HostedReviewCreationEligibilityTimeoutError,
   refreshHostedReviewCard
 } from './hosted-review'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
@@ -63,6 +64,17 @@ const review: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
+const githubReview: HostedReviewInfo = {
+  provider: 'github',
+  number: 12,
+  title: 'Branch PR',
+  state: 'open',
+  url: 'https://github.com/acme/orca/pull/12',
+  status: 'success',
+  updatedAt: '2026-05-10T00:00:00.000Z',
+  mergeable: 'MERGEABLE'
+}
+
 describe('hosted review slice', () => {
   beforeEach(() => {
     mockApi.hostedReview.forBranch.mockReset()
@@ -98,6 +110,36 @@ describe('hosted review slice', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
+    })
+  })
+
+  it('records branch provenance separately from a GitHub fallback request hint', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(githubReview)
+    const store = makeStore()
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/github', {
+      fallbackGitHubPR: 12
+    })
+
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/github']).toMatchObject({
+      data: githubReview,
+      linkedReviewHintKey: 'github:12',
+      branchLookupGitHubPRNumber: 12
+    })
+  })
+
+  it('does not mark an exact linked GitHub lookup as branch-discovered', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(githubReview)
+    const store = makeStore()
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/github', {
+      linkedGitHubPR: 12
+    })
+
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/github']).toEqual({
+      data: githubReview,
+      fetchedAt: expect.any(Number),
+      linkedReviewHintKey: 'github:12'
     })
   })
 
@@ -374,6 +416,45 @@ describe('hosted review slice', () => {
       branch: 'feature/create-pr',
       base: 'main'
     })
+  })
+
+  it('rejects a never-settling local eligibility probe after the timeout', async () => {
+    vi.useFakeTimers()
+    // A hung git/gh subprocess never resolves; the store must not wait forever.
+    mockApi.hostedReview.getCreationEligibility.mockReturnValueOnce(new Promise(() => {}))
+    const store = makeStore()
+
+    const pending = store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+    const assertion = expect(pending).rejects.toBeInstanceOf(
+      HostedReviewCreationEligibilityTimeoutError
+    )
+    await vi.advanceTimersByTimeAsync(30_000)
+    await assertion
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('clears the timeout as soon as a local eligibility probe settles', async () => {
+    vi.useFakeTimers()
+    mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
+      provider: 'github',
+      review: null,
+      canCreate: true,
+      blockedReason: null,
+      nextAction: null
+    })
+
+    const store = makeStore()
+    await store.getState().getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'main'
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('uses the selected worktree selector for runtime pull request creation', async () => {

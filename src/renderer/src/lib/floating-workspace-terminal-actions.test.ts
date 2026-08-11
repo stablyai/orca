@@ -12,9 +12,11 @@ import {
   isFloatingWorkspacePanelShortcutTarget,
   isFloatingWorkspaceTerminalInputTarget,
   isFloatingWorkspacePanelVisible,
+  matchFloatingWorkspacePanelChord,
   shouldMinimizeFloatingWorkspacePanelOnCloseShortcut,
   switchFloatingWorkspaceTab
 } from './floating-workspace-terminal-actions'
+import { matchFloatingWorkspacePanelOwnedAction } from './floating-workspace-shortcut-policy'
 
 const activateWebRuntimeSessionTabMock = vi.hoisted(() => vi.fn())
 const createWebRuntimeSessionBrowserTabMock = vi.hoisted(() => vi.fn())
@@ -329,6 +331,105 @@ describe('isFloatingWorkspacePanelShortcut', () => {
         panelRoot
       )
     ).toBe(false)
+  })
+})
+
+describe('matchFloatingWorkspacePanelOwnedAction', () => {
+  beforeEach(() => {
+    installFakeHTMLElement()
+  })
+
+  it('returns the matched action so one pass serves the claim check and the dispatch branch', () => {
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 't', code: 'KeyT', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBe('tab.newTerminal')
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 'w', code: 'KeyW', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBe('tab.close')
+  })
+
+  it('does not gate on the event target — the panel owns these chords from any pane it hosts', () => {
+    expect(
+      matchFloatingWorkspacePanelOwnedAction(
+        shortcutEvent({ key: 'b', code: 'KeyB', target: makeElement({}) }),
+        'linux',
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
+  })
+})
+
+describe('matchFloatingWorkspacePanelChord', () => {
+  beforeEach(() => {
+    installFakeHTMLElement()
+  })
+
+  it('claims a creation chord from the shortcut surface', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutSurfaceEvent({ key: 't', code: 'KeyT', ctrlKey: true }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'action', action: 'tab.newTerminal' })
+  })
+
+  it('keeps creation chords target-gated', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: 't', code: 'KeyT', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
+  })
+
+  it('claims indexed switching and rename regardless of the event target', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: '2', code: 'Digit2', ctrlKey: true, target: makeElement({}) }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'index', index: 1 })
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutEvent({ key: 'r', code: 'KeyR', metaKey: true, target: makeElement({}) }),
+        'darwin',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toEqual({ kind: 'action', action: 'tab.rename' })
+  })
+
+  it('does not claim chords the panel has no shortcut for', () => {
+    expect(
+      matchFloatingWorkspacePanelChord(
+        shortcutSurfaceEvent({ key: 'b', code: 'KeyB', ctrlKey: true }),
+        'linux',
+        null,
+        undefined,
+        { context: 'app' }
+      )
+    ).toBeNull()
   })
 })
 

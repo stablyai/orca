@@ -1,7 +1,4 @@
-/* eslint-disable max-lines -- Why: repo metadata hooks share TTL caches and
-Linear/GitHub cache invalidation entrypoints used by the issue dialog. */
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: issue metadata hooks clear stale rows and track loading while async provider cache requests are in flight. */
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import {
   linearTeamLabels,
@@ -16,25 +13,20 @@ import type {
   LinearMember
 } from '../../../shared/types'
 import { getTaskSourceRuntimeSettings } from '../../../shared/task-source-context'
+import { unionLinearMetadataById } from '../components/linear-issue-attribute-filter-team-ids'
 import {
   clearMetadataRequestStore,
   createMetadataRequestStore,
   getFreshMetadata,
-  loadMetadata
+  loadMetadata,
+  type MetadataRequestStore
 } from './metadata-request-cache'
-
-type MetadataState<T> = {
-  data: T
-  loading: boolean
-  error: string | null
-}
+import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
 type GitHubMetadataOptions = {
   runtimeEnvironmentId?: string | null
   activeRuntimeEnvironmentId?: string | null
 }
-
-// ─── GitHub ────────────────────────────────────────────────
 
 const ghLabelStore = createMetadataRequestStore<string[]>()
 const ghAssigneeStore = createMetadataRequestStore<GitHubAssignableUser[]>()
@@ -43,44 +35,22 @@ export function useRepoLabels(
   repoPath: string | null,
   repoId?: string | null,
   options?: GitHubMetadataOptions
-): MetadataState<string[]> {
-  const [state, setState] = useState<MetadataState<string[]>>({
-    data: [],
-    loading: false,
-    error: null
-  })
-  const activeKeyRef = useRef<string | null>(null)
+): MetadataListState<string> {
+  const runtimeEnvironmentId =
+    options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+  const repoSelector = repoId ?? repoPath ?? ''
+  const cacheKey =
+    repoPath || repoId
+      ? runtimeEnvironmentId
+        ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
+        : repoSelector
+      : null
 
-  useEffect(() => {
-    if (!repoPath && !repoId) {
-      return
-    }
-    const runtimeEnvironmentId =
-      options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
-    const repoSelector = repoId ?? repoPath ?? ''
-    // Why: SSH/runtime metadata must not reuse host-path cache entries; the same
-    // repo id may resolve through a different credential/runtime boundary.
-    const cacheKey = runtimeEnvironmentId
-      ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
-      : repoSelector
-    const cached = getFreshMetadata(ghLabelStore, cacheKey)
-    if (cached) {
-      if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = cacheKey
-      }
-      return
-    }
-
-    activeKeyRef.current = cacheKey
-    const requestKey = cacheKey
-    setState((s) => ({
-      ...s,
-      data: s.data.length ? ([] as typeof s.data) : s.data,
-      loading: true,
-      error: null
-    }))
-    loadMetadata(ghLabelStore, cacheKey, () =>
+  return useMetadataListRequest({
+    cacheKey,
+    store: ghLabelStore,
+    errorFallback: 'Failed to load labels',
+    load: () =>
       runtimeEnvironmentId
         ? callRuntimeRpc<string[]>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -91,71 +61,29 @@ export function useRepoLabels(
         : window.api.gh
             .listLabels({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
             .then((labels) => labels as string[])
-    )
-      .then((data) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        setState({ data, loading: false, error: null })
-      })
-      .catch((err) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        activeKeyRef.current = null
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load labels'
-        }))
-      })
-  }, [repoPath, repoId, options?.runtimeEnvironmentId, options?.activeRuntimeEnvironmentId])
-
-  return state
+  })
 }
 
 export function useRepoAssignees(
   repoPath: string | null,
   repoId?: string | null,
   options?: GitHubMetadataOptions
-): MetadataState<GitHubAssignableUser[]> {
-  const [state, setState] = useState<MetadataState<GitHubAssignableUser[]>>({
-    data: [],
-    loading: false,
-    error: null
-  })
-  const activeKeyRef = useRef<string | null>(null)
+): MetadataListState<GitHubAssignableUser> {
+  const runtimeEnvironmentId =
+    options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
+  const repoSelector = repoId ?? repoPath ?? ''
+  const cacheKey =
+    repoPath || repoId
+      ? runtimeEnvironmentId
+        ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
+        : repoSelector
+      : null
 
-  useEffect(() => {
-    if (!repoPath && !repoId) {
-      return
-    }
-    const runtimeEnvironmentId =
-      options?.runtimeEnvironmentId?.trim() || options?.activeRuntimeEnvironmentId?.trim() || null
-    const repoSelector = repoId ?? repoPath ?? ''
-    // Why: SSH/runtime metadata must not reuse host-path cache entries; the same
-    // repo id may resolve through a different credential/runtime boundary.
-    const cacheKey = runtimeEnvironmentId
-      ? `runtime:${runtimeEnvironmentId}:${repoSelector}`
-      : repoSelector
-    const cached = getFreshMetadata(ghAssigneeStore, cacheKey)
-    if (cached) {
-      if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = cacheKey
-      }
-      return
-    }
-
-    activeKeyRef.current = cacheKey
-    const requestKey = cacheKey
-    setState((s) => ({
-      ...s,
-      data: s.data.length ? ([] as typeof s.data) : s.data,
-      loading: true,
-      error: null
-    }))
-    loadMetadata(ghAssigneeStore, cacheKey, () =>
+  return useMetadataListRequest({
+    cacheKey,
+    store: ghAssigneeStore,
+    errorFallback: 'Failed to load assignees',
+    load: () =>
       runtimeEnvironmentId
         ? callRuntimeRpc<GitHubAssignableUser[]>(
             { kind: 'environment', environmentId: runtimeEnvironmentId },
@@ -166,30 +94,8 @@ export function useRepoAssignees(
         : window.api.gh
             .listAssignableUsers({ repoPath: repoPath ?? '', repoId: repoId ?? undefined })
             .then((users) => users as GitHubAssignableUser[])
-    )
-      .then((data) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        setState({ data, loading: false, error: null })
-      })
-      .catch((err) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        activeKeyRef.current = null
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load assignees'
-        }))
-      })
-  }, [repoPath, repoId, options?.runtimeEnvironmentId, options?.activeRuntimeEnvironmentId])
-
-  return state
+  })
 }
-
-// ─── Linear ────────────────────────────────────────────────
 
 const linearStateStore = createMetadataRequestStore<LinearWorkflowState[]>()
 const linearLabelStore = createMetadataRequestStore<LinearLabel[]>()
@@ -215,176 +121,125 @@ export function clearLinearMetadataCache(): void {
   clearMetadataRequestStore(linearMemberStore)
 }
 
-export function clearGitHubMetadataCache(): void {
-  clearMetadataRequestStore(ghLabelStore)
-  clearMetadataRequestStore(ghAssigneeStore)
-}
-
 export function useTeamStates(
   teamId: string | null,
   settings?: RuntimeLinearSettings,
   workspaceId?: string | null
-): MetadataState<LinearWorkflowState[]> {
-  const [state, setState] = useState<MetadataState<LinearWorkflowState[]>>({
-    data: [],
-    loading: false,
-    error: null
+): MetadataListState<LinearWorkflowState> {
+  const selectedTeamId = teamId ?? ''
+  return useMetadataListRequest({
+    cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
+    store: linearStateStore,
+    load: () => loadTeamStates(settings, selectedTeamId, workspaceId),
+    errorFallback: 'Failed to load states'
   })
-  const activeKeyRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!teamId) {
-      return
-    }
-
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
-    const cached = getFreshMetadata(linearStateStore, cacheKey)
-    if (cached) {
-      if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = cacheKey
-      }
-      return
-    }
-
-    activeKeyRef.current = cacheKey
-    const requestKey = cacheKey
-    setState((s) => ({
-      ...s,
-      data: s.data.length ? ([] as typeof s.data) : s.data,
-      loading: true,
-      error: null
-    }))
-    loadMetadata(linearStateStore, cacheKey, () =>
-      linearTeamStates(settings, teamId, workspaceId).then(
-        (states) => states as LinearWorkflowState[]
-      )
-    )
-      .then((data) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        setState({ data, loading: false, error: null })
-      })
-      .catch((err) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        activeKeyRef.current = null
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load states'
-        }))
-      })
-  }, [settings, teamId, workspaceId])
-
-  return state
 }
 
 export function useTeamLabels(
   teamId: string | null,
   settings?: RuntimeLinearSettings,
   workspaceId?: string | null
-): MetadataState<LinearLabel[]> {
-  const [state, setState] = useState<MetadataState<LinearLabel[]>>({
-    data: [],
-    loading: false,
-    error: null
+): MetadataListState<LinearLabel> {
+  const selectedTeamId = teamId ?? ''
+  return useMetadataListRequest({
+    cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
+    store: linearLabelStore,
+    load: () => loadTeamLabels(settings, selectedTeamId, workspaceId),
+    errorFallback: 'Failed to load labels'
   })
-  const activeKeyRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!teamId) {
-      return
-    }
-
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
-    const cached = getFreshMetadata(linearLabelStore, cacheKey)
-    if (cached) {
-      if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = cacheKey
-      }
-      return
-    }
-
-    activeKeyRef.current = cacheKey
-    const requestKey = cacheKey
-    setState((s) => ({
-      ...s,
-      data: s.data.length ? ([] as typeof s.data) : s.data,
-      loading: true,
-      error: null
-    }))
-    loadMetadata(linearLabelStore, cacheKey, () =>
-      linearTeamLabels(settings, teamId, workspaceId).then((labels) => labels as LinearLabel[])
-    )
-      .then((data) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        setState({ data, loading: false, error: null })
-      })
-      .catch((err) => {
-        if (activeKeyRef.current !== requestKey) {
-          return
-        }
-        activeKeyRef.current = null
-        setState((s) => ({
-          ...s,
-          loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load labels'
-        }))
-      })
-  }, [settings, teamId, workspaceId])
-
-  return state
 }
 
 export function useTeamMembers(
   teamId: string | null,
   settings?: RuntimeLinearSettings,
   workspaceId?: string | null
-): MetadataState<LinearMember[]> {
-  const [state, setState] = useState<MetadataState<LinearMember[]>>({
+): MetadataListState<LinearMember> {
+  const selectedTeamId = teamId ?? ''
+  return useMetadataListRequest({
+    cacheKey: selectedTeamId ? linearMetadataCacheKey(selectedTeamId, settings, workspaceId) : null,
+    store: linearMemberStore,
+    load: () => loadTeamMembers(settings, selectedTeamId, workspaceId),
+    errorFallback: 'Failed to load members'
+  })
+}
+
+function useTeamsMetadataList<T extends { id: string }>(
+  teamIds: readonly string[],
+  settings: RuntimeLinearSettings | undefined,
+  workspaceId: string | null | undefined,
+  store: MetadataRequestStore<T[]>,
+  loadTeam: (
+    settings: RuntimeLinearSettings | undefined,
+    teamId: string,
+    workspaceId: string | null | undefined
+  ) => Promise<T[]>,
+  errorFallback: string
+): MetadataListState<T> {
+  const [state, setState] = useState<MetadataListState<T>>({
     data: [],
     loading: false,
     error: null
   })
   const activeKeyRef = useRef<string | null>(null)
+  const settingsRef = useRef(settings)
+  settingsRef.current = settings
+
+  // Why: parents often pass a fresh teamIds array each render; key on joined ids.
+  const teamIdsKey = teamIds.filter((id) => id.trim().length > 0).join('\0')
+  const stableTeamIds = useMemo(
+    () => [...new Set(teamIdsKey.length === 0 ? [] : teamIdsKey.split('\0'))],
+    [teamIdsKey]
+  )
+
+  const requestKey =
+    stableTeamIds.length === 0
+      ? null
+      : stableTeamIds
+          .map((teamId) => linearMetadataCacheKey(teamId, settings, workspaceId))
+          .join('|')
 
   useEffect(() => {
-    if (!teamId) {
+    if (!requestKey || stableTeamIds.length === 0) {
+      activeKeyRef.current = null
+      setState({ data: [], loading: false, error: null })
       return
     }
 
-    const cacheKey = linearMetadataCacheKey(teamId, settings, workspaceId)
-    const cached = getFreshMetadata(linearMemberStore, cacheKey)
-    if (cached) {
-      if (activeKeyRef.current !== cacheKey) {
-        setState({ data: cached.data, loading: false, error: null })
-        activeKeyRef.current = cacheKey
-      }
+    activeKeyRef.current = requestKey
+    const cachedGroups = stableTeamIds.map(
+      (teamId) =>
+        getFreshMetadata(store, linearMetadataCacheKey(teamId, settingsRef.current, workspaceId))
+          ?.data
+    )
+    if (cachedGroups.every((group): group is T[] => group !== undefined)) {
+      setState({ data: unionLinearMetadataById(cachedGroups), loading: false, error: null })
       return
     }
 
-    activeKeyRef.current = cacheKey
-    const requestKey = cacheKey
     setState((s) => ({
       ...s,
       data: s.data.length ? ([] as typeof s.data) : s.data,
       loading: true,
       error: null
     }))
-    loadMetadata(linearMemberStore, cacheKey, () =>
-      linearTeamMembers(settings, teamId, workspaceId).then((members) => members as LinearMember[])
+
+    void Promise.all(
+      stableTeamIds.map((teamId) => {
+        const cacheKey = linearMetadataCacheKey(teamId, settingsRef.current, workspaceId)
+        return loadMetadata(store, cacheKey, () =>
+          loadTeam(settingsRef.current, teamId, workspaceId)
+        )
+      })
     )
-      .then((data) => {
+      .then((groups) => {
         if (activeKeyRef.current !== requestKey) {
           return
         }
-        setState({ data, loading: false, error: null })
+        setState({
+          data: unionLinearMetadataById(groups),
+          loading: false,
+          error: null
+        })
       })
       .catch((err) => {
         if (activeKeyRef.current !== requestKey) {
@@ -394,12 +249,78 @@ export function useTeamMembers(
         setState((s) => ({
           ...s,
           loading: false,
-          error: err instanceof Error ? err.message : 'Failed to load members'
+          error: err instanceof Error ? err.message : errorFallback
         }))
       })
-  }, [settings, teamId, workspaceId])
+  }, [requestKey, stableTeamIds, workspaceId, store, loadTeam, errorFallback])
 
   return state
+}
+
+const loadTeamStates = (
+  settings: RuntimeLinearSettings | undefined,
+  teamId: string,
+  workspaceId: string | null | undefined
+): Promise<LinearWorkflowState[]> =>
+  linearTeamStates(settings, teamId, workspaceId).then((states) => states as LinearWorkflowState[])
+
+const loadTeamLabels = (
+  settings: RuntimeLinearSettings | undefined,
+  teamId: string,
+  workspaceId: string | null | undefined
+): Promise<LinearLabel[]> =>
+  linearTeamLabels(settings, teamId, workspaceId).then((labels) => labels as LinearLabel[])
+
+const loadTeamMembers = (
+  settings: RuntimeLinearSettings | undefined,
+  teamId: string,
+  workspaceId: string | null | undefined
+): Promise<LinearMember[]> =>
+  linearTeamMembers(settings, teamId, workspaceId).then((members) => members as LinearMember[])
+
+export function useTeamsStates(
+  teamIds: readonly string[],
+  settings?: RuntimeLinearSettings,
+  workspaceId?: string | null
+): MetadataListState<LinearWorkflowState> {
+  return useTeamsMetadataList(
+    teamIds,
+    settings,
+    workspaceId,
+    linearStateStore,
+    loadTeamStates,
+    'Failed to load states'
+  )
+}
+
+export function useTeamsLabels(
+  teamIds: readonly string[],
+  settings?: RuntimeLinearSettings,
+  workspaceId?: string | null
+): MetadataListState<LinearLabel> {
+  return useTeamsMetadataList(
+    teamIds,
+    settings,
+    workspaceId,
+    linearLabelStore,
+    loadTeamLabels,
+    'Failed to load labels'
+  )
+}
+
+export function useTeamsMembers(
+  teamIds: readonly string[],
+  settings?: RuntimeLinearSettings,
+  workspaceId?: string | null
+): MetadataListState<LinearMember> {
+  return useTeamsMetadataList(
+    teamIds,
+    settings,
+    workspaceId,
+    linearMemberStore,
+    loadTeamMembers,
+    'Failed to load members'
+  )
 }
 
 export { useImmediateMutation } from './useImmediateMutation'

@@ -6,6 +6,8 @@ import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/runtime-types'
 import { LINEAR_ERROR_CODES } from '../../../shared/linear-agent-access'
+import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../shared/agent-session-host-authority'
+import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../shared/artifact-sharing-gate'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return {
@@ -43,14 +45,61 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_not_writable',
   'terminal_exited',
   'terminal_gone',
+  'terminal_tab_close_timeout',
+  'terminal_tab_not_found',
+  'terminal_tab_pinned',
   'no_active_terminal',
   'repo_not_found',
   'timeout',
-  'invalid_limit'
+  'invalid_limit',
+  'remote_update_manual_required',
+  'remote_update_not_available',
+  'remote_update_not_downloaded',
+  ...AGENT_SESSION_RPC_ERROR_CODES
 ])
 
 const COMPUTER_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(Object.values(COMPUTER_ERROR_CODES))
 const LINEAR_PASSTHROUGH_CODES: ReadonlySet<string> = new Set(LINEAR_ERROR_CODES)
+const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
+  'worktree_id_requires_full_path',
+  'run_not_found',
+  'run_required',
+  'stable_pane_required',
+  'consumer_fenced',
+  'task_not_found',
+  'task_not_startable',
+  'dispatch_not_found',
+  'dispatch_run_mismatch',
+  'dispatch_inactive',
+  'worker_identity_changed',
+  'cursor_invalid',
+  'cursor_dispatch_mismatch',
+  'source_changed',
+  'transcript_required',
+  'server_required',
+  'worktree_not_found_on_server',
+  'resource_server_mismatch',
+  'peer_changed',
+  'remote_runtime_unavailable',
+  'runtime_timeout',
+  'invalid_runtime_response',
+  'capability_unsupported',
+  'relay_quota_exceeded',
+  'dispatch_capability_invalid',
+  'agent_unconfigured',
+  'terminal_worktree_mismatch',
+  'request_mismatch',
+  'mutation_ledger_full',
+  'legacy_read_only',
+  'orchestration_migration_required',
+  'operation_unknown',
+  'question_not_found',
+  'answer_conflict',
+  'stale_delivery',
+  'waiter_exists',
+  'invalid_argument',
+  ARTIFACT_SHARING_DISABLED_CODE
+])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
@@ -61,7 +110,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     COMPUTER_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     const code = (error as { code: string }).code
-    return errorResponse(id, meta, code, message, computerErrorData(code))
+    return errorResponse(id, meta, code, message, computerErrorData(code, message))
   }
   if (
     error instanceof Error &&
@@ -82,6 +131,20 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     'code' in error &&
     typeof (error as { code: unknown }).code === 'string' &&
     LINEAR_PASSTHROUGH_CODES.has((error as { code: string }).code)
+  ) {
+    return errorResponse(
+      id,
+      meta,
+      (error as { code: string }).code,
+      message,
+      (error as { data?: unknown }).data
+    )
+  }
+  if (
+    error instanceof Error &&
+    'code' in error &&
+    typeof (error as { code: unknown }).code === 'string' &&
+    STRUCTURED_RUNTIME_PASSTHROUGH_CODES.has((error as { code: string }).code)
   ) {
     return errorResponse(
       id,

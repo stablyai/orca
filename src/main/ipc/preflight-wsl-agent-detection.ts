@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import path from 'node:path'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import {
   buildWslLoginShellCommand,
   escapeWslShCommandForWindows
@@ -24,13 +25,15 @@ export async function detectWslCommandsOnPath(
   }
 
   const commandList = uniqueCommands.map(shellQuote).join(' ')
-  // Why: join with newlines, not spaces. zsh treats `fi done` as a parse error
-  // (it needs a separator before `done`); the login shell may be zsh, so a
-  // space-joined script silently fails for every agent. Newlines are valid
-  // statement separators in every POSIX shell and zsh.
+  const lookupScript = buildPosixCommandPathLookupScript({
+    kind: 'shell-variable',
+    name: 'cmd'
+  })
+  // Newlines keep the loop valid in zsh and every POSIX shell used here.
   const script = [
     `for cmd in ${commandList}; do`,
-    'if resolved=$(command -v "$cmd" 2>/dev/null); then',
+    lookupScript,
+    'if [ -n "$resolved" ]; then',
     `printf '${WSL_AGENT_DETECTION_PREFIX}%s\\t%s\\n' "$cmd" "$resolved";`,
     'fi',
     'done'
@@ -111,7 +114,9 @@ function parseWslDetectedCommands(stdout: string): Set<string> {
     }
     const command = payload.slice(0, separatorIndex)
     const resolvedPath = payload.slice(separatorIndex + 1)
-    if (path.posix.isAbsolute(resolvedPath) || path.win32.isAbsolute(resolvedPath)) {
+    // Why: a real guest executable always resolves to a POSIX-absolute path, so
+    // a Windows-style C:\ path here is spoofed/non-guest output, not an install.
+    if (path.posix.isAbsolute(resolvedPath)) {
       found.add(command)
     }
   }

@@ -1,4 +1,4 @@
-import type { MobileTerminalTheme } from '../terminal/TerminalWebView'
+import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 
 export type TerminalRecord = {
@@ -17,6 +17,9 @@ export type MobileTerminalSessionTab = {
   status?: 'pending-handle' | 'ready'
   terminal: string | null
   agentStatus?: AgentStatusEntry | null
+  /** Host-provided launch context still parked as an unsent TUI-input draft. */
+  launchDraft?: string
+  launchDraftCreatedAt?: number
   terminalTheme?: MobileTerminalTheme
   isActive: boolean
 }
@@ -84,6 +87,10 @@ function mobileSessionTabEqual(
         a.leafId === b.leafId &&
         a.status === b.status &&
         a.terminal === b.terminal &&
+        // A frame whose only delta is the launch draft appearing or retracting
+        // still has to reach the chat composer.
+        a.launchDraft === b.launchDraft &&
+        a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.terminalTheme ?? null) === JSON.stringify(b.terminalTheme ?? null)
       )
@@ -116,6 +123,20 @@ function mobileSessionTabEqual(
   }
 }
 
+// Reconcile a partial session snapshot against the last known record for the
+// same terminal. The snapshot owns live fields (title, activity); the known
+// theme only survives when the snapshot omits it, since lightweight snapshots
+// can drop it.
+function mergeTerminalSnapshotWithKnownRecord(
+  snapshot: TerminalRecord,
+  known: TerminalRecord
+): TerminalRecord {
+  return {
+    ...snapshot,
+    terminalTheme: snapshot.terminalTheme ?? known.terminalTheme
+  }
+}
+
 export function mergeTerminalRecordsByCurrentOrder(
   terminalTabs: TerminalRecord[],
   currentTerminals: TerminalRecord[]
@@ -126,7 +147,12 @@ export function mergeTerminalRecordsByCurrentOrder(
   const terminalTabsByHandle = new Map(terminalTabs.map((tab) => [tab.handle, tab]))
   const currentHandles = new Set(currentTerminals.map((terminal) => terminal.handle))
   return [
-    ...currentTerminals.map((terminal) => terminalTabsByHandle.get(terminal.handle) ?? terminal),
+    ...currentTerminals.map((terminal) => {
+      const snapshotTerminal = terminalTabsByHandle.get(terminal.handle)
+      return snapshotTerminal
+        ? mergeTerminalSnapshotWithKnownRecord(snapshotTerminal, terminal)
+        : terminal
+    }),
     ...terminalTabs.filter((terminal) => !currentHandles.has(terminal.handle))
   ]
 }

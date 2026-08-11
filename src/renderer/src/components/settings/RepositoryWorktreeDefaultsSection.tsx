@@ -5,6 +5,7 @@ import { BaseRefPicker } from './BaseRefPicker'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { SearchableSetting } from './SearchableSetting'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 type RepositoryWorktreeDefaultsUpdate = Pick<Repo, 'worktreeBasePath' | 'worktreeBaseRef'>
 
@@ -41,6 +42,7 @@ export function RepositoryWorktreeDefaultsSection({
         </Label>
         <BaseRefPicker
           repoId={repo.id}
+          hostId={getRepoExecutionHostId(repo)}
           currentBaseRef={repo.worktreeBaseRef}
           onSelect={(ref) => updateRepo(repo.id, { worktreeBaseRef: ref })}
           onUsePrimary={() => updateRepo(repo.id, { worktreeBaseRef: undefined })}

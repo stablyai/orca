@@ -128,7 +128,8 @@ export function BrowserUseSetup({
   const cookiesImported = !!defaultProfile?.source
 
   const cliEnabled = isOrcaCliAvailableOnPath(cliStatus)
-  const cliPathNeedsAttention = cliStatus?.state === 'installed' && !cliStatus.pathConfigured
+  const cliPathNeedsAttention =
+    cliStatus?.state === 'installed' && cliStatus.pathConfigured === false
   const cliSupported = cliStatus?.supported ?? false
 
   const {
