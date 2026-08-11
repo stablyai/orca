@@ -11,6 +11,7 @@ const MAX_ENTRIES_PER_HOST = 200
 
 export type ConnectionLogStore = {
   append: (hostId: string, entry: ConnectionLogEntry) => void
+  clear: (hostId: string) => void
   get: (hostId: string) => readonly ConnectionLogEntry[]
   subscribe: (hostId: string, listener: () => void) => () => void
 }
@@ -37,6 +38,17 @@ export function createConnectionLogStore(
       if (entries.length > maxEntriesPerHost) {
         entries.splice(0, entries.length - maxEntriesPerHost)
       }
+      snapshotByHost.delete(hostId)
+      const listeners = listenersByHost.get(hostId)
+      if (listeners) {
+        for (const listener of listeners) {
+          listener()
+        }
+      }
+    },
+
+    clear(hostId) {
+      entriesByHost.delete(hostId)
       snapshotByHost.delete(hostId)
       const listeners = listenersByHost.get(hostId)
       if (listeners) {

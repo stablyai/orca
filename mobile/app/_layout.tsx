@@ -13,6 +13,7 @@ import { useOpenNotificationRoute } from '../src/notifications/use-open-notifica
 import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
+import { NotificationHostConnectionOwner } from '../src/notifications/notification-host-connection-owner'
 
 // Why: keeps the native splash screen visible until the React tree is mounted
 // and ready to render. Without this the user sees a blank white/black frame
@@ -159,6 +160,7 @@ export default function RootLayout() {
 
   return (
     <RpcClientProvider>
+      <NotificationHostConnectionOwner />
       <View style={styles.root} onLayout={onNavigatorLayout}>
         <StatusBar style="light" />
         <Stack

@@ -9,7 +9,7 @@ import {
   type PreProfilePairingAttempt
 } from '../src/transport/pre-profile-pairing-coordinator'
 import type { ConnectionLogEntry } from '../src/transport/types'
-import { useCloseHost } from '../src/transport/client-context'
+import { useCloseHost, useForceReconnect } from '../src/transport/client-context'
 import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import {
@@ -29,6 +29,7 @@ const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 export default function PairConfirmScreen() {
   const router = useRouter()
   const closeHost = useCloseHost()
+  const forceReconnect = useForceReconnect()
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
@@ -113,9 +114,10 @@ export default function PairConfirmScreen() {
       // (STA-1840 dedup), so a client cached under that id from an earlier
       // pairing would keep the stale endpoint/relay. Close it so the
       // destination screen opens a fresh client with the newly-paired
-      // profile — the removeHost() path already refreshes on re-pair, and a
-      // brand-new host has no cached entry so this is a no-op.
+      // profile. Reopen immediately so root notification ownership does not
+      // stay clientless while onboarding is visible.
       closeHost(hostId)
+      await forceReconnect(hostId)
       const onboardingSteps = await loadMobileOnboardingSteps()
       if (!mountedRef.current) {
         return

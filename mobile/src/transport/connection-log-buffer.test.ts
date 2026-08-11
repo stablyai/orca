@@ -53,4 +53,16 @@ describe('connection log buffer', () => {
     store.append('host-a', entry(2))
     expect(onA).toHaveBeenCalledTimes(1)
   })
+
+  it('evicts a retired host and notifies its active observer', () => {
+    const store = createConnectionLogStore()
+    const listener = vi.fn()
+    store.append('host-a', entry(1))
+    store.subscribe('host-a', listener)
+
+    store.clear('host-a')
+
+    expect(store.get('host-a')).toEqual([])
+    expect(listener).toHaveBeenCalledOnce()
+  })
 })

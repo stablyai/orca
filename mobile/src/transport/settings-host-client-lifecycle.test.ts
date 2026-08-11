@@ -180,10 +180,8 @@ function activeHostIds(): string[] {
   if (!context) {
     throw new Error('client context was not captured')
   }
-  return context
-    .getAllClients()
-    .map(({ hostId }) => hostId)
-    .sort()
+  const openedHostIds = connectMock.mock.calls.map(([profile]) => profile.id as string)
+  return [...new Set(openedHostIds)].filter((hostId) => context?.getClient(hostId)).sort()
 }
 
 beforeEach(() => {

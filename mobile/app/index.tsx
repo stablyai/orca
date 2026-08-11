@@ -23,6 +23,7 @@ import { fetchHomeHostWorktreeInfo } from '../src/worktree/home-host-worktree-fe
 import { totalHomeStats, type HomeStatsSummary } from '../src/stats/home-stats-total'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from '../src/worktree/home-worktree-info'
 import type { RpcClient } from '../src/transport/rpc-client'
+import { rpcClientIdentity } from '../src/transport/rpc-client-identity'
 import { createHostConnectRefetchGate } from '../src/transport/host-connect-refetch-gate'
 import { sendSingleFlightRequest } from '../src/transport/request-single-flight'
 import { useCloseHost, useForceReconnect, usePrimeHosts } from '../src/transport/client-context'
@@ -32,7 +33,6 @@ import {
   selectHomeAutoConnectHostIds
 } from '../src/transport/home-host-auto-connect'
 import { classifyConnection } from '../src/transport/connection-health'
-import { subscribeToDesktopNotifications } from '../src/notifications/mobile-notifications'
 import {
   loadMobileOnboardingSteps,
   mobileOnboardingDestination
@@ -106,18 +106,6 @@ function formatDuration(ms: number): string {
     return `${totalHours}h ${minutes}m`
   }
   return `${totalMinutes}m`
-}
-
-// Why: stable per-instance RpcClient identity so wireUp's dep key changes when forceReconnect swaps the client, re-attaching listeners.
-const clientIdentities = new WeakMap<RpcClient, number>()
-let nextClientIdentity = 1
-function clientKey(client: RpcClient): number {
-  let id = clientIdentities.get(client)
-  if (id == null) {
-    id = nextClientIdentity++
-    clientIdentities.set(client, id)
-  }
-  return id
 }
 
 function fetchStats(
@@ -246,7 +234,7 @@ export default function HomeScreen() {
   // Why: scoped to the paired hosts so an unpaired desktop's cached reply leaves the header total.
   const stats = useMemo(() => totalHomeStats(statsByHost, hostIds), [statsByHost, hostIds])
   const autoConnectHostIds = useMemo(() => selectHomeAutoConnectHostIds(hosts), [hosts])
-  const allClients = useAllHostClients(hostIds, {
+  const allClients = useAllHostClients(autoConnectHostIds, {
     autoConnectHostIds,
     closeUnusedOnRelease: true
   })
@@ -432,7 +420,7 @@ export default function HomeScreen() {
     })
   }, [allClients, hostCatalog])
 
-  // Notif/accounts subs + a snapshot read per connect for one host. Lives outside the effect body
+  // Accounts sub + a snapshot read per connect for one host. Lives outside the effect body
   // because react-doctor's effect-needs-cleanup false-positives on `subscribe` inside one; the
   // returned disposer owns every handle allocated here.
   const wireHostSubscriptions = (entry: {
@@ -440,15 +428,11 @@ export default function HomeScreen() {
     client: RpcClient
     state: ConnectionState
   }) => {
-    let unsubNotif: (() => void) | null = null
     let unsubAccounts: (() => void) | null = null
     const refetchGate = createHostConnectRefetchGate()
     const wireUp = (state: ConnectionState) => {
       const reconnected = refetchGate.observe(state)
       if (state === 'connected') {
-        if (!unsubNotif) {
-          unsubNotif = subscribeToDesktopNotifications(entry.client, entry.hostId)
-        }
         if (!unsubAccounts) {
           unsubAccounts = entry.client.subscribe('accounts.subscribe', null, (payload) => {
             if (!payload || typeof payload !== 'object') {
@@ -474,10 +458,6 @@ export default function HomeScreen() {
           fetchTaskProviders(entry.client, entry.hostId, setTaskProvidersByHost, () => false)
         }
       } else {
-        if (unsubNotif) {
-          unsubNotif()
-          unsubNotif = null
-        }
         if (unsubAccounts) {
           unsubAccounts()
           unsubAccounts = null
@@ -488,7 +468,6 @@ export default function HomeScreen() {
     const unsubState = entry.client.onStateChange(wireUp)
     return () => {
       unsubState()
-      unsubNotif?.()
       unsubAccounts?.()
     }
   }
@@ -504,7 +483,7 @@ export default function HomeScreen() {
     // Why: key on host-id set + each client's identity so resubs fire when forceReconnect swaps a host's client, not on every render.
   }, [
     allClients
-      .map((e) => `${e.hostId}:${clientKey(e.client)}`)
+      .map((e) => `${e.hostId}:${rpcClientIdentity(e.client)}`)
       .sort()
       .join(',')
   ])

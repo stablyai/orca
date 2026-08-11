@@ -83,9 +83,26 @@ describe('host removal lifecycle', () => {
     removeHostMock.mockResolvedValue(undefined)
 
     await removeHostAndCloseClient('host-1', vi.fn())
-    // clearWatermark is fire-and-forget; let its microtask land.
-    await Promise.resolve()
 
+    expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
+  })
+
+  it('drains in-flight notification delivery before retiring a host for re-pair', async () => {
+    removeHostMock.mockResolvedValue(undefined)
+    const session = getHostNotificationSession('host-1')
+    let finishDelivery: () => void = () => {}
+    session.deliveryTail = new Promise<void>((resolve) => {
+      finishDelivery = resolve
+    })
+
+    const removal = removeHostAndCloseClient('host-1', vi.fn())
+    await Promise.resolve()
+    expect(getHostNotificationSession('host-1')).toBe(session)
+
+    finishDelivery()
+    await removal
+
+    expect(getHostNotificationSession('host-1')).not.toBe(session)
     expect(asyncStorage.removeItem).toHaveBeenCalledWith('orca:mobileNotificationsWatermark:host-1')
   })
 })

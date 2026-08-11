@@ -5,7 +5,10 @@ export {
   getNotificationPermissionState,
   type NotificationPermissionState
 } from './notification-permissions'
-export { setScheduledNotificationsMaxForTests } from './local-notification-scheduling'
+export {
+  resetNotificationChannelConfigurationForTests,
+  setScheduledNotificationsMaxForTests
+} from './local-notification-scheduling'
 import {
   configureNotificationChannel,
   dismissLocalNotification,
@@ -65,6 +68,9 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
     }
     return enqueueHostDelivery(session, async () => {
       try {
+        if (disposed) {
+          return
+        }
         await deliverLive(type, event)
       } finally {
         if (type === 'notification') {
@@ -87,6 +93,9 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       await showLocalNotification(event as NotificationEvent, hostId)
     } else {
       await dismissLocalNotification(event as DismissNotificationEvent, hostId)
+    }
+    if (session.retired) {
+      return
     }
     // Why after the await, exactly like the watermark below: `seen` asserts this event
     // reached the user (#8129). Marked before, a rejected show leaves the key behind and
@@ -141,13 +150,13 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
 
   // Why: desktop cuts by seq > lastSeenSeq, so re-fetching from the watermark is idempotent (session.seen guards residual overlap).
   async function fetchMissed(): Promise<void> {
-    if (disposed) {
+    if (session.retired) {
       return
     }
     // Captured before the request: everything at or below it is known delivered, so
     // it is the floor the watermark falls back to if this catch-up never completes.
     const askFrom = catchUpWatermarkSeq(session)
-    const missed = await client
+    const catchUp = await client
       .sendRequest('notifications.getMissedSince', {
         lastSeenSeq: askFrom,
         // Why: sending the epoch lets the desktop reject a watermark from a counter
@@ -159,17 +168,24 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
           return null
         }
         const result = response.result as { notifications?: unknown[]; epoch?: string } | undefined
-        adoptNotificationEpoch(session, hostId, result?.epoch)
-        return Array.isArray(result?.notifications) ? result.notifications : []
+        return {
+          epoch: result?.epoch,
+          notifications: Array.isArray(result?.notifications) ? result.notifications : []
+        }
       })
       .catch(() => null)
-    if (missed == null) {
+    if (session.retired) {
+      return
+    }
+    if (catchUp == null) {
       // Why quarantine rather than retry: the range this catch-up abandoned stays
       // unrecovered until SOME later one succeeds, and a live seq persisting past it
       // meanwhile would make the desktop cut it forever.
       quarantineCatchUpWatermark(session, hostId, askFrom)
       return
     }
+    adoptNotificationEpoch(session, hostId, catchUp.epoch)
+    const missed = catchUp.notifications
     // Why the whole batch is ONE queue entry (#8591): awaiting per event returns to
     // the event loop between replays, so a live seq 11 slots into the chain between
     // seq 6 and 7 and persists a watermark past a notification still unshown. Why the
@@ -181,6 +197,9 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       let contiguousSeq = askFrom
       let drained = false
       try {
+        if (disposed) {
+          return
+        }
         for (const raw of missed) {
           // Re-checked per event: the batch can start before a teardown and still be
           // draining after it, and a torn-down host must stop pushing.
@@ -195,7 +214,7 @@ export function subscribeToDesktopNotifications(client: RpcClient, hostId: strin
       } finally {
         if (drained) {
           resolveCatchUpQuarantine(session, hostId)
-        } else {
+        } else if (!session.retired) {
           quarantineCatchUpWatermark(session, hostId, contiguousSeq)
         }
       }

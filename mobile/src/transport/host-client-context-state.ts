@@ -17,12 +17,6 @@ export function notifyHostStateListeners(
   }
 }
 
-export function notifyAllHostListeners(listeners: Set<() => void>): void {
-  for (const listener of listeners) {
-    listener()
-  }
-}
-
 export function subscribeHostStateListener(
   listeners: Map<string, Set<(state: ConnectionState) => void>>,
   hostId: string,
@@ -40,20 +34,6 @@ export function subscribeHostStateListener(
       listeners.delete(hostId)
     }
   }
-}
-
-export function subscribeAllHostListener(
-  listeners: Set<() => void>,
-  listener: () => void
-): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
-}
-
-export function listHostClients(
-  entries: ReadonlyMap<string, { client: RpcClient }>
-): { hostId: string; client: RpcClient }[] {
-  return [...entries].map(([hostId, entry]) => ({ hostId, client: entry.client }))
 }
 
 export function primeHostProfiles(cache: Map<string, HostProfile>, hosts: HostProfile[]): void {

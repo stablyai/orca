@@ -30,6 +30,8 @@ import {
   toStoredHostProfile,
   writeStoredHostProfiles
 } from './host-metadata-store'
+import * as hostCollectionChanges from './host-collection-changes'
+import { recordHostLastConnected } from './host-last-connected'
 
 async function commitDeviceToken(hostId: string, token: string): Promise<void> {
   markHostCredentialWrite(hostId)
@@ -169,6 +171,7 @@ export const saveExistingHostRelayUpgrade = (host: HostProfile): Promise<void> =
 async function persistHost(host: HostProfile, requireExisting: boolean): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStoredHostProfile(validated)
+  const credentialWasCached = tokenCache.has(stored.id)
   const duplicateHostIds = new Set<string>()
   let updatedExistingHost = false
   let cleanupIntentRecordedBeforeMetadata = false
@@ -252,6 +255,9 @@ async function persistHost(host: HostProfile, requireExisting: boolean): Promise
       // Metadata is already deduplicated; orphan-token recovery is best-effort.
     }
   }
+  if (!updatedExistingHost || duplicateHostIds.size > 0 || !credentialWasCached) {
+    hostCollectionChanges.notifyHostCollectionChanged({ retiredHostIds: [...duplicateHostIds] })
+  }
 }
 
 export async function removeHost(hostId: string): Promise<void> {
@@ -285,6 +291,7 @@ export async function removeHost(hostId: string): Promise<void> {
   } catch {
     // Metadata is already committed; orphan-token recovery is best-effort.
   }
+  hostCollectionChanges.notifyHostCollectionChanged({ retiredHostIds: [hostId] })
 }
 
 export async function retryPendingHostCredentialCleanup(): Promise<{
@@ -319,15 +326,7 @@ export async function updateHostNameAndEndpoint(
 
 export async function updateLastConnected(hostId: string): Promise<void> {
   try {
-    await mutateStoredHosts((hosts) => {
-      const index = hosts.findIndex((h) => h.id === hostId)
-      if (index < 0) {
-        return hosts
-      }
-      const next = hosts.slice()
-      next[index] = { ...next[index]!, lastConnected: Date.now() }
-      return next
-    })
+    await mutateStoredHosts((hosts) => recordHostLastConnected(hosts, hostId, Date.now()))
   } catch {
     // Why: best-effort timestamp fired with void; swallow so unreadable storage doesn't reject.
   }
@@ -340,4 +339,5 @@ export function resetHostStoreForTests(): void {
   resetHostCredentialWriteRevisionsForTests()
   hostListLoads.dropSharedHostListLoad()
   resetPairingKeychainForTests()
+  hostCollectionChanges.resetHostCollectionChangeListenersForTests()
 }

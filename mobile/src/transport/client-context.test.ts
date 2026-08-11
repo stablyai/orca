@@ -354,6 +354,96 @@ describe('useHostClient', () => {
 })
 
 describe('useAllHostClients', () => {
+  it('honors an observeConnectionState toggle for an already tracked host', async () => {
+    const client = makeFakeClient('connected')
+    connectMock.mockReturnValue(client)
+    loadHostsMock.mockResolvedValue([HOST])
+    let renderCount = 0
+
+    function Probe({ observeConnectionState }: { observeConnectionState: boolean }): null {
+      renderCount += 1
+      useAllHostClients([HOST.id], { observeConnectionState })
+      return null
+    }
+    const tree = (observeConnectionState: boolean) =>
+      createElement(
+        RpcClientProvider,
+        null,
+        createElement(Probe, { observeConnectionState, key: 'probe' })
+      )
+
+    let renderer: ReactTestRenderer | null = null
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(tree(true))
+        await Promise.resolve()
+      })
+
+      let baseline = renderCount
+      await act(async () => {
+        client.emitState('reconnecting')
+        await Promise.resolve()
+      })
+      expect(renderCount).toBeGreaterThan(baseline)
+
+      await act(async () => {
+        renderer?.update(tree(false))
+        await Promise.resolve()
+      })
+      baseline = renderCount
+      await act(async () => {
+        client.emitState('connected')
+        await Promise.resolve()
+      })
+      expect(renderCount).toBe(baseline)
+
+      await act(async () => {
+        renderer?.update(tree(true))
+        await Promise.resolve()
+      })
+      baseline = renderCount
+      await act(async () => {
+        client.emitState('reconnecting')
+        await Promise.resolve()
+      })
+      expect(renderCount).toBeGreaterThan(baseline)
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('observes a client opened by an earlier sibling effect in the same commit', async () => {
+    connectMock.mockReturnValue(makeFakeClient('connected'))
+    loadHostsMock.mockResolvedValue([HOST])
+    let observerHasClient = false
+
+    function Acquirer(): null {
+      useAllHostClients([HOST.id])
+      return null
+    }
+    function Observer(): null {
+      observerHasClient = useAllHostClients([HOST.id]).length === 1
+      return null
+    }
+
+    let renderer: ReactTestRenderer | null = null
+    const restore = suppressReactTestRendererDeprecationWarning()
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(RpcClientProvider, null, createElement(Acquirer), createElement(Observer))
+        )
+        await Promise.resolve()
+      })
+      expect(observerHasClient).toBe(true)
+    } finally {
+      restore()
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('only opens the requested startup subset', async () => {
     const host2 = { ...HOST, id: 'host-2', name: 'Host 2' }
     connectMock.mockReturnValue(makeFakeClient('connected'))
