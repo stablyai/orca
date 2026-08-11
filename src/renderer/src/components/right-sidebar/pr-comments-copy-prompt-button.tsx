@@ -23,6 +23,8 @@ export function CopyCommentsPromptButton({
   const resetTimerRef = useRef<number | null>(null)
   // Why: clipboard IPC can resolve after unmount; the ref lets the callback skip the post-unmount setState.
   const isMountedRef = useRef(false)
+  // Why: a fast double-click would start two concurrent onCopy() calls (duplicate side effects like toasts).
+  const isCopyingRef = useRef(false)
 
   const setButtonRef = useCallback((node: HTMLButtonElement | null) => {
     isMountedRef.current = node !== null
@@ -33,18 +35,30 @@ export function CopyCommentsPromptButton({
   }, [])
 
   const handleCopy = useCallback(async () => {
-    const ok = await onCopy()
-    if (!ok || !isMountedRef.current) {
+    if (isCopyingRef.current) {
       return
     }
-    setCopied(true)
-    if (resetTimerRef.current !== null) {
-      window.clearTimeout(resetTimerRef.current)
+    isCopyingRef.current = true
+    try {
+      const ok = await onCopy()
+      if (!ok || !isMountedRef.current) {
+        return
+      }
+      setCopied(true)
+      if (resetTimerRef.current !== null) {
+        window.clearTimeout(resetTimerRef.current)
+      }
+      resetTimerRef.current = window.setTimeout(() => {
+        resetTimerRef.current = null
+        setCopied(false)
+      }, 1500)
+    } catch (err) {
+      // Why: onCopy's contract is to resolve false on failure; a rejection is unexpected.
+      // Catch it so the click's `void handleCopy()` can't drop it as an unhandled rejection.
+      console.warn('Copy prompt button onCopy rejected unexpectedly:', err)
+    } finally {
+      isCopyingRef.current = false
     }
-    resetTimerRef.current = window.setTimeout(() => {
-      resetTimerRef.current = null
-      setCopied(false)
-    }, 1500)
   }, [onCopy])
 
   const copiedLabel = translate(

@@ -113,6 +113,8 @@ function renderList(props: {
   commentsLoading?: boolean
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
+  copyCommentsPromptDisabled?: boolean
+  copyCommentsPromptDisabledReason?: string
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
   onCopyCommentsPromptToClipboard?: (groups: PRCommentGroup[]) => Promise<boolean>
   clearRequest?: PRCommentsListSelectionClearRequest | null
@@ -124,6 +126,8 @@ function renderList(props: {
         commentsLoading={props.commentsLoading ?? false}
         resolveCommentsWithAIDisabled={props.resolveCommentsWithAIDisabled}
         resolveCommentsWithAIDisabledReason={props.resolveCommentsWithAIDisabledReason}
+        copyCommentsPromptDisabled={props.copyCommentsPromptDisabled}
+        copyCommentsPromptDisabledReason={props.copyCommentsPromptDisabledReason}
         selectionContextKey={props.contextKey ?? 'review:42'}
         selectionClearRequest={props.clearRequest}
         onResolveSelectedCommentsWithAI={props.onResolveSelectedCommentsWithAI ?? vi.fn()}
@@ -323,18 +327,35 @@ describe('PRCommentsList comment resolution selection', () => {
     expect(hasButton('Copy unresolved PR comments prompt')).toBe(false)
   })
 
-  it('disables the header copy action and skips the handler when AI actions are disabled', () => {
+  const headerCopyButton = (): HTMLButtonElement | undefined =>
+    [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.getAttribute('aria-label')?.includes('Copy unresolved PR comments prompt')
+    )
+
+  it('keeps the copy action enabled even when the launch (Send) action is disabled', () => {
+    // Why: copy launches no agent, so it must not inherit the Send button's eligibility
+    // (e.g. no enabled agent detected). Only copy-specific prerequisites may disable it.
     const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
     renderList({
       comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })],
       resolveCommentsWithAIDisabled: true,
-      resolveCommentsWithAIDisabledReason: 'Still finishing the previous comment launch.',
+      resolveCommentsWithAIDisabledReason: 'No enabled agent detected.',
       onCopyCommentsPromptToClipboard
     })
 
-    const copyButton = [...container.querySelectorAll('button')].find((candidate) =>
-      candidate.getAttribute('aria-label')?.includes('Copy unresolved PR comments prompt')
-    )
+    expect(headerCopyButton()?.hasAttribute('disabled')).toBe(false)
+  })
+
+  it('disables the header copy action and skips the handler on copy-specific prerequisites', () => {
+    const onCopyCommentsPromptToClipboard = vi.fn().mockResolvedValue(true)
+    renderList({
+      comments: [comment({ id: 1, threadId: 'thread-1', path: 'src/a.ts', isResolved: false })],
+      copyCommentsPromptDisabled: true,
+      copyCommentsPromptDisabledReason: 'Comments are still loading.',
+      onCopyCommentsPromptToClipboard
+    })
+
+    const copyButton = headerCopyButton()
     expect(copyButton?.hasAttribute('disabled')).toBe(true)
     act(() => {
       copyButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))

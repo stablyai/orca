@@ -2422,6 +2422,8 @@ export function PRCommentsList({
   selectionClearRequest,
   resolveCommentsWithAIDisabled,
   resolveCommentsWithAIDisabledReason,
+  copyCommentsPromptDisabled,
+  copyCommentsPromptDisabledReason,
   onAddComment,
   onResolveSelectedCommentsWithAI,
   onCopyCommentsPromptToClipboard,
@@ -2440,6 +2442,9 @@ export function PRCommentsList({
   selectionClearRequest?: PRCommentsListSelectionClearRequest | null
   resolveCommentsWithAIDisabled?: boolean
   resolveCommentsWithAIDisabledReason?: string
+  // Why: copy has its own eligibility (no agent-launch prerequisites), so it disables independently of the Send action.
+  copyCommentsPromptDisabled?: boolean
+  copyCommentsPromptDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
   /** Copies the resolution prompt for the given groups; resolves true when the clipboard write lands. */
@@ -2684,8 +2689,8 @@ export function PRCommentsList({
                       'Copy unresolved {{value0}} comments prompt',
                       { value0: reviewKind }
                     )}
-                    disabled={commentsLoading || resolveCommentsWithAIDisabled}
-                    disabledReason={resolveCommentsWithAIDisabledReason}
+                    disabled={copyCommentsPromptDisabled}
+                    disabledReason={copyCommentsPromptDisabledReason}
                     onCopy={() => onCopyCommentsPromptToClipboard(selectableGroups)}
                   />
                 )}
@@ -2738,12 +2743,8 @@ export function PRCommentsList({
                           'Copy {{value0}} queued comments prompt',
                           { value0: selectedCommentQueueCount }
                         )}
-                        disabled={
-                          selectedCommentQueueCount === 0 ||
-                          commentsLoading ||
-                          resolveCommentsWithAIDisabled
-                        }
-                        disabledReason={resolveCommentsWithAIDisabledReason}
+                        disabled={selectedCommentQueueCount === 0 || copyCommentsPromptDisabled}
+                        disabledReason={copyCommentsPromptDisabledReason}
                         onCopy={() => onCopyCommentsPromptToClipboard(selectedGroups)}
                       />
                     )}

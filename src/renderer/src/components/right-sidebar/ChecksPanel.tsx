@@ -2868,6 +2868,15 @@ export default function ChecksPanel(): React.JSX.Element {
                 ? 'Open a GitLab MR before resolving comments.'
                 : undefined
 
+  // Why: copy only needs loaded comments and an active review. Unlike launch it must NOT
+  // gate on agent detection (aiActionDisabledReason) or ack-busy — copying starts no agent,
+  // so a user with no Orca-managed agent can still copy the prompt for one they already have.
+  const copyCommentsPromptDisabledReason = commentsLoading
+    ? 'Comments are still loading.'
+    : !activeReview
+      ? 'Open a PR or MR before copying comments.'
+      : undefined
+
   const handleAddPRComment = useCallback(
     async (body: string) => {
       if (!repo || !prNumber || !pr?.prRepo) {
@@ -3241,7 +3250,7 @@ export default function ChecksPanel(): React.JSX.Element {
   // agent they already have open; the self-managed prompt drops the "Orca handles it" promise.
   const handleCopyCommentsPrompt = useCallback(
     async (selectedGroups: PRCommentGroup[]): Promise<boolean> => {
-      if (!sourceControlAiActionsVisible || !activeReview || resolveCommentsWithAIDisabledReason) {
+      if (!sourceControlAiActionsVisible || !activeReview || copyCommentsPromptDisabledReason) {
         return false
       }
       if (selectedGroups.length === 0) {
@@ -3281,7 +3290,7 @@ export default function ChecksPanel(): React.JSX.Element {
     [
       activeReview,
       activeWorktreePath,
-      resolveCommentsWithAIDisabledReason,
+      copyCommentsPromptDisabledReason,
       sourceControlAiActionsVisible
     ]
   )
@@ -4683,6 +4692,8 @@ export default function ChecksPanel(): React.JSX.Element {
         selectionClearRequest={commentsSelectionClearRequest}
         resolveCommentsWithAIDisabled={Boolean(resolveCommentsWithAIDisabledReason)}
         resolveCommentsWithAIDisabledReason={resolveCommentsWithAIDisabledReason}
+        copyCommentsPromptDisabled={Boolean(copyCommentsPromptDisabledReason)}
+        copyCommentsPromptDisabledReason={copyCommentsPromptDisabledReason}
         onAddComment={pr ? handleAddPRComment : undefined}
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined

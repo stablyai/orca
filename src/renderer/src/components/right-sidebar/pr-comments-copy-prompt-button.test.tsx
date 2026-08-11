@@ -94,4 +94,28 @@ describe('CopyCommentsPromptButton', () => {
 
     expect(onCopy).not.toHaveBeenCalled()
   })
+
+  it('ignores a re-entrant click while a copy is already in flight', async () => {
+    let resolveCopy: (value: boolean) => void = () => {}
+    const onCopy = vi.fn(() => new Promise<boolean>((resolve) => (resolveCopy = resolve)))
+    render({ onCopy })
+
+    // First click starts an in-flight copy; a second click before it resolves must be dropped.
+    act(() => {
+      button().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    act(() => {
+      button().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onCopy).toHaveBeenCalledTimes(1)
+
+    // Once it settles, the button accepts a fresh copy again.
+    await act(async () => {
+      resolveCopy(true)
+    })
+    await act(async () => {
+      button().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(onCopy).toHaveBeenCalledTimes(2)
+  })
 })
