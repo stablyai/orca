@@ -10744,7 +10744,13 @@
             "b25f63edd7": "open",
             "d2ca293f3d": "Working...",
             "ef064cb7c3": "default",
-            "59b4dccf70": "destructive"
+            "59b4dccf70": "destructive",
+            "queueThroughOne": "Queue through #{{pr}} · {{count}} PR",
+            "queueThroughOther": "Queue through #{{pr}} · {{count}} PRs",
+            "stackQueueTooltip": "GitHub will add this pull request and every pull request below it to the merge queue.",
+            "stackMergeTooltip": "GitHub will merge this pull request and every pull request below it in the stack.",
+            "queueingStack": "Queueing stack...",
+            "mergingStack": "Merging stack..."
           },
           "PortsPanel": {
             "3ea4a02a8f": "Cancel",
@@ -11926,6 +11932,49 @@
             "mayBeSlower": "May be slower",
             "slowest": "Slowest",
             "unlimited": "Unlimited"
+          },
+          "GitHubPRStackMap": {
+            "status": {
+              "merged": "merged",
+              "closed": "closed",
+              "draft": "draft",
+              "conflicts": "conflicts",
+              "checksFailed": "checks failed",
+              "checksPending": "checks pending",
+              "changesRequested": "changes requested",
+              "reviewNeeded": "review needed",
+              "approved": "approved",
+              "open": "open"
+            },
+            "collapse": "Collapse stack #{{value0}}",
+            "expand": "Expand stack #{{value0}}",
+            "title": "Stack #{{value0}}",
+            "position": "{{value0}} of {{value1}} · {{value2}}",
+            "unavailable": "Stack details are temporarily unavailable."
+          },
+          "githubPRStackMerge": {
+            "labelOne": "Merge through #{{pr}} · {{count}} PR",
+            "labelOther": "Merge through #{{pr}} · {{count}} PRs",
+            "blockerDraft": "#{{pr}} is still a draft.",
+            "blockerClosed": "#{{pr}} is closed.",
+            "blockerConflicts": "#{{pr}} has merge conflicts.",
+            "blockerChanges": "#{{pr}} has requested changes.",
+            "blockerReview": "#{{pr}} still needs review approval.",
+            "blockerBehind": "#{{pr}} must be updated.",
+            "blockerBlocked": "#{{pr}} is blocked."
+          },
+          "useHostedReviewActions": {
+            "stackIncluded": "Included: {{numbers}}. ",
+            "queueThroughTitle": "Queue through #{{pr}}?",
+            "mergeThroughTitle": "Merge through #{{pr}}?",
+            "queueDescriptionOne": "{{included}}GitHub will add {{count}} pull request to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+            "queueDescriptionOther": "{{included}}GitHub will add {{count}} pull requests to the merge queue together. The queue chooses the merge method and may merge them in separate groups.",
+            "mergeDescriptionOne": "{{included}}GitHub will merge {{count}} pull request atomically using {{method}}. If it cannot merge, nothing will be merged.",
+            "mergeDescriptionOther": "{{included}}GitHub will merge {{count}} pull requests atomically using {{method}}. If any cannot merge, none will.",
+            "queueLabelOne": "Queue {{count}} PR",
+            "queueLabelOther": "Queue {{count}} PRs",
+            "mergeLabelOne": "Merge {{count}} PR",
+            "mergeLabelOther": "Merge {{count}} PRs"
           }
         }
       },
