@@ -320,6 +320,53 @@ describe('removeManagedCommands', () => {
 
     expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
   })
+
+  it('removes exec-form hooks whose managed script path is an argument', () => {
+    const cleaned = removeManagedCommands(
+      [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: [
+                '--headless',
+                'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/c',
+                'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd'
+              ]
+            },
+            { type: 'command', command: 'echo keep me' }
+          ]
+        }
+      ],
+      match
+    )
+
+    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
+  })
+
+  it('preserves user hooks with malformed args fields', () => {
+    const definitions = [
+      {
+        hooks: [
+          {
+            type: 'command' as const,
+            command: 'echo keep me',
+            args: 'not-an-array' as unknown as string[]
+          },
+          {
+            type: 'command' as const,
+            command: 'echo keep me too',
+            args: [42] as unknown as string[]
+          }
+        ]
+      }
+    ]
+
+    expect(removeManagedCommands(definitions, match)).toEqual(definitions)
+  })
 })
 
 describe('hookDefinitionHasManagedCommand', () => {
@@ -338,6 +385,34 @@ describe('hookDefinitionHasManagedCommand', () => {
         match
       )
     ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: ['--headless', 'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd']
+            }
+          ]
+        },
+        match
+      )
+    ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'echo no',
+              args: 'not-an-array' as unknown as string[]
+            }
+          ]
+        },
+        match
+      )
+    ).toBe(false)
     expect(hookDefinitionHasManagedCommand({ bash: 'echo no' }, match)).toBe(false)
   })
 })
