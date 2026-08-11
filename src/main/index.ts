@@ -2516,6 +2516,22 @@ void app.whenReady().then(async () => {
     orchestrationEnvironmentTransport
   })
   runtime = runtimeService
+  // Why: submit verdicts are derived from the harness's own turn-lifecycle hook, and this tap is
+  // the one place every source lands — local, WSL relay, and SSH relay all ingest through it.
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
+    if (!enriched.source || enriched.providerSessionOnly) {
+      return
+    }
+    runtimeService.noteAgentSubmitHookEvent({
+      paneKey: enriched.paneKey,
+      source: enriched.source,
+      hookEventName: enriched.hookEventName,
+      hasExplicitPrompt: enriched.hasExplicitPrompt,
+      state: enriched.payload.state,
+      isReplay: enriched.isReplay,
+      restoredUnconfirmed: enriched.restoredUnconfirmed
+    })
+  })
   runtimeService.prepareLegacyWorkerTerminalRecovery()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {

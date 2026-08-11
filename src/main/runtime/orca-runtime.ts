@@ -94,6 +94,17 @@ import {
   AGENT_PROMPT_SUBMIT_DELAY_MS,
   buildAgentPromptPasteBytes
 } from '../../shared/agent-prompt-injection'
+import {
+  clampTerminalSubmitVerdictTimeoutMs,
+  DEFAULT_TERMINAL_SUBMIT_VERDICT_TIMEOUT_MS,
+  type TerminalSubmitVerdict,
+  type TerminalSubmitVerdictRequest
+} from '../../shared/terminal-submit-verdict'
+import {
+  TerminalSubmitVerdictTracker,
+  type AgentSubmitHookEvent,
+  type TerminalSubmitWatch
+} from './terminal-submit-verdict-tracker'
 import { gitExecFileAsync, gitSpawn, nonInteractiveGitEnv } from '../git/runner'
 import { runWithGitReadCacheInvalidation } from '../git/status'
 import {
@@ -2946,6 +2957,9 @@ export class OrcaRuntimeService {
   // mobile the same inline agent rows the desktop sidebar renders. Cleared on pty
   // teardown so dead agents don't linger. See RuntimeAgentRowSnapshot.
   private latestAgentStatusByPaneKey = new Map<string, RuntimeAgentRowSnapshot>()
+  // Why: joins a submit write to the harness's own turn-start hook so a send can report whether the
+  // text reached the agent's turn instead of guessing from the fact that bytes were written.
+  private submitVerdictTracker = new TerminalSubmitVerdictTracker()
   // Why: per-PTY hydration state guards against double-hydration. Keys:
   //   'pending'  → maybeHydrateHeadlessFromRenderer is in flight
   //   'done'     → hydration completed (success or skip); never run again
@@ -16614,7 +16628,56 @@ export class OrcaRuntimeService {
     return probe
   }
 
+  /** Feed live agent-hook events so submit verdicts can be derived from the harness's own
+   *  turn-lifecycle signal. Wired from the hook server in the main process. */
+  noteAgentSubmitHookEvent(event: AgentSubmitHookEvent): void {
+    this.submitVerdictTracker.noteHookEvent(event)
+  }
+
   async sendTerminal(
+    handle: string,
+    action: {
+      text?: string
+      enter?: boolean
+      interrupt?: boolean
+    },
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      reserveWrite?: (ptyId: string) => void
+      afterWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+      submitVerdict?: TerminalSubmitVerdictRequest
+    } = {}
+  ): Promise<RuntimeTerminalSend> {
+    const verdictRequest = options.submitVerdict
+    // Why gate on text+enter: a verdict answers "did this prompt reach the agent's turn". A
+    // text-only write deliberately leaves the composer dirty, and a bare interrupt is not a prompt.
+    if (
+      !verdictRequest ||
+      action.enter !== true ||
+      typeof action.text !== 'string' ||
+      action.text.length === 0
+    ) {
+      return this.writeTerminalSendAction(handle, action, options)
+    }
+    // Why arm before the write: a local harness can post its turn-start hook before the write call
+    // returns, and a watch armed afterwards would miss it and report a false `pending`.
+    const watch = this.submitVerdictTracker.beginWatch(this.getTerminalPaneKey(handle))
+    try {
+      const result = await this.writeTerminalSendAction(handle, action, options)
+      if (!result.accepted) {
+        return result
+      }
+      return {
+        ...result,
+        submitVerdict: await this.settleSubmitVerdict(watch, handle, verdictRequest, '\r')
+      }
+    } finally {
+      watch.release()
+    }
+  }
+
+  private async writeTerminalSendAction(
     handle: string,
     action: {
       text?: string
@@ -16673,6 +16736,82 @@ export class OrcaRuntimeService {
   }
 
   async sendTerminalAgentPrompt(
+    handle: string,
+    prompt: string,
+    options: {
+      beforeWrite?: (ptyId: string) => void | Promise<void>
+      suffixFailureError?: string
+      submitVerdict?: TerminalSubmitVerdictRequest
+    } = {}
+  ): Promise<RuntimeTerminalSend> {
+    const verdictRequest = options.submitVerdict
+    if (!verdictRequest) {
+      return this.writeTerminalAgentPromptAction(handle, prompt, options)
+    }
+    const watch = this.submitVerdictTracker.beginWatch(this.getTerminalPaneKey(handle))
+    try {
+      const result = await this.writeTerminalAgentPromptAction(handle, prompt, options)
+      if (!result.accepted) {
+        return result
+      }
+      return {
+        ...result,
+        submitVerdict: await this.settleSubmitVerdict(
+          watch,
+          handle,
+          verdictRequest,
+          AGENT_PROMPT_SUBMIT
+        )
+      }
+    } finally {
+      watch.release()
+    }
+  }
+
+  /** Resolve the verdict, retrying the submit once when the text is proven to be sitting
+   *  unsubmitted in the composer. */
+  private async settleSubmitVerdict(
+    watch: TerminalSubmitWatch,
+    handle: string,
+    request: TerminalSubmitVerdictRequest,
+    submitBytes: string
+  ): Promise<TerminalSubmitVerdict> {
+    const timeoutMs = clampTerminalSubmitVerdictTimeoutMs(request.timeoutMs)
+    const ptyIdAtWrite = this.getSubmitVerdictPtyId(handle)
+    const verdict = await watch.settle(timeoutMs)
+    if (verdict.status !== 'pending' || request.retrySubmit === false || !ptyIdAtWrite) {
+      return verdict
+    }
+    // Why re-send the submit key alone: `pending` means the text IS in the composer and only the
+    // Enter was lost (a completion popup ate it, or the TUI dropped it mid-redraw). Re-typing the
+    // text would leave the pane holding the prompt twice, so the retry never carries payload.
+    // Why exactly once: a second silence is evidence about the pane, not a reason to keep drumming
+    // Enters into it — the honest answer then is still `pending`.
+    if (this.getSubmitVerdictPtyId(handle) !== ptyIdAtWrite) {
+      return verdict
+    }
+    if (!(this.ptyController?.write(ptyIdAtWrite, submitBytes) ?? false)) {
+      return verdict
+    }
+    return { ...(await watch.settle(timeoutMs)), resubmitted: true }
+  }
+
+  /** The pty a submit retry may write to, or null when the pane is gone or not writable. */
+  private getSubmitVerdictPtyId(handle: string): string | null {
+    try {
+      const pty = this.getLivePtyForHandle(handle)
+      if (pty) {
+        return pty.pty.connected ? pty.pty.ptyId : null
+      }
+      const { leaf } = this.getLiveLeafForHandle(handle)
+      return leaf.writable && leaf.ptyId ? leaf.ptyId : null
+    } catch {
+      // Why: a stale or closed handle just means there is nothing left to retry the submit on.
+      return null
+    }
+  }
+
+  private async writeTerminalAgentPromptAction(
     handle: string,
     prompt: string,
     options: {
@@ -32311,6 +32450,8 @@ export class OrcaRuntimeService {
       }
 
       // Why: agent TUIs can swallow a \r in the same PTY write; submit separately after a delay.
+      let submitWatch: TerminalSubmitWatch | null = null
+      let submitRetryArmed = false
       flight.enterTimer = setTimeout(() => {
         try {
           // Why current state, not the closure: graph resync replaces leaf
@@ -32323,10 +32464,21 @@ export class OrcaRuntimeService {
           if (!currentLeaf || currentLeaf.ptyId !== deliveryPtyId || !currentLeaf.writable) {
             return
           }
+          // Why arm before the write: a local harness can post its turn-start hook before this
+          // call returns, and a watch armed afterwards would miss it.
+          submitWatch = this.submitVerdictTracker.beginWatch(this.makeRuntimePaneKey(currentLeaf))
           this.ptyController?.write(deliveryPtyId, '\r')
+          // Why: the same swallowed-Enter failure the send verdict exists for also strands a
+          // mailbox pointer — the agent never reads its mail and the coordinator waits forever.
+          // The retry re-sends the submit key only; the pointer text is already in the composer.
+          submitRetryArmed = true
+          void this.retryPendingMessageSubmit(deliveryPtyId, submitWatch)
         } catch {
           // Terminal may have closed during the delay; mail remains queued for check.
         } finally {
+          if (!submitRetryArmed) {
+            submitWatch?.release()
+          }
           // Why finally: every outcome — submit, refusal, throw — ends the flight,
           // and settle re-runs any trigger parked during it so nothing strands.
           this.settlePendingMessageDelivery(deliveryPtyId, flight)
@@ -32337,6 +32489,32 @@ export class OrcaRuntimeService {
       if (!settlesInEnterCallback) {
         this.settlePendingMessageDelivery(deliveryPtyId, flight)
       }
+    }
+  }
+
+  /** Re-send the submit key once when a pushed mailbox pointer is proven to be sitting unsubmitted.
+   *  Never re-sends the pointer text — the pane already holds it, and a second copy would read as
+   *  two separate messages. */
+  private async retryPendingMessageSubmit(
+    ptyId: string,
+    watch: TerminalSubmitWatch
+  ): Promise<void> {
+    try {
+      const verdict = await watch.settle(DEFAULT_TERMINAL_SUBMIT_VERDICT_TIMEOUT_MS)
+      if (verdict.status !== 'pending') {
+        return
+      }
+      // Why re-read liveness: the pane can exit or be replaced during the verdict wait, and a write
+      // to a prior process's ptyId is an accepted no-op that would look like a delivered submit.
+      if (!this.controllerKnowsPtyIsLive(ptyId)) {
+        return
+      }
+      this.ptyController?.write(ptyId, '\r')
+    } catch {
+      // Why swallow: this is a best-effort recovery on a fire-and-forget push; the mail stays
+      // queued for an explicit check either way.
+    } finally {
+      watch.release()
     }
   }
 

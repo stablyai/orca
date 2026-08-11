@@ -906,7 +906,15 @@ const TerminalSend = TerminalHandle.extend({
       rows: z.number().int().min(1).max(500)
     })
     .optional(),
-  claimViewport: z.literal(true).optional()
+  claimViewport: z.literal(true).optional(),
+  // Why optional: an old host ignores it and answers with no verdict, which callers must read as
+  // `unknown` (docs/reference/remote-wire-compatibility.md Rule 1).
+  submitVerdict: z
+    .object({
+      timeoutMs: OptionalFiniteNumber,
+      retrySubmit: z.boolean().optional()
+    })
+    .optional()
 })
 
 const TerminalViewport = z.object({
@@ -1360,6 +1368,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
           },
           {
             beforeWrite,
+            ...(params.submitVerdict ? { submitVerdict: params.submitVerdict } : {}),
             ...(reserveWrite ? { reserveWrite } : {}),
             ...(params.inputKind !== 'query-reply' && mobileFloorClientId
               ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

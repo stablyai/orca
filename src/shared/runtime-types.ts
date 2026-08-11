@@ -37,6 +37,7 @@ import type {
   SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
+import type { TerminalSubmitVerdict } from './terminal-submit-verdict'
 import type { RemoteServerUpdateSupport } from './remote-server-update'
 import type { ExecutionHostId } from './execution-host'
 import type { PtyIncarnationId } from './pty-incarnation'
@@ -605,6 +606,10 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
+  /** Whether the text actually reached the agent's turn. Present only when the caller asked for it
+   *  and the write carried a submit. Absent means the host cannot answer — treat that as `unknown`,
+   *  never as success (see `isTerminalSubmitDelivered`). */
+  submitVerdict?: TerminalSubmitVerdict
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
