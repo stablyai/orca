@@ -1945,6 +1945,112 @@
       "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
     },
     {
+      "id": "terminal-session.remote-project-removal",
+      "title": "Project removal retires every host-owned terminal before catalog deletion",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-runtime-rpc-daemon-contract",
+      "surfaces": [
+        "project removal",
+        "local runtime",
+        "paired runtime",
+        "PTY shutdown",
+        "daemon sessions"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon", "remote-runtime"],
+      "coverageNotes": "A local desktop, a headed paired host, and a headless serve host each remove a project owning a real daemon session absent from the runtime graph. The local journey represents the session only through a durable renderer wake hint. Deterministic runtime tests cover host-scoped fencing, unrelated sessions, provider inventory failure, one-scan behavior, and a delayed admitted spawn for a valid uncatalogued worktree whose exact real PID must exit. SSH, WSL, Linux, and Windows remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13072",
+        "https://github.com/stablyai/orca/pull/13229"
+      ],
+      "invariant": "Local and paired clients route project removal to the owning runtime, which drains every already-admitted project spawn, rejects later same-host spawns, then inventories and stops every PTY attributable to the resolved host-scoped project row before deleting that row; unrelated hosts and projects survive, and an unavailable authority or bounded drain leaves removal retryable.",
+      "oracle": "Create a provider-only daemon session whose worktree identity belongs to the target project but has no runtime leaf, remove the project locally and through separately paired headed and headless clients, then independently assert the client catalog row disappeared and the exact host PID exited; the race oracle admits an uncatalogued-worktree spawn, starts removal, commits a real child only after the old implementation inventories and deletes, and asserts that exact PID still exits before removal returns. Runtime tests also assert sibling-host admission, one provider inventory, bounded drain retry, and inventory-failure retry.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-remove-project-host-scope.test.ts src/main/runtime/worktree-teardown.test.ts src/renderer/src/store/slices/repos-project-removal.test.ts",
+        "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-project-removal.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3"
+      ],
+      "testFiles": [
+        "src/main/runtime/runtime-remove-project-host-scope.test.ts",
+        "src/main/runtime/worktree-teardown.test.ts",
+        "src/renderer/src/store/slices/repos-project-removal.test.ts",
+        "tests/e2e/paired-remote-project-removal.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/runtime-remove-project-host-scope.test.ts",
+          "assertions": [
+            "provider-only project sessions stop before the resolved host row is removed",
+            "unrelated provider sessions and duplicate repo rows on other hosts survive",
+            "one provider inventory failure preserves the project for retry",
+            "removal waits for an admitted spawn and rejects later spawns until inventory and deletion settle",
+            "an admitted uncatalogued-worktree spawn commits before inventory and its exact real PID exits",
+            "an expired active-spawn drain preserves the project and permits a clean retry",
+            "a catalog deletion failure releases the removal fence for retry",
+            "a sibling-host spawn sharing the repo id remains admitted during removal"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-project-removal.spec.ts",
+          "assertions": [
+            "local removal kills a sleeping provider PID represented only by a durable wake hint",
+            "headed host provider-only PID exits after paired-client project removal",
+            "headless serve provider-only PID exits after paired-client project removal",
+            "the paired client visibly loses the project catalog row"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-project-removal.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 53,
+          "summary": "The local durable-wake-hint and headed/headless paired-runtime provider-only process oracles each passed three consecutive runs with visible catalog removal."
+        },
+        {
+          "date": "2026-08-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-remove-project-host-scope.test.ts src/main/runtime/worktree-teardown.test.ts src/renderer/src/store/slices/repos-project-removal.test.ts",
+          "result": "passed",
+          "durationSeconds": 6,
+          "summary": "The runtime host-scope, worktree-teardown, and renderer project-removal suites passed in one local run with 43 tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "one local and two isolated paired-runtime Electron journeys"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "All three journeys passed three consecutive local runs; CI and longer soak history are pending."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical local plus headed/headless provider-only PID oracle failed on current main, the published patch, and the authoritative runtime cleanup disabled, then passed on the corrected candidate; red runs removed the visible catalog row while the exact host PID stayed alive beyond 20 seconds. The delayed uncatalogued-worktree regression additionally failed candidate 4d4c2642f9 with orphaned exact PID evidence before the project-scoped active-spawn drain was added."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Spawn admission updates one host-scoped project counter without serializing sibling spawns; removal waits at most 10 seconds for the counter to drain, then takes one provider inventory snapshot and reuses it across bounded per-worktree teardown. Focused tests assert one listProcesses call, retry after timeout, and unrelated-session exclusion."
+      },
+      "promotionCriteria": [
+        "Accumulate 100 clean runs or 14 days on required CI platforms.",
+        "Add live SSH, WSL, Linux, and Windows process-absence evidence.",
+        "Add a reconnect race proving a stale client cannot resurrect the removed catalog row."
+      ],
+      "knownGaps": [
+        "Native Windows, WSL, Linux, and live SSH process evidence were not run.",
+        "Old-client/new-host compatibility is covered structurally, not with a packaged mixed-version journey."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if an owned or already-admitted provider session survives, an unrelated session is stopped, inventory fans out per worktree, or catalog deletion proceeds after an undrained spawn or unknown inventory."
+    },
+    {
       "id": "terminal-session.explicit-close-retirement",
       "title": "Explicit terminal close retires parked PTYs and agent authority exactly once",
       "maturity": "experimental",

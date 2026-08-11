@@ -4860,7 +4860,10 @@ export function registerPtyHandlers(
       let preparedProvisionalExecutionContext = false
       let releaseWorktreeSpawn: (() => void) | undefined
       try {
-        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(
+          args.worktreeId,
+          args.connectionId
+        )
         try {
           if (args.preAllocatedHandle) {
             trustedTerminalHandleEnv.add(args.preAllocatedHandle)
@@ -6362,6 +6365,10 @@ export function registerPtyHandlers(
             : null
         }
         finishTerminalInstall = beginPtySpawnForWorktree(args.worktreeId, cwd, args.connectionId)
+        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(
+          args.worktreeId,
+          args.connectionId
+        )
         const initiallyHidden = args.initiallyHidden === true
         // Why: daemon PTYs can emit before spawn() resolves, so the hidden mark must beat byte zero (terminal-query-authority.md §races); other providers are safe with the post-spawn mark below.
         const preSpawnHiddenMarkId =
@@ -6371,7 +6378,6 @@ export function registerPtyHandlers(
         if (preSpawnHiddenMarkId !== null) {
           transitionSpawnHiddenRendererPtyDeliveryState(preSpawnHiddenMarkId, true)
         }
-        releaseWorktreeSpawn = await runtime?.acquireWorktreeTerminalSpawn?.(args.worktreeId)
         try {
           if (preAllocatedHandle) {
             trustedTerminalHandleEnv.add(preAllocatedHandle)

@@ -30,6 +30,7 @@ export type HeadlessPairedRuntimeHost = {
   client: RuntimeClient
   dispose: () => Promise<void>
   offer: RuntimeDesktopPairingOffer
+  userDataDir: string
 }
 
 export class HeadlessPairedRuntimeStartupDiagnosticBuffer {
@@ -226,6 +227,7 @@ export async function launchHeadlessPairedRuntimeHost(): Promise<HeadlessPairedR
       app,
       client: new RuntimeClient(userDataDir, 5_000),
       offer,
+      userDataDir,
       dispose: async () => {
         await closeElectronAppForE2E(app)
         await cleanupE2EDaemons(userDataDir)

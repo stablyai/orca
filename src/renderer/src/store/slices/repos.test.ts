@@ -19,6 +19,7 @@ import {
   reposRemove,
   reposReorder,
   reposUpdate,
+  runtimeCall,
   runtimeEnvironmentCall,
   sshRepo
 } from './repos-runtime-routing-fixture'
@@ -630,7 +631,7 @@ describe('repo slice runtime routing', () => {
     expect(reposRemove).not.toHaveBeenCalled()
   })
 
-  it('removes SSH-owned repos through local IPC even when a runtime is focused', async () => {
+  it('removes SSH-owned repos through the local runtime even when a remote is focused', async () => {
     const store = createTestStore()
     const worktreeId = `${sshRepo.id}::/home/orca/wt`
     store.setState({
@@ -646,7 +647,11 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([])
     expect(store.getState().activeRepoId).toBeNull()
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: sshRepo.id, hostId: 'ssh:ssh-1' }
+    })
+    expect(reposRemove).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -667,7 +672,10 @@ describe('repo slice runtime routing', () => {
 
     expect(store.getState().repos).toEqual([localRepo])
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktreeId]: 200 })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: sshRepo.id })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: sshRepo.id, hostId: 'ssh:ssh-1' }
+    })
   })
 
   it('drops persisted visit timestamps for removed unhydrated runtime repos', async () => {
@@ -727,41 +735,6 @@ describe('repo slice runtime routing', () => {
     ])
     expect(Object.keys(store.getState().prCache)).toEqual(['other-repo::branch'])
     expect(store.getState().workItemsInvalidationNonce).toBe(3)
-  })
-
-  it('stops remote runtime terminals instead of killing remote ids through local pty IPC', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-remote',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'runtime-remote' }
-    })
-    const store = createTestStore()
-    const worktreeId = `${remoteRepo.id}::/remote/wt`
-    store.setState({
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-      repos: [remoteRepo],
-      worktreesByRepo: {
-        [remoteRepo.id]: [makeWorktree({ id: worktreeId, repoId: remoteRepo.id })]
-      },
-      tabsByWorktree: {
-        [worktreeId]: [{ id: 'tab-1', worktreeId } as never]
-      },
-      ptyIdsByTabId: {
-        'tab-1': ['remote:term-1', 'pty-local-stale']
-      }
-    })
-
-    await store.getState().removeProject(remoteRepo.id)
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'terminal.stop',
-      params: { worktree: `id:${worktreeId}` },
-      timeoutMs: 15_000
-    })
-    expect(ptyKill).toHaveBeenCalledWith('pty-local-stale')
-    expect(ptyKill).not.toHaveBeenCalledWith('remote:term-1')
   })
 
   it('cleans up hidden detected worktree state when removing a repo', async () => {

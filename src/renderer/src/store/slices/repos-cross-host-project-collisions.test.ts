@@ -51,6 +51,7 @@ const reposRemove = vi.fn()
 const reposRemoveForHost = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn<(args: RuntimeCall) => unknown>()
+const runtimeCall = vi.fn()
 
 type RuntimeCall = RuntimeEnvironmentCallRequest & {
   selector: string
@@ -137,7 +138,8 @@ beforeEach(() => {
     reposRemove,
     reposRemoveForHost,
     runtimeEnvironmentCall,
-    runtimeEnvironmentTransportCall
+    runtimeEnvironmentTransportCall,
+    runtimeCall
   ]) {
     mock.mockReset()
   }
@@ -145,9 +147,16 @@ beforeEach(() => {
     (args) => createCompatibleRuntimeStatusResponseIfNeeded(args) ?? runtimeEnvironmentCall(args)
   )
   answerRepoRm()
+  runtimeCall.mockResolvedValue({
+    id: 'rpc-local',
+    ok: true,
+    result: { removed: true },
+    _meta: { runtimeId: 'runtime-local' }
+  })
   vi.stubGlobal('window', {
     api: {
       repos: { remove: reposRemove, removeForHost: reposRemoveForHost },
+      runtime: { call: runtimeCall },
       pty: { kill: vi.fn() },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
       ui: { set: vi.fn().mockResolvedValue(undefined) }
@@ -177,7 +186,10 @@ describe('deleting one host copy of a same-named project', () => {
 
     await store.getState().removeProject('local-uuid', { hostId: 'local' })
 
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'local-uuid' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'local-uuid', hostId: 'local' }
+    })
     expect(repoRmCalls()).toEqual([])
     expect(remainingRepoIds(store)).toEqual(['env-a-uuid'])
   })
@@ -222,11 +234,11 @@ describe('deleting one host copy of a project whose id exists on two hosts', () 
 
     await store.getState().removeProject('dup-id', { hostId: 'local' })
 
-    // repos:remove is id-only and would delete every host's row in main persistence.
+    // The local runtime receives the host identity, so the sibling row stays authoritative.
     expect(reposRemove).not.toHaveBeenCalled()
-    expect(reposRemoveForHost).toHaveBeenCalledWith({
-      repoId: 'dup-id',
-      hostId: 'local'
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'dup-id', hostId: 'local' }
     })
     expect(store.getState().repos.map((entry) => entry.path)).toEqual(['/mini/dup'])
   })

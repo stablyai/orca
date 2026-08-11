@@ -246,6 +246,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
+  normalizeExecutionHostId,
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
@@ -972,7 +973,12 @@ import {
   getTerminalViewColorQueryReplyColors,
   registerTerminalViewAttributesApplier
 } from './terminal-view-attribute-store'
-import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
+import {
+  killAllProcessesForWorktree,
+  teardownRpcDeadline,
+  WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
+} from './worktree-teardown'
+import { listRegisteredPtys } from '../memory/pty-registry'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 import {
   MobileNotificationReplayBuffer,
@@ -2704,6 +2710,8 @@ export class OrcaRuntimeService {
   // Why: concurrent clients sleeping one host workspace must share one physical teardown.
   private terminalSleepByWorktreeId = new Map<string, Promise<RuntimeWorktreeTerminalSleepResult>>()
   private terminalMutationTailByWorktreeId = new Map<string, Promise<void>>()
+  private activeTerminalSpawnCountByProjectKey = new Map<string, number>()
+  private terminalSpawnDrainWaitersByProjectKey = new Map<string, Set<() => void>>()
   private terminalSleepStateByWorktreeId = new Map<
     string,
     {
@@ -3182,6 +3190,7 @@ export class OrcaRuntimeService {
   private canonicalFetchKeyCache = new Map<string, string>()
   private optimisticReconcileTokens = new Map<string, string>()
   private removeManagedWorktreeInFlight = new Map<string, RuntimeWorktreeRemovalInFlight>()
+  private removingProjectKeys = new Set<string>()
   private preservedBranchCleanupByWorktreeId = new Map<string, PreservedBranchCleanupTarget>()
   private readonly getLocalProviderFn: (() => IPtyProvider) | null
   private readonly getSshProviderFn: ((connectionId: string) => IPtyProvider | undefined) | null
@@ -19067,24 +19076,53 @@ export class OrcaRuntimeService {
     return updated
   }
 
-  async removeProject(repoSelector: string): Promise<{ removed: true }> {
+  async removeProject(repoSelector: string, hostId?: string): Promise<{ removed: true }> {
     if (!this.store?.removeProject) {
       throw new Error('runtime_unavailable')
     }
-    const repo = await this.resolveRepoSelector(repoSelector)
+    const normalizedHostId = hostId === undefined ? undefined : normalizeExecutionHostId(hostId)
+    if (hostId !== undefined && !normalizedHostId) {
+      throw new Error('invalid_host_id')
+    }
+    const repo = normalizedHostId
+      ? await this.resolveRepoSelectorForHost(repoSelector, normalizedHostId)
+      : await this.resolveRepoSelector(repoSelector)
+    const removalKey = runtimeProjectIdentityKey(repo.id, getRepoExecutionHostId(repo))
+    if (this.removingProjectKeys.has(removalKey)) {
+      throw new Error(`Project removal already in progress: ${repo.id}`)
+    }
+    this.removingProjectKeys.add(removalKey)
+    try {
+      await this.waitForActiveProjectTerminalSpawns(
+        removalKey,
+        Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS,
+        repo.id
+      )
+      await this.stopProjectTerminalsBeforeRemoval(repo)
+      return this.removeResolvedProject(repo)
+    } finally {
+      this.removingProjectKeys.delete(removalKey)
+    }
+  }
+
+  private removeResolvedProject(repo: Repo): { removed: true } {
+    const store = this.store
+    if (!store?.removeProject) {
+      throw new Error('runtime_unavailable')
+    }
     // Why: removeProject is id-only, but the same id may be registered on a sibling
     // execution host; a path:/name: selector resolves one row and must remove only it.
     const hostId = getRepoExecutionHostId(repo)
-    const idExistsOnOtherHost = this.store
+    const idExistsOnOtherHost = store
       .getRepos()
       .some((entry) => entry.id === repo.id && getRepoExecutionHostId(entry) !== hostId)
     if (idExistsOnOtherHost) {
-      if (!this.store.removeProjectForHost) {
+      if (!store.removeProjectForHost) {
         throw new Error('runtime_unavailable')
       }
-      this.store.removeProjectForHost(repo.id, hostId)
+      store.removeProjectForHost(repo.id, hostId)
     } else {
-      this.store.removeProject(repo.id)
+      store.removeProject(repo.id)
     }
     this.terminalTopologyRevisionByRepoId.delete(repo.id)
     this.invalidateResolvedWorktreeCache()
@@ -19092,6 +19130,110 @@ export class OrcaRuntimeService {
     invalidateAuthorizedRootsCache()
     this.notifyReposChanged()
     return { removed: true }
+  }
+
+  private async stopProjectTerminalsBeforeRemoval(repo: Repo): Promise<void> {
+    const provider = repo.connectionId
+      ? this.getSshProviderFn?.(repo.connectionId)
+      : this.getLocalProvider()
+    if (!provider) {
+      throw new Error(`PTY provider unavailable for project removal: ${repo.id}`)
+    }
+    const releases: (() => void)[] = []
+    try {
+      const deadline = Date.now() + WORKTREE_PROCESS_SWEEP_TIMEOUT_MS
+      const knownWorktreeIds = this.getProjectRemovalWorktreeIds(repo, [])
+      for (const worktreeId of [...knownWorktreeIds].sort()) {
+        releases.push(
+          await this.acquireWorktreeTerminalMutation(worktreeId, {
+            deadline,
+            hostId: getRepoExecutionHostId(repo)
+          })
+        )
+      }
+      const providerProcesses = await provider.listProcesses({
+        deadlineMs: teardownRpcDeadline(deadline)
+      })
+      const worktreeIds = this.getProjectRemovalWorktreeIds(repo, providerProcesses)
+      const stopAttempts = new Map<string, Promise<boolean>>()
+      const results = await Promise.all(
+        [...worktreeIds].map((worktreeId) =>
+          killAllProcessesForWorktree(worktreeId, {
+            runtime: this,
+            resolvedWorktreeId: worktreeId,
+            ...(repo.connectionId ? { resolvedConnectionId: repo.connectionId } : {}),
+            localProvider: provider,
+            onPtyStopped: this.onPtyStopped ?? undefined,
+            requirePhysicalStop: true,
+            includeLocalRegistry: !repo.connectionId,
+            providerProcesses,
+            stopAttempts
+          })
+        )
+      )
+      const stopped = results.reduce(
+        (count, result) =>
+          count + result.runtimeStopped + result.providerStopped + result.registryStopped,
+        0
+      )
+      if (stopped > 0) {
+        console.info(`[project-removal] ${repo.id} stopped ${stopped} PTY registrations`)
+      }
+    } finally {
+      for (const release of releases.toReversed()) {
+        release()
+      }
+    }
+  }
+
+  private getProjectRemovalWorktreeIds(
+    repo: Repo,
+    providerProcesses: readonly PtyProcessInfo[]
+  ): Set<string> {
+    const worktreeIds = new Set<string>([`${repo.id}${WORKTREE_ID_SEPARATOR}${repo.path}`])
+    const hostId = getRepoExecutionHostId(repo)
+    const hasSameIdOnOtherHost =
+      this.store
+        ?.getRepos()
+        .some(
+          (candidate) => candidate.id === repo.id && getRepoExecutionHostId(candidate) !== hostId
+        ) ?? false
+    const add = (worktreeId: string | null | undefined): void => {
+      if (worktreeId && getRepoIdFromWorktreeId(worktreeId) === repo.id) {
+        worktreeIds.add(worktreeId)
+      }
+    }
+
+    for (const [worktreeId, meta] of Object.entries(this.store?.getAllWorktreeMeta() ?? {})) {
+      if (meta.hostId === hostId || (!meta.hostId && !hasSameIdOnOtherHost)) {
+        add(worktreeId)
+      }
+    }
+    for (const worktreeId of Object.keys(
+      this.store?.getWorkspaceSession?.(hostId)?.tabsByWorktree ?? {}
+    )) {
+      add(worktreeId)
+    }
+    for (const leaf of this.leaves.values()) {
+      const connectionId = leaf.ptyId ? (this.ptysById.get(leaf.ptyId)?.connectionId ?? null) : null
+      if (connectionId === (repo.connectionId ?? null)) {
+        add(leaf.worktreeId)
+      }
+    }
+    for (const pty of this.ptysById.values()) {
+      if ((pty.connectionId ?? null) === (repo.connectionId ?? null)) {
+        add(pty.worktreeId)
+      }
+    }
+    if (!repo.connectionId) {
+      for (const registration of listRegisteredPtys()) {
+        add(registration.worktreeId)
+      }
+    }
+    for (const process of providerProcesses) {
+      add(process.worktreeId ?? inferWorktreeIdFromPtyId(process.id))
+    }
+    return worktreeIds
   }
 
   async inspectTerminalProcess(
@@ -27429,32 +27571,129 @@ export class OrcaRuntimeService {
     }
   }
 
-  async acquireWorktreeTerminalSpawn(worktreeId?: string): Promise<() => void> {
+  async acquireWorktreeTerminalSpawn(
+    worktreeId?: string,
+    connectionId?: string | null
+  ): Promise<() => void> {
     if (!worktreeId) {
       return () => {}
     }
-    const release = await this.acquireWorktreeTerminalMutation(worktreeId)
-    const key = runtimeWorktreeIdentityKey(worktreeId)
-    const sleepState = this.terminalSleepStateByWorktreeId.get(key)
-    if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
-      this.terminalSleepStateByWorktreeId.delete(key)
-      this.emitClientEvent({
-        type: 'worktreeTerminalSleepState',
-        worktreeId: sleepState.worktreeId,
-        generation: sleepState.generation,
-        phase: 'woken',
-        ptyIds: sleepState.ptyIds,
-        terminalHandles: sleepState.terminalHandles
-      })
+    const repoId = getRepoIdFromWorktreeId(worktreeId)
+    const hostId = this.resolveTerminalMutationHostId(repoId, connectionId)
+    const projectKey = runtimeProjectIdentityKey(repoId, hostId)
+    const repoExistedBeforeLease = this.hasRepoIdentity(repoId, hostId)
+    if (this.removingProjectKeys.has(projectKey)) {
+      throw new Error(`Project removal in progress: ${getRepoIdFromWorktreeId(worktreeId)}`)
     }
-    return release
+    const releaseProjectSpawn = this.beginProjectTerminalSpawn(projectKey)
+    let releaseWorktreeSpawn = (): void => {}
+    let released = false
+    const release = (): void => {
+      if (released) {
+        return
+      }
+      released = true
+      releaseWorktreeSpawn()
+      releaseProjectSpawn()
+    }
+    try {
+      releaseWorktreeSpawn = await this.acquireWorktreeTerminalMutation(worktreeId, { hostId })
+      if (
+        this.removingProjectKeys.has(projectKey) ||
+        (repoExistedBeforeLease && !this.hasRepoIdentity(repoId, hostId))
+      ) {
+        throw new Error(`Project removal in progress: ${repoId}`)
+      }
+      const key = runtimeWorktreeIdentityKey(worktreeId)
+      const sleepState = this.terminalSleepStateByWorktreeId.get(key)
+      if (sleepState?.phase === 'sleeping' || sleepState?.phase === 'partial') {
+        this.terminalSleepStateByWorktreeId.delete(key)
+        this.emitClientEvent({
+          type: 'worktreeTerminalSleepState',
+          worktreeId: sleepState.worktreeId,
+          generation: sleepState.generation,
+          phase: 'woken',
+          ptyIds: sleepState.ptyIds,
+          terminalHandles: sleepState.terminalHandles
+        })
+      }
+      return release
+    } catch (error) {
+      release()
+      throw error
+    }
+  }
+
+  private beginProjectTerminalSpawn(projectKey: string): () => void {
+    this.activeTerminalSpawnCountByProjectKey.set(
+      projectKey,
+      (this.activeTerminalSpawnCountByProjectKey.get(projectKey) ?? 0) + 1
+    )
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      const remaining = (this.activeTerminalSpawnCountByProjectKey.get(projectKey) ?? 1) - 1
+      if (remaining > 0) {
+        this.activeTerminalSpawnCountByProjectKey.set(projectKey, remaining)
+        return
+      }
+      this.activeTerminalSpawnCountByProjectKey.delete(projectKey)
+      const waiters = this.terminalSpawnDrainWaitersByProjectKey.get(projectKey)
+      this.terminalSpawnDrainWaitersByProjectKey.delete(projectKey)
+      for (const resolve of waiters ?? []) {
+        resolve()
+      }
+    }
+  }
+
+  private async waitForActiveProjectTerminalSpawns(
+    projectKey: string,
+    deadline: number,
+    repoId: string
+  ): Promise<void> {
+    if (!this.activeTerminalSpawnCountByProjectKey.has(projectKey)) {
+      return
+    }
+    const remainingMs = deadline - Date.now()
+    if (remainingMs <= 0) {
+      throw new Error(`Project terminal spawn drain timed out: ${repoId}`)
+    }
+    await new Promise<void>((resolve, reject) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const finish = (): void => {
+        if (timer) {
+          clearTimeout(timer)
+        }
+        this.terminalSpawnDrainWaitersByProjectKey.get(projectKey)?.delete(finish)
+        resolve()
+      }
+      const waiters = this.terminalSpawnDrainWaitersByProjectKey.get(projectKey) ?? new Set()
+      waiters.add(finish)
+      this.terminalSpawnDrainWaitersByProjectKey.set(projectKey, waiters)
+      timer = setTimeout(() => {
+        waiters.delete(finish)
+        if (waiters.size === 0) {
+          this.terminalSpawnDrainWaitersByProjectKey.delete(projectKey)
+        }
+        reject(new Error(`Project terminal spawn drain timed out: ${repoId}`))
+      }, remainingMs)
+      if (!this.activeTerminalSpawnCountByProjectKey.has(projectKey)) {
+        finish()
+      }
+    })
   }
 
   private async acquireWorktreeTerminalMutation(
     worktreeId: string,
-    deadline?: number
+    options: { deadline?: number; hostId?: ExecutionHostId } = {}
   ): Promise<() => void> {
-    const key = runtimeWorktreeIdentityKey(worktreeId)
+    const key = runtimeWorktreeMutationIdentityKey(
+      worktreeId,
+      options.hostId ?? this.resolveTerminalMutationHostId(getRepoIdFromWorktreeId(worktreeId))
+    )
     const previous = this.terminalMutationTailByWorktreeId.get(key) ?? Promise.resolve()
     let releaseCurrent = (): void => {}
     const current = new Promise<void>((resolve) => {
@@ -27465,7 +27704,7 @@ export class OrcaRuntimeService {
     try {
       await waitForWorktreeTerminalMutation(
         previous.catch(() => {}),
-        deadline
+        options.deadline
       )
     } catch (error) {
       // Why: resolve this abandoned queue node now so it can never acquire later and stop a terminal after the caller timed out.
@@ -27492,11 +27731,35 @@ export class OrcaRuntimeService {
     }
   }
 
+  private resolveTerminalMutationHostId(
+    repoId: string,
+    connectionId?: string | null
+  ): ExecutionHostId {
+    if (connectionId) {
+      return toSshExecutionHostId(connectionId)
+    }
+    const repo = this.store?.getRepos().find((candidate) => candidate.id === repoId)
+    return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+  }
+
+  private hasRepoIdentity(repoId: string, hostId: ExecutionHostId): boolean {
+    return (
+      this.store
+        ?.getRepos()
+        .some(
+          (candidate) => candidate.id === repoId && getRepoExecutionHostId(candidate) === hostId
+        ) ?? false
+    )
+  }
+
   private async sleepResolvedWorktreeTerminals(
     worktree: ResolvedWorktree
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
-    const releaseMutation = await this.acquireWorktreeTerminalMutation(worktree.id, sleepDeadline)
+    const releaseMutation = await this.acquireWorktreeTerminalMutation(worktree.id, {
+      deadline: sleepDeadline,
+      hostId: worktree.hostId
+    })
     const key = runtimeWorktreeIdentityKey(worktree.id)
     const existingSleepState = this.terminalSleepStateByWorktreeId.get(key)
     if (existingSleepState?.phase === 'sleeping') {
@@ -28675,6 +28938,22 @@ export class OrcaRuntimeService {
     }
     const candidates = this.selectReposBySelector(selector)
 
+    if (candidates.length === 1) {
+      return candidates[0]
+    }
+    if (candidates.length > 1) {
+      throw new Error('selector_ambiguous')
+    }
+    throw new Error('repo_not_found')
+  }
+
+  private async resolveRepoSelectorForHost(
+    selector: string,
+    hostId: ExecutionHostId
+  ): Promise<Repo> {
+    const candidates = this.selectReposBySelector(selector).filter(
+      (repo) => getRepoExecutionHostId(repo) === hostId
+    )
     if (candidates.length === 1) {
       return candidates[0]
     }
@@ -36859,6 +37138,14 @@ function runtimeWorktreeIdentityKey(worktreeId: string): string {
   return parsed
     ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
     : worktreeId
+}
+
+function runtimeProjectIdentityKey(repoId: string, hostId: ExecutionHostId): string {
+  return `${hostId}\0${repoId}`
+}
+
+function runtimeWorktreeMutationIdentityKey(worktreeId: string, hostId: ExecutionHostId): string {
+  return `${hostId}\0${runtimeWorktreeIdentityKey(worktreeId)}`
 }
 
 function resolveTerminalSessionWorktreeId(

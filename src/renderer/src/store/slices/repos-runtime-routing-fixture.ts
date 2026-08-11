@@ -54,6 +54,7 @@ export const projectGroupsMoveProject: Mock = vi.fn()
 export const ptyKill: Mock = vi.fn()
 export const runtimeEnvironmentCall: Mock = vi.fn()
 export const runtimeEnvironmentTransportCall: Mock = vi.fn()
+export const runtimeCall: Mock = vi.fn()
 export const orcaProfileFindProjectProfiles: Mock = vi.fn()
 export const uiSet: Mock = vi.fn()
 
@@ -84,6 +85,13 @@ export function installReposRuntimeRoutingHarness(): void {
     orcaProfileFindProjectProfiles.mockReset()
     runtimeEnvironmentCall.mockReset()
     runtimeEnvironmentTransportCall.mockReset()
+    runtimeCall.mockReset()
+    runtimeCall.mockResolvedValue({
+      id: 'rpc-local',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-local' }
+    })
     uiSet.mockReset()
     uiSet.mockResolvedValue(undefined)
     runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -116,6 +124,7 @@ export function installReposRuntimeRoutingHarness(): void {
           findProjectProfiles: orcaProfileFindProjectProfiles
         },
         pty: { kill: ptyKill },
+        runtime: { call: runtimeCall },
         runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
         ui: { set: uiSet }
       }

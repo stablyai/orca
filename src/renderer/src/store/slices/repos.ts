@@ -3308,16 +3308,35 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       // Why: derive the target from the owner's settings (via options.hostId) so an SSH host removal never routes repo.rm to the focused runtime.
       const target = getActiveRuntimeTarget(settingsForRepoOwner(get(), projectId, options?.hostId))
-      // Why: repos:remove is id-only and would delete every host's row; scope local removal to the owning host so cross-host duplicates keep other rows.
-      const idExistsOnOtherHost = get().repos.some(
-        (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
-      )
+      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
+      if (target.kind === 'environment') {
+        // Why: repo.rm drops the runtime's catalog row; stop remote PTYs while the worktree selector still resolves.
+        const stopResults = await Promise.allSettled(
+          worktreeIds.map((worktreeId) =>
+            callRuntimeRpc(
+              target,
+              'terminal.stop',
+              { worktree: toRuntimeWorktreeSelector(worktreeId) },
+              { timeoutMs: 15_000 }
+            )
+          )
+        )
+        const stopFailure = stopResults.find(
+          (result) =>
+            result.status === 'rejected' &&
+            !hasRuntimeRpcErrorCode(result.reason, 'selector_not_found')
+        )
+        if (stopFailure?.status === 'rejected') {
+          throw stopFailure.reason
+        }
+      }
       try {
-        await (target.kind === 'local'
-          ? idExistsOnOtherHost
-            ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
-            : window.api.repos.remove({ repoId: projectId })
-          : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+        await callRuntimeRpc(
+          target,
+          'repo.rm',
+          { repo: projectId, ...(target.kind === 'local' ? { hostId: ownerHostId } : {}) },
+          { timeoutMs: 15_000 }
+        )
       } catch (err) {
         // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
         if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
@@ -3334,25 +3353,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       clearRepoSlugCacheEntry(projectId)
 
       // Kill PTYs for all worktrees belonging to this repo
-      const worktreeIds = getKnownRepoWorktreeIds(get(), projectId, ownerHostId)
       const killedTabIds = new Set<string>()
-      if (target.kind === 'environment') {
-        await Promise.allSettled(
-          worktreeIds.map((worktreeId) =>
-            callRuntimeRpc(
-              target,
-              'terminal.stop',
-              { worktree: toRuntimeWorktreeSelector(worktreeId) },
-              { timeoutMs: 15_000 }
-            )
-          )
-        )
-      }
       for (const wId of worktreeIds) {
         const tabs = get().tabsByWorktree[wId] ?? []
         for (const tab of tabs) {
           killedTabIds.add(tab.id)
-          for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
+          const lastKnownRelayPtyId = get().lastKnownRelayPtyIdByTabId[tab.id]
+          const ptyIds = new Set<string>([
+            ...(get().ptyIdsByTabId[tab.id] ?? []),
+            ...(tab.ptyId ? [tab.ptyId] : []),
+            ...(lastKnownRelayPtyId ? [lastKnownRelayPtyId] : [])
+          ])
+          for (const ptyId of ptyIds) {
             if (!ptyId.startsWith('remote:')) {
               window.api.pty.kill(ptyId)
             }

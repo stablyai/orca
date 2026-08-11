@@ -16915,7 +16915,8 @@ describe('registerPtyHandlers', () => {
         getPtyOutputSequence: vi.fn(() => 42),
         hasRemoteTerminalViewSubscriber: vi.fn(() => false),
         createPreAllocatedTerminalHandle: vi.fn(() => 'terminal-handle-1'),
-        registerPreAllocatedHandleForPty: vi.fn()
+        registerPreAllocatedHandleForPty: vi.fn(),
+        acquireWorktreeTerminalSpawn: vi.fn()
       }
     }
 
@@ -16936,12 +16937,11 @@ describe('registerPtyHandlers', () => {
           sessionId: 'daemon-session',
           initiallyHidden: true
         }) as Promise<{ id: string }>
-        // Let the handler run up to the awaited provider.spawn.
-        await Promise.resolve()
+        // Let the handler pass the awaited admission and reach provider.spawn.
+        await vi.waitFor(() => expect(isHiddenRendererPty('daemon-session')).toBe(true))
         mainWindow.webContents.send.mockClear()
 
         // Daemon PTYs can emit prompt bytes before spawn() resolves, so the pre-spawn mark must already gate them.
-        expect(isHiddenRendererPty('daemon-session')).toBe(true)
         daemon.emitData('daemon-session', 'pre-spawn prompt\x1b[c')
         vi.advanceTimersByTime(50)
         expect(runtime.onPtyData).toHaveBeenCalledWith(
@@ -16982,6 +16982,26 @@ describe('registerPtyHandlers', () => {
 
       // A later visible attach reusing this session id must not start gated.
       expect(isHiddenRendererPty('daemon-session')).toBe(false)
+    })
+
+    it('does not arm the pre-spawn hidden mark when admission rejects the spawn', async () => {
+      const runtime = createRuntimeMock()
+      runtime.acquireWorktreeTerminalSpawn.mockRejectedValue(new Error('removal in progress'))
+      const daemon = installObservableDaemonTestProvider()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          sessionId: 'daemon-session',
+          worktreeId: 'repo::/tmp/worktree',
+          initiallyHidden: true
+        })
+      ).rejects.toThrow('removal in progress')
+
+      expect(isHiddenRendererPty('daemon-session')).toBe(false)
+      expect(daemon.spawn).not.toHaveBeenCalled()
     })
 
     it('marks local PTYs hidden after spawn, before their first data task', async () => {

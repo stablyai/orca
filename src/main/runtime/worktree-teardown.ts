@@ -1,4 +1,4 @@
-import type { IPtyProvider } from '../providers/types'
+import type { IPtyProvider, PtyProcessInfo } from '../providers/types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { listRegisteredPtys } from '../memory/pty-registry'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
@@ -39,25 +39,24 @@ export type WorktreeTeardownDeps = {
   allowUnverifiedStop?: boolean
   includeProviderInventory?: boolean
   includeLocalRegistry?: boolean
+  /** One authoritative inventory reused across a multi-worktree removal. */
+  providerProcesses?: readonly PtyProcessInfo[]
+  /** Cross-worktree dedupe for provider rows with duplicate PTY ids. */
+  stopAttempts?: Map<string, Promise<boolean>>
 }
 
-export type WorktreeTeardownResult = {
-  runtimeStopped: number
-  providerStopped: number
-  registryStopped: number
-}
+export type WorktreeTeardownResult = Record<
+  'runtimeStopped' | 'providerStopped' | 'registryStopped',
+  number
+>
 
 export const WORKTREE_PROCESS_SWEEP_TIMEOUT_MS = 10_000
 
-// Why: keep each bounded stop RPC settling before the sweep deadline itself, so
-// a wedged provider surfaces as a stop failure rather than as the outer timeout.
-// (The recheck this margin once also reserved time for now runs on its own
-// budget — see verifyUnstoppedPtys — because sharing this one wedged #11960.)
+// Why: settle each RPC before the sweep deadline so a wedged provider surfaces accurately;
+// verification owns a separate budget because sharing this one wedged #11960.
 export const WORKTREE_TEARDOWN_RPC_MARGIN_MS = 500
 
-// Absolute deadline (epoch ms) threaded into provider RPCs on the destructive
-// path; each RPC leaf converts it to the remaining time when it actually issues,
-// so sequential RPCs share one budget without any relative-timeout bookkeeping.
+// Absolute deadlines let sequential destructive RPCs share one budget.
 export function teardownRpcDeadline(sweepDeadline: number): number {
   return sweepDeadline - WORKTREE_TEARDOWN_RPC_MARGIN_MS
 }
@@ -97,7 +96,7 @@ export async function killAllProcessesForWorktree(
     `${WORKTREE_TEARDOWN_TIMEOUT_PREFIX} ${worktreeId}. ${WORKTREE_TEARDOWN_FORCE_HINT}`
   )
   const sweeps = createWorktreeSweepTracker()
-  const stopAttempts = new Map<string, Promise<boolean>>()
+  const stopAttempts = deps.stopAttempts ?? new Map<string, Promise<boolean>>()
   const stopPty = (
     ptyId: string,
     stop: () => boolean | Promise<boolean>
@@ -153,14 +152,7 @@ export async function killAllProcessesForWorktree(
       ? Promise.resolve(0)
       : settleBeforeDeadline(
           sweeps.track(() =>
-            sweepProviderByPrefix(
-              worktreeId,
-              deps.localProvider,
-              deadline,
-              stopPty,
-              deps.onPtyStopped,
-              deps.requirePhysicalStop
-            )
+            sweepProviderByPrefix(worktreeId, deps.localProvider, deadline, stopPty, deps)
           ),
           0,
           deadline,
@@ -263,8 +255,7 @@ async function sweepProviderByPrefix(
     ptyId: string,
     stop: () => Promise<boolean>
   ) => Promise<{ stopped: boolean; owner: boolean }>,
-  onPtyStopped?: (ptyId: string) => void,
-  failClosed = false
+  deps: WorktreeTeardownDeps
 ): Promise<number> {
   const prefix = `${worktreeId}@@`
   // Why (#10252): the cwd fallback only proves ownership when the filesystem path
@@ -278,9 +269,11 @@ async function sweepProviderByPrefix(
       ? fullWorktreePath
       : undefined
   const rpcDeadline = teardownRpcDeadline(deadline)
-  const sessions = failClosed
-    ? await provider.listProcesses({ deadlineMs: rpcDeadline })
-    : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => [])
+  const sessions =
+    deps.providerProcesses ??
+    (deps.requirePhysicalStop
+      ? await provider.listProcesses({ deadlineMs: rpcDeadline })
+      : await provider.listProcesses({ deadlineMs: rpcDeadline }).catch(() => []))
   const ownedSessions = sessions.filter((session) => {
     // Why: older daemon/relay process rows may omit cwd; their established ID
     // and authoritative worktree ownership must remain usable during teardown.
@@ -313,7 +306,7 @@ async function sweepProviderByPrefix(
         }
       })
       if (stopResult.owner && Date.now() < deadline) {
-        clearStoppedPtyState(session.id, onPtyStopped)
+        clearStoppedPtyState(session.id, deps.onPtyStopped)
         return 1
       }
       return 0

@@ -28,16 +28,21 @@ const projectGroup: ProjectGroup = {
   updatedAt: 1
 }
 
-const reposRemove = vi.fn()
 const projectGroupsDelete = vi.fn()
+const runtimeCall = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
 
 beforeEach(() => {
   clearRuntimeCompatibilityCacheForTests()
-  reposRemove.mockReset()
-  reposRemove.mockResolvedValue(undefined)
   projectGroupsDelete.mockReset()
+  runtimeCall.mockReset()
+  runtimeCall.mockResolvedValue({
+    id: 'rpc-local',
+    ok: true,
+    result: { removed: true },
+    _meta: { runtimeId: 'runtime-local' }
+  })
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -45,8 +50,8 @@ beforeEach(() => {
   })
   vi.stubGlobal('window', {
     api: {
-      repos: { remove: reposRemove },
       projectGroups: { delete: projectGroupsDelete },
+      runtime: { call: runtimeCall },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })
@@ -152,7 +157,7 @@ describe('project group deletion store routing', () => {
       failedProjectRemovals: []
     })
 
-    expect(reposRemove).not.toHaveBeenCalled()
+    expect(runtimeCall).not.toHaveBeenCalled()
     expect(store.getState().repos).toMatchObject([{ id: 'direct', projectGroupId: null }])
   })
 
@@ -186,8 +191,14 @@ describe('project group deletion store routing', () => {
       failedProjectRemovals: []
     })
 
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'direct' })
-    expect(reposRemove).toHaveBeenCalledWith({ repoId: 'nested' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'direct', hostId: 'local' }
+    })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'nested', hostId: 'local' }
+    })
     expect(store.getState().repos).toEqual([siblingRepo])
   })
 
@@ -212,15 +223,21 @@ describe('project group deletion store routing', () => {
       failedProjectRemovals: []
     })
 
-    expect(reposRemove).not.toHaveBeenCalled()
+    expect(runtimeCall).not.toHaveBeenCalled()
     expect(store.getState().repos).toEqual([groupedRepo])
   })
 
   it('reports project removal failures by comparing store state after removeProject', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    reposRemove.mockImplementation(async ({ repoId }: { repoId: string }) => {
-      if (repoId === 'nested') {
+    runtimeCall.mockImplementation(async ({ params }: { params: { repo: string } }) => {
+      if (params.repo === 'nested') {
         throw new Error('remove failed')
+      }
+      return {
+        id: 'rpc-local',
+        ok: true,
+        result: { removed: true },
+        _meta: { runtimeId: 'runtime-local' }
       }
     })
     const childGroup: ProjectGroup = {

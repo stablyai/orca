@@ -9,6 +9,10 @@ const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
 })
 
+const RepoRemove = RepoSelector.extend({
+  hostId: OptionalString
+})
+
 const RepoPath = z.object({
   path: requiredString('Missing repo path'),
   kind: z.enum(['git', 'folder']).optional()
@@ -216,8 +220,8 @@ export const REPO_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'repo.rm',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
+    params: RepoRemove,
+    handler: async (params, { runtime }) => runtime.removeProject(params.repo, params.hostId)
   }),
   defineMethod({
     name: 'repo.reorder',

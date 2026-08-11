@@ -44,6 +44,14 @@ const mockApi = {
   pty: {
     kill: vi.fn().mockResolvedValue(undefined)
   },
+  runtime: {
+    call: vi.fn().mockResolvedValue({
+      id: 'rpc-local',
+      ok: true,
+      result: { removed: true },
+      _meta: { runtimeId: 'runtime-local' }
+    })
+  },
   gh: {
     prForBranch: vi.fn().mockResolvedValue(null),
     issue: vi.fn().mockResolvedValue(null)

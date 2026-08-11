@@ -43,6 +43,7 @@ const reposReorderForHost = vi.fn()
 const ptyKill = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
 const runtimeEnvironmentTransportCall = vi.fn()
+const runtimeCall = vi.fn()
 const uiSet = vi.fn()
 
 function deferred<T>() {
@@ -79,6 +80,13 @@ beforeEach(() => {
   ptyKill.mockReset()
   runtimeEnvironmentCall.mockReset()
   runtimeEnvironmentTransportCall.mockReset()
+  runtimeCall.mockReset()
+  runtimeCall.mockResolvedValue({
+    id: 'rpc-local',
+    ok: true,
+    result: { removed: true },
+    _meta: { runtimeId: 'runtime-local' }
+  })
   uiSet.mockReset()
   uiSet.mockResolvedValue(undefined)
   runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
@@ -94,6 +102,7 @@ beforeEach(() => {
         reorderForHost: reposReorderForHost
       },
       pty: { kill: ptyKill },
+      runtime: { call: runtimeCall },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall },
       ui: { set: uiSet }
     }
@@ -357,9 +366,10 @@ describe('repo slice host identity routing', () => {
     expect(store.getState().projects).toEqual([
       expect.objectContaining({ id: 'repo:same-repo', sourceRepoIds: ['same-repo'] })
     ])
-    // Why: the id also exists on runtime:env-1, so the local-side removal must be
-    // host-scoped in main to avoid deleting the other host's persisted repo row.
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'local' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'same-repo', hostId: 'local' }
+    })
     expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('local-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('remote-pty')
@@ -431,8 +441,10 @@ describe('repo slice host identity routing', () => {
 
     await store.getState().removeProject('same-repo', { hostId: 'ssh:ssh-1' })
 
-    // Host-scoped local removal (id also exists on local), never the runtime RPC.
-    expect(reposRemoveForHost).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'ssh:ssh-1' })
+    expect(runtimeCall).toHaveBeenCalledWith({
+      method: 'repo.rm',
+      params: { repo: 'same-repo', hostId: 'ssh:ssh-1' }
+    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'repo.rm' })
     )

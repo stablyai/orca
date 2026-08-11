@@ -15,13 +15,21 @@ const repo1: Repo = { id: 'repo-1', path: '/r1', displayName: 'R1', badgeColor: 
 const repo2: Repo = { id: 'repo-2', path: '/r2', displayName: 'R2', badgeColor: '#111', addedAt: 2 }
 
 const reposRemove = vi.fn().mockResolvedValue(undefined)
+const runtimeCall = vi.fn()
 
 beforeEach(() => {
   reposRemove.mockReset().mockResolvedValue(undefined)
+  runtimeCall.mockReset().mockResolvedValue({
+    id: 'rpc-local',
+    ok: true,
+    result: { removed: true },
+    _meta: { runtimeId: 'runtime-local' }
+  })
   vi.stubGlobal('window', {
     api: {
       repos: { remove: reposRemove },
       pty: { kill: vi.fn() },
+      runtime: { call: runtimeCall },
       runtimeEnvironments: { call: vi.fn() }
     }
   })

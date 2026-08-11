@@ -131,6 +131,21 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('passes the optional removal host identity to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      removeProject: vi.fn().mockResolvedValue({ removed: true })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.rm', { repo: 'repo-1', hostId: 'ssh:server' })
+    )
+
+    expect(runtime.removeProject).toHaveBeenCalledWith('repo-1', 'ssh:server')
+    expect(response).toMatchObject({ ok: true, result: { removed: true } })
+  })
+
   it('lists sparse checkout presets for a repo', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
