@@ -144,22 +144,24 @@ describe('Bitbucket client', () => {
     ).resolves.toBeNull()
   })
 
-  it('keeps a MERGED PR on a feature branch when it is the explicitly linked review', async () => {
+  it('fetches an explicitly linked DECLINED PR before the branch index', async () => {
     const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith('/pullrequests/7')) {
+        return Response.json({ ...bitbucketPr(7), state: 'DECLINED' })
+      }
       if (url.includes('/statuses/build')) {
         return Response.json({ values: [] })
       }
-      return Response.json({
-        values: [
-          { ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'feature/login' } } }
-        ]
-      })
+      return new Response('branch index unavailable', { status: 503 })
     })
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
-      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login', 7)
-    ).resolves.toMatchObject({ number: 7, state: 'merged' })
+      getBitbucketPullRequestForBranchOrThrow('/repo', 'refs/heads/feature/login', 7)
+    ).resolves.toMatchObject({ number: 7, state: 'closed' })
+    expect(fetchMock.mock.calls.map(([url]) => url)).not.toContainEqual(
+      expect.stringContaining('/pullrequests?')
+    )
   })
 
   it('fetches a branch pull request and commit build status', async () => {

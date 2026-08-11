@@ -205,6 +205,17 @@ export async function getBitbucketPullRequestForBranch(
     return null
   }
 
+  if (typeof linkedPRNumber === 'number') {
+    const raw = await requestJson<RawBitbucketPullRequest>(
+      `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
+      {},
+      throwOnFailure
+    )
+    if (raw) {
+      return normalizePullRequest(repo, raw)
+    }
+  }
+
   if (branchName) {
     const query = [
       `source.branch.name = "${escapeBitbucketQueryString(branchName)}"`,
@@ -237,15 +248,7 @@ export async function getBitbucketPullRequestForBranch(
     }
   }
 
-  if (typeof linkedPRNumber !== 'number') {
-    return null
-  }
-  const raw = await requestJson<RawBitbucketPullRequest>(
-    `/repositories/${encodedRepoPath(repo)}/pullrequests/${encodeURIComponent(String(linkedPRNumber))}`,
-    {},
-    throwOnFailure
-  )
-  return raw ? normalizePullRequest(repo, raw) : null
+  return null
 }
 
 /**
