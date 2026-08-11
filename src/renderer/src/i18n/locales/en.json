@@ -10746,7 +10746,8 @@
             },
             "7e4b2a19c0": "Could not resolve the GitHub PR to reply on.",
             "430f1a62d4": "Could not resolve the selected thread on the host.",
-            "updateReactionFailed": "Failed to update reaction."
+            "updateReactionFailed": "Failed to update reaction.",
+            "copyPromptFailed": "Could not copy the prompt to the clipboard."
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "Cancel",
@@ -11357,7 +11358,9 @@
                 "actionRequiredHint": "This check needs a manual action on GitHub (for example, approving the workflow run) before merging is unblocked.",
                 "b3195cba33": "Unmark author as bot",
                 "f588b46a6c": "Mark author as bot",
-                "e45324fbed": "Failed to load check details."
+                "e45324fbed": "Failed to load check details.",
+                "b4e1c7a902": "Copy unresolved {{value0}} comments prompt",
+                "c5f2a8e310": "Copy {{value0}} queued comments prompt"
               },
               "empty": {
                 "state": {
@@ -12124,6 +12127,17 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "pr": {
+            "comments": {
+              "copy": {
+                "prompt": {
+                  "button": {
+                    "a1f3c2d4e5": "Copied prompt to clipboard"
+                  }
+                }
+              }
+            }
           }
         }
       },

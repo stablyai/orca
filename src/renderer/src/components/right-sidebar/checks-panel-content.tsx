@@ -107,6 +107,7 @@ import {
   usePRCommentsListSelection,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
+import { CopyCommentsPromptButton } from './pr-comments-copy-prompt-button'
 import { translate } from '@/i18n/i18n'
 import { useActiveWorktree } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -2423,6 +2424,7 @@ export function PRCommentsList({
   resolveCommentsWithAIDisabledReason,
   onAddComment,
   onResolveSelectedCommentsWithAI,
+  onCopyCommentsPromptToClipboard,
   onReply,
   onResolve,
   onEditComment,
@@ -2440,6 +2442,8 @@ export function PRCommentsList({
   resolveCommentsWithAIDisabledReason?: string
   onAddComment?: (body: string) => Promise<RightPanelCommentSubmitResult>
   onResolveSelectedCommentsWithAI?: (groups: PRCommentGroup[]) => void
+  /** Copies the resolution prompt for the given groups; resolves true when the clipboard write lands. */
+  onCopyCommentsPromptToClipboard?: (groups: PRCommentGroup[]) => Promise<boolean>
   onReply?: (comment: PRComment, body: string) => Promise<RightPanelCommentSubmitResult>
   onResolve?: (threadId: string, resolve: boolean) => boolean | Promise<boolean>
   onEditComment?: (comment: PRComment, body: string) => Promise<boolean>
@@ -2487,6 +2491,7 @@ export function PRCommentsList({
   const canShowResolveWithAI = Boolean(
     onResolveSelectedCommentsWithAI && selectableGroups.length > 0
   )
+  const canShowCopyPrompt = Boolean(onCopyCommentsPromptToClipboard && selectableGroups.length > 0)
   const selectedCommentQueueCount = selectedGroups.length
 
   useEffect(() => {
@@ -2672,6 +2677,18 @@ export function PRCommentsList({
                         )}
                   </TooltipContent>
                 </Tooltip>
+                {canShowCopyPrompt && onCopyCommentsPromptToClipboard && (
+                  <CopyCommentsPromptButton
+                    label={translate(
+                      'auto.components.right.sidebar.checks.panel.content.b4e1c7a902',
+                      'Copy unresolved {{value0}} comments prompt',
+                      { value0: reviewKind }
+                    )}
+                    disabled={commentsLoading || resolveCommentsWithAIDisabled}
+                    disabledReason={resolveCommentsWithAIDisabledReason}
+                    onCopy={() => onCopyCommentsPromptToClipboard(selectableGroups)}
+                  />
+                )}
                 {isSelectingForAI && (
                   <>
                     <Tooltip>
@@ -2714,6 +2731,22 @@ export function PRCommentsList({
                             )}
                       </TooltipContent>
                     </Tooltip>
+                    {canShowCopyPrompt && onCopyCommentsPromptToClipboard && (
+                      <CopyCommentsPromptButton
+                        label={translate(
+                          'auto.components.right.sidebar.checks.panel.content.c5f2a8e310',
+                          'Copy {{value0}} queued comments prompt',
+                          { value0: selectedCommentQueueCount }
+                        )}
+                        disabled={
+                          selectedCommentQueueCount === 0 ||
+                          commentsLoading ||
+                          resolveCommentsWithAIDisabled
+                        }
+                        disabledReason={resolveCommentsWithAIDisabledReason}
+                        onCopy={() => onCopyCommentsPromptToClipboard(selectedGroups)}
+                      />
+                    )}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button

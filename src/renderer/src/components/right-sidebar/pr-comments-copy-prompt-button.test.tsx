@@ -1,0 +1,97 @@
+// @vitest-environment happy-dom
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { CopyCommentsPromptButton } from './pr-comments-copy-prompt-button'
+
+let container: HTMLDivElement
+let root: Root
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+
+afterEach(() => {
+  act(() => {
+    root.unmount()
+  })
+  container.remove()
+})
+
+function render(props: {
+  label?: string
+  disabled?: boolean
+  disabledReason?: string
+  onCopy: () => Promise<boolean>
+}): void {
+  act(() => {
+    root.render(
+      <TooltipProvider>
+        <CopyCommentsPromptButton label={props.label ?? 'Copy prompt'} {...props} />
+      </TooltipProvider>
+    )
+  })
+}
+
+function button(): HTMLButtonElement {
+  const el = container.querySelector('button')
+  if (!el) {
+    throw new Error('Copy button not found')
+  }
+  return el
+}
+
+// Why: the success icon (`Check`) is the only node carrying the success token; its
+// presence is the observable proof the button honored the copy result.
+function hasSuccessIcon(): boolean {
+  return container.querySelector('.text-status-success') !== null
+}
+
+async function click(): Promise<void> {
+  await act(async () => {
+    button().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  // Why: the click starts an awaited clipboard promise; flush its microtask + re-render.
+  await act(async () => {})
+}
+
+describe('CopyCommentsPromptButton', () => {
+  it('swaps to the success icon when the copy resolves true', async () => {
+    const onCopy = vi.fn().mockResolvedValue(true)
+    render({ onCopy })
+
+    expect(hasSuccessIcon()).toBe(false)
+    await click()
+
+    expect(onCopy).toHaveBeenCalledTimes(1)
+    expect(hasSuccessIcon()).toBe(true)
+  })
+
+  it('does not signal success when the copy resolves false', async () => {
+    const onCopy = vi.fn().mockResolvedValue(false)
+    render({ onCopy })
+
+    await click()
+
+    expect(onCopy).toHaveBeenCalledTimes(1)
+    expect(hasSuccessIcon()).toBe(false)
+  })
+
+  it('does not invoke onCopy while disabled', () => {
+    const onCopy = vi.fn().mockResolvedValue(true)
+    render({ disabled: true, disabledReason: 'Comments are still loading.', onCopy })
+
+    expect(button().disabled).toBe(true)
+    act(() => {
+      button().dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(onCopy).not.toHaveBeenCalled()
+  })
+})

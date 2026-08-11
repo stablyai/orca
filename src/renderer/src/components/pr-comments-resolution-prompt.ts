@@ -3,6 +3,13 @@ import type { PRCommentGroup } from '../../../shared/pr-comment-groups'
 
 export type PRCommentsResolutionReviewKind = 'PR' | 'MR'
 
+/**
+ * Who acknowledges the review threads after the prompt reaches an agent:
+ * - `orca-managed`: Orca posts fixing replies and resolves host threads (new-terminal launch).
+ * - `self-managed`: nobody automates host state — the user pasted the prompt into their own agent.
+ */
+export type PRCommentsResolutionOrchestration = 'orca-managed' | 'self-managed'
+
 type SerializablePRComment = {
   id: number
   author: string
@@ -104,7 +111,8 @@ export function buildPRCommentsResolutionPrompt({
   reviewTitle,
   reviewUrl,
   groups,
-  worktreePath
+  worktreePath,
+  orchestration = 'orca-managed'
 }: {
   reviewKind: PRCommentsResolutionReviewKind
   reviewNumber: number
@@ -112,6 +120,7 @@ export function buildPRCommentsResolutionPrompt({
   reviewUrl: string
   groups: PRCommentGroup[]
   worktreePath?: string | null
+  orchestration?: PRCommentsResolutionOrchestration
 }): string {
   const threads = groups
     .map(serializeThread)
@@ -150,7 +159,9 @@ export function buildPRCommentsResolutionPrompt({
     '- For outdated comments, inspect the current file and nearby code before editing. Apply the reviewer intent only if it still matches the current code.',
     '- Keep changes minimal and coherent. If multiple selected comments conflict or require a larger design decision, stop and report the tradeoff instead of guessing.',
     '- Preserve unrelated staged and unstaged work. Do not run destructive cleanup commands such as git reset --hard, git checkout ., git restore ., or git stash.',
-    '- Orca acknowledges this feedback on the host itself after launch. Do not resolve or unresolve threads on the host, reply on the host, edit host comments, or use provider APIs/CLIs just to change review state.',
+    orchestration === 'self-managed'
+      ? '- No fixing replies or host thread resolution are automated for you. Focus on the code changes; only reply on the host or resolve/unresolve threads if the user explicitly asks.'
+      : '- Orca acknowledges this feedback on the host itself after launch. Do not resolve or unresolve threads on the host, reply on the host, edit host comments, or use provider APIs/CLIs just to change review state.',
     '- Do not push, create commits, or rewrite history.',
     '- Run git diff --check before finishing. Run the most focused relevant tests, typecheck, or lint command you can reasonably identify; if validation is impractical, explain why.',
     '',

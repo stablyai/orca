@@ -3236,6 +3236,56 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
+  // Why: unlike the launch flow, copy never delivers the prompt to an agent, so it must not
+  // set up a pending ack, open the composer, or write host state. The user pastes it into an
+  // agent they already have open; the self-managed prompt drops the "Orca handles it" promise.
+  const handleCopyCommentsPrompt = useCallback(
+    async (selectedGroups: PRCommentGroup[]): Promise<boolean> => {
+      if (!sourceControlAiActionsVisible || !activeReview || resolveCommentsWithAIDisabledReason) {
+        return false
+      }
+      if (selectedGroups.length === 0) {
+        toast.message(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.f316a8ca2b',
+            'No unresolved comments selected.'
+          )
+        )
+        return false
+      }
+      const prompt = buildPRCommentsResolutionPrompt({
+        reviewKind: activeReview.provider === 'gitlab' ? 'MR' : 'PR',
+        reviewNumber: activeReview.number,
+        reviewTitle: activeReview.title,
+        reviewUrl: activeReview.url,
+        groups: selectedGroups,
+        worktreePath: activeWorktreePath,
+        orchestration: 'self-managed'
+      })
+      try {
+        await window.api.ui.writeClipboardText(prompt)
+        return true
+      } catch (err) {
+        // Why: writeClipboardText verifies the write and can reject; without a toast a
+        // verify-failure is a silent no-op the user could mistake for success and paste stale text.
+        console.warn('Failed to copy PR comment resolution prompt to clipboard:', err)
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.ChecksPanel.copyPromptFailed',
+            'Could not copy the prompt to the clipboard.'
+          )
+        )
+        return false
+      }
+    },
+    [
+      activeReview,
+      activeWorktreePath,
+      resolveCommentsWithAIDisabledReason,
+      sourceControlAiActionsVisible
+    ]
+  )
+
   const clearSentCommentSelection = useCallback((reviewContextKey: string): void => {
     clearPRCommentsListSelection(reviewContextKey)
     commentsSelectionClearTokenRef.current += 1
@@ -4636,6 +4686,9 @@ export default function ChecksPanel(): React.JSX.Element {
         onAddComment={pr ? handleAddPRComment : undefined}
         onResolveSelectedCommentsWithAI={
           sourceControlAiActionsVisible ? handleResolveCommentsWithAI : undefined
+        }
+        onCopyCommentsPromptToClipboard={
+          sourceControlAiActionsVisible ? handleCopyCommentsPrompt : undefined
         }
         onReply={pr ? handleReplyToComment : undefined}
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
