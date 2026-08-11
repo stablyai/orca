@@ -105,9 +105,7 @@ export function completeArtifactCloudCleanupIfCommitted(
   clearArtifactCreateIntents(profileId, userDataPath)
   clearArtifactShareRecords(profileId, userDataPath)
   rmSync(cleanupMarkerPath(profileId, userDataPath), { force: true })
-  if (process.platform !== 'win32') {
-    bestEffortFsyncDirectorySync(getOrcaProfileDirectory(profileId, userDataPath))
-  }
+  bestEffortFsyncDirectorySync(getOrcaProfileDirectory(profileId, userDataPath))
 }
 
 function assertArtifactCloudCleanupReady(

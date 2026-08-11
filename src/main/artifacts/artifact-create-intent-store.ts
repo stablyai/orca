@@ -76,9 +76,7 @@ function writeIntent(path: string, directory: string, serializedIntent: string):
     })
     fsyncFileSync(temporaryPath)
     renameSync(temporaryPath, path)
-    if (process.platform !== 'win32') {
-      bestEffortFsyncDirectorySync(directory)
-    }
+    bestEffortFsyncDirectorySync(directory)
   } catch (error) {
     rmSync(temporaryPath, { force: true })
     throw error
@@ -239,9 +237,7 @@ export function removeArtifactCreateIntent(
   }
   if (matches) {
     rmSync(path, { force: true })
-    if (process.platform !== 'win32') {
-      bestEffortFsyncDirectorySync(intentDirectory(profileId, userDataPath))
-    }
+    bestEffortFsyncDirectorySync(intentDirectory(profileId, userDataPath))
   }
 }
 
@@ -255,7 +251,5 @@ export function clearArtifactCreateIntents(profileId: string, userDataPath: stri
       rmSync(join(directory, name), { force: true })
     }
   }
-  if (process.platform !== 'win32') {
-    bestEffortFsyncDirectorySync(directory)
-  }
+  bestEffortFsyncDirectorySync(directory)
 }

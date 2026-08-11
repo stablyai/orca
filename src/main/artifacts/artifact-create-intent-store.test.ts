@@ -14,7 +14,7 @@ import {
 } from './artifact-create-intent-store'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
-vi.mock('child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
+vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
 
 const createdPaths: string[] = []
 const scope: ArtifactShareScope = {

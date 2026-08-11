@@ -48,12 +48,17 @@ afterEach(() => {
   }
 })
 
-it('propagates directory fsync I/O failures', () => {
+it('skips directory fsync on Windows and propagates I/O failures elsewhere', () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-artifact-directory-fsync-eio-'))
   createdPaths.push(directory)
   fsyncMockState.directoryErrorCode = 'EIO'
 
-  expect(() => bestEffortFsyncDirectorySync(directory)).toThrow('directory fsync failed')
+  const fsyncDirectory = (): void => bestEffortFsyncDirectorySync(directory)
+  if (process.platform === 'win32') {
+    expect(fsyncDirectory).not.toThrow()
+  } else {
+    expect(fsyncDirectory).toThrow('directory fsync failed')
+  }
 })
 
 it('keeps durable artifact records usable when directory fsync is unsupported', () => {

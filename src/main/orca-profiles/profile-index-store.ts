@@ -133,9 +133,7 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
   fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
-  if (process.platform !== 'win32') {
-    bestEffortFsyncDirectorySync(dirname(indexPath))
-  }
+  bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
 function copyIfPresent(source: string, target: string): void {

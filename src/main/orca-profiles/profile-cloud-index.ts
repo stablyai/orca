@@ -111,7 +111,10 @@ export function linkOrcaProfileToCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile?.cloud)
+  if (!currentProfile) {
+    throw new Error('unknown_orca_profile')
+  }
+  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile.cloud)
   const cleanupNeedsCommit = artifactCloudCleanupNeedsCommit(profileId, userDataPath, cloud)
   const now = Date.now()
   let found = false
@@ -156,7 +159,10 @@ export function unlinkOrcaProfileFromCloud(
 ): OrcaProfileListState {
   const index = loadOrCreateProfileIndex(userDataPath)
   const currentProfile = index.profiles.find((profile) => profile.id === profileId)
-  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile?.cloud)
+  if (!currentProfile) {
+    throw new Error('unknown_orca_profile')
+  }
+  reconcileCurrentArtifactCloudCleanup(profileId, userDataPath, currentProfile.cloud)
   const now = Date.now()
   let found = false
   const profiles = index.profiles.map((profile) => {

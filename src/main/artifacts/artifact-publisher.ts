@@ -4,7 +4,11 @@ import type {
   ArtifactWriteRequest
 } from '../../shared/artifacts'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
-import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
+import {
+  artifactRequest,
+  type ArtifactWriteBody,
+  artifactWriteBody
+} from './artifact-cloud-request'
 import {
   type ArtifactCreateIntent,
   getArtifactCreateIntent,
@@ -27,10 +31,7 @@ type ArtifactCreateOutcome = {
   result: ArtifactPublishResult
 }
 
-function artifactWriteBodiesMatch(
-  left: ReturnType<typeof artifactWriteBody>,
-  right: ReturnType<typeof artifactWriteBody>
-): boolean {
+function artifactWriteBodiesMatch(left: ArtifactWriteBody, right: ArtifactWriteBody): boolean {
   return (
     left.content === right.content &&
     left.contentType === right.contentType &&

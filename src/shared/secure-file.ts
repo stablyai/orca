@@ -124,7 +124,7 @@ export function writeSecureFile(
     if (applySecurePathRestriction(targetPath, false, process.platform, true)) {
       rememberHardenedPath(targetPath, false)
     }
-    if (options.durable && process.platform !== 'win32') {
+    if (options.durable) {
       bestEffortFsyncDirectorySync(dir)
     }
   } catch (error) {
@@ -143,6 +143,9 @@ export function fsyncFileSync(path: string): void {
 }
 
 export function bestEffortFsyncDirectorySync(directory: string): void {
+  if (process.platform === 'win32') {
+    return
+  }
   try {
     fsyncFileSync(directory)
   } catch (error) {
