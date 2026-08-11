@@ -670,7 +670,9 @@ export class LocalPtyProvider implements IPtyProvider {
     }
 
     ensureNodePtySpawnHelperExecutable()
-    validateWorkingDirectory(validationCwd)
+    if (args.prevalidatedCwd !== validationCwd) {
+      validateWorkingDirectory(validationCwd)
+    }
 
     const spawnEnv: Record<string, string> = {
       ...mergeGitConfigEnvProtocol(stripInheritedBuildModeEnv(process.env), args.env),

@@ -9261,13 +9261,26 @@ describe('registerPtyHandlers', () => {
       store.persistPtyBinding.mockClear()
       mainWindow.webContents.send.mockClear()
 
+      wslUncDirectoryExistsAsyncMock.mockClear()
       const mountArgs = {
         cols: 120,
         rows: 40,
-        cwd,
+        cwd: '/a',
+        cwdFallback: 'worktree',
         command: 'claude --resume provider-session',
         launchAgent: 'claude',
         worktreeId,
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'wsl',
+            hostPlatform: 'wsl',
+            projectId: 'repo-1',
+            distro: 'Ubuntu-24.04',
+            reason: 'project-override',
+            cacheKey: 'repo-1:wsl'
+          }
+        },
         tabId,
         leafId,
         env: {
@@ -9300,6 +9313,7 @@ describe('registerPtyHandlers', () => {
         sessionId: 'pty-live-owner'
       })
       expect(providerSpawn.mock.calls[1]?.[0].command).toBeUndefined()
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
       expect(runtime.createPreAllocatedTerminalHandle).not.toHaveBeenCalled()
       expect(prepareClaudeAuth).not.toHaveBeenCalled()
       expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
@@ -12180,51 +12194,60 @@ describe('registerPtyHandlers', () => {
     expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
   })
 
-  it('keeps an existing POSIX startup cwd for the selected WSL runtime', async () => {
-    const originalPlatform = process.platform
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-cwd' })
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
-    statSyncMock.mockImplementation((target: string) => {
-      if (target === '/home/alice/repo') {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }
-      return { isDirectory: () => true, mode: 0o755 }
-    })
-
-    try {
-      installDaemonTestProvider({ spawn: providerSpawn })
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/home/alice/repo',
-        cwdFallback: 'worktree',
-        worktreeId: 'repo-1::C:\\Users\\alice\\repo',
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            hostPlatform: 'wsl',
-            projectId: 'repo-1',
-            distro: 'Ubuntu-24.04',
-            reason: 'project-override',
-            cacheKey: 'repo-1:wsl'
-          }
+  it.each(['/home/alice/repo', '/a', '/c'])(
+    'keeps an existing POSIX startup cwd for the selected WSL runtime (%s)',
+    async (startupCwd) => {
+      const originalPlatform = process.platform
+      const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-cwd' })
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
+      statSyncMock.mockImplementation((target: string) => {
+        if (target === startupCwd) {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
         }
+        return { isDirectory: () => true, mode: 0o755 }
       })
 
-      expect(statSyncMock).not.toHaveBeenCalledWith('/home/alice/repo')
-      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo'
-      )
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo', shellOverride: 'wsl.exe' })
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      try {
+        installDaemonTestProvider({ spawn: providerSpawn })
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: startupCwd,
+          cwdFallback: 'worktree',
+          worktreeId: 'repo-1::C:\\Users\\alice\\repo',
+          projectRuntime: {
+            status: 'resolved',
+            runtime: {
+              kind: 'wsl',
+              hostPlatform: 'wsl',
+              projectId: 'repo-1',
+              distro: 'Ubuntu-24.04',
+              reason: 'project-override',
+              cacheKey: 'repo-1:wsl'
+            }
+          }
+        })
+
+        const expectedValidationCwd = `\\\\wsl.localhost\\Ubuntu-24.04${startupCwd.replaceAll('/', '\\')}`
+        expect(statSyncMock).not.toHaveBeenCalledWith(startupCwd)
+        expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(1)
+        expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(expectedValidationCwd)
+        expect(providerSpawn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            cwd: startupCwd,
+            shellOverride: 'wsl.exe'
+          })
+        )
+        expect(providerSpawn).toHaveBeenCalledWith(
+          expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+        )
+      } finally {
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      }
     }
-  })
+  )
 
   it('falls back when the selected WSL runtime reports a POSIX cwd missing', async () => {
     const originalPlatform = process.platform
@@ -12239,7 +12262,7 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/deleted',
+        cwd: '/a',
         cwdFallback: 'worktree',
         worktreeId: `repo-1::${worktreePath}`,
         projectRuntime: {
@@ -12255,11 +12278,69 @@ describe('registerPtyHandlers', () => {
         }
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(1)
       expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: worktreePath }))
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+      )
       expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
+  })
+
+  it('does not probe or forward local WSL cwd evidence for SSH fallback spawns', async () => {
+    const sshSpawn = vi.fn(async () => ({ id: 'ssh-wsl-looking-cwd' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: sshSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/a',
+      cwdFallback: 'worktree',
+      connectionId: 'ssh-1',
+      worktreeId: 'repo-1::C:\\Users\\alice\\repo',
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo-1:wsl'
+        }
+      }
+    })
+
+    expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
+    expect(sshSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/a' }))
+    expect(sshSpawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+    )
   })
 
   it('preserves a POSIX WSL cwd when the distro probe is inconclusive', async () => {
@@ -12274,15 +12355,13 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/repo',
+        cwd: '/a',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
 
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo' })
-      )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/a' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12301,17 +12380,15 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/repo',
+        cwd: '/c',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
 
-      expect(statSyncMock).not.toHaveBeenCalledWith('/home/alice/repo')
+      expect(statSyncMock).not.toHaveBeenCalledWith('/c')
       expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo' })
-      )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/c' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12319,7 +12396,11 @@ describe('registerPtyHandlers', () => {
   })
 
   it.each([
-    { exists: true, expectedCwd: '/home/alice/repo', expectedFallback: undefined },
+    {
+      exists: true,
+      expectedCwd: '/home/alice/repo',
+      expectedFallback: undefined
+    },
     {
       exists: false,
       expectedCwd: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
@@ -12348,8 +12429,12 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(testCase.exists ? 1 : 2)
       expect(providerSpawn).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: testCase.expectedCwd })
+      )
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
       )
       expect(result.startupCwdFallback).toEqual(testCase.expectedFallback)
     } finally {
@@ -12369,15 +12454,16 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/deleted',
+        cwd: '/c',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: unknown }
 
       expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(2)
       expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/deleted' })
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
       )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/c' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12440,7 +12526,41 @@ describe('registerPtyHandlers', () => {
       expect(providerSpawn).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: worktreePath, shellOverride: 'wsl.exe' })
       )
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
       expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('probes Git Bash /c as its existing native drive root without falling back', async () => {
+    const originalPlatform = process.platform
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-git-bash-cwd' })
+    const worktreePath = 'C:/Users/alice/repo'
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      installDaemonTestProvider({ spawn: providerSpawn })
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/c',
+        cwdFallback: 'worktree',
+        worktreeId: `repo-1::${worktreePath}`,
+        shellOverride: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })) as { startupCwdFallback?: { kind: string; cwd: string } }
+
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
+      expect(statSyncMock).toHaveBeenCalledWith('C:\\')
+      expect(statSyncMock).not.toHaveBeenCalledWith('/c')
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/c',
+          shellOverride: expect.stringContaining('bash')
+        })
+      )
+      expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }

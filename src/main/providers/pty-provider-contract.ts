@@ -38,6 +38,8 @@ export type PtySpawnOptions = {
   cols: number
   rows: number
   cwd?: string
+  /** Exact per-spawn cwd already proven by main; providers validate any other resolved path. */
+  prevalidatedCwd?: string
   env?: Record<string, string>
   envToDelete?: string[]
   /** Main-validated home provenance for an automatic Codex session resume. */
