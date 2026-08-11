@@ -169,7 +169,41 @@ export function createRemoteWorkspaceTargetSync(
       })
       return
     }
+    // Why: a superseded sync attempt must not report its upload — arrival
+    // fencing keeps an older push from overwriting the newer attempt's
+    // status/last-synced revision when results resolve out of order.
+    const pushLocalSession = async (): Promise<void> => {
+      if (
+        !isArrivalCurrent(authority.targetId, arrival) ||
+        !deps.isPreparationTokenCurrent(token)
+      ) {
+        return
+      }
+      const results = await deps.remoteWorkspace.setForConnectedTargets({
+        session: buildWorkspaceSessionPayload(deps.store.getState()),
+        hydratedTargetIds: [authority.targetId]
+      })
+      if (
+        !isArrivalCurrent(authority.targetId, arrival) ||
+        !deps.isPreparationTokenCurrent(token)
+      ) {
+        return
+      }
+      const result = results.find((entry) => entry.targetId === authority.targetId)?.result
+      applyPatchStatus(deps.store.getState(), authority.targetId, result)
+    }
     if (snapshot.revision > 0) {
+      const lastSyncedRevision =
+        deps.store.getState().lastSyncedRemoteWorkspaceRevisionByTargetId[authority.targetId]
+      if (lastSyncedRevision !== undefined && snapshot.revision <= lastSyncedRevision) {
+        // Why: the remote snapshot did not advance since this client last
+        // synced it, so the local session (which may hold newer offline edits,
+        // e.g. tabs closed while disconnected) is authoritative. Applying the
+        // snapshot would resurrect those closed tabs; upload local instead.
+        deps.store.getState().markRemoteWorkspaceHydrated(authority.targetId)
+        await pushLocalSession()
+        return
+      }
       const applyToken = buildDirectSshSnapshotApplyToken(token, snapshot.revision)
       if (applyToken) {
         await applyDirectSshRemoteWorkspaceSnapshot({
@@ -195,24 +229,21 @@ export function createRemoteWorkspaceTargetSync(
       })
       return
     }
-    if (!deps.isPreparationTokenCurrent(token)) {
-      return
-    }
-    const results = await deps.remoteWorkspace.setForConnectedTargets({
-      session: buildWorkspaceSessionPayload(deps.store.getState()),
-      hydratedTargetIds: [authority.targetId]
-    })
-    if (!deps.isPreparationTokenCurrent(token)) {
-      return
-    }
-    const result = results.find((entry) => entry.targetId === authority.targetId)?.result
-    applyPatchStatus(deps.store.getState(), authority.targetId, result)
+    await pushLocalSession()
   }
 
   const applyUnsolicitedSnapshot = async (
     targetId: string,
     snapshot: RemoteWorkspaceSnapshot
   ): Promise<void> => {
+    const lastSyncedRevision =
+      deps.store.getState().lastSyncedRemoteWorkspaceRevisionByTargetId[targetId]
+    if (lastSyncedRevision !== undefined && snapshot.revision <= lastSyncedRevision) {
+      // Why: a late or out-of-order change notification at (or below) the
+      // revision this client already synced carries nothing new — applying it
+      // would stomp newer local state (e.g. re-open a just-closed tab).
+      return
+    }
     const arrival = beginArrival(targetId)
     const authority = deps.getCurrentAuthority(targetId)
     if (!authority) {
