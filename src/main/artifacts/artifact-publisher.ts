@@ -6,6 +6,11 @@ import type {
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
 import {
+  getArtifactCreateIntent,
+  getOrCreateArtifactCreateIntent,
+  removeArtifactCreateIntent
+} from './artifact-create-intent-store'
+import {
   type ArtifactShareScope,
   getArtifactShareRecord,
   refreshArtifactShareRecordExpiration,
@@ -14,6 +19,23 @@ import {
 } from './artifact-share-record-store'
 
 type ArtifactCreateResponse = ArtifactListItem & { editToken: string }
+
+type ArtifactCreateOutcome = {
+  editToken: string
+  result: ArtifactPublishResult
+}
+
+function artifactWriteBodiesMatch(
+  left: ReturnType<typeof artifactWriteBody>,
+  right: ReturnType<typeof artifactWriteBody>
+): boolean {
+  return (
+    left.content === right.content &&
+    left.contentType === right.contentType &&
+    left.fileName === right.fileName &&
+    left.title === right.title
+  )
+}
 
 type ArtifactPublishAuthContext = {
   profileId: string
@@ -51,7 +73,7 @@ export class ArtifactPublisher {
   ): Promise<ArtifactListItem> {
     return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
-      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).item
+      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).result.item
     })
   }
 
@@ -64,6 +86,23 @@ export class ArtifactPublisher {
   ): Promise<ArtifactPublishResult> {
     return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
+      const pending = getArtifactCreateIntent(
+        auth.profileId,
+        this.userDataPath,
+        request.sourceKey,
+        auth.scope
+      )
+      if (pending) {
+        const created = await this.create(request, token, apiUrl, auth, idempotencyKey)
+        if (artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))) {
+          return created.result
+        }
+        const item = await this.updateExisting(request, token, apiUrl, auth, {
+          slug: created.result.item.artifact.slug,
+          editToken: created.editToken
+        })
+        return { change: 'created', item }
+      }
       const record = getArtifactShareRecord(
         auth.profileId,
         this.userDataPath,
@@ -72,24 +111,8 @@ export class ArtifactPublisher {
       )
       if (record) {
         try {
-          return await this.runForSlug(record.slug, auth, async () => {
-            auth.assertCurrent()
-            const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
-              method: 'PUT',
-              editToken: record.editToken,
-              body: artifactWriteBody(request)
-            })
-            auth.assertCurrent()
-            refreshArtifactShareRecordExpiration(
-              auth.profileId,
-              this.userDataPath,
-              request.sourceKey,
-              auth.scope,
-              record,
-              item.artifact.expiresAt
-            )
-            return { change: 'updated', item }
-          })
+          const item = await this.updateExisting(request, token, apiUrl, auth, record)
+          return { change: 'updated', item }
         } catch (error) {
           if (!(error instanceof OrcaCloudRequestError) || error.statusCode !== 404) {
             throw error
@@ -101,7 +124,7 @@ export class ArtifactPublisher {
           })
         }
       }
-      return this.create(request, token, apiUrl, auth, idempotencyKey)
+      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).result
     })
   }
 
@@ -121,17 +144,52 @@ export class ArtifactPublisher {
     return this.runSerialized(artifactOperationQueueKey('slug', auth, slug), operation)
   }
 
+  private updateExisting(
+    request: ArtifactWriteRequest,
+    token: string,
+    apiUrl: string,
+    auth: ArtifactPublishAuthContext,
+    record: { slug: string; editToken: string }
+  ): Promise<ArtifactListItem> {
+    return this.runForSlug(record.slug, auth, async () => {
+      auth.assertCurrent()
+      const item = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
+        method: 'PUT',
+        editToken: record.editToken,
+        body: artifactWriteBody(request)
+      })
+      auth.assertCurrent()
+      refreshArtifactShareRecordExpiration(
+        auth.profileId,
+        this.userDataPath,
+        request.sourceKey,
+        auth.scope,
+        record,
+        item.artifact.expiresAt
+      )
+      return item
+    })
+  }
+
   private async create(
     request: ArtifactWriteRequest,
     token: string,
     apiUrl: string,
     auth: ArtifactPublishAuthContext,
     idempotencyKey: string
-  ): Promise<ArtifactPublishResult> {
+  ): Promise<ArtifactCreateOutcome> {
+    const intent = getOrCreateArtifactCreateIntent(
+      auth.profileId,
+      this.userDataPath,
+      request.sourceKey,
+      auth.scope,
+      idempotencyKey,
+      artifactWriteBody(request)
+    )
     const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
       method: 'POST',
-      body: artifactWriteBody(request),
-      idempotencyKey
+      body: intent.body,
+      idempotencyKey: intent.idempotencyKey
     })
     auth.assertCurrent()
     saveArtifactShareRecord(auth.profileId, this.userDataPath, request.sourceKey, {
@@ -141,9 +199,19 @@ export class ArtifactPublisher {
       expiresAt: response.artifact.expiresAt,
       ...auth.scope
     })
+    removeArtifactCreateIntent(
+      auth.profileId,
+      this.userDataPath,
+      request.sourceKey,
+      auth.scope,
+      intent.idempotencyKey
+    )
     return {
-      change: 'created',
-      item: { artifact: response.artifact, shareUrl: response.shareUrl }
+      editToken: response.editToken,
+      result: {
+        change: 'created',
+        item: { artifact: response.artifact, shareUrl: response.shareUrl }
+      }
     }
   }
 

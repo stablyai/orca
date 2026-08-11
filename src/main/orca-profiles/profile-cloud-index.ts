@@ -12,6 +12,7 @@ import {
   writeProfileIndex
 } from './profile-index-store'
 import { clearArtifactShareRecords } from '../artifacts/artifact-share-record-store'
+import { clearArtifactCreateIntents } from '../artifacts/artifact-create-intent-store'
 
 export type CreateCloudLinkedOrcaProfileRecordResult = OrcaProfileListState & {
   profile: OrcaProfileSummary
@@ -111,6 +112,7 @@ export function linkOrcaProfileToCloud(
     throw new Error('unknown_orca_profile')
   }
   if (cloudIdentityChanged) {
+    clearArtifactCreateIntents(profileId, userDataPath)
     clearArtifactShareRecords(profileId, userDataPath)
   }
   const nextIndex = {
@@ -141,6 +143,7 @@ export function unlinkOrcaProfileFromCloud(
   if (!found) {
     throw new Error('unknown_orca_profile')
   }
+  clearArtifactCreateIntents(profileId, userDataPath)
   clearArtifactShareRecords(profileId, userDataPath)
   const nextIndex = {
     ...index,

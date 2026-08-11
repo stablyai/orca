@@ -40,12 +40,15 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.artifactSlugs()).toEqual(['artifact-1'])
     await expect(publishedLink(userDataPath)).resolves.toBeNull()
 
-    await expect(service(userDataPath).publish(writeRequest)).resolves.toMatchObject({
+    await expect(
+      service(userDataPath).publish({ ...writeRequest, content: '<h1>Changed after loss</h1>' })
+    ).resolves.toMatchObject({
       status: 'ok',
       value: { item: { artifact: { slug: 'artifact-1' } } }
     })
     expect(server.createMutations).toBe(1)
     expect(server.artifactSlugs()).toEqual(['artifact-1'])
+    expect(server.artifactContent('artifact-1')).toBe('<h1>Changed after loss</h1>')
     await expect(publishedLink(userDataPath)).resolves.toBe('https://share.onorca.dev/a/artifact-1')
   })
 
@@ -86,17 +89,25 @@ class ArtifactFaultServer {
   deleteMutations = 0
   loseNextCreateResponse = false
   loseNextDeleteResponse = false
-  private readonly artifacts = new Set<string>()
+  private readonly artifacts = new Map<string, string>()
   private readonly createsByKey = new Map<string, { body: string; response: object }>()
 
   artifactSlugs(): string[] {
-    return [...this.artifacts].sort()
+    return [...this.artifacts.keys()].sort()
+  }
+
+  artifactContent(slug: string): string | undefined {
+    const body = this.artifacts.get(slug)
+    return body ? (JSON.parse(body) as { content?: string }).content : undefined
   }
 
   private async handle(input: string | URL | Request, init?: RequestInit): Promise<Response> {
     const method = init?.method ?? 'GET'
     if (method === 'POST') {
       return this.create(init)
+    }
+    if (method === 'PUT') {
+      return this.update(String(input), init)
     }
     if (method === 'DELETE') {
       return this.delete(String(input))
@@ -122,7 +133,7 @@ class ArtifactFaultServer {
     const slug = `artifact-${this.createMutations}`
     const response = createResponseBody(slug)
     this.createsByKey.set(key, { body, response })
-    this.artifacts.add(slug)
+    this.artifacts.set(slug, body)
     if (this.loseNextCreateResponse) {
       this.loseNextCreateResponse = false
       throw new TypeError('response lost after committed create')
@@ -141,6 +152,15 @@ class ArtifactFaultServer {
       throw new TypeError('response lost after committed delete')
     }
     return new Response(null, { status: 204 })
+  }
+
+  private update(url: string, init?: RequestInit): Response {
+    const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
+    if (!this.artifacts.has(slug)) {
+      return jsonResponse({ code: 'artifact_not_found' }, 404)
+    }
+    this.artifacts.set(slug, String(init?.body))
+    return jsonResponse(createResponseBody(slug), 200)
   }
 }
 
