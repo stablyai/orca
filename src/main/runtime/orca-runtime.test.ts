@@ -22262,6 +22262,23 @@ describe('OrcaRuntimeService', () => {
     expect(read.tail).toEqual(['after reload'])
   })
 
+  it('notifies remote clients to refetch projects after the renderer graph reloads', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const events: unknown[] = []
+    runtime.onClientEvent((event) => events.push(event))
+
+    syncSinglePty(runtime)
+    expect(events).toEqual([])
+
+    runtime.markRendererReloading(1)
+    syncSinglePty(runtime)
+    expect(events).toEqual([{ type: 'reposChanged' }])
+
+    // Why: only the first rebuild after reload should republish; steady-state sync stays quiet.
+    syncSinglePty(runtime)
+    expect(events).toEqual([{ type: 'reposChanged' }])
+  })
+
   it('keeps preallocated terminal handles valid when a reload graph omits the live leaf', async () => {
     const runtime = new OrcaRuntimeService(store)
     const handle = runtime.preAllocateHandleForPty('pty-1')
