@@ -6397,6 +6397,16 @@ export class OrchestrationDb {
     return this.findActiveDispatchForAssignee(handle, paneKey)
   }
 
+  /**
+   * Active Dispatch proven to sit on this exact pane. Unlike the handle-first lookup, a handle
+   * match on another pane never satisfies it, so callers that attribute something permanent to
+   * the Dispatch — run-create writing an immutable parent Run — cannot inherit a stale or
+   * reissued handle's Run. A row with no recorded pane proves nothing and is not a match.
+   */
+  getActiveDispatchForPane(paneKey: string): DispatchContextRow | undefined {
+    return this.findActiveDispatchByPane(paneKey)
+  }
+
   private findActiveDispatchForAssignee(
     assigneeHandle: string,
     assigneePaneKey?: string
@@ -6414,6 +6424,10 @@ export class OrchestrationDb {
       return undefined
     }
 
+    return this.findActiveDispatchByPane(assigneePaneKey)
+  }
+
+  private findActiveDispatchByPane(paneKey: string): DispatchContextRow | undefined {
     const actives = this.db
       .prepare(
         `SELECT * FROM dispatch_contexts
@@ -6421,10 +6435,10 @@ export class OrchestrationDb {
            AND status IN ('pending', 'dispatched')
            AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL} = ?`
       )
-      .all(paneKeyMatchSuffix(assigneePaneKey)) as DispatchContextRow[]
+      .all(paneKeyMatchSuffix(paneKey)) as DispatchContextRow[]
 
     for (const row of actives) {
-      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, assigneePaneKey)) {
+      if (row.assignee_pane_key && isEquivalentPaneKey(row.assignee_pane_key, paneKey)) {
         return row
       }
     }

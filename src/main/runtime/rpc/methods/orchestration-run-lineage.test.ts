@@ -102,6 +102,64 @@ describe('Run lineage RPC', () => {
     expect(general.run.parent_run_id).toBeNull()
   })
 
+  // Why: the parent is immutable, so inference must not accept a Dispatch that merely shares the
+  // caller's handle. A handle reissued to a new pane, or a stale active Dispatch left on the old
+  // one, would otherwise make an unrelated Run the permanent parent.
+  it('ignores an active Dispatch that holds the same handle on another pane', async () => {
+    const { db: store, ctx } = setup()
+    const general = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'wave',
+      from: 'term_general'
+    })) as { run: { id: string } }
+    // The stale Dispatch names term_captain, but on the pane term_captain no longer occupies.
+    const stalePane = 'tab_stale:cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+    const task = store.createTask({ spec: 'lead a lane that already moved', runId: general.run.id })
+    store.createDispatchContext(task.id, 'term_captain', stalePane)
+
+    const captain = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'alpha lane',
+      from: 'term_captain'
+    })) as { run: { parent_run_id: string | null } }
+
+    expect(captain.run.parent_run_id).toBeNull()
+  })
+
+  it('still infers the parent when the handle was reissued on the dispatched pane', async () => {
+    const { db: store, ctx } = setup()
+    const general = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'wave',
+      from: 'term_general'
+    })) as { run: { id: string } }
+    // Pane key is the remint-stable identity, so a new handle on the dispatched pane is the
+    // same terminal and must keep its parent.
+    const task = store.createTask({ spec: 'lead the alpha lane', runId: general.run.id })
+    store.createDispatchContext(task.id, 'term_captain_old', CAPTAIN_PANE)
+
+    const captain = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'alpha lane',
+      from: 'term_captain'
+    })) as { run: { parent_run_id: string | null } }
+
+    expect(captain.run.parent_run_id).toBe(general.run.id)
+  })
+
+  it('leaves the Run unparented when the active Dispatch recorded no pane', async () => {
+    const { db: store, ctx } = setup()
+    const general = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'wave',
+      from: 'term_general'
+    })) as { run: { id: string } }
+    const task = store.createTask({ spec: 'lead a lane', runId: general.run.id })
+    store.createDispatchContext(task.id, 'term_captain')
+
+    const captain = (await call(ctx, 'orchestration.runCreate', {
+      objective: 'alpha lane',
+      from: 'term_captain'
+    })) as { run: { parent_run_id: string | null } }
+
+    expect(captain.run.parent_run_id).toBeNull()
+  })
+
   it('refuses an unknown parent Run without applying effects', async () => {
     const { ctx } = setup()
 

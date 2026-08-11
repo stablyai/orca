@@ -52,7 +52,6 @@ function requireCallerPane(
 function resolveParentRun(
   runtime: OrcaRuntimeService,
   declaredParent: string | undefined,
-  callerHandle: string,
   callerPaneKey: string
 ): string | null {
   const db = runtime.getOrchestrationDb()
@@ -67,7 +66,10 @@ function resolveParentRun(
     }
     return parent.id
   }
-  const dispatchRunId = db.getActiveDispatchForIdentity(callerHandle, callerPaneKey)?.run_id
+  // Why: the parent is written once and never rewritten, so inference needs a Dispatch proven to
+  // be this pane's. A handle-first lookup would accept a stale or reissued handle's Dispatch on
+  // another pane and make that unrelated Run the permanent parent. No proof means no parent.
+  const dispatchRunId = db.getActiveDispatchForPane(callerPaneKey)?.run_id
   const inferred = dispatchRunId ? db.getRun(dispatchRunId) : undefined
   return inferred && inferred.legacy === 0 ? inferred.id : null
 }
@@ -85,7 +87,7 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         objective: params.objective,
         coordinatorHandle: params.from,
         coordinatorPaneKey: paneKey,
-        parentRunId: resolveParentRun(runtime, params.parent, params.from, paneKey)
+        parentRunId: resolveParentRun(runtime, params.parent, paneKey)
       })
       if (priorRun) {
         runtime.cancelMessageWaiters(`run:${priorRun.id}`)
