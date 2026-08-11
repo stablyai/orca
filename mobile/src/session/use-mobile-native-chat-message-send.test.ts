@@ -219,24 +219,46 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(onCommandSend).toHaveBeenCalledWith('/clear')
   })
 
-  it('never creates an optimistic echo for an unknown slash token', async () => {
-    // `/model` is not in Claude's autocomplete catalog, but the session-option
-    // recorder still recognizes it without claiming a generic command ran.
-    mount(() => null)
-    await act(async () => {
-      await api!.send('/model sonnet')
-    })
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
-  })
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s composer slash sends pasted',
+    async (agent) => {
+      // `/model` is not in Claude's autocomplete catalog, but the session-option
+      // recorder still recognizes it without claiming a generic command ran.
+      mount(() => null, agent)
+      await act(async () => {
+        await api!.send('/model sonnet')
+      })
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).toHaveBeenCalledWith('/model sonnet')
+      expect(sendWithOutcome).toHaveBeenCalledOnce()
+      expect(typeCommandWithOutcome).not.toHaveBeenCalled()
+    }
+  )
 
-  it('classifies per agent: /model is a catalog command for Codex', async () => {
+  it('types Codex composer slash sends instead of pasting them', async () => {
     mount(() => null, 'codex')
     await act(async () => {
       await api!.send('/model')
     })
     expect(acceptSend).not.toHaveBeenCalled()
     expect(onCommandSend).toHaveBeenCalledWith('/model')
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('keeps Codex skill sends pasted', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.send('$ref-oss')
+    })
+    expect(acceptSend).not.toHaveBeenCalled()
+    expect(onCommandSend).toHaveBeenCalledWith('$ref-oss')
+    expect(sendWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ text: '$ref-oss', terminal: 'term' })
+    )
+    expect(typeCommandWithOutcome).not.toHaveBeenCalled()
   })
 
   it('holds only chat sends for transcript confirmation on a lost ack', async () => {
@@ -252,17 +274,20 @@ describe('useMobileNativeChatMessageSend', () => {
     expect(holdUnconfirmedSend).toHaveBeenCalledTimes(1)
   })
 
-  it('dispatchCommand surfaces the outcome without echo or composer sync', async () => {
-    mount(() => ({ text: DRAFT, createdAt: 1 }))
-    let outcome: string | undefined
-    await act(async () => {
-      outcome = await api!.dispatchCommand('/model sonnet')
-    })
-    expect(outcome).toBe('accepted')
-    expect(acceptSend).not.toHaveBeenCalled()
-    expect(onCommandSend).not.toHaveBeenCalled()
-    expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
-  })
+  it.each(['claude', 'openclaude'] as const)(
+    'keeps %s session-option commands pasted',
+    async (agent) => {
+      mount(() => ({ text: DRAFT, createdAt: 1 }), agent)
+      let outcome: string | undefined
+      await act(async () => {
+        outcome = await api!.dispatchCommand('/model sonnet', { delivery: 'type' })
+      })
+      expect(outcome).toBe('accepted')
+      expect(acceptSend).not.toHaveBeenCalled()
+      expect(onCommandSend).not.toHaveBeenCalled()
+      expect(sentArgs().resolvedLaunchDraft).toBeUndefined()
+    }
+  )
 
   it('routes typed picker commands around the pasted composer-text send', async () => {
     mount(() => null, 'codex')
@@ -271,6 +296,18 @@ describe('useMobileNativeChatMessageSend', () => {
       outcome = await api!.dispatchCommand('/model', { delivery: 'type' })
     })
     expect(outcome).toBe('accepted')
+    expect(typeCommandWithOutcome).toHaveBeenCalledWith(
+      expect.objectContaining({ command: '/model', terminal: 'term' })
+    )
+    expect(sendWithOutcome).not.toHaveBeenCalled()
+  })
+
+  it('types Codex session-option commands without caller delivery metadata', async () => {
+    mount(() => null, 'codex')
+    await act(async () => {
+      await api!.dispatchCommand('/model')
+    })
+
     expect(typeCommandWithOutcome).toHaveBeenCalledWith(
       expect.objectContaining({ command: '/model', terminal: 'term' })
     )

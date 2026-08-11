@@ -322,6 +322,34 @@ describe('typeMobileNativeChatCommandWithOutcome', () => {
       }))
     )
   })
+
+  it('retires a parked launch draft only with the final typed Enter', async () => {
+    vi.useFakeTimers()
+    const client = clientWithResponse({
+      id: 'request',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'runtime' }
+    })
+    const result = typeMobileNativeChatCommandWithOutcome({
+      client,
+      terminal: 'term',
+      command: '/model',
+      resolvedLaunchDraft: { text: 'seed', createdAt: 7 }
+    })
+    await vi.runAllTimersAsync()
+    await result
+
+    const params = vi.mocked(client.sendRequest).mock.calls.map((call) => call[1]) as Array<{
+      text: string
+      resolvedLaunchDraft?: { text: string; createdAt: number }
+    }>
+    expect(params.slice(0, -1).every((entry) => entry.resolvedLaunchDraft === undefined)).toBe(true)
+    expect(params.at(-1)).toMatchObject({
+      text: '\r',
+      resolvedLaunchDraft: { text: 'seed', createdAt: 7 }
+    })
+  })
 })
 
 describe('clearMobileNativeChatInput', () => {

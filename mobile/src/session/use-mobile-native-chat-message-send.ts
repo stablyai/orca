@@ -8,6 +8,7 @@ import {
   type MobileNativeChatSendOutcome
 } from './mobile-native-chat-send'
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
+import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
 import {
@@ -155,40 +156,42 @@ export function useMobileNativeChatMessageSend(args: {
           return 'rejected'
         }
       }
-      const outcome = await sendMobileNativeChatMessageWithOutcome({
-        client,
-        terminal: handle,
-        text,
-        // Why: pre-clear only when nothing was deliberately pasted first. The heal
-        // above fires only for terminals a mobile image paste marked, so a desktop
-        // launch-draft prefill parked on the input line would otherwise glue onto
-        // this message. An image send already led its own paste with Ctrl+U, and a
-        // second one here would wipe the image it just pasted (desktop's image path
-        // likewise clears once, before the paste, and never again).
-        //
-        // Also skipped once the dedicated clear above ran: the line is already
-        // empty, and a Ctrl+U written immediately before body text in the SAME
-        // write reaches the agent as a literal control character rather than a
-        // keypress (observed live as a stray \x15 heading the received message).
-        clearInputFirst: !images?.length && !seededLaunchDraft,
-        ...(syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
-          ? {
-              resolvedLaunchDraft: {
-                text: seededLaunchDraft.text,
-                createdAt: seededLaunchDraft.createdAt
-              }
-            }
-          : {}),
-        deadline,
-        ...(deviceTokenRef.current
-          ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
-          : {})
-      })
+      const classification = classifyMobileNativeChatSend(agent, text)
+      const mobileClient = deviceTokenRef.current
+        ? { id: deviceTokenRef.current, type: 'mobile' as const }
+        : undefined
+      const resolvedLaunchDraft =
+        syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
+          ? { text: seededLaunchDraft.text, createdAt: seededLaunchDraft.createdAt }
+          : undefined
+      const outcome =
+        agent === 'codex' &&
+        classification !== 'chat' &&
+        isSlashCommandDraft(text) &&
+        !images?.length
+          ? await typeMobileNativeChatCommandWithOutcome({
+              client,
+              terminal: handle,
+              command: text,
+              ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
+              ...(mobileClient ? { mobileClient } : {}),
+              deadline
+            })
+          : await sendMobileNativeChatMessageWithOutcome({
+              client,
+              terminal: handle,
+              text,
+              // Why: an image send already cleared before its paste; a second
+              // clear here would wipe the image before submission.
+              clearInputFirst: !images?.length && !seededLaunchDraft,
+              ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
+              deadline,
+              ...(mobileClient ? { mobileClient } : {})
+            })
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
       // TUI, not the conversation — the transcript never echoes it as a user
       // turn, so an optimistic bubble would never reconcile and the
       // unconfirmed hold could never observe a landing.
-      const classification = classifyMobileNativeChatSend(agent, text)
       if (outcome === 'unknown') {
         if (classification === 'chat') {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
@@ -276,14 +279,14 @@ export function useMobileNativeChatMessageSend(args: {
   const dispatchCommand = useCallback(
     async (
       text: string,
-      options?: { delivery?: CatalogCommandDelivery }
+      _options?: { delivery?: CatalogCommandDelivery }
     ): Promise<MobileNativeChatSendOutcome> => {
       const terminal = handleRef.current
       if (terminal && !acquireMobileNativeChatTerminalWrite(terminal)) {
         return 'rejected'
       }
       try {
-        if (options?.delivery === 'type') {
+        if (agentRef.current === 'codex') {
           if (!client || !terminal || !enabled) {
             return 'rejected'
           }
