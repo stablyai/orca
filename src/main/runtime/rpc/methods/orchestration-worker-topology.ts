@@ -59,6 +59,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
   taskId: string
+  coordinatorTabId?: string
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
@@ -68,6 +69,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     startupAgent: args.agent,
     ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
     title: `worker-${args.taskId}`,
+    ...(args.coordinatorTabId ? { afterTabId: args.coordinatorTabId } : {}),
     // Why: dispatching a worker is background work; it must not pull the sidebar
     // to the worker's workspace while the user is reading somewhere else.
     surfaceOwner: false

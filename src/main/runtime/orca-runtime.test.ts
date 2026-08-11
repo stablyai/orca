@@ -12490,6 +12490,120 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('publishes background terminals in their anchor tab group without changing focus', async () => {
+    const spawn = vi
+      .fn()
+      .mockResolvedValueOnce({ id: 'pty-worker' })
+      .mockResolvedValueOnce({ id: 'pty-stale-anchor' })
+    const revealTerminalSession = vi.fn().mockResolvedValue({ tabId: 'tab-worker' })
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession,
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:split-layout',
+      snapshotVersion: 1,
+      activeGroupId: 'group-left',
+      activeTabId: `tab-left::${HEADLESS_LEAF_ID}`,
+      activeTabType: 'terminal',
+      tabGroups: [
+        { id: 'group-left', activeTabId: 'tab-left', tabOrder: ['tab-left'] },
+        {
+          id: 'group-right',
+          activeTabId: 'tab-coordinator',
+          tabOrder: ['tab-coordinator', 'tab-peer']
+        }
+      ],
+      tabs: [
+        {
+          type: 'terminal',
+          id: `tab-left::${HEADLESS_LEAF_ID}`,
+          parentTabId: 'tab-left',
+          leafId: HEADLESS_LEAF_ID,
+          ptyId: 'pty-left',
+          title: 'Left',
+          isActive: true
+        },
+        {
+          type: 'terminal',
+          id: `tab-coordinator::${HEADLESS_SECOND_LEAF_ID}`,
+          parentTabId: 'tab-coordinator',
+          leafId: HEADLESS_SECOND_LEAF_ID,
+          ptyId: 'pty-coordinator',
+          title: 'Coordinator',
+          isActive: false
+        },
+        {
+          type: 'terminal',
+          id: `tab-peer::${HEADLESS_THIRD_LEAF_ID}`,
+          parentTabId: 'tab-peer',
+          leafId: HEADLESS_THIRD_LEAF_ID,
+          ptyId: 'pty-peer',
+          title: 'Peer',
+          isActive: false
+        }
+      ]
+    })
+
+    const placed = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      afterTabId: 'tab-coordinator',
+      surfaceOwner: false
+    })
+    const fallback = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      afterTabId: 'tab-missing',
+      surfaceOwner: false
+    })
+
+    const snapshot = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+    expect(snapshot.tabGroups).toEqual([
+      {
+        id: 'group-left',
+        activeTabId: 'tab-left',
+        tabOrder: ['tab-left', fallback.tabId]
+      },
+      {
+        id: 'group-right',
+        activeTabId: 'tab-coordinator',
+        tabOrder: ['tab-coordinator', placed.tabId, 'tab-peer']
+      }
+    ])
+    expect(snapshot).toMatchObject({
+      activeGroupId: 'group-left',
+      activeTabId: `tab-left::${HEADLESS_LEAF_ID}`,
+      activeTabType: 'terminal'
+    })
+    expect(revealTerminalSession).toHaveBeenNthCalledWith(
+      1,
+      TEST_WORKTREE_ID,
+      expect.objectContaining({ afterTabId: 'tab-coordinator', activate: false })
+    )
+    expect(revealTerminalSession).toHaveBeenNthCalledWith(
+      2,
+      TEST_WORKTREE_ID,
+      expect.objectContaining({ afterTabId: 'tab-missing', activate: false })
+    )
+  })
+
   it('retires inherited launch authority when the agent command exits', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-authority', incarnationId: 'process-1' })
     const retireAuthority = vi.fn()

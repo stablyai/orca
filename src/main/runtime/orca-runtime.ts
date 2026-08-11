@@ -1366,6 +1366,9 @@ type TerminalCreateOptions = {
   // sidebar reveal, no tab focus. Distinct from 'background' presentation,
   // which skips renderer adoption entirely.
   surfaceOwner?: false
+  // Why: background creators can preserve the initiating tab's outer split group
+  // without depending on whichever group is globally active when adoption finishes.
+  afterTabId?: string
   tabId?: string
   leafId?: string
   sessionId?: string
@@ -1874,6 +1877,7 @@ type RuntimeNotifier = {
       activate?: boolean
       presentation?: RuntimeTerminalPresentation
       surfaceOwner?: false
+      afterTabId?: string
       tabId?: string
       leafId?: string
       splitFromLeafId?: string
@@ -6377,9 +6381,19 @@ export class OrcaRuntimeService {
     worktreeId: string,
     groups: readonly RuntimeMobileSessionTabGroup[],
     terminalTabs: readonly RuntimeMobileSessionTerminalTab[],
-    activeTab: RuntimeMobileSessionTerminalTab | null
+    activeTab: RuntimeMobileSessionTerminalTab | null,
+    placement?: { tabId: string; afterTabId: string }
   ): RuntimeMobileSessionTabGroup[] {
     const parentTabOrder = this.collectHeadlessParentTabOrder(terminalTabs)
+    if (placement && placement.tabId !== placement.afterTabId) {
+      const placedIndex = parentTabOrder.indexOf(placement.tabId)
+      const anchorIndex = parentTabOrder.indexOf(placement.afterTabId)
+      if (placedIndex !== -1 && anchorIndex !== -1) {
+        parentTabOrder.splice(placedIndex, 1)
+        const nextAnchorIndex = parentTabOrder.indexOf(placement.afterTabId)
+        parentTabOrder.splice(nextAnchorIndex + 1, 0, placement.tabId)
+      }
+    }
     if (parentTabOrder.length === 0) {
       return [...groups]
     }
@@ -6408,9 +6422,13 @@ export class OrcaRuntimeService {
     const activeParentId = activeTab?.parentTabId ?? null
     const activeGroupId =
       (activeParentId ? ownerGroupId.get(activeParentId) : undefined) ?? nextGroups[0]!.id
+    const placementGroupId = placement ? ownerGroupId.get(placement.afterTabId) : undefined
     const retainedOrder = new Map<string, string[]>(nextGroups.map((group) => [group.id, []]))
     for (const tabId of parentTabOrder) {
-      const groupId = ownerGroupId.get(tabId) ?? activeGroupId
+      const groupId =
+        (tabId === placement?.tabId ? placementGroupId : undefined) ??
+        ownerGroupId.get(tabId) ??
+        activeGroupId
       retainedOrder.get(groupId)?.push(tabId)
     }
     return nextGroups
@@ -6450,6 +6468,7 @@ export class OrcaRuntimeService {
       startupCwd?: string
       viewMode?: 'terminal' | 'chat'
       split?: { splitFromLeafId: string; direction: 'horizontal' | 'vertical' }
+      afterTabId?: string
       notify?: boolean
     }
   ): void {
@@ -6519,7 +6538,7 @@ export class OrcaRuntimeService {
           candidate.leafId === args.leafId
         )
     )
-    const tabs = this.mergeMobileSessionSnapshotTabs(
+    let tabs = this.mergeMobileSessionSnapshotTabs(
       existingTabs.map((candidate) => ({
         ...candidate,
         // Why: the client picks one sibling's parentLayout to render the whole
@@ -6533,6 +6552,26 @@ export class OrcaRuntimeService {
       })),
       [tab]
     )
+    if (args.afterTabId && args.tabId !== args.afterTabId) {
+      // Why: persist parent order so later background publications cannot undo the anchor insertion.
+      const placedSurfaces = tabs.filter(
+        (candidate) => candidate.type === 'terminal' && candidate.parentTabId === args.tabId
+      )
+      const retainedTabs = tabs.filter(
+        (candidate) => candidate.type !== 'terminal' || candidate.parentTabId !== args.tabId
+      )
+      const anchorIndex = retainedTabs.reduce(
+        (lastIndex, candidate, index) =>
+          (candidate.type === 'terminal' ? candidate.parentTabId : candidate.id) === args.afterTabId
+            ? index
+            : lastIndex,
+        -1
+      )
+      if (placedSurfaces.length > 0 && anchorIndex !== -1) {
+        retainedTabs.splice(anchorIndex + 1, 0, ...placedSurfaces)
+        tabs = retainedTabs
+      }
+    }
     const activeTab =
       (tab.isActive ? tab : tabs.find((candidate) => candidate.id === existing?.activeTabId)) ??
       tabs.find((candidate) => candidate.isActive) ??
@@ -6553,7 +6592,8 @@ export class OrcaRuntimeService {
         worktreeId,
         existing?.tabGroups ?? [],
         terminalTabs,
-        activeTab?.type === 'terminal' ? activeTab : null
+        activeTab?.type === 'terminal' ? activeTab : null,
+        args.afterTabId ? { tabId: args.tabId, afterTabId: args.afterTabId } : undefined
       ),
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
@@ -25422,6 +25462,9 @@ export class OrcaRuntimeService {
       }
       const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
+      if (launchOpts.afterTabId) {
+        this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(workspace.id)
+      }
       let ptySpawnCommitReported = false
       const reportPtySpawnCommitted = (): void => {
         if (ptySpawnCommitReported) {
@@ -25692,7 +25735,8 @@ export class OrcaRuntimeService {
             // metadata from an already-owned renderer pane; don't select it on mobile.
             selectIfNoActiveTab: presentation !== 'background',
             ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-            ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
+            ...(cwd !== workspace.path ? { startupCwd: cwd } : {}),
+            ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {})
           })
         }
         let surface: RuntimeTerminalCreate['surface'] = 'background'
@@ -25714,6 +25758,7 @@ export class OrcaRuntimeService {
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),
               ...ownerSurfacing(opts.surfaceOwner !== false),
+              ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
               tabId,
               leafId
             })
@@ -25799,6 +25844,7 @@ export class OrcaRuntimeService {
         ...(launchOpts.launchToken ? { launchToken: launchOpts.launchToken } : {}),
         ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
         ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+        ...(launchOpts.afterTabId ? { afterTabId: launchOpts.afterTabId } : {}),
         startupCommandDelivery: launchOpts.startupCommandDelivery,
         title: launchOpts.title,
         activate: presentation === 'focused',

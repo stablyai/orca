@@ -813,6 +813,7 @@ describe('attachMainWindowServices', () => {
           cwd?: string
           viewMode?: 'terminal' | 'chat'
           activate?: boolean
+          afterTabId?: string
         }
       ) => Promise<{ tabId: string; title?: string }>
     }
@@ -820,7 +821,8 @@ describe('attachMainWindowServices', () => {
       ptyId: 'pty-1',
       title: 'SSH tmux',
       cwd: '/repo/packages/web',
-      viewMode: 'chat'
+      viewMode: 'chat',
+      afterTabId: 'tab-coordinator'
     })
     const sentPayload = sendMock.mock.calls.find(
       ([channel]) => channel === 'ui:createTerminal'
@@ -828,7 +830,11 @@ describe('attachMainWindowServices', () => {
     const handler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
-    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
+    expect(sentPayload).toMatchObject({
+      cwd: '/repo/packages/web',
+      viewMode: 'chat',
+      afterTabId: 'tab-coordinator'
+    })
 
     handler?.(
       { sender: { send: vi.fn() } },

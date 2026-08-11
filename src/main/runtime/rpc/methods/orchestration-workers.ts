@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -28,6 +29,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
     handler: async (params, { runtime, orchestrationMutation }) => {
       const db = runtime.getOrchestrationDb()
       const coordinatorPane = runtime.getTerminalPaneKey(params.from)
+      const coordinatorTabId = coordinatorPane ? parsePaneKey(coordinatorPane)?.tabId : undefined
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
@@ -164,6 +166,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
             taskId: task.id,
+            coordinatorTabId,
             effects
           })
           terminalHandle = terminal.handle

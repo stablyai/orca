@@ -171,6 +171,10 @@ import {
   type DirectSshPreparationReason
 } from './direct-ssh-reconnect-coordinator'
 import { directSshAuthoritiesEqual } from './direct-ssh-reconnect-tokens'
+import {
+  applyTerminalTabPlacement,
+  resolveTerminalTabPlacementGroupId
+} from './terminal-tab-placement'
 import { createDirectSshHostHydration } from './direct-ssh-host-hydration'
 import { createDirectSshReconnectProductTelemetryAdapter } from '@/lib/direct-ssh-reconnect-product-telemetry'
 import {
@@ -1441,6 +1445,7 @@ export function useIpcEvents(): void {
           focus,
           presentation,
           surfaceOwner,
+          afterTabId,
           tabId,
           leafId,
           splitFromLeafId,
@@ -1483,10 +1488,13 @@ export function useIpcEvents(): void {
               throw new Error(`Terminal tab ${tabId} not found`)
             }
             const reusedTab = existingTab ?? splitTargetTab
+            const targetGroupId = resolveTerminalTabPlacementGroupId(store, worktreeId, {
+              afterTabId
+            })
             const tab =
               reusedTab ??
               (ptyId
-                ? store.createTab(worktreeId, undefined, undefined, {
+                ? store.createTab(worktreeId, targetGroupId, undefined, {
                     initialPtyId: ptyId,
                     activate: shouldActivate,
                     ...(launchAgent
@@ -1510,7 +1518,7 @@ export function useIpcEvents(): void {
                   })
                 : store.createTab(
                     worktreeId,
-                    undefined,
+                    targetGroupId,
                     undefined,
                     shouldActivate
                       ? cwd
@@ -1522,6 +1530,7 @@ export function useIpcEvents(): void {
                           ...(cwd ? { startupCwd: cwd } : {})
                         }
                   ))
+            applyTerminalTabPlacement(useAppStore.getState(), worktreeId, tab.id, { afterTabId })
             // Why: a reused tab whose id differs from the hint breaks the PTY's baked-in paneKey attribution; warn during dev.
             if (tabId !== undefined && tab.id !== tabId) {
               console.warn(
@@ -1737,38 +1746,19 @@ export function useIpcEvents(): void {
                   recordInteraction: false,
                   ...(data.cwd ? { startupCwd: data.cwd } : {})
                 }
-          const tab = store.createTab(worktreeId, data.targetGroupId, undefined, tabOptions)
+          const targetGroupId = resolveTerminalTabPlacementGroupId(store, worktreeId, {
+            targetGroupId: data.targetGroupId,
+            afterTabId: data.afterTabId
+          })
+          const tab = store.createTab(worktreeId, targetGroupId, undefined, tabOptions)
           if (!shouldActivate) {
             // Why: renderer-backed Codex startup must mount its new TerminalPane without switching UI or connecting every saved tab.
             requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tab.id] })
           }
-          if (data.afterTabId) {
-            const createdUnifiedTab = useAppStore
-              .getState()
-              .unifiedTabsByWorktree[worktreeId]?.find((item) => item.entityId === tab.id)
-            const anchorUnifiedTab = useAppStore
-              .getState()
-              .unifiedTabsByWorktree[worktreeId]?.find((item) => item.id === data.afterTabId)
-            if (
-              createdUnifiedTab &&
-              anchorUnifiedTab &&
-              createdUnifiedTab.groupId === anchorUnifiedTab.groupId
-            ) {
-              const group = useAppStore
-                .getState()
-                .groupsByWorktree[worktreeId]?.find((item) => item.id === createdUnifiedTab.groupId)
-              const order = (group?.tabOrder ?? []).filter((id) => id !== createdUnifiedTab.id)
-              const anchorIndex = order.indexOf(anchorUnifiedTab.id)
-              order.splice(
-                anchorIndex === -1 ? order.length : anchorIndex + 1,
-                0,
-                createdUnifiedTab.id
-              )
-              useAppStore.getState().reorderUnifiedTabs(createdUnifiedTab.groupId, order, {
-                recordInteraction: false
-              })
-            }
-          }
+          applyTerminalTabPlacement(useAppStore.getState(), worktreeId, tab.id, {
+            targetGroupId: data.targetGroupId,
+            afterTabId: data.afterTabId
+          })
           if (shouldActivate) {
             store.setActiveTabType('terminal')
             store.setActiveTab(tab.id)

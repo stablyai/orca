@@ -1964,6 +1964,7 @@ describe('useIpcEvents updater integration', () => {
             activate?: boolean
             focus?: boolean
             presentation?: 'background' | 'focused'
+            afterTabId?: string
             tabId?: string
             leafId?: string
             splitFromLeafId?: string
@@ -2113,6 +2114,7 @@ describe('useIpcEvents updater integration', () => {
               activate?: boolean
               focus?: boolean
               presentation?: 'background' | 'focused'
+              afterTabId?: string
               tabId?: string
               leafId?: string
               splitFromLeafId?: string
