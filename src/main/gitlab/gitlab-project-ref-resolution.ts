@@ -5,6 +5,10 @@ import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
+  listRepoRemoteNames,
+  resolveProjectRefPreferringRemotes
+} from './gitlab-project-ref-remote-preference'
+import {
   _resetGlabUnauthenticatedHosts,
   isGlabHostKnownUnauthenticated,
   parseGlabAuthStatusHosts,
@@ -163,13 +167,28 @@ async function resolveProjectRefForRemote(
   return null
 }
 
+async function getProjectRefPreferring(
+  repoPath: string,
+  preferredRemoteNames: readonly string[],
+  knownHosts?: readonly string[],
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<ProjectRef | null> {
+  return resolveProjectRefPreferringRemotes(
+    preferredRemoteNames,
+    (remoteName) =>
+      getProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions),
+    () => listRepoRemoteNames(repoPath, connectionId, localGitOptions)
+  )
+}
+
 export async function getProjectRef(
   repoPath: string,
   knownHosts?: readonly string[],
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
+  return getProjectRefPreferring(repoPath, ['origin'], knownHosts, connectionId, localGitOptions)
 }
 
 export async function getIssueProjectRef(
@@ -178,16 +197,12 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
+  return getProjectRefPreferring(
     repoPath,
-    'upstream',
+    ['upstream', 'origin'],
     knownHosts,
     connectionId,
     localGitOptions
-  )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
   )
 }
 
@@ -215,20 +230,21 @@ export async function resolveIssueSource(
     if (upstream) {
       return { source: upstream, fellBack: false }
     }
-    const origin = await getProjectRefForRemote(
+    // Why: prefer origin after upstream, then any other remote (#13816).
+    const fallback = await getProjectRefPreferring(
       repoPath,
-      'origin',
+      ['origin'],
       knownHosts,
       connectionId,
       localGitOptions
     )
-    return { source: origin, fellBack: origin !== null }
+    return { source: fallback, fellBack: fallback !== null }
   }
   if (preference === 'origin') {
     return {
-      source: await getProjectRefForRemote(
+      source: await getProjectRefPreferring(
         repoPath,
-        'origin',
+        ['origin'],
         knownHosts,
         connectionId,
         localGitOptions
