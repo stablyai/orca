@@ -57,7 +57,9 @@ export function clampTerminalSubmitVerdictTimeoutMs(timeoutMs: number | undefine
   if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     return DEFAULT_TERMINAL_SUBMIT_VERDICT_TIMEOUT_MS
   }
-  return Math.min(Math.trunc(timeoutMs), MAX_TERMINAL_SUBMIT_VERDICT_TIMEOUT_MS)
+  // Why the 1ms floor: truncating a positive fractional bound (0.5) to 0 would skip the evidence
+  // wait entirely and answer from the pre-write snapshot alone, which reads as a real verdict.
+  return Math.min(Math.max(1, Math.trunc(timeoutMs)), MAX_TERMINAL_SUBMIT_VERDICT_TIMEOUT_MS)
 }
 
 /** The only status that means the agent took the text into a turn. A missing verdict is an old

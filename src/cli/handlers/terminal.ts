@@ -120,7 +120,9 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
           }
         : undefined
     )
-    printResult(result, json, formatTerminalSend)
+    printResult(result, json, (value) =>
+      formatTerminalSend(value, { verdictRequested: submitVerdict !== undefined })
+    )
   },
   'terminal wait': async ({ flags, client, cwd, json }) => {
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')

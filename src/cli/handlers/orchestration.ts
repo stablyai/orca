@@ -1069,6 +1069,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
     const returnPreamble = flags.has('return-preamble') ? true : undefined
     // Why: --to is only required for non-dry-run; the RPC handler re-enforces.
     const to = dryRun ? getOptionalStringFlag(flags, 'to') : getRequiredStringFlag(flags, 'to')
+    const inject = flags.has('inject') ? true : undefined
     const result = await callMutation<{
       dispatch: { id: string; task_id: string; status: string } | null
       injected?: boolean
@@ -1080,7 +1081,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
       run: getOptionalStringFlag(flags, 'run'),
       to,
       from,
-      inject: flags.has('inject') ? true : undefined,
+      inject,
       dryRun,
       returnPreamble,
       devMode: isDevCliInvocation()
@@ -1090,10 +1091,15 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
         return r.preamble ?? ''
       }
       const base = `Dispatched ${r.dispatch?.task_id} -> ${r.dispatch?.id} [${r.dispatch?.status}]`
-      // Why: an unproven submit is the one outcome a coordinator must not read as delivered work.
+      // Why gate on `inject` and not on the field: an unproven submit is the one outcome a
+      // coordinator must not read as delivered work, and a host that predates submit verdicts
+      // answers with no field at all — silence there is unknown, never confirmation.
+      const verdictReason = r.submitVerdict
+        ? `${r.submitVerdict.status}: ${r.submitVerdict.reason}`
+        : 'unknown: the host returned no verdict'
       const verdictNote =
-        r.submitVerdict && !isTerminalSubmitDelivered(r.submitVerdict)
-          ? `\nPreamble NOT confirmed submitted (${r.submitVerdict.status}: ${r.submitVerdict.reason}). Check the worker terminal before waiting on it.`
+        inject && !isTerminalSubmitDelivered(r.submitVerdict)
+          ? `\nPreamble NOT confirmed submitted (${verdictReason}). Check the worker terminal before waiting on it.`
           : ''
       return r.preamble
         ? `${base}${verdictNote}\n\n--- Preamble ---\n${r.preamble}`

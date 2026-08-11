@@ -150,11 +150,20 @@ const SUBMIT_VERDICT_SUMMARY: Record<TerminalSubmitVerdictStatus, string> = {
   unknown: 'no trustworthy evidence either way'
 }
 
-export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
+export function formatTerminalSend(
+  result: { send: RuntimeTerminalSend },
+  options: { verdictRequested?: boolean } = {}
+): string {
   const sent = `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
   const verdict = result.send.submitVerdict
   if (!verdict) {
-    return sent
+    // Why: a host that predates submit verdicts answers without the field. Printing only the byte
+    // count there would let an unproven submission read as a completed one, so say what we know:
+    // nothing. `verdictRequested` is a property of this invocation, not of the response, so the
+    // JSON output stays exactly what the host sent.
+    return options.verdictRequested
+      ? `${sent}\nSubmit verdict: unknown — the host returned no verdict (it predates this field), so whether the agent received the text is unproven. Read the terminal before treating it as delivered.`
+      : sent
   }
   const retried = verdict.resubmitted ? ' after one submit retry' : ''
   return `${sent}\nSubmit verdict: ${verdict.status}${retried} — ${SUBMIT_VERDICT_SUMMARY[verdict.status]} (${verdict.reason}, waited ${verdict.waitedMs}ms).`

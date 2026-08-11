@@ -38,7 +38,7 @@ export const TERMINAL_COMMAND_SPECS: CommandSpec[] = [
     path: ['terminal', 'send'],
     summary: 'Send input to a live terminal',
     usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
+      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--submit-timeout-ms <ms>] [--no-submit-retry] [--no-verdict] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'terminal',
