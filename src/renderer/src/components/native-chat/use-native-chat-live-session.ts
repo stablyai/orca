@@ -5,10 +5,7 @@ import {
   type NativeChatMessage,
   type NativeChatSession
 } from '../../../../shared/native-chat-types'
-import {
-  createNativeChatMerger,
-  replaceList
-} from '../../../../shared/native-chat-merge'
+import { createNativeChatMerger, replaceList } from '../../../../shared/native-chat-merge'
 import {
   applyAppends,
   createIncrementalAssembler,

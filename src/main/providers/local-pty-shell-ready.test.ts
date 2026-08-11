@@ -305,7 +305,7 @@ function runInteractiveBashRcfile(rcfileContent: string, tempDir: string): strin
         ...process.env,
         HOME: tempDir,
         ORCA_SHELL_READY_MARKER: '1',
-        TERM: process.env.TERM || 'xterm'
+        TERM: 'dumb'
       },
       timeout: 5000
     }

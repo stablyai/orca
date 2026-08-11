@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -350,6 +350,52 @@ describe('reconcileOpenCodeNativeChat', () => {
     }
     expect(errors).toEqual(['Transcript unavailable'])
   })
+
+  it('keeps the last good snapshot silent while a corrupt DB recovers', async () => {
+    const { db, path } = createTempDb()
+    applyOpenCodeSchema(db)
+    insertSession(db, 'ses_1')
+    db.close()
+
+    const state = createOpenCodeNativeChatState()
+    const errors: string[] = []
+    const appends: NativeChatMessage[][] = []
+    const reconcile = () =>
+      reconcileOpenCodeNativeChat({
+        dbPath: path,
+        sessionId: 'ses_1',
+        windowLimit: 40,
+        state,
+        onInitialSnapshot: (_messages, _hasMore, _beforeOffset, error) => {
+          if (error) {
+            errors.push(error)
+          }
+        },
+        onAppend: (messages) => appends.push(messages)
+      })
+
+    await reconcile()
+    writeFileSync(path, 'not a sqlite database')
+    await reconcile()
+    expect(errors).toEqual([])
+    rmSync(path)
+
+    const repaired = new DatabaseSync(path)
+    applyOpenCodeSchema(repaired)
+    insertSession(repaired, 'ses_1')
+    upsertMessage(repaired, { id: 'm1', sessionId: 'ses_1', role: 'user', timeCreated: 1 })
+    upsertPart(repaired, {
+      id: 'p1',
+      messageId: 'm1',
+      sessionId: 'ses_1',
+      timeCreated: 1,
+      data: textPart('recovered')
+    })
+    repaired.close()
+
+    await reconcile()
+    expect(appends.flat().map((message) => message.id)).toEqual(['m1'])
+  })
 })
 
 describe('subscribeOpenCodeNativeChatTranscript', () => {
@@ -379,5 +425,20 @@ describe('subscribeOpenCodeNativeChatTranscript', () => {
     await vi.advanceTimersByTimeAsync(200)
     expect(onInitialSnapshot).not.toHaveBeenCalled()
     expect(onAppend).not.toHaveBeenCalled()
+  })
+  it('returns an inert subscription when the database is unavailable', () => {
+    const onAppend = vi.fn()
+    const onInitialSnapshot = vi.fn()
+    const subscription = subscribeOpenCodeNativeChatTranscript({
+      dbPath: null,
+      sessionId: 'ses-memory',
+      onAppend,
+      onInitialSnapshot
+    })
+
+    expect(subscription.watching).toBe(false)
+    subscription.unsubscribe()
+    expect(onAppend).not.toHaveBeenCalled()
+    expect(onInitialSnapshot).not.toHaveBeenCalled()
   })
 })

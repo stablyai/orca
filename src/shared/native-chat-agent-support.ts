@@ -26,11 +26,7 @@ export function nativeChatRequiresHostReadableTranscript(
 /** Agents whose hook does not disclose a direct transcript path. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return (
-    transcriptAgent === 'grok' ||
-    transcriptAgent === 'omp' ||
-    transcriptAgent === 'opencode'
-  )
+  return transcriptAgent === 'grok' || transcriptAgent === 'omp' || transcriptAgent === 'opencode'
 }
 
 /** True when the agent renders a digit-commit question selector that ignores

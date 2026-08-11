@@ -25,6 +25,7 @@ import {
 } from './transcript-read-cache'
 
 let tempRoots: string[] = []
+let explicitCacheRoot: string | null = null
 
 function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
@@ -47,13 +48,20 @@ async function seedSession(sessionId: string, turns: number): Promise<string> {
   return filePath
 }
 
-// Writes a transcript file at an explicit path whose on-disk size is ~`bytes`
-// (padded via one big user message), returning the path. Read it back by passing
-// the path as `transcriptPath` so resolution doesn't depend on process.env.HOME.
+// Writes a transcript file at an explicit path under the Claude projects root.
+// Explicit paths are still subject to resolver containment checks; keeping the
+// temporary fixture below HOME exercises the authoritative-path cache contract.
 async function seedBigFile(name: string, bytes: number): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-'))
-  tempRoots.push(root)
-  const filePath = join(root, `${name}.jsonl`)
+  const root =
+    explicitCacheRoot ?? (await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-')))
+  if (!explicitCacheRoot) {
+    explicitCacheRoot = root
+    tempRoots.push(root)
+    process.env.HOME = root
+  }
+  const projectDir = join(root, '.claude', 'projects', '-repo')
+  await mkdir(projectDir, { recursive: true })
+  const filePath = join(projectDir, `${name}.jsonl`)
   const record = {
     type: 'user',
     uuid: `u-${name}`,
@@ -64,15 +72,19 @@ async function seedBigFile(name: string, bytes: number): Promise<string> {
   return filePath
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   clearNativeChatTranscriptCache()
   setNativeChatTranscriptCacheMaxBytesForTests()
   readSpy.mockClear()
+  explicitCacheRoot = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-bytes-'))
+  tempRoots.push(explicitCacheRoot)
+  process.env.HOME = explicitCacheRoot
 })
 
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  explicitCacheRoot = null
 })
 
 describe('readNativeChatTranscriptCached', () => {
@@ -94,6 +106,30 @@ describe('readNativeChatTranscriptCached', () => {
     await utimes(filePath, future, future)
     await readNativeChatTranscriptCached('claude', 'sess-mtime')
     expect(readSpy).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-reads same-path content replacement even when size and mtime match', async () => {
+    const filePath = await seedSession('sess-replaced', 1)
+    await readNativeChatTranscriptCached('claude', 'sess-replaced')
+    const stable = new Date('2026-06-01T10:00:00.000Z')
+    await utimes(filePath, stable, stable)
+    await readNativeChatTranscriptCached('claude', 'sess-replaced')
+    expect(readSpy).toHaveBeenCalledTimes(2)
+
+    await writeFile(
+      filePath,
+      jsonLines([
+        {
+          type: 'user',
+          uuid: 'u-0',
+          timestamp: '2026-06-01T10:00:00.000Z',
+          message: { role: 'user', content: 'n0' }
+        }
+      ])
+    )
+    await utimes(filePath, stable, stable)
+    await readNativeChatTranscriptCached('claude', 'sess-replaced')
+    expect(readSpy).toHaveBeenCalledTimes(3)
   })
 
   it('clear() empties the cache so the next read re-reads', async () => {
@@ -131,8 +167,11 @@ describe('readNativeChatTranscriptCached', () => {
   it('never serves one file’s parse for a different file that shares a sessionId', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-cache-xwt-'))
     tempRoots.push(root)
-    const fileA = join(root, 'worktree-a.jsonl')
-    const fileC = join(root, 'worktree-c.jsonl')
+    const projectDir = join(root, '.claude', 'projects', '-repo')
+    await mkdir(projectDir, { recursive: true })
+    process.env.HOME = root
+    const fileA = join(projectDir, 'worktree-a.jsonl')
+    const fileC = join(projectDir, 'worktree-c.jsonl')
     await writeFile(
       fileA,
       jsonLines([

@@ -19,6 +19,7 @@ const store = {
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
+  worktreesByRepo: {} as Record<string, unknown[]>,
   pendingWorktreeCreations: {} as Record<string, PendingWorktreeCreation>,
   beginPendingWorktreeCreation: vi.fn((entry: PendingWorktreeCreation) => {
     store.pendingWorktreeCreations[entry.creationId] = entry
@@ -102,6 +103,7 @@ beforeEach(() => {
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
+  store.worktreesByRepo = {}
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
   store.tabsByWorktree = {}

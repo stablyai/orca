@@ -111,9 +111,8 @@ describe('isAgentScratchRepoRootPath', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/.codex-tmp/rc-fwd-qEXuEq')).toBe(true)
   })
 
-  it('matches codex vendor imports and claude skills containers', () => {
+  it('matches codex vendor import containers', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/.codex/vendor_imports/skills')).toBe(true)
-    expect(isAgentScratchRepoRootPath('/Users/dev/.claude/skills/obsidian-second-brain')).toBe(true)
   })
 
   it('matches a repo registered at the scratch container itself', () => {

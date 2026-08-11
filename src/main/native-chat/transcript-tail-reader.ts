@@ -259,9 +259,9 @@ export async function readNativeChatTranscriptTail(
       beforeOffset: result.beforeOffset
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    // Do not disclose host transcript paths or provider filesystem details.
     return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-      ? { error: message, notFound: true }
-      : { error: message }
+      ? { error: 'Transcript unavailable', notFound: true }
+      : { error: 'Transcript unavailable' }
   }
 }

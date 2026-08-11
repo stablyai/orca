@@ -1,8 +1,12 @@
+import { DatabaseSync } from 'node:sqlite'
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readAiVaultFirstUserPrompt } from './session-first-user-prompt-read'
+import {
+  handleAiVaultGetFirstUserPrompt,
+  readAiVaultFirstUserPrompt
+} from './session-first-user-prompt-read'
 
 const tempRoots: string[] = []
 
@@ -13,6 +17,56 @@ afterEach(async () => {
 })
 
 describe('readAiVaultFirstUserPrompt', () => {
+  it('rejects an OpenCode database outside known roots at the IPC boundary', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-opencode-security-'))
+    tempRoots.push(root)
+    const dbPath = join(root, 'opencode.db')
+    const db = new DatabaseSync(dbPath)
+    db.exec(`
+      CREATE TABLE session (id TEXT PRIMARY KEY, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE message (
+        id TEXT PRIMARY KEY,
+        session_id TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        data TEXT
+      );
+      CREATE TABLE part (
+        id TEXT PRIMARY KEY,
+        message_id TEXT,
+        session_id TEXT,
+        time_created INTEGER,
+        time_updated INTEGER,
+        data TEXT
+      );
+    `)
+    db.prepare('INSERT INTO session VALUES (?, ?, ?)').run('secret-session', 1, 1)
+    db.prepare('INSERT INTO message VALUES (?, ?, ?, ?, ?)').run(
+      'message-1',
+      'secret-session',
+      1,
+      1,
+      JSON.stringify({ role: 'user' })
+    )
+    db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run(
+      'part-1',
+      'message-1',
+      'secret-session',
+      1,
+      1,
+      JSON.stringify({ type: 'text', text: 'secret prompt' })
+    )
+    db.close()
+
+    await expect(
+      handleAiVaultGetFirstUserPrompt({
+        agent: 'opencode',
+        filePath: dbPath,
+        sessionId: 'secret-session'
+      })
+    ).resolves.toEqual({ prompt: null })
+  })
+
   it('returns the full first user prompt without preview truncation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-'))
     tempRoots.push(root)

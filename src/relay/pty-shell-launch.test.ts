@@ -18,7 +18,7 @@ function runInteractiveBashRcfile(rcfile: string, homeDir: string): string {
       env: {
         ...process.env,
         HOME: homeDir,
-        TERM: process.env.TERM || 'xterm'
+        TERM: 'dumb'
       },
       timeout: 5000
     }
@@ -235,14 +235,12 @@ describe('getRelayShellLaunchConfig', () => {
     expectBashOsc133Lifecycle(output)
   })
 
-  // Why: RHEL-family /etc/bashrc prepends "history -a; " to PROMPT_COMMAND
-  // outside its BASHRCSOURCED guard (repeated across re-sources), so the value
-  // Orca inherits ends in a ";"+whitespace separator. Prepend/append must not
-  // splice an empty command (";;") that breaks the prompt with a syntax error.
-  itWithBash('normalizes an inherited PROMPT_COMMAND ending in a separator', () => {
+  // Why: a startup hook can leave an empty command between separators after
+  // another hook is appended. Prepend/append must not preserve that syntax error.
+  itWithBash('normalizes an inherited PROMPT_COMMAND with an empty separator', () => {
     writeFileSync(
       join(homeDir, '.bash_profile'),
-      'PROMPT_COMMAND=\'AFTER_SEP_PROMPT=1; printf "PROMPT_SEP\\n"; \'\n'
+      'PROMPT_COMMAND=\'AFTER_SEP_PROMPT=1; printf "PROMPT_SEP\\n"; ; printf "PROMPT_SECOND\\n"\'\n'
     )
     const config = getRelayShellLaunchConfig('/bin/bash', { HOME: homeDir })
     const output = runInteractiveBashRcfile(config.args[1] as string, homeDir)

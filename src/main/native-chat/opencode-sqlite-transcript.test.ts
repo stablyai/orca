@@ -8,7 +8,6 @@ import {
   mapOpenCodeNativeChatMessage,
   openCodeMessageSignature,
   readOpenCodeNativeChatTranscriptTail,
-  resolveOpenCodeNativeChatDbPath,
   isRetryableOpenCodeSqliteError
 } from './opencode-sqlite-transcript'
 import SyncDatabase from '../sqlite/sync-database'
@@ -114,13 +113,6 @@ const toolData = (status: 'pending' | 'completed' | 'error', tool = 'bash'): str
       ...(status === 'error' ? { error: 'command failed' } : {})
     }
   })
-
-describe('resolveOpenCodeNativeChatDbPath', () => {
-  it('defaults to the OpenCode data directory canonical DB and honors an override', () => {
-    expect(resolveOpenCodeNativeChatDbPath().endsWith(join('opencode', 'opencode.db'))).toBe(true)
-    expect(resolveOpenCodeNativeChatDbPath('/tmp/db/db.sqlite')).toBe('/tmp/db/db.sqlite')
-  })
-})
 
 describe('mapOpenCodeNativeChatMessage', () => {
   it('maps a user text prompt with a stable id and timestamp', () => {
@@ -793,7 +785,8 @@ describe('readOpenCodeNativeChatTranscriptTail', () => {
       sessionId: 'ses_1',
       limit: 40
     })
-    expect(missingDb).toMatchObject({ error: expect.any(String), notFound: true })
+    expect(missingDb).toEqual({ error: 'Transcript unavailable', notFound: true })
+    expect(JSON.stringify(missingDb)).not.toContain('does-not-exist-opencode.db')
   })
 
   it('returns Transcript unavailable when the schema is unreadable', async () => {

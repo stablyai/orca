@@ -2,10 +2,7 @@ import { existsSync } from 'node:fs'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 import SyncDatabase from '../sqlite/sync-database'
-import {
-  readMappedOpenCodeTail,
-  type OpenCodeMessageMapper
-} from './opencode-sqlite-paging'
+import { readMappedOpenCodeTail, type OpenCodeMessageMapper } from './opencode-sqlite-paging'
 
 const SQLITE_READ_TIMEOUT_MS = 250
 const SQLITE_BUSY_RETRY_COUNT = 2
@@ -49,9 +46,9 @@ export function canReadOpenCodeChatSession(db: SyncDatabase): boolean {
 }
 
 function openCodeSessionRowExists(db: SyncDatabase, sessionId: string): boolean {
-  const row = db
-    .prepare('SELECT 1 AS found FROM session WHERE id = ? LIMIT 1')
-    .get(sessionId) as { found?: number } | undefined
+  const row = db.prepare('SELECT 1 AS found FROM session WHERE id = ? LIMIT 1').get(sessionId) as
+    | { found?: number }
+    | undefined
   return row?.found === 1
 }
 
@@ -106,7 +103,7 @@ function waitForOpenCodeSqliteRetry(): Promise<void> {
 
 export async function readOpenCodeNativeChatTranscript(
   args: {
-    dbPath: string
+    dbPath: string | null
     sessionId: string
     limit: number
     beforeOffset?: number
@@ -133,19 +130,22 @@ export async function readOpenCodeNativeChatTranscript(
 }
 
 function readOpenCodeTranscriptAttempt(args: {
-  dbPath: string
+  dbPath: string | null
   sessionId: string
   limit: number
   beforeOffset?: number
   mapMessage: OpenCodeMessageMapper
 }): OpenCodeReadResult {
   const { dbPath, sessionId, limit } = args
+  if (!dbPath) {
+    return { error: 'Transcript unavailable' }
+  }
   let db: SyncDatabase | null = null
   let transactionStarted = false
   try {
-    // SyncDatabase's fileMustExist guard throws a plain Error, so check first.
+    // Keep host filesystem paths out of RPC/IPC error payloads.
     if (!existsSync(dbPath)) {
-      return { error: `SQLite database does not exist: ${dbPath}`, notFound: true }
+      return { error: 'Transcript unavailable', notFound: true }
     }
     db = openReadonlyDatabase(dbPath)
     // Count, message rows, and parts must share one WAL snapshot.
@@ -172,9 +172,8 @@ function readOpenCodeTranscriptAttempt(args: {
       filterPartsBySessionId: columnExists(db, 'part', 'session_id')
     })
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
     if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
-      return { error: message, notFound: true }
+      return { error: 'Transcript unavailable', notFound: true }
     }
     if (isRetryableOpenCodeSqliteError(error)) {
       return { error: 'SQLite database is locked' }
@@ -182,7 +181,7 @@ function readOpenCodeTranscriptAttempt(args: {
     if (isCorruptOpenCodeSqliteError(error)) {
       return { error: 'Transcript unavailable' }
     }
-    return { error: message }
+    return { error: 'Transcript unavailable' }
   } finally {
     if (transactionStarted && db) {
       try {

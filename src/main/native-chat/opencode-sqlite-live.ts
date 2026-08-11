@@ -28,7 +28,7 @@ export function createOpenCodeNativeChatState(): OpenCodeNativeChatState {
 }
 
 export type ReconcileOpenCodeArgs = {
-  dbPath: string
+  dbPath: string | null
   sessionId: string
   /** Re-read window; appends/updates are detected inside this newest tail. */
   windowLimit: number
@@ -59,7 +59,7 @@ export async function reconcileOpenCodeNativeChat(args: ReconcileOpenCodeArgs): 
     if (result.retryable) {
       return
     }
-    if (!result.notFound && !state.errorNotified) {
+    if (!result.notFound && !state.initialized && !state.errorNotified) {
       state.errorNotified = true
       args.onInitialSnapshot([], false, 0, result.error)
     }
@@ -99,7 +99,7 @@ const OPENCODE_RECONCILE_WINDOW_MAX_CAP = 100
 const OPENCODE_RECONCILE_INTERVAL_MS = 1_000
 
 export function subscribeOpenCodeNativeChatTranscript(args: {
-  dbPath: string
+  dbPath: string | null
   sessionId: string
   initialLimit?: number
   onAppend: (messages: NativeChatMessage[], lifecycle?: NativeChatTurnLifecycle) => void
@@ -113,14 +113,14 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
   /** Test-only override for the reconcile cadence. */
   reconciliationIntervalMs?: number
 }): NativeChatTranscriptSubscription {
+  if (!args.dbPath) {
+    return { watching: false, unsubscribe: () => {} }
+  }
   const requestedLimit =
     typeof args.initialLimit === 'number' && !Number.isNaN(args.initialLimit)
       ? Math.floor(args.initialLimit)
       : 40
-  const limitedWindow = Math.max(
-    1,
-    Math.min(requestedLimit, OPENCODE_RECONCILE_WINDOW_MAX_CAP)
-  )
+  const limitedWindow = Math.max(1, Math.min(requestedLimit, OPENCODE_RECONCILE_WINDOW_MAX_CAP))
   let closed = false
   const state = createOpenCodeNativeChatState()
 

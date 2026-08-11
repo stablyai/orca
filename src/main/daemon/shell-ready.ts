@@ -197,6 +197,18 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  local __orca_extglob_was_disabled=0
+  if ! shopt -q extglob; then
+    __orca_extglob_was_disabled=1
+    shopt -s extglob
+  fi
+  PROMPT_COMMAND="\${PROMPT_COMMAND//;+([[:space:]]);/;}"
+  if [[ "$__orca_extglob_was_disabled" == "1" ]]; then
+    shopt -u extglob
+  fi
+  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
+    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  done
 }
 __orca_normalize_prompt_command
 PROMPT_COMMAND="__orca_osc133_precmd\${PROMPT_COMMAND:+;\${PROMPT_COMMAND}};__orca_osc133_epilogue"

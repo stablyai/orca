@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, extname, isAbsolute, join, relative, sep } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, sep, win32 } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
@@ -60,16 +60,28 @@ function hasParentPathSegment(path: string): boolean {
 }
 
 function isPathWithinRoot(root: string, candidate: string): boolean {
-  const descendant = relative(root, candidate)
+  const usesWindowsPaths =
+    root.startsWith('\\\\') ||
+    root.startsWith('//') ||
+    candidate.startsWith('\\\\') ||
+    candidate.startsWith('//') ||
+    /^[A-Za-z]:[\\/]/.test(root) ||
+    /^[A-Za-z]:[\\/]/.test(candidate)
+  const descendant = usesWindowsPaths ? win32.relative(root, candidate) : relative(root, candidate)
+  const separator = usesWindowsPaths ? win32.sep : sep
+  const isDescendantAbsolute = usesWindowsPaths
+    ? win32.isAbsolute(descendant)
+    : isAbsolute(descendant)
   return (
     descendant === '' ||
-    (descendant !== '..' && !descendant.startsWith(`..${sep}`) && !isAbsolute(descendant))
+    (descendant !== '..' && !descendant.startsWith(`..${separator}`) && !isDescendantAbsolute)
   )
 }
 
 async function transcriptRoots(
   agent: AgentType,
-  options: ResolveSessionFileOptions
+  options: ResolveSessionFileOptions,
+  transcriptPath?: string
 ): Promise<string[]> {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
   if (!transcriptAgent) {
@@ -82,7 +94,10 @@ async function transcriptRoots(
     const roots = [...(options.codexSessionsDirs ?? codexSessionsDirs())]
     // WSL hooks report guest paths; the host-readable path is a UNC path under
     // one of these roots, so include them in the same containment check.
-    if (options.codexSessionsDirs === undefined) {
+    if (
+      options.codexSessionsDirs === undefined ||
+      (transcriptPath !== undefined && needsWslHostTranslation(transcriptPath))
+    ) {
       roots.push(...(await wslCodexSessionsDirs()))
     }
     return [...new Set(roots)]
@@ -114,7 +129,7 @@ export async function resolveHostOwnedTranscriptPath(
   if (!hostReadablePath) {
     return null
   }
-  const roots = await transcriptRoots(agent, options)
+  const roots = await transcriptRoots(agent, options, transcriptPath)
   if (roots.length === 0) {
     return null
   }
@@ -147,6 +162,8 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Internal host-owned provider metadata; never pass a client-supplied path here. */
+  transcriptPathIsHostOwned?: boolean
   /** Absolute path to the OpenCode SQLite DB (open code overrides the default
    *  `~/.local/share/opencode/opencode.db` — used by tests/isolated reads). */
   openCodeDbPath?: string
@@ -177,7 +194,9 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   const hookPath = options.transcriptPath?.trim()
   if (hookPath && extname(hookPath) === '.jsonl') {
-    const hostOwnedPath = await resolveHostOwnedTranscriptPath(agent, hookPath, options)
+    const hostOwnedPath = options.transcriptPathIsHostOwned
+      ? await toHostReadableTranscriptPath(hookPath)
+      : await resolveHostOwnedTranscriptPath(agent, hookPath, options)
     if (hostOwnedPath) {
       return hostOwnedPath
     }

@@ -9,10 +9,7 @@ import {
   replaceList,
   type NativeChatMerger
 } from '../../../../shared/native-chat-merge'
-import {
-  hasMoreNativeChatHistory,
-  NATIVE_CHAT_INITIAL_LIMIT
-} from './native-chat-pagination'
+import { hasMoreNativeChatHistory, NATIVE_CHAT_INITIAL_LIMIT } from './native-chat-pagination'
 import type { NativeChatSessionTransport } from './native-chat-session-transport'
 
 export type NativeChatReadState =
@@ -55,9 +52,7 @@ function retryDelayMs(attempt: number): number {
   return RETRY_DELAYS_MS[attempt] ?? RETRY_FIXED_DELAY_MS
 }
 
-export function bindNativeChatLiveSession(
-  args: BindNativeChatLiveSessionArgs
-): () => void {
+export function bindNativeChatLiveSession(args: BindNativeChatLiveSessionArgs): () => void {
   const {
     agent,
     sessionId: activeSessionId,

@@ -122,7 +122,7 @@ export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: stri
     const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
     return [
       `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
-      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
+      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } | LC_ALL=C sort |`,
       String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /^relay-(v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?)(\.gc-tombstone\.[0-9]+\.[0-9]+)?$/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
   }

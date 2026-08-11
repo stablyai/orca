@@ -1798,7 +1798,9 @@ function extractOpenCodeToolFields(
         'name',
         'permissionType',
         'type'
-      ]) ?? permissionToolName ?? permissionName
+      ]) ??
+      permissionToolName ??
+      permissionName
     const toolInputSource = hasOwnField(hookPayload, 'tool_input')
       ? hookPayload.tool_input
       : (permission ?? hookPayload.input ?? hookPayload.arguments)

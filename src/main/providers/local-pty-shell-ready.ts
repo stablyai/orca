@@ -178,6 +178,20 @@ __orca_normalize_prompt_command() {
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  local __orca_extglob_was_disabled=0
+  if ! shopt -q extglob; then
+    __orca_extglob_was_disabled=1
+    shopt -s extglob
+  fi
+  PROMPT_COMMAND="\${PROMPT_COMMAND//;+([[:space:]]);/;}"
+  if [[ "$__orca_extglob_was_disabled" == "1" ]]; then
+    shopt -u extglob
+  fi
+  # Why: RHEL-family /etc/bashrc can leave an inherited PROMPT_COMMAND ending in
+  # a ";"/whitespace separator; trim it so Orca's prepend/append never form ";;".
+  while [[ "\${PROMPT_COMMAND:-}" == *[[:space:]\\;] ]]; do
+    PROMPT_COMMAND="\${PROMPT_COMMAND%?}"
+  done
 }
 __orca_prepend_prompt_command() {
   __orca_normalize_prompt_command

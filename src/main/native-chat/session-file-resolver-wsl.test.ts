@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFsModule from 'node:fs'
+import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const WSL_MANAGED_SESSIONS_DIR = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`
@@ -22,6 +23,14 @@ vi.mock('node:fs', async (importOriginal) => {
     ...actual,
     existsSync: (path: string) =>
       fsState.existsAll || path.startsWith('\\\\wsl.localhost\\') || actual.existsSync(path)
+  }
+})
+
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromisesModule>()
+  return {
+    ...actual,
+    realpath: vi.fn(async (path: string) => path)
   }
 })
 

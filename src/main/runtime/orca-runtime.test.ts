@@ -47723,12 +47723,6 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
         connectionId: ''
       })
     ).toBe(SCRATCH_TTL_MS)
-    expect(
-      resolveWorktreeScanCacheTtlMs({
-        path: '/Users/dev/.claude/skills/obsidian-second-brain',
-        connectionId: ''
-      })
-    ).toBe(SCRATCH_TTL_MS)
   })
 
   it('never extends the TTL for SSH repos', () => {

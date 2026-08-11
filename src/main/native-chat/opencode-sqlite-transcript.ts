@@ -1,14 +1,16 @@
-// OpenCode 1.18.x native-chat transcript reader.
+// OpenCode native-chat transcript reader.
 //
-// Why: OpenCode migrated conversations from per-session JSON files to a single
-// SQLite DB at ~/.local/share/opencode/opencode.db (the same schema the AI Vault
-// scanner reads). Unlike the JSONL agents, there is no append-only file to tail:
-// the `part` rows mutate in place while the assistant streams, so a message's
-// blocks are rebuilt from its current parts on every read. This module maps
-// `message` + `part` rows to NativeChatMessages and pages the conversation by a
-// stable ordinal window (read query-only, schema-guarded, malformed-tolerant).
+// OpenCode stores conversations in a host-owned SQLite database. The canonical
+// live database is `opencode.db`; sibling database copies are fallbacks, and
+// `OPENCODE_DB` can select another host-owned database. Unlike JSONL agents,
+// `part` rows mutate in place while the assistant streams, so a message's
+// blocks are rebuilt from current parts on every read. This module maps
+// `message` + `part` rows to NativeChatMessages and pages by a stable ordinal
+// window (read query-only, schema-guarded, malformed-tolerant).
 
-import { join } from 'node:path'
+
+import { statSync } from 'node:fs'
+import { isAbsolute, join } from 'node:path'
 import type {
   NativeChatBlock,
   NativeChatMessage,
@@ -31,8 +33,56 @@ const OPENCODE_TEXT_CHAR_CAP = 64_000
 const OPENCODE_REASONING_CHAR_CAP = 32_000
 const OPENCODE_TOOL_OUTPUT_CHAR_CAP = 100_000
 
-export function resolveOpenCodeNativeChatDbPath(openCodeDbPath?: string): string {
-  return openCodeDbPath ?? join(resolveOpenCodeDataDirectory(), 'opencode.db')
+const OPEN_CODE_DEFAULT_DATABASE_NAMES = [
+  'opencode.db',
+  'opencode-next.db',
+  'opencode-local.db',
+  'opencode-prod.db'
+] as const
+
+function resolveConfiguredDatabasePath(path: string): string | null {
+  if (path === ':memory:') {
+    return null
+  }
+  try {
+    return statSync(path).isFile() ? path : null
+  } catch {
+    // A configured database may be created after the first live poll.
+    return path
+  }
+}
+
+function isRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+export function resolveOpenCodeNativeChatDbPath(openCodeDbPath?: string): string | null {
+  const explicitPath = openCodeDbPath?.trim()
+  if (explicitPath) {
+    return resolveConfiguredDatabasePath(explicitPath)
+  }
+  const dataDirectory = resolveOpenCodeDataDirectory()
+  const configuredPath = process.env.OPENCODE_DB?.trim()
+  if (configuredPath) {
+    if (configuredPath === ':memory:') {
+      return null
+    }
+    const resolvedPath = isAbsolute(configuredPath)
+      ? configuredPath
+      : join(dataDirectory, configuredPath)
+    return resolveConfiguredDatabasePath(resolvedPath)
+  }
+  for (const databaseName of OPEN_CODE_DEFAULT_DATABASE_NAMES) {
+    const candidate = join(dataDirectory, databaseName)
+    if (isRegularFile(candidate)) {
+      return candidate
+    }
+  }
+  return join(dataDirectory, 'opencode.db')
 }
 
 export function clipOpenCodeText(text: string, cap: number): string {
@@ -174,7 +224,7 @@ export function openCodeMessageSignature(message: NativeChatMessage): string {
  *  ordinal of the OLDEST row in the previously returned page; the reader returns
  *  the `limit` rows strictly before it. Undefined reads the newest tail. */
 export async function readOpenCodeNativeChatTranscriptTail(args: {
-  dbPath: string
+  dbPath: string | null
   sessionId: string
   limit: number
   beforeOffset?: number

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: these activation cases share one mock store and assert ordering across startup, setup, issue commands, and default tabs. */
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SetupScriptLaunchMode } from '../../../shared/types'
 import { SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import { activateAndRevealWorktree, ensureWorktreeHasInitialTerminal } from './worktree-activation'
@@ -10,6 +10,7 @@ type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 const initialTabsByWorktree = useAppStore.getState().tabsByWorktree
 const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
+const initialRepos = useAppStore.getState().repos
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 const initialPendingIssueCommandSplitByTabId =
   useAppStore.getState().pendingIssueCommandSplitByTabId
@@ -24,6 +25,13 @@ function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
   }))
 }
 
+beforeEach(() => {
+  useAppStore.setState({
+    repos: [{ id: 'wt-1', connectionId: null }],
+    worktreesByRepo: {}
+  } as Partial<AppStoreState>)
+})
+
 afterEach(() => {
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   useAppStore.setState((state) => ({
@@ -36,6 +44,7 @@ afterEach(() => {
   useAppStore.setState({
     tabsByWorktree: initialTabsByWorktree,
     worktreesByRepo: initialWorktreesByRepo,
+    repos: initialRepos,
     getKnownWorktreeById: initialGetKnownWorktreeById,
     pendingIssueCommandSplitByTabId: initialPendingIssueCommandSplitByTabId
   } as Partial<AppStoreState>)

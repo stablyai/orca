@@ -103,11 +103,7 @@ function subscribeViaResolvePoll(
       if (exactPath && !hostReadableExactPath) {
         if (!needsWslHostTranslation(exactPath)) {
           // Validate the exact path before passing it as an internal file path.
-          hostReadableExactPath = await resolveHostOwnedTranscriptPath(
-            args.agent,
-            exactPath,
-            args
-          )
+          hostReadableExactPath = await resolveHostOwnedTranscriptPath(args.agent, exactPath, args)
         } else if (Date.now() - lastWslTranslateAt >= FALLBACK_RESOLVE_POLL_MS) {
           // Why: translating sync-stats the UNC twin per distro over the 9P
           // share, and the guest file usually appears well after the hook does,
@@ -115,11 +111,7 @@ function subscribeViaResolvePoll(
           // guest path is never installed on Windows — it would resolve against
           // the current drive (`C:\home\…`) and bind chat to a look-alike file.
           lastWslTranslateAt = Date.now()
-          hostReadableExactPath = await resolveHostOwnedTranscriptPath(
-            args.agent,
-            exactPath,
-            args
-          )
+          hostReadableExactPath = await resolveHostOwnedTranscriptPath(args.agent, exactPath, args)
         }
       }
       result = hostReadableExactPath
