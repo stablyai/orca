@@ -14348,10 +14348,10 @@
   },
   "components": {
     "agent-child-disclosure": {
-      "hide-one": "1 個のサブエージェントを非表示",
-      "hide-other": "{{count}} 個のサブエージェントを非表示",
-      "show-one": "1 個のサブエージェントを表示",
-      "show-other": "{{count}} 個のサブエージェントを表示"
+      "hide-one": "1 個のサブ Agent を非表示",
+      "hide-other": "{{count}} 個のサブ Agent を非表示",
+      "show-one": "1 個のサブ Agent を表示",
+      "show-other": "{{count}} 個のサブ Agent を表示"
     },
     "native-chat": {
       "composer": {
