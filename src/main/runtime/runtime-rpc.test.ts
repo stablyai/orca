@@ -5770,8 +5770,10 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     const registry = new DeviceRegistry(userDataPath)
     const older = registry.addDevice('Old server', 'runtime', 'network')
     const newer = registry.addDevice('New server', 'runtime', 'network')
-    // Mark older as paired so the default-rotation lookup would skip it; noRotate ignores that.
+    // Mark both devices as paired so default rotation cannot reuse either existing entry —
+    // without noRotate, getOrCreatePendingDevice would mint a third device here.
     registry.updateLastSeen(older.deviceId)
+    registry.updateLastSeen(newer.deviceId)
     // With noRotate, the lookup must return the newer entry (last in the array).
     const resolved = registry.getOrCreatePendingDevice('Server', 'runtime', 'network', {
       noRotate: true
@@ -5779,6 +5781,8 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     expect(resolved.deviceId).toBe(newer.deviceId)
     expect(resolved.token).toBe(newer.token)
     expect(resolved.deviceId).not.toBe(older.deviceId)
+    // Confirm no third device was minted.
+    expect(registry.listDevices()).toHaveLength(2)
   })
 
   it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
