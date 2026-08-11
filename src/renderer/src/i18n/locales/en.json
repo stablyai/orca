@@ -2856,7 +2856,11 @@
             "openTaskTerminal": "Open task terminal",
             "systemBrowser": "System Browser",
             "orcaBrowser": "Orca Browser",
-            "terminalLinkSettings": "Terminal link settings"
+            "terminalLinkSettings": "Terminal link settings",
+            "copyLink": "Copy link",
+            "copied": "Copied",
+            "copiedLink": "Copied link",
+            "copyLinkFailed": "Failed to copy link"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -10720,7 +10724,8 @@
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
-            "1d8e182c32": "View File"
+            "1d8e182c32": "View File",
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",

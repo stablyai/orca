@@ -494,6 +494,7 @@ describe('hard-wrapped terminal HTTP clicks', () => {
       getLinkActionContext: () => ({
         paneId: 1,
         pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+        claimPtyMouse: vi.fn(() => true),
         request,
         focusTerminal: vi.fn()
       })

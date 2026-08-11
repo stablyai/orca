@@ -17,17 +17,34 @@ vi.mock('electron', () => ({
 import type { SFTPWrapper } from 'ssh2'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
-import { OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
+import { getWindowsManagedLifecycleHook, OPENCLAUDE_HOOK_SETTINGS } from './hook-settings'
 
 const CLAUDE_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'claude-hook.cmd' : 'claude-hook.sh'
 const STATUSLINE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'claude-statusline.cmd' : 'claude-statusline.sh'
 const OPENCLAUDE_SCRIPT_FILE_NAME =
   process.platform === 'win32' ? 'openclaude-hook.cmd' : 'openclaude-hook.sh'
-const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
 const isClaudeManagedCommand = createManagedCommandMatcher(CLAUDE_SCRIPT_FILE_NAME)
 const isOpenClaudeManagedCommand = createManagedCommandMatcher(OPENCLAUDE_SCRIPT_FILE_NAME)
+
+type TestHook = { command: string; args?: string[] }
+
+function hasManagedCommand(hook: TestHook, matcher: (command: string | undefined) => boolean) {
+  return matcher(hook.command) || hook.args?.some(matcher) === true
+}
+
+describe('getWindowsManagedLifecycleHook', () => {
+  it('keeps cmd metacharacters out of the headless client command line', () => {
+    const scriptPath = 'C:\\Users\\%name%\\a^b&c\\.orca\\agent-hooks\\claude-hook.cmd'
+    const hook = getWindowsManagedLifecycleHook(scriptPath)
+    const encodedCommand = hook.args?.at(-1)
+
+    expect(hook.args?.[0]).toBe('--headless')
+    expect(hook.args?.[1]).toMatch(/\\WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
+    expect(hook.args).not.toContain(scriptPath)
+    expect(Buffer.from(encodedCommand!, 'base64').toString('utf16le')).toContain(scriptPath)
+  })
+})
 
 type FakeFs = {
   files: Map<string, string>
@@ -162,18 +179,23 @@ describe('ClaudeHookService.install', () => {
           AWS_REGION: 'us-west-2'
         }
       })
-      const legacyCommands = legacy.hooks.Stop.flatMap(
-        (definition: { hooks: { command: string }[] }) =>
-          definition.hooks.map((hook) => hook.command)
+      const legacyHooks = legacy.hooks.Stop.flatMap(
+        (definition: { hooks: TestHook[] }) => definition.hooks
       )
-      expect(legacyCommands).toContain('/usr/local/bin/user-hook')
-      expect(legacyCommands.some((command: string) => isClaudeManagedCommand(command))).toBe(true)
+      expect(legacyHooks.map((hook: TestHook) => hook.command)).toContain(
+        '/usr/local/bin/user-hook'
+      )
       expect(
-        legacyCommands.some((command: string) =>
-          command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
+        legacyHooks.some((hook: TestHook) => hasManagedCommand(hook, isClaudeManagedCommand))
+      ).toBe(true)
+      expect(
+        legacyHooks.some((hook: TestHook) =>
+          hook.command.includes('/Users/old/.orca/agent-hooks/claude-hook.sh')
         )
       ).toBe(false)
-      expect(isClaudeManagedCommand(legacy.hooks.StopFailure[0].hooks[0].command)).toBe(true)
+      expect(hasManagedCommand(legacy.hooks.StopFailure[0].hooks[0], isClaudeManagedCommand)).toBe(
+        true
+      )
       expect(
         readFileSync(join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME), 'utf-8')
       ).toContain('DEVIN_PROJECT_DIR')
@@ -307,12 +329,8 @@ describe('ClaudeHookService.install', () => {
     }
   })
 
-  // Why: #6078 — Claude Code runs hooks through Git Bash, and an unquoted path
-  // with a space (e.g. `C:/Users/Jane Doe`) splits at the space. The managed
-  // command must use an encoded launcher so Git Bash/cmd.exe never splits or
-  // expands the raw path before invoking the managed .cmd.
   it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
+    'runs managed hooks through headless exec form and preserves profile-path spaces',
     () => {
       const tmpHome = mkdtempSync(join(tmpdir(), 'orca claude home with spaces '))
       vi.stubEnv('HOME', tmpHome)
@@ -322,11 +340,19 @@ describe('ClaudeHookService.install', () => {
 
         const settings = JSON.parse(
           readFileSync(join(tmpHome, '.claude', 'settings.json'), 'utf-8')
-        ) as { hooks: Record<string, { hooks: { command: string }[] }[]> }
+        ) as { hooks: Record<string, { hooks: TestHook[] }[]> }
+
+        const system32 = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32')
+        const scriptPath = join(tmpHome, '.orca', 'agent-hooks', CLAUDE_SCRIPT_FILE_NAME)
 
         for (const eventName of ['UserPromptSubmit', 'Stop', 'StopFailure']) {
-          const command = settings.hooks[eventName]?.[0]?.hooks?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
+          const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
+          expect(hook).toEqual({
+            type: 'command',
+            command: join(system32, 'conhost.exe'),
+            args: ['--headless', join(system32, 'cmd.exe'), '/d', '/c', scriptPath],
+            timeout: 10
+          })
         }
       } finally {
         vi.unstubAllEnvs()
@@ -335,9 +361,6 @@ describe('ClaudeHookService.install', () => {
     }
   )
 
-  // Why: the launcher must stay PowerShell-encoded for Git Bash, but the hook
-  // POST inside the .cmd should use curl.exe so each hook spawns one
-  // interpreter, not two. Posting via a second PowerShell was the slow path.
   it.skipIf(process.platform !== 'win32')(
     'posts from the managed .cmd via curl.exe, not a second PowerShell',
     () => {
