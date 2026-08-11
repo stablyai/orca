@@ -14,6 +14,7 @@ import type {
   WorktreeLineage,
   WorkspaceLineage,
   ProjectHostSetup,
+  Repo,
   WorktreeMeta
 } from '../../../../shared/types'
 import type { RuntimeWorktreeListResult } from '../../../../shared/runtime-types'
@@ -28,8 +29,6 @@ import {
 } from './worktree-helpers'
 import { projectWorktreeTabModelReconciliation } from './tabs'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree-id'
-import { areWorkspaceLinkedItemsEqual } from '../../../../shared/workspace-linked-item'
-import { areTaskSourceContextsEqual } from '../../../../shared/task-source-context'
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
@@ -120,6 +119,10 @@ import {
   type DetectedWorktreeRefreshLease
 } from './detected-worktree-refresh-leases'
 import { getTerminalActivationSpawnSuppression } from './terminal-activation-spawn-suppression'
+import {
+  preservedBranchCleanupKey,
+  type PreservedBranchCleanup
+} from '../../../../shared/preserved-branch-cleanup'
 import type {
   HostQualifiedDetectedWorktreeResult,
   HostQualifiedKnownWorktreeResult,
@@ -129,6 +132,7 @@ import type {
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
+import { catalogRowsEqual, reuseEqualCatalogRows } from './worktree-catalog-reconciliation'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list UI hydration parity used before `worktree.detectedList` existed.
@@ -143,6 +147,10 @@ const FOLDER_WORKSPACE_ACTIVITY_PERSIST_INTERVAL_MS = 1_000
 export const WORKTREE_REFRESH_CONCURRENCY = 8
 const pendingActivationTerminalPrepCancels = new Map<string, () => void>()
 const detachedHeadAutoDerivedDisplayNames = new Map<string, string>()
+const preservedBranchRuntimeTargetByCleanupKey = new Map<
+  string,
+  { cleanup: PreservedBranchCleanup; target: ReturnType<typeof getActiveRuntimeTarget> }
+>()
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const runtimeDetectedWorktreeRefreshesInFlight = new Map<
@@ -312,107 +320,8 @@ function showLocalBaseRefRefreshToast(
   )
 }
 
-function arraysShallowEqual(a: string[] | undefined, b: string[] | undefined): boolean {
-  if (a === b) {
-    return true
-  }
-  if (!a || !b || a.length !== b.length) {
-    return !a?.length && !b?.length
-  }
-  return a.every((v, i) => v === b[i])
-}
-
-function areLineageRecordsEqual(
-  a: WorktreeLineage | null | undefined,
-  b: WorktreeLineage | null | undefined
-): boolean {
-  if (!a || !b) {
-    return !a && !b
-  }
-  return (
-    a.worktreeId === b.worktreeId &&
-    a.worktreeInstanceId === b.worktreeInstanceId &&
-    a.parentWorktreeId === b.parentWorktreeId &&
-    a.parentWorktreeInstanceId === b.parentWorktreeInstanceId &&
-    a.origin === b.origin &&
-    a.capture.source === b.capture.source &&
-    a.capture.confidence === b.capture.confidence &&
-    a.orchestrationRunId === b.orchestrationRunId &&
-    a.taskId === b.taskId &&
-    a.coordinatorHandle === b.coordinatorHandle &&
-    a.createdByTerminalHandle === b.createdByTerminalHandle &&
-    a.createdAt === b.createdAt
-  )
-}
-
 function areWorktreesEqual(current: Worktree[] | undefined, next: Worktree[]): boolean {
-  if (!current || current.length !== next.length) {
-    return false
-  }
-
-  return current.every((worktree, index) => {
-    const candidate = next[index]
-    return (
-      worktree.id === candidate.id &&
-      worktree.instanceId === candidate.instanceId &&
-      worktree.repoId === candidate.repoId &&
-      worktree.projectId === candidate.projectId &&
-      worktree.hostId === candidate.hostId &&
-      worktree.projectHostSetupId === candidate.projectHostSetupId &&
-      worktree.path === candidate.path &&
-      worktree.head === candidate.head &&
-      worktree.branch === candidate.branch &&
-      worktree.isBare === candidate.isBare &&
-      worktree.isMainWorktree === candidate.isMainWorktree &&
-      worktree.isSparse === candidate.isSparse &&
-      worktree.displayName === candidate.displayName &&
-      worktree.comment === candidate.comment &&
-      worktree.linkedIssue === candidate.linkedIssue &&
-      worktree.linkedPR === candidate.linkedPR &&
-      worktree.linkedLinearIssue === candidate.linkedLinearIssue &&
-      (worktree.linkedLinearIssueWorkspaceId ?? null) ===
-        (candidate.linkedLinearIssueWorkspaceId ?? null) &&
-      (worktree.linkedLinearIssueOrganizationUrlKey ?? null) ===
-        (candidate.linkedLinearIssueOrganizationUrlKey ?? null) &&
-      worktree.linkedGitLabMR === candidate.linkedGitLabMR &&
-      worktree.linkedGitLabIssue === candidate.linkedGitLabIssue &&
-      worktree.linkedBitbucketPR === candidate.linkedBitbucketPR &&
-      worktree.linkedAzureDevOpsPR === candidate.linkedAzureDevOpsPR &&
-      worktree.linkedGiteaPR === candidate.linkedGiteaPR &&
-      areWorkspaceLinkedItemsEqual(worktree.linkedWorkItem, candidate.linkedWorkItem) &&
-      areTaskSourceContextsEqual(
-        worktree.linkedTaskSourceContext,
-        candidate.linkedTaskSourceContext
-      ) &&
-      worktree.isArchived === candidate.isArchived &&
-      worktree.isUnread === candidate.isUnread &&
-      worktree.isPinned === candidate.isPinned &&
-      worktree.sortOrder === candidate.sortOrder &&
-      worktree.manualOrder === candidate.manualOrder &&
-      worktree.lastActivityAt === candidate.lastActivityAt &&
-      worktree.workspaceStatus === candidate.workspaceStatus &&
-      worktree.createdWithAgent === candidate.createdWithAgent &&
-      worktree.pendingFirstAgentMessageRename === candidate.pendingFirstAgentMessageRename &&
-      worktree.firstAgentMessageRenameError === candidate.firstAgentMessageRenameError &&
-      worktree.baseRef === candidate.baseRef &&
-      worktree.pushTarget?.remoteName === candidate.pushTarget?.remoteName &&
-      worktree.pushTarget?.branchName === candidate.pushTarget?.branchName &&
-      worktree.pushTarget?.remoteUrl === candidate.pushTarget?.remoteUrl &&
-      worktree.sparseBaseRef === candidate.sparseBaseRef &&
-      arraysShallowEqual(worktree.sparseDirectories, candidate.sparseDirectories) &&
-      arraysShallowEqual(worktree.priorWorktreeIds, candidate.priorWorktreeIds) &&
-      (worktree as WorktreeWithLineage).parentWorktreeId ===
-        (candidate as WorktreeWithLineage).parentWorktreeId &&
-      arraysShallowEqual(
-        (worktree as WorktreeWithLineage).childWorktreeIds,
-        (candidate as WorktreeWithLineage).childWorktreeIds
-      ) &&
-      areLineageRecordsEqual(
-        (worktree as WorktreeWithLineage).lineage,
-        (candidate as WorktreeWithLineage).lineage
-      )
-    )
-  })
+  return catalogRowsEqual(current, next)
 }
 
 function areDetectedWorktreeResultsEqual(
@@ -424,15 +333,7 @@ function areDetectedWorktreeResultsEqual(
     current.repoId === next.repoId &&
     current.authoritative === next.authoritative &&
     current.source === next.source &&
-    areWorktreesEqual(current.worktrees, next.worktrees) &&
-    current.worktrees.every((worktree, index) => {
-      const candidate = next.worktrees[index]
-      return (
-        worktree.ownership === candidate.ownership &&
-        worktree.selectedCheckout === candidate.selectedCheckout &&
-        worktree.visible === candidate.visible
-      )
-    })
+    catalogRowsEqual(current.worktrees, next.worktrees)
   )
 }
 
@@ -649,7 +550,7 @@ function worktreeMatchesHost(
 }
 
 function mergeWorktreesForHost<
-  T extends { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
+  T extends { id: string; hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 >(
   current: readonly T[] | undefined,
   refreshed: readonly T[],
@@ -658,13 +559,17 @@ function mergeWorktreesForHost<
 ): T[] {
   // Why: host-scoped refreshes replace that host in place so alternating local/runtime refreshes don't churn sibling row order or sortEpoch.
   const existing = current ?? []
+  const reconciled = reuseEqualCatalogRows(
+    existing.filter((worktree) => worktreeMatchesHost(worktree, hostId, options)),
+    refreshed
+  )
   const next: T[] = []
   let inserted = false
 
   for (const worktree of existing) {
     if (worktreeMatchesHost(worktree, hostId, options)) {
       if (!inserted) {
-        next.push(...refreshed)
+        next.push(...reconciled)
         inserted = true
       }
       continue
@@ -672,7 +577,12 @@ function mergeWorktreesForHost<
     next.push(worktree)
   }
 
-  return inserted ? next : [...next, ...refreshed]
+  if (!inserted) {
+    next.push(...reconciled)
+  }
+  return existing.length === next.length && existing.every((row, index) => row === next[index])
+    ? (existing as T[])
+    : next
 }
 
 function mergeDetectedWorktreesForHost(
@@ -686,9 +596,19 @@ function mergeDetectedWorktreesForHost(
     refreshed.worktrees,
     current?.worktrees
   ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+  const worktrees = mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
+  if (
+    current &&
+    current.repoId === refreshed.repoId &&
+    current.authoritative === refreshed.authoritative &&
+    current.source === refreshed.source &&
+    current.worktrees === worktrees
+  ) {
+    return current
+  }
   return {
     ...refreshed,
-    worktrees: mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
+    worktrees
   }
 }
 
@@ -3528,7 +3448,8 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           : false
       }
       // Direct SSH lineage requires its own qualified authority result.
-      if (!directSshAuthority) {
+      // Bulk runtime callers apply one final host-wide snapshot after all repo merges.
+      if (!directSshAuthority && !options?.suppressRemoteLineageRefresh) {
         await refreshRemoteWorktreeLineageBestEffort(settings, set)
       }
       return directCallerAuthority ? refresh.providerResult! : refresh.result.authoritative
@@ -4335,6 +4256,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
                 'worktree.rm',
                 {
                   worktree: toRuntimeWorktreeSelector(worktreeId),
+                  ...(hostId ? { hostId } : {}),
                   force,
                   allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
                   runHooks: !skipArchive
@@ -4682,13 +4604,46 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
       const preservedBranch = removalResult?.preservedBranch
+      const cleanup = preservedBranch
+        ? {
+            worktreeId,
+            branchName: preservedBranch.branchName,
+            expectedHead: preservedBranch.head,
+            ...(hostId ? { hostId } : {}),
+            ...(removalRoute?.runtimeEnvironmentId
+              ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
+              : {})
+          }
+        : null
+      if (preservedBranch) {
+        preservedBranchRuntimeTargetByCleanupKey.set(preservedBranchCleanupKey(cleanup!), {
+          cleanup: cleanup!,
+          target
+        })
+      }
       if (preservedBranch && options?.suppressPreservedBranchToast !== true) {
         showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead)
+          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead, {
+            ...(hostId ? { hostId } : {}),
+            ...(removalRoute?.runtimeEnvironmentId
+              ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
+              : {})
+          })
         })
       }
       pruneHostedReviewLinkMutationGenerations([worktreeId])
-      return preservedBranch ? { ok: true as const, preservedBranch } : { ok: true as const }
+      return preservedBranch && cleanup
+        ? {
+            ok: true as const,
+            preservedBranch: {
+              ...preservedBranch,
+              ...(cleanup.hostId ? { hostId: cleanup.hostId } : {}),
+              ...(cleanup.runtimeEnvironmentId
+                ? { runtimeEnvironmentId: cleanup.runtimeEnvironmentId }
+                : {})
+            }
+          }
+        : { ok: true as const }
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
@@ -4765,32 +4720,81 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
     })
   },
 
-  forceDeletePreservedBranch: async (worktreeId, branchName, expectedHead) => {
+  forceDeletePreservedBranch: async (worktreeId, branchName, expectedHead, options) => {
     try {
-      const target = getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
+      const requestedCleanup: PreservedBranchCleanup = {
+        worktreeId,
+        branchName,
+        expectedHead,
+        ...(options?.hostId ? { hostId: options.hostId } : {}),
+        ...(options?.runtimeEnvironmentId
+          ? { runtimeEnvironmentId: options.runtimeEnvironmentId }
+          : {})
+      }
+      const requestedCleanupKey = preservedBranchCleanupKey(requestedCleanup)
+      const exactRetainedTarget = preservedBranchRuntimeTargetByCleanupKey.get(requestedCleanupKey)
+      const matchingRetainedTargets = exactRetainedTarget
+        ? [exactRetainedTarget]
+        : [...preservedBranchRuntimeTargetByCleanupKey.values()].filter(
+            ({ cleanup }) =>
+              cleanup.worktreeId === worktreeId &&
+              cleanup.branchName === branchName &&
+              cleanup.expectedHead === expectedHead
+          )
+      const retainedTarget =
+        exactRetainedTarget ??
+        (options?.hostId || options?.runtimeEnvironmentId || matchingRetainedTargets.length !== 1
+          ? undefined
+          : matchingRetainedTargets[0])
+      if ((options?.hostId || options?.runtimeEnvironmentId) && !retainedTarget) {
+        throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
+      }
+      const cleanupHostId = options?.hostId ?? retainedTarget?.cleanup.hostId
+      // Why: the removed row no longer records its nested HUB owner, so retain the deletion-time route.
+      const target =
+        retainedTarget?.target ??
+        getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
       const result = await (target.kind === 'local'
         ? window.api.worktrees.forceDeletePreservedBranch({
             worktreeId,
             branchName,
-            expectedHead
+            expectedHead,
+            ...(cleanupHostId ? { hostId: cleanupHostId } : {})
           })
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
             'worktree.forceDeleteBranch',
-            { worktree: toRuntimeWorktreeSelector(worktreeId), branchName, expectedHead },
+            {
+              worktree: toRuntimeWorktreeSelector(worktreeId),
+              branchName,
+              expectedHead,
+              ...(cleanupHostId ? { hostId: cleanupHostId } : {})
+            },
             { timeoutMs: 15_000 }
           ))
-      toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
-        description: translate('auto.store.slices.worktrees.5a58e03a26', 'Deleted "{{value0}}".', {
-          value0: branchName
+      if (options?.suppressToast !== true) {
+        toast.success(translate('auto.store.slices.worktrees.19db0085fb', 'Local branch deleted'), {
+          description: translate(
+            'auto.store.slices.worktrees.5a58e03a26',
+            'Deleted "{{value0}}".',
+            { value0: branchName }
+          )
         })
-      })
+      }
+      preservedBranchRuntimeTargetByCleanupKey.delete(
+        retainedTarget ? preservedBranchCleanupKey(retainedTarget.cleanup) : requestedCleanupKey
+      )
       return { ok: true as const, ...result }
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err)
-      toast.error(translate('auto.store.slices.worktrees.0216895fb5', 'Failed to delete branch'), {
-        description: error
-      })
+      if (options?.suppressToast !== true) {
+        toast.error(
+          translate('auto.store.slices.worktrees.0216895fb5', 'Failed to delete branch'),
+          {
+            description: error
+          }
+        )
+      }
       return { ok: false as const, error }
     }
   },
@@ -6063,7 +6067,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const repoIdsWithRemovedOwners = new Set<string>()
       const survivingRepoIds = new Set<string>()
       const repoIdsWithSurvivingOwners = new Set<string>()
-      const survivingRepos: AppState['repos'] = []
+      const survivingRepos: Repo[] = []
       for (const repo of s.repos) {
         if (isRemovedRuntimeHostId(getRepoExecutionHostId(repo), removed)) {
           repoIdsWithRemovedOwners.add(repo.id)

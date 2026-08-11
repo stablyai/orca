@@ -2,7 +2,10 @@ import { useCallback, useMemo, useRef, type KeyboardEvent } from 'react'
 import { track } from '@/lib/telemetry'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
+import {
+  buildSkillCommandForRuntime,
+  buildSkillSetupTerminalCommand
+} from '../settings/CliSkillRuntimeSetup'
 import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 import {
   getOnboardingFeatureSetupAgentRuntime,
@@ -71,7 +74,9 @@ export function FeatureSetupInlineTerminal({
   return (
     <OnboardingInlineCommandTerminal
       command={runtimeCommand}
+      prepareCommandForShell={buildSkillSetupTerminalCommand}
       shellOverride={setupRuntime.terminalShellOverride}
+      forceHostRuntime={Boolean(setupRuntime.installDisabledReason)}
       title={translate(
         'auto.components.onboarding.FeatureSetupInlineTerminal.c767ab7061',
         'Skill setup'

@@ -84,7 +84,7 @@ type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
-  eligibleRepos: RepoOption[]
+  eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
   selectedProjectId?: string | null
@@ -98,7 +98,7 @@ type NewWorkspaceComposerCardProps = {
   selectedEphemeralVmRecipeId?: string | null
   onEphemeralVmRecipeChange?: (recipeId: string | null) => void
   ephemeralVmRecipeError?: string | null
-  repoBackedSearchRepos?: RepoOption[]
+  repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean
   smartNameRepoSwitchTarget?: 'project' | 'task-source'

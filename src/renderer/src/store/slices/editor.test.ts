@@ -3080,18 +3080,24 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       checkRunId: 42
     }
+    const githubRepository = { owner: 'upstream', repo: 'project' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
       details: null,
       loading: false,
-      error: null
+      error: null,
+      githubRepository
     })
 
     await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
 
     expect(fetchPRCheckDetails).toHaveBeenCalledWith(
       '/repo',
-      expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
+      expect.objectContaining({
+        checkRunId: 42,
+        checkName: 'verify',
+        prRepo: githubRepository
+      }),
       { repoId: 'repo-1' }
     )
     expect(store.getState().openFiles).toContainEqual(
@@ -3100,6 +3106,43 @@ describe('createEditorSlice conflict status reconciliation', () => {
         checkRunDetails: expect.objectContaining({
           loading: false,
           details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+        })
+      })
+    )
+  })
+
+  it('stops loading when an open check-details tab loses its repository', async () => {
+    const fetchPRCheckDetails = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {},
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          error: 'Repository details are unavailable for this check.'
         })
       })
     )
@@ -3302,6 +3345,112 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+  })
+
+  it('ignores a stale check-details request after the tab context changes', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:new', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(
+      expect.objectContaining({ contextKey: 'repo:new', details: null, loading: true, error: null })
+    )
+  })
+
+  it('ignores an older check-details request in the same context', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, details: null, loading: true, error: null }))
+  })
+
+  it('does not reopen a check-details tab with an older sidebar snapshot', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: false,
+      error: 'newer result'
+    })
+    store.getState().openFile({
+      filePath: '/repo/other.ts',
+      relativePath: 'other.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale result'
+    })
+
+    expect(store.getState().activeFileId).toBe('wt-1::check-details::check-run:42')
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, error: 'newer result' }))
   })
 
   it('opens check full details as a center-pane editor tab', () => {

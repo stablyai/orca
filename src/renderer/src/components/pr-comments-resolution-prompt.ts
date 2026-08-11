@@ -1,5 +1,5 @@
 import type { PRComment } from '../../../shared/types'
-import type { PRCommentGroup } from '@/lib/pr-comment-groups'
+import type { PRCommentGroup } from '../../../shared/pr-comment-groups'
 
 export type PRCommentsResolutionReviewKind = 'PR' | 'MR'
 

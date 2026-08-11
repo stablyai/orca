@@ -149,7 +149,7 @@ function PreflightBanner({
   repos
 }: {
   issues: PreflightIssue[]
-  repos: Repo[]
+  repos: readonly Repo[]
 }): React.JSX.Element | null {
   // Why: keying the seed on the current GitHub project set means adding a new
   // GitHub project (which changes the key) re-evaluates dismissals, so a lapsed

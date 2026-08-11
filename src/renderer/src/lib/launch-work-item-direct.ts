@@ -15,6 +15,7 @@ import {
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { getConnectionId } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
@@ -278,6 +279,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         promptDelivery,
         settings,
         launchPlatform,
+        nativeChatTranscriptIsLocalReadable:
+          isNativeChatTranscriptLocalReadable(launchConnectionId),
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
         isRemote: typeof launchConnectionId === 'string'

@@ -22,6 +22,8 @@ type AgentMapWorktreeRingNodeProps = {
   worktree: AgentMapWorktreeRing
   zoom: number
   mapScale: number
+  /** Pressed at the start of a pan drag; keeps the ring lit through the gesture. */
+  held: boolean
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
@@ -33,7 +35,8 @@ type AgentMapWorktreeRingNodeProps = {
     event: React.MouseEvent<SVGCircleElement>,
     worktree: AgentMapWorktreeRing
   ) => void
-  onLabelActiveChange: (worktreeId: string, active: boolean) => void
+  onLabelHoverChange: (worktreeId: string, active: boolean) => void
+  onLabelFocusChange: (worktreeId: string, active: boolean) => void
   onAgentKeyDown: (event: React.KeyboardEvent<SVGGElement>, agent: AgentMapAgentNode) => void
 }
 
@@ -175,6 +178,7 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   worktree,
   zoom,
   mapScale,
+  held,
   selectedPaneKey,
   allowAggregation,
   showOrchestrationLinks,
@@ -183,7 +187,8 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   onSelectAgent,
   onSpawnAgent,
   onOpenWorkspaceContextMenu,
-  onLabelActiveChange,
+  onLabelHoverChange,
+  onLabelFocusChange,
   onAgentKeyDown
 }: AgentMapWorktreeRingNodeProps): React.JSX.Element {
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -196,14 +201,15 @@ export const AgentMapWorktreeRingNode = memo(function AgentMapWorktreeRingNode({
   return (
     <Popover open={detailsOpen && !exiting} onOpenChange={setDetailsOpen}>
       <g
-        className={`agent-map-worktree-group${worktree.motionState ? ` is-${worktree.motionState}` : ''}`}
+        className={`agent-map-worktree-group${worktree.motionState ? ` is-${worktree.motionState}` : ''}${held ? ' is-held' : ''}`}
+        data-agent-map-worktree-id={worktree.id}
         aria-hidden={exiting || undefined}
-        onPointerEnter={() => onLabelActiveChange(worktree.id, true)}
-        onPointerLeave={() => onLabelActiveChange(worktree.id, false)}
-        onFocus={() => onLabelActiveChange(worktree.id, true)}
+        onPointerEnter={() => onLabelHoverChange(worktree.id, true)}
+        onPointerLeave={() => onLabelHoverChange(worktree.id, false)}
+        onFocus={() => onLabelFocusChange(worktree.id, true)}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-            onLabelActiveChange(worktree.id, false)
+            onLabelFocusChange(worktree.id, false)
           }
         }}
       >

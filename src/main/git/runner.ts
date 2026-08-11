@@ -48,6 +48,11 @@ import {
   peekWslGitReadEnvironment,
   type WslGitReadEnvironment
 } from './wsl-git-read-environment'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting,
+  usesHostGitForWslLinkedWorktree
+} from './wsl-linked-worktree-git-routing'
 // Re-exported for existing importers; lightweight consumers should import from './exec-error' to avoid this heavy module.
 import { extractExecError, parseRetryAfterMs } from './exec-error'
 export { extractExecError, parseRetryAfterMs }
@@ -335,6 +340,10 @@ function resolveGitCommand(
   options: GitExecOptions,
   forceLoginShell = false
 ): ResolvedCommand {
+  if (usesHostGitForWslLinkedWorktree(options.cwd, options.wslDistro)) {
+    // Why: WSL Git resolves a Windows-authored linked-worktree pointer relative to cwd.
+    return { binary: 'git', args, cwd: options.cwd, wsl: null, wslMode: null }
+  }
   if (!forceLoginShell && shouldAttemptWslDirectGit(options)) {
     const distro = wslDistroForCommand(options.cwd, options.wslDistro)
     const environment = distro ? peekWslGitReadEnvironment(distro) : undefined
@@ -908,13 +917,7 @@ async function buildNetworkSshPolicyEnv(options: GitExecOptions): Promise<{
     return { env: promptEnv, mode: 'explicit-env' }
   }
 
-  const resolved = resolveCommand(
-    'git',
-    ['config', '--get', 'core.sshCommand'],
-    options.cwd,
-    options.wslDistro,
-    { useWslLoginShell: Boolean(options.wslDistro) }
-  )
+  const resolved = resolveGitCommand(['config', '--get', 'core.sshCommand'], options, true)
   let configuredCommand = ''
   try {
     const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
@@ -964,6 +967,11 @@ export async function gitExecFileAsync(
   return withGitSpan(
     { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
     async () => {
+      if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
+        await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
+          signal: options.signal
+        })
+      }
       const resolved = resolveGitCommand(args, options)
       const policy = options.useConfiguredSshCommandForNetwork
         ? await buildNetworkSshPolicyEnv(options)
@@ -1055,9 +1063,10 @@ export async function gitExecFileAsyncBuffer(
   args: string[],
   options: { cwd: string; maxBuffer?: number; wslDistro?: string }
 ): Promise<{ stdout: Buffer }> {
-  const resolved = resolveCommand('git', args, options.cwd, options.wslDistro, {
-    useWslLoginShell: Boolean(options.wslDistro)
-  })
+  if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
+    await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro)
+  }
+  const resolved = resolveGitCommand(args, options, true)
   const { stdout } = (await execFileCapture(resolved.binary, resolved.args, {
     cwd: resolved.cwd,
     encoding: 'buffer',
@@ -1098,6 +1107,11 @@ export async function gitStreamStdout(
 ): Promise<GitStreamResult> {
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   return withGitSpan({ args, cwd: options.cwd }, async () => {
+    if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
+      await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
+        signal: options.signal
+      })
+    }
     const gitOptions: GitExecOptions = {
       cwd: options.cwd,
       ...(options.env ? { env: options.env } : {}),
@@ -1294,8 +1308,10 @@ export function gitSpawn(
   options: SpawnOptions & { cwd: string; wslDistro?: string }
 ): ChildProcess {
   const { wslDistro, ...spawnOptions } = options
-  const resolved = resolveCommand('git', args, options.cwd, wslDistro, {
-    useWslLoginShell: Boolean(wslDistro)
+  const resolved = resolveGitCommand(args, {
+    cwd: options.cwd,
+    ...(wslDistro ? { wslDistro } : {}),
+    ...(spawnOptions.env ? { env: spawnOptions.env } : {})
   })
   const spawnStartedAt = performance.now()
   const child = spawn(resolved.binary, resolved.args, {
@@ -1438,8 +1454,24 @@ const GH_RETRY_DELAYS_MS = [250, 1000] as const
 const GH_RETRY_AFTER_MAX_MS = 30_000
 const DEFAULT_GH_EXEC_TIMEOUT_MS = 30_000
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    throw createAbortError()
+  }
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(finish, ms)
+    const onAbort = (): void => finish(createAbortError())
+    function finish(error?: Error): void {
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function defaultGhExecTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -1611,7 +1643,8 @@ export async function ghExecFileAsync(
         maxBuffer: options.maxBuffer,
         // Why: bound gh so one stuck child fails visibly instead of wedging the IPC lane.
         timeout: options.timeout ?? defaultGhExecTimeoutMs(options.env),
-        env: nonInteractiveGhEnv(options.env)
+        env: nonInteractiveGhEnv(options.env),
+        signal: options.signal
       })
       return { stdout: stdout as string, stderr: stderr as string }
     } catch (err) {
@@ -1653,7 +1686,7 @@ export async function ghExecFileAsync(
           retryAfterMs !== null
             ? Math.min(retryAfterMs, GH_RETRY_AFTER_MAX_MS)
             : GH_RETRY_DELAYS_MS[attempt]
-        await sleep(delayMs)
+        await sleep(delayMs, options.signal)
         continue
       }
       throw err

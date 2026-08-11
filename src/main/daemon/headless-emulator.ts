@@ -13,6 +13,7 @@ import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
+import { buildFrameRestoreSnapshotFields } from './terminal-frame-restore-sequences'
 import { splitTerminalSnapshotAnsi } from './terminal-snapshot-ansi-buffers'
 import {
   installTerminalViewAttributeResponder,
@@ -255,6 +256,7 @@ export class HeadlessEmulator {
         this.restoredOscLinks
       ),
       rehydrateSequences: buildRehydrateSequences(modes),
+      ...buildFrameRestoreSnapshotFields(this.serializer, this.terminal, modes),
       cwd: this.oscText.cwd,
       modes,
       cols: this.terminal.cols,
@@ -265,10 +267,6 @@ export class HeadlessEmulator {
       ...(this.partialEscapeTail.length > 0
         ? { pendingEscapeTailAnsi: this.partialEscapeTail }
         : {})
-    }
-    if (this.partialEscapeTail.length > 0) {
-      // Why a separate field: consumers write their own reset sequences after the body, and any ESC after a dangling partial would abort it.
-      snapshot.pendingEscapeTailAnsi = this.partialEscapeTail
     }
     return snapshot
   }

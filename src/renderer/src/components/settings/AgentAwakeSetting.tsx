@@ -57,7 +57,7 @@ export function AgentAwakeSetting({
               },
               {
                 value: 'auto',
-                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Auto')
+                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
               },
               {
                 value: 'off',

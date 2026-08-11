@@ -49,6 +49,10 @@ export type EditorRequestFileCloseDetail = {
   fileId: string
 }
 
+export type EditorRequestCmdSaveDetail = {
+  fileId: string
+}
+
 export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   return (
     file.mode === 'edit' ||

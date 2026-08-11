@@ -25,6 +25,11 @@ export type FileContent = {
   mimeType?: string
   fileIdentity?: string
   loadError?: string
+  /** Superseded by an external change; still rendered until the lazy reload lands. */
+  isStale?: boolean
 }
 
-export type DiffContent = GitDiffResult
+export type DiffContent = GitDiffResult & {
+  /** Superseded by an external change; still rendered until the lazy reload lands. */
+  isStale?: boolean
+}

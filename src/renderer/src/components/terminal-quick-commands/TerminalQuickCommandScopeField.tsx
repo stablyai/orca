@@ -18,7 +18,7 @@ import { QUICK_COMMAND_TOGGLE_ITEM_CLASS } from './terminal-quick-command-toggle
 import { translate } from '@/i18n/i18n'
 
 type TerminalQuickCommandScopeFieldProps = {
-  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   selectedScope: TerminalQuickCommandScope
   selectedRepoId: string
   selectedRepoMissing: boolean
@@ -32,7 +32,7 @@ function getRepoLabel(repo: Pick<Repo, 'displayName' | 'path'>): string {
 }
 
 export function getQuickCommandProjectScopeRepoId(
-  repos: Pick<Repo, 'id'>[],
+  repos: readonly Pick<Repo, 'id'>[],
   lastRepoScopeId: string | null
 ): string | null {
   return lastRepoScopeId ?? repos[0]?.id ?? null

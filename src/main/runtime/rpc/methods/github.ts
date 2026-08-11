@@ -439,14 +439,18 @@ export const GITHUB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'github.prCheckDetails',
     params: PullRequestCheckDetails,
-    handler: async (params, { runtime }) =>
-      runtime.getRepoPRCheckDetails(params.repo, {
-        checkRunId: params.checkRunId,
-        workflowRunId: params.workflowRunId,
-        checkName: params.checkName,
-        url: params.url,
-        prRepo: params.prRepo ?? null
-      })
+    handler: async (params, { runtime, signal }) =>
+      runtime.getRepoPRCheckDetails(
+        params.repo,
+        {
+          checkRunId: params.checkRunId,
+          workflowRunId: params.workflowRunId,
+          checkName: params.checkName,
+          url: params.url,
+          prRepo: params.prRepo ?? null
+        },
+        signal
+      )
   }),
   defineMethod({
     name: 'github.rerunPRChecks',

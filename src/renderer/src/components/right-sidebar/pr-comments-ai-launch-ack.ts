@@ -1,6 +1,6 @@
 import type { PRComment, PRInfo } from '../../../../shared/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getPRCommentGroupRoot, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { getPRCommentGroupRoot, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import { isResolvablePRCommentGroup } from '../pr-comments-resolution-prompt'
 import {
   buildPRCommentBatchConversationReplyBody,
