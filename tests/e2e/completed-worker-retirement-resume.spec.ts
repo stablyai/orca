@@ -443,9 +443,11 @@ for (const closeMode of ['terminal-close-cli', 'worker-release'] as const) {
     }, targetWorktreeId)
     expect(beforeActivation).toEqual({ everActivated: false, tabCount: 0, pendingStartupCount: 0 })
 
-    const targetCard = orcaPage.locator(`[data-worktree-id="${String(targetWorktreeId)}"]`).first()
-    await targetCard.scrollIntoViewIfNeeded()
-    await targetCard.locator('[data-worktree-card-surface]').click()
+    const targetCard = orcaPage
+      .locator(`[data-worktree-id="${String(targetWorktreeId)}"]`)
+      .first()
+      .locator('[data-worktree-card-surface]')
+    await targetCard.evaluate((element: HTMLElement) => element.click())
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
       .toBe(targetWorktreeId)
