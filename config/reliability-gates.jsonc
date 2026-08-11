@@ -4357,7 +4357,6 @@
         "src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx",
         "src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx",
         "src/renderer/src/components/terminal-pane/terminal-cold-park-verdict-loop.test.tsx",
-        "src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/renderer/src/web/web-preload-api.test.ts",
         "src/main/ipc/runtime-environments.test.ts",
