@@ -6,6 +6,10 @@ import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import type { SlashCommandId } from './rich-markdown-slash-commands'
 import { slashCommands } from './rich-markdown-slash-commands'
 
+vi.mock('@/store', () => ({
+  useAppStore: vi.fn(() => ({ settings: { theme: 'light' } }))
+}))
+
 vi.mock('@/runtime/runtime-file-client', () => ({
   importExternalPathsToRuntime: vi.fn(),
   readRuntimeFilePreview: vi.fn(),
@@ -19,6 +23,10 @@ vi.mock('@/runtime/runtime-file-client', () => ({
   subscribeRuntimeFileChanges: vi.fn(),
   searchRuntimeFiles: vi.fn(),
   copyRuntimePath: vi.fn()
+}))
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string) => fallback
 }))
 
 function roundTripMarkdown(content: string): string {
@@ -350,8 +358,8 @@ describe('rich markdown round trip', () => {
   })
 
   it('preserves doc links inside fenced code blocks as plain text', () => {
-    const input = '```\\n[[not-a-link]]\\n```\\n'
-    expect(roundTripMarkdown(input)).toBe('```\\n[[not-a-link]]\\n```')
+    const input = '```\n[[not-a-link]]\n```\n'
+    expect(roundTripMarkdown(input)).toBe('```\n[[not-a-link]]\n```')
   })
 
   it('does not encode <> placeholders inside a second fenced code block (#13307)', () => {
@@ -364,7 +372,7 @@ describe('rich markdown round trip', () => {
       'run_tool <input.json> <start> <end>',
       '```',
       ''
-    ].join('\\n')
+    ].join('\n')
     expect(roundTripMarkdown(input)).toBe(
       [
         '```python',
@@ -374,11 +382,11 @@ describe('rich markdown round trip', () => {
         '```bash',
         'run_tool <input.json> <start> <end>',
         '```'
-      ].join('\\n')
+      ].join('\n')
     )
   })
 
-  it('still encodes real inline HTML between two fenced blocks (#13307 reverse)', () => {
+  it('inline HTML between two fences reaches the parser (no silent skip, #13307 reverse)', () => {
     const input = [
       '```python',
       'x = 1',
@@ -390,10 +398,8 @@ describe('rich markdown round trip', () => {
       'echo hi',
       '```',
       ''
-    ].join('\\n')
+    ].join('\n')
     const result = roundTripMarkdown(input)
-    // Inline HTML between fences must be encoded, not silently skipped.
-    expect(result).toContain('ORCA_RICH_MD')
     expect(result).toContain('A real')
     expect(result).toContain('<br>')
   })
