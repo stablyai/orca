@@ -104,14 +104,9 @@ export function resumeTerminalVisibility({
       resumeTerminalVisibilityHeavy(manager, isActive)
     }
     enforceTerminalViewportIntents(manager)
-    if (!shouldUseLightTabResume) {
-      // Why: this clear wipes the glyph atlas shared with other same-config
-      // terminals; refresh after reset so rebuilt atlases repaint from xterm.
-      resetAndRefreshAllTerminalWebglAtlases('visibility-resume')
-    }
-    // Why: the synchronous recovery above can fire before the revealed pane is
-    // attached and laid out. Follow up after layout with one shared-atlas-safe
-    // recovery covering every visible terminal manager.
+    // Why: one settled-layout rebuild is the whole reveal repair. A synchronous
+    // wipe here lands before the pane is attached and measured, so its repaint
+    // is dropped, yet it still re-rasterizes every sibling pane's shared atlas.
     manager.scheduleRevealRepaint()
   })
 }
