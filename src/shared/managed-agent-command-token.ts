@@ -60,6 +60,6 @@ export function isSafeOverrideExecutableToken(token: string): boolean {
   return (
     !token.includes('..') &&
     !/[|&;<>(){}[\]$`"'*!?]/.test(token) &&
-    /^[A-Za-z0-9._+\-/:\\~ ]+$/.test(token)
+    /^[A-Za-z0-9._+@\-/:\\~ ]+$/.test(token)
   )
 }
