@@ -30,6 +30,7 @@ import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCovera
 import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
+import { OrchestrationWorkerModelSetting } from './OrchestrationWorkerModelSetting'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -45,6 +46,11 @@ function resolveOrchestrationExampleIcon(example: SkillUsageExample): LucideIcon
 
 export function OrchestrationPane(): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
+  const defaultWorkerAgent = useAppStore((s) => s.settings?.orchestrationDefaultWorkerAgent)
+  const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents)
+  const workerModels = useAppStore((s) => s.settings?.orchestrationWorkerModels)
+  const workerEfforts = useAppStore((s) => s.settings?.orchestrationWorkerEfforts)
+  const updateSettings = useAppStore((s) => s.updateSettings)
   const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
@@ -90,6 +96,19 @@ export function OrchestrationPane(): React.JSX.Element {
       keywords={getOrchestrationPaneSearchEntries()[0].keywords}
       className="space-y-5 py-2"
     >
+      <OrchestrationWorkerModelSetting
+        defaultAgent={defaultWorkerAgent}
+        disabledAgents={disabledAgents}
+        models={workerModels}
+        efforts={workerEfforts}
+        onDefaultAgentChange={(orchestrationDefaultWorkerAgent) => {
+          void updateSettings({ orchestrationDefaultWorkerAgent })
+        }}
+        onChange={(orchestrationWorkerModels, orchestrationWorkerEfforts) => {
+          void updateSettings({ orchestrationWorkerModels, orchestrationWorkerEfforts })
+        }}
+      />
+
       <AgentSkillSetupPanel
         title={translate(
           'auto.components.settings.OrchestrationPane.07641b9768',

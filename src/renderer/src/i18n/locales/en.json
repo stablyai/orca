@@ -10291,6 +10291,22 @@
           "accessHint": "Allow microphone access to list input devices.",
           "allowAccess": "Allow access"
         },
+        "OrchestrationWorkerModelSetting": {
+          "defaultHint": "Use agent default stores no model or effort override. Available effort levels follow the selected model.",
+          "defaultWorkerSelectLabel": "Default worker provider",
+          "requireAgent": "No default worker",
+          "modelSelectLabel": "{{value0}} model",
+          "modelPlaceholder": "Select provider",
+          "modelUnavailable": "Not available",
+          "agentDefault": "Use agent default",
+          "effortSelectLabel": "{{value0}} effort",
+          "effortDefault": "Use agent default",
+          "effortPlaceholder": "Select model",
+          "effortPlaceholderNoProvider": "Select provider",
+          "effortUnavailable": "Not available",
+          "workerDefaultsTitle": "Worker defaults",
+          "workerDefaultsDescription": "Choose the provider, model, and reasoning effort to store as your orchestration worker preference."
+        },
         "TerminalTccAttributionNotice": {
           "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
           "openManageSessions": "Open Manage Sessions",

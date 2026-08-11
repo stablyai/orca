@@ -5587,6 +5587,41 @@ describe('Store', () => {
     expect(updated.disabledTuiAgents).toEqual(['gemini', 'opencode'])
   })
 
+  it('normalizes orchestration worker launch preferences on load and update', async () => {
+    writeFileSync(
+      join(testState.dir, 'orca-data.json'),
+      JSON.stringify({
+        settings: {
+          orchestrationDefaultWorkerAgent: 'codex',
+          orchestrationWorkerModels: {
+            codex: '  gpt-5.6-luna  ',
+            aider: 'unsupported',
+            unknown: 'ignored'
+          },
+          orchestrationWorkerEfforts: {
+            codex: ' max ',
+            gemini: 'high',
+            unknown: 'ignored'
+          }
+        }
+      })
+    )
+    const store = await createStore()
+
+    expect(store.getSettings().orchestrationDefaultWorkerAgent).toBe('codex')
+    expect(store.getSettings().orchestrationWorkerModels).toEqual({ codex: 'gpt-5.6-luna' })
+    expect(store.getSettings().orchestrationWorkerEfforts).toEqual({ codex: 'max' })
+
+    const updated = store.updateSettings({
+      orchestrationDefaultWorkerAgent: 'unknown' as never,
+      orchestrationWorkerModels: { claude: ' opus ', cursor: '' } as never,
+      orchestrationWorkerEfforts: { claude: ' high ', codex: 'future' } as never
+    })
+    expect(updated.orchestrationDefaultWorkerAgent).toBeNull()
+    expect(updated.orchestrationWorkerModels).toEqual({ claude: 'opus' })
+    expect(updated.orchestrationWorkerEfforts).toEqual({ claude: 'high' })
+  })
+
   it('enables Claude Agent Teams by default for fresh installs', async () => {
     const store = await createStore()
 

@@ -175,6 +175,11 @@ import {
 } from '../shared/cross-platform-path'
 import { normalizeTerminalQuickCommands } from '../shared/terminal-quick-commands'
 import { normalizeTaskProviderSettings } from '../shared/task-providers'
+import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerEfforts,
+  normalizeOrchestrationWorkerModels
+} from '../shared/orchestration-worker-model-settings'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../shared/auto-rename-branch-from-work-settings'
 import {
   addMobilePairingCustomAddress,
@@ -3437,6 +3442,15 @@ export class Store {
               parsed.settings?.terminalShortcutPolicy
             ),
             disabledTuiAgents: migratedDisabledTuiAgents,
+            orchestrationDefaultWorkerAgent: normalizeOrchestrationDefaultWorkerAgent(
+              parsed.settings?.orchestrationDefaultWorkerAgent
+            ),
+            orchestrationWorkerModels: normalizeOrchestrationWorkerModels(
+              parsed.settings?.orchestrationWorkerModels
+            ),
+            orchestrationWorkerEfforts: normalizeOrchestrationWorkerEfforts(
+              parsed.settings?.orchestrationWorkerEfforts
+            ),
             ...migratedAgentYoloDefaults,
             claudeAgentTeamsDefaultDisabledMigrated: true,
             openInApplications: normalizeOpenInApplications(parsed.settings?.openInApplications, {
@@ -5728,6 +5742,21 @@ export class Store {
     if ('agentDefaultArgs' in updates) {
       sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
       sanitizedUpdates.agentYoloDefaultsMigrated = true
+    }
+    if ('orchestrationDefaultWorkerAgent' in updates) {
+      sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+        updates.orchestrationDefaultWorkerAgent
+      )
+    }
+    if ('orchestrationWorkerModels' in updates) {
+      sanitizedUpdates.orchestrationWorkerModels = normalizeOrchestrationWorkerModels(
+        updates.orchestrationWorkerModels
+      )
+    }
+    if ('orchestrationWorkerEfforts' in updates) {
+      sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+        updates.orchestrationWorkerEfforts
+      )
     }
     if ('agentDefaultEnv' in updates) {
       sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)

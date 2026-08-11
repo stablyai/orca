@@ -44,6 +44,16 @@ export const getOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
         'worker'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.orchestration.search.workerModel',
+        'worker model'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.orchestration.search.workerEffort',
+        'worker effort'
+      ),
+      ...translateSearchKeyword('auto.components.settings.orchestration.search.model', 'model'),
+      ...translateSearchKeyword('auto.components.settings.orchestration.search.effort', 'effort'),
+      ...translateSearchKeyword(
         'auto.components.settings.orchestration.search.21c28ccdf7',
         'coordinator'
       ),

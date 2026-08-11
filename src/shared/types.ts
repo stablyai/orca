@@ -3014,6 +3014,12 @@ export type GlobalSettings = {
   }
   /** Per-agent default CLI arguments appended after the binary/path and before prompts. */
   agentDefaultArgs?: Partial<Record<TuiAgent, string>>
+  /** Provider preference stored for orchestration worker settings. */
+  orchestrationDefaultWorkerAgent?: TuiAgent | null
+  /** Per-agent model preferences stored for orchestration worker settings. */
+  orchestrationWorkerModels?: Partial<Record<TuiAgent, string>>
+  /** Per-agent reasoning-effort preferences stored for orchestration worker settings. */
+  orchestrationWorkerEfforts?: Partial<Record<TuiAgent, string>>
   /** Per-agent launch environment defaults used when yolo mode is exposed as env. */
   agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
   /** One-shot guard for adding yolo-mode default args to untouched agent launch profiles. */

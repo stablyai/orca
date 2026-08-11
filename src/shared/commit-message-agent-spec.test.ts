@@ -278,8 +278,14 @@ describe('model discovery parsers', () => {
             {
               slug: 'gpt-5.5',
               display_name: 'GPT-5.5',
+              visibility: 'list',
               default_reasoning_level: 'low',
               supported_reasoning_levels: [{ effort: 'low' }, { effort: 'high' }]
+            },
+            {
+              slug: 'codex-auto-review',
+              display_name: 'Codex Auto Review',
+              visibility: 'hide'
             }
           ]
         })

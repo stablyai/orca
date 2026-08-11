@@ -33,13 +33,14 @@ describe('orchestration worker launch preferences', () => {
   })
 
   it('rejects model-specific effort combinations the catalog disproves', () => {
+    // Luna now supports xhigh; ultra remains above its catalog ceiling.
     expect(() =>
       resolveWorkerLaunchPreferences({
         agent: 'codex',
         model: 'gpt-5.6-luna',
-        effort: 'xhigh'
+        effort: 'ultra'
       })
-    ).toThrow('does not support effort xhigh')
+    ).toThrow('does not support effort ultra')
   })
 
   it('rejects effort without a model', () => {

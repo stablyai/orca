@@ -27,6 +27,11 @@ import {
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
 } from '../../../../shared/mobile-pairing-custom-address'
+import {
+  normalizeOrchestrationDefaultWorkerAgent,
+  normalizeOrchestrationWorkerEfforts,
+  normalizeOrchestrationWorkerModels
+} from '../../../../shared/orchestration-worker-model-settings'
 
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
@@ -96,6 +101,21 @@ function normalizeSettingsUpdates(
   if ('agentDefaultArgs' in updates) {
     sanitizedUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
     sanitizedUpdates.agentYoloDefaultsMigrated = true
+  }
+  if ('orchestrationDefaultWorkerAgent' in updates) {
+    sanitizedUpdates.orchestrationDefaultWorkerAgent = normalizeOrchestrationDefaultWorkerAgent(
+      updates.orchestrationDefaultWorkerAgent
+    )
+  }
+  if ('orchestrationWorkerModels' in updates) {
+    sanitizedUpdates.orchestrationWorkerModels = normalizeOrchestrationWorkerModels(
+      updates.orchestrationWorkerModels
+    )
+  }
+  if ('orchestrationWorkerEfforts' in updates) {
+    sanitizedUpdates.orchestrationWorkerEfforts = normalizeOrchestrationWorkerEfforts(
+      updates.orchestrationWorkerEfforts
+    )
   }
   if ('agentDefaultEnv' in updates) {
     sanitizedUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
