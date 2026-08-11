@@ -12527,6 +12527,12 @@ describe('registerPtyHandlers', () => {
       }
       return true
     })
+    statSyncMock.mockImplementation((targetPath: string) => {
+      if (targetPath === '//wsl.localhost/Ubuntu/home/jin/missing') {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
 
     try {
       registerPtyHandlers(mainWindow as never)
