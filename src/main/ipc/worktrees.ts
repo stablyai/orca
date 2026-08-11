@@ -117,6 +117,7 @@ import {
   notifyWorktreesChanged
 } from './worktree-remote'
 import { registerWorktreeChangeInvalidator } from './worktree-change-invalidators'
+import { scheduleMergedWorktreeAutoCloseForRepo } from './merged-worktree-auto-close'
 import {
   invalidateAuthorizedRootsCache,
   isENOENT,
@@ -1943,6 +1944,11 @@ export function registerWorktreeHandlers(
         pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
+      // Why here: this is the one point every worktree-graph change funnels back
+      // through (`worktrees:changed` makes the renderer re-list), so the sweep is
+      // event-driven without a timer of its own. It is cooldown-gated and never
+      // awaited — a list must not wait on Git merge probes.
+      void scheduleMergedWorktreeAutoCloseForRepo(store, runtime, repo)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
