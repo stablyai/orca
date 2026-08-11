@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildLocalNotificationData, getNotificationNavigationTarget } from './notification-routing'
+import {
+  buildLocalNotificationData,
+  getNotificationNavigationTarget,
+  notificationCredentialRecoveryRoute
+} from './notification-routing'
 
 describe('notification routing', () => {
   it('includes the host id in locally scheduled notification data', () => {
@@ -54,5 +58,33 @@ describe('notification routing', () => {
         { knownHostIds: new Set(['host-1']) }
       )
     ).toBeNull()
+  })
+
+  it.each([
+    ['missing', 're-pair'],
+    ['temporarily-unavailable', 'retry']
+  ] as const)('routes %s host credentials to %s recovery', (status, recovery) => {
+    const target = getNotificationNavigationTarget(
+      { hostId: 'host-1', worktreeId: 'repo::/tmp/worktree' },
+      {
+        knownHostIds: new Set(['host-1']),
+        credentialStatusByHostId: new Map([['host-1', status]])
+      }
+    )
+
+    expect(target).toMatchObject({ hostId: 'host-1', credentialRecovery: recovery })
+    expect(notificationCredentialRecoveryRoute(target!)).toBe(
+      status === 'missing' ? '/pair-scan' : '/'
+    )
+  })
+
+  it('keeps ready hosts on the requested notification destination', () => {
+    const target = getNotificationNavigationTarget(
+      { hostId: 'host-1', worktreeId: 'repo::/tmp/worktree' },
+      { credentialStatusByHostId: new Map([['host-1', 'ready']]) }
+    )
+
+    expect(target?.sessionTarget).not.toBeNull()
+    expect(notificationCredentialRecoveryRoute(target!)).toBeNull()
   })
 })

@@ -12,6 +12,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails,
   GitHubCommentResult,
+  GitHubReactionContent,
   GitHubPRReviewCommentInput,
   PRComment,
   GitHubViewer,
@@ -110,7 +111,11 @@ import {
   mapPRState,
   deriveCheckStatus
 } from './mappers'
-import { mapGraphQLReactionGroups, type GitHubGraphQLReactionGroup } from './comment-reactions'
+import {
+  mapGraphQLReactionGroups,
+  toGraphQLReactionContent,
+  type GitHubGraphQLReactionGroup
+} from './comment-reactions'
 import {
   getRateLimit,
   noteRepositoryRateLimitSpend,
@@ -1664,7 +1669,8 @@ export async function getRepoSlug(
 
 /**
  * Resolve a fork's upstream/parent owner/repo, or null when not a fork.
- * Why: a fork's `origin` is the personal copy, so repo identity (avatar) should prefer upstream.
+ * Why: drives the fork indicator, and a same-name fork's avatar prefers the
+ * upstream owner (a renamed fork keeps its own owner).
  * Best-effort: any failure (offline, unauthed, non-GitHub) resolves to null.
  */
 export async function getRepoUpstream(
@@ -4117,6 +4123,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           originalStartLine
           comments(first: 100) {
             nodes {
+              id
               databaseId
               author { __typename login avatarUrl(size: 48) }
               body
@@ -4125,6 +4132,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               path
               reactionGroups {
                 content
+                viewerHasReacted
                 reactors {
                   totalCount
                 }
@@ -4135,6 +4143,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
       }
       comments(first: 100) {
         nodes {
+          id
           databaseId
           author { __typename login avatarUrl(size: 48) }
           body
@@ -4142,6 +4151,24 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           url
           reactionGroups {
             content
+            viewerHasReacted
+            reactors {
+              totalCount
+            }
+          }
+        }
+      }
+      reviews(first: 100) {
+        nodes {
+          id
+          databaseId
+          author { __typename login avatarUrl(size: 48) }
+          body
+          createdAt
+          url
+          reactionGroups {
+            content
+            viewerHasReacted
             reactors {
               totalCount
             }
@@ -4255,6 +4282,7 @@ export async function getPRComments(
         originalStartLine: number | null
         comments: {
           nodes: {
+            id: string
             databaseId: number
             author: { __typename?: string; login: string; avatarUrl: string } | null
             body: string
@@ -4266,6 +4294,7 @@ export async function getPRComments(
         }
       }
       type GQLIssueComment = {
+        id: string
         databaseId: number
         author: { __typename?: string; login: string; avatarUrl: string } | null
         body: string
@@ -4273,6 +4302,7 @@ export async function getPRComments(
         url: string
         reactionGroups?: GitHubGraphQLReactionGroup[] | null
       }
+      let graphQLReviewSummaries: PRComment[] | undefined
       const reviewComments: PRComment[] = []
       if (threadsResult.status === 'fulfilled' && threadsResult.value) {
         const threadsData = JSON.parse(threadsResult.value.stdout) as {
@@ -4281,6 +4311,7 @@ export async function getPRComments(
               pullRequest: {
                 reviewThreads: { nodes: GQLThread[] }
                 comments?: { nodes: GQLIssueComment[] }
+                reviews?: { nodes: GQLIssueComment[] }
               }
             }
           }
@@ -4295,12 +4326,28 @@ export async function getPRComments(
             createdAt: c.createdAt,
             url: c.url,
             isBot: c.author?.__typename === 'Bot',
+            reactionSubjectId: c.id,
             reactions: mapGraphQLReactionGroups(c.reactionGroups)
           })
         )
         if (graphQLIssueComments.length > 0) {
           issueComments = graphQLIssueComments
         }
+        graphQLReviewSummaries = (pullRequest.reviews?.nodes ?? [])
+          .filter((review) => review.body?.trim())
+          .map(
+            (review): PRComment => ({
+              id: review.databaseId,
+              author: review.author?.login ?? 'ghost',
+              authorAvatarUrl: review.author?.avatarUrl ?? '',
+              body: review.body,
+              createdAt: review.createdAt,
+              url: review.url,
+              isBot: review.author?.__typename === 'Bot',
+              reactionSubjectId: review.id,
+              reactions: mapGraphQLReactionGroups(review.reactionGroups)
+            })
+          )
 
         const threads = pullRequest.reviewThreads.nodes
         for (const thread of threads) {
@@ -4313,6 +4360,7 @@ export async function getPRComments(
               createdAt: c.createdAt,
               url: c.url,
               isBot: c.author?.__typename === 'Bot',
+              reactionSubjectId: c.id,
               reactions: mapGraphQLReactionGroups(c.reactionGroups),
               path: c.path,
               threadId: thread.id,
@@ -4340,7 +4388,9 @@ export async function getPRComments(
         html_url: string
       }
       let reviewSummaries: PRComment[] = []
-      if (reviewsResult.status === 'fulfilled') {
+      if (graphQLReviewSummaries) {
+        reviewSummaries = graphQLReviewSummaries
+      } else if (reviewsResult.status === 'fulfilled') {
         reviewSummaries = (JSON.parse(reviewsResult.value.stdout) as RESTReview[])
           .filter((r) => r.body?.trim())
           .map(
@@ -4388,6 +4438,62 @@ export async function getPRComments(
   } catch (err) {
     console.warn('getPRComments failed:', err)
     return []
+  } finally {
+    release()
+  }
+}
+
+export async function setPRCommentReaction(
+  repoPath: string,
+  reactionSubjectId: string,
+  content: GitHubReactionContent,
+  reacted: boolean,
+  connectionId?: string | null,
+  prRepo?: GitHubApiRepository | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<boolean> {
+  const mutation = reacted ? 'addReaction' : 'removeReaction'
+  const query = `mutation($subjectId: ID!, $content: ReactionContent!) {
+    ${mutation}(input: { subjectId: $subjectId, content: $content }) {
+      subject { id }
+    }
+  }`
+  const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
+    repoPath,
+    prRepo,
+    connectionId,
+    localGitOptions
+  )
+  if (!ownerRepo) {
+    return false
+  }
+  const guard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
+  if (guard.blocked) {
+    console.warn(
+      `${mutation} skipped: GitHub GraphQL rate limit nearly exhausted (${guard.remaining}/${guard.limit})`
+    )
+    return false
+  }
+  await acquire()
+  try {
+    noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
+    await ghExecFileAsync(
+      [
+        'api',
+        'graphql',
+        '-f',
+        `query=${query}`,
+        '-f',
+        `subjectId=${reactionSubjectId}`,
+        '-f',
+        `content=${toGraphQLReactionContent(content)}`
+      ],
+      ghOptions
+    )
+    return true
+  } catch (err) {
+    console.warn(`${mutation} failed:`, err)
+    return false
   } finally {
     release()
   }
@@ -4492,6 +4598,7 @@ export async function resolveReviewThread(
 function mapReviewCommentResponse(
   data: {
     id?: number
+    node_id?: string | null
     user: { login: string; avatar_url: string; type?: string } | null
     body?: string
     created_at?: string
@@ -4507,6 +4614,7 @@ function mapReviewCommentResponse(
 ): PRComment {
   return {
     id: data.id ?? Date.now(),
+    reactionSubjectId: data.node_id?.trim() || undefined,
     author: data.user?.login ?? 'You',
     authorAvatarUrl: data.user?.avatar_url ?? '',
     body: data.body ?? body,

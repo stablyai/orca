@@ -25,8 +25,7 @@ type WorktreeCardStatusSlotProps = {
   className?: string
 }
 
-// Passive identity only replaces status when the workspace is inactive.
-const IDENTITY_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['inactive'])
+const QUIET_REVIEW_REPLACEABLE_STATUSES = new Set<WorktreeStatus>(['active', 'done', 'inactive'])
 // Why: a missing review display can also mean provider state is unavailable,
 // so the passive label names the identity cue without claiming no review exists.
 function getDefaultBranchIdentityLabel(): string {
@@ -104,13 +103,16 @@ export function WorktreeCardStatusSlot({
   const status = useWorktreeActivityStatus(worktreeId)
   const statusLabel = getWorktreeStatusLabel(status) || status
   const canShowReviewStatus =
-    newCardStyle && showStatus && prDisplay !== null && IDENTITY_REPLACEABLE_STATUSES.has(status)
+    newCardStyle &&
+    showStatus &&
+    prDisplay !== null &&
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const canShowBranchStatus =
     newCardStyle &&
     showStatus &&
     hasBranchIdentity &&
     prDisplay === null &&
-    IDENTITY_REPLACEABLE_STATUSES.has(status)
+    QUIET_REVIEW_REPLACEABLE_STATUSES.has(status)
   const passiveStatusLabel =
     canShowReviewStatus && prDisplay
       ? getReviewStatusTooltip(prDisplay)

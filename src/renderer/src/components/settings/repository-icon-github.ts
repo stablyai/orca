@@ -1,5 +1,5 @@
 import type { GitHubRepositoryIdentity, Repo } from '../../../../shared/types'
-import { githubAvatarIcon, type RepoIcon } from '../../../../shared/repo-icon'
+import { githubAvatarIcon, githubAvatarSlug, type RepoIcon } from '../../../../shared/repo-icon'
 import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 import { callRuntimeRpc, type getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
@@ -55,20 +55,17 @@ export async function resolveRepositoryGitHubAvatar(
   repo: Repo,
   options: ResolveRepositoryGitHubAvatarOptions = {}
 ): Promise<RepositoryGitHubAvatarResolution> {
-  const upstream =
+  const liveUpstream =
     !options.forceLive && repo.upstream !== undefined
       ? repo.upstream
       : await resolveRepositoryUpstreamLive(runtimeTarget, repo).catch(() => null)
-  if (upstream) {
-    return { repoIcon: githubAvatarIcon(upstream), upstream }
-  }
   // Why: a null live upstream is ambiguous (offline/unauthed vs. not-a-fork). Keep
-  // the last-known parent avatar so a transient failure can't clobber fork identity.
-  if (repo.upstream) {
-    return { repoIcon: githubAvatarIcon(repo.upstream), upstream: repo.upstream }
-  }
-  const slug = await resolveRepositorySlugLive(runtimeTarget, repo)
-  return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream: null }
+  // the last-known parent so a transient failure can't clobber fork identity.
+  const upstream = liveUpstream ?? repo.upstream ?? null
+  // Why: a rejected origin probe is also ambiguous, so it propagates — callers keep
+  // the stored icon rather than flipping a renamed fork back to the parent avatar.
+  const slug = githubAvatarSlug(await resolveRepositorySlugLive(runtimeTarget, repo), upstream)
+  return { repoIcon: slug ? githubAvatarIcon(slug) : null, upstream }
 }
 
 function sameRepositoryIdentity(

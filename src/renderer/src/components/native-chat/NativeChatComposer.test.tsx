@@ -550,7 +550,7 @@ describe('NativeChatComposer', () => {
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
   })
 
-  it('waits for the Codex picker command before switching to the terminal', async () => {
+  it('applies a Codex model change without switching to the terminal', async () => {
     mocks.sendHandle.settleAfterMs = 0
     const onSwitchToTerminal = vi.fn()
     render(
@@ -563,17 +563,17 @@ describe('NativeChatComposer', () => {
       />
     )
 
-    // Why: Codex model is agent-picker mid-session — setOption rejects; UI uses invokeAction.
+    // Codex model changes are value-bearing commands; only effort still uses the TUI picker.
     await act(async () => {
-      await mocks.fieldProps?.sessionOptionsSurface?.invokeAction('model')
+      await mocks.fieldProps?.sessionOptionsSurface?.setOption('model', 'gpt-5.5')
     })
 
     expect(mocks.sendNativeChatMessageVerified).toHaveBeenCalledWith(
       {},
       'pty-1',
-      '/model',
+      '/model gpt-5.5',
       expect.any(AbortSignal)
     )
-    expect(onSwitchToTerminal).toHaveBeenCalledOnce()
+    expect(onSwitchToTerminal).not.toHaveBeenCalled()
   })
 })

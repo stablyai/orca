@@ -366,6 +366,30 @@ describe('registerFilesystemHandlers', () => {
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
   })
 
+  it('re-sorts SSH provider listings directories-first in natural order', async () => {
+    // Why: the remote relay may be an older build that still sorts lexicographically.
+    getSshFilesystemProviderMock.mockReturnValueOnce({
+      readDir: vi.fn().mockResolvedValue([
+        { name: '100 - b.txt', isDirectory: false, isSymlink: false },
+        { name: '9 - c.txt', isDirectory: false, isSymlink: false },
+        { name: '10 - dir', isDirectory: true, isSymlink: false },
+        { name: '99 - a.txt', isDirectory: false, isSymlink: false }
+      ])
+    })
+    registerFilesystemHandlers(store as never)
+
+    const result = (await handlers.get('fs:readDir')!(null, {
+      dirPath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })) as { name: string }[]
+    expect(result.map((e) => e.name)).toEqual([
+      '10 - dir',
+      '9 - c.txt',
+      '99 - a.txt',
+      '100 - b.txt'
+    ])
+  })
+
   it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
     registerFilesystemHandlers(store as never)
 

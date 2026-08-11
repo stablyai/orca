@@ -48,6 +48,7 @@ import {
   parsePtyStartupIngressIntent,
   type PtyIngressEmission
 } from '../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend, type PtyOwnerBackend } from '../shared/pty-owner-backend'
 import { RecentPtyOutputBuffer } from '../main/runtime/recent-pty-output-buffer'
 import { expandWindowsPathEnvironmentVariables } from '../shared/windows-environment-expansion'
@@ -56,6 +57,8 @@ import {
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
+import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
+import { readPtsName } from '../main/pty/node-pty-pts-name'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import type {
   PtySourceRecoveryRequest,
@@ -1688,6 +1691,13 @@ export class PtyHandler {
     if (managed && !managed.disposed) {
       this.lastInputAtByPty.set(id, performance.now())
       this.interactiveOutputCharsByPty.set(id, 0)
+      // Relay PTYs need the local provider's cooked-echo containment (#13137).
+      if (
+        extractOnlyCookedEchoSafeQueryReplies(data) &&
+        managed.startupIngress?.answerLiveQueryReply(data)
+      ) {
+        return
+      }
       managed.pty.write(data)
     }
   }
@@ -1742,6 +1752,16 @@ export class PtyHandler {
     // Why: dispose neutralizes pty.kill on POSIX; treat disposed as not-found so signals don't silently no-op.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
+    }
+    // Why only SIGWINCH: a real resize reaches the tty's foreground process group,
+    // and node-pty's kill targets the root pid, which the shell setpgid's away from.
+    // Host-local behavior only — no wire change, so an older client simply gets a
+    // SIGWINCH that now lands. Destructive signals keep node-pty's own path.
+    if (signal === 'SIGWINCH') {
+      signalPosixPtyForegroundGroup(managed.pty.pid, readPtsName(managed.pty), signal, () => {
+        managed.pty.kill(signal)
+      })
+      return
     }
     managed.pty.kill(signal)
   }

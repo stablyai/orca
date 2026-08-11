@@ -35,7 +35,6 @@ import { terminalLayoutEqual } from '@/lib/terminal-layout-equality'
 import { normalizeTerminalLayoutPtyOwnership } from '@/components/terminal-pane/terminal-layout-pty-ownership'
 import { isClientAuthoritativeAgentStatusPane } from '@/components/terminal-pane/renderer-owned-agent-status-registry'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getReachableRuntimeSessionMirrorTargets } from '@/lib/runtime-session-mirror-targets'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -84,6 +83,7 @@ import {
   resolveWebAgentSessionHandoff
 } from './web-agent-session-handoff'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { useRuntimeSessionMirrorEnvironmentKey } from './use-runtime-session-mirror-environment-key'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 
@@ -653,6 +653,7 @@ function buildMirroredTerminalTabs(
         // Why: the host transport carries no generated title, so rebuilding the tab
         // without this dropped the client's agent-prompt label on every snapshot.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
+        ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
         customTitle: existing?.customTitle ?? null,
@@ -888,6 +889,7 @@ function buildTerminalUnifiedTab(
     label: tab.title,
     ...(tab.quickCommandLabel?.trim() ? { quickCommandLabel: tab.quickCommandLabel.trim() } : {}),
     ...(tab.generatedTitle?.trim() ? { generatedLabel: tab.generatedTitle.trim() } : {}),
+    ...(tab.aiVaultTitle ? { aiVaultTitle: tab.aiVaultTitle } : {}),
     customLabel: tab.customTitle,
     color: tab.color,
     sortOrder: tab.sortOrder,
@@ -1526,6 +1528,9 @@ function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.quickCommandLabel === b.quickCommandLabel &&
     a.startupCwd === b.startupCwd &&
     a.generatedTitle === b.generatedTitle &&
+    a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
+    a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
+    a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&
@@ -1675,6 +1680,9 @@ function tabEqual(a: Tab, b: Tab): boolean {
     // Why: the generated label is the visible tab title; ignoring it let the
     // equality bail keep a unified tab that disagreed with its terminal tab.
     a.generatedLabel === b.generatedLabel &&
+    a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
+    a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
+    a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
     a.customLabel === b.customLabel &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&
@@ -2696,14 +2704,7 @@ export function applyWebSessionTabsStorePatch(
 
 export function useWebSessionTabsSync(): void {
   const activeWorktreeId = useAppStore((state) => state.activeWorktreeId)
-  const runtimeSessionMirrorEnvironmentKey = useAppStore((state) =>
-    getReachableRuntimeSessionMirrorTargets(state)
-      .map(
-        ({ environmentId, runtimeId, connectionGeneration, pairingRevision }) =>
-          `${environmentId}\u0001${runtimeId}\u0001${connectionGeneration}\u0001${pairingRevision}`
-      )
-      .join('\u0000')
-  )
+  const runtimeSessionMirrorEnvironmentKey = useRuntimeSessionMirrorEnvironmentKey()
   const activeWorktreeRuntimeEnvironmentId = useAppStore((state) =>
     getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
   )

@@ -1,21 +1,15 @@
 // @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ImeNativeTextKeyEvent } from './terminal-ime-native-text-candidates'
 import {
   installTerminalImeNativeTextForwarder,
-  type TerminalImeNativeTextForwarder
+  type ImeNativeTextKeyEvent
 } from './terminal-ime-native-text-forwarder'
-
-const KOREAN_FEATURES = {
-  forwardHangulJamo: true,
-  forwardAsciiPunctuation: true,
-  forwardShortTextReplacements: false
-} as const
 
 function keyEvent(overrides: Partial<ImeNativeTextKeyEvent>): ImeNativeTextKeyEvent {
   return {
     type: 'keydown',
-    key: '',
+    key: ',',
+    code: 'Comma',
     metaKey: false,
     ctrlKey: false,
     altKey: false,
@@ -24,105 +18,67 @@ function keyEvent(overrides: Partial<ImeNativeTextKeyEvent>): ImeNativeTextKeyEv
   }
 }
 
-describe('native-text claim release across a Hangul composition', () => {
+describe('the claim is retired by releases the bypass rules would otherwise skip', () => {
   let element: HTMLDivElement
   let textarea: HTMLTextAreaElement
 
   beforeEach(() => {
+    document.body.replaceChildren()
     element = document.createElement('div')
     textarea = document.createElement('textarea')
+    textarea.className = 'xterm-helper-textarea'
     element.appendChild(textarea)
-    document.body.replaceChildren(element)
+    document.body.appendChild(element)
   })
 
-  function install(
-    isComposing: () => boolean
-  ): TerminalImeNativeTextForwarder & { sendInput: ReturnType<typeof vi.fn> } {
+  function install(isComposing: () => boolean = () => false): {
+    forwarder: ReturnType<typeof installTerminalImeNativeTextForwarder>
+    sendInput: ReturnType<typeof vi.fn>
+  } {
     const sendInput = vi.fn()
     const forwarder = installTerminalImeNativeTextForwarder({
       terminalElement: element,
       isComposing,
-      sendInput,
-      getInputSourceFeatures: () => KOREAN_FEATURES
+      sendInput
     })
-    return Object.assign(forwarder, { sendInput })
+    return { forwarder, sendInput }
   }
 
-  // Recorded on macOS 2-Set Korean: "ㅇ" on KeyD, an input-source switch, then
-  // "d" on that same physical key. The jamo arrives in `key` before
-  // compositionstart, so the keydown looks like a native commit and claims KeyD.
-  it('keeps the post-switch keypress on the claimed key out of the forwarder', () => {
+  // Recorded on macOS 2-Set Korean: the jamo arrives in `key` before compositionstart, so
+  // the keydown looks like a native commit and claims KeyD. Its release then lands inside
+  // the composition it started, and every keyup inside a composition reports isComposing.
+  it('retires a claim whose release reports isComposing', () => {
     let composing = false
-    const forwarder = install(() => composing)
+    const { forwarder, sendInput } = install(() => composing)
 
-    expect(
-      forwarder.claimKeyEvent(keyEvent({ type: 'keydown', key: 'ㅇ', code: 'KeyD', keyCode: 229 }))
-    ).toBe(true)
-
+    expect(forwarder.claimKeyEvent(keyEvent({ key: 'ㅇ', code: 'KeyD' }))).toBe(true)
     textarea.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
     composing = true
-    textarea.value = 'ㅇ'
-    textarea.dispatchEvent(
-      new InputEvent('input', { data: 'ㅇ', inputType: 'insertCompositionText', bubbles: true })
-    )
-    forwarder.claimKeyEvent(
-      keyEvent({ type: 'keyup', key: 'ㅇ', code: 'KeyD', keyCode: 68, isComposing: true })
-    )
 
-    // The input-source switch commits the syllable and closes the composition.
+    expect(
+      forwarder.claimKeyEvent(
+        keyEvent({ type: 'keyup', key: 'ㅇ', code: 'KeyD', isComposing: true })
+      )
+    ).toBe(false)
+
     textarea.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
     composing = false
 
-    expect(
-      forwarder.claimKeyEvent(keyEvent({ type: 'keydown', key: 'd', code: 'KeyD', keyCode: 68 }))
-    ).toBe(false)
-    expect(
-      forwarder.claimKeyEvent(keyEvent({ type: 'keypress', key: 'd', code: 'KeyD', keyCode: 100 }))
-    ).toBe(false)
-    expect(forwarder.sendInput).not.toHaveBeenCalled()
-  })
-
-  it('retires a claim on its keyup even when the release reports isComposing', () => {
-    const forwarder = install(() => false)
-
-    expect(
-      forwarder.claimKeyEvent(keyEvent({ type: 'keydown', key: 'ㅇ', code: 'KeyD', keyCode: 229 }))
-    ).toBe(true)
-    // Bypassing stays off for a composing release so xterm's own IME suppression owns it.
-    expect(
-      forwarder.claimKeyEvent(
-        keyEvent({ type: 'keyup', key: 'ㅇ', code: 'KeyD', keyCode: 68, isComposing: true })
-      )
-    ).toBe(false)
-
-    expect(
-      forwarder.claimKeyEvent(keyEvent({ type: 'keypress', key: 'd', code: 'KeyD', keyCode: 100 }))
-    ).toBe(false)
-  })
-
-  it('still bypasses the keypress and forwards the glyph for a real native commit', () => {
-    const forwarder = install(() => false)
-
-    expect(
-      forwarder.claimKeyEvent(
-        keyEvent({ type: 'keydown', key: '₩', code: 'Backquote', keyCode: 192 })
-      )
-    ).toBe(true)
-    expect(
-      forwarder.claimKeyEvent(
-        keyEvent({ type: 'keypress', key: '`', code: 'Backquote', keyCode: 96 })
-      )
-    ).toBe(true)
-
-    textarea.dispatchEvent(
-      new InputEvent('input', { data: '`', inputType: 'insertText', bubbles: true })
+    // The keydown for this press was refused while the composition was still live, so
+    // nothing is armed to forward it. A stranded claim would bypass it into a dropped key.
+    expect(forwarder.claimKeyEvent(keyEvent({ type: 'keypress', key: 'd', code: 'KeyD' }))).toBe(
+      false
     )
+    expect(sendInput).not.toHaveBeenCalled()
+  })
 
-    expect(forwarder.sendInput).toHaveBeenCalledExactlyOnceWith('`')
-    expect(
-      forwarder.claimKeyEvent(
-        keyEvent({ type: 'keyup', key: '₩', code: 'Backquote', keyCode: 192 })
-      )
-    ).toBe(true)
+  it('retires a claim whose release arrives under a chord', () => {
+    const { forwarder, sendInput } = install()
+
+    expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
+    expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',', ctrlKey: true }))).toBe(false)
+
+    expect(forwarder.claimKeyEvent(keyEvent({ type: 'keypress', key: ',' }))).toBe(false)
+    expect(sendInput).not.toHaveBeenCalled()
   })
 })

@@ -1,56 +1,126 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
 
-// Why: refcounting prevents a double-open when a host-detail screen shares one of these hosts.
-export function useAllHostClients(hostIds: string[]) {
+type UseAllHostClientsOptions = {
+  autoConnectHostIds?: readonly string[]
+  closeUnusedOnRelease?: boolean
+}
+
+export function useAllHostClients(hostIds: string[], options?: UseAllHostClientsOptions) {
   const ctx = useRpcClientContext()
-  // Stable key so we don't tear down on every render of the array.
-  const key = useMemo(() => [...hostIds].sort().join(','), [hostIds])
+  const autoConnectHostIds = options?.autoConnectHostIds ?? hostIds
+  const closeUnusedOnRelease = options?.closeUnusedOnRelease ?? false
+  const key = useMemo(
+    () =>
+      [
+        [...hostIds].sort().join(','),
+        [...autoConnectHostIds].sort().join(','),
+        closeUnusedOnRelease ? 'close' : 'keep'
+      ].join('|'),
+    [autoConnectHostIds, closeUnusedOnRelease, hostIds]
+  )
   const [tick, setTick] = useState(0)
+  const acquiredHostIdsRef = useRef<Set<string>>(new Set())
+  const hostUnsubscribesRef = useRef<Map<string, () => void>>(new Map())
+  const closeUnusedRef = useRef(closeUnusedOnRelease)
 
   useEffect(() => {
-    if (hostIds.length === 0) {
-      return
-    }
-    for (const id of hostIds) {
-      ctx.acquire(id)
-    }
-    const unsubs: (() => void)[] = []
-    for (const id of hostIds) {
-      unsubs.push(ctx.subscribeHostState(id, () => setTick((n) => n + 1)))
-    }
-    unsubs.push(ctx.subscribeAllHosts(() => setTick((n) => n + 1)))
+    closeUnusedRef.current = closeUnusedOnRelease
+  }, [closeUnusedOnRelease])
+
+  useEffect(() => {
+    const unsubscribeAllHosts = ctx.subscribeAllHosts(() => setTick((value) => value + 1))
     return () => {
-      for (const u of unsubs) {
-        u()
+      unsubscribeAllHosts()
+      const trackedHostIds = [...hostUnsubscribesRef.current.keys()]
+      const acquiredHostIds = new Set(acquiredHostIdsRef.current)
+      for (const unsubscribe of hostUnsubscribesRef.current.values()) {
+        unsubscribe()
       }
-      for (const id of hostIds) {
-        ctx.release(id)
+      hostUnsubscribesRef.current.clear()
+      for (const id of acquiredHostIds) {
+        if (closeUnusedRef.current) {
+          ctx.releaseAndCloseIfUnused(id)
+        } else {
+          ctx.release(id)
+        }
+      }
+      if (closeUnusedRef.current) {
+        for (const id of trackedHostIds) {
+          if (!acquiredHostIds.has(id)) {
+            ctx.closeIfUnused(id)
+          }
+        }
+      }
+      acquiredHostIdsRef.current.clear()
+    }
+  }, [ctx])
+
+  useEffect(() => {
+    const trackedHostIds = new Set(hostIds)
+    const nextAcquiredHostIds = new Set(autoConnectHostIds.filter((id) => trackedHostIds.has(id)))
+    const removedTrackedHostIds: string[] = []
+
+    for (const [id, unsubscribe] of hostUnsubscribesRef.current) {
+      if (!trackedHostIds.has(id)) {
+        unsubscribe()
+        hostUnsubscribesRef.current.delete(id)
+        removedTrackedHostIds.push(id)
       }
     }
-  }, [key])
+    for (const id of trackedHostIds) {
+      if (!hostUnsubscribesRef.current.has(id)) {
+        hostUnsubscribesRef.current.set(
+          id,
+          ctx.subscribeHostState(id, () => setTick((value) => value + 1))
+        )
+      }
+    }
+
+    for (const id of acquiredHostIdsRef.current) {
+      if (!nextAcquiredHostIds.has(id)) {
+        if (closeUnusedOnRelease) {
+          ctx.releaseAndCloseIfUnused(id)
+        } else {
+          ctx.release(id)
+        }
+      }
+    }
+    for (const id of nextAcquiredHostIds) {
+      if (!acquiredHostIdsRef.current.has(id)) {
+        ctx.acquire(id)
+      }
+    }
+    if (closeUnusedOnRelease) {
+      for (const id of removedTrackedHostIds) {
+        ctx.closeIfUnused(id)
+      }
+      for (const id of trackedHostIds) {
+        if (!nextAcquiredHostIds.has(id)) {
+          ctx.closeIfUnused(id)
+        }
+      }
+    }
+    acquiredHostIdsRef.current = nextAcquiredHostIds
+  }, [ctx, key])
 
   return useMemo(() => {
-    const out: {
+    const clientsByHostId = new Map(
+      ctx.getAllClients().map((entry) => [entry.hostId, entry.client])
+    )
+    return hostIds.flatMap<{
       hostId: string
       client: RpcClient
       state: ConnectionState
       path: MobileConnectionPath
-    }[] = []
-    for (const id of hostIds) {
-      const all = ctx.getAllClients().find((entry) => entry.hostId === id)
-      if (all) {
-        out.push({
-          hostId: id,
-          client: all.client,
-          state: ctx.getState(id),
-          path: ctx.getActivePath(id)
-        })
-      }
-    }
-    return out
-  }, [key, tick])
+    }>((hostId) => {
+      const client = clientsByHostId.get(hostId)
+      return client
+        ? [{ hostId, client, state: ctx.getState(hostId), path: ctx.getActivePath(hostId) }]
+        : []
+    })
+  }, [ctx, hostIds, tick])
 }

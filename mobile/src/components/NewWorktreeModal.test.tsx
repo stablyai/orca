@@ -58,7 +58,6 @@ describe('NewWorktreeModal repo list', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     setCachedRepos('host-1', repos)
   })
 

@@ -388,6 +388,27 @@ describe('createRemoteRuntimePtyTransport', () => {
     transport.destroy?.()
   })
 
+  // Why: retained gauges would inflate every later high-water profile.
+  it.each(['detach', 'destroy'] as const)(
+    'drops its side-effect gauge from the census on %s',
+    async (teardown) => {
+      await import('./pty-side-effect-pending-census')
+      const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+      const transport = createRemoteRuntimePtyTransport('env-1', { worktreeId: 'wt-1' })
+      transport.attach({ existingPtyId: 'remote:terminal-1', callbacks: {} })
+      await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+      transport[teardown]?.()
+
+      expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+      transport.destroy?.()
+    }
+  )
+
   it('recovers when the first restored-terminal subscription attempt is offline', async () => {
     vi.useFakeTimers()
     try {

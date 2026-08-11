@@ -23,7 +23,7 @@ import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agen
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveNativeChatLaunchSessionOptions } from '@/components/native-chat/native-chat-session-option-enrichment'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import {
   resolveTuiAgentLaunchArgs,
@@ -3462,7 +3462,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             : undefined,
           agentEnv: agent ? resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv) : undefined,
           sessionOptions: agent
-            ? resolveNativeChatSessionOptionDefaults(settings?.nativeChatSessionOptions, agent)
+            ? resolveNativeChatLaunchSessionOptions(settings?.nativeChatSessionOptions, agent)
             : undefined,
           terminalWindowsShell: settings?.terminalWindowsShell,
           isRemote: folderTargetIsRemote,
@@ -3768,7 +3768,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         cmdOverrides: settings?.agentCmdOverrides ?? {},
         agentArgs: resolveTuiAgentLaunchArgs(tuiAgent, settings?.agentDefaultArgs),
         agentEnv: resolveTuiAgentLaunchEnv(tuiAgent, settings?.agentDefaultEnv),
-        sessionOptions: resolveNativeChatSessionOptionDefaults(
+        sessionOptions: resolveNativeChatLaunchSessionOptions(
           settings?.nativeChatSessionOptions,
           tuiAgent
         ),
@@ -3849,7 +3849,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         submitCompareBaseRef,
         {
           linkedWorkItem: toFolderWorkspaceLinkedTask(submitLinkedWorkItem),
-          linkedTaskSourceContext: taskSourceContext
+          linkedTaskSourceContext: taskSourceContext,
+          ...(!backendStartup && startupPlan?.draftPrompt
+            ? { startupDraft: startupPlan.draftPrompt }
+            : {})
         }
       )
       const worktree = result.worktree
@@ -3877,6 +3880,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
+        ...(backendSpawnedStartup ? { backendStartupTerminalSpawned: true } : {}),
         ...(startupPlan && !backendSpawnedStartup
           ? {
               startup: {
@@ -4319,7 +4323,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 cmdOverrides: settings?.agentCmdOverrides ?? {},
                 agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
                 agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-                sessionOptions: resolveNativeChatSessionOptionDefaults(
+                sessionOptions: resolveNativeChatLaunchSessionOptions(
                   settings?.nativeChatSessionOptions,
                   agent
                 ),
@@ -4351,7 +4355,7 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             cmdOverrides: settings?.agentCmdOverrides ?? {},
             agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
             agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
-            sessionOptions: resolveNativeChatSessionOptionDefaults(
+            sessionOptions: resolveNativeChatLaunchSessionOptions(
               settings?.nativeChatSessionOptions,
               agent
             ),

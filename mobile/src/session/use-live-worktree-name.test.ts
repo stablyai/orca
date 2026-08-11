@@ -13,18 +13,6 @@ vi.mock('expo-router', async () => {
   }
 })
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 describe('useLiveWorktreeName request volume', () => {
   let renderer: ReactTestRenderer | null = null
   let eventListener: ((payload: unknown) => void) | null = null
@@ -54,15 +42,10 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
   }
 
   async function emitEvent(payload: unknown): Promise<void> {
@@ -75,7 +58,6 @@ describe('useLiveWorktreeName request volume', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     eventListener = null
     sendRequest.mockClear().mockResolvedValue({
       id: 'worktree-show',
@@ -179,15 +161,10 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-    try {
-      await act(async () => {
-        renderer = create(createElement(FloatingHarness))
-        await Promise.resolve()
-      })
-    } finally {
-      restoreConsoleError()
-    }
+    await act(async () => {
+      renderer = create(createElement(FloatingHarness))
+      await Promise.resolve()
+    })
     await act(async () => {
       await vi.advanceTimersByTimeAsync(30_000)
     })
@@ -214,7 +191,6 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
 
-    const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
     try {
       await act(async () => {
         renderer = create(
@@ -241,7 +217,6 @@ describe('useLiveWorktreeName request volume', () => {
         )
       })
     } finally {
-      restoreConsoleError()
       act(() => renderer?.unmount())
     }
 
@@ -263,15 +238,10 @@ describe('useLiveWorktreeName request volume', () => {
       return null
     }
     const mount = async (): Promise<void> => {
-      const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-      try {
-        await act(async () => {
-          renderer = create(createElement(VerdictHarness))
-          await Promise.resolve()
-        })
-      } finally {
-        restoreConsoleError()
-      }
+      await act(async () => {
+        renderer = create(createElement(VerdictHarness))
+        await Promise.resolve()
+      })
     }
 
     await mount()

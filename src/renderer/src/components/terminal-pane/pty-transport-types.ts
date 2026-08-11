@@ -183,6 +183,9 @@ export type PtyTransport = {
     scrollbackRows?: number
   }) => Promise<RemoteRuntimeSnapshotOutcome>
   preserve?: () => void
+  /** Hand the live PTY to a successor without process teardown. Terminal for this instance:
+   *  it also drops the transport's output processor from the pty side-effect memory census,
+   *  so a reattached one would run untracked. Create a new transport instead. */
   detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>
 }
