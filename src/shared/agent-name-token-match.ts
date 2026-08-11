@@ -26,7 +26,10 @@ export const AGENT_NAMES = [
   'openclaw',
   'aider',
   'grok',
-  'devin'
+  'devin',
+  // Why: Qwen Code installs as `qwen`; token-match is safe (uncommon in cwd names)
+  // and keeps the hook-less title-derived sidebar path aligned with process recognition.
+  'qwen'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

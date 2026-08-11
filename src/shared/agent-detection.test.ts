@@ -101,6 +101,26 @@ describe('MiMo title detection', () => {
   )
 })
 
+describe('Qwen Code title detection', () => {
+  it.each([
+    ['Qwen Code', 'idle'],
+    ['qwen ready', 'idle'],
+    ['qwen working', 'working'],
+    ['\u280b Qwen Code', 'working']
+  ] as const)('classifies %s', (title, expectedStatus) => {
+    expect(getAgentLabel(title)).toBe('Qwen Code')
+    expect(detectAgentStatusFromTitle(title)).toBe(expectedStatus)
+  })
+
+  it.each(['~/qwen/working', 'qwen-code-fixtures ready'])(
+    'does not classify path or hyphen false positive %s',
+    (title) => {
+      expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
 describe('Pi-compatible title detection', () => {
   it.each([
     ['\u280b OMP', 'OMP', 'working'],

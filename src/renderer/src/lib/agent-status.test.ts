@@ -467,6 +467,9 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('Hermes ready')).toBe('Hermes')
     expect(getAgentLabel('⠋ Devin')).toBe('Devin')
     expect(getAgentLabel('Devin ready')).toBe('Devin')
+    expect(getAgentLabel('Qwen Code')).toBe('Qwen Code')
+    expect(getAgentLabel('⠋ Qwen Code')).toBe('Qwen Code')
+    expect(getAgentLabel('qwen ready')).toBe('Qwen Code')
   })
 
   it('does not label the Claude agents management title', () => {
@@ -854,6 +857,10 @@ describe('formatAgentTypeLabel', () => {
 
   it("maps 'command-code' to 'Command Code'", () => {
     expect(formatAgentTypeLabel('command-code')).toBe('Command Code')
+  })
+
+  it("maps 'qwen-code' to 'Qwen Code'", () => {
+    expect(formatAgentTypeLabel('qwen-code')).toBe('Qwen Code')
   })
 
   it("maps 'ante' to 'Ante'", () => {
