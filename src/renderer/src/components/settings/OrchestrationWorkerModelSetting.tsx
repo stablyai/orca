@@ -143,7 +143,7 @@ export function OrchestrationWorkerModelSetting(props: {
   const effortPlaceholder = !selectedAgent
     ? translate(
         'auto.components.settings.OrchestrationWorkerModelSetting.effortPlaceholderNoProvider',
-        'Select provider'
+        'Pick provider'
       )
     : !modelAgent
       ? translate(
@@ -165,6 +165,9 @@ export function OrchestrationWorkerModelSetting(props: {
     selectedModel && modelAgent && !modelAgent.models.some((model) => model.id === selectedModel)
       ? selectedModel
       : null
+  const selectedModelLabel = selectedModel
+    ? (modelAgent?.models.find((model) => model.id === selectedModel)?.label ?? selectedModel)
+    : undefined
 
   useEffect(() => {
     let cancelled = false
@@ -216,7 +219,7 @@ export function OrchestrationWorkerModelSetting(props: {
         >
           <SelectTrigger
             size="sm"
-            className="min-w-0 w-40 max-w-full"
+            className="w-fit min-w-[min(13rem,100%)] max-w-full"
             aria-label={translate(
               'auto.components.settings.OrchestrationWorkerModelSetting.defaultWorkerSelectLabel',
               'Default worker provider'
@@ -266,6 +269,7 @@ export function OrchestrationWorkerModelSetting(props: {
               '{{value0}} model',
               { value0: selectedAgentLabel }
             )}
+            title={selectedModelLabel}
           >
             <SelectValue placeholder={modelPlaceholder} />
           </SelectTrigger>

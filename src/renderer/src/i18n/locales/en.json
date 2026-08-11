@@ -10302,7 +10302,7 @@
           "effortSelectLabel": "{{value0}} effort",
           "effortDefault": "Agent default",
           "effortPlaceholder": "Select model",
-          "effortPlaceholderNoProvider": "Select provider",
+          "effortPlaceholderNoProvider": "Pick provider",
           "effortUnavailable": "Not available",
           "workerDefaultsTitle": "Worker defaults",
           "workerDefaultsDescription": "Choose the provider, model, and reasoning effort to store as your orchestration worker preference."

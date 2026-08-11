@@ -39,6 +39,7 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).toContain('aria-label="Default worker provider"')
     expect(markup).toContain('aria-label="Codex model"')
     expect(markup).toContain('aria-label="Codex effort"')
+    expect(markup).toContain('title="GPT-5.6 Luna"')
     expect(markup).toContain('Agent default')
     expect(markup).not.toContain('Use agent default')
     expect(markup).not.toContain('Aider model')
@@ -62,7 +63,7 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Worker model"/)
     expect(markup).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Worker effort"/)
     expect(markup).toMatch(
-      /<button[^>]*aria-label="Worker effort"[^>]*>.*?Select provider.*?<\/button>/s
+      /<button[^>]*aria-label="Worker effort"[^>]*>.*?Pick provider.*?<\/button>/s
     )
   })
 
