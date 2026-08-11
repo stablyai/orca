@@ -4,6 +4,11 @@ import type { Repo, Worktree } from '../../../../shared/types'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getWorktreeIdsWithLiveAgent } from '@/lib/worktree-activity-state'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
+import type { AppState } from '@/store/types'
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  getPairedDeviceIdsByEnvironment
+} from './workspace-creator-visibility'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -11,6 +16,8 @@ type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
 }
 
 const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
+const EMPTY_RUNTIME_ENVIRONMENTS: AppState['runtimeEnvironments'] = []
+const EMPTY_RUNTIME_STATUS_BY_ENVIRONMENT_ID: AppState['runtimeStatusByEnvironmentId'] = new Map()
 
 export function useVisibleWorkspaceKanbanWorktreeIds({
   allWorktrees,
@@ -22,6 +29,15 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
+  const runtimeEnvironments = useAppStore((s) =>
+    s.hideWorkspacesFromOtherDevices ? s.runtimeEnvironments : EMPTY_RUNTIME_ENVIRONMENTS
+  )
+  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+    s.hideWorkspacesFromOtherDevices
+      ? s.runtimeStatusByEnvironmentId
+      : EMPTY_RUNTIME_STATUS_BY_ENVIRONMENT_ID
+  )
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const workspaceHostScope = useAppStore((s) => s.workspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
@@ -62,6 +78,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         hideAutomationGeneratedWorkspaces,
         hideCliCreatedWorkspaces,
         hideDetachedHeadWorkspaces,
+        hideWorkspacesFromOtherDevices,
+        pairedDeviceIdsByEnvironment: hideWorkspacesFromOtherDevices
+          ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+          : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
         alwaysShowDefaultBranchWorkspace,
         repoMap,
         workspaceHostScope,
@@ -81,12 +101,15 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices,
     alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,
     ptyIdsByTabId,
     repoMap,
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
     showSleepingWorkspaces,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,

@@ -30,7 +30,7 @@ import {
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../shared/git-worktree-command-capabilities'
-import { getLocalGitCapabilityCache } from './git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
 import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
@@ -410,32 +410,32 @@ async function readRepoLocation(
   resolveBasePath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<RepoLocation | undefined> {
-  const capabilities = getLocalGitCapabilityCache({
-    cwd: repoPath,
-    wslDistro: options.wslDistro
-  })
   try {
-    return await capabilities.runWithFallback(
-      'rev-parse-path-format',
-      async () => {
-        const { stdout } = await gitExecFileAsync(
-          ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
-          gitExecOptions(repoPath, options)
+    return await withLocalGitCapabilityCacheForExecution(
+      { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+      (capabilities) =>
+        capabilities.runWithFallback(
+          'rev-parse-path-format',
+          async () => {
+            const { stdout } = await gitExecFileAsync(
+              ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'],
+              gitExecOptions(repoPath, options)
+            )
+            if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
+              // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
+              capabilities.rememberUnsupported('rev-parse-path-format')
+            }
+            return parseRepoLocation(resolveBasePath, stdout)
+          },
+          async () => {
+            const { stdout } = await gitExecFileAsync(
+              ['rev-parse', '--show-toplevel', '--git-common-dir'],
+              gitExecOptions(repoPath, options)
+            )
+            return parseRepoLocation(resolveBasePath, stdout)
+          },
+          isUnsupportedRevParsePathFormatError
         )
-        if (hasUnsupportedRevParsePathFormatEcho(stdout)) {
-          // Why: some old Git echoes the unknown option and exits zero; remember that compat signal even though parsing recovers.
-          capabilities.rememberUnsupported('rev-parse-path-format')
-        }
-        return parseRepoLocation(resolveBasePath, stdout)
-      },
-      async () => {
-        const { stdout } = await gitExecFileAsync(
-          ['rev-parse', '--show-toplevel', '--git-common-dir'],
-          gitExecOptions(repoPath, options)
-        )
-        return parseRepoLocation(resolveBasePath, stdout)
-      },
-      isUnsupportedRevParsePathFormatError
     )
   } catch {
     return undefined
@@ -578,41 +578,44 @@ async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
-  const capabilities = getLocalGitCapabilityCache({
-    cwd: repoPath,
-    wslDistro: options.wslDistro
-  })
   const execOptions = {
     cwd: repoPath,
     ...options,
     timeout: options.timeout ?? WORKTREE_LIST_TIMEOUT_MS
   }
-  return capabilities.runWithFallback(
-    'worktree-list-z',
-    async () => {
-      const { stdout } = await gitExecFileAsync(
-        ['worktree', 'list', '--porcelain', '-z'],
-        execOptions
+  return withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+    (capabilities) =>
+      capabilities.runWithFallback(
+        'worktree-list-z',
+        async () => {
+          const { stdout } = await gitExecFileAsync(
+            ['worktree', 'list', '--porcelain', '-z'],
+            execOptions
+          )
+          return normalizeMainWorktreePath(
+            repoPath,
+            parseWorktreeList(stdout, { nulDelimited: true }),
+            options
+          )
+        },
+        async () => {
+          // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
+          const { stdout } = await gitExecFileAsync(
+            ['worktree', 'list', '--porcelain'],
+            execOptions
+          )
+          const normalized = await normalizeMainWorktreePath(
+            repoPath,
+            parseWorktreeList(stdout),
+            options
+          )
+          // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
+          // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
+          return annotatePrunableByExistence(normalized, repoPath, options)
+        },
+        isUnsupportedWorktreeListZError
       )
-      return normalizeMainWorktreePath(
-        repoPath,
-        parseWorktreeList(stdout, { nulDelimited: true }),
-        options
-      )
-    },
-    async () => {
-      // Why: `-z` preserves worktree paths with newlines but Git <2.36 rejects it; fall back to the line parser.
-      const { stdout } = await gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions)
-      const normalized = await normalizeMainWorktreePath(
-        repoPath,
-        parseWorktreeList(stdout),
-        options
-      )
-      // Why: Git <2.31 emits no `prunable`, so probe each linked path for existence instead of trusting
-      // stale registrations; a harmless backstop on 2.31–2.35 where parseWorktreeList already set it (#8389).
-      return annotatePrunableByExistence(normalized, repoPath, options)
-    },
-    isUnsupportedWorktreeListZError
   )
 }
 
@@ -1355,14 +1358,12 @@ async function deleteAlreadyMergedBranchAfterSafeDeleteFailure(
     })
   const targetRefs = await getBranchCleanupTargetRefs(runGit, branchName)
   // Why: squash merges rewrite commit IDs, so `branch -d` rejects already-merged branches; delete only when Git proves no unmerged tree changes.
-  if (
-    !(await branchHasNoUnmergedChangesWithLazyTargetRefresh(
-      runGit,
-      branchName,
-      targetRefs,
-      getLocalGitCapabilityCache({ cwd: repoPath, wslDistro: options.wslDistro })
-    ))
-  ) {
+  const hasNoUnmergedChanges = await withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: options.wslDistro, signal: options.signal },
+    (capabilities) =>
+      branchHasNoUnmergedChangesWithLazyTargetRefresh(runGit, branchName, targetRefs, capabilities)
+  )
+  if (!hasNoUnmergedChanges) {
     return false
   }
   await forceDeleteLocalBranch(repoPath, branchName, branchHead, (args, cwd) =>

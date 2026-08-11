@@ -18,18 +18,19 @@ const CLIENT_A2_WORKTREE_ID = worktreeId('client-a2')
 const CLIENT_B_WORKTREE_ID = worktreeId('client-b')
 const SESSION_WORKTREE_ID = worktreeId('session')
 
-vi.mock('../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(
-    ['host', 'client-a', 'client-a2', 'client-b', 'session'].map((name) => ({
-      path: `/tmp/${name}`,
-      head: name,
-      branch: name,
-      isBare: false,
-      isMainWorktree: false
-    }))
-  ),
-  listWorktreesStrict: vi.fn().mockResolvedValue([])
-}))
+vi.mock('../git/worktree', () => {
+  const worktrees = ['host', 'client-a', 'client-a2', 'client-b', 'session'].map((name) => ({
+    path: `/tmp/${name}`,
+    head: name,
+    branch: name,
+    isBare: false,
+    isMainWorktree: false
+  }))
+  return {
+    listWorktrees: vi.fn().mockResolvedValue(worktrees),
+    listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
+  }
+})
 
 type PairedSession = {
   ws: WebSocket
@@ -303,6 +304,8 @@ describe('paired runtime navigation isolation', () => {
     const clientB = await authenticate(offerB.pairingUrl)
     sessions.push(clientB)
     expect(offerA.deviceId).not.toBe(offerB.deviceId)
+    expect(parsePairingCode(offerA.pairingUrl)?.pairedDeviceId).toBe(offerA.deviceId)
+    expect(parsePairingCode(offerB.pairingUrl)?.pairedDeviceId).toBe(offerB.deviceId)
     expect(parsePairingCode(offerA.pairingUrl)?.deviceToken).not.toBe(
       parsePairingCode(offerB.pairingUrl)?.deviceToken
     )
@@ -317,11 +320,91 @@ describe('paired runtime navigation isolation', () => {
       focusTerminal,
       clientA,
       clientB,
+      deviceIdA: offerA.deviceId,
+      deviceIdB: offerB.deviceId,
       pairingUrlA: offerA.pairingUrl,
       readerA,
       readerB
     }
   }
+
+  it('attributes workspace creation to each authenticated device across reconnect', async () => {
+    const harness = await startHarness()
+    const createManagedWorktree = vi
+      .spyOn(harness.runtime, 'createManagedWorktree')
+      .mockImplementation(async (args) => {
+        const creatorProvenance = (args as unknown as Record<string, unknown>).creatorProvenance
+        return {
+          worktree: {
+            id: worktreeId(args.name),
+            creatorProvenance
+          }
+        } as never
+      })
+
+    send(harness.clientA, {
+      id: 'status-a',
+      method: 'status.get'
+    })
+    send(harness.clientB, {
+      id: 'status-b',
+      method: 'status.get'
+    })
+    const [statusA, statusB] = await Promise.all([
+      harness.readerA.next('status-a'),
+      harness.readerB.next('status-b')
+    ])
+    expect(statusA).toMatchObject({
+      ok: true,
+      result: { pairedDeviceId: harness.deviceIdA }
+    })
+    expect(statusB).toMatchObject({
+      ok: true,
+      result: { pairedDeviceId: harness.deviceIdB }
+    })
+
+    send(harness.clientA, {
+      id: 'create-a',
+      method: 'worktree.create',
+      params: {
+        repo: REPO_ID,
+        name: 'created-a',
+        creatorProvenance: { kind: 'paired-device', deviceId: harness.deviceIdB }
+      }
+    })
+    send(harness.clientB, {
+      id: 'create-b',
+      method: 'worktree.create',
+      params: { repo: REPO_ID, name: 'created-b' }
+    })
+    await Promise.all([harness.readerA.next('create-a'), harness.readerB.next('create-b')])
+    expect(createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'created-a',
+        creatorProvenance: { kind: 'paired-device', deviceId: harness.deviceIdA }
+      })
+    )
+    expect(createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'created-b',
+        creatorProvenance: { kind: 'paired-device', deviceId: harness.deviceIdB }
+      })
+    )
+
+    await new Promise<void>((resolve) => {
+      harness.clientA.ws.once('close', () => resolve())
+      harness.clientA.ws.close()
+    })
+    const reconnectedA = await authenticate(harness.pairingUrlA)
+    sessions.push(reconnectedA)
+    const reconnectedReaderA = createReader(reconnectedA)
+    readers.push(reconnectedReaderA)
+    send(reconnectedA, { id: 'status-a2', method: 'status.get' })
+    await expect(reconnectedReaderA.next('status-a2')).resolves.toMatchObject({
+      ok: true,
+      result: { pairedDeviceId: harness.deviceIdA }
+    })
+  })
 
   it('keeps worktree navigation local to each paired runtime client by default', async () => {
     const harness = await startHarness()

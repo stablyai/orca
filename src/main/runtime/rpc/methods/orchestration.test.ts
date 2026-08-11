@@ -3075,9 +3075,11 @@ describe('orchestration RPC methods', () => {
     it('resets all state', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       const result = (await call('orchestration.reset', { all: true })) as { reset: string }
       expect(result.reset).toBe('all')
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -3085,8 +3087,10 @@ describe('orchestration RPC methods', () => {
     it('resets tasks only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { tasks: true })
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -3094,8 +3098,10 @@ describe('orchestration RPC methods', () => {
     it('resets messages only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { messages: true })
+      expect(stopRelay).not.toHaveBeenCalled()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })

@@ -14,6 +14,7 @@ import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custo
 import { normalizeTaskProviderSettings } from '../../../../shared/task-providers'
 import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
 import { createSettingsSearchState, type SettingsSearchState } from './settings-search-state'
+import { isRuntimeCatalogListingStale } from './runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
 import {
   normalizeTuiAgentArgsRecord,
@@ -135,6 +136,17 @@ async function persistSettingsUpdates(
   }))
 }
 
+/** Every known host has a recorded status entry, and no entry survives for a host that is gone. */
+function hasCompleteRuntimeStatusCoverage(
+  runtimeEnvironments: AppState['runtimeEnvironments'],
+  runtimeStatusByEnvironmentId: AppState['runtimeStatusByEnvironmentId']
+): boolean {
+  return (
+    new Set(runtimeEnvironments.map(({ id }) => id)).size === runtimeStatusByEnvironmentId.size &&
+    runtimeEnvironments.every(({ id }) => runtimeStatusByEnvironmentId.has(id))
+  )
+}
+
 async function verifyRuntimeEnvironmentReachable(environmentId: string | null): Promise<void> {
   if (!environmentId) {
     return
@@ -161,11 +173,18 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     } catch (err) {
       console.error('Failed to fetch settings:', err)
     }
-    // Why: best-effort boot probe so sidebar host pickers show live runtime
-    // health before the settings pane is ever opened. Fire-and-forget to keep
-    // startup off the network round-trips. Runs even when settings fail to load,
-    // so surfaces waiting on the catalog settling are never stranded pending.
-    void get().hydrateRuntimeEnvironmentStatuses()
+    const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
+      get()
+    // Why: settings refreshes are frequent, but only incomplete host coverage needs
+    // the all-host boot probe. A recorded null still means the host was checked.
+    if (
+      !runtimeEnvironmentCatalogHydrated ||
+      !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
+      // Why: coverage is blind to catalog edits from another client or the orca CLI.
+      isRuntimeCatalogListingStale()
+    ) {
+      void get().hydrateRuntimeEnvironmentStatuses()
+    }
   },
 
   updateSettings: async (updates) => {

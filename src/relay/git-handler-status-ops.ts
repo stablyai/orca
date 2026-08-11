@@ -91,7 +91,36 @@ export async function getStatusOp(
   )
   // Why: reject NaN/negative limits — NaN would silently disable capping, negatives would over-truncate.
   const limit = resolveGitStatusLimit(params.limit)
-  const conflictOperation = await detectConflictOperation(worktreePath)
+  const conflictPromise = detectConflictOperation(worktreePath)
+  // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
+  const statusArgs = [
+    '-c',
+    'core.quotePath=false',
+    'status',
+    '--porcelain=v2',
+    '--branch',
+    '--untracked-files=all'
+  ]
+  if (includeIgnored) {
+    statusArgs.push('--ignored=matching')
+  }
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const parser = new StatusPorcelainParser()
+      const result = await streamGit(statusArgs, worktreePath, {
+        // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
+        disableOptionalLocks: true,
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return { parser, stoppedEarly: result.stoppedEarly }
+    })()
+  ])
+  const conflictOperation = await conflictPromise
   const entries: Record<string, unknown>[] = []
   let head: string | undefined
   let branch: string | undefined
@@ -103,28 +132,11 @@ export async function getStatusOp(
   let branchLineTotal: GitBranchLineTotal | undefined
 
   try {
-    // Why: core.quotePath=false keeps non-ASCII filenames as raw UTF-8 instead of octal escapes that render as gibberish.
-    const statusArgs = [
-      '-c',
-      'core.quotePath=false',
-      'status',
-      '--porcelain=v2',
-      '--branch',
-      '--untracked-files=all'
-    ]
-    if (includeIgnored) {
-      statusArgs.push('--ignored=matching')
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    const parser = new StatusPorcelainParser()
-    const { stoppedEarly } = await streamGit(statusArgs, worktreePath, {
-      // Why: status polling is read-like; avoid racing terminal Git on .git/worktrees/*/index.lock.
-      disableOptionalLocks: true,
-      signal: options.signal,
-      onStdout: (chunk) => parser.update(chunk, limit)
-    })
-    if (!stoppedEarly) {
-      parser.finish()
-    }
+    const { parser, stoppedEarly } = statusResult.value
     head = parser.branch.head
     branch = parser.branch.branch
     ignoredPaths = parser.ignoredPaths

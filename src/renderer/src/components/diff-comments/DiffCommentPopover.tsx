@@ -9,7 +9,6 @@ import {
 } from '@/lib/comment-body-submit-state'
 import { translate } from '@/i18n/i18n'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { resolveDiffCommentPopoverTop } from './diff-comment-popover-position'
 
 // Why: a DOM sibling overlay rather than a Monaco content widget, so it can own a React auto-resizing textarea.
@@ -47,7 +46,6 @@ export function DiffCommentPopover({
   onSubmit
 }: Props): React.JSX.Element {
   const [body, setBody] = useState('')
-  const imeEnter = useImeEnterGestureOwnership()
   // Why: mirror the draft into a ref so the mousedown listener reads it fresh without re-registering each keystroke.
   const bodyRef = useRef(body)
   bodyRef.current = body
@@ -209,20 +207,14 @@ export function DiffCommentPopover({
             setBody(e.target.value)
             autoResize(e.currentTarget)
           }}
-          onBlur={imeEnter.reset}
-          onCompositionStart={() => imeEnter.setComposing(true)}
-          onCompositionEnd={() => imeEnter.setComposing(false)}
-          onKeyUp={imeEnter.onKeyUp}
           onKeyDown={(e) => {
-            if (imeEnter.ownsKeyDown(e)) {
-              return
-            }
             if (e.key === 'Escape') {
               e.preventDefault()
               onCancel()
               return
             }
-            if (e.key === 'Enter' && !e.shiftKey) {
+            // Why: Shift+Enter inserts a newline; skip isComposing so IME composition Enter doesn't submit a half-typed CJK note.
+            if (e.key === 'Enter' && !e.nativeEvent.isComposing && !e.shiftKey) {
               e.preventDefault()
               if (submitting) {
                 return

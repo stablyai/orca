@@ -9,6 +9,7 @@
 // reconnects via `relay.js --connect`, bridging the new SSH channel's stdio to the existing relay's socket.
 
 import { createServer, createConnection, type Socket, type Server } from 'node:net'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
   unlinkSync,
@@ -41,6 +42,9 @@ import { PortScanHandler } from './port-scan-handler'
 import { AgentExecHandler } from './agent-exec-handler'
 import { WorkspaceSessionHandler } from './workspace-session-handler'
 import { AiVaultHandler } from './ai-vault-handler'
+import { createRelayAiVaultService } from './ai-vault-service-factory'
+import { getRemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
+import { parseUnameToRelayPlatform } from '../main/ssh/relay-protocol'
 import { endpointDirForRelaySocket, RelayAgentHookServer } from './agent-hook-server'
 import { PluginOverlayManager } from './plugin-overlay'
 import {
@@ -723,7 +727,17 @@ async function main(): Promise<void> {
   const _workspaceSessionHandler = new WorkspaceSessionHandler(dispatcher)
   void _workspaceSessionHandler
 
-  const _aiVaultHandler = new AiVaultHandler(dispatcher)
+  const aiVaultRelayPlatform = parseUnameToRelayPlatform(process.platform, process.arch)
+  const aiVaultHostPlatform = aiVaultRelayPlatform
+    ? getRemoteHostPlatform(aiVaultRelayPlatform)
+    : undefined
+  const aiVaultService = aiVaultHostPlatform
+    ? createRelayAiVaultService(homedir(), aiVaultHostPlatform)
+    : null
+  const _aiVaultHandler = new AiVaultHandler(dispatcher, {
+    hostPlatform: aiVaultHostPlatform,
+    service: aiVaultService ?? undefined
+  })
   void _aiVaultHandler
 
   // Why: relay-hosted plugin provisioning is a later phase. Register the
@@ -843,6 +857,15 @@ async function main(): Promise<void> {
           env.ORCA_OMP_SOURCE_AGENT_DIR = result.sourceAgentDir
         }
       }
+      if (kind === 'prime-agent') {
+        const sourceDir = resolvePiSourceAgentDir(ctx.env, ctx.shell, 'prime-agent')
+        const result = pluginOverlay.materializePi(overlayId, sourceDir, 'prime-agent', {
+          materializeDefaultHome: explicitKind === 'prime-agent'
+        })
+        if (result?.sourceAgentDir) {
+          env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR = result.sourceAgentDir
+        }
+      }
     }
     return env
   })
@@ -870,19 +893,23 @@ async function main(): Promise<void> {
     const opencode = params.opencodePluginSource
     const pi = params.piExtensionSource
     const omp = params.ompExtensionSource
+    const primeAgent = params.primeAgentExtensionSource
     assertPluginSourceUnderByteCap('opencodePluginSource', opencode)
     assertPluginSourceUnderByteCap('piExtensionSource', pi)
     assertPluginSourceUnderByteCap('ompExtensionSource', omp)
+    assertPluginSourceUnderByteCap('primeAgentExtensionSource', primeAgent)
     pluginOverlay.setSources({
       opencodePluginSource: typeof opencode === 'string' ? opencode : undefined,
       piExtensionSource: typeof pi === 'string' ? pi : undefined,
-      ompExtensionSource: typeof omp === 'string' ? omp : undefined
+      ompExtensionSource: typeof omp === 'string' ? omp : undefined,
+      primeAgentExtensionSource: typeof primeAgent === 'string' ? primeAgent : undefined
     })
     return {
       installed: {
         opencode: pluginOverlay.hasOpenCodeSource(),
         pi: pluginOverlay.hasPiSource('pi'),
-        omp: pluginOverlay.hasPiSource('omp')
+        omp: pluginOverlay.hasPiSource('omp'),
+        primeAgent: pluginOverlay.hasPiSource('prime-agent')
       }
     }
   })
@@ -1272,7 +1299,12 @@ async function main(): Promise<void> {
     graceBranch = null
     void ptyHandler
       .dispose()
-      .then(() => {
+      .then(async () => {
+        await aiVaultService?.dispose().catch((error) => {
+          relayLogLine(
+            `[relay] AI Vault sidecar shutdown failed: ${error instanceof Error ? error.message : String(error)}`
+          )
+        })
         stopPoolWatch()
         stopPoolActiveWatch()
         dispatcher.dispose()

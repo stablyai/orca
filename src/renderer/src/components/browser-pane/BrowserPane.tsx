@@ -12,7 +12,7 @@ import {
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import { getWorkspaceFileBrowserOpenTarget } from '@/lib/file-preview'
@@ -82,7 +82,7 @@ import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
 } from '../../../../shared/browser-viewport-presets'
-import { rememberLiveBrowserUrl } from './browser-runtime'
+import { getLiveBrowserUrl, rememberLiveBrowserUrl, seedLiveBrowserUrl } from './browser-runtime'
 import { ensureBrowserPageWebview } from './browser-page-webview'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
@@ -135,6 +135,7 @@ import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
 import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
@@ -193,6 +194,12 @@ import { MarkupOverlay } from './markup/MarkupOverlay'
 import { MarkupDrawButton } from './markup/MarkupDrawButton'
 import { deliverMarkupToClipboard } from './markup/markup-clipboard-delivery'
 import { BrowserLoadFailureOverlay } from './browser-load-failure-overlay'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import {
+  browserFileUrlToAbsolutePath,
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from './browser-artifact-upload'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery
@@ -591,26 +598,8 @@ function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
 }
 
-function fileUrlToAbsolutePath(url: string): string | null {
-  try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'file:') {
-      return null
-    }
-    const hostPrefix =
-      parsed.hostname && parsed.hostname !== 'localhost' ? `//${parsed.hostname}` : ''
-    let absolutePath = `${hostPrefix}${decodeURIComponent(parsed.pathname)}`
-    if (/^\/[A-Za-z]:\//.test(absolutePath)) {
-      absolutePath = absolutePath.slice(1)
-    }
-    return absolutePath
-  } catch {
-    return null
-  }
-}
-
 function getNotebookPathFromBrowserUrl(url: string): string | null {
-  const filePath = fileUrlToAbsolutePath(url)
+  const filePath = browserFileUrlToAbsolutePath(url)
   return filePath?.toLowerCase().endsWith('.ipynb') ? filePath : null
 }
 
@@ -700,33 +689,8 @@ function getRemoteBrowserDeviceScaleFactor(): number {
   return Math.min(2, Math.max(1, Number(scale.toFixed(2))))
 }
 
-function getOpenableExternalUrl(
-  webview: Electron.WebviewTag | null,
-  fallbackUrl: string
-): string | null {
-  let currentUrl = fallbackUrl
-  if (webview) {
-    try {
-      currentUrl = webview.getURL() || fallbackUrl
-    } catch {
-      // Why: querying nav state before dom-ready throws and blanks the whole IDE on launch; fall back to the persisted URL.
-      currentUrl = fallbackUrl
-    }
-  }
+function getOpenableExternalUrl(currentUrl: string): string | null {
   return normalizeExternalBrowserUrl(redactKagiSessionToken(currentUrl))
-}
-
-function getCurrentBrowserUrl(webview: Electron.WebviewTag | null, fallbackUrl: string): string {
-  let currentUrl = fallbackUrl
-  if (webview) {
-    try {
-      currentUrl = webview.getURL() || fallbackUrl
-    } catch {
-      // Why: toolbar actions need a stable URL during early guest attach/restore; fall back to the persisted URL instead of throwing.
-      currentUrl = fallbackUrl
-    }
-  }
-  return toDisplayUrl(currentUrl)
 }
 
 function retryBrowserTabLoad(
@@ -1496,29 +1460,15 @@ function RemoteBrowserPagePane({
     setReopenNonce((nonce) => nonce + 1)
   }, [])
 
-  useEffect(() => {
-    if (!isActive) {
-      return
-    }
-    const closeStream = lifecycle.open()
-    return () => {
-      closeStream()
-      clearPendingRemoteWheel()
-    }
-    // Why: the lifecycle reads tab/environment/worktree live, so it only needs to reopen when the
-    // pane's identity actually changes — not when an unrelated callback identity does.
-    //
-    // browserTab.id is load-bearing because lifecycle.open() reads tab identity through refs.
-    // reopenNonce re-runs the full open path for an explicit reconnect.
-  }, [
+  useRemoteBrowserStreamActivation({
     activeRuntimeEnvironmentId,
-    browserTab.id,
+    browserPageId: browserTab.id,
     clearPendingRemoteWheel,
     isActive,
     lifecycle,
     reopenNonce,
     runtimeWorktree
-  ])
+  })
 
   useEffect(() => {
     if (!isActive) {
@@ -2517,6 +2467,7 @@ function BrowserPagePane({
   const handleInternalFileDragOverRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const handleInternalFileDropRef = useRef<(event: DragEvent<HTMLDivElement>) => void>(() => {})
   const keybindings = useAppStore((state) => state.keybindings)
+  const workspaceConnectionId = useAppStore((state) => getConnectionIdFromState(state, worktreeId))
   const browserDefaultZoomLevel = useAppStore(
     (state) => state.browserDefaultZoomLevel ?? DEFAULT_BROWSER_PAGE_ZOOM_LEVEL
   )
@@ -3441,6 +3392,7 @@ function BrowserPagePane({
     container = ensuredWebview.container
     const webview = ensuredWebview.webview
     const needsInitialNavigation = ensuredWebview.created
+    seedLiveBrowserUrl(browserTab.id, redactKagiSessionToken(browserTabUrlRef.current))
 
     if (!ensuredWebview.created) {
       // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
@@ -4567,8 +4519,12 @@ function BrowserPagePane({
 
   // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
   const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
-  const externalUrl = getOpenableExternalUrl(webviewRef.current, browserTab.url)
-  const currentBrowserUrl = getCurrentBrowserUrl(webviewRef.current, browserTab.url)
+  // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
+  const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
+  const externalUrl = getOpenableExternalUrl(liveBrowserUrl)
+  const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
+  const shareableArtifactFile =
+    workspaceConnectionId === null ? getShareableBrowserArtifactFile(currentBrowserUrl) : null
   const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
   const failureExternalUrl = normalizeExternalBrowserUrl(failedNavigationUrl)
   const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
@@ -5041,6 +4997,14 @@ function BrowserPagePane({
             active={markup.isActive}
             surfaceActive={isActive}
           />
+
+          {shareableArtifactFile ? (
+            <ArtifactPublishButton
+              sourceKey={shareableArtifactFile.filePath}
+              className="h-7 w-7"
+              createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
+            />
+          ) : null}
 
           <Button
             size="icon"

@@ -4,7 +4,6 @@ import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
-import { disableMacAutomaticPeriodSubstitution } from './macos-automatic-period-substitution'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
   Store,
@@ -40,7 +39,10 @@ import {
   shutdownDaemon
 } from './daemon/daemon-init'
 import {
-  hasRecordedLegacySharedCodexPane,
+  type CodexPaneHomeRoute,
+  getCodexPaneAccount,
+  hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
 import { closeAllWatchers } from './ipc/filesystem-watcher'
@@ -68,6 +70,7 @@ import { resolveConsent } from './telemetry/consent'
 import { triggerStartupNotificationRegistration } from './ipc/notifications'
 import { OrcaRuntimeService, type RuntimeWorktreeLifecycleEvent } from './runtime/orca-runtime'
 import { ArtifactCloudService } from './artifacts/artifact-cloud-service'
+import { isArtifactSharingEnabled } from '../shared/artifact-sharing-gate'
 import { loadAgentSessionClaimSigner } from './runtime/agent-session-claim-identity'
 import {
   fingerprintOrchestrationPeer,
@@ -159,6 +162,7 @@ import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
 import { getDevInstanceIdentity } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
+import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
 import {
   acquireSingleInstanceLock,
   logSingleInstanceLockBypass,
@@ -215,6 +219,7 @@ import {
 } from './codex-accounts/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from './claude-accounts/runtime-selection'
 import { codexHookService, setSystemCodexHomeHookSweepSuppressed } from './codex/hook-service'
+import { reconcileRetainedCodexHookHomes } from './codex/retained-codex-hook-state'
 import {
   ensureRealHomeCodexHookState,
   isRealHomeCodexHookLaneUsable
@@ -266,6 +271,7 @@ import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
 import { AgentAwakeService } from './agent-awake-service'
+import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
@@ -398,10 +404,23 @@ function handleCodexHomePtySpawned(args: {
   id: string
   codexHomePath: string | null
   reattached?: boolean
+  reattachedHomeRoute?: CodexPaneHomeRoute | null
   launchEnv?: NodeJS.ProcessEnv
   startedAt?: Date
   startedSequence?: number
 }): void {
+  // Why: only shared or ambiguous retained shells can create rollout logs that still need publication.
+  if (args.reattached && args.startedSequence !== undefined) {
+    const paneAccount = getCodexPaneAccount(args.id)
+    const homeRoute =
+      args.reattachedHomeRoute !== undefined
+        ? (args.reattachedHomeRoute ?? undefined)
+        : paneAccount?.homeRoute
+    if (codexSessionMigration && isCodexPaneHomeRouteProvenAwayFromSharedHome(homeRoute)) {
+      codexSessionMigration.ignoreLaunch(args.id, args.startedSequence)
+      return
+    }
+  }
   const fullScanRequired =
     codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,
@@ -915,10 +934,19 @@ function startTerminalRuntimeStartupServices(): Promise<void> {
       await initDaemonPtyProvider(signal, {
         macosLoginSessionWatch: process.platform === 'darwin' && !isServeMode
       })
-      if (codexRuntimeHome?.isHostSystemDefaultRealHome() && hasRecordedLegacySharedCodexPane()) {
+      // Why: a retained shell keeps its launch-time Codex home even when the current routing lane changes.
+      if (codexRuntimeHome && hasRecordedManagedHostCodexPane()) {
         const livePtyIds = await listLiveDaemonPtyIds()
         if (livePtyIds) {
           reconcileCodexPaneAccountsWithLivePtys(livePtyIds)
+          const settings = store?.getSettings()
+          reconcileRetainedCodexHookHomes({
+            hookService: codexHookService,
+            hooksEnabled:
+              isAgentStatusHooksEnabled(settings) &&
+              settings?.disabledTuiAgents.includes('codex') !== true,
+            runtimeHomePaths: codexRuntimeHome.getRetainedHostCodexHookHomePaths(livePtyIds)
+          })
         }
       }
       // Why: retained shells can invoke Codex immediately after the startup gate.
@@ -2061,8 +2089,6 @@ function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
 
 void app.whenReady().then(async () => {
   logStartupMilestone('app-ready')
-  // Why: before any window exists, so the first terminal never inherits the substitution (#11504).
-  disableMacAutomaticPeriodSubstitution()
   installMainThreadHangWatchdog({ userDataPath: getCanonicalUserDataPath() })
   const hangDetection = consumeHangDetectionMarker(
     hangDetectionMarkerPath(getCanonicalUserDataPath())
@@ -2126,6 +2152,21 @@ void app.whenReady().then(async () => {
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  const windowsShellPathHydration = createWindowsShellPathHydration()
+  if (process.platform === 'win32') {
+    const settings = store.getSettings()
+    if (app.isPackaged) {
+      void windowsShellPathHydration.hydrate(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    } else {
+      windowsShellPathHydration.configure(
+        settings.terminalWindowsShell,
+        settings.terminalWindowsPowerShellImplementation
+      )
+    }
+  }
   wslHookRelayManager.setManagedHookSettingsResolver(() => store?.getSettings() ?? null)
   logStartupMilestone('store-loaded')
   // Why: apply initial fallback WSL distro from store settings for global git/CLI calls.
@@ -2135,9 +2176,35 @@ void app.whenReady().then(async () => {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
     }
+    if (
+      ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&
+      process.platform === 'win32'
+    ) {
+      if (app.isPackaged) {
+        void windowsShellPathHydration.hydrate(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      } else {
+        windowsShellPathHydration.configure(
+          settings.terminalWindowsShell,
+          settings.terminalWindowsPowerShellImplementation
+        )
+      }
+    }
     if ('showMenuBarIcon' in updates) {
       // Why: Store is the mutation authority for all settings writes, so every macOS toggle updates the native item live.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
+    }
+    if ('agentStatusHooksEnabled' in updates) {
+      // Why both directions: the ensure gate only blocks NEW relays, so off must stop the running
+      // guest process and timers, and on must restart them — otherwise open WSL panes report no
+      // status until their next spawn.
+      if (isAgentStatusHooksEnabled(settings)) {
+        wslHookRelayManager.resumeStoppedRelays()
+      } else {
+        wslHookRelayManager.disposeAll({ permanent: false })
+      }
     }
   })
   // Why: run before ClaudeRuntimeAuthService's constructor sync — a surviving daemon Claude CLI holds the single-use refresh token; early refresh rotates it out mid-session.
@@ -2176,7 +2243,12 @@ void app.whenReady().then(async () => {
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
-  agentAwakeService.setEnabled(store.getSettings().keepComputerAwakeWhileAgentsRun)
+  agentAwakeService.setMode(
+    normalizeComputerAwakeMode(
+      store.getSettings().computerAwakeMode,
+      store.getSettings().keepComputerAwakeWhileAgentsRun
+    )
+  )
   // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
   agentAwakeService.setStatuses([])
   const collectChangedProviderSessionWorktrees = createHookProviderSessionInvalidator()
@@ -2558,7 +2630,11 @@ void app.whenReady().then(async () => {
       : undefined
   })
   runtimeService.setAutomationService(automations)
-  runtimeService.setArtifactService(new ArtifactCloudService(app.getPath('userData')))
+  runtimeService.setArtifactService(
+    new ArtifactCloudService(app.getPath('userData'), () =>
+      isArtifactSharingEnabled(store?.getSettings())
+    )
+  )
   runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
@@ -2730,7 +2806,7 @@ void app.whenReady().then(async () => {
     if (isAgentStatusHooksEnabled(store.getSettings())) {
       const managedHookStore = store
       void applyAgentStatusHooksEnabled(true, managedHookStore.getSettings(), {
-        shouldHydrateShellPath: app.isPackaged && process.platform !== 'win32',
+        shouldHydrateShellPath: app.isPackaged,
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
@@ -2904,6 +2980,8 @@ void app.whenReady().then(async () => {
     }
   })
 
+  // Why: Git hooks inherit process.env, so Source Control must not open before profile PATH settles.
+  await windowsShellPathHydration.whenReady()
   startTerminalRuntimeStartupServices()
   app.on('activate', handleMacAppActivation)
 

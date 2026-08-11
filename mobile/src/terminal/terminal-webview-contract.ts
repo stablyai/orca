@@ -1,6 +1,6 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
-import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 

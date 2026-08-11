@@ -51,7 +51,6 @@ import {
 } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { buildContainedLinkedContextBlock } from '@/lib/linked-work-item-context'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
@@ -125,39 +124,6 @@ function LinearIssueAvatar({
     >
       {initial}
     </span>
-  )
-}
-
-export function LinearSubIssueTitleInput({
-  value,
-  onChange,
-  onSubmit
-}: {
-  value: string
-  onChange: (value: string) => void
-  onSubmit: () => void
-}): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
-  return (
-    <input
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onCompositionStart={() => imeEnter.setComposing(true)}
-      onCompositionEnd={() => imeEnter.setComposing(false)}
-      onKeyDown={(event) => {
-        if (imeEnter.ownsKeyDown(event)) {
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          onSubmit()
-        }
-      }}
-      onKeyUp={imeEnter.onKeyUp}
-      onBlur={imeEnter.reset}
-      placeholder={translate('auto.components.LinearIssueWorkspace.c182e02de5', 'Sub-issue title')}
-      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-    />
   )
 }
 
@@ -334,10 +300,20 @@ function LinearIssueSubIssueButton({
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
           <div className="space-y-3">
-            <LinearSubIssueTitleInput
+            <input
               value={title}
-              onChange={setTitle}
-              onSubmit={() => void handleCreate()}
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void handleCreate()
+                }
+              }}
+              placeholder={translate(
+                'auto.components.LinearIssueWorkspace.c182e02de5',
+                'Sub-issue title'
+              )}
+              className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex justify-end">
               <Button

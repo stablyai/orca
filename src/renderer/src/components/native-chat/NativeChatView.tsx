@@ -2,12 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
-import type { NativeChatSession } from '../../../../shared/native-chat-types'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
-import { useNativeChatComposerCompositionHold } from './native-chat-composer-composition-hold'
 import { useNativeChatFontScale } from './use-native-chat-font-scale'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
@@ -39,18 +37,20 @@ import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
-import { shouldFocusNativeChatPaneFromPointerTarget } from './native-chat-typing-redirect'
-import { useNativeChatTypingRedirectHandler } from './use-native-chat-typing-redirect-handler'
+import {
+  shouldFocusNativeChatComposerFromEditingKey,
+  shouldFocusNativeChatPaneFromPointerTarget,
+  shouldRedirectNativeChatTyping
+} from './native-chat-typing-redirect'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
-import type { NativeChatContextMenuActions } from './use-native-chat-context-menu'
 import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
-import type { NativeChatViewProps } from './native-chat-view-types'
+import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-chat-view-types'
 import { isNativeChatInteractiveTranscriptSettled } from './native-chat-transcript-readiness'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
@@ -58,6 +58,7 @@ export type { NativeChatViewProps } from './native-chat-view-types'
 /** Resolves an agent terminal into its native conversation and composer UI. */
 export default function NativeChatView({
   terminalTabId,
+  isVisible,
   paneKey: preferredPaneKey,
   targetPtyId = null,
   launchAgent,
@@ -93,6 +94,7 @@ export default function NativeChatView({
           agent={resolution.agent}
           sessionId={resolution.sessionId}
           transcriptPath={resolution.transcriptPath}
+          isVisible={isVisible}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           onSwitchToTerminal={onSwitchToTerminal}
@@ -109,22 +111,13 @@ function NativeChatResolvedView({
   agent,
   sessionId,
   transcriptPath,
+  isVisible,
   targetPtyId,
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
   contextMenuActions
-}: {
-  paneKey: string
-  agent: NativeChatSession['agent']
-  sessionId: string | null
-  transcriptPath: string | null
-  targetPtyId: string | null
-  terminalTabId: string
-  onSwitchToTerminal?: () => void
-  readTerminalScreen?: () => string | null
-  contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
-}): React.JSX.Element {
+}: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
   const runtimeEnvironmentId = useAppStore((s) =>
@@ -135,7 +128,8 @@ function NativeChatResolvedView({
     agent,
     sessionId,
     transcriptPath,
-    runtimeEnvironmentId
+    runtimeEnvironmentId,
+    enabled: isVisible
   })
   const launchPrompt = useAppStore((s) => s.nativeChatLaunchPromptByTabId[terminalTabId] ?? null)
   const clearNativeChatLaunchPrompt = useAppStore((s) => s.clearNativeChatLaunchPrompt)
@@ -168,10 +162,8 @@ function NativeChatResolvedView({
   const previousWorkingEpochRef = useRef<number | null>(null)
   // True while a question card owns the input region, so the composer is hidden.
   const [questionActive, setQuestionActive] = useState(false)
-  const composerHold = useNativeChatComposerCompositionHold(questionActive)
   const rootRef = useRef<HTMLDivElement>(null)
   const composerRef = useRef<NativeChatComposerHandle>(null)
-  const redirectTypingToComposer = useNativeChatTypingRedirectHandler(composerRef)
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -383,7 +375,22 @@ function NativeChatResolvedView({
           rootRef.current?.focus({ preventScroll: true })
         }
       }}
-      onKeyDownCapture={redirectTypingToComposer}
+      onKeyDownCapture={(event) => {
+        // Backspace/Delete outside an input focuses the composer (like typing)
+        // but inserts nothing — let the now-focused field handle the keystroke.
+        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
+          composerRef.current?.focus()
+          return
+        }
+        if (!shouldRedirectNativeChatTyping(event)) {
+          return
+        }
+        if (!composerRef.current?.insertTypedText(event.key)) {
+          return
+        }
+        event.preventDefault()
+        event.stopPropagation()
+      }}
       onMouseUpCapture={contextMenu.onSelectionCapture}
       onKeyUpCapture={contextMenu.onSelectionCapture}
       onContextMenuCapture={contextMenu.onContextMenuCapture}
@@ -425,10 +432,8 @@ function NativeChatResolvedView({
       />
       {/* canSend reflects the mobile presence-lock: when a mobile client holds
           the pty, the composer shows its guarded state instead of racing the
-          mobile driver (R8). The card normally replaces the composer outright,
-          but an in-flight IME composition defers that swap: unmounting the
-          field mid-composition aborts it in the OS and degrades the syllable. */}
-      {composerHold.renderComposer ? (
+          mobile driver (R8). */}
+      {questionActive ? null : (
         <NativeChatComposer
           ref={composerRef}
           terminalTabId={terminalTabId}
@@ -443,10 +448,9 @@ function NativeChatResolvedView({
           onSlashCommand={onSlashCommand}
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
-          onCompositionActiveChange={composerHold.onCompositionActiveChange}
           {...launchDraftSignal}
         />
-      ) : null}
+      )}
       {contextMenu.menu}
     </div>
   )

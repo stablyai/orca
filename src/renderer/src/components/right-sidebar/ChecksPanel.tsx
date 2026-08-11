@@ -25,7 +25,7 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
-import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
@@ -42,6 +42,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
+import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
   PullRequestIcon,
   prStateColor,
@@ -65,6 +66,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
+  GitHubReactionContent,
   PRRefreshErrorType
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -190,7 +192,7 @@ import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import { groupPRComments, type PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   openChecksPanelHostedReviewUrl,
   resolveChecksPanelHostedReviewModifierDestination,
@@ -265,48 +267,6 @@ type ChecksAgentComposerState = {
   launchSource: 'conflict_resolution' | 'task_page'
   commentResolution?: PendingPRCommentAiAck
 }
-export function ChecksPanelReviewTitleInput({
-  inputRef,
-  value,
-  onChange,
-  onSubmit,
-  onCancel,
-  disabled
-}: {
-  inputRef: React.Ref<HTMLInputElement>
-  value: string
-  onChange: (value: string) => void
-  onSubmit: () => void
-  onCancel: () => void
-  disabled: boolean
-}): React.JSX.Element {
-  const imeEnter = useImeEnterGestureOwnership()
-  return (
-    <input
-      ref={inputRef}
-      className="flex-1 text-[12px] bg-background border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-ring"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onCompositionStart={() => imeEnter.setComposing(true)}
-      onCompositionEnd={() => imeEnter.setComposing(false)}
-      onKeyDown={(event) => {
-        if (imeEnter.ownsKeyDown(event)) {
-          return
-        }
-        if (event.key === 'Enter') {
-          event.preventDefault()
-          onSubmit()
-        } else if (event.key === 'Escape') {
-          onCancel()
-        }
-      }}
-      onKeyUp={imeEnter.onKeyUp}
-      onBlur={imeEnter.reset}
-      disabled={disabled}
-    />
-  )
-}
-
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
   isRefreshing: boolean
@@ -539,6 +499,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const fetchPRComments = useAppStore((s) => s.fetchPRComments)
   const addPRConversationComment = useAppStore((s) => s.addPRConversationComment)
   const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
+  const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const remoteDetectedAgentIds = useAppStore((s) => {
@@ -2753,6 +2714,18 @@ export default function ChecksPanel(): React.JSX.Element {
     mountedRef
   ])
 
+  const handleTitleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        void handleSaveTitle()
+      } else if (e.key === 'Escape') {
+        handleCancelEdit()
+      }
+    },
+    [handleSaveTitle, handleCancelEdit]
+  )
+
   const handleResolve = useCallback(
     async (
       threadId: string,
@@ -2970,6 +2943,50 @@ export default function ChecksPanel(): React.JSX.Element {
       setComments((prev) => prev.filter((entry) => entry.id !== comment.id))
     },
     [pr?.prRepo, confirm]
+  )
+
+  const handleSetReaction = useCallback(
+    async (
+      comment: PRComment,
+      content: GitHubReactionContent,
+      reacted: boolean
+    ): Promise<boolean> => {
+      const reactionSubjectId = comment.reactionSubjectId
+      if (!repo || !prNumber || !pr?.prRepo || !reactionSubjectId) {
+        return false
+      }
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
+      setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
+      const ok = await setPRCommentReaction(
+        repo.path,
+        prNumber,
+        reactionSubjectId,
+        content,
+        reacted,
+        { repoId: repo.id, prRepo: pr.prRepo }
+      )
+      if (!isCurrentAsyncResult(requestKey) || ok) {
+        return ok
+      }
+      setComments((current) =>
+        restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+      )
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',
+          'Failed to update reaction.'
+        )
+      )
+      return false
+    },
+    [branch, isCurrentAsyncResult, pr, prCacheKey, prNumber, repo, setPRCommentReaction]
   )
 
   const handleReplyToComment = useCallback(
@@ -3718,6 +3735,18 @@ export default function ChecksPanel(): React.JSX.Element {
     [activeReview, activeWorktreeId]
   )
 
+  const handleOpenStackPR = useCallback(
+    (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => {
+      openChecksPanelHostedReviewUrl({
+        url,
+        event: modifiers,
+        isMac: isMacPlatform(),
+        worktreeId: activeWorktreeId
+      })
+    },
+    [activeWorktreeId]
+  )
+
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
       return
@@ -4421,15 +4450,23 @@ export default function ChecksPanel(): React.JSX.Element {
 
         {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
 
+        {activeReview.provider === 'github' && pr?.stack ? (
+          <GitHubPRStackMap
+            stack={pr.stack}
+            currentPRNumber={pr.number}
+            onOpenPullRequest={handleOpenStackPR}
+          />
+        ) : null}
+
         {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
-            <ChecksPanelReviewTitleInput
-              inputRef={titleInputRef}
+            <input
+              ref={titleInputRef}
+              className="flex-1 text-[12px] bg-background border border-border rounded px-2 py-1 text-foreground outline-none focus:ring-1 focus:ring-ring"
               value={titleDraft}
-              onChange={setTitleDraft}
-              onSubmit={() => void handleSaveTitle()}
-              onCancel={handleCancelEdit}
+              onChange={(e) => setTitleDraft(e.target.value)}
+              onKeyDown={handleTitleKeyDown}
               disabled={titleSaving}
             />
             <button
@@ -4516,6 +4553,7 @@ export default function ChecksPanel(): React.JSX.Element {
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
+          githubRepository={pr?.prRepo ?? null}
           getGitLabProjectRef={getGitLabProjectRef}
         />
       )}
@@ -4537,6 +4575,7 @@ export default function ChecksPanel(): React.JSX.Element {
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
         onDeleteComment={pr ? handleDeleteComment : undefined}
+        onSetReaction={canTargetPRComments ? handleSetReaction : undefined}
       />
       <SourceControlAgentActionDialog
         open={sourceControlAiActionsVisible && agentComposerState !== null}

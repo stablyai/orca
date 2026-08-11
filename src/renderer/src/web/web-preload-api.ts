@@ -12,6 +12,10 @@ import { verifyRemotePairingRuntimeStatus } from '../../../shared/remote-pairing
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault-session-deletion'
 import type { AiVaultListArgs, AiVaultListResult } from '../../../shared/ai-vault-types'
 import type {
+  AiVaultSessionTitlesArgs,
+  AiVaultSessionTitlesResult
+} from '../../../shared/ai-vault-session-title'
+import type {
   AiVaultPrepareSessionResumeArgs,
   AiVaultPrepareSessionResumeResult
 } from '../../../shared/ai-vault-resume-preparation'
@@ -88,6 +92,10 @@ import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-t
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode
+} from '../../../shared/computer-awake-mode'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeStatus, RuntimeSyncWindowGraph } from '../../../shared/runtime-types'
 import { assertFileMutationOwnershipCapability } from '../../../shared/file-mutation-ownership'
@@ -285,6 +293,7 @@ type WebGitHubRouteKey =
   | 'prCheckDetails'
   | 'rerunPRChecks'
   | 'prComments'
+  | 'setPRCommentReaction'
   | 'resolveReviewThread'
   | 'setPRFileViewed'
   | 'updatePRTitle'
@@ -333,6 +342,7 @@ type WebGitHubRuntimeMethod =
   | 'github.prCheckDetails'
   | 'github.rerunPRChecks'
   | 'github.prComments'
+  | 'github.setPRCommentReaction'
   | 'github.resolveReviewThread'
   | 'github.setPRFileViewed'
   | 'github.updatePRTitle'
@@ -434,6 +444,7 @@ export const GITHUB_WEB_RPC_METHODS = {
   prCheckDetails: 'github.prCheckDetails',
   rerunPRChecks: 'github.rerunPRChecks',
   prComments: 'github.prComments',
+  setPRCommentReaction: 'github.setPRCommentReaction',
   resolveReviewThread: 'github.resolveReviewThread',
   setPRFileViewed: 'github.setPRFileViewed',
   updatePRTitle: 'github.updatePRTitle',
@@ -673,8 +684,35 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       set: async (updates) => {
         const sanitizedUpdates = { ...updates }
         delete sanitizedUpdates.activeRuntimeEnvironmentId
+        if ('computerAwakeMode' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              normalizeComputerAwakeMode(
+                sanitizedUpdates.computerAwakeMode,
+                sanitizedUpdates.keepComputerAwakeWhileAgentsRun
+              )
+            )
+          )
+        } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            computerAwakeSettingsForMode(
+              sanitizedUpdates.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off'
+            )
+          )
+        }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
+        }
+        if ('terminalCursorStyle' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            normalizeTerminalCursorStyleDefault(
+              { terminalCursorStyle: sanitizedUpdates.terminalCursorStyle },
+              { preserveExplicitValue: true }
+            )
+          )
         }
         const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
@@ -697,6 +735,19 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
     } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    agentAwake: {
+      getStatus: async () => {
+        const settings = getStoredSettings()
+        return {
+          mode: normalizeComputerAwakeMode(
+            settings.computerAwakeMode,
+            settings.keepComputerAwakeWhileAgentsRun
+          ),
+          active: false
+        }
+      },
+      onChanged: () => noopUnsubscribe
+    },
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     crashReports: {
@@ -1441,12 +1492,15 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
         client?.close()
       }
       const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
-      const nextEnvironment = createStoredWebRuntimeEnvironment({
-        name,
-        offer: parsed.value.pairing,
-        previousEnvironment: activeEnvironment,
-        ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
-      })
+      const nextEnvironment = {
+        ...createStoredWebRuntimeEnvironment({
+          name,
+          offer: parsed.value.pairing,
+          previousEnvironment: activeEnvironment,
+          ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+        }),
+        ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
+      }
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         saveStoredWebRuntimeEnvironment(nextEnvironment)
@@ -1532,6 +1586,19 @@ function createAiVaultApi(): NonNullable<Partial<PreloadApi>['aiVault']> {
         scopePaths: args?.scopePaths,
         executionHostId
       })
+    },
+    resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => {
+      const environment = requireActiveEnvironment()
+      const executionHostId = toRuntimeExecutionHostId(environment.id)
+      if (
+        args.executionHostScope &&
+        normalizeExecutionHostScope(args.executionHostScope) !== executionHostId
+      ) {
+        return Promise.resolve({ titles: [] })
+      }
+      return callRuntimeResult<AiVaultSessionTitlesResult>('aiVault.resolveSessionTitles', {
+        requests: args.requests
+      }).catch(() => ({ titles: [] }))
     },
     // Why: the runtime RPC transport has no cancel verb, so the in-flight scan
     // settles on its own timeout. The renderer's refreshId guard already drops
@@ -1776,10 +1843,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
+    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...(hostId ? { hostId } : {}),
         force,
         // Why (#11960): the web client renders the same Force Delete affordances, so
         // dropping this field here would leave paired clients permanently wedged.
@@ -1791,11 +1859,12 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     forgetLocal: () => {
       throw new Error('Forgetting a workspace is unavailable in paired web clients.')
     },
-    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead, hostId }) =>
       callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         branchName,
-        expectedHead
+        expectedHead,
+        ...(hostId ? { hostId } : {})
       }),
     updateMeta: async ({ worktreeId, updates }) => {
       const rpcUpdates =
@@ -2368,6 +2437,11 @@ function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'rerunPRChecks'>>(GITHUB_WEB_RPC_METHODS.rerunPRChecks, args),
     prComments: (args) =>
       route<WebGitHubResult<'prComments'>>(GITHUB_WEB_RPC_METHODS.prComments, args),
+    setPRCommentReaction: (args) =>
+      route<WebGitHubResult<'setPRCommentReaction'>>(
+        GITHUB_WEB_RPC_METHODS.setPRCommentReaction,
+        args
+      ),
     resolveReviewThread: (args) =>
       route<WebGitHubResult<'resolveReviewThread'>>(
         GITHUB_WEB_RPC_METHODS.resolveReviewThread,
@@ -2582,7 +2656,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2604,8 +2678,11 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
+      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
+        updates
+      void _clientLocalWorkspaceFilter
       try {
-        await callRuntimeResult('ui.set', updates, 15_000)
+        await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -2632,7 +2709,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2679,8 +2756,12 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     performNativePaste: () => {
       document.execCommand?.('paste')
     },
+    performNativeSelectionAction: (action) => {
+      document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
+    },
     onExportPdfRequested: () => noopUnsubscribe,
     onAppMenuPaste: () => noopUnsubscribe,
+    onAppMenuSelectionAction: () => noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
@@ -3628,7 +3709,14 @@ function updateEnvironmentFromResponse(
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
-  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
+  const pairedDeviceId =
+    response.ok &&
+    typeof response.result === 'object' &&
+    response.result !== null &&
+    typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
+      ? (response.result as { pairedDeviceId: string }).pairedDeviceId
+      : undefined
+  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId, pairedDeviceId)
 }
 
 function getStoredSettings(): GlobalSettings {
@@ -3735,6 +3823,11 @@ async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> {
       runtimeSettings.prBotAuthorOverrides = normalizePRBotAuthorOverrides(
         result.settings.prBotAuthorOverrides
       )
+    }
+    // Read-only mirror: the host owns this capability and `syncRuntimeBackedSettings` never
+    // sends it back, so web shows what the host enforces instead of a local value it ignores.
+    if (typeof result.settings.artifactSharingEnabled === 'boolean') {
+      runtimeSettings.artifactSharingEnabled = result.settings.artifactSharingEnabled
     }
     const next = mergeSettings(local, runtimeSettings)
     writeStoredSettings(next)
@@ -3930,6 +4023,16 @@ function mergeWebUIState(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
     )
+  }
+}
+
+function mergeHostWebUIState(
+  local: PersistedUIState,
+  incoming: PersistedUIState
+): PersistedUIState {
+  return {
+    ...mergeWebUIState(local, incoming),
+    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
   }
 }
 

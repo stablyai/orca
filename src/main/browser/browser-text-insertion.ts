@@ -1,21 +1,9 @@
 import { measureClipboardTextByteLength } from '../../shared/clipboard-text'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../shared/utf8-byte-limits'
 import type { CdpCommandSender } from './snapshot-engine'
 
 export const BROWSER_TEXT_INSERT_CHUNK_BYTES = 64 * 1024
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
 
 export function splitBrowserTextInsertionChunks(
   text: string,
@@ -38,24 +26,11 @@ export function* iterateBrowserTextInsertionChunks(
     return
   }
 
-  let currentStart = 0
-  let currentBytes = 0
-  let index = 0
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextIndex = index + codeUnitLength
-    const characterBytes = getUtf8ByteLengthForCodePoint(codePoint)
-    if (currentBytes > 0 && currentBytes + characterBytes > normalizedMax) {
-      yield text.slice(currentStart, index)
-      currentStart = index
-      currentBytes = 0
-    }
-    currentBytes += characterBytes
-    index = nextIndex
-  }
-  if (currentStart < text.length) {
-    yield text.slice(currentStart)
+  let startIndex = 0
+  while (startIndex < text.length) {
+    const endIndex = getUtf8ChunkEndIndex(text, startIndex, normalizedMax)
+    yield text.slice(startIndex, endIndex)
+    startIndex = endIndex
   }
 }
 
@@ -68,8 +43,7 @@ export async function insertTextThroughCdp(
   let chunk = chunks.next()
   while (!chunk.done) {
     await sender('Input.insertText', { text: chunk.value })
-    // Why: browser automation text can be paste-sized; yielding keeps the main
-    // process responsive between bounded CDP payloads.
+    // Keep paste-sized insertion from monopolizing the main process.
     chunk = chunks.next()
     if (options?.yieldBetweenChunks !== false && !chunk.done) {
       await yieldToEventLoop()

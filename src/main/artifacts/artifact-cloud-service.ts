@@ -5,11 +5,13 @@ import type {
   ArtifactListOptions,
   ArtifactListPage,
   ArtifactListItem,
+  ArtifactPublishedLink,
+  ArtifactPublishResult,
   ArtifactWriteRequest
 } from '../../shared/artifacts'
+import { assertArtifactSharingAllowed } from '../../shared/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
 import {
   allowsArtifactCloudAuthOverride,
@@ -21,12 +23,11 @@ import {
   getArtifactShareRecord,
   isArtifactShareLifecycleCurrent,
   refreshArtifactShareRecordExpiration,
-  removeArtifactShareRecords,
-  saveArtifactShareRecord
+  removeArtifactShareRecords
 } from './artifact-share-record-store'
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
-
-type ArtifactCreateResponse = ArtifactListItem & { editToken: string }
+import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
+import { ArtifactPublisher } from './artifact-publisher'
 
 type ArtifactAuthContext = {
   profileId: string
@@ -113,7 +114,19 @@ function explicitTokenAuthContext(
 }
 
 export class ArtifactCloudService {
-  constructor(private readonly userDataPath: string) {}
+  private readonly publisher: ArtifactPublisher
+
+  /**
+   * `isSharingEnabled` is the publish capability gate. It is read per call, never cached, so
+   * revoking it in Settings takes effect on the next request. List, unshare, and delete stay
+   * ungated: a user who turns publishing off must still be able to audit and revoke old links.
+   */
+  constructor(
+    private readonly userDataPath: string,
+    private readonly isSharingEnabled: () => boolean
+  ) {
+    this.publisher = new ArtifactPublisher(userDataPath)
+  }
 
   list(options: ArtifactListOptions): Promise<ArtifactCloudOperation<ArtifactListPage>> {
     return this.withAuth(options, async (token, apiUrl) => {
@@ -122,84 +135,121 @@ export class ArtifactCloudService {
     })
   }
 
-  share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    const idempotencyKey = randomUUID()
-    return this.withAuth(request, async (token, apiUrl, auth) => {
-      const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
-        method: 'POST',
-        body: writeBody(request),
-        idempotencyKey
-      })
-      auth.assertCurrent()
-      saveArtifactShareRecord(auth.profileId, this.userDataPath, request.sourceKey, {
-        slug: response.artifact.slug,
-        editToken: response.editToken,
-        shareUrl: response.shareUrl,
-        expiresAt: response.artifact.expiresAt,
-        ...auth.scope
-      })
-      return { artifact: response.artifact, shareUrl: response.shareUrl }
-    })
-  }
-
-  update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
-    return this.withAuth(request, async (token, apiUrl, auth) => {
+  getPublishedLink(
+    request: ArtifactCloudOptions & { sourceKey: string }
+  ): Promise<ArtifactCloudOperation<ArtifactPublishedLink | null>> {
+    return this.withAuth(request, async (_token, _apiUrl, auth) => {
       const record = getArtifactShareRecord(
         auth.profileId,
         this.userDataPath,
         request.sourceKey,
         auth.scope
       )
-      if (!record) {
-        throw new Error('This file has not been shared from the active Orca profile.')
-      }
-      const response = await artifactRequest<ArtifactListItem>(apiUrl, token, `/${record.slug}`, {
-        method: 'PUT',
-        editToken: record.editToken,
-        body: writeBody(request)
-      })
-      auth.assertCurrent()
-      refreshArtifactShareRecordExpiration(
-        auth.profileId,
-        this.userDataPath,
-        request.sourceKey,
-        auth.scope,
-        record,
-        response.artifact.expiresAt
-      )
-      return response
+      return record ? { shareUrl: record.shareUrl } : null
     })
+  }
+
+  // Why async: the gate must surface as a rejection, not a synchronous throw, so every caller's
+  // promise chain handles it the same way.
+  async share(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
+    const idempotencyKey = randomUUID()
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.share(request, token, apiUrl, auth, idempotencyKey)
+    )
+  }
+
+  async publish(
+    request: ArtifactWriteRequest
+  ): Promise<ArtifactCloudOperation<ArtifactPublishResult>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
+    const idempotencyKey = randomUUID()
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.publish(request, token, apiUrl, auth, idempotencyKey)
+    )
+  }
+
+  async update(request: ArtifactWriteRequest): Promise<ArtifactCloudOperation<ArtifactListItem>> {
+    assertArtifactSharingAllowed(this.isSharingEnabled)
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.runForSource(request.sourceKey, auth, async () => {
+        auth.assertCurrent()
+        const record = getArtifactShareRecord(
+          auth.profileId,
+          this.userDataPath,
+          request.sourceKey,
+          auth.scope
+        )
+        if (!record) {
+          throw new Error('This file has not been shared from the active Orca profile.')
+        }
+        return this.publisher.runForSlug(record.slug, auth, async () => {
+          auth.assertCurrent()
+          const response = await artifactRequest<ArtifactListItem>(
+            apiUrl,
+            token,
+            `/${record.slug}`,
+            {
+              method: 'PUT',
+              editToken: record.editToken,
+              body: artifactWriteBody(request)
+            }
+          )
+          auth.assertCurrent()
+          refreshArtifactShareRecordExpiration(
+            auth.profileId,
+            this.userDataPath,
+            request.sourceKey,
+            auth.scope,
+            record,
+            response.artifact.expiresAt
+          )
+          return response
+        })
+      })
+    )
   }
 
   unshare(
     request: ArtifactCloudOptions & { sourceKey: string }
   ): Promise<ArtifactCloudOperation<void>> {
-    return this.withAuth(request, async (token, apiUrl, auth) => {
-      const record = getArtifactShareRecord(
-        auth.profileId,
-        this.userDataPath,
-        request.sourceKey,
-        auth.scope
-      )
-      if (!record) {
-        throw new Error('This file has not been shared from the active Orca profile.')
-      }
-      await artifactRequest<void>(apiUrl, token, `/${record.slug}`, {
-        method: 'DELETE',
-        editToken: record.editToken
+    return this.withAuth(request, (token, apiUrl, auth) =>
+      this.publisher.runForSource(request.sourceKey, auth, async () => {
+        auth.assertCurrent()
+        const record = getArtifactShareRecord(
+          auth.profileId,
+          this.userDataPath,
+          request.sourceKey,
+          auth.scope
+        )
+        if (!record) {
+          throw new Error('This file has not been shared from the active Orca profile.')
+        }
+        return this.publisher.runForSlug(record.slug, auth, async () => {
+          auth.assertCurrent()
+          await artifactRequest<void>(apiUrl, token, `/${record.slug}`, {
+            method: 'DELETE',
+            editToken: record.editToken
+          })
+          removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
+            sourceKey: request.sourceKey,
+            slug: record.slug
+          })
+        })
       })
-      removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, {
-        sourceKey: request.sourceKey,
-        slug: record.slug
-      })
-    })
+    )
   }
 
   delete(id: string, options: ArtifactCloudOptions): Promise<ArtifactCloudOperation<void>> {
-    return this.withAuth(options, async (token, apiUrl, auth) => {
-      await artifactRequest<void>(apiUrl, token, `/${encodeURIComponent(id)}`, { method: 'DELETE' })
-      removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
-    })
+    return this.withAuth(options, (token, apiUrl, auth) =>
+      this.publisher.runForSlug(id, auth, async () => {
+        auth.assertCurrent()
+        await artifactRequest<void>(apiUrl, token, `/${encodeURIComponent(id)}`, {
+          method: 'DELETE'
+        })
+        removeArtifactShareRecords(auth.profileId, this.userDataPath, auth.scope, { slug: id })
+      })
+    )
   }
 
   private async withAuth<T>(
@@ -242,41 +292,4 @@ export class ArtifactCloudService {
       ? { status: 'ok', value: result.value }
       : { status: 'reconnect-required' }
   }
-}
-
-function writeBody(request: ArtifactWriteRequest): Record<string, string> {
-  return {
-    content: request.content,
-    contentType: request.contentType,
-    fileName: request.fileName,
-    ...(request.title ? { title: request.title } : {})
-  }
-}
-
-async function artifactRequest<T>(
-  apiUrl: string,
-  token: string,
-  path: string,
-  options: { method?: string; body?: unknown; editToken?: string; idempotencyKey?: string } = {}
-): Promise<T> {
-  const response = await fetch(`${apiUrl}/v1/artifacts${path}`, {
-    method: options.method ?? 'GET',
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(options.editToken ? { 'x-orca-edit-token': options.editToken } : {}),
-      ...(options.idempotencyKey ? { 'idempotency-key': options.idempotencyKey } : {}),
-      ...(options.body ? { 'content-type': 'application/json' } : {})
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-    redirect: 'error',
-    signal: AbortSignal.timeout(20_000)
-  })
-  if (!response.ok) {
-    const body = (await response.json().catch(() => null)) as { code?: string } | null
-    throw new OrcaCloudRequestError(response.status, body?.code)
-  }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  return (await response.json()) as T
 }

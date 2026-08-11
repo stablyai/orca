@@ -83,7 +83,8 @@ function stableStringify(value: unknown): string {
 function supersedes(candidate: NativeChatMessage, existing: NativeChatMessage): boolean {
   const candidateRank = NATIVE_CHAT_SOURCE_PRIORITY[candidate.source]
   const existingRank = NATIVE_CHAT_SOURCE_PRIORITY[existing.source]
-  return candidateRank > existingRank
+  // Re-emitted records from the same source carry in-place streaming mutations.
+  return candidateRank >= existingRank
 }
 
 // Why: the tail bubbles form fixed tiers that timestamps alone can't express.

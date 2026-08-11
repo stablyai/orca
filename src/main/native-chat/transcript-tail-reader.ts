@@ -50,7 +50,8 @@ export async function readNativeChatTranscriptTailFile(
   decode: NativeChatLineDecoder,
   includeTrailingLine = false,
   endOffset?: number,
-  decodeLifecycle?: NativeChatTurnLifecycleDecoder | null
+  decodeLifecycle?: NativeChatTurnLifecycleDecoder | null,
+  signal?: AbortSignal
 ): Promise<{
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
@@ -60,7 +61,9 @@ export async function readNativeChatTranscriptTailFile(
   malformedRecordCount?: number
   oversizedRecordCount?: number
 }> {
+  signal?.throwIfAborted()
   const end = Math.min((await stat(filePath)).size, endOffset ?? Number.MAX_SAFE_INTEGER)
+  signal?.throwIfAborted()
   if (end === 0) {
     return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
   }
@@ -73,19 +76,25 @@ export async function readNativeChatTranscriptTailFile(
   let oversizedRecordCount = 0
   let ignoreNextMalformedRecord = false
   try {
-    const consumedTo = includeTrailingLine ? end : await findLastCompleteLineEnd(handle, end)
+    signal?.throwIfAborted()
+    const consumedTo = includeTrailingLine
+      ? end
+      : await findLastCompleteLineEnd(handle, end, signal)
     if (consumedTo === 0) {
       return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = Buffer.allocUnsafe(1)
     await handle.read(finalByte, 0, 1, consumedTo - 1)
+    signal?.throwIfAborted()
     ignoreNextMalformedRecord = finalByte[0] !== 0x0a
     let cursor = consumedTo - (finalByte[0] === 0x0a ? 1 : 0)
     while (cursor > 0 && newestFirst.length <= limit) {
+      signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
       const buffer = Buffer.allocUnsafe(cursor - start)
       const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+      signal?.throwIfAborted()
       let segmentEnd = bytesRead
       for (let index = bytesRead - 1; index >= 0 && newestFirst.length <= limit; index--) {
         if (buffer[index] !== 0x0a) {
@@ -179,18 +188,23 @@ export async function readNativeChatTranscriptTailFile(
 
 async function findLastCompleteLineEnd(
   handle: Awaited<ReturnType<typeof open>>,
-  end: number
+  end: number,
+  signal?: AbortSignal
 ): Promise<number> {
+  signal?.throwIfAborted()
   const lastByte = Buffer.allocUnsafe(1)
   await handle.read(lastByte, 0, 1, end - 1)
+  signal?.throwIfAborted()
   if (lastByte[0] === 0x0a) {
     return end
   }
   let cursor = end
   while (cursor > 0) {
+    signal?.throwIfAborted()
     const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
     const buffer = Buffer.allocUnsafe(cursor - start)
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
+    signal?.throwIfAborted()
     const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
     if (newline >= 0) {
       return start + newline + 1
@@ -208,7 +222,8 @@ export async function readNativeChatTranscriptTail(
     filePath?: string
     limit: number
     beforeOffset?: number
-  }
+  },
+  signal?: AbortSignal
 ): Promise<
   | {
       messages: NativeChatMessage[]
@@ -230,7 +245,9 @@ export async function readNativeChatTranscriptTail(
       beforeOffset: args.beforeOffset
     })
   }
-  const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
+  const filePath =
+    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  signal?.throwIfAborted()
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
@@ -246,8 +263,10 @@ export async function readNativeChatTranscriptTail(
       decode,
       true,
       args.beforeOffset,
-      decodeLifecycle
+      decodeLifecycle,
+      signal
     )
+    signal?.throwIfAborted()
     return {
       messages: result.messages,
       // Why: an older pagination page must not rewind the live lifecycle; only
@@ -259,6 +278,7 @@ export async function readNativeChatTranscriptTail(
       beforeOffset: result.beforeOffset
     }
   } catch (error) {
+    signal?.throwIfAborted()
     // Do not disclose host transcript paths or provider filesystem details.
     return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
       ? { error: 'Transcript unavailable', notFound: true }

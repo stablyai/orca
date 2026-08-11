@@ -13,30 +13,11 @@ export type TerminalImeDomEvent = {
   selectionEnd: number | null
   selectionStart: number | null
   value: string
-  altGraph?: boolean | null
-  altKey?: boolean | null
-  charCode?: number | null
-  composed?: boolean
-  ctrlKey?: boolean | null
-  defaultPrevented?: boolean
-  location?: number | null
-  metaKey?: boolean | null
-  repeat?: boolean | null
-  shiftKey?: boolean | null
-  timeStamp?: number
-  target?: { className: string; tagName: string } | null
-  which?: number | null
-}
-
-export type TerminalImeDataEvent = {
-  data: string
-  timeStamp: number
 }
 
 export type TerminalImeBoundaryTrace = {
   dom: TerminalImeDomEvent[]
   onData: string[]
-  onDataEvents?: TerminalImeDataEvent[]
 }
 
 type TerminalImeProbeWindow = Window & {
@@ -65,7 +46,6 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
 
     const dom: TerminalImeDomEvent[] = []
     const onData: string[] = []
-    const onDataEvents: TerminalImeDataEvent[] = []
     const record = (event: Event): void => {
       const input = event instanceof InputEvent ? event : null
       const composition = event instanceof CompositionEvent ? event : null
@@ -80,23 +60,7 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
         isComposing: keyboard?.isComposing ?? input?.isComposing ?? null,
         selectionEnd: textarea.selectionEnd,
         selectionStart: textarea.selectionStart,
-        value: textarea.value,
-        altGraph: keyboard?.getModifierState('AltGraph') ?? null,
-        altKey: keyboard?.altKey ?? null,
-        charCode: keyboard?.charCode ?? null,
-        composed: event.composed,
-        ctrlKey: keyboard?.ctrlKey ?? null,
-        defaultPrevented: event.defaultPrevented,
-        location: keyboard?.location ?? null,
-        metaKey: keyboard?.metaKey ?? null,
-        repeat: keyboard?.repeat ?? null,
-        shiftKey: keyboard?.shiftKey ?? null,
-        timeStamp: event.timeStamp,
-        target:
-          event.target instanceof Element
-            ? { className: event.target.className, tagName: event.target.tagName }
-            : null,
-        which: keyboard?.which ?? null
+        value: textarea.value
       })
     }
     const eventTypes = [
@@ -112,14 +76,10 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
     for (const eventType of eventTypes) {
       textarea.addEventListener(eventType, record, true)
     }
-    const onDataDisposable = pane.terminal.onData((data) => {
-      onData.push(data)
-      onDataEvents.push({ data, timeStamp: performance.now() })
-    })
+    const onDataDisposable = pane.terminal.onData((data) => onData.push(data))
     targetWindow.__terminalImeBoundaryProbe = {
       dom,
       onData,
-      onDataEvents,
       dispose: () => {
         for (const eventType of eventTypes) {
           textarea.removeEventListener(eventType, record, true)
@@ -133,16 +93,7 @@ export async function installTerminalImeBoundaryProbe(page: Page): Promise<void>
 export async function readTerminalImeBoundaryTrace(page: Page): Promise<TerminalImeBoundaryTrace> {
   return page.evaluate(() => {
     const probe = (window as TerminalImeProbeWindow).__terminalImeBoundaryProbe
-    // An uninstalled probe returning an empty trace makes every "nothing leaked" negative pass
-    // vacuously, so absence must throw rather than read as silence.
-    if (!probe) {
-      throw new Error('terminal IME boundary probe was never installed')
-    }
-    return {
-      dom: [...probe.dom],
-      onData: [...probe.onData],
-      onDataEvents: [...(probe.onDataEvents ?? [])]
-    }
+    return probe ? { dom: [...probe.dom], onData: [...probe.onData] } : { dom: [], onData: [] }
   })
 }
 

@@ -9,7 +9,6 @@ import { Button } from '../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../ui/collapsible'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
@@ -271,10 +270,6 @@ export function AdvancedNetworkSettingsSection({
                 }}
                 onBlur={commitHttpProxyUrl}
                 onKeyDown={(e) => {
-                  // Why: blurring on a CJK confirm-Enter would commit a half-composed proxy URL.
-                  if (isImeCompositionKeyDown(e)) {
-                    return
-                  }
                   if (e.key === 'Enter') {
                     e.currentTarget.blur()
                   }
@@ -315,10 +310,6 @@ export function AdvancedNetworkSettingsSection({
                 onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
                 onBlur={commitHttpProxyBypassRules}
                 onKeyDown={(e) => {
-                  // Why: blurring on a CJK confirm-Enter would commit half-composed bypass rules.
-                  if (isImeCompositionKeyDown(e)) {
-                    return
-                  }
                   if (e.key === 'Enter') {
                     e.currentTarget.blur()
                   }

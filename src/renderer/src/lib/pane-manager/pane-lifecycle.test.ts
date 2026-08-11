@@ -69,6 +69,7 @@ function createPane(): ManagedPaneInternal {
     ligaturesAddon: null,
     webLinksAddon: {} as never,
     webglAddon: null,
+    compositionHandler: null,
     pendingSplitScrollState: null,
     debugLabel: null
   }
@@ -526,6 +527,12 @@ describe('openTerminal — addon and provider wiring', () => {
       deregisterCharacterJoiner: vi.fn((joinerId: number) => {
         events.push(`deregisterCharacterJoiner:${joinerId}`)
       }),
+      clearSelection: vi.fn(() => {
+        events.push('clearSelection')
+      }),
+      dispose: vi.fn(() => {
+        events.push('dispose')
+      }),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
     } as unknown as ManagedPaneInternal['terminal']
@@ -553,6 +560,7 @@ describe('openTerminal — addon and provider wiring', () => {
       ligaturesAddon: null,
       webLinksAddon,
       webglAddon: null,
+      compositionHandler: null,
       pendingSplitScrollState: null,
       debugLabel: null
     }
@@ -603,6 +611,15 @@ describe('openTerminal — addon and provider wiring', () => {
 
     expect(events).toContain('deregisterCharacterJoiner:3')
     expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  it('clears selection before disposing a remounted pane', () => {
+    const { pane, events } = createOpenTerminalHarness()
+    openTerminal(pane)
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events.indexOf('clearSelection')).toBeLessThan(events.indexOf('dispose'))
   })
 
   // Why: a link streamed under a stationary pointer must re-linkify on the next

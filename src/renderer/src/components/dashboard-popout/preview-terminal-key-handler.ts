@@ -4,19 +4,15 @@ import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
 import { prefetchLayoutBaseCharacters } from '@/lib/keyboard-layout/layout-base-character'
 import { createTerminalNativeOnlyShortcutTracker } from '@/components/terminal-pane/terminal-native-only-shortcut'
-import { installTerminalNativeInputListeners } from '@/components/terminal-pane/terminal-native-input-listeners'
 import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
 } from './preview-terminal-shortcuts'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
-import { shouldBypassXtermForMacNativeText } from '@/components/terminal-pane/xterm-bypass-policy'
-import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
 
 /**
  * Installs the preview terminal's ONE custom key handler (xterm allows a single
- * attachCustomKeyEventHandler) covering copy/paste chords and the full pane
- * shortcut policy. Plain Mod+V is left to the
+ * attachCustomKeyEventHandler) covering copy/paste chords, the IME native-text
+ * bypass, and the full pane shortcut policy. Plain Mod+V is left to the
  * Edit-menu accelerator, which reaches this window as ui:appMenuPaste — matching
  * it here too would paste twice.
  *
@@ -25,6 +21,7 @@ import { isLatinShortcutKey } from '@/lib/ime-latin-shortcut-key'
  */
 export function installPreviewTerminalKeyHandler(args: {
   terminal: Terminal
+  claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
   /** Everything but optionKeyLocation, which this installer tracks itself. */
@@ -40,33 +37,57 @@ export function installPreviewTerminalKeyHandler(args: {
     return false
   }
 
+  // Why: a character key's KeyboardEvent.location reports its own position, so
+  // left-vs-right Option must be recorded from the modifier's own keydown.
   let optionKeyLocation = 0
-  const disposeNativeInputListeners = installTerminalNativeInputListeners(
-    window,
-    nativeOnlyShortcutTracker,
-    (location) => {
-      optionKeyLocation = location
-    },
-    // Why: the preview dialog has dropped the tracked side on blur since #11015.
-    { forgetOptionKeyLocationOnBlur: true }
-  )
+  const onModifierDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Alt') {
+      optionKeyLocation = event.location
+    }
+  }
+  const onModifierUp = (event: KeyboardEvent): void => {
+    if (event.key === 'Alt') {
+      optionKeyLocation = 0
+    }
+  }
+  const onWindowBlur = (): void => {
+    optionKeyLocation = 0
+    nativeOnlyShortcutTracker.clear()
+  }
+  const onNativeOnlyShortcutCompanion = (event: KeyboardEvent): void => {
+    if (!nativeOnlyShortcutTracker.consumeCompanion(event)) {
+      return
+    }
+    if (event.type === 'keypress') {
+      event.preventDefault()
+    }
+    event.stopImmediatePropagation()
+  }
+  const onNativeOnlyBeforeInput = (event: Event): void => {
+    if (
+      !(event instanceof InputEvent) ||
+      !nativeOnlyShortcutTracker.shouldSuppressBeforeInput(event)
+    ) {
+      return
+    }
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }
   if (platform === 'darwin') {
     // Why: kitty Option-chord encoding resolves base keys through the async
     // KeyboardLayoutMap; prefetch so the map is cached before the first chord.
     prefetchLayoutBaseCharacters()
   }
+  window.addEventListener('keydown', onModifierDown, true)
+  window.addEventListener('keyup', onModifierUp, true)
+  window.addEventListener('keypress', onNativeOnlyShortcutCompanion, true)
+  window.addEventListener('keyup', onNativeOnlyShortcutCompanion, true)
+  window.addEventListener('beforeinput', onNativeOnlyBeforeInput, true)
+  window.addEventListener('blur', onWindowBlur)
 
   terminal.attachCustomKeyEventHandler((event) => {
-    if (isImeOwnedKeyboardEvent(event)) {
-      return true
-    }
-    if (
-      shouldBypassXtermForMacNativeText(
-        event,
-        platform === 'darwin',
-        args.getShortcutContext().kittyKeyboardActive()
-      )
-    ) {
+    if (args.claimImeKeyEvent(event)) {
+      // Why: bypass xterm's kitty encoder for native-text keydowns so the committed glyph survives via the input event.
       return false
     }
     if (event.type !== 'keydown') {
@@ -82,10 +103,20 @@ export function installPreviewTerminalKeyHandler(args: {
     nativeOnlyShortcutTracker.prepareKeyDown(event)
     const keybindings = useAppStore.getState().keybindings
     if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+      const selection = terminal.getSelection()
+      if (
+        !selection &&
+        platform !== 'darwin' &&
+        event.ctrlKey &&
+        !event.metaKey &&
+        !event.altKey &&
+        !event.shiftKey
+      ) {
+        return true
+      }
       const keyIdentity = event.code || event.key
       const firstKeydown = !consumedClipboardKeys.has(keyIdentity)
       consumedClipboardKeys.add(keyIdentity)
-      const selection = terminal.getSelection()
       if (firstKeydown && selection) {
         void window.api.ui.writeTerminalClipboardText(selection).catch(() => undefined)
       }
@@ -95,7 +126,7 @@ export function installPreviewTerminalKeyHandler(args: {
       (platform === 'darwin' ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) &&
       !event.altKey &&
       !event.shiftKey &&
-      isLatinShortcutKey(event, 'v')
+      event.key.toLowerCase() === 'v'
     if (
       !isMenuPasteChord &&
       keybindingMatchesAction('terminal.paste', event, platform, keybindings)
@@ -126,6 +157,12 @@ export function installPreviewTerminalKeyHandler(args: {
           terminal.scrollToBottom()
         }
         return consumeEvent(event)
+      case 'selectAll':
+        if (!event.repeat) {
+          nativeOnlyShortcutTracker.armKeyDown(event)
+          terminal.selectAll()
+        }
+        return consumeEvent(event)
       case 'switchInputSource':
         // Why: the OS owns this chord — block xterm without preventing the default.
         nativeOnlyShortcutTracker.armKeyDown(event)
@@ -150,5 +187,12 @@ export function installPreviewTerminalKeyHandler(args: {
     }
   })
 
-  return disposeNativeInputListeners
+  return () => {
+    window.removeEventListener('keydown', onModifierDown, true)
+    window.removeEventListener('keyup', onModifierUp, true)
+    window.removeEventListener('keypress', onNativeOnlyShortcutCompanion, true)
+    window.removeEventListener('keyup', onNativeOnlyShortcutCompanion, true)
+    window.removeEventListener('beforeinput', onNativeOnlyBeforeInput, true)
+    window.removeEventListener('blur', onWindowBlur)
+  }
 }

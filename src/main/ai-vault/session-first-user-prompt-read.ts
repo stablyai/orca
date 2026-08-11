@@ -2,7 +2,6 @@ import { realpath, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import type {
   AiVaultAgent,
-  AiVaultFirstUserPromptArgs,
   AiVaultFirstUserPromptResult,
   AiVaultSession
 } from '../../shared/ai-vault-types'
@@ -71,22 +70,6 @@ async function canonicalOpenCodeDatabasePath(filePath: string): Promise<string |
     return null
   }
   return synthetic ? `${canonicalPath}#${synthetic.sessionId}` : canonicalPath
-}
-
-/** IPC-safe entry: validates untyped payload then reads the full first prompt. */
-export async function handleAiVaultGetFirstUserPrompt(
-  args?: AiVaultFirstUserPromptArgs
-): Promise<AiVaultFirstUserPromptResult> {
-  if (!args || typeof args.filePath !== 'string' || typeof args.agent !== 'string') {
-    return { prompt: null }
-  }
-  return readAiVaultFirstUserPrompt({
-    agent: args.agent,
-    filePath: args.filePath,
-    sessionId: typeof args.sessionId === 'string' ? args.sessionId : undefined,
-    executionHostId: args.executionHostId,
-    codexHome: args.codexHome
-  })
 }
 
 /**

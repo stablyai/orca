@@ -166,8 +166,9 @@ export function rovoPartsText(parts: unknown[], role: 'user' | 'assistant'): str
 }
 
 // Agents whose transcripts are append-only message-graph JSONL (session +
-// model_change + message records). OMP is a Pi fork and shares the format.
-export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp'
+// model_change + message records). OMP and Prime Agent are Pi forks and
+// share the format.
+export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
 
 export async function parseMessageGraphSessionFile(
   agent: MessageGraphAgent,
@@ -246,7 +247,7 @@ export function createMessageGraphSessionResumeState(
   )
   // Why: only OMP materializes task-subagent transcripts beside its sessions
   // (in the same-named artifact dir); the row UI shows the count without
-  // expanding details. Pi/OpenClaw have no such layout — skip the readdir.
+  // expanding details. Pi/OpenClaw/Prime Agent have no such layout — skip the readdir.
   return agent === 'omp' ? withOmpSubagentTranscriptCount(state, file.path) : state
 }
 

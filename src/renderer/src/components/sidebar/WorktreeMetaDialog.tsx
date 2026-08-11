@@ -21,12 +21,7 @@ import {
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
-import { getScreenSubmitShortcutLabel } from '@/lib/screen-submit-shortcut'
-import { handleWorktreeMetaCommentKeyDown } from './worktree-meta-enter-handlers'
-import {
-  isImeOwnedKeyboardEvent,
-  useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
+import { getScreenSubmitShortcutLabel, isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isWorkItemLinkQueryTooLarge } from '../../../../shared/new-workspace/work-item-link-query-bounds'
@@ -35,6 +30,7 @@ import {
   parseIssueLinkInput,
   type IssueLinkProvider
 } from '../../../../shared/issue-link-input'
+import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 
 function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto'
@@ -55,7 +51,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const closeModal = useAppStore((s) => s.closeModal)
   const updateWorktreeMeta = useAppStore((s) => s.updateWorktreeMeta)
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
-  const commentEnterGesture = useImeEnterGestureOwnership()
 
   const isEditMeta = activeModal === 'edit-meta'
   const isOpen = isEditMeta
@@ -99,6 +94,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<WorktreeMetaSnapshot>(EMPTY_SNAPSHOT)
+  const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const { canOpenIssue, openingIssue, openIssueFailed, handleOpenIssue, resetOpeningIssue } =
     useWorktreeIssueLink({
       worktreeId,
@@ -265,18 +261,18 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
 
   const handleCommentKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      handleWorktreeMetaCommentKeyDown(e, commentEnterGesture, handleSave)
+      const isPlainEnter = e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey
+      if (isPlainEnter || isScreenSubmitShortcut(e)) {
+        e.preventDefault()
+        e.stopPropagation()
+        handleSave()
+      }
     },
-    [commentEnterGesture, handleSave]
+    [handleSave]
   )
 
   const handleIssueKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      // Oracle tier only: issue/PR fields take digits and URLs, not CJK prose, so the
-      // unmarked-redispatch residual isn't worth the carry token here.
-      if (isImeOwnedKeyboardEvent(e)) {
-        return
-      }
       if (e.key === 'Enter') {
         e.preventDefault()
         handleSave()
@@ -288,6 +284,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
+        ref={setDialogElement}
         className="max-w-md"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
@@ -318,28 +315,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.sidebar.WorktreeMetaDialog.ad5e4e514f', 'Display Name')}
-            </label>
-            <Input
-              ref={displayNameInputRef}
-              value={displayNameInput}
-              onChange={(e) => setDisplayNameInput(e.target.value)}
-              onKeyDown={handleIssueKeyDown}
-              placeholder={translate(
-                'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
-                'Custom display name...'
-              )}
-              className="h-8 text-xs"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.459ad7f650',
-                'Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.'
-              )}
-            </p>
-          </div>
+          <WorktreeDisplayNameField
+            disabled={saving}
+            inputRef={displayNameInputRef}
+            onEnter={handleSave}
+            onValueChange={setDisplayNameInput}
+            portalContainer={dialogElement}
+            value={displayNameInput}
+          />
 
           <WorktreeIssueLinkField
             inputRef={issueInputRef}
@@ -388,9 +371,6 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
               ref={setCommentTextareaRef}
               value={commentInput}
               onChange={handleCommentChange}
-              onCompositionStart={() => commentEnterGesture.setComposing(true)}
-              onCompositionEnd={() => commentEnterGesture.setComposing(false)}
-              onKeyUp={(e) => commentEnterGesture.onKeyUp(e)}
               onKeyDown={handleCommentKeyDown}
               placeholder={translate(
                 'auto.components.sidebar.WorktreeMetaDialog.030d484fc0',

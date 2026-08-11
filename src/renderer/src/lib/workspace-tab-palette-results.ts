@@ -1,3 +1,5 @@
+import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 import type {
@@ -26,7 +28,7 @@ export type WorkspaceTabPaletteSearchResult = {
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 function findRange(text: string, query: string): MatchRange | null {
@@ -187,14 +189,7 @@ export function searchWorkspaceTabs(
     }
 
     // Why after display secondaries: path/file matches should beat bare type labels.
-    let typeAliasHit: { text: string; range: MatchRange } | null = null
-    for (const alias of entry.typeSearchAliases ?? []) {
-      const range = findRange(alias, trimmedQuery)
-      if (range) {
-        typeAliasHit = { text: alias, range }
-        break
-      }
-    }
+    const typeAliasHit = selectPaletteTypeAliasMatch(entry.typeSearchAliases ?? [], trimmedQuery)
     if (typeAliasHit) {
       results.push({
         ...baseResult,

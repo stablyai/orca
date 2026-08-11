@@ -39,7 +39,7 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }

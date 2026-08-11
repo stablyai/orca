@@ -18,6 +18,7 @@ import {
   consumeFloatingTerminalOpenMaximizedIntent,
   requestFloatingTerminalOpenMaximized
 } from '@/lib/floating-terminal'
+import { FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY } from './floating-terminal-panel-view-state'
 import {
   clearFloatingPanelReclaimIntent,
   consumeFloatingPanelReclaimIntent
@@ -124,6 +125,7 @@ const mocks = vi.hoisted(() => ({
   getFloatingMarkdownDirectory: vi.fn(),
   getFloatingTerminalCwd: vi.fn(),
   getInstallStatus: vi.fn(),
+  isTerminalImeInputContextRefreshing: vi.fn(),
   isWebRuntimeSessionActive: vi.fn(),
   markFileDirty: vi.fn(),
   makePreviewFilePermanent: vi.fn(),
@@ -215,6 +217,10 @@ vi.mock('@/components/terminal-pane/use-terminal-tab-cold-parking', () => ({
 
 vi.mock('@/components/terminal-pane/terminal-parked-tab-watchers', () => ({
   shouldDeferParkedPtyExitTabClose: mocks.shouldDeferParkedPtyExitTabClose
+}))
+
+vi.mock('@/components/terminal-pane/terminal-ime-input-context-refresh', () => ({
+  isTerminalImeInputContextRefreshing: mocks.isTerminalImeInputContextRefreshing
 }))
 
 // closeFloatingItemConfirmed routes terminals through closeTerminalTab (own pin guard + F9
@@ -822,6 +828,7 @@ describe('FloatingTerminalPanel close behavior', () => {
     mocks.getFloatingMarkdownDirectory.mockResolvedValue('/tmp/orca/floating-notes')
     mocks.getFloatingTerminalCwd.mockResolvedValue('/tmp/orca')
     mocks.getInstallStatus.mockResolvedValue({ state: 'installed', pathConfigured: true })
+    mocks.isTerminalImeInputContextRefreshing.mockReturnValue(false)
     mocks.isWebRuntimeSessionActive.mockReturnValue(false)
     mocks.pickFloatingMarkdownDocument.mockResolvedValue(null)
     mocks.shouldDeferParkedPtyExitTabClose.mockReturnValue(false)
@@ -886,6 +893,41 @@ describe('FloatingTerminalPanel close behavior', () => {
     expect(getPanelClassName(element)).toContain('z-[45]')
   })
 
+  it('refreshes terminal native input focus when the floating panel opens', async () => {
+    setFloatingTabs([makeTab({ id: 'tab-1' })])
+
+    await renderPanel(true)
+    runEffects()
+
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(
+      'tab-1',
+      null,
+      expect.objectContaining({
+        onImeRefocusSkipped: expect.any(Function),
+        refreshImeContext: true
+      })
+    )
+    mocks.setFloatingFocus.mockClear()
+    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped()
+    // No refocus target: both bits false (atomic payload, F7).
+    expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
+      panelFocused: false,
+      terminalFocused: false
+    })
+
+    const newerFloatingInput = {
+      classList: { contains: (token: string) => token === 'xterm-helper-textarea' },
+      closest: vi.fn().mockReturnValue({})
+    }
+    Object.setPrototypeOf(newerFloatingInput, HTMLElement.prototype)
+    mocks.focusTerminalTabSurface.mock.calls[0]?.[2].onImeRefocusSkipped(newerFloatingInput)
+    // Relatched onto the floating xterm: panel ⊇ terminal, both true.
+    expect(mocks.setFloatingFocus).toHaveBeenLastCalledWith({
+      panelFocused: true,
+      terminalFocused: true
+    })
+  })
+
   it('preserves and reclaims terminal input ownership across window blur', async () => {
     setFloatingTabs([makeTab({ id: 'tab-1' })])
     const element = await renderPanel(true)
@@ -909,15 +951,13 @@ describe('FloatingTerminalPanel close behavior', () => {
     Object.setPrototypeOf(panelElement, HTMLElement.prototype)
     Object.setPrototypeOf(terminalInput, HTMLElement.prototype)
     attachRef(panel.props.ref, panelElement)
+    mocks.isTerminalImeInputContextRefreshing.mockReturnValueOnce(true)
     const onBlurCapture = panel.props.onBlurCapture as (event: unknown) => void
     onBlurCapture({
       relatedTarget: null,
       target: terminalInput
     })
-    expect(mocks.setFloatingFocus).toHaveBeenCalledWith({
-      panelFocused: false,
-      terminalFocused: false
-    })
+    expect(mocks.setFloatingFocus).not.toHaveBeenCalled()
     const documentState = {
       activeElement: terminalInput as unknown as HTMLElement | null,
       addEventListener: vi.fn(),
@@ -961,7 +1001,9 @@ describe('FloatingTerminalPanel close behavior', () => {
       'tab-1',
       'leaf-1',
       expect.objectContaining({
-        onlyIfFocusUnclaimed: true
+        onlyIfFocusUnclaimed: true,
+        onImeRefocusSkipped: expect.any(Function),
+        refreshImeContext: true
       })
     )
   })
@@ -1156,14 +1198,45 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     element = await renderPanel(true)
     expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
 
     const restoredControls = findByTypeName(element, 'FloatingTerminalWindowControls')
     ;(restoredControls.props.onToggleMaximized as () => void)()
     element = await renderPanel(true)
 
     expect(getPanelStyleBounds(element)).toEqual(savedBounds)
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
+  })
+
+  it('restores saved normal bounds after starting maximized', async () => {
+    const savedBounds = { left: 120, top: 96, width: 760, height: 420 }
+    getMockedLocalStorage().getItem.mockImplementation((key: string) => {
+      if (key === FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY) {
+        return JSON.stringify(savedBounds)
+      }
+      return key === FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY
+        ? JSON.stringify({ open: true, maximized: true })
+        : null
+    })
+
+    let element = await renderPanel(true)
+    expect(getPanelStyleBounds(element)).toEqual(getMaximizedFloatingTerminalBounds())
+
+    const controls = findByTypeName(element, 'FloatingTerminalWindowControls')
+    ;(controls.props.onToggleMaximized as () => void)()
+    element = await renderPanel(true)
+
+    expect(getPanelStyleBounds(element)).toEqual(savedBounds)
   })
 
   it('restores committed normal bounds after maximizing from a skinny clamp', async () => {
@@ -1198,7 +1271,12 @@ describe('FloatingTerminalPanel close behavior', () => {
       width: 920,
       height: 560
     })
-    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalled()
+    // Why key-scoped rather than "no writes": maximize now persists panel view state under
+    // its own key. The invariant here is that the saved NORMAL bounds are never clobbered.
+    expect(getMockedLocalStorage().setItem).not.toHaveBeenCalledWith(
+      FLOATING_TERMINAL_PANEL_BOUNDS_STORAGE_KEY,
+      expect.anything()
+    )
   })
 
   it('does not bootstrap a terminal tab when the panel opens empty', async () => {
@@ -2440,6 +2518,16 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
     expect(editorPanel.props.activeFileId).toBe('notes')
+    expect(editorPanel.props.isVisible).toBe(true)
+  })
+
+  it('marks the retained floating editor hidden when the panel is closed', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'notes' })])
+
+    const element = await renderPanel(false)
+    const editorPanel = findByProp(element, 'activeFileId')
+
+    expect(editorPanel.props.isVisible).toBe(false)
   })
 
   it('keeps the panel open when the explicit close action removes the last tab', async () => {

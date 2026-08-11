@@ -46,7 +46,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: (candidate) => candidate === ROLLOUT_UNC,
+        pathExists: async (candidate) => candidate === ROLLOUT_UNC,
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBe(ROLLOUT_UNC)
@@ -59,7 +59,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/x.jsonl', {
         platform: 'win32',
-        pathExists: (candidate) => {
+        pathExists: async (candidate) => {
           seen.push(candidate)
           return true
         },
@@ -75,7 +75,7 @@ describe('toHostReadableTranscriptPath', () => {
       await expect(
         toHostReadableTranscriptPath(path, {
           platform: 'win32',
-          pathExists: (candidate) => candidate === path,
+          pathExists: async (candidate) => candidate === path,
           listWslHomeDirs: async () => {
             throw new Error('should not enumerate distros')
           }
@@ -89,7 +89,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/.codex/sessions/rollout.jsonl', {
         platform: 'win32',
-        pathExists: (candidate) => {
+        pathExists: async (candidate) => {
           seen.push(candidate)
           return true
         },
@@ -103,7 +103,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: () => false,
+        pathExists: async () => false,
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBeNull()
@@ -113,7 +113,7 @@ describe('toHostReadableTranscriptPath', () => {
     await expect(
       toHostReadableTranscriptPath('/home/ada/rollout.jsonl', {
         platform: 'darwin',
-        pathExists: (candidate) => candidate === '/home/ada/rollout.jsonl',
+        pathExists: async (candidate) => candidate === '/home/ada/rollout.jsonl',
         listWslHomeDirs: async () => {
           throw new Error('should not enumerate distros')
         }
@@ -128,7 +128,7 @@ describe('toHostReadableTranscriptPath', () => {
     for (let tick = 0; tick < 5; tick += 1) {
       await toHostReadableTranscriptPath(ROLLOUT_LINUX, {
         platform: 'win32',
-        pathExists: () => false,
+        pathExists: async () => false,
         listWslHomeDirs
       })
     }
@@ -151,7 +151,7 @@ describe('toHostReadableTranscriptPath', () => {
       const call = (): Promise<string | null> =>
         toHostReadableTranscriptPath('/home/other/x.jsonl', {
           platform: 'win32',
-          pathExists: (candidate) => candidate === debianRollout,
+          pathExists: async (candidate) => candidate === debianRollout,
           listWslHomeDirs
         })
 

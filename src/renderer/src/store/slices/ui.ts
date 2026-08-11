@@ -36,7 +36,6 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
-import { normalizeLinearIssueViewResumeState } from '../../../../shared/linear-issue-view-resume-state'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -560,12 +559,6 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   if (typeof input.linearQuery === 'string') {
     next.linearQuery = input.linearQuery
   }
-  // Why: normalization drops a malformed preference or filter entry on its own,
-  // so corrupt Linear view state can't take the rest of the resume state down.
-  const linearIssueView = normalizeLinearIssueViewResumeState(input.linearIssueView)
-  if (linearIssueView) {
-    next.linearIssueView = linearIssueView
-  }
   if (input.linearContext && typeof input.linearContext === 'object') {
     const context = input.linearContext as Record<string, unknown>
     if (
@@ -706,6 +699,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
+  setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -797,6 +792,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'preserved-branch-review'
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
@@ -901,6 +897,8 @@ export type UISlice = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideWorkspacesFromOtherDevices: boolean
+  setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean
   setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
@@ -1265,6 +1263,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1419,6 +1418,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
@@ -2092,6 +2092,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
   hideDetachedHeadWorkspaces: false,
   setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  hideWorkspacesFromOtherDevices: false,
+  setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
   alwaysShowDefaultBranchWorkspace: true,
   setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
@@ -2500,6 +2502,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
         hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
         // Why !== false: profiles written before #8873 have no key, and they are
         // precisely the ones showing the bug, so absence must mean "exempt".
         alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,

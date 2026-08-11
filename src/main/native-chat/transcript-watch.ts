@@ -23,13 +23,21 @@ export type {
  *  is unresolved; native-watch failure degrades to reconciliation-only mode. */
 async function attemptInstall(
   args: SubscribeNativeChatTranscriptArgs,
-  decode: (line: string, fallbackId: string) => NativeChatMessage | null
+  decode: (line: string, fallbackId: string) => NativeChatMessage | null,
+  signal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription | null> {
-  const filePath = args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args))
+  const filePath =
+    args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
+  signal?.throwIfAborted()
   if (!filePath) {
     return null
   }
-  return installTranscriptWatcher(filePath, decode, args)
+  const installed = await installTranscriptWatcher(filePath, decode, args)
+  if (signal?.aborted) {
+    installed?.unsubscribe()
+    signal.throwIfAborted()
+  }
+  return installed
 }
 
 // Why: Claude Code (and other agents) can take from ~3s to minutes to flush a
@@ -69,6 +77,7 @@ function subscribeViaResolvePoll(
   // the exact-path install doesn't wait on the slower id-glob (#10326).
   let hostReadableExactPath: string | null = null
   let lastWslTranslateAt = 0
+  const resolveController = new AbortController()
 
   function scheduleAttempt(): void {
     if (closed) {
@@ -105,24 +114,33 @@ function subscribeViaResolvePoll(
           // Validate the exact path before passing it as an internal file path.
           hostReadableExactPath = await resolveHostOwnedTranscriptPath(args.agent, exactPath, args)
         } else if (Date.now() - lastWslTranslateAt >= FALLBACK_RESOLVE_POLL_MS) {
-          // Why: translating sync-stats the UNC twin per distro over the 9P
+          // Why: translating probes the UNC twin per distro over the 9P
           // share, and the guest file usually appears well after the hook does,
           // so retry on the slow cadence rather than every fast tick. The raw
           // guest path is never installed on Windows — it would resolve against
           // the current drive (`C:\home\…`) and bind chat to a look-alike file.
           lastWslTranslateAt = Date.now()
-          hostReadableExactPath = await resolveHostOwnedTranscriptPath(args.agent, exactPath, args)
+          hostReadableExactPath = await resolveHostOwnedTranscriptPath(
+            args.agent,
+            exactPath,
+            args,
+            resolveController.signal
+          )
         }
       }
       result = hostReadableExactPath
-        ? await attemptInstall({ ...args, filePath: hostReadableExactPath }, decode)
+        ? await attemptInstall(
+            { ...args, filePath: hostReadableExactPath },
+            decode,
+            resolveController.signal
+          )
         : null
       if (
         !result &&
         (!exactPath || Date.now() - lastFallbackResolveAt >= FALLBACK_RESOLVE_POLL_MS)
       ) {
         lastFallbackResolveAt = Date.now()
-        result = await attemptInstall(args, decode)
+        result = await attemptInstall(args, decode, resolveController.signal)
       }
     } catch {
       // Why: a transient resolve failure (EACCES/EIO during the glob) must not
@@ -150,6 +168,7 @@ function subscribeViaResolvePoll(
         return
       }
       closed = true
+      resolveController.abort()
       if (pollTimer) {
         clearTimeout(pollTimer)
         pollTimer = null
@@ -174,8 +193,10 @@ function subscribeViaResolvePoll(
  * than returning a no-op that never recovers.
  */
 export async function subscribeNativeChatTranscript(
-  args: SubscribeNativeChatTranscriptArgs
+  args: SubscribeNativeChatTranscriptArgs,
+  setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
+  setupSignal?.throwIfAborted()
   const decode = nativeChatLineDecoderForAgent(args.agent)
   // Why: OpenCode keeps conversations in SQLite, not a JSONL file, so live
   // updates come from a poll-based reconcile loop instead of fs.watch on a file.
@@ -200,9 +221,10 @@ export async function subscribeNativeChatTranscript(
     return { unsubscribe: () => {}, watching: false }
   }
 
-  const installed = await attemptInstall(args, decode)
+  const installed = await attemptInstall(args, decode, setupSignal)
   if (installed) {
     return installed
   }
+  setupSignal?.throwIfAborted()
   return subscribeViaResolvePoll(args, decode)
 }

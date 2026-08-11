@@ -565,7 +565,7 @@ describe('native chat PTY session options', () => {
     )
 
     const result = await surface.invokeAction('effort')
-    expect(dispatch).toHaveBeenCalledWith('/model')
+    expect(dispatch).toHaveBeenCalledWith('/model', { delivery: 'type' })
     expect(onAgentPicker).toHaveBeenCalledOnce()
     expect(result.snapshot).toHaveLength(1)
     expect(result.snapshot[0]).toMatchObject({ valueSource: 'unknown' })

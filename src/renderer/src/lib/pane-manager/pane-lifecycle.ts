@@ -18,6 +18,7 @@ import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -92,6 +93,9 @@ export function openTerminal(pane: ManagedPaneInternal): void {
     terminal,
     () => pane.webglAddon != null
   )
+
+  // Store so disposePane() can remove it and avoid a memory leak.
+  pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
 
@@ -202,6 +206,11 @@ export function disposePane(
     /* ignore */
   }
   pane.arabicShapingJoinerCleanup = null
+  if (pane.compositionHandler) {
+    pane.terminal.element?.removeEventListener('compositionstart', pane.compositionHandler)
+    pane.terminal.element?.removeEventListener('compositionupdate', pane.compositionHandler)
+    pane.compositionHandler = null
+  }
   try {
     clearPendingSplitScrollRestore(pane)
   } catch {
@@ -242,6 +251,12 @@ export function disposePane(
   }
   try {
     pane.fitAddon.dispose()
+  } catch {
+    /* ignore */
+  }
+  try {
+    // Drop renderer selection state before a recovery remount replaces the surface.
+    pane.terminal.clearSelection()
   } catch {
     /* ignore */
   }

@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { activateAndRevealWorktree } from './worktree-activation'
 
 export type SimulatorTabPaletteActivationFailure = 'missing-tab' | 'missing-worktree'
@@ -8,11 +9,13 @@ export type SimulatorTabPaletteActivationResult =
   | { status: 'failed'; reason: SimulatorTabPaletteActivationFailure }
 
 export type SimulatorTabPaletteActivationTarget = {
+  executionHostId?: ExecutionHostId
   tabId: string
   worktreeId: string
 }
 
 export function activateSimulatorTabPaletteResult({
+  executionHostId,
   tabId,
   worktreeId
 }: SimulatorTabPaletteActivationTarget): SimulatorTabPaletteActivationResult {
@@ -24,16 +27,15 @@ export function activateSimulatorTabPaletteResult({
     return { status: 'failed', reason: 'missing-tab' }
   }
 
-  // Why thread hostId: activateAndRevealWorktree resolves the worktree and stores
-  // activeWorkspaceExecutionHostId from it, so remote-hosted worktrees need it.
-  const worktree = initialState.getKnownWorktreeById(worktreeId)
+  const worktree = initialState.getKnownWorktreeById(worktreeId, executionHostId)
   if (!worktree) {
     return { status: 'failed', reason: 'missing-worktree' }
   }
 
+  const targetHostId = executionHostId ?? worktree.hostId
   const activated = activateAndRevealWorktree(
     worktree.id,
-    worktree.hostId ? { executionHostId: worktree.hostId } : {}
+    targetHostId ? { executionHostId: targetHostId } : {}
   )
   if (!activated) {
     return { status: 'failed', reason: 'missing-worktree' }

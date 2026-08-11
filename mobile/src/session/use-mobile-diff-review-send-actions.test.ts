@@ -52,7 +52,6 @@ describe('useMobileDiffReviewSendActions', () => {
   let saveCommentsAndReviewState: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     resetMobileNativeChatStaleInputForTests()
     setActionError = vi.fn()
     setSendSheet = vi.fn()
@@ -81,20 +80,9 @@ describe('useMobileDiffReviewSendActions', () => {
 
   async function mount(client: RpcClient): Promise<void> {
     mountedClient = client
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness))
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
   }
 
   it('heals a marked terminal BEFORE submitting the notes', async () => {

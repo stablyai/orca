@@ -94,6 +94,7 @@ docs/**
 !docs/readme/
 !docs/readme/**
 !docs/STYLEGUIDE.md
+!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md
@@ -102,7 +103,6 @@ docs/**
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-wire-compatibility.md
 !docs/reference/windows-setup-shell.md
-!docs/reference/xterm-patch-regeneration.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*

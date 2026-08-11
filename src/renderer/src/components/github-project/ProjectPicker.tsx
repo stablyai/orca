@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -622,11 +621,6 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                     )
                   }}
                   onKeyDown={(e) => {
-                    // Oracle tier only: this field takes URLs and owner/number refs, not CJK
-                    // prose, so the unmarked-redispatch residual is negligible.
-                    if (isImeOwnedKeyboardEvent(e)) {
-                      return
-                    }
                     if (e.key === 'Enter') {
                       void handlePaste()
                     }

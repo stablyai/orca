@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as NodeFsModule from 'node:fs'
+import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
 const ROLLOUT_LINUX =
@@ -25,11 +25,15 @@ vi.mock('../wsl', () => ({
   listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
   getWslHomeAsync: vi.fn(async () => UBUNTU_HOME)
 }))
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFsModule>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromisesModule>()
   return {
     ...actual,
-    existsSync: (path: string) => path === ROLLOUT_UNC || actual.existsSync(path)
+    access: async (path: string) => {
+      if (path !== ROLLOUT_UNC) {
+        await actual.access(path)
+      }
+    }
   }
 })
 
