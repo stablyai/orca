@@ -84,13 +84,6 @@ export function OnboardingInlineCommandTerminal({
     shellOverride: string | undefined
   } | null>(null)
   const tabId = createdTab?.id ?? null
-  const terminalCommand = useMemo(
-    () =>
-      createdTab
-        ? (prepareCommandForShell?.(command, createdTab.shellOverride) ?? command)
-        : command,
-    [command, createdTab, prepareCommandForShell]
-  )
   // Why: starts at `prefersReducedMotion` so users opted out of motion never
   // see the slide-in frame; otherwise we flip to true after first paint so the
   // CSS transition has a starting state to interpolate from.
@@ -218,9 +211,17 @@ export function OnboardingInlineCommandTerminal({
   }, [autoScrollIntoView, entered, prefersReducedMotion])
 
   const insertCommand = useCallback(() => {
-    if (!tabId) {
+    if (!createdTab) {
       return
     }
+    const terminalCommand = prepareCommandForShell?.(command, createdTab.shellOverride) ?? command
+    if (
+      autoInsertedRef.current?.tabId === createdTab.id &&
+      autoInsertedRef.current.command === terminalCommand
+    ) {
+      return
+    }
+    autoInsertedRef.current = { tabId: createdTab.id, command: terminalCommand }
     if (autoScrollIntoView) {
       terminalSectionRef.current?.scrollIntoView({
         behavior: 'auto',
@@ -230,21 +231,16 @@ export function OnboardingInlineCommandTerminal({
     window.dispatchEvent(
       new CustomEvent<PasteTerminalTextDetail>(PASTE_TERMINAL_TEXT_EVENT, {
         detail: {
-          tabId,
+          tabId: createdTab.id,
           text: terminalCommand.trim()
         }
       })
     )
-    focusTerminalTabSurface(tabId)
-  }, [autoScrollIntoView, tabId, terminalCommand])
+    focusTerminalTabSurface(createdTab.id)
+  }, [autoScrollIntoView, command, createdTab, prepareCommandForShell])
 
   useEffect(() => {
-    if (
-      !tabId ||
-      !cwd ||
-      (autoInsertedRef.current?.tabId === tabId &&
-        autoInsertedRef.current.command === terminalCommand)
-    ) {
+    if (!tabId || !cwd) {
       return
     }
     let canceled = false
@@ -258,7 +254,6 @@ export function OnboardingInlineCommandTerminal({
       }
       insertionTimer = window.setTimeout(() => {
         if (!canceled) {
-          autoInsertedRef.current = { tabId, command: terminalCommand }
           insertCommand()
         }
       }, AUTO_INSERT_DELAY_MS)
@@ -302,7 +297,7 @@ export function OnboardingInlineCommandTerminal({
         window.clearTimeout(insertionTimer)
       }
     }
-  }, [cwd, insertCommand, tabId, terminalCommand])
+  }, [cwd, insertCommand, tabId])
 
   // Why: grid 0fr → 1fr animates to the child's natural height without a
   // hardcoded max-height, so we don't leave dead space if the terminal
