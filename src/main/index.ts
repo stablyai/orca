@@ -1033,8 +1033,8 @@ function prepareCodexRuntimeHomeForLaunch(
     }
     // Why (flag ON, system default): the hook entry must exist — appended last
     // and trusted by codex's own app-server grant — in the real ~/.codex before
-    // the pane spawns. An incapable grant flips the lane gate so the launch
-    // below falls back to the managed home instead of a status-blind pane.
+    // the pane spawns. A failed grant removes only Orca's optional status hook;
+    // authentication still comes from the user's native Codex home.
     ensureRealHomeCodexHookState({
       hooksEnabled: isAgentStatusHooksEnabled(store?.getSettings()),
       userDataPath: app.getPath('userData')
@@ -1047,8 +1047,8 @@ function prepareCodexRuntimeHomeForLaunch(
   })
   if (runtimeHomePath === null && !realHomeHooksPrepared) {
     // Why: launch prep can reject an untrusted managed home and clear its
-    // selection. Establish hook capability for that newly selected lane, then
-    // re-resolve if the capability gate rejects it.
+    // selection. Establish hook state for that newly selected lane, then
+    // re-resolve after the selection change.
     realHomeHooksPrepared = ensureRealHomeHooksIfSelected()
     if (realHomeHooksPrepared) {
       runtimeHomePath = codexRuntimeHome!.prepareForCodexLaunch(target, launchEnv, {
@@ -2367,17 +2367,14 @@ void app.whenReady().then(async () => {
   rateLimits = new RateLimitService()
   codexRuntimeHome = new CodexRuntimeHomeService(store)
   void startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
-  // Why: an incapable trust-grant host must fall back to the managed home for
-  // every consumer (PTY env, rate limits, commit messages) in one place.
-  codexRuntimeHome.setRealHomeLaneGate(() => isRealHomeCodexHookLaneUsable())
-  // Why: while the real-home lane owns ~/.codex/hooks.json, the legacy
-  // system-home sweep inside managed installs would delete the entry the
-  // real-home installer just appended. Flag OFF, hooks off, or an incapable
-  // trust lane re-arms the sweep so downgrade, opt-out, and rollback converge.
+  // Why: the real-home installer owns system-home hooks only while its trust
+  // lane is usable. If trust is unavailable, legacy cleanup may remove an old
+  // Orca entry, but authentication still stays on the native Codex home.
   setSystemCodexHomeHookSweepSuppressed(
     () =>
       codexRuntimeHome !== null &&
       codexRuntimeHome.isHostSystemDefaultRealHome() &&
+      isRealHomeCodexHookLaneUsable() &&
       isAgentStatusHooksEnabled(store?.getSettings())
   )
   codexSessionMigration = createCodexSessionMigrationScheduler({
@@ -2813,8 +2810,8 @@ void app.whenReady().then(async () => {
   })
   nativeTheme.themeSource = store.getSettings().theme ?? 'system'
   if (codexRuntimeHome.isHostSystemDefaultRealHomeSelected()) {
-    // Why: establish capability before managed-hook reconciliation so an
-    // incapable host re-arms and completes the legacy real-home sweep now.
+    // Why: settle installation or rollback before managed-hook reconciliation;
+    // credential routing does not depend on this optional status capability.
     ensureRealHomeCodexHookState({
       hooksEnabled: isAgentStatusHooksEnabled(store.getSettings()),
       userDataPath: app.getPath('userData')

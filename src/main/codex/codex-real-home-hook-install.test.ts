@@ -40,6 +40,7 @@ vi.mock('./codex-hook-trust-grant', () => ({
 import {
   ensureRealHomeCodexHookState,
   getRealHomeCodexHookLane,
+  isRealHomeCodexHookLaneUsable,
   _internals
 } from './codex-real-home-hook-install'
 import { getCodexManagedHookInstallMaterial } from './hook-service'
@@ -139,7 +140,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     ).toBe(true)
   })
 
-  it('keeps the managed lane for unknown top-level fields Codex cannot load', () => {
+  it('skips the status hook for unknown top-level fields Codex cannot load', () => {
     grantSucceeds()
     const userConfig = {
       hooks: {
@@ -211,7 +212,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     }
   )
 
-  it('keeps the managed lane and original bytes when the pristine backup cannot be created', () => {
+  it('skips the status hook and preserves bytes when the pristine backup cannot be created', () => {
     grantSucceeds()
     const original = `${JSON.stringify({ hooks: { Stop: [] } }, null, 2)}\n`
     writeFileSync(getRealHooksJsonPath(), original, 'utf-8')
@@ -261,6 +262,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
 
     expect(lane).toBe('unavailable')
     expect(getRealHomeCodexHookLane()).toBe('unavailable')
+    expect(isRealHomeCodexHookLaneUsable()).toBe(false)
     expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(userRaw)
   })
 
@@ -286,7 +288,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     )
 
     expect(warning).toHaveBeenCalledWith(
-      '[codex-real-home-hooks] ensure failed; staying on managed lane:',
+      '[codex-real-home-hooks] ensure failed; status hook unavailable:',
       expect.any(Error)
     )
   })
@@ -306,7 +308,7 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(existsSync(getRealHooksJsonPath())).toBe(false)
   })
 
-  it('leaves an unparseable hooks.json untouched and keeps the managed lane', () => {
+  it('leaves an unparseable hooks.json untouched and skips the status hook', () => {
     writeFileSync(getRealHooksJsonPath(), '{not json', 'utf-8')
 
     const lane = ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
