@@ -19,6 +19,7 @@ import {
 } from 'lucide-react-native'
 import WebView, { type WebViewMessageEvent } from 'react-native-webview'
 import { colors, radii, spacing } from '../theme/mobile-theme'
+import { useMobileScrollPersistence } from '../hooks/use-mobile-scroll-persistence'
 import { normalizeMobileRichMarkdownKeyboardInset } from './mobile-rich-markdown-editor-keyboard-inset-script'
 import {
   buildMobileRichMarkdownEditorHtml,
@@ -75,6 +76,7 @@ type Props = {
   editable: boolean
   onChange: (content: string) => void
   onKeyboardInsetChange?: (bottom: number) => void
+  scrollCacheKey?: string
 }
 
 type EditorWebViewMessage =
@@ -82,6 +84,7 @@ type EditorWebViewMessage =
   | { type: 'change'; markdown: string; generation: number }
   | { type: 'openLink'; url: string }
   | { type: 'keyboardInset'; bottom: number }
+  | { type: 'scroll'; scrollY: number }
 
 type ToolbarItem = {
   command: RichMarkdownCommand
@@ -111,13 +114,17 @@ function MobileRichMarkdownEditorInner({
   content,
   editable,
   onChange,
-  onKeyboardInsetChange
+  onKeyboardInsetChange,
+  scrollCacheKey
 }: Props) {
   const webViewRef = useRef<WebView>(null)
   const readyRef = useRef(false)
   const documentGenerationRef = useRef(0)
   const currentWebViewContentRef = useRef<string | null>(null)
   const html = useMemo(() => buildMobileRichMarkdownEditorHtml(), [])
+  // Scroll position tracking for persistence across unmount/remount.
+  const { captureScroll, restoreScrollY } = useMobileScrollPersistence(scrollCacheKey ?? '')
+  const restoredRef = useRef(false)
 
   const inject = useCallback((script: string) => {
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`)
@@ -158,11 +165,41 @@ function MobileRichMarkdownEditorInner({
     }
   }, [applyEditable, editable])
 
-  // Clear any reported keyboard inset when the editor unmounts so a lifted
-  // Save/Discard bar settles back once the tab closes.
   useEffect(() => {
     return () => onKeyboardInsetChange?.(0)
   }, [onKeyboardInsetChange])
+
+  // Restore scroll position after content is applied.
+  const restoreScrollPosition = useCallback(
+    (webView: WebView) => {
+      if (!scrollCacheKey || restoredRef.current) {
+        return
+      }
+      const target = restoreScrollY
+      if (target === undefined || target <= 0) {
+        return
+      }
+      restoredRef.current = true
+      let attempts = 0
+      const tryRestore = () => {
+        webView.injectJavaScript(`
+          (function() {
+            var max = Math.max(0, document.documentElement.scrollHeight - document.documentElement.clientHeight);
+            if (max > 0) {
+              window.scrollTo(0, Math.min(${target}, max));
+            }
+          })();
+          true;
+        `)
+        attempts += 1
+        if (attempts < 15) {
+          requestAnimationFrame(tryRestore)
+        }
+      }
+      requestAnimationFrame(() => requestAnimationFrame(tryRestore))
+    },
+    [scrollCacheKey]
+  )
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -180,6 +217,37 @@ function MobileRichMarkdownEditorInner({
         readyRef.current = true
         applyContent(content)
         applyEditable(editable)
+        // Inject scroll event listener.
+        if (scrollCacheKey) {
+          inject(`
+            (function() {
+              var lastY = 0;
+              var ticking = false;
+              window.addEventListener('scroll', function() {
+                if (!ticking) {
+                  requestAnimationFrame(function() {
+                    var y = window.scrollY || 0;
+                    if (Math.abs(y - lastY) > 2) {
+                      lastY = y;
+                      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'scroll', scrollY: y }));
+                    }
+                    ticking = false;
+                  });
+                  ticking = true;
+                }
+              }, { passive: true });
+            })();
+          `)
+        }
+        // Restore scroll position after content is set.
+        const webView = webViewRef.current
+        if (webView) {
+          restoreScrollPosition(webView)
+        }
+        return
+      }
+      if (editorMessage.type === 'scroll' && typeof editorMessage.scrollY === 'number') {
+        captureScroll(editorMessage.scrollY)
         return
       }
       if (

@@ -252,8 +252,28 @@ function restoreScrollStateNow(terminal: Terminal, state: ScrollState): ScrollRe
     return 'retry'
   }
   const buf = terminal.buffer.active
-  if (state.bufferType === 'alternate' || buf.type !== state.bufferType) {
+  if (buf.type !== state.bufferType) {
     return 'skipped'
+  }
+
+  // Why: alternate buffer (OMP, vim, htop) has no scrollback or line markers.
+  // Restore the viewport Y directly via scrollToLine. This is safe during tab
+  // switches (no active draw race); split-reparent callers already guard
+  // against #1298 by deferring to runAfterNormalBuffer.
+  if (state.bufferType === 'alternate') {
+    if (state.wasAtBottom) {
+      if (safeScrollCall(() => terminal.scrollToBottom())) {
+        forceTerminalViewportScrollbarSync(terminal)
+        return 'restored'
+      }
+      return 'retry'
+    }
+    const targetLine = state.viewportY
+    if (safeScrollCall(() => terminal.scrollToLine(targetLine))) {
+      forceTerminalViewportScrollbarSync(terminal)
+      return 'restored'
+    }
+    return 'retry'
   }
 
   // Why: WebGL suspend disposes xterm's render service while leaving
