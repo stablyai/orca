@@ -329,6 +329,27 @@ export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
+const PTY_DIMENSION_MIN = 1
+const PTY_DIMENSION_MAX = 500
+
+function clampPtyDimension(value: number): number {
+  return Math.max(PTY_DIMENSION_MIN, Math.min(PTY_DIMENSION_MAX, Math.floor(value)))
+}
+
+function parseAttachViewport(
+  params: Record<string, unknown>
+): { cols: number; rows: number } | null {
+  const { cols, rows } = params
+  // Why: absent or coercible junk must not resize a live remote pane.
+  if (typeof cols !== 'number' || typeof rows !== 'number') {
+    return null
+  }
+  if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 1 || rows < 1) {
+    return null
+  }
+  return { cols: clampPtyDimension(cols), rows: clampPtyDimension(rows) }
+}
+
 /**
  * True when a reattach's expected pane identity contradicts the target PTY's own.
  * Rejects cross-relay-generation id collisions (a reset relay reuses `pty-N`).
@@ -1627,6 +1648,12 @@ export class PtyHandler {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
     }
 
+    // Why: node-pty's cached grid can match while the kernel PTY has drifted.
+    const attachViewport = parseAttachViewport(params)
+    if (attachViewport) {
+      managed.pty.resize(attachViewport.cols, attachViewport.rows)
+    }
+
     managed.startupIngress?.snapshotBarrier()
     let sourceRecovery = parseSourceRecoveryRequest(params.sourceRecovery)
     if (
@@ -1704,8 +1731,8 @@ export class PtyHandler {
 
   private resize(params: Record<string, unknown>): void {
     const id = params.id as string
-    const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
-    const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
+    const cols = clampPtyDimension(Number(params.cols) || 80)
+    const rows = clampPtyDimension(Number(params.rows) || 24)
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
       managed.pty.resize(cols, rows)
