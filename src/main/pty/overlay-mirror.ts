@@ -138,6 +138,35 @@ export function safeRemoveTree(path: string): void {
   }
 }
 
+// Why: lexical containment alone can still cross a mirrored symlink parent
+// (for example overlay/config/secret). Validate every existing ancestor with
+// lstat before removing so cleanup can only unlink inside the real overlay tree.
+function hasSafeOverlayAncestors(root: string, relativeTarget: string): boolean {
+  let current = root
+  try {
+    if (lstatSync(current).isSymbolicLink()) {
+      return false
+    }
+  } catch {
+    return false
+  }
+  const segments = relativeTarget.split(sep).filter(Boolean)
+  for (const [index, segment] of segments.entries()) {
+    current = join(current, segment)
+    if (index === segments.length - 1) {
+      break
+    }
+    try {
+      if (lstatSync(current).isSymbolicLink()) {
+        return false
+      }
+    } catch {
+      return false
+    }
+  }
+  return true
+}
+
 // Why: last-line guard against an overlay-root constant ever being
 // mis-resolved. Any caller that points safeRemoveTree at a path outside its
 // designated overlay root is refused so a misconfiguration cannot turn into
@@ -147,7 +176,13 @@ export function safeRemoveOverlay(overlayDir: string, overlayRoot: string): void
   const resolvedRoot = resolve(overlayRoot)
   const resolvedTarget = resolve(overlayDir)
   const rel = relative(resolvedRoot, resolvedTarget)
-  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+  if (
+    rel === '' ||
+    rel === '..' ||
+    rel.startsWith(`..${sep}`) ||
+    isAbsolute(rel) ||
+    !hasSafeOverlayAncestors(resolvedRoot, rel)
+  ) {
     console.warn(
       `[overlay-mirror] refusing to remove overlay outside root: target=${resolvedTarget} root=${resolvedRoot}`
     )

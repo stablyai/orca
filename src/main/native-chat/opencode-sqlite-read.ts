@@ -94,11 +94,20 @@ function isCorruptOpenCodeSqliteError(error: unknown): boolean {
   return /not a database|database disk image is malformed|file is encrypted/i.test(message)
 }
 
-function waitForOpenCodeSqliteRetry(): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, SQLITE_BUSY_RETRY_DELAY_MS)
-    timer.unref?.()
-  })
+function waitForOpenCodeSqliteRetry(signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
+  const { promise, resolve, reject } = Promise.withResolvers<void>()
+  const onAbort = () => {
+    clearTimeout(timer)
+    reject(signal?.reason)
+  }
+  const timer = setTimeout(() => {
+    signal?.removeEventListener('abort', onAbort)
+    resolve()
+  }, SQLITE_BUSY_RETRY_DELAY_MS)
+  signal?.addEventListener('abort', onAbort, { once: true })
+  timer.unref?.()
+  return promise
 }
 
 export async function readOpenCodeNativeChatTranscript(
@@ -107,24 +116,27 @@ export async function readOpenCodeNativeChatTranscript(
     sessionId: string
     limit: number
     beforeOffset?: number
+    signal?: AbortSignal
   },
   mapMessage: OpenCodeMessageMapper
 ): Promise<OpenCodeReadResult> {
   const limit = Number.isInteger(args.limit) && args.limit > 0 ? args.limit : 40
   for (let attempt = 0; attempt <= SQLITE_BUSY_RETRY_COUNT; attempt += 1) {
+    args.signal?.throwIfAborted()
     const result = readOpenCodeTranscriptAttempt({
       ...args,
       limit,
       beforeOffset: normalizeBeforeOffset(args.beforeOffset),
       mapMessage
     })
+    args.signal?.throwIfAborted()
     if (!('error' in result) || !isRetryableOpenCodeSqliteError(result.error)) {
       return result
     }
     if (attempt === SQLITE_BUSY_RETRY_COUNT) {
       return { ...result, retryable: true }
     }
-    await waitForOpenCodeSqliteRetry()
+    await waitForOpenCodeSqliteRetry(args.signal)
   }
   return { error: 'Transcript unavailable', retryable: true }
 }
@@ -135,8 +147,10 @@ function readOpenCodeTranscriptAttempt(args: {
   limit: number
   beforeOffset?: number
   mapMessage: OpenCodeMessageMapper
+  signal?: AbortSignal
 }): OpenCodeReadResult {
-  const { dbPath, sessionId, limit } = args
+  const { dbPath, sessionId, limit, signal } = args
+  signal?.throwIfAborted()
   if (!dbPath) {
     return { error: 'Transcript unavailable' }
   }
@@ -147,6 +161,7 @@ function readOpenCodeTranscriptAttempt(args: {
     if (!existsSync(dbPath)) {
       return { error: 'Transcript unavailable', notFound: true }
     }
+    signal?.throwIfAborted()
     db = openReadonlyDatabase(dbPath)
     // Count, message rows, and parts must share one WAL snapshot.
     db.exec('BEGIN')
@@ -154,6 +169,7 @@ function readOpenCodeTranscriptAttempt(args: {
     if (!canReadOpenCodeChatSession(db)) {
       return { error: 'Transcript unavailable' }
     }
+    signal?.throwIfAborted()
     if (!openCodeSessionRowExists(db, sessionId)) {
       return { error: 'Transcript unavailable', notFound: true }
     }
@@ -169,9 +185,11 @@ function readOpenCodeTranscriptAttempt(args: {
       windowEnd,
       limit,
       mapMessage: args.mapMessage,
-      filterPartsBySessionId: columnExists(db, 'part', 'session_id')
+      filterPartsBySessionId: columnExists(db, 'part', 'session_id'),
+      signal
     })
   } catch (error) {
+    signal?.throwIfAborted()
     if ((error as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
       return { error: 'Transcript unavailable', notFound: true }
     }

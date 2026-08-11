@@ -242,7 +242,8 @@ export async function readNativeChatTranscriptTail(
       dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
       sessionId: args.sessionId,
       limit: args.limit,
-      beforeOffset: args.beforeOffset
+      beforeOffset: args.beforeOffset,
+      signal
     })
   }
   const filePath =

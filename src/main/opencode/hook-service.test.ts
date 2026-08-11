@@ -225,6 +225,39 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     expect(existsSync(configDir)).toBe(true)
     expect(existsSync(join(configDir, 'node_modules', 'opencode-runtime', 'index.js'))).toBe(true)
   })
+  it('contains tampered manifest traversal and symlink entries during cleanup', () => {
+    const service = new OpenCodeHookService()
+    const sourceDir = mkdtempSync(join(tmpdir(), 'orca-opencode-source-'))
+    try {
+      const sourceConfigDir = join(sourceDir, 'config')
+      const sourceSecret = join(sourceConfigDir, 'secret')
+      mkdirSync(sourceConfigDir, { recursive: true })
+      writeFileSync(sourceSecret, 'keep')
+      const env = service.buildPtyEnv(daemonSessionId, sourceDir)
+      const overlayDir = env.OPENCODE_CONFIG_DIR!
+      const topLevelOutside = join(userDataDir, 'outside-top-level')
+      const pluginOutside = join(userDataDir, 'outside-plugin')
+      writeFileSync(topLevelOutside, 'keep')
+      writeFileSync(pluginOutside, 'keep')
+      writeFileSync(
+        join(overlayDir, '.orca-opencode-overlay-manifest.json'),
+        JSON.stringify({
+          topLevelEntries: [42, 'config/secret', '../../outside-top-level'],
+          pluginEntries: [null, '../../../outside-plugin']
+        })
+      )
+
+      const rebuiltEnv = service.buildPtyEnv(daemonSessionId, sourceDir)
+
+      expect(rebuiltEnv.OPENCODE_CONFIG_DIR).toBe(overlayDir)
+      expect(existsSync(join(overlayDir, 'plugins', 'orca-opencode-status.js'))).toBe(true)
+      expect(readFileSync(sourceSecret, 'utf8')).toBe('keep')
+      expect(readFileSync(topLevelOutside, 'utf8')).toBe('keep')
+      expect(readFileSync(pluginOutside, 'utf8')).toBe('keep')
+    } finally {
+      rmSync(sourceDir, { recursive: true, force: true })
+    }
+  })
 
   it('buildPtyEnv returns {} for an unusable id and creates nothing on disk', () => {
     const service = new OpenCodeHookService()

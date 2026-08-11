@@ -24,7 +24,8 @@ type OpenCodeMappedMessage = {
 
 export type OpenCodeMessageMapper = (
   message: OpenCodeMessageRow,
-  parts: OpenCodePartRow[]
+  parts: OpenCodePartRow[],
+  signal?: AbortSignal
 ) => NativeChatMessage | null
 
 function dedupeMappedOpenCodeMessages(
@@ -60,10 +61,12 @@ function selectOpenCodePartsForMessages(
   db: SyncDatabase,
   sessionId: string,
   filterBySessionId: boolean,
-  messageIds: readonly string[]
+  messageIds: readonly string[],
+  signal?: AbortSignal
 ): OpenCodePartRow[] {
   const rows: OpenCodePartRow[] = []
   for (let start = 0; start < messageIds.length; start += OPENCODE_PART_MESSAGE_BATCH) {
+    signal?.throwIfAborted()
     const chunk = messageIds.slice(start, start + OPENCODE_PART_MESSAGE_BATCH)
     const placeholders = chunk.map(() => '?').join(', ')
     const batch = db
@@ -86,16 +89,21 @@ function mapOpenCodeWindowMessages(
   filterPartsBySessionId: boolean,
   messageRows: readonly OpenCodeMessageRow[],
   offset: number,
-  mapMessage: OpenCodeMessageMapper
+  mapMessage: OpenCodeMessageMapper,
+  signal?: AbortSignal
 ): OpenCodeMappedMessage[] {
+  signal?.throwIfAborted()
   const parts = selectOpenCodePartsForMessages(
     db,
     sessionId,
     filterPartsBySessionId,
-    messageRows.map((row) => row.id)
+    messageRows.map((row) => row.id),
+    signal
   )
+  signal?.throwIfAborted()
   const partsByMessage = new Map<string, OpenCodePartRow[]>()
   for (const part of parts) {
+    signal?.throwIfAborted()
     const bucket = partsByMessage.get(part.message_id)
     if (bucket) {
       bucket.push(part)
@@ -106,7 +114,8 @@ function mapOpenCodeWindowMessages(
 
   const mapped: OpenCodeMappedMessage[] = []
   for (const [index, row] of messageRows.entries()) {
-    const message = mapMessage(row, partsByMessage.get(row.id) ?? [])
+    signal?.throwIfAborted()
+    const message = mapMessage(row, partsByMessage.get(row.id) ?? [], signal)
     if (message) {
       mapped.push({ offset: offset + index, message })
     }
@@ -120,15 +129,18 @@ function readMappedOpenCodeWindow(
   filterPartsBySessionId: boolean,
   offset: number,
   limit: number,
-  mapMessage: OpenCodeMessageMapper
+  mapMessage: OpenCodeMessageMapper,
+  signal?: AbortSignal
 ): OpenCodeMappedMessage[] {
+  signal?.throwIfAborted()
   return mapOpenCodeWindowMessages(
     db,
     sessionId,
     filterPartsBySessionId,
     selectOpenCodeWindowMessages(db, sessionId, limit, offset),
     offset,
-    mapMessage
+    mapMessage,
+    signal
   )
 }
 
@@ -138,10 +150,12 @@ function hasMappedOpenCodeMessageBefore(
   filterPartsBySessionId: boolean,
   beforeOffset: number,
   scanLimit: number,
-  mapMessage: OpenCodeMessageMapper
+  mapMessage: OpenCodeMessageMapper,
+  signal?: AbortSignal
 ): boolean {
   let cursor = beforeOffset
   while (cursor > 0) {
+    signal?.throwIfAborted()
     const start = Math.max(0, cursor - scanLimit)
     if (
       readMappedOpenCodeWindow(
@@ -150,7 +164,8 @@ function hasMappedOpenCodeMessageBefore(
         filterPartsBySessionId,
         start,
         cursor - start,
-        mapMessage
+        mapMessage,
+        signal
       ).length > 0
     ) {
       return true
@@ -168,10 +183,12 @@ export function readMappedOpenCodeTail(args: {
   mapMessage: OpenCodeMessageMapper
   /** Newer schemas include part.session_id; keep older DBs readable. */
   filterPartsBySessionId?: boolean
+  signal?: AbortSignal
 }): { messages: NativeChatMessage[]; hasMore: boolean; beforeOffset: number } {
-  const { db, sessionId, windowEnd, mapMessage } = args
+  const { db, sessionId, windowEnd, mapMessage, signal } = args
   const limit = Number.isInteger(args.limit) && args.limit > 0 ? args.limit : 0
   const filterPartsBySessionId = args.filterPartsBySessionId === true
+  signal?.throwIfAborted()
   const normalizedWindowEnd =
     Number.isInteger(windowEnd) && windowEnd > 0
       ? windowEnd
@@ -188,6 +205,7 @@ export function readMappedOpenCodeTail(args: {
   // Page over raw rows in bounded chunks, but use mapped rows for the visible
   // page so malformed/lifecycle rows cannot consume a history slot.
   while (cursor > 0 && mapped.length < limit) {
+    signal?.throwIfAborted()
     const start = Math.max(0, cursor - scanLimit)
     mapped = [
       ...readMappedOpenCodeWindow(
@@ -196,13 +214,15 @@ export function readMappedOpenCodeTail(args: {
         filterPartsBySessionId,
         start,
         cursor - start,
-        mapMessage
+        mapMessage,
+        signal
       ),
       ...mapped
     ]
     cursor = start
   }
 
+  signal?.throwIfAborted()
   const dedupedMapped = dedupeMappedOpenCodeMessages(mapped)
   const selected = dedupedMapped.slice(-limit)
   const beforeOffset = selected[0]?.offset ?? 0
@@ -219,7 +239,8 @@ export function readMappedOpenCodeTail(args: {
             filterPartsBySessionId,
             beforeOffset,
             scanLimit,
-            mapMessage
+            mapMessage,
+            signal
           ))),
     beforeOffset
   }

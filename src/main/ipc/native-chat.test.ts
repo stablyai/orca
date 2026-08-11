@@ -65,7 +65,16 @@ async function invokeReadSession(args: {
   if (!handler) {
     throw new Error('handler not registered')
   }
-  return handler({}, args)
+  return handler(
+    {
+      sender: {
+        isDestroyed: () => false,
+        once: () => {},
+        removeListener: () => {}
+      }
+    },
+    args
+  )
 }
 
 describe('nativeChat:readSession handler', () => {

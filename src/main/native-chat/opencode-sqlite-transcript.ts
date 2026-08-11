@@ -167,8 +167,10 @@ function openCodePartBlocks(partData: string | null): {
  *  malformed JSON — all tolerated, never thrown). */
 export function mapOpenCodeNativeChatMessage(
   message: OpenCodeMessageRow,
-  parts: OpenCodePartRow[]
+  parts: OpenCodePartRow[],
+  signal?: AbortSignal
 ): NativeChatMessage | null {
+  signal?.throwIfAborted()
   const dataRecord = parseJsonObject(message.data ?? '')
   const role = extractString(dataRecord?.role)
   if (role !== 'user' && role !== 'assistant') {
@@ -184,6 +186,7 @@ export function mapOpenCodeNativeChatMessage(
   const blocks: NativeChatBlock[] = []
   const reasoningText: string[] = []
   for (const part of parts) {
+    signal?.throwIfAborted()
     const mapped = openCodePartBlocks(part.data)
     blocks.push(...mapped.blocks)
     reasoningText.push(...mapped.reasoningText)
@@ -228,6 +231,8 @@ export async function readOpenCodeNativeChatTranscriptTail(args: {
   sessionId: string
   limit: number
   beforeOffset?: number
+  signal?: AbortSignal
 }): Promise<OpenCodeReadResult> {
+  args.signal?.throwIfAborted()
   return readOpenCodeNativeChatTranscript(args, mapOpenCodeNativeChatMessage)
 }

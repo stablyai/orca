@@ -9,6 +9,7 @@ import {
   subscribeOpenCodeNativeChatTranscript
 } from './opencode-sqlite-live'
 import { openCodeMessageSignature } from './opencode-sqlite-transcript'
+import { readOpenCodeNativeChatTranscript } from './opencode-sqlite-read'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 
 let tempDirs: string[] = []
@@ -396,6 +397,55 @@ describe('reconcileOpenCodeNativeChat', () => {
     await reconcile()
     expect(appends.flat().map((message) => message.id)).toEqual(['m1'])
   })
+})
+
+it('aborts SQLite paging when the read signal is canceled', async () => {
+  const { db, path } = createTempDb()
+  applyOpenCodeSchema(db)
+  insertSession(db, 'ses_1')
+  upsertMessage(db, { id: 'm1', sessionId: 'ses_1', role: 'user', timeCreated: 1 })
+  upsertPart(db, {
+    id: 'p1',
+    messageId: 'm1',
+    sessionId: 'ses_1',
+    timeCreated: 1,
+    data: textPart('first')
+  })
+  upsertMessage(db, { id: 'm2', sessionId: 'ses_1', role: 'assistant', timeCreated: 2 })
+  upsertPart(db, {
+    id: 'p2',
+    messageId: 'm2',
+    sessionId: 'ses_1',
+    timeCreated: 2,
+    data: textPart('second')
+  })
+  db.close()
+
+  const controller = new AbortController()
+  let mapped = 0
+  await expect(
+    readOpenCodeNativeChatTranscript(
+      {
+        dbPath: path,
+        sessionId: 'ses_1',
+        limit: 40,
+        signal: controller.signal
+      },
+      (message) => {
+        mapped += 1
+        if (mapped === 1) {
+          controller.abort()
+        }
+        return {
+          id: message.id,
+          role: 'user',
+          blocks: [{ type: 'text', text: 'mapped' }],
+          timestamp: message.time_created,
+          source: 'transcript'
+        }
+      }
+    )
+  ).rejects.toMatchObject({ name: 'AbortError' })
 })
 
 describe('subscribeOpenCodeNativeChatTranscript', () => {

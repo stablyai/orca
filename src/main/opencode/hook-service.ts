@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -33,6 +34,15 @@ function isUsableId(id: string): boolean {
 function toSafeDirName(id: string): string {
   // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
+}
+function removeExistingMirrorLink(path: string, overlayRoot: string): void {
+  try {
+    if (lstatSync(path).isSymbolicLink()) {
+      safeRemoveOverlay(path, overlayRoot)
+    }
+  } catch {
+    // A stale mirror is best-effort; the subsequent mirror attempt handles the source error.
+  }
 }
 
 export function getOpenCodePluginSource(): string {
@@ -1071,8 +1081,12 @@ export class OpenCodeHookService {
         readFileSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'utf8')
       ) as Partial<OpenCodeOverlayManifest>
       return {
-        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
-        pluginEntries: Array.isArray(parsed.pluginEntries) ? parsed.pluginEntries : []
+        topLevelEntries: Array.isArray(parsed.topLevelEntries)
+          ? parsed.topLevelEntries.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+        pluginEntries: Array.isArray(parsed.pluginEntries)
+          ? parsed.pluginEntries.filter((entry): entry is string => typeof entry === 'string')
+          : []
       }
     } catch {
       return { topLevelEntries: [], pluginEntries: [] }
@@ -1088,7 +1102,7 @@ export class OpenCodeHookService {
 
   private clearManifestEntries(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
     for (const entryName of manifest.topLevelEntries) {
-      safeRemoveTree(join(overlayDir, entryName))
+      safeRemoveOverlay(join(overlayDir, entryName), overlayDir)
     }
 
     const overlayPluginsDir = join(overlayDir, 'plugins')
@@ -1096,7 +1110,7 @@ export class OpenCodeHookService {
       if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
         continue
       }
-      safeRemoveTree(join(overlayPluginsDir, entryName))
+      safeRemoveOverlay(join(overlayPluginsDir, entryName), overlayPluginsDir)
     }
   }
 
@@ -1134,6 +1148,7 @@ export class OpenCodeHookService {
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
+            removeExistingMirrorLink(join(overlayPluginsDir, pluginEntry.name), overlayPluginsDir)
             mirrorEntry(
               join(resolvedSource, pluginEntry.name),
               join(overlayPluginsDir, pluginEntry.name)
@@ -1144,8 +1159,8 @@ export class OpenCodeHookService {
         }
       }
 
+      removeExistingMirrorLink(join(overlayDir, entry.name), overlayDir)
       mirrorEntry(sourcePath, join(overlayDir, entry.name))
-      nextManifest.topLevelEntries.push(entry.name)
     }
 
     this.writeOverlayManifest(overlayDir, nextManifest)

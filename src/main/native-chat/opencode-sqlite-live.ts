@@ -33,6 +33,7 @@ export type ReconcileOpenCodeArgs = {
   /** Re-read window; appends/updates are detected inside this newest tail. */
   windowLimit: number
   state: OpenCodeNativeChatState
+  signal?: AbortSignal
   onInitialSnapshot: (
     messages: NativeChatMessage[],
     hasMore: boolean,
@@ -46,12 +47,15 @@ export type ReconcileOpenCodeArgs = {
  *  Idempotent per content signature, so repeated polls with no change emit
  *  nothing and a mutated part re-emits its stable message id exactly once. */
 export async function reconcileOpenCodeNativeChat(args: ReconcileOpenCodeArgs): Promise<void> {
-  const { dbPath, sessionId, windowLimit, state } = args
+  const { dbPath, sessionId, windowLimit, state, signal } = args
+  signal?.throwIfAborted()
   const result = await readOpenCodeNativeChatTranscriptTail({
     dbPath,
     sessionId,
-    limit: windowLimit
+    limit: windowLimit,
+    signal
   })
+  signal?.throwIfAborted()
 
   if ('error' in result) {
     // A busy WAL is a transient writer/read race; keep the last good snapshot
@@ -75,6 +79,7 @@ export async function reconcileOpenCodeNativeChat(args: ReconcileOpenCodeArgs): 
 
   const updates: NativeChatMessage[] = []
   for (const message of result.messages) {
+    signal?.throwIfAborted()
     const previous = state.lastEmitted.get(message.id)
     if (
       previous === undefined ||
@@ -122,6 +127,7 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
       : 40
   const limitedWindow = Math.max(1, Math.min(requestedLimit, OPENCODE_RECONCILE_WINDOW_MAX_CAP))
   let closed = false
+  const abortController = new AbortController()
   const state = createOpenCodeNativeChatState()
 
   const emitInitial = args.onInitialSnapshot ?? (() => {})
@@ -136,6 +142,7 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
       sessionId: args.sessionId,
       windowLimit: limitedWindow,
       state,
+      signal: abortController.signal,
       onInitialSnapshot: (messages, hasMore, beforeOffset, error) => {
         if (!closed) {
           emitInitial(messages, hasMore, beforeOffset, error)
@@ -173,7 +180,9 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
 
   const scheduler = createTranscriptWatchScheduler({
     reconciliationIntervalMs: args.reconciliationIntervalMs ?? OPENCODE_RECONCILE_INTERVAL_MS,
-    drain: () => void runPoll(),
+    drain: () => {
+      void runPoll().catch(() => {})
+    },
     reconcile: runPoll
   })
 
@@ -187,6 +196,7 @@ export function subscribeOpenCodeNativeChatTranscript(args: {
         return
       }
       closed = true
+      abortController.abort()
       scheduler.dispose()
     }
   }

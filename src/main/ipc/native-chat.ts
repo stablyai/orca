@@ -1,4 +1,4 @@
-import { ipcMain, type IpcMainEvent, type WebContents } from 'electron'
+import { ipcMain, type IpcMainEvent, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import type {
   AgentType,
   NativeChatMessage,
@@ -32,16 +32,32 @@ export type NativeChatReadSessionArgs = {
 // either the main process or the message list. Pagination raises this limit.
 const DESKTOP_READ_WINDOW = 300
 
-async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
+async function readSession(
+  event: IpcMainInvokeEvent,
+  args: NativeChatReadSessionArgs
+): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
-  // Clamp to a positive window; default to the desktop window for the first page.
-  const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  return readNativeChatTranscriptTail({
-    agent,
-    sessionId,
-    transcriptPath: args.transcriptPath,
-    limit
-  })
+  if (event.sender.isDestroyed()) {
+    return { error: 'Transcript unavailable' }
+  }
+  const controller = new AbortController()
+  const onDestroyed = () => controller.abort()
+  event.sender.once('destroyed', onDestroyed)
+  try {
+    // Clamp to a positive window; default to the desktop window for the first page.
+    const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
+    return await readNativeChatTranscriptTail(
+      {
+        agent,
+        sessionId,
+        transcriptPath: args.transcriptPath,
+        limit
+      },
+      controller.signal
+    )
+  } finally {
+    event.sender.removeListener('destroyed', onDestroyed)
+  }
 }
 
 export type NativeChatSubscribeArgs = {
@@ -288,8 +304,8 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
 }
 
 export function registerNativeChatHandlers(): void {
-  ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
-    readSession(args)
+  ipcMain.handle('nativeChat:readSession', (event, args: NativeChatReadSessionArgs) =>
+    readSession(event, args)
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
     void handleSubscribe(event, args)
