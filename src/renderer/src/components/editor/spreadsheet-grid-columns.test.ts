@@ -62,6 +62,67 @@ describe('computeSpreadsheetColumnWidths', () => {
     ).toEqual([80, 80])
     expect(computeSpreadsheetColumnWidths({ header: [], rows: [], columnCount: 0 })).toEqual([])
   })
+
+  it("prefers a reader's width over the declared one and over sizing from content", () => {
+    const widths = computeSpreadsheetColumnWidths({
+      header: ['a header long enough to grow'],
+      rows: [['a value long enough to grow']],
+      columnCount: 1,
+      declaredColumnWidths: [200],
+      columnWidthOverrides: [130]
+    })
+
+    expect(widths).toEqual([130])
+  })
+
+  it("scales a reader's width by the zoom level like any other width", () => {
+    const widths = computeSpreadsheetColumnWidths({
+      header: ['a'],
+      rows: [['1']],
+      columnCount: 1,
+      columnWidthOverrides: [130],
+      zoomScale: 1.5
+    })
+
+    expect(widths).toEqual([195])
+  })
+
+  it('falls back per column when a reader has only sized some of them', () => {
+    const widths = computeSpreadsheetColumnWidths({
+      header: ['a', 'b', 'c'],
+      rows: [['1', '2', '3']],
+      columnCount: 3,
+      declaredColumnWidths: [undefined, 200, undefined],
+      columnWidthOverrides: [130, undefined, undefined]
+    })
+
+    expect(widths).toEqual([130, 200, 80])
+  })
+
+  it('sizes exactly as before when the reader has sized nothing', () => {
+    const input = {
+      header: ['a header long enough to grow', 'b'],
+      rows: [['1', '2']],
+      columnCount: 2,
+      declaredColumnWidths: [undefined, 200]
+    }
+
+    expect(computeSpreadsheetColumnWidths({ ...input, columnWidthOverrides: [] })).toEqual(
+      computeSpreadsheetColumnWidths(input)
+    )
+  })
+
+  it("honours a reader's width of zero instead of falling back to the declared one", () => {
+    const widths = computeSpreadsheetColumnWidths({
+      header: ['a'],
+      rows: [['1']],
+      columnCount: 1,
+      declaredColumnWidths: [200],
+      columnWidthOverrides: [0]
+    })
+
+    expect(widths).toEqual([0])
+  })
 })
 
 describe('buildSpreadsheetGridTemplate', () => {

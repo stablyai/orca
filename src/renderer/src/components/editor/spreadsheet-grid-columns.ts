@@ -26,6 +26,11 @@ export type SpreadsheetColumnWidthsInput = {
    * author's layout decision and wins over sizing from content.
    */
   declaredColumnWidths?: readonly (number | undefined)[]
+  /**
+   * Widths the reader has dragged, by column index. A reader's own width wins
+   * over the file's, which in turn wins over sizing from content.
+   */
+  columnWidthOverrides?: readonly (number | undefined)[]
   /** Multiplier from the editor zoom level; 1 at the default font size. */
   zoomScale?: number
 }
@@ -39,6 +44,7 @@ export function computeSpreadsheetColumnWidths({
   rows,
   columnCount,
   declaredColumnWidths,
+  columnWidthOverrides,
   zoomScale = 1
 }: SpreadsheetColumnWidthsInput): number[] {
   const widths = Array.from<number>({ length: columnCount }).fill(MIN_COLUMN_PX)
@@ -65,7 +71,10 @@ export function computeSpreadsheetColumnWidths({
   }
 
   return widths.map((width, columnIndex) =>
-    Math.round((declaredColumnWidths?.[columnIndex] ?? width) * zoomScale)
+    Math.round(
+      (columnWidthOverrides?.[columnIndex] ?? declaredColumnWidths?.[columnIndex] ?? width) *
+        zoomScale
+    )
   )
 }
 

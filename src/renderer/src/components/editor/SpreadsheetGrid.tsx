@@ -1,5 +1,7 @@
-import React, { useMemo, useRef } from 'react'
+import React, { useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { SpreadsheetColumnResizeHandle } from './SpreadsheetColumnResizeHandle'
+import { useSpreadsheetColumnResize } from './use-spreadsheet-column-resize'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -110,6 +112,7 @@ export function SpreadsheetGrid({
     () => padSpreadsheetHeader(header, columnCount),
     [header, columnCount]
   )
+  const columnResize = useSpreadsheetColumnResize(zoomScale)
   const columnWidths = useMemo(
     () =>
       computeSpreadsheetColumnWidths({
@@ -117,9 +120,10 @@ export function SpreadsheetGrid({
         rows,
         columnCount,
         declaredColumnWidths,
+        columnWidthOverrides: columnResize.widthOverrides,
         zoomScale
       }),
-    [paddedHeader, rows, columnCount, declaredColumnWidths, zoomScale]
+    [paddedHeader, rows, columnCount, declaredColumnWidths, columnResize.widthOverrides, zoomScale]
   )
   const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
   const overlay = useMemo(
@@ -162,6 +166,12 @@ export function SpreadsheetGrid({
     overscan: SPREADSHEET_GRID_COLUMN_OVERSCAN,
     getItemKey: (index) => index
   })
+  // Why: the virtualizer caches a measurement per column, so a dragged width
+  // needs an explicit re-measure or the grid keeps the size it first estimated.
+  useEffect(() => {
+    columnVirtualizer.measure()
+  }, [columnVirtualizer, columnWidths])
+
   const virtualRows = rowVirtualizer.getVirtualItems()
   const virtualColumns = columnVirtualizer.getVirtualItems()
   const columnsTotalWidth = columnVirtualizer.getTotalSize()
@@ -219,7 +229,7 @@ export function SpreadsheetGrid({
                 aria-colindex={virtualColumn.index + 2}
                 key={virtualColumn.key}
                 className={cn(
-                  'flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline-strong px-2 font-medium text-spreadsheet-header-foreground',
+                  'relative flex items-center overflow-hidden border-b border-r border-spreadsheet-gridline-strong px-2 font-medium text-spreadsheet-header-foreground',
                   headerAlignment === 'center' ? 'justify-center' : 'justify-start'
                 )}
                 style={{ fontSize: headerFontSizePx }}
@@ -227,6 +237,12 @@ export function SpreadsheetGrid({
                 <span className="truncate" title={cell}>
                   {cell}
                 </span>
+                <SpreadsheetColumnResizeHandle
+                  columnIndex={virtualColumn.index}
+                  renderedWidthPx={virtualColumn.size}
+                  resize={columnResize}
+                  label={cell === '' ? String(virtualColumn.index + 1) : cell}
+                />
               </div>
             )
           })}
