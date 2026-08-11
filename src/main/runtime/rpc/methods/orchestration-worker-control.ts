@@ -4,7 +4,6 @@ import {
   type OrchestrationWorkerReadResult
 } from '../../../../shared/orchestration-worker-output'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import { syncFederatedDispatch } from '../../orchestration/federation-sync'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
 import {
@@ -54,7 +53,9 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS: RpcMethod[] = [
           attachment.state === 'succeeded' ||
           (attachment.state === 'failed' && attachment.stage === 'worker_report_queued')
         ) {
-          await syncFederatedDispatch(runtime, params.dispatch).catch(() => undefined)
+          await runtime
+            .syncOrchestrationFederatedDispatchAfterCurrent(params.dispatch)
+            .catch(() => undefined)
         } else if (
           attachment.state === 'stopped' &&
           ['stopping', 'stop_unknown'].includes(worker.state)

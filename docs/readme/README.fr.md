@@ -40,7 +40,7 @@
 
 Surveillez et pilotez vos agents depuis votre téléphone — soyez notifié quand un agent termine, et envoyez des instructions de suivi où que vous soyez.
 
-[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.32](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
+[App Store iOS](https://apps.apple.com/us/app/orca-ide/id6766130217) · [TestFlight](https://testflight.apple.com/join/YjeGMQBA) · [APK Android 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk) · [Docs →](https://www.onorca.dev/docs/mobile)
 
 </td>
 <td width="50%">
@@ -235,7 +235,7 @@ yay -S stably-orca-bin
 Associez-la à l'app de bureau pour surveiller et piloter vos agents depuis votre téléphone.
 
 - **iOS :** [Télécharger sur l'App Store](https://apps.apple.com/us/app/orca-ide/id6766130217) ou [rejoindre TestFlight](https://testflight.apple.com/join/YjeGMQBA)
-- **Android :** [Télécharger l'APK 0.0.32](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.32/app-release.apk)
+- **Android :** [Télécharger l'APK 0.0.37](https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.37/app-release.apk)
 
 ---
 

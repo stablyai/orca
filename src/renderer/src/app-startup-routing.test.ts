@@ -36,6 +36,10 @@ describe('renderer startup runtime routing', () => {
     const hydrationWorktreesIndex = source.indexOf(
       "timeRendererStartupStep('fetch-hydration-worktrees'"
     )
+    const servicesIndex = source.indexOf(
+      "timeRendererStartupStep('first-window-services-await'",
+      sessionIndex
+    )
     const fullWorktreesIndex = source.indexOf('await actions.fetchAllWorktrees()')
     const lineageIndex = startupBlock.indexOf('actions.fetchWorktreeLineage()')
 
@@ -53,7 +57,8 @@ describe('renderer startup runtime routing', () => {
     expect(localReposIndex).toBeLessThan(localGroupsIndex)
     expect(localGroupsIndex).toBeLessThan(localFoldersIndex)
     expect(localReposIndex).toBeLessThan(sessionIndex)
-    expect(sessionIndex).toBeLessThan(hydrationWorktreesIndex)
+    expect(sessionIndex).toBeLessThan(servicesIndex)
+    expect(servicesIndex).toBeLessThan(hydrationWorktreesIndex)
     const hydrationWorktreeBlock = source.slice(
       hydrationWorktreesIndex,
       source.indexOf('await keybindingsPromise')

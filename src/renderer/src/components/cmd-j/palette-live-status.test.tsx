@@ -411,7 +411,11 @@ describe('palette live status', () => {
     expect(pip?.className).toContain('bg-popover')
     expect(pip?.className).toContain('ring-popover')
     expect(pip?.className).not.toContain('bg-background')
-    expect(pip?.className).toContain('group-data-[selected=true]:bg-accent')
-    expect(pip?.className).toContain('group-data-[selected=true]:ring-accent')
+    expect(pip?.className).toContain(
+      'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)]'
+    )
+    expect(pip?.className).toContain(
+      'group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
+    )
   })
 })

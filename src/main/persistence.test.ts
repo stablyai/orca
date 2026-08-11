@@ -5621,6 +5621,42 @@ describe('Store', () => {
     expect(persisted.settings).not.toHaveProperty('terminalScrollbackBytes')
   })
 
+  it('normalizes terminal cursor style before persistence and listener broadcasts', async () => {
+    const store = await createStore()
+    store.updateSettings({ terminalCursorStyle: 'underline' })
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    const invalid = store.updateSettings(
+      { terminalCursorStyle: 'beam' as never },
+      { notifyListeners: true }
+    )
+
+    expect(invalid.terminalCursorStyle).toBe('block')
+    expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(listener).toHaveBeenCalledWith(
+      {
+        terminalCursorStyle: 'block'
+      },
+      expect.objectContaining({ terminalCursorStyle: 'block' }),
+      undefined
+    )
+
+    const valid = store.updateSettings(
+      { terminalCursorStyle: 'underline' },
+      { notifyListeners: true }
+    )
+    expect(valid.terminalCursorStyle).toBe('underline')
+    expect(listener).toHaveBeenLastCalledWith(
+      { terminalCursorStyle: 'underline' },
+      expect.objectContaining({ terminalCursorStyle: 'underline' }),
+      undefined
+    )
+
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalCursorStyle).toBe('underline')
+  })
+
   it('normalizes disabled TUI agents on load and update', async () => {
     writeFileSync(
       join(testState.dir, 'orca-data.json'),
@@ -7293,6 +7329,22 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalCursorStyle).toBe('bar')
     expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('replaces an invalid persisted terminal cursor choice after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'beam', terminalCursorStyleDefaultedToBlock: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('block')
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalCursorStyle).toBe('block')
   })
 
   it('preserves explicit "false" terminalMacOptionAsAlt through migration', async () => {

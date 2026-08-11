@@ -207,6 +207,8 @@ type CreateMainWindowOptions = {
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
+  /** Reveal after load instead of first paint when startup must show the shell before slower renderer work. */
+  revealOnDidFinishLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
@@ -379,6 +381,9 @@ export function createMainWindow(
     mainWindow.show()
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
+  if (opts?.revealOnDidFinishLoad === true) {
+    mainWindow.webContents.on('did-finish-load', revealInitialWindow)
+  }
 
   // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null

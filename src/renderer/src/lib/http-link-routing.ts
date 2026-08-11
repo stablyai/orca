@@ -35,7 +35,7 @@ type StoreAccessor = () => {
   > | null
   setActiveWorktree: (worktreeId: string) => void
   createBrowserTab: (worktreeId: string, url: string, opts: { activate: boolean }) => unknown
-  repos?: LocalhostLinkRepo[]
+  repos?: readonly LocalhostLinkRepo[]
   projects?: LocalhostLinkProject[]
   worktreesByRepo?: Record<string, LocalhostLinkWorktree[]>
   allWorktrees?: () => LocalhostLinkWorktree[]

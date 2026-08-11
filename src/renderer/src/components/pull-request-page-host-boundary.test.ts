@@ -249,6 +249,41 @@ describe('PullRequestPage host boundaries', () => {
     expect(checksSection).toContain('window.api.gh.prChecks({')
     expect(checksSection).toContain('window.api.gh.rerunPRChecks({')
     expect(checksSection).toContain('prCheckDetails({')
+    expect(checksSection).toMatch(
+      /withGitHubCheckDetailsTimeout\(\(signal\) =>\s*runtimeHost\s*\?\s*callRuntimeRpc[\s\S]*:\s*window\.api\.gh\.prCheckDetails\(\{/
+    )
+    expect(checksSection).toContain('{ timeoutMs: 30_000, signal }')
+  })
+
+  it('makes failed check detail loads retryable and fences stale settlements', () => {
+    const source = componentSource('PullRequestPage.tsx')
+    const checksSection = sourceBetween(source, 'function ChecksTab', 'function MentionTextarea')
+
+    expect(checksSection).toContain('const requestId = ++nextCheckDetailsRequestIdRef.current')
+    expect(checksSection).toContain('settleGitHubChecksTabDetails(current, key, requestId')
+    expect(checksSection).toContain('createGitHubChecksTabState(checks, checkDetailsContextKey)')
+    expect(checksSection).toContain('checksState,\n    checks,\n    checkDetailsContextKey')
+    expect(checksSection).toContain('resetGitHubChecksTabForSource(current)')
+    expect(checksSection).toContain(
+      'committedChecksContextOwnerRef.current !== refreshContextOwner'
+    )
+    expect(checksSection).toContain('activeChecksRefreshRequestIdRef.current !== refreshRequestId')
+    expect(checksSection).toContain('current.contextOwner === refreshContextOwner')
+    expect(checksSection).toContain(
+      'const rerunContextOwner = committedChecksContextOwnerRef.current'
+    )
+    expect(checksSection).toContain('committedChecksContextOwnerRef.current !== rerunContextOwner')
+    expect(checksSection).toContain('await handleRefresh(rerunContextOwner)')
+    expect(checksSection).toContain('!mountedRef.current ||')
+    expect(checksSection).toContain(
+      'onClick={() => requestCheckDetails(check, getCheckDetailsKey(check))}'
+    )
+    expect(checksSection).toContain('disabled={state.loading}')
+    expect(checksSection).toContain('aria-busy={state.loading}')
+    expect(checksSection).toContain("translate('githubChecks.retrying', 'Retrying…')")
+    expect(checksSection).toContain(
+      "translate('auto.components.PullRequestPage.5df7c41d2a', 'Retry')"
+    )
   })
 
   it('routes edit metadata and mutations through the PR source context', () => {

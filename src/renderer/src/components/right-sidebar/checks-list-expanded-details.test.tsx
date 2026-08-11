@@ -7,6 +7,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
 import { ChecksList } from './checks-panel-content'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 const openCheckRunDetails = vi.fn()
 const patchOpenCheckRunDetails = vi.fn()
 const activeWorktreeState = vi.hoisted(() => ({
@@ -84,6 +86,7 @@ function renderChecksList(
   props: Partial<{
     worktreeId: string
     detailsStickySurface: 'sidebar' | 'card'
+    checkDetailsContextKey: string
     checks: PRCheckDetail[]
     onLoadCheckDetails: (check: PRCheckDetail) => Promise<PRCheckRunDetails | null>
   }> = {}
@@ -94,7 +97,7 @@ function renderChecksList(
         <ChecksList
           checks={props.checks ?? [failingCheck]}
           checksLoading={false}
-          checkDetailsContextKey="repo:42"
+          checkDetailsContextKey={props.checkDetailsContextKey ?? 'repo:42'}
           worktreeId={props.worktreeId}
           detailsStickySurface={props.detailsStickySurface ?? 'sidebar'}
           onLoadCheckDetails={
@@ -210,6 +213,152 @@ describe('ChecksList expanded check details', () => {
     const stickyBar = container.querySelector('.sticky.top-0')
     expect(stickyBar?.textContent).toContain('View full details')
     expect(stickyBar?.textContent).not.toContain('View full logs')
+  })
+
+  it('finishes the full-details tab when its sidebar unmounts during loading', async () => {
+    let resolveDetails: (details: PRCheckRunDetails) => void = () => {}
+    const request = new Promise<PRCheckRunDetails>((resolve) => {
+      resolveDetails = resolve
+    })
+    renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    patchOpenCheckRunDetails.mockClear()
+    const button = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('View full details')
+    )
+
+    act(() => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      root.render(<div />)
+    })
+    await act(async () => {
+      resolveDetails(checkDetails)
+      await request
+    })
+
+    expect(patchOpenCheckRunDetails).toHaveBeenCalledWith(
+      'wt-child-1',
+      'repo:42',
+      failingCheck,
+      expect.objectContaining({ details: checkDetails, loading: false, error: null })
+    )
+  })
+
+  it('shows a load error in the full-details tab after its sidebar unmounts', async () => {
+    let rejectDetails: (error: Error) => void = () => {}
+    const request = new Promise<PRCheckRunDetails>((_resolve, reject) => {
+      rejectDetails = reject
+    })
+    renderChecksList({ worktreeId: 'wt-child-1', onLoadCheckDetails: () => request })
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+    patchOpenCheckRunDetails.mockClear()
+    const button = [...container.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('View full details')
+    )
+
+    act(() => {
+      button!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      root.render(<div />)
+    })
+    await act(async () => {
+      rejectDetails(new Error('GitHub request failed'))
+      await request.catch(() => undefined)
+    })
+
+    expect(patchOpenCheckRunDetails).toHaveBeenCalledWith(
+      'wt-child-1',
+      'repo:42',
+      failingCheck,
+      expect.objectContaining({ details: null, loading: false, error: 'GitHub request failed' })
+    )
+  })
+
+  it('retries an inline details error', async () => {
+    let resolveRetry: (details: PRCheckRunDetails) => void = () => {}
+    const retryRequest = new Promise<PRCheckRunDetails>((resolve) => {
+      resolveRetry = resolve
+    })
+    const onLoadCheckDetails = vi
+      .fn<() => Promise<PRCheckRunDetails | null>>()
+      .mockRejectedValueOnce(new Error('GitHub request failed'))
+      .mockReturnValueOnce(retryRequest)
+    renderChecksList({ onLoadCheckDetails })
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const retry = [...container.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === 'Retry'
+    )
+    retry!.focus()
+
+    await act(async () => {
+      retry!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await Promise.resolve()
+    })
+
+    expect(onLoadCheckDetails).toHaveBeenCalledTimes(2)
+    expect(document.activeElement).toBe(retry)
+    expect(retry?.disabled).toBe(true)
+    expect(retry?.textContent).toContain('Retrying…')
+    expect(retry?.getAttribute('aria-busy')).toBe('true')
+    expect(container.textContent).toContain('GitHub request failed')
+
+    await act(async () => {
+      resolveRetry(checkDetails)
+      await retryRequest
+    })
+
+    expect(container.textContent).toContain('Verify failed')
+  })
+
+  it('ignores a stale inline result after returning to the same context', async () => {
+    const requests: {
+      resolve: (details: PRCheckRunDetails) => void
+      reject: (error: Error) => void
+    }[] = []
+    const onLoadCheckDetails = vi.fn(
+      () =>
+        new Promise<PRCheckRunDetails>((resolve, reject) => {
+          requests.push({ resolve, reject })
+        })
+    )
+
+    renderChecksList({ checkDetailsContextKey: 'repo:A', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    renderChecksList({ checkDetailsContextKey: 'repo:B', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    renderChecksList({ checkDetailsContextKey: 'repo:A', onLoadCheckDetails })
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(requests).toHaveLength(3)
+    await act(async () => {
+      requests[2]!.resolve(checkDetails)
+      await Promise.resolve()
+    })
+    await act(async () => {
+      requests[0]!.reject(new Error('stale request failed'))
+      await Promise.resolve()
+    })
+
+    expect(container.textContent).toContain('Verify failed')
+    expect(container.textContent).not.toContain('stale request failed')
   })
 
   it('uses resolved details when showing the action-required fallback hint', async () => {

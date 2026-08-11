@@ -54,6 +54,11 @@ import {
   isDefaultBranchWorkspace,
   isSleepingSweepExemptWorkspace
 } from '@/components/sidebar/visible-worktrees'
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  getPairedDeviceIdsByEnvironment,
+  isWorkspaceFromOtherDevice
+} from '@/components/sidebar/workspace-creator-visibility'
 import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
@@ -265,6 +270,9 @@ const CREATE_WORKSPACE_QUICK_ACTION_ITEM_ID = `quick-action:${CREATE_WORKSPACE_Q
 
 // Why: outlast the CommandDialog close animation so its rows do not disappear mid-fade.
 const PALETTE_CLOSE_LINGER_MS = 300
+// Why `jump-palette-item`: selection chrome lives in main.css — flat accent is invisible on light popovers.
+const JUMP_PALETTE_ITEM_CLASSNAME =
+  'jump-palette-item group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 text-left outline-none transition-[background-color,box-shadow]'
 
 type OpenTabPaletteItem = BrowserPaletteItem | SimulatorPaletteItem | WorkspaceTabPaletteItem
 
@@ -615,6 +623,7 @@ function WorktreeJumpPaletteContent({
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
@@ -631,7 +640,6 @@ function WorktreeJumpPaletteContent({
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedItemId, setSelectedItemId] = useState('')
-  const latestQueryRef = useRef('')
   // Why: the id cmdk auto-selected for the last committed list, so a late recent-order snapshot can
   // tell "nobody has moved the highlight yet" from "the user arrowed somewhere deliberately".
   const autoSelectedItemIdRef = useRef<string | null>(null)
@@ -748,6 +756,13 @@ function WorktreeJumpPaletteContent({
       ),
     [agentStatusByPaneKey, tabsByWorktree]
   )
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      hideWorkspacesFromOtherDevices
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
 
   // Why: empty-query mirrors sidebar filters so Search opens on the same quiet list; typed search widens to global non-archived scope.
   const emptyQueryVisibleWorktrees = useMemo(
@@ -771,6 +786,12 @@ function WorktreeJumpPaletteContent({
           return false
         }
         if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
+          return false
+        }
+        if (
+          hideWorkspacesFromOtherDevices &&
+          isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
+        ) {
           return false
         }
         if (
@@ -799,6 +820,8 @@ function WorktreeJumpPaletteContent({
       hideCliCreatedWorkspaces,
       hideDefaultBranchWorkspace,
       hideDetachedHeadWorkspaces,
+      hideWorkspacesFromOtherDevices,
+      pairedDeviceIdsByEnvironment,
       ptyIdsByTabId,
       showSleepingWorkspaces,
       tabsByWorktree,
@@ -1850,7 +1873,6 @@ function WorktreeJumpPaletteContent({
           ? document.activeElement
           : null
       skipRestoreFocusRef.current = false
-      latestQueryRef.current = ''
       setQuery('')
       setSelectedItemId('')
       // Why: reset on open, not on close — closing races the fade-out, and a
@@ -1887,16 +1909,23 @@ function WorktreeJumpPaletteContent({
     showCreateAction
   })
 
-  const handleCommandSelectionChange = useCallback(
-    (nextItemId: string) => {
-      // Why: cmdk can report the old list head before the deferred query commits its new ranking.
-      if (latestQueryRef.current !== deferredQuery) {
-        return
-      }
-      setSelectedItemId(nextItemId)
-    },
-    [deferredQuery]
-  )
+  // Why: cmdk writes its internal cursor *before* calling onValueChange. Dropping that
+  // callback (e.g. while deferredQuery lags the keystroke) leaves internal state advanced
+  // while the controlled `value` prop stays put — the next ArrowDown/Up then no-ops on
+  // cmdk's Object.is guard, so keyboard navigation dies after typing. Always accept the
+  // report so the cursor stays aligned; the deferred-commit effect below re-auto-selects
+  // the new ranking head once the list the user sees actually changes.
+  const handleCommandSelectionChange = useCallback((nextItemId: string) => {
+    setSelectedItemId(nextItemId)
+  }, [])
+
+  // Why: while query is mid-deferral, cmdk (and mid-lag arrows) can latch a selection
+  // against the previous ranking. When the deferred list commits, snap Enter back to the
+  // new head — matching handleQueryChange's clear, but covering selection that landed
+  // after the keystroke and before this commit.
+  useLayoutEffect(() => {
+    setSelectedItemId('')
+  }, [deferredQuery])
 
   useEffect(() => {
     const isCreateWorkspaceHighlighted =
@@ -1910,7 +1939,6 @@ function WorktreeJumpPaletteContent({
   }, [commandSelectedItemId, prefetchCreateWorkspaceBaseForComposer, visible])
 
   const handleQueryChange = useCallback((nextQuery: string) => {
-    latestQueryRef.current = nextQuery
     setQuery(nextQuery)
     setSelectedItemId('')
     listRef.current?.scrollTo(0, 0)
@@ -2566,7 +2594,7 @@ function WorktreeJumpPaletteContent({
                     key={entry.id}
                     value={CREATE_WORKTREE_ITEM_ID}
                     onSelect={handleCreateWorktree}
-                    className="group mx-0.5 mt-1 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-1.5 text-left outline-none transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground"
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'mt-1 py-1.5')}
                   >
                     <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-dashed border-border/60 bg-muted/25 text-muted-foreground/70">
                       <Plus size={13} aria-hidden="true" />
@@ -2610,10 +2638,7 @@ function WorktreeJumpPaletteContent({
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
                     data-current={isCurrentWorktree ? 'true' : undefined}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start">
                       <PaletteWorktreeStatusDot worktree={worktree} />
@@ -2739,10 +2764,7 @@ function WorktreeJumpPaletteContent({
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <FolderTree className="size-3.5" aria-hidden="true" />
@@ -2786,10 +2808,7 @@ function WorktreeJumpPaletteContent({
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Icon className="size-3.5" aria-hidden="true" />
@@ -2834,10 +2853,7 @@ function WorktreeJumpPaletteContent({
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <PaletteRecentTabStatusDot
@@ -2919,10 +2935,7 @@ function WorktreeJumpPaletteContent({
                     key={entry.id}
                     value={entry.id}
                     onSelect={() => handleSelectItem(entry)}
-                    className={cn(
-                      'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                      'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                    )}
+                    className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                   >
                     <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                       <Smartphone className="size-3.5" aria-hidden="true" />
@@ -2998,10 +3011,7 @@ function WorktreeJumpPaletteContent({
                   key={entry.id}
                   value={entry.id}
                   onSelect={() => handleSelectItem(entry)}
-                  className={cn(
-                    'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-                    'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-                  )}
+                  className={cn(JUMP_PALETTE_ITEM_CLASSNAME, 'py-2.5')}
                 >
                   <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
                     <Globe className="size-3.5" aria-hidden="true" />

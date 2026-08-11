@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
+import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
+import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
 const SSH_CONNECT_FAILURE_PREFIX = 'SSH connection failed'
@@ -16,7 +20,7 @@ const STALE_DAEMON_CWD_MARKERS = [
 const PANE_OWNER_UNVERIFIED_MARKER = 'terminal_pane_owner_unverified'
 
 function isSshError(error: string): boolean {
-  return error.startsWith(SSH_PREFIX) || error.includes(SSH_RELAY_LOST_MARKER)
+  return isSshReconnectOwnedTerminalError(error)
 }
 
 /** A single error line the SSH reconnect banner already covers — hide instead of stacking under/over it. */
@@ -70,6 +74,28 @@ export function TerminalErrorToast({
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
   const displayError = humanizeTerminalError(error)
+  const [environmentFooter, setEnvironmentFooter] = useState<{
+    error: string
+    footer: string
+  } | null>(null)
+
+  // Why: a select-all copy should carry details loaded asynchronously from preload.
+  useEffect(() => {
+    if (ssh || hasClientEnvironmentFooter(displayError)) {
+      return
+    }
+    let cancelled = false
+    void resolveClientEnvironmentFooter().then((footer) => {
+      if (!cancelled) {
+        setEnvironmentFooter({ error: displayError, footer })
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [displayError, ssh])
+
+  const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
 
   return (
     <div
@@ -120,6 +146,7 @@ export function TerminalErrorToast({
               .
             </>
           ) : null}
+          {!ssh && footer ? `\n\n${footer}` : null}
         </span>
         {showDaemonRestart ? (
           <button

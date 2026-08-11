@@ -1947,6 +1947,7 @@ export function FloatingTerminalPanel({
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  isVisible={open}
                   markdownAnnotationsEnabled={false}
                 />
               </Suspense>

@@ -2613,6 +2613,8 @@ describe('createPtySubprocess', () => {
     spawnMock.mockImplementation(() => {
       throw new Error('File not found: ')
     })
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
 
     try {
       expect(() =>
@@ -2623,9 +2625,14 @@ describe('createPtySubprocess', () => {
           shellOverride: 'not-a-real-shell.exe'
         })
       ).toThrow(
-        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:/
+        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:.*orca: 1\.4\.178-test/
       )
     } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }

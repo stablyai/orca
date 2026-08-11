@@ -1,9 +1,14 @@
 import { GitCapabilityCache } from '../../shared/git-capability-cache'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting
+} from './wsl-linked-worktree-git-routing'
 
 type LocalGitCapabilityTarget = {
   cwd?: string
   wslDistro?: string
+  signal?: AbortSignal
 }
 
 const localCapabilitiesByExecutionHost = new Map<string, GitCapabilityCache>()
@@ -27,6 +32,28 @@ export function getLocalGitCapabilityCache(
     localCapabilitiesByExecutionHost.set(executionHost, cache)
   }
   return cache
+}
+
+export function withLocalGitCapabilityCacheForExecution<T>(
+  target: LocalGitCapabilityTarget,
+  run: (capabilities: GitCapabilityCache) => Promise<T>
+): Promise<T> {
+  if (!target.cwd || !isWslLinkedWorktreeGitRoutingCandidate(target.cwd, target.wslDistro)) {
+    try {
+      return run(getLocalGitCapabilityCache(target))
+    } catch (error) {
+      return Promise.reject(error)
+    }
+  }
+  return prepareWslLinkedWorktreeGitRouting(target.cwd, target.wslDistro, {
+    signal: target.signal
+  }).then((usesHostGit) =>
+    run(
+      getLocalGitCapabilityCache(
+        usesHostGit ? { cwd: target.cwd } : { cwd: target.cwd, wslDistro: target.wslDistro }
+      )
+    )
+  )
 }
 
 export function getSshGitCapabilityCache(provider: object): GitCapabilityCache {

@@ -7,7 +7,11 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
-import { gitSpawn } from '../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../git/runner'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting
+} from '../git/wsl-linked-worktree-git-routing'
 
 /**
  * Fallback text search using git grep. Used when rg is not available.
@@ -16,24 +20,27 @@ import { gitSpawn } from '../git/runner'
  * is launched from a desktop entry (which inherits a minimal system PATH).
  * git grep is always available since this is a git-focused app.
  */
-export function searchWithGitGrep(
+export async function searchWithGitGrep(
   rootPath: string,
   args: SearchOptions,
   maxResults: number,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<SearchResult> {
+  if (isWslLinkedWorktreeGitRoutingCandidate(rootPath, localGitOptions.wslDistro)) {
+    await prepareWslLinkedWorktreeGitRouting(rootPath, localGitOptions.wslDistro)
+  }
+  const gitArgs = buildGitGrepArgs(args.query, args)
+  const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
+    cwd: rootPath,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
   return new Promise((resolve) => {
-    const gitArgs = buildGitGrepArgs(args.query, args)
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
     let stdoutBuffer = ''
     let done = false
 
-    const child = gitSpawn(gitArgs, {
-      cwd: rootPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
     let killTimeout: ReturnType<typeof setTimeout>
 
     function resolveOnce(): void {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerHttpLinkStoreAccessor } from '@/lib/http-link-routing'
 import {
   closeTerminalLinkActionRequest,
+  requestTerminalLinkAction,
   type TerminalLinkActionContext,
   type TerminalLinkActionRequest
 } from './terminal-link-action-request'
@@ -29,6 +30,7 @@ function actionContext(request = vi.fn()): TerminalLinkActionContext {
   return {
     paneId: 7,
     pointerGesture: { canRequestAction: () => true, dispose: vi.fn() },
+    claimPtyMouse: vi.fn(() => true),
     request,
     focusTerminal: vi.fn()
   }
@@ -56,6 +58,54 @@ describe('terminal link action routing', () => {
 
     expect(closeTerminalLinkActionRequest(second, first)).toBe(second)
     expect(closeTerminalLinkActionRequest(first, first)).toBeNull()
+  })
+
+  it('claims PTY mouse ownership only after the pointer gesture is eligible', () => {
+    const claimPtyMouse = vi.fn(() => true)
+    const request = vi.fn()
+    const context = actionContext(request)
+    context.claimPtyMouse = claimPtyMouse
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(true)
+    expect(claimPtyMouse).toHaveBeenCalledOnce()
+    expect(claimPtyMouse.mock.invocationCallOrder[0]).toBeLessThan(
+      request.mock.invocationCallOrder[0]
+    )
+  })
+
+  it('leaves PTY mouse ownership with an ineligible pointer gesture', () => {
+    const context = actionContext()
+    context.pointerGesture.canRequestAction = () => false
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(false)
+    expect(context.claimPtyMouse).not.toHaveBeenCalled()
+    expect(context.request).not.toHaveBeenCalled()
+  })
+
+  it('leaves the action closed when the child already owns the gesture', () => {
+    const context = actionContext()
+    context.claimPtyMouse = vi.fn(() => false)
+
+    expect(
+      requestTerminalLinkAction(plainEvent(), context, {
+        destination: 'https://example.com',
+        kind: 'url',
+        primary: { label: 'Open', run: vi.fn() }
+      })
+    ).toBe(false)
+    expect(context.request).not.toHaveBeenCalled()
   })
 
   it('offers system browser first and Orca second when system browser is the default', () => {

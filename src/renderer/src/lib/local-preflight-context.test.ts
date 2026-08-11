@@ -11,26 +11,30 @@ import {
 } from './local-preflight-context'
 
 function makeState(args: {
-  repoPath?: string | null
+  repoPath?: string
   worktreePath?: string | null
   repo?: Partial<Repo>
   worktree?: Partial<Worktree>
 }): AppState {
   const repoId = 'repo-1'
   const worktreeId = `${repoId}::worktree-1`
+  const repos: AppState['repos'] =
+    args.repoPath === undefined
+      ? []
+      : [
+          {
+            id: repoId,
+            path: args.repoPath,
+            displayName: repoId,
+            badgeColor: 'blue',
+            addedAt: 1,
+            ...args.repo
+          }
+        ]
   return {
     activeRepoId: repoId,
     activeWorktreeId: args.worktreePath === undefined ? null : worktreeId,
-    repos:
-      args.repoPath === undefined
-        ? []
-        : [
-            {
-              id: repoId,
-              path: args.repoPath,
-              ...args.repo
-            }
-          ],
+    repos,
     worktreesByRepo:
       args.worktreePath === undefined
         ? {}

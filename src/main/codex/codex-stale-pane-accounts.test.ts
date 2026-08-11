@@ -8,6 +8,8 @@ import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,
   hasRecordedLegacySharedCodexPane,
+  hasRecordedManagedHostCodexPane,
+  isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys,
   recordCodexPaneAccount
 } from './codex-pane-account-registry'
@@ -46,6 +48,17 @@ afterEach(() => {
 })
 
 describe('codex pane account registry', () => {
+  it.each([
+    ['real-home', true],
+    ['account-home', true],
+    ['wsl-home', true],
+    ['shared-home', false],
+    ['custom-home', false],
+    [undefined, false]
+  ] as const)('classifies whether %s proves a pane avoided the shared home', (route, expected) => {
+    expect(isCodexPaneHomeRouteProvenAwayFromSharedHome(route)).toBe(expected)
+  })
+
   it('survives a process restart so a daemon-backed shell stays attributable', () => {
     recordCodexPaneAccount('pty-1', {
       selectionKey: 'host',
@@ -123,6 +136,40 @@ describe('codex pane account registry', () => {
     })
 
     expect(hasRecordedLegacySharedCodexPane()).toBe(true)
+  })
+
+  it('requests startup inventory only for managed host panes', () => {
+    recordCodexPaneAccount('pty-real', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'real-home'
+    })
+    recordCodexPaneAccount('pty-wsl', {
+      selectionKey: 'wsl:Ubuntu',
+      accountId: 'account-wsl',
+      homeRoute: 'account-home'
+    })
+
+    expect(hasRecordedManagedHostCodexPane()).toBe(false)
+
+    recordCodexPaneAccount('pty-shared', {
+      selectionKey: 'host',
+      accountId: null,
+      homeRoute: 'shared-home'
+    })
+
+    expect(hasRecordedManagedHostCodexPane()).toBe(true)
+
+    forgetCodexPaneAccount('pty-shared')
+    expect(hasRecordedManagedHostCodexPane()).toBe(false)
+
+    recordCodexPaneAccount('pty-account', {
+      selectionKey: 'host',
+      accountId: 'account-host',
+      homeRoute: 'account-home'
+    })
+
+    expect(hasRecordedManagedHostCodexPane()).toBe(true)
   })
 
   it('drops leaked records that are absent from the authoritative daemon inventory', () => {

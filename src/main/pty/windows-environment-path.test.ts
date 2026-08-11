@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { defaultExecFileMock, defaultExecFileSyncMock } = vi.hoisted(() => ({
   defaultExecFileMock: vi.fn(),
@@ -19,8 +19,26 @@ import {
   readPersistedWindowsPathSegmentsAsync,
   resolvePathEnvKey
 } from './windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from './windows-path-registry-reader'
 
-type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void
+const registryGetKeyMock = vi.fn()
+
+function registryPath(value: string): Record<string, unknown> {
+  return { Path: { type: 1, value } }
+}
+
+beforeEach(() => {
+  registryGetKeyMock.mockReset()
+  __setWindowsPathRegistryLoaderForTests(() => ({
+    HK: { LM: 1, CU: 2 },
+    getRegistryKey: registryGetKeyMock
+  }))
+})
+
+afterEach(() => {
+  __resetPersistedWindowsPathCacheForTests()
+  __setWindowsPathRegistryLoaderForTests()
+})
 
 describe('readPersistedWindowsPathSegments', () => {
   it('reads machine and user Path values from the Windows registry', () => {
@@ -68,18 +86,17 @@ describe('readPersistedWindowsPathSegments', () => {
   it('caches production registry reads briefly', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileSyncMock
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
-      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(2)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(2)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileSyncMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -87,27 +104,26 @@ describe('readPersistedWindowsPathSegments', () => {
   it('force-refreshes the production registry cache', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileSyncMock
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\User;C:\\Program Files\\GitHub CLI\r\n')
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User;C:\\Program Files\\GitHub CLI'))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
-      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(2)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(2)
 
       expect(readPersistedWindowsPathSegments({ forceRefresh: true })).toEqual([
         'C:\\Machine',
         'C:\\User',
         'C:\\Program Files\\GitHub CLI'
       ])
-      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileSyncMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -115,11 +131,11 @@ describe('readPersistedWindowsPathSegments', () => {
   it('invalidates the cache after Windows reports an environment change', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileSyncMock
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldMachine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\OldUser\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewMachine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\NewUser\r\n')
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\OldMachine'))
+      .mockReturnValueOnce(registryPath('C:\\OldUser'))
+      .mockReturnValueOnce(registryPath('C:\\NewMachine'))
+      .mockReturnValueOnce(registryPath('C:\\NewUser'))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
@@ -129,10 +145,9 @@ describe('readPersistedWindowsPathSegments', () => {
       invalidatePersistedWindowsPathCache()
 
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\NewMachine', 'C:\\NewUser'])
-      expect(defaultExecFileSyncMock).toHaveBeenCalledTimes(4)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileSyncMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -140,9 +155,9 @@ describe('readPersistedWindowsPathSegments', () => {
   it('keeps the last good segments when a forced read hits a blocked registry', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileSyncMock
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
       .mockImplementation(() => {
         throw new Error('ERROR: Access is denied.')
       })
@@ -157,7 +172,6 @@ describe('readPersistedWindowsPathSegments', () => {
       expect(readPersistedWindowsPathSegments()).toEqual(['C:\\Machine', 'C:\\User'])
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileSyncMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -165,10 +179,10 @@ describe('readPersistedWindowsPathSegments', () => {
   it('still clears the cache when the registry reports an empty Path', () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileSyncMock
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\Machine\r\n')
-      .mockReturnValueOnce('    Path    REG_SZ    C:\\User\r\n')
-      .mockReturnValue('    Path    REG_SZ    \r\n')
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
+      .mockReturnValue(registryPath(''))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
@@ -180,7 +194,6 @@ describe('readPersistedWindowsPathSegments', () => {
       expect(readPersistedWindowsPathSegments()).toEqual([])
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileSyncMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -188,13 +201,9 @@ describe('readPersistedWindowsPathSegments', () => {
   it('deduplicates concurrent forced asynchronous refreshes and merges each environment', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const callbacks: ExecCallback[] = []
-    defaultExecFileMock.mockImplementation(
-      (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-        callbacks.push(callback)
-        return {} as never
-      }
-    )
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
@@ -203,41 +212,25 @@ describe('readPersistedWindowsPathSegments', () => {
       const first = mergePersistedWindowsPathAsync(firstEnv, { forceRefresh: true })
       const second = mergePersistedWindowsPathAsync(secondEnv, { forceRefresh: true })
 
-      expect(defaultExecFileMock).toHaveBeenCalledTimes(2)
-      callbacks[0]?.(null, '    Path    REG_SZ    C:\\Machine\r\n', '')
-      callbacks[1]?.(null, '    Path    REG_SZ    C:\\User\r\n', '')
       await Promise.all([first, second])
       expect(firstEnv.Path).toBe('C:\\First;C:\\Machine;C:\\User')
       expect(secondEnv.Path).toBe('C:\\Second;C:\\Machine;C:\\User')
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(2)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
 
-  it('keeps the last good cache when bounded asynchronous reads time out', async () => {
+  it('keeps the last good cache when native registry reads fail', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    defaultExecFileMock
-      .mockImplementationOnce(
-        (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '    Path    REG_SZ    C:\\Machine\r\n', '')
-          return {} as never
-        }
-      )
-      .mockImplementationOnce(
-        (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(null, '    Path    REG_SZ    C:\\User\r\n', '')
-          return {} as never
-        }
-      )
-      .mockImplementation(
-        (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-          callback(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }), '', '')
-          return {} as never
-        }
-      )
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\Machine'))
+      .mockReturnValueOnce(registryPath('C:\\User'))
+      .mockImplementation(() => {
+        throw new Error('registry unavailable')
+      })
     __resetPersistedWindowsPathCacheForTests()
 
     try {
@@ -249,7 +242,7 @@ describe('readPersistedWindowsPathSegments', () => {
         'C:\\Machine',
         'C:\\User'
       ])
-      expect(defaultExecFileMock).toHaveBeenCalledTimes(2)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(2)
       await expect(readPersistedWindowsPathSegmentsAsync({ forceRefresh: true })).resolves.toEqual([
         'C:\\Machine',
         'C:\\User'
@@ -258,11 +251,9 @@ describe('readPersistedWindowsPathSegments', () => {
         'C:\\Machine',
         'C:\\User'
       ])
-      expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
-      expect(defaultExecFileMock.mock.calls[2]?.[2]).toMatchObject({ timeout: 5_000 })
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })
@@ -270,35 +261,28 @@ describe('readPersistedWindowsPathSegments', () => {
   it('uses a current-generation refresh before merging an invalidated read', async () => {
     const originalPlatform = process.platform
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const callbacks: ExecCallback[] = []
-    defaultExecFileMock.mockImplementation(
-      (_file: string, _args: string[], _options: unknown, callback: ExecCallback) => {
-        callbacks.push(callback)
-        return {} as never
-      }
-    )
+    registryGetKeyMock
+      .mockReturnValueOnce(registryPath('C:\\OldMachine'))
+      .mockImplementationOnce(() => {
+        queueMicrotask(invalidatePersistedWindowsPathCache)
+        return registryPath('C:\\OldUser')
+      })
+      .mockReturnValueOnce(registryPath('C:\\NewMachine'))
+      .mockReturnValueOnce(registryPath('C:\\NewUser'))
     __resetPersistedWindowsPathCacheForTests()
 
     try {
       const env = { Path: 'C:\\Injected' }
-      const merge = mergePersistedWindowsPathAsync(env)
-      invalidatePersistedWindowsPathCache()
-      const currentRead = readPersistedWindowsPathSegmentsAsync()
-      callbacks[2]?.(null, '    Path    REG_SZ    C:\\NewMachine\r\n', '')
-      callbacks[3]?.(null, '    Path    REG_SZ    C:\\NewUser\r\n', '')
-      await expect(currentRead).resolves.toEqual(['C:\\NewMachine', 'C:\\NewUser'])
-      callbacks[0]?.(null, '    Path    REG_SZ    C:\\OldMachine\r\n', '')
-      callbacks[1]?.(null, '    Path    REG_SZ    C:\\OldUser\r\n', '')
-      await vi.waitFor(() => expect(env.Path).toBe('C:\\Injected;C:\\NewMachine;C:\\NewUser'))
-      await merge
+      await mergePersistedWindowsPathAsync(env)
+
+      expect(env.Path).toBe('C:\\Injected;C:\\NewMachine;C:\\NewUser')
       await expect(readPersistedWindowsPathSegmentsAsync()).resolves.toEqual([
         'C:\\NewMachine',
         'C:\\NewUser'
       ])
-      expect(defaultExecFileMock).toHaveBeenCalledTimes(4)
+      expect(registryGetKeyMock).toHaveBeenCalledTimes(4)
     } finally {
       __resetPersistedWindowsPathCacheForTests()
-      defaultExecFileMock.mockReset()
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
   })

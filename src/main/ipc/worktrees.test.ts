@@ -603,6 +603,18 @@ describe('registerWorktreeHandlers', () => {
     expect(orderedTargets).not.toContain(staleId)
   })
 
+  it('persistSortOrder skips ranks that already represent the requested order', () => {
+    const firstId = 'repo-1::/workspace/first'
+    const secondId = 'repo-1::/workspace/second'
+    store.getWorktreeMeta.mockImplementation((id: string) => ({
+      sortOrder: id === firstId ? 200 : 100
+    }))
+
+    handlers['worktrees:persistSortOrder'](null, { orderedIds: [firstId, secondId] })
+
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
+
   it('prefetches the local default create base through the runtime refresh cache', async () => {
     const repo = {
       id: 'repo-1',
