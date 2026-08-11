@@ -135,6 +135,9 @@ export function WorktreeTitleInlineRename({
   const savingInputClassName = editingPresentation === 'field' ? 'pr-6' : 'pr-4'
   const savingSpinnerClassName = editingPresentation === 'field' ? 'right-1.5' : 'right-0'
 
+  // Why: the guard reads the rendered `editing`, so every caller must be reachable
+  // only from the branch it belongs to — a call from a timer or subscription could
+  // capture a stale value and silently drop the transition.
   const setEditingMode = useCallback(
     (nextEditing: boolean) => {
       if (editing === nextEditing) {
@@ -152,7 +155,7 @@ export function WorktreeTitleInlineRename({
 
   // Why: both ways in (double-click, the workspace.rename shortcut) open the editor
   // here, so no caller can put it on screen while skipping part of the transition.
-  const openEditor = useCallback(() => {
+  const openRenameEditor = useCallback(() => {
     setValue(displayName)
     setEditingMode(true)
   }, [displayName, setEditingMode])
@@ -178,8 +181,8 @@ export function WorktreeTitleInlineRename({
     if (disabled || editing) {
       return
     }
-    openEditor()
-  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openEditor])
+    openRenameEditor()
+  }, [beginEditing, disabled, editing, onBeginEditingConsumed, openRenameEditor])
 
   const stopCardEvent = useCallback((event: React.SyntheticEvent) => {
     event.stopPropagation()
@@ -192,9 +195,9 @@ export function WorktreeTitleInlineRename({
       }
       event.preventDefault()
       event.stopPropagation()
-      openEditor()
+      openRenameEditor()
     },
-    [disabled, openEditor]
+    [disabled, openRenameEditor]
   )
 
   const cancelRename = useCallback(() => {
