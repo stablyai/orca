@@ -36,6 +36,7 @@ import {
 import { useAppStore } from '../../store'
 import {
   ClaudeIcon,
+  DeepSeekIcon,
   GeminiIcon,
   MiniMaxIcon,
   OpenAIIcon,
@@ -45,6 +46,7 @@ import { toast } from 'sonner'
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsDeepSeekSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
@@ -328,6 +330,9 @@ export function AccountsPane({
   const [miniMaxCookieDraft, setMiniMaxCookieDraft] = useState('')
   const [miniMaxConfigured, setMiniMaxConfigured] = useState(false)
   const [miniMaxCredentialBusy, setMiniMaxCredentialBusy] = useState(false)
+  const [deepSeekApiKeyDraft, setDeepSeekApiKeyDraft] = useState('')
+  const [deepSeekConfigured, setDeepSeekConfigured] = useState(false)
+  const [deepSeekCredentialBusy, setDeepSeekCredentialBusy] = useState(false)
   const localAccountRuntime = getSelectedAccountRuntime(
     settings,
     wslSupportedPlatform,
@@ -552,8 +557,64 @@ export function AccountsPane({
     }
   }
 
+  const refreshDeepSeekCredentialStatus = async (): Promise<void> => {
+    try {
+      const status = await window.api.deepseekCredentials.getStatus()
+      setDeepSeekConfigured(status.configured)
+    } catch (error) {
+      console.error('Failed to load DeepSeek credential status:', error)
+    }
+  }
+
+  const saveDeepSeekApiKey = async (): Promise<void> => {
+    if (!deepSeekApiKeyDraft.trim()) {
+      toast.error(
+        translate('settings.accounts.deepseek.keyRequired', 'DeepSeek API key is required.')
+      )
+      return
+    }
+    setDeepSeekCredentialBusy(true)
+    try {
+      const status = await window.api.deepseekCredentials.saveApiKey(deepSeekApiKeyDraft.trim())
+      if (!status.configured) {
+        throw new Error(
+          translate('settings.accounts.deepseek.keyNotSaved', 'DeepSeek API key was not saved.')
+        )
+      }
+      setDeepSeekConfigured(status.configured)
+      setDeepSeekApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+      toast.success(translate('settings.accounts.deepseek.keySaved', 'DeepSeek API key saved.'))
+    } catch (error) {
+      toast.error(
+        translate('settings.accounts.deepseek.updateFailed', 'DeepSeek API key update failed.'),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setDeepSeekCredentialBusy(false)
+    }
+  }
+
+  const clearDeepSeekApiKey = async (): Promise<void> => {
+    setDeepSeekCredentialBusy(true)
+    try {
+      const status = await window.api.deepseekCredentials.clearApiKey()
+      setDeepSeekConfigured(status.configured)
+      setDeepSeekApiKeyDraft('')
+      recordFeatureInteraction('usage-tracking')
+    } catch (error) {
+      toast.error(
+        translate('settings.accounts.deepseek.updateFailed', 'DeepSeek API key update failed.'),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setDeepSeekCredentialBusy(false)
+    }
+  }
+
   useEffect(() => {
     void refreshMiniMaxCredentialStatus()
+    void refreshDeepSeekCredentialStatus()
   }, [])
 
   useEffect(() => {
@@ -1943,6 +2004,121 @@ export function AccountsPane({
             />
           </SearchableSetting>
         </div>
+      </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsDeepSeekSearchEntries()) ? (
+      <section key="deepseek" id="accounts-deepseek" className="space-y-4 scroll-mt-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <DeepSeekIcon size={16} />
+              {translate('settings.accounts.deepseek.title', 'DeepSeek')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'settings.accounts.deepseek.description',
+                'Add a DeepSeek API key to show your prepaid balance in the status bar.'
+              )}
+            </p>
+          </div>
+          <a
+            href="https://platform.deepseek.com/api_keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            {translate('settings.accounts.deepseek.openConsole', 'API keys')}
+            <ExternalLink className="size-3" />
+          </a>
+        </div>
+
+        <div
+          className={cn(
+            'flex items-start gap-3 rounded-lg border bg-muted/20 p-3',
+            deepSeekConfigured ? 'border-border/60' : 'border-border/40'
+          )}
+        >
+          <ShieldCheck
+            className={cn(
+              'mt-0.5 size-4 shrink-0',
+              deepSeekConfigured ? 'text-foreground' : 'text-muted-foreground'
+            )}
+          />
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium">
+              {deepSeekConfigured
+                ? translate('settings.accounts.deepseek.stored', 'Stored locally')
+                : translate('settings.accounts.deepseek.notSet', 'API key not set')}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'settings.accounts.deepseek.storedHint',
+                'Encrypted on this device and sent only to api.deepseek.com for balance refreshes.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <SearchableSetting
+          title={translate('settings.accounts.deepseek.keyLabel', 'DeepSeek API Key')}
+          description={translate(
+            'settings.accounts.deepseek.keyDescription',
+            'Paste a DeepSeek API key for local balance fetching.'
+          )}
+          keywords={['deepseek', 'api key', 'balance', 'rate limit', 'status bar']}
+          className="space-y-2"
+        >
+          <div className="flex items-center gap-2">
+            <Label>{translate('settings.accounts.deepseek.keyLabel', 'DeepSeek API Key')}</Label>
+            <Badge
+              variant={deepSeekConfigured ? 'secondary' : 'outline'}
+              className="h-5 gap-1 rounded-full px-2 text-[10px] font-medium text-muted-foreground"
+            >
+              {deepSeekConfigured ? <Lock className="size-3" /> : <LockOpen className="size-3" />}
+              {deepSeekConfigured
+                ? translate('settings.accounts.deepseek.saved', 'Saved')
+                : translate('settings.accounts.deepseek.notSaved', 'Not saved')}
+            </Badge>
+          </div>
+          <div className="flex gap-2">
+            <Input
+              type="password"
+              value={deepSeekApiKeyDraft}
+              onChange={(e) => setDeepSeekApiKeyDraft(e.target.value)}
+              placeholder={translate('settings.accounts.deepseek.keyPlaceholder', 'sk-…')}
+              spellCheck={false}
+              className="flex-1 text-xs"
+            />
+            <Button
+              size="xs"
+              onClick={() => void saveDeepSeekApiKey()}
+              disabled={deepSeekCredentialBusy || !deepSeekApiKeyDraft.trim()}
+              className="h-7 shrink-0 text-xs"
+            >
+              {deepSeekCredentialBusy ? <Loader2 className="size-3 animate-spin" /> : null}
+              {deepSeekConfigured
+                ? translate('settings.accounts.deepseek.replace', 'Replace')
+                : translate('settings.accounts.deepseek.save', 'Save')}
+            </Button>
+            {deepSeekConfigured ? (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void clearDeepSeekApiKey()}
+                disabled={deepSeekCredentialBusy}
+                className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {translate('settings.accounts.deepseek.forget', 'Forget key')}
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'settings.accounts.deepseek.envHint',
+              'Create a key at platform.deepseek.com/api_keys. A key saved here takes precedence over the DEEPSEEK_API_KEY environment variable.'
+            )}
+          </p>
+        </SearchableSetting>
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (

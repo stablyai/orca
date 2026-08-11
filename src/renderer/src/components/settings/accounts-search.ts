@@ -212,6 +212,23 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsDeepSeekSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.accounts.deepseek.searchTitle', 'DeepSeek Usage'),
+    description: translate(
+      'settings.accounts.deepseek.searchDescription',
+      'Add a DeepSeek API key to show prepaid balance in the status bar.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.accounts.deepseek.searchKeyword', 'deepseek'),
+      ...translateSearchKeyword('settings.accounts.deepseek.searchKeywordApiKey', 'api key'),
+      ...translateSearchKeyword('settings.accounts.deepseek.searchKeywordBalance', 'balance'),
+      ...translateSearchKeyword('settings.accounts.deepseek.searchKeywordRateLimit', 'rate limit'),
+      ...translateSearchKeyword('settings.accounts.deepseek.searchKeywordStatusBar', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +236,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
+  ...getAccountsDeepSeekSearchEntries(),
   ...getAccountsGrokSearchEntries()
 ])

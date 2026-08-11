@@ -3439,6 +3439,11 @@ export type PreloadApi = {
     saveCookie: (cookie: string) => Promise<{ configured: boolean }>
     clearCookie: () => Promise<{ configured: boolean }>
   }
+  deepseekCredentials: {
+    getStatus: () => Promise<{ configured: boolean }>
+    saveApiKey: (apiKey: string) => Promise<{ configured: boolean }>
+    clearApiKey: () => Promise<{ configured: boolean }>
+  }
   grokAccounts: {
     getStatus: () => Promise<GrokAccountStatus>
   }

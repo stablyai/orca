@@ -4476,6 +4476,15 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
   },
 
+  deepseekCredentials: {
+    getStatus: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('deepseekCredentials:getStatus'),
+    saveApiKey: (apiKey: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('deepseekCredentials:saveApiKey', apiKey),
+    clearApiKey: (): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('deepseekCredentials:clearApiKey')
+  },
+
   grokAccounts: {
     getStatus: (): Promise<GrokAccountStatus> => ipcRenderer.invoke('grokAccounts:getStatus')
   },

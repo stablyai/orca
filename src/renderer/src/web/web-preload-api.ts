@@ -868,6 +868,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    deepseekCredentials: createDeepSeekCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
@@ -3142,6 +3143,18 @@ function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimax
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
     clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createDeepSeekCredentialsApi(): NonNullable<Partial<PreloadApi>['deepseekCredentials']> {
+  const notConfigured = { configured: false }
+  const unsupportedError = new Error(
+    'DeepSeek API key storage is only available in the desktop app.'
+  )
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.resolve(notConfigured)
   }
 }
 

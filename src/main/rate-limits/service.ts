@@ -24,11 +24,9 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
-import {
-  fetchDeepSeekRateLimits,
-  isDeepSeekAuthConfigured
-} from './deepseek-fetcher'
+import { fetchDeepSeekRateLimits, isDeepSeekAuthConfigured } from './deepseek-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
+import { hasDeepSeekApiKey, readStoredDeepSeekApiKey } from '../deepseek/deepseek-api-key-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
@@ -183,7 +181,7 @@ export class RateLimitService {
     deepseek: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
-  private deepseekAuthConfigured = isDeepSeekAuthConfigured()
+  private deepseekAuthConfigured = hasDeepSeekApiKey() || isDeepSeekAuthConfigured()
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -419,6 +417,16 @@ export class RateLimitService {
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
     })
+  }
+
+  // Why: a corrupt/undecryptable key file must not throw on a hot fetch cycle;
+  // degrade to the env var (or unavailable) instead.
+  private readStoredDeepSeekKey(): string | null {
+    try {
+      return readStoredDeepSeekApiKey()
+    } catch {
+      return null
+    }
   }
 
   async refreshForCodexAccountChange(
@@ -1617,7 +1625,7 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
-    this.deepseekAuthConfigured = isDeepSeekAuthConfigured()
+    this.deepseekAuthConfigured = hasDeepSeekApiKey() || isDeepSeekAuthConfigured()
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1707,7 +1715,7 @@ export class RateLimitService {
             groupId: miniMaxGroupId,
             models: miniMaxModels
           }),
-      fetchDeepSeekRateLimits({ signal })
+      fetchDeepSeekRateLimits({ signal, storedApiKey: this.readStoredDeepSeekKey() })
     ])
 
     if (signal.aborted) {

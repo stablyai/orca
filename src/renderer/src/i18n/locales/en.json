@@ -60,11 +60,37 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "deepseekToggleDescription": "Show DeepSeek prepaid balance when DEEPSEEK_API_KEY is set."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar."
+      }
+    },
+    "accounts": {
+      "deepseek": {
+        "keyRequired": "DeepSeek API key is required.",
+        "keyNotSaved": "DeepSeek API key was not saved.",
+        "keySaved": "DeepSeek API key saved.",
+        "updateFailed": "DeepSeek API key update failed.",
+        "title": "DeepSeek",
+        "description": "Add a DeepSeek API key to show your prepaid balance in the status bar.",
+        "openConsole": "API keys",
+        "stored": "Stored locally",
+        "notSet": "API key not set",
+        "storedHint": "Encrypted on this device and sent only to api.deepseek.com for balance refreshes.",
+        "keyLabel": "DeepSeek API Key",
+        "keyDescription": "Paste a DeepSeek API key for local balance fetching.",
+        "saved": "Saved",
+        "notSaved": "Not saved",
+        "keyPlaceholder": "sk-…",
+        "replace": "Replace",
+        "save": "Save",
+        "forget": "Forget key",
+        "envHint": "Create a key at platform.deepseek.com/api_keys. A key saved here takes precedence over the DEEPSEEK_API_KEY environment variable.",
+        "searchTitle": "DeepSeek Usage",
+        "searchDescription": "Add a DeepSeek API key to show prepaid balance in the status bar."
       }
     }
   },
@@ -3404,7 +3430,8 @@
             "antigravityUsageDetails": "Open Antigravity usage details",
             "grokUsageAria": "Open Grok usage details",
             "grokUsageMenu": "Grok Usage",
-            "floatingTerminalNewActivity": "{{label}}, new activity"
+            "floatingTerminalNewActivity": "{{label}}, new activity",
+            "deepseekUsageMenu": "DeepSeek Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -8144,7 +8171,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "deepseekUsageTitle": "DeepSeek Usage",
+            "deepseekUsageDescription": "Show DeepSeek prepaid balance from DEEPSEEK_API_KEY."
           }
         },
         "auto": {

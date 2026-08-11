@@ -22,13 +22,25 @@ type DeepSeekBalanceResponse = {
   balance_infos?: unknown
 }
 
-export function readDeepSeekApiKey(env: NodeJS.ProcessEnv = process.env): string | null {
+// A key saved in Orca's settings takes precedence over the environment variable
+// so users who plug a key into the UI don't also need to export DEEPSEEK_API_KEY.
+export function readDeepSeekApiKey(
+  env: NodeJS.ProcessEnv = process.env,
+  storedApiKey?: string | null
+): string | null {
+  const stored = storedApiKey?.trim()
+  if (stored) {
+    return stored
+  }
   const key = env.DEEPSEEK_API_KEY?.trim()
   return key ? key : null
 }
 
-export function isDeepSeekAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
-  return readDeepSeekApiKey(env) !== null
+export function isDeepSeekAuthConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+  storedApiKey?: string | null
+): boolean {
+  return readDeepSeekApiKey(env, storedApiKey) !== null
 }
 
 function result(
@@ -137,15 +149,19 @@ function mapBalanceResponse(data: DeepSeekBalanceResponse): ProviderRateLimits {
  * hasUsageData without inventing session/weekly quotas.
  */
 export async function fetchDeepSeekRateLimits(
-  options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal } = {}
+  options: { env?: NodeJS.ProcessEnv; signal?: AbortSignal; storedApiKey?: string | null } = {}
 ): Promise<ProviderRateLimits> {
   const env = options.env ?? process.env
-  const apiKey = readDeepSeekApiKey(env)
+  const apiKey = readDeepSeekApiKey(env, options.storedApiKey)
   if (!apiKey) {
-    return result('unavailable', 'DeepSeek API key not set — export DEEPSEEK_API_KEY', {
-      failureKind: 'missing-credentials',
-      source: 'cli'
-    })
+    return result(
+      'unavailable',
+      'DeepSeek API key not set — add it in Settings → Accounts or export DEEPSEEK_API_KEY',
+      {
+        failureKind: 'missing-credentials',
+        source: 'cli'
+      }
+    )
   }
 
   try {
