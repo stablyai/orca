@@ -1312,6 +1312,25 @@ export function connectPanePty(
       }
     }
   }
+  const clearShellOwnedSleepingRecord = (
+    state: ReturnType<typeof useAppStore.getState>,
+    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
+  ): void => {
+    state.clearSleepingAgentSession(consumed.paneKey)
+    const consumedClaimKey = getProviderSessionClaimKey(consumed.record)
+    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
+      const legacy = parseLegacyNumericPaneKey(paneKey)
+      if (
+        paneKey !== consumed.paneKey &&
+        legacy?.tabId === deps.tabId &&
+        (!record.tabId || record.tabId === deps.tabId) &&
+        getProviderSessionClaimKey(record) === consumedClaimKey
+      ) {
+        // Why: shell confirmation owns this tab, not another tab with the same provider metadata.
+        state.clearSleepingAgentSession(paneKey)
+      }
+    }
+  }
   const launchToken = paneStartup?.launchConfig
     ? (paneStartup.launchToken ?? createBrowserUuid())
     : undefined
@@ -2166,7 +2185,7 @@ export function connectPanePty(
       const state = useAppStore.getState()
       const sleepingRecord = getShellOwnedSleepingRecordForPane(state)
       if (sleepingRecord) {
-        clearSleepingRecordProviderDuplicates(state, sleepingRecord)
+        clearShellOwnedSleepingRecord(state, sleepingRecord)
       }
       clearStaleAgentTabTitleOnConfirmedShell()
       // Why: a hard-killed agent leaves mouse/focus/kitty modes armed, and the
