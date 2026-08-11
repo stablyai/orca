@@ -147,6 +147,8 @@ import type {
   ClaudeRateLimitAccountsState,
   ClassifiedError,
   CodexRateLimitAccountsState,
+  CursorRateLimitAccountsState,
+  MuseSparkRateLimitAccountsState,
   CreateWorktreeArgs,
   CreateWorktreeResult,
   CustomPet,
@@ -2429,6 +2431,26 @@ export type PreloadApi = {
       runtime?: 'host' | 'wsl'
       wslDistro?: string | null
     }) => Promise<ClaudeRateLimitAccountsState>
+  }
+  cursorAccounts: {
+    list: () => Promise<CursorRateLimitAccountsState>
+    add: () => Promise<CursorRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<CursorRateLimitAccountsState>
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }) => Promise<CursorRateLimitAccountsState>
+  }
+  museSparkAccounts: {
+    list: () => Promise<MuseSparkRateLimitAccountsState>
+    add: () => Promise<MuseSparkRateLimitAccountsState>
+    remove: (args: { accountId: string }) => Promise<MuseSparkRateLimitAccountsState>
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }) => Promise<MuseSparkRateLimitAccountsState>
   }
   cli: {
     getInstallStatus: () => Promise<CliInstallStatus>

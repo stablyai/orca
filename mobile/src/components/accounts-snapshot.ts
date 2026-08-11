@@ -155,6 +155,38 @@ const CodexAccountSummarySchema = z
     }
   })
 
+const CursorAccountSummarySchema = z
+  .object({
+    id: AccountIdSchema,
+    email: z.string().min(1),
+    authId: z.string().nullable().optional(),
+    membershipType: z.string().nullable().optional(),
+    signUpType: z.string().nullable().optional(),
+    managedRuntime: z.enum(['host', 'wsl']).optional(),
+    wslDistro: z.string().nullable().optional(),
+    createdAt: TimestampSchema.optional(),
+    updatedAt: TimestampSchema.optional(),
+    lastAuthenticatedAt: TimestampSchema.optional()
+  })
+  .passthrough()
+
+const MuseSparkAccountSummarySchema = z
+  .object({
+    id: AccountIdSchema,
+    email: z.string().min(1),
+    managedRuntime: z.enum(['host', 'wsl']).optional(),
+    wslDistro: z.string().nullable().optional(),
+    createdAt: TimestampSchema.optional(),
+    updatedAt: TimestampSchema.optional(),
+    lastAuthenticatedAt: TimestampSchema.optional()
+  })
+  .passthrough()
+
+// Why: Cursor/MuseSpark shipped after this schema, and older hosts omit them.
+// Optional + default keeps mixed-version snapshots valid while exposing the
+// rosters to the mobile switcher when a newer host sends them.
+const EmptyProviderAccountsState = { accounts: [], activeAccountId: null }
+
 export const AccountsSnapshotSchema = z
   .object({
     claude: z
@@ -171,6 +203,22 @@ export const AccountsSnapshotSchema = z
         activeAccountIdsByRuntime: RuntimeSelectionSchema.optional()
       })
       .passthrough(),
+    cursor: z
+      .object({
+        accounts: z.array(CursorAccountSummarySchema),
+        activeAccountId: AccountIdSchema.nullable(),
+        activeAccountIdsByRuntime: RuntimeSelectionSchema.optional()
+      })
+      .passthrough()
+      .default(EmptyProviderAccountsState),
+    museSpark: z
+      .object({
+        accounts: z.array(MuseSparkAccountSummarySchema),
+        activeAccountId: AccountIdSchema.nullable(),
+        activeAccountIdsByRuntime: RuntimeSelectionSchema.optional()
+      })
+      .passthrough()
+      .default(EmptyProviderAccountsState),
     rateLimits: z
       .object({
         claude: ProviderRateLimitsSchema.nullable(),
@@ -226,6 +274,8 @@ export type InactiveAccountUsage = z.infer<typeof InactiveAccountUsageSchema>
 export type RateLimitRuntimeTarget = z.infer<typeof RateLimitRuntimeTargetSchema>
 export type ClaudeAccountSummary = z.infer<typeof ClaudeAccountSummarySchema>
 export type CodexAccountSummary = z.infer<typeof CodexAccountSummarySchema>
+export type CursorAccountSummary = z.infer<typeof CursorAccountSummarySchema>
+export type MuseSparkAccountSummary = z.infer<typeof MuseSparkAccountSummarySchema>
 export type AccountsSnapshot = z.infer<typeof AccountsSnapshotSchema>
 
 export function decodeAccountsSnapshot(value: unknown): AccountsSnapshot {

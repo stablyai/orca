@@ -246,6 +246,8 @@ import type { AgentProviderSessionMetadata } from '../shared/agent-session-resum
 import { getDefaultWslDistro } from './wsl'
 import { collectWorktreeTrashSweepRoots, sweepStaleWorktreeTrash } from './worktree-trash'
 import { ClaudeAccountService } from './claude-accounts/service'
+import { CursorAccountService } from './cursor-accounts/service'
+import { MuseSparkAccountService } from './muse-spark-accounts/service'
 import { ClaudeRuntimeAuthService } from './claude-accounts/runtime-auth-service'
 import {
   attachClaudeLivePtyPersistence,
@@ -355,6 +357,8 @@ let codexRuntimeHome: CodexRuntimeHomeService | null = null
 let codexSessionMigration: ReturnType<typeof createCodexSessionMigrationScheduler> | null = null
 let claudeAccounts: ClaudeAccountService | null = null
 let claudeRuntimeAuth: ClaudeRuntimeAuthService | null = null
+let cursorAccounts: CursorAccountService | null = null
+let museSparkAccounts: MuseSparkAccountService | null = null
 let runtime: OrcaRuntimeService | null = null
 let rateLimits: RateLimitService | null = null
 let runtimeRpc: OrcaRuntimeRpcServer | null = null
@@ -1295,6 +1299,12 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   if (!claudeAccounts) {
     throw new Error('Claude account service must be initialized before opening the main window')
   }
+  if (!cursorAccounts) {
+    throw new Error('Cursor account service must be initialized before opening the main window')
+  }
+  if (!museSparkAccounts) {
+    throw new Error('MuseSpark account service must be initialized before opening the main window')
+  }
   if (!claudeRuntimeAuth) {
     throw new Error(
       'Claude runtime auth service must be initialized before opening the main window'
@@ -1421,6 +1431,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     openCodeUsage,
     codexAccounts,
     claudeAccounts,
+    cursorAccounts,
+    museSparkAccounts,
     rateLimits,
     rendererWebContentsId,
     automations,
@@ -2398,6 +2410,8 @@ void app.whenReady().then(async () => {
   codexSessionMigration.scheduleInitialRun()
   claudeRuntimeAuth = new ClaudeRuntimeAuthService(store)
   claudeAccounts = new ClaudeAccountService(store, rateLimits, claudeRuntimeAuth)
+  cursorAccounts = new CursorAccountService(store)
+  museSparkAccounts = new MuseSparkAccountService(store)
   rateLimits.setCodexHomePathResolver((target) =>
     codexRuntimeHome!.prepareForRateLimitFetch(target)
   )
@@ -2654,7 +2668,13 @@ void app.whenReady().then(async () => {
       isArtifactSharingEnabled(store?.getSettings())
     )
   )
-  runtimeService.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
+  runtimeService.setAccountServices({
+    claudeAccounts,
+    codexAccounts,
+    cursorAccounts,
+    museSparkAccounts,
+    rateLimits
+  })
   runtimeService.setCommitMessageAgentEnvironmentResolvers({
     // Why: Codex hooks/auth live in Orca's managed runtime home even for the default path, so every launch must resolve CODEX_HOME via runtime-home.
     prepareForCodexLaunch: prepareCodexRuntimeHomeForLaunch,

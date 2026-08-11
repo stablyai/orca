@@ -2102,6 +2102,12 @@ describe('OrcaRuntimeService', () => {
         listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
       },
       codexAccounts,
+      cursorAccounts: {
+        listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
+      },
+      museSparkAccounts: {
+        listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
+      },
       rateLimits
     } as never)
 
@@ -2154,6 +2160,12 @@ describe('OrcaRuntimeService', () => {
           codex,
           rateLimits: rateLimitState
         })
+      },
+      cursorAccounts: {
+        listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
+      },
+      museSparkAccounts: {
+        listAccounts: vi.fn(() => ({ accounts: [], activeAccountId: null }))
       },
       rateLimits: {}
     } as never)

@@ -17,6 +17,7 @@ import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { styles } from '../../../src/accounts/mobile-accounts-screen-styles'
 import { useNow } from '../../../src/hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../../../src/components/AgentIcons'
+import { SwitchOnlyProviderSections } from '../../../src/accounts/SwitchOnlyProviderSections'
 import {
   type AccountsSnapshot,
   type ProviderKey,
@@ -381,6 +382,13 @@ export default function AccountsScreen() {
           <>
             {renderProviderSection('claude', 'Claude')}
             {renderProviderSection('codex', 'Codex')}
+            <SwitchOnlyProviderSections
+              client={client}
+              connected={connState === 'connected'}
+              cursor={snapshot.cursor}
+              museSpark={snapshot.museSpark}
+              onRefresh={refresh}
+            />
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>

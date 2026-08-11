@@ -872,6 +872,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
+    cursorAccounts: createAccountsApi(),
+    museSparkAccounts: createAccountsApi(),
     cli: createCliApi(),
     agentHooks: createAgentHooksApi(),
     macosTccPrompts: createMacosTccPromptsApi(),

@@ -144,6 +144,29 @@ export const ACCOUNT_METHODS: readonly RpcAnyMethod[] = [
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
+  // Cursor + MuseSpark are host-only read/scaffold providers, so they expose
+  // select + remove only. Old hosts lack these methods; new clients must treat
+  // an unknown-method error as "provider unavailable" (see remote-wire-compatibility).
+  defineMethod({
+    name: 'accounts.selectCursor',
+    params: SelectAccountParams,
+    handler: async (params, { runtime }) => runtime.selectCursorAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.removeCursor',
+    params: RemoveAccountParams,
+    handler: async (params, { runtime }) => runtime.removeCursorAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.selectMuseSpark',
+    params: SelectAccountParams,
+    handler: async (params, { runtime }) => runtime.selectMuseSparkAccount(params.accountId)
+  }),
+  defineMethod({
+    name: 'accounts.removeMuseSpark',
+    params: RemoveAccountParams,
+    handler: async (params, { runtime }) => runtime.removeMuseSparkAccount(params.accountId)
+  }),
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
     params: AddClaudeFromConfigDirParams,

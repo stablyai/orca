@@ -35,6 +35,8 @@ const {
   registerAgentHookHandlersMock,
   registerAgentTrustHandlersMock,
   registerClaudeAccountHandlersMock,
+  registerCursorAccountHandlersMock,
+  registerMuseSparkAccountHandlersMock,
   registerMiniMaxCredentialsHandlersMock,
   registerDeepSeekCredentialsHandlersMock,
   registerGrokAccountHandlersMock,
@@ -101,6 +103,8 @@ const {
   registerAgentHookHandlersMock: vi.fn(),
   registerAgentTrustHandlersMock: vi.fn(),
   registerClaudeAccountHandlersMock: vi.fn(),
+  registerCursorAccountHandlersMock: vi.fn(),
+  registerMuseSparkAccountHandlersMock: vi.fn(),
   registerMiniMaxCredentialsHandlersMock: vi.fn(),
   registerDeepSeekCredentialsHandlersMock: vi.fn(),
   registerGrokAccountHandlersMock: vi.fn(),
@@ -325,6 +329,14 @@ vi.mock('./claude-accounts', () => ({
   registerClaudeAccountHandlers: registerClaudeAccountHandlersMock
 }))
 
+vi.mock('./cursor-accounts', () => ({
+  registerCursorAccountHandlers: registerCursorAccountHandlersMock
+}))
+
+vi.mock('./muse-spark-accounts', () => ({
+  registerMuseSparkAccountHandlers: registerMuseSparkAccountHandlersMock
+}))
+
 vi.mock('./minimax-credentials', () => ({
   registerMiniMaxCredentialsHandlers: registerMiniMaxCredentialsHandlersMock
 }))
@@ -424,6 +436,8 @@ describe('registerCoreHandlers', () => {
     registerAgentHookHandlersMock.mockReset()
     registerAgentTrustHandlersMock.mockReset()
     registerClaudeAccountHandlersMock.mockReset()
+    registerCursorAccountHandlersMock.mockReset()
+    registerMuseSparkAccountHandlersMock.mockReset()
     registerMiniMaxCredentialsHandlersMock.mockReset()
     registerDeepSeekCredentialsHandlersMock.mockReset()
     registerClipboardHandlersMock.mockReset()
@@ -476,6 +490,8 @@ describe('registerCoreHandlers', () => {
       openCodeUsage as never,
       codexAccounts as never,
       claudeAccounts as never,
+      null as never,
+      null as never,
       rateLimits as never,
       null,
       undefined,
@@ -646,6 +662,8 @@ describe('registerCoreHandlers', () => {
       openCodeUsage2 as never,
       codexAccounts2 as never,
       claudeAccounts2 as never,
+      null as never,
+      null as never,
       rateLimits2 as never,
       42
     )

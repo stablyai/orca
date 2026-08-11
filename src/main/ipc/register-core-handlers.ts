@@ -63,6 +63,8 @@ import { registerCodexConfigSyncHandlers } from './codex-config-sync'
 import { getPtyIdForPaneKey } from './pty'
 import { registerAgentTrustHandlers } from './agent-trust'
 import { registerClaudeAccountHandlers } from './claude-accounts'
+import { registerCursorAccountHandlers } from './cursor-accounts'
+import { registerMuseSparkAccountHandlers } from './muse-spark-accounts'
 import { registerMiniMaxCredentialsHandlers } from './minimax-credentials'
 import { registerDeepSeekCredentialsHandlers } from './deepseek-credentials'
 import { registerGrokAccountHandlers } from './grok-accounts'
@@ -78,6 +80,8 @@ import type { OpenCodeUsageStore } from '../opencode-usage/store'
 import type { RateLimitService } from '../rate-limits/service'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { ClaudeAccountService } from '../claude-accounts/service'
+import type { CursorAccountService } from '../cursor-accounts/service'
+import type { MuseSparkAccountService } from '../muse-spark-accounts/service'
 import type { AutomationService } from '../automations/service'
 import type { AgentAwakeService } from '../agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/crash-report-store'
@@ -116,6 +120,8 @@ export function registerCoreHandlers(
   openCodeUsage: OpenCodeUsageStore,
   codexAccounts: CodexAccountService,
   claudeAccounts: ClaudeAccountService,
+  cursorAccounts: CursorAccountService,
+  museSparkAccounts: MuseSparkAccountService,
   rateLimits: RateLimitService,
   mainWindowWebContentsId: number | null = null,
   automations?: AutomationService,
@@ -149,6 +155,8 @@ export function registerCoreHandlers(
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
   registerAgentTrustHandlers()
   registerClaudeAccountHandlers(claudeAccounts)
+  registerCursorAccountHandlers(cursorAccounts)
+  registerMuseSparkAccountHandlers(museSparkAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerDeepSeekCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()

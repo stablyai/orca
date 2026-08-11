@@ -2157,6 +2157,30 @@ const api = {
     }): Promise<unknown> => ipcRenderer.invoke('claudeAccounts:select', args)
   },
 
+  cursorAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('cursorAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('cursorAccounts:add'),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('cursorAccounts:remove', args),
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('cursorAccounts:select', args)
+  },
+
+  museSparkAccounts: {
+    list: (): Promise<unknown> => ipcRenderer.invoke('museSparkAccounts:list'),
+    add: (): Promise<unknown> => ipcRenderer.invoke('museSparkAccounts:add'),
+    remove: (args: { accountId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('museSparkAccounts:remove', args),
+    select: (args: {
+      accountId: string | null
+      runtime?: 'host' | 'wsl'
+      wslDistro?: string | null
+    }): Promise<unknown> => ipcRenderer.invoke('museSparkAccounts:select', args)
+  },
+
   cli: {
     getInstallStatus: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:getInstallStatus'),
     install: (): Promise<CliInstallStatus> => ipcRenderer.invoke('cli:install'),

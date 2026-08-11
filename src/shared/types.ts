@@ -2630,6 +2630,85 @@ export type ClaudeManagedAccountRuntimeSelection = {
   wsl: Record<string, string | null>
 }
 
+/** Cursor account discovered read-only from Cursor's local state.vscdb
+ *  (ItemTable `cursorAuth/*`). Orca never writes Cursor's config; sign-in
+ *  happens inside Cursor itself. */
+export type CursorManagedAccount = {
+  id: string
+  email: string
+  /** glass.lastSignedInAuthId — Cursor's own account identifier. */
+  authId?: string | null
+  /** stripeMembershipType, e.g. 'free' | 'pro' | 'business'. */
+  membershipType?: string | null
+  /** cursorAuth/cachedSignUpType. */
+  signUpType?: string | null
+  /** state.vscdb the account was discovered from. */
+  configDbPath: string
+  managedRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type CursorManagedAccountSummary = {
+  id: string
+  email: string
+  authId?: string | null
+  membershipType?: string | null
+  signUpType?: string | null
+  managedRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type CursorRateLimitAccountsState = {
+  accounts: CursorManagedAccountSummary[]
+  activeAccountId: string | null
+  activeAccountIdsByRuntime?: CursorManagedAccountRuntimeSelection
+}
+
+export type CursorManagedAccountRuntimeSelection = {
+  host: string | null
+  wsl: Record<string, string | null>
+}
+
+/** MuseSpark managed account. Scaffolded provider: the wiring is complete but
+ *  discovery is stubbed until MuseSpark's real credential source exists — see
+ *  src/main/muse-spark-accounts/service.ts. */
+export type MuseSparkManagedAccount = {
+  id: string
+  email: string
+  managedRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type MuseSparkManagedAccountSummary = {
+  id: string
+  email: string
+  managedRuntime?: 'host' | 'wsl'
+  wslDistro?: string | null
+  createdAt: number
+  updatedAt: number
+  lastAuthenticatedAt: number
+}
+
+export type MuseSparkRateLimitAccountsState = {
+  accounts: MuseSparkManagedAccountSummary[]
+  activeAccountId: string | null
+  activeAccountIdsByRuntime?: MuseSparkManagedAccountRuntimeSelection
+}
+
+export type MuseSparkManagedAccountRuntimeSelection = {
+  host: string | null
+  wsl: Record<string, string | null>
+}
+
 /** All AI coding agents Orca knows how to launch. Used for the agent picker in the new-workspace
  *  flow and for the default-agent setting. Extend this union as new agents are added. */
 export type TuiAgent =
@@ -2992,6 +3071,14 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
+  /** Why: read-only mirror of Cursor's signed-in account(s) for the accounts UI; Orca never writes Cursor config. */
+  cursorManagedAccounts: CursorManagedAccount[]
+  activeCursorManagedAccountId: string | null
+  activeCursorManagedAccountIdsByRuntime?: CursorManagedAccountRuntimeSelection
+  /** Why: scaffolded MuseSpark provider; persisted like the others so switching survives restarts once discovery lands. */
+  museSparkManagedAccounts: MuseSparkManagedAccount[]
+  activeMuseSparkManagedAccountId: string | null
+  activeMuseSparkManagedAccountIdsByRuntime?: MuseSparkManagedAccountRuntimeSelection
   /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */

@@ -304,6 +304,12 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     activeCodexManagedAccountIdsByRuntime: { host: null, wsl: {} },
     claudeManagedAccounts: [],
     activeClaudeManagedAccountId: null,
+    cursorManagedAccounts: [],
+    activeCursorManagedAccountId: null,
+    activeCursorManagedAccountIdsByRuntime: { host: null, wsl: {} },
+    museSparkManagedAccounts: [],
+    activeMuseSparkManagedAccountId: null,
+    activeMuseSparkManagedAccountIdsByRuntime: { host: null, wsl: {} },
     terminalScopeHistoryByWorktree: true,
     terminalHiddenViewParking: true,
     // C1 kill switches — runtime reads stay `!== false` so older persisted

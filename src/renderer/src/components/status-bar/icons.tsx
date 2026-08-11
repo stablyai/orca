@@ -61,6 +61,53 @@ export function DeepSeekIcon({ size = 14 }: { size?: number }): React.JSX.Elemen
   )
 }
 
+export function CursorIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: no bundled Cursor brand mark yet; a monogram matches the DeepSeek
+  // placeholder approach and stays theme-agnostic via currentColor.
+  return (
+    <svg
+      height={size}
+      width={size}
+      viewBox="0 0 16 16"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect width="16" height="16" rx="3" fill="currentColor" opacity="0.14" />
+      <text
+        x="8"
+        y="11.5"
+        textAnchor="middle"
+        fontSize="8"
+        fontWeight="700"
+        fontFamily="system-ui, sans-serif"
+        fill="currentColor"
+      >
+        C
+      </text>
+    </svg>
+  )
+}
+
+export function MuseSparkIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  // Why: MuseSpark is a scaffolded provider with no branding yet; a neutral
+  // spark glyph flags it as a placeholder without inventing a trademark.
+  return (
+    <svg
+      height={size}
+      width={size}
+      viewBox="0 0 16 16"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+    >
+      <rect width="16" height="16" rx="3" fill="currentColor" opacity="0.14" />
+      <path
+        d="M8 2.5l1.15 3.1a1 1 0 00.6.6L12.9 7.5l-3.05 1.3a1 1 0 00-.6.6L8 12.5l-1.25-3.1a1 1 0 00-.6-.6L3.1 7.5l3.05-1.3a1 1 0 00.6-.6z"
+        fill="currentColor"
+      />
+    </svg>
+  )
+}
+
 // Why: each instance needs unique filter/mask IDs — reusing the same ID across
 // multiple SVGs on the same page causes the browser to resolve to the first one,
 // breaking all subsequent instances.

@@ -29,6 +29,14 @@ function emptyCodexState(): CodexRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
 }
 
+function emptyReadOnlyState(): {
+  accounts: []
+  activeAccountId: null
+  activeAccountIdsByRuntime: { host: null; wsl: Record<string, string | null> }
+} {
+  return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
+}
+
 function snapshotFixture(marker: string): ProviderAccountsSnapshot {
   return {
     claude: {
@@ -39,6 +47,8 @@ function snapshotFixture(marker: string): ProviderAccountsSnapshot {
       ...emptyCodexState(),
       activeAccountId: `codex-${marker}`
     },
+    cursor: emptyReadOnlyState(),
+    museSpark: emptyReadOnlyState(),
     rateLimits: null
   }
 }
@@ -58,6 +68,12 @@ const claudeSelectLocal = vi.fn()
 const codexSelectLocal = vi.fn()
 const claudeRemoveLocal = vi.fn()
 const codexRemoveLocal = vi.fn()
+const cursorListLocal = vi.fn()
+const cursorSelectLocal = vi.fn()
+const cursorRemoveLocal = vi.fn()
+const museSparkListLocal = vi.fn()
+const museSparkSelectLocal = vi.fn()
+const museSparkRemoveLocal = vi.fn()
 const unsubscribe = vi.fn()
 
 let subscriptionCallbacks: SubscriptionCallbacks | null = null
@@ -106,9 +122,24 @@ beforeEach(() => {
         list: codexListLocal,
         select: codexSelectLocal,
         remove: codexRemoveLocal
+      },
+      cursorAccounts: {
+        list: cursorListLocal,
+        select: cursorSelectLocal,
+        remove: cursorRemoveLocal
+      },
+      museSparkAccounts: {
+        list: museSparkListLocal,
+        select: museSparkSelectLocal,
+        remove: museSparkRemoveLocal
       }
     }
   })
+  // Why: Cursor/MuseSpark are secondary read-only providers; default them to a
+  // resolved empty roster so tests that only exercise Claude/Codex don't have to
+  // wire them, while still producing a complete snapshot.
+  cursorListLocal.mockResolvedValue(emptyReadOnlyState())
+  museSparkListLocal.mockResolvedValue(emptyReadOnlyState())
 })
 
 async function flushMicrotasks(): Promise<void> {
@@ -172,6 +203,8 @@ describe('watchProviderAccounts', () => {
       {
         claude: emptyClaudeState(),
         codex: codexState,
+        cursor: emptyReadOnlyState(),
+        museSpark: emptyReadOnlyState(),
         rateLimits: null,
         failedProviders: ['claude']
       }
@@ -199,6 +232,8 @@ describe('watchProviderAccounts', () => {
       {
         claude: claudeState,
         codex: emptyCodexState(),
+        cursor: emptyReadOnlyState(),
+        museSpark: emptyReadOnlyState(),
         rateLimits: null,
         failedProviders: ['codex']
       }
@@ -393,6 +428,8 @@ describe('fetchProviderAccountsSnapshot', () => {
     await expect(fetchProviderAccountsSnapshot(LOCAL)).resolves.toEqual({
       claude: emptyClaudeState(),
       codex: codexState,
+      cursor: emptyReadOnlyState(),
+      museSpark: emptyReadOnlyState(),
       rateLimits: null,
       failedProviders: ['claude']
     })

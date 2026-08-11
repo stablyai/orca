@@ -1,26 +1,26 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
+  CursorRateLimitAccountsState,
+  MuseSparkRateLimitAccountsState,
   GlobalSettings
 } from '../../../shared/types'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import { callRuntimeRpc, getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
+import { getActiveRuntimeTarget, RuntimeRpcCallError } from './runtime-rpc-client'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
+export type ProviderAccountFailure = 'claude' | 'codex' | 'cursor' | 'muse-spark'
+
 export type ProviderAccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
+  cursor: CursorRateLimitAccountsState
+  museSpark: MuseSparkRateLimitAccountsState
   rateLimits: RateLimitState | null
   // Why: a partial local load substitutes an empty state for the failed
   // provider; consumers must not treat that half as an authoritative roster.
-  failedProviders?: ('claude' | 'codex')[]
-}
-
-type ProviderAccountSelection = {
-  accountId: string | null
-  runtime: 'host' | 'wsl'
-  wslDistro?: string | null
+  failedProviders?: ProviderAccountFailure[]
 }
 
 type ProviderAccountsSubscriptionMessage = {
@@ -29,10 +29,6 @@ type ProviderAccountsSubscriptionMessage = {
 }
 
 const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
-// Why: the server applies a selection before it awaits provider usage
-// refreshes, and those refreshes can crawl behind broken auth. Give the call
-// room to finish instead of reporting failure for an applied switch.
-const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
 
 function getProviderAccountsOwnerKey(
@@ -62,7 +58,29 @@ export function emptyCodexAccountsState(): CodexRateLimitAccountsState {
   return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
 }
 
-function providerAccountsLoadError(provider: 'Claude' | 'Codex', cause: unknown): Error {
+export function emptyCursorAccountsState(): CursorRateLimitAccountsState {
+  return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
+}
+
+export function emptyMuseSparkAccountsState(): MuseSparkRateLimitAccountsState {
+  return { accounts: [], activeAccountId: null, activeAccountIdsByRuntime: { host: null, wsl: {} } }
+}
+
+// Why: an older remote host predates the Cursor/MuseSpark providers and omits
+// their snapshot keys. Fill defaults so the new client never renders undefined
+// against a mixed-version host (see docs/reference/remote-wire-compatibility).
+function normalizeRemoteSnapshot(snapshot: ProviderAccountsSnapshot): ProviderAccountsSnapshot {
+  return {
+    ...snapshot,
+    cursor: snapshot.cursor ?? emptyCursorAccountsState(),
+    museSpark: snapshot.museSpark ?? emptyMuseSparkAccountsState()
+  }
+}
+
+function providerAccountsLoadError(
+  provider: 'Claude' | 'Codex' | 'Cursor' | 'MuseSpark',
+  cause: unknown
+): Error {
   const message = String((cause as Error)?.message ?? cause)
   return new Error(`Could not load ${provider} accounts: ${message}`)
 }
@@ -86,8 +104,10 @@ export function watchProviderAccounts(
     let closed = false
     void Promise.allSettled([
       window.api.claudeAccounts.list(),
-      window.api.codexAccounts.list()
-    ]).then(([claudeResult, codexResult]) => {
+      window.api.codexAccounts.list(),
+      window.api.cursorAccounts.list(),
+      window.api.museSparkAccounts.list()
+    ]).then(([claudeResult, codexResult, cursorResult, museSparkResult]) => {
       if (closed) {
         return
       }
@@ -100,29 +120,52 @@ export function watchProviderAccounts(
         codexResult.status === 'rejected'
           ? providerAccountsLoadError('Codex', codexResult.reason)
           : null
+      // Why: Cursor/MuseSpark are secondary read-only providers; a failure there
+      // must not blank the primary Claude/Codex roster, so they never contribute
+      // to the all-failed aggregate below — only to failedProviders.
+      const cursorError =
+        cursorResult.status === 'rejected'
+          ? providerAccountsLoadError('Cursor', cursorResult.reason)
+          : null
+      const museSparkError =
+        museSparkResult.status === 'rejected'
+          ? providerAccountsLoadError('MuseSpark', museSparkResult.reason)
+          : null
       if (claudeError && codexError) {
         const errors = [claudeError, codexError]
         handlers.onError(new AggregateError(errors, errors.map((error) => error.message).join(' ')))
         return
       }
 
-      const failedProviders: ('claude' | 'codex')[] = []
+      const failedProviders: ProviderAccountFailure[] = []
       if (claudeError) {
         failedProviders.push('claude')
       }
       if (codexError) {
         failedProviders.push('codex')
       }
+      if (cursorError) {
+        failedProviders.push('cursor')
+      }
+      if (museSparkError) {
+        failedProviders.push('muse-spark')
+      }
       handlers.onSnapshot({
         claude:
           claudeResult.status === 'fulfilled' ? claudeResult.value : emptyClaudeAccountsState(),
         codex: codexResult.status === 'fulfilled' ? codexResult.value : emptyCodexAccountsState(),
+        cursor:
+          cursorResult.status === 'fulfilled' ? cursorResult.value : emptyCursorAccountsState(),
+        museSpark:
+          museSparkResult.status === 'fulfilled'
+            ? museSparkResult.value
+            : emptyMuseSparkAccountsState(),
         rateLimits: null,
         ...(failedProviders.length > 0 ? { failedProviders } : {})
       })
       // Why: publish the healthy provider first so one-shot consumers keep it,
       // but re-check closed since an onSnapshot handler may close the watcher.
-      for (const error of [claudeError, codexError]) {
+      for (const error of [claudeError, codexError, cursorError, museSparkError]) {
         if (error && !closed) {
           handlers.onError(error)
         }
@@ -166,7 +209,7 @@ export function watchProviderAccounts(
           const message = typed.result
           if ((message.type === 'ready' || message.type === 'snapshot') && message.snapshot) {
             receivedSnapshot = true
-            handlers.onSnapshot(message.snapshot)
+            handlers.onSnapshot(normalizeRemoteSnapshot(message.snapshot))
           }
         },
         onError: (error) => {
@@ -237,66 +280,16 @@ export function fetchProviderAccountsSnapshot(
   return request
 }
 
-export async function selectClaudeProviderAccount(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  selection: ProviderAccountSelection
-): Promise<ClaudeRateLimitAccountsState> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
-      target,
-      'accounts.selectClaude',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.select(selection)
-}
-
-export async function selectCodexProviderAccount(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  selection: ProviderAccountSelection
-): Promise<CodexRateLimitAccountsState> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<CodexRateLimitAccountsState>(
-      target,
-      'accounts.selectCodex',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.codexAccounts.select(selection)
-}
-
-export async function removeClaudeProviderAccount(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  accountId: string
-): Promise<ClaudeRateLimitAccountsState> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
-      target,
-      'accounts.removeClaude',
-      { accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.remove({ accountId })
-}
-
-export async function removeCodexProviderAccount(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
-  accountId: string
-): Promise<CodexRateLimitAccountsState> {
-  const target = getActiveRuntimeTarget(settings)
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<CodexRateLimitAccountsState>(
-      target,
-      'accounts.removeCodex',
-      { accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.codexAccounts.remove({ accountId })
-}
+// Provider-account mutations live in a sibling module to keep this file within
+// the line budget; re-exported here so existing import sites are unchanged.
+export {
+  type ProviderAccountSelection,
+  selectClaudeProviderAccount,
+  selectCodexProviderAccount,
+  removeClaudeProviderAccount,
+  removeCodexProviderAccount,
+  selectCursorProviderAccount,
+  removeCursorProviderAccount,
+  selectMuseSparkProviderAccount,
+  removeMuseSparkProviderAccount
+} from './provider-account-mutations'

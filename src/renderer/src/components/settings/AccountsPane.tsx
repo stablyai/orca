@@ -8,6 +8,8 @@ import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity,
+  CursorRateLimitAccountsState,
+  MuseSparkRateLimitAccountsState,
   GlobalSettings
 } from '../../../../shared/types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
@@ -36,21 +38,26 @@ import {
 import { useAppStore } from '../../store'
 import {
   ClaudeIcon,
+  CursorIcon,
   DeepSeekIcon,
   GeminiIcon,
   MiniMaxIcon,
+  MuseSparkIcon,
   OpenAIIcon,
   OpenCodeGoIcon
 } from '../status-bar/icons'
+import { ReadOnlyProviderAccountsSection } from './ReadOnlyProviderAccountsSection'
 import { toast } from 'sonner'
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsCursorSearchEntries,
   getAccountsDeepSeekSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsMiniMaxSearchEntries,
+  getAccountsMuseSparkSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
 } from './accounts-search'
@@ -90,11 +97,17 @@ import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
+  emptyCursorAccountsState,
+  emptyMuseSparkAccountsState,
   hasRemoteProviderAccountOwner,
   removeClaudeProviderAccount,
   removeCodexProviderAccount,
+  removeCursorProviderAccount,
+  removeMuseSparkProviderAccount,
   selectClaudeProviderAccount,
   selectCodexProviderAccount,
+  selectCursorProviderAccount,
+  selectMuseSparkProviderAccount,
   watchProviderAccounts
 } from '@/runtime/runtime-provider-accounts-client'
 
@@ -395,6 +408,13 @@ export function AccountsPane({
   const [claudeAction, setClaudeAction] = useState<
     'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
   >('idle')
+  const [cursorAccounts, setCursorAccounts] =
+    useState<CursorRateLimitAccountsState>(emptyCursorAccountsState)
+  const [cursorBusyAccountId, setCursorBusyAccountId] = useState<string | null>(null)
+  const [museSparkAccounts, setMuseSparkAccounts] = useState<MuseSparkRateLimitAccountsState>(
+    emptyMuseSparkAccountsState
+  )
+  const [museSparkBusyAccountId, setMuseSparkBusyAccountId] = useState<string | null>(null)
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<{
@@ -633,6 +653,12 @@ export function AccountsPane({
           }
           if (!snapshot.failedProviders?.includes('claude')) {
             setClaudeAccounts(snapshot.claude)
+          }
+          if (!snapshot.failedProviders?.includes('cursor')) {
+            setCursorAccounts(snapshot.cursor)
+          }
+          if (!snapshot.failedProviders?.includes('muse-spark')) {
+            setMuseSparkAccounts(snapshot.museSpark)
           }
         },
         onError: (error) => {
@@ -890,6 +916,40 @@ export function AccountsPane({
       )
     } finally {
       setClaudeAction('idle')
+    }
+  }
+
+  const runCursorAccountAction = async (
+    accountId: string,
+    action: () => Promise<CursorRateLimitAccountsState>
+  ): Promise<void> => {
+    setCursorBusyAccountId(accountId)
+    try {
+      setCursorAccounts(await action())
+    } catch (error) {
+      toast.error(
+        translate('settings.accounts.cursor.updateFailed', 'Cursor account update failed.'),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setCursorBusyAccountId(null)
+    }
+  }
+
+  const runMuseSparkAccountAction = async (
+    accountId: string,
+    action: () => Promise<MuseSparkRateLimitAccountsState>
+  ): Promise<void> => {
+    setMuseSparkBusyAccountId(accountId)
+    try {
+      setMuseSparkAccounts(await action())
+    } catch (error) {
+      toast.error(
+        translate('settings.accounts.museSpark.updateFailed', 'MuseSpark account update failed.'),
+        { description: String((error as Error)?.message ?? error) }
+      )
+    } finally {
+      setMuseSparkBusyAccountId(null)
     }
   }
 
@@ -2120,6 +2180,76 @@ export function AccountsPane({
           </p>
         </SearchableSetting>
       </section>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+      <div key="cursor-accounts" id="accounts-cursor" className="scroll-mt-6">
+        <ReadOnlyProviderAccountsSection
+          icon={<CursorIcon size={16} />}
+          name={translate('settings.accounts.cursor.title', 'Cursor')}
+          description={translate(
+            'settings.accounts.cursor.description',
+            'Read-only. Mirrors the account signed into Cursor on this host; switch or remove which one Orca attributes usage to.'
+          )}
+          emptyLabel={translate(
+            'settings.accounts.cursor.empty',
+            'No Cursor account detected. Sign in to Cursor on this host and reopen this pane.'
+          )}
+          accounts={cursorAccounts.accounts.map((account) => ({
+            id: account.id,
+            email: account.email,
+            detail: account.membershipType
+              ? translate('settings.accounts.cursor.plan', '{{value0}} plan', {
+                  value0: account.membershipType
+                })
+              : null
+          }))}
+          activeAccountId={cursorAccounts.activeAccountId}
+          busyAccountId={cursorBusyAccountId}
+          onSelect={(accountId) =>
+            void runCursorAccountAction(accountId, () =>
+              selectCursorProviderAccount(settings, { accountId, runtime: 'host' })
+            )
+          }
+          onRemove={(accountId) =>
+            void runCursorAccountAction(accountId, () =>
+              removeCursorProviderAccount(settings, accountId)
+            )
+          }
+        />
+      </div>
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsMuseSparkSearchEntries()) ? (
+      <div key="muse-spark-accounts" id="accounts-muse-spark" className="scroll-mt-6">
+        <ReadOnlyProviderAccountsSection
+          icon={<MuseSparkIcon size={16} />}
+          name={translate('settings.accounts.museSpark.title', 'MuseSpark')}
+          description={translate(
+            'settings.accounts.museSpark.description',
+            'MuseSpark account switcher. Discovery is not available yet, so no accounts appear until MuseSpark sign-in is supported.'
+          )}
+          emptyLabel={translate(
+            'settings.accounts.museSpark.empty',
+            'No MuseSpark accounts yet. Support for signing in to MuseSpark is coming soon.'
+          )}
+          accounts={museSparkAccounts.accounts.map((account) => ({
+            id: account.id,
+            email: account.email,
+            detail: null
+          }))}
+          activeAccountId={museSparkAccounts.activeAccountId}
+          busyAccountId={museSparkBusyAccountId}
+          onSelect={(accountId) =>
+            void runMuseSparkAccountAction(accountId, () =>
+              selectMuseSparkProviderAccount(settings, { accountId, runtime: 'host' })
+            )
+          }
+          onRemove={(accountId) =>
+            void runMuseSparkAccountAction(accountId, () =>
+              removeMuseSparkProviderAccount(settings, accountId)
+            )
+          }
+        />
+      </div>
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />

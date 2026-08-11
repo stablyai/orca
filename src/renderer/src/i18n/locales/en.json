@@ -91,6 +91,27 @@
         "envHint": "Create a key at platform.deepseek.com/api_keys. A key saved here takes precedence over the DEEPSEEK_API_KEY environment variable.",
         "searchTitle": "DeepSeek Usage",
         "searchDescription": "Add a DeepSeek API key to show prepaid balance in the status bar."
+      },
+      "cursor": {
+        "updateFailed": "Cursor account update failed.",
+        "title": "Cursor",
+        "description": "Read-only. Mirrors the account signed into Cursor on this host; switch or remove which one Orca attributes usage to.",
+        "empty": "No Cursor account detected. Sign in to Cursor on this host and reopen this pane.",
+        "plan": "{{value0}} plan",
+        "searchTitle": "Cursor",
+        "searchDescription": "Read-only account switcher mirroring the account signed into Cursor."
+      },
+      "museSpark": {
+        "updateFailed": "MuseSpark account update failed.",
+        "title": "MuseSpark",
+        "description": "MuseSpark account switcher. Discovery is not available yet, so no accounts appear until MuseSpark sign-in is supported.",
+        "empty": "No MuseSpark accounts yet. Support for signing in to MuseSpark is coming soon.",
+        "searchTitle": "MuseSpark",
+        "searchDescription": "MuseSpark account switcher."
+      },
+      "readOnly": {
+        "active": "Active",
+        "remove": "Remove account"
       }
     }
   },

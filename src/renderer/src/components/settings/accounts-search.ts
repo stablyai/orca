@@ -229,10 +229,42 @@ export const getAccountsDeepSeekSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCursorSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.accounts.cursor.searchTitle', 'Cursor'),
+    description: translate(
+      'settings.accounts.cursor.searchDescription',
+      'Read-only account switcher mirroring the account signed into Cursor.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.accounts.cursor.searchKeyword', 'cursor'),
+      ...translateSearchKeyword('settings.accounts.cursor.searchKeywordAccount', 'account'),
+      ...translateSearchKeyword('settings.accounts.cursor.searchKeywordAnysphere', 'anysphere')
+    ]
+  }
+])
+
+export const getAccountsMuseSparkSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.accounts.museSpark.searchTitle', 'MuseSpark'),
+    description: translate(
+      'settings.accounts.museSpark.searchDescription',
+      'MuseSpark account switcher.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.accounts.museSpark.searchKeyword', 'musespark'),
+      ...translateSearchKeyword('settings.accounts.museSpark.searchKeywordMeta', 'meta'),
+      ...translateSearchKeyword('settings.accounts.museSpark.searchKeywordAccount', 'account')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
+  ...getAccountsCursorSearchEntries(),
+  ...getAccountsMuseSparkSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),

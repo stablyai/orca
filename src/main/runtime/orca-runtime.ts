@@ -245,7 +245,9 @@ import type {
   MRListState,
   PRRefreshOutcome,
   ClaudeRateLimitAccountsState,
-  CodexRateLimitAccountsState
+  CodexRateLimitAccountsState,
+  CursorRateLimitAccountsState,
+  MuseSparkRateLimitAccountsState
 } from '../../shared/types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
@@ -1036,6 +1038,11 @@ import type {
   CodexResetCreditRejectedBeforeProviderReason
 } from '../codex-accounts/service'
 import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import type { CursorAccountSelectionTarget, CursorAccountService } from '../cursor-accounts/service'
+import type {
+  MuseSparkAccountSelectionTarget,
+  MuseSparkAccountService
+} from '../muse-spark-accounts/service'
 import type { RateLimitService } from '../rate-limits/service'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
 import type { CodexRateLimitResetOutcome, RateLimitState } from '../../shared/rate-limit-types'
@@ -1063,6 +1070,8 @@ function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): 
 type RuntimeAccountServices = {
   claudeAccounts: ClaudeAccountService
   codexAccounts: CodexAccountService
+  cursorAccounts: CursorAccountService
+  museSparkAccounts: MuseSparkAccountService
   rateLimits: RateLimitService
 }
 
@@ -1078,6 +1087,8 @@ export type RemoteTrackingBase = {
 export type AccountsSnapshot = {
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
+  cursor: CursorRateLimitAccountsState
+  museSpark: MuseSparkRateLimitAccountsState
   rateLimits: RateLimitState
 }
 
@@ -13080,10 +13091,13 @@ export class OrcaRuntimeService {
   }
 
   getAccountsSnapshot(): AccountsSnapshot {
-    const { claudeAccounts, codexAccounts, rateLimits } = this.requireAccountServices()
+    const { claudeAccounts, codexAccounts, cursorAccounts, museSparkAccounts, rateLimits } =
+      this.requireAccountServices()
     return {
       claude: claudeAccounts.listAccounts(),
       codex: codexAccounts.listAccounts(),
+      cursor: cursorAccounts.listAccounts(),
+      museSpark: museSparkAccounts.listAccounts(),
       rateLimits: rateLimits.getState()
     }
   }
@@ -13132,13 +13146,16 @@ export class OrcaRuntimeService {
     idempotencyKey: string,
     expectedScope: CodexResetCreditExpectedScope
   ): Promise<CodexRateLimitResetRpcResult> {
-    const { claudeAccounts, codexAccounts } = this.requireAccountServices()
+    const { claudeAccounts, codexAccounts, cursorAccounts, museSparkAccounts } =
+      this.requireAccountServices()
     const result = await codexAccounts.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
     // Why: Codex selection and usage were captured before its mutation queue
     // advanced. Re-reading them here could pair scope A with queued selection B.
     const snapshot = {
       claude: claudeAccounts.listAccounts(),
       codex: result.codex,
+      cursor: cursorAccounts.listAccounts(),
+      museSpark: museSparkAccounts.listAccounts(),
       rateLimits: result.rateLimits
     }
     if ('status' in result) {
@@ -13180,6 +13197,36 @@ export class OrcaRuntimeService {
     return this.requireAccountServices().codexAccounts.removeAccount(accountId)
   }
 
+  selectCursorAccount(accountId: string | null): Promise<CursorRateLimitAccountsState> {
+    return this.requireAccountServices().cursorAccounts.selectAccount(accountId)
+  }
+
+  selectCursorAccountForTarget(
+    accountId: string | null,
+    target?: CursorAccountSelectionTarget
+  ): Promise<CursorRateLimitAccountsState> {
+    return this.requireAccountServices().cursorAccounts.selectAccountForTarget(accountId, target)
+  }
+
+  removeCursorAccount(accountId: string): Promise<CursorRateLimitAccountsState> {
+    return this.requireAccountServices().cursorAccounts.removeAccount(accountId)
+  }
+
+  selectMuseSparkAccount(accountId: string | null): Promise<MuseSparkRateLimitAccountsState> {
+    return this.requireAccountServices().museSparkAccounts.selectAccount(accountId)
+  }
+
+  selectMuseSparkAccountForTarget(
+    accountId: string | null,
+    target?: MuseSparkAccountSelectionTarget
+  ): Promise<MuseSparkRateLimitAccountsState> {
+    return this.requireAccountServices().museSparkAccounts.selectAccountForTarget(accountId, target)
+  }
+
+  removeMuseSparkAccount(accountId: string): Promise<MuseSparkRateLimitAccountsState> {
+    return this.requireAccountServices().museSparkAccounts.removeAccount(accountId)
+  }
+
   // Why: Codex counterpart of addClaudeAccountFromConfigDir — register a managed
   // Codex account from a CODEX_HOME the caller already logged into, so headless
   // hosts can add accounts via `orca account add --agent codex`.
@@ -13200,6 +13247,8 @@ export class OrcaRuntimeService {
       listener({
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
+        cursor: services.cursorAccounts.listAccounts(),
+        museSpark: services.museSparkAccounts.listAccounts(),
         rateLimits
       })
     })

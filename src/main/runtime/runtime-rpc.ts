@@ -181,6 +181,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',
+  'accounts.selectCursor',
+  'accounts.selectMuseSpark',
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
