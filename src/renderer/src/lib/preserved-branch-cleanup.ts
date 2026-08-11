@@ -1,5 +1,5 @@
-export type PreservedBranchCleanup = {
-  worktreeId: string
-  branchName: string
-  expectedHead?: string
-}
+export {
+  preservedBranchCleanupKey,
+  preservedBranchCleanupScopeKey,
+  type PreservedBranchCleanup
+} from '../../../shared/preserved-branch-cleanup'

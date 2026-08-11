@@ -15,7 +15,9 @@ function isPreservedBranchCleanup(value: unknown): value is PreservedBranchClean
   return (
     typeof branch.worktreeId === 'string' &&
     typeof branch.branchName === 'string' &&
-    (branch.expectedHead === undefined || typeof branch.expectedHead === 'string')
+    (branch.expectedHead === undefined || typeof branch.expectedHead === 'string') &&
+    (branch.hostId === undefined || typeof branch.hostId === 'string') &&
+    (branch.runtimeEnvironmentId === undefined || typeof branch.runtimeEnvironmentId === 'string')
   )
 }
 

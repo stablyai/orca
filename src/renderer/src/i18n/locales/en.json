@@ -5335,24 +5335,44 @@
           "authFailedTooltip": "{{value0}} · authentication failed",
           "failedTooltip": "{{value0}} · connection failed"
         },
-        "preservedBranchBatch": {
-          "diskCopy": "Git kept {{value0}} local {{value1}} because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
-          "title": "{{value0}} {{value1}} removed, {{value2}} {{value3}} kept",
-          "deleting": "Deleting local branches: {{value0}}",
-          "deleted": "Local branches deleted: {{value0}}",
-          "failed": "{{value0}} deleted, {{value1}} not deleted",
-          "retry": "Retry {{value0}} {{value1}}",
-          "review": "Review {{value0}} {{value1}}"
+        "preserved": {
+          "branch": {
+            "batch": {
+              "toast": {
+                "a3cdd9d9e6": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "a3cdd9d9e6_one": "Git kept {{count}} local branch because it may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "a3cdd9d9e6_other": "Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.",
+                "6310412304": "Review {{count}} Branches",
+                "6310412304_one": "Review {{count}} Branch",
+                "6310412304_other": "Review {{count}} Branches",
+                "cea24c2b7d": "{{count}} workspaces removed",
+                "cea24c2b7d_one": "{{count}} workspace removed",
+                "cea24c2b7d_other": "{{count}} workspaces removed",
+                "0e0379f24a": "{{count}} branches kept",
+                "0e0379f24a_one": "{{count}} branch kept",
+                "0e0379f24a_other": "{{count}} branches kept",
+                "4cf75caab7": "{{value0}}, {{value1}}",
+                "e61d78054f": "Deleting local branches: {{value0}}",
+                "1e1a5f6763": "Local branches deleted: {{value0}}",
+                "43d9395605": "{{value0}} deleted, {{value1}} not deleted",
+                "d42f1f14e0": "Retry {{count}} Branches",
+                "d42f1f14e0_one": "Retry {{count}} Branch",
+                "d42f1f14e0_other": "Retry {{count}} Branches"
+              }
+            }
+          }
         },
-        "preservedBranchBatchReview": {
-          "title": "Review kept branches",
-          "description": "Select the local branches you want to force delete. Unselected branches stay in their repositories.",
-          "selectAll": "Select all",
-          "selectedCount": "{{value0}} of {{value1}} selected",
-          "mayBeUnmerged": "May be unmerged",
-          "headUnavailable": "Head unavailable",
-          "cancel": "Cancel",
-          "forceDeleteSelected": "Force Delete {{value0}} {{value1}}"
+        "PreservedBranchBatchReviewDialog": {
+          "c4bf8e7eaf": "Review kept branches",
+          "f21976c9a8": "Select the local branches you want to force delete. Unselected branches stay in their repositories.",
+          "38c947f7c5": "Select all",
+          "9602129d38": "{{value0}} of {{value1}} selected",
+          "ee39e872d5": "May be unmerged",
+          "676db406fd": "Head unavailable",
+          "285e1e4882": "Cancel",
+          "a0f9863597": "Force Delete {{count}} Branches",
+          "a0f9863597_one": "Force Delete {{count}} Branch",
+          "a0f9863597_other": "Force Delete {{count}} Branches"
         }
       },
       "shared": {

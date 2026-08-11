@@ -16,10 +16,6 @@ type PreservedBranchDeleteResult = {
   result: { ok: true; deleted: true } | { ok: false; error: string }
 }
 
-function pluralize(count: number, singular: string, plural: string): string {
-  return count === 1 ? singular : plural
-}
-
 function PreservedBranchBatchToastBody({
   branches,
   onReview
@@ -32,24 +28,18 @@ function PreservedBranchBatchToastBody({
     <div className="flex w-[300px] max-w-[calc(100vw-96px)] flex-col gap-3">
       <p className="min-w-0 break-words text-sm leading-5 text-popover-foreground/80">
         {translate(
-          'auto.components.sidebar.preservedBranchBatch.diskCopy',
-          'Git kept {{value0}} local {{value1}} because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.',
-          {
-            value0: branches.length,
-            value1: pluralize(branches.length, 'branch', 'branches')
-          }
+          'auto.components.sidebar.preserved.branch.batch.toast.a3cdd9d9e6',
+          'Git kept {{count}} local branches because they may contain unmerged commits. Kept branches do not retain workspace folders; their commits remain in the repository. Orca may continue freeing workspace disk space in the background.',
+          { count: branches.length }
         )}
       </p>
       {actionableCount > 0 ? (
         <Button type="button" variant="destructive" size="sm" className="w-full" onClick={onReview}>
           <Trash2 className="size-3.5" />
           {translate(
-            'auto.components.sidebar.preservedBranchBatch.review',
-            'Review {{value0}} {{value1}}',
-            {
-              value0: actionableCount,
-              value1: pluralize(actionableCount, 'Branch', 'Branches')
-            }
+            'auto.components.sidebar.preserved.branch.batch.toast.6310412304',
+            'Review {{count}} Branches',
+            { count: actionableCount }
           )}
         </Button>
       ) : null}
@@ -66,6 +56,16 @@ export function showPreservedBranchBatchToast(
   }
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
   const toastId = `preserved-branch-batch:${branches[0].worktreeId}:${branches.length}`
+  const removedWorkspaces = translate(
+    'auto.components.sidebar.preserved.branch.batch.toast.cea24c2b7d',
+    '{{count}} workspaces removed',
+    { count: workspaceCount }
+  )
+  const keptBranches = translate(
+    'auto.components.sidebar.preserved.branch.batch.toast.0e0379f24a',
+    '{{count}} branches kept',
+    { count: branches.length }
+  )
   const onReview = (): void => {
     useAppStore.getState().openModal('preserved-branch-review', { branches })
     toast.dismiss(toastId)
@@ -73,14 +73,9 @@ export function showPreservedBranchBatchToast(
 
   toast.warning(
     translate(
-      'auto.components.sidebar.preservedBranchBatch.title',
-      '{{value0}} {{value1}} removed, {{value2}} {{value3}} kept',
-      {
-        value0: workspaceCount,
-        value1: pluralize(workspaceCount, 'workspace', 'workspaces'),
-        value2: branches.length,
-        value3: pluralize(branches.length, 'branch', 'branches')
-      }
+      'auto.components.sidebar.preserved.branch.batch.toast.4cf75caab7',
+      '{{value0}}, {{value1}}',
+      { value0: removedWorkspaces, value1: keptBranches }
     ),
     {
       id: toastId,
@@ -100,7 +95,7 @@ export async function forceDeletePreservedBranchBatch(
   const progressToastId = `force-delete-branch-batch:${branches[0].worktreeId}:${branches.length}`
   toast.loading(
     translate(
-      'auto.components.sidebar.preservedBranchBatch.deleting',
+      'auto.components.sidebar.preserved.branch.batch.toast.e61d78054f',
       'Deleting local branches: {{value0}}',
       { value0: branches.length }
     ),
@@ -127,7 +122,11 @@ export async function forceDeletePreservedBranchBatch(
           result: await useAppStore
             .getState()
             .forceDeletePreservedBranch(branch.worktreeId, branch.branchName, branch.expectedHead, {
-              suppressToast: true
+              suppressToast: true,
+              ...(branch.hostId ? { hostId: branch.hostId } : {}),
+              ...(branch.runtimeEnvironmentId
+                ? { runtimeEnvironmentId: branch.runtimeEnvironmentId }
+                : {})
             })
         })
       }
@@ -139,7 +138,7 @@ export async function forceDeletePreservedBranchBatch(
   if (failures.length === 0) {
     toast.success(
       translate(
-        'auto.components.sidebar.preservedBranchBatch.deleted',
+        'auto.components.sidebar.preserved.branch.batch.toast.1e1a5f6763',
         'Local branches deleted: {{value0}}',
         { value0: branches.length }
       ),
@@ -155,7 +154,7 @@ export async function forceDeletePreservedBranchBatch(
   const failedBranches = failures.map(({ branch }) => branch)
   toast.error(
     translate(
-      'auto.components.sidebar.preservedBranchBatch.failed',
+      'auto.components.sidebar.preserved.branch.batch.toast.43d9395605',
       '{{value0}} deleted, {{value1}} not deleted',
       { value0: deletedCount, value1: failures.length }
     ),
@@ -177,12 +176,9 @@ export async function forceDeletePreservedBranchBatch(
           >
             <Trash2 className="size-3.5" />
             {translate(
-              'auto.components.sidebar.preservedBranchBatch.retry',
-              'Retry {{value0}} {{value1}}',
-              {
-                value0: failedBranches.length,
-                value1: pluralize(failedBranches.length, 'Branch', 'Branches')
-              }
+              'auto.components.sidebar.preserved.branch.batch.toast.d42f1f14e0',
+              'Retry {{count}} Branches',
+              { count: failedBranches.length }
             )}
           </Button>
         </div>

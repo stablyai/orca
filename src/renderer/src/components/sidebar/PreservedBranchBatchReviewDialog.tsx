@@ -15,15 +15,12 @@ import {
   DialogTitle
 } from '../ui/dialog'
 import { Label } from '../ui/label'
+import { preservedBranchCleanupKey } from '@/lib/preserved-branch-cleanup'
 
 type ActionablePreservedBranch = PreservedBranchCleanup & { expectedHead: string }
 
-function pluralize(count: number, singular: string, plural: string): string {
-  return count === 1 ? singular : plural
-}
-
 function selectionKey(branch: PreservedBranchCleanup): string {
-  return `${branch.worktreeId}\0${branch.branchName}\0${branch.expectedHead ?? ''}`
+  return preservedBranchCleanupKey(branch)
 }
 
 function getRepositoryLabel(branch: PreservedBranchCleanup): string {
@@ -80,13 +77,13 @@ export function PreservedBranchBatchReviewDialog({
         <DialogHeader>
           <DialogTitle className="text-sm">
             {translate(
-              'auto.components.sidebar.preservedBranchBatchReview.title',
+              'auto.components.sidebar.PreservedBranchBatchReviewDialog.c4bf8e7eaf',
               'Review kept branches'
             )}
           </DialogTitle>
           <DialogDescription>
             {translate(
-              'auto.components.sidebar.preservedBranchBatchReview.description',
+              'auto.components.sidebar.PreservedBranchBatchReviewDialog.f21976c9a8',
               'Select the local branches you want to force delete. Unselected branches stay in their repositories.'
             )}
           </DialogDescription>
@@ -103,13 +100,13 @@ export function PreservedBranchBatchReviewDialog({
                 }
               />
               {translate(
-                'auto.components.sidebar.preservedBranchBatchReview.selectAll',
+                'auto.components.sidebar.PreservedBranchBatchReviewDialog.38c947f7c5',
                 'Select all'
               )}
             </Label>
             <span className="text-[11px] tabular-nums text-muted-foreground">
               {translate(
-                'auto.components.sidebar.preservedBranchBatchReview.selectedCount',
+                'auto.components.sidebar.PreservedBranchBatchReviewDialog.9602129d38',
                 '{{value0}} of {{value1}} selected',
                 { value0: selectedBranches.length, value1: actionableBranches.length }
               )}
@@ -150,11 +147,11 @@ export function PreservedBranchBatchReviewDialog({
                   <span className="text-[11px] whitespace-nowrap text-muted-foreground">
                     {actionableBranch
                       ? translate(
-                          'auto.components.sidebar.preservedBranchBatchReview.mayBeUnmerged',
+                          'auto.components.sidebar.PreservedBranchBatchReviewDialog.ee39e872d5',
                           'May be unmerged'
                         )
                       : translate(
-                          'auto.components.sidebar.preservedBranchBatchReview.headUnavailable',
+                          'auto.components.sidebar.PreservedBranchBatchReviewDialog.676db406fd',
                           'Head unavailable'
                         )}
                   </span>
@@ -166,7 +163,10 @@ export function PreservedBranchBatchReviewDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {translate('auto.components.sidebar.preservedBranchBatchReview.cancel', 'Cancel')}
+            {translate(
+              'auto.components.sidebar.PreservedBranchBatchReviewDialog.285e1e4882',
+              'Cancel'
+            )}
           </Button>
           <Button
             type="button"
@@ -176,12 +176,9 @@ export function PreservedBranchBatchReviewDialog({
           >
             <Trash2 />
             {translate(
-              'auto.components.sidebar.preservedBranchBatchReview.forceDeleteSelected',
-              'Force Delete {{value0}} {{value1}}',
-              {
-                value0: selectedBranches.length,
-                value1: pluralize(selectedBranches.length, 'Branch', 'Branches')
-              }
+              'auto.components.sidebar.PreservedBranchBatchReviewDialog.a0f9863597',
+              'Force Delete {{count}} Branches',
+              { count: selectedBranches.length }
             )}
           </Button>
         </DialogFooter>

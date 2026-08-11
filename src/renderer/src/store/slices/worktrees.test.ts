@@ -6097,11 +6097,13 @@ describe('worktree remote runtime mutations', () => {
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
+        hostId: 'runtime:env-1',
         force: undefined,
         allowUnverifiedPtyStop: false,
         runHooks: true
       },
-      timeoutMs: 60_000
+      timeoutMs: 60_000,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
     expect(store.getState().shutdownWorktreeTerminals).toHaveBeenCalledWith(wt.id, {
@@ -6144,13 +6146,19 @@ describe('worktree remote runtime mutations', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/nested', head: 'saved-head' }
+      preservedBranch: {
+        branchName: 'feature/nested',
+        head: 'saved-head',
+        hostId: 'ssh:hub-private-target',
+        runtimeEnvironmentId: 'owner-hub'
+      }
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
       method: 'worktree.rm',
       params: {
         worktree: `id:${wt.id}`,
+        hostId: 'ssh:hub-private-target',
         force: undefined,
         allowUnverifiedPtyStop: false,
         runHooks: true
@@ -6171,10 +6179,83 @@ describe('worktree remote runtime mutations', () => {
       params: {
         worktree: `id:${wt.id}`,
         branchName: 'feature/nested',
-        expectedHead: 'saved-head'
+        expectedHead: 'saved-head',
+        hostId: 'ssh:hub-private-target'
       },
       timeoutMs: 15_000
     })
+  })
+
+  it('retains separate preserved-branch cleanup routes for sequential same-id hosts', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-shared::/same/path'
+    const localWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      path: '/same/path',
+      hostId: 'local'
+    })
+    const remoteWorktree = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo-shared',
+      path: '/same/path',
+      hostId: 'ssh:shared-target',
+      runtimeOwnerEnvironmentId: 'shared-hub'
+    })
+    mockApi.worktrees.remove.mockResolvedValueOnce({
+      preservedBranch: { branchName: 'feature/local', head: 'local-head' }
+    })
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) =>
+      Promise.resolve({
+        id: `rpc-${method}`,
+        ok: true,
+        result:
+          method === 'repo.hooksCheck'
+            ? { hasHooks: false, hooks: null, mayNeedUpdate: false }
+            : method === 'worktree.rm'
+              ? {
+                  preservedBranch: { branchName: 'feature/remote', head: 'remote-head' }
+                }
+              : { deleted: true },
+        _meta: { runtimeId: 'runtime-shared-hub' }
+      })
+    )
+    store.setState({
+      worktreesByRepo: { 'repo-shared': [localWorktree] }
+    } as Partial<AppState>)
+
+    await store.getState().removeWorktree(worktreeId)
+    store.setState({
+      worktreesByRepo: { 'repo-shared': [remoteWorktree] }
+    } as Partial<AppState>)
+    await store.getState().removeWorktree(worktreeId)
+
+    await store
+      .getState()
+      .forceDeletePreservedBranch(worktreeId, 'feature/local', 'local-head', { hostId: 'local' })
+    await store.getState().forceDeletePreservedBranch(worktreeId, 'feature/remote', 'remote-head', {
+      hostId: 'ssh:shared-target',
+      runtimeEnvironmentId: 'shared-hub'
+    })
+
+    expect(mockApi.worktrees.forceDeletePreservedBranch).toHaveBeenCalledWith({
+      worktreeId,
+      branchName: 'feature/local',
+      expectedHead: 'local-head',
+      hostId: 'local'
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'shared-hub',
+        method: 'worktree.forceDeleteBranch',
+        params: {
+          worktree: `id:${worktreeId}`,
+          branchName: 'feature/remote',
+          expectedHead: 'remote-head',
+          hostId: 'ssh:shared-target'
+        }
+      })
+    )
   })
 
   it('fails HUB-owned SSH removal closed when the exact id has two HUB owners', async () => {
