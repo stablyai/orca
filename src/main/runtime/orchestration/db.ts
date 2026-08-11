@@ -39,7 +39,7 @@ import type {
 } from './types'
 import { buildOrchestrationTaskDisplayMetadata } from '../../../shared/orchestration-task-display'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../shared/orchestration-rpc-contract'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isEquivalentPaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
@@ -61,16 +61,6 @@ import {
   ensureMutationReceiptCapacity,
   migrateMutationReceiptCapacity
 } from './mutation-receipt-capacity'
-
-// Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
-function isEquivalentPaneKey(a: string, b: string): boolean {
-  if (a === b) {
-    return true
-  }
-  const aLeaf = parsePaneKey(a)?.leafId
-  const bLeaf = parsePaneKey(b)?.leafId
-  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
-}
 
 // Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
 // text after the first ':', so this narrows candidates without deciding equivalence itself.

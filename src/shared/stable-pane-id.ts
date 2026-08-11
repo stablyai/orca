@@ -44,6 +44,17 @@ export function parsePaneKey(
   return { tabId, leafId, stablePaneId: leafId }
 }
 
+// Why: leaf UUID is the remint-stable pane identity (the tab half changes on
+// break-out); exact match covers legacy or unparseable keys.
+export function isEquivalentPaneKey(a: string, b: string): boolean {
+  if (a === b) {
+    return true
+  }
+  const aLeaf = parsePaneKey(a)?.leafId
+  const bLeaf = parsePaneKey(b)?.leafId
+  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
+}
+
 export function parseLegacyNumericPaneKey(
   paneKey: unknown
 ): { tabId: string; numericPaneId: string; paneKey: string } | null {
