@@ -7,7 +7,6 @@ import {
   type RawBitbucketBuildStatus,
   type RawBitbucketPullRequest
 } from './pull-request-mappers'
-import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
 import {
   getHostedReviewLocalGitOptions,
@@ -225,18 +224,14 @@ export async function getBitbucketPullRequestForBranch(
     )
     const raw = list?.values?.[0]
     if (raw) {
-      // Why (#9171): discard a non-open implicit branch match on the repo
-      // default branch and fall through to the linked-number fallback below.
-      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
-        state: mapBitbucketPullRequestState(raw.state),
-        reviewNumber: raw.id ?? null,
-        linkedReviewNumber: linkedPRNumber,
-        branchName,
-        repoPath,
-        connectionId,
-        localGitOptions: getHostedReviewLocalGitOptions(options)
-      })
-      if (!hideOnDefaultBranch) {
+      // Why: a merged or declined PR we only matched by branch name is history,
+      // not review context — the same rule GitHub applies. Keeping it would
+      // report "a pull request already exists" and block the branch's next PR.
+      // An explicitly linked review still resolves through the fallback below.
+      const isImplicitNonOpenMatch =
+        mapBitbucketPullRequestState(raw.state) !== 'open' &&
+        !(typeof linkedPRNumber === 'number' && raw.id === linkedPRNumber)
+      if (!isImplicitNonOpenMatch) {
         return normalizePullRequest(repo, raw)
       }
     }

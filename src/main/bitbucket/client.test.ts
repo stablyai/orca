@@ -124,6 +124,44 @@ describe('Bitbucket client', () => {
     ).resolves.toMatchObject({ number: 42 })
   })
 
+  it('hides a MERGED PR matched only by feature-branch name so a new PR can be created', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      return Response.json({
+        values: [
+          { ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'feature/login' } } }
+        ]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    // Why: a merged branch match is history. Returning it made eligibility
+    // report "a pull request already exists" and blocked the branch's next PR.
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login')
+    ).resolves.toBeNull()
+  })
+
+  it('keeps a MERGED PR on a feature branch when it is the explicitly linked review', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes('/statuses/build')) {
+        return Response.json({ values: [] })
+      }
+      return Response.json({
+        values: [
+          { ...bitbucketPr(7), state: 'MERGED', source: { branch: { name: 'feature/login' } } }
+        ]
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      getBitbucketPullRequestForBranch('/repo', 'refs/heads/feature/login', 7)
+    ).resolves.toMatchObject({ number: 7, state: 'merged' })
+  })
+
   it('fetches a branch pull request and commit build status', async () => {
     const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (url.includes('/statuses/build')) {
