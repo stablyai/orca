@@ -82,6 +82,14 @@ export function encodeRawMarkdownHtmlForRichEditor(
         } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
           activeFence = null
           activeFenceLength = 0
+          // Consume the entire closing fence line so the inline-code-span
+          // branch can't treat these backticks as a span opener that bridges
+          // into the next fence and skips its line-start inspection (#13307).
+          const lineEnd = findLineEnd(normalizedContent, index)
+          result += normalizedContent.slice(index, lineEnd)
+          index = lineEnd
+          isLineStart = true
+          continue
         }
       }
     }
