@@ -1,12 +1,26 @@
-import { createHash } from 'node:crypto'
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import {
+  closeSync,
+  existsSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
-import { writeSecureJsonFile } from '../../shared/secure-file'
+import { hardenSecurePath } from '../../shared/secure-file'
 import { getOrcaProfileDirectory } from '../orca-profiles/profile-storage-paths'
 import type { ArtifactWriteBody } from './artifact-cloud-request'
 import type { ArtifactShareScope } from './artifact-share-record-store'
 
 export const MAX_PENDING_ARTIFACT_CREATES = 32
+
+const MAX_HARDENED_INTENT_DIRECTORIES = 64
+const hardenedIntentDirectories = new Set<string>()
 
 export type ArtifactCreateIntent = {
   version: 1
@@ -18,6 +32,62 @@ export type ArtifactCreateIntent = {
 
 function intentDirectory(profileId: string, userDataPath: string): string {
   return join(getOrcaProfileDirectory(profileId, userDataPath), 'artifact-create-intents')
+}
+
+function ensureIntentDirectory(profileId: string, userDataPath: string): string {
+  const directory = intentDirectory(profileId, userDataPath)
+  mkdirSync(directory, { recursive: true, mode: 0o700 })
+  if (!hardenedIntentDirectories.has(directory)) {
+    hardenSecurePath(directory, {
+      isDirectory: true,
+      platform: process.platform,
+      sync: true
+    })
+    if (hardenedIntentDirectories.size >= MAX_HARDENED_INTENT_DIRECTORIES) {
+      const oldest = hardenedIntentDirectories.values().next().value
+      if (oldest !== undefined) {
+        hardenedIntentDirectories.delete(oldest)
+      }
+    }
+    hardenedIntentDirectories.add(directory)
+  }
+  return directory
+}
+
+function flushPath(path: string): void {
+  const descriptor = openSync(path, 'r')
+  try {
+    fsyncSync(descriptor)
+  } finally {
+    closeSync(descriptor)
+  }
+}
+
+function removeTemporaryIntents(directory: string): void {
+  for (const name of readdirSync(directory)) {
+    if (name.endsWith('.tmp')) {
+      rmSync(join(directory, name), { force: true })
+    }
+  }
+}
+
+function writeIntent(path: string, directory: string, intent: ArtifactCreateIntent): void {
+  // Child files inherit the once-hardened directory ACL, avoiding per-create PowerShell launches.
+  const temporaryPath = `${path}.${process.pid}.${Date.now()}.${randomBytes(4).toString('hex')}.tmp`
+  try {
+    writeFileSync(temporaryPath, JSON.stringify(intent, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600
+    })
+    flushPath(temporaryPath)
+    renameSync(temporaryPath, path)
+    if (process.platform !== 'win32') {
+      flushPath(directory)
+    }
+  } catch (error) {
+    rmSync(temporaryPath, { force: true })
+    throw error
+  }
 }
 
 function intentPath(
@@ -125,10 +195,9 @@ export function getOrCreateArtifactCreateIntent(
   if (existing) {
     return existing
   }
-  const directory = intentDirectory(profileId, userDataPath)
-  const pendingCount = existsSync(directory)
-    ? readdirSync(directory).filter((name) => name.endsWith('.json')).length
-    : 0
+  const directory = ensureIntentDirectory(profileId, userDataPath)
+  removeTemporaryIntents(directory)
+  const pendingCount = readdirSync(directory).filter((name) => name.endsWith('.json')).length
   if (pendingCount >= MAX_PENDING_ARTIFACT_CREATES) {
     throw new Error('Too many artifact creates are waiting for recovery. Retry an earlier share.')
   }
@@ -139,7 +208,7 @@ export function getOrCreateArtifactCreateIntent(
     idempotencyKey,
     body
   }
-  writeSecureJsonFile(intentPath(profileId, userDataPath, sourceKey, scope), intent)
+  writeIntent(intentPath(profileId, userDataPath, sourceKey, scope), directory, intent)
   return intent
 }
 
@@ -156,9 +225,23 @@ export function removeArtifactCreateIntent(
   }
   if (readIntent(path).idempotencyKey === expectedIdempotencyKey) {
     rmSync(path, { force: true })
+    if (process.platform !== 'win32') {
+      flushPath(intentDirectory(profileId, userDataPath))
+    }
   }
 }
 
 export function clearArtifactCreateIntents(profileId: string, userDataPath: string): void {
-  rmSync(intentDirectory(profileId, userDataPath), { force: true, recursive: true })
+  const directory = intentDirectory(profileId, userDataPath)
+  if (!existsSync(directory)) {
+    return
+  }
+  for (const name of readdirSync(directory)) {
+    if (name.endsWith('.json') || name.endsWith('.tmp')) {
+      rmSync(join(directory, name), { force: true })
+    }
+  }
+  if (process.platform !== 'win32') {
+    flushPath(directory)
+  }
 }

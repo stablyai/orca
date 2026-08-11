@@ -37,6 +37,15 @@ function artifactWriteBodiesMatch(
   )
 }
 
+function discardsCreateIntent(error: unknown): boolean {
+  return (
+    error instanceof OrcaCloudRequestError &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500 &&
+    ![408, 409, 425, 429].includes(error.statusCode)
+  )
+}
+
 type ArtifactPublishAuthContext = {
   profileId: string
   scope: ArtifactShareScope
@@ -73,7 +82,19 @@ export class ArtifactPublisher {
   ): Promise<ArtifactListItem> {
     return this.runForSource(request.sourceKey, auth, async () => {
       auth.assertCurrent()
-      return (await this.create(request, token, apiUrl, auth, idempotencyKey)).result.item
+      const pending = getArtifactCreateIntent(
+        auth.profileId,
+        this.userDataPath,
+        request.sourceKey,
+        auth.scope
+      )
+      const created = await this.create(request, token, apiUrl, auth, idempotencyKey)
+      return pending && !artifactWriteBodiesMatch(pending.body, artifactWriteBody(request))
+        ? this.updateExisting(request, token, apiUrl, auth, {
+            slug: created.result.item.artifact.slug,
+            editToken: created.editToken
+          })
+        : created.result.item
     })
   }
 
@@ -178,6 +199,9 @@ export class ArtifactPublisher {
     auth: ArtifactPublishAuthContext,
     idempotencyKey: string
   ): Promise<ArtifactCreateOutcome> {
+    const replaying =
+      getArtifactCreateIntent(auth.profileId, this.userDataPath, request.sourceKey, auth.scope) !==
+      null
     const intent = getOrCreateArtifactCreateIntent(
       auth.profileId,
       this.userDataPath,
@@ -186,11 +210,26 @@ export class ArtifactPublisher {
       idempotencyKey,
       artifactWriteBody(request)
     )
-    const response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
-      method: 'POST',
-      body: intent.body,
-      idempotencyKey: intent.idempotencyKey
-    })
+    let response: ArtifactCreateResponse
+    try {
+      response = await artifactRequest<ArtifactCreateResponse>(apiUrl, token, '', {
+        method: 'POST',
+        body: intent.body,
+        idempotencyKey: intent.idempotencyKey
+      })
+    } catch (error) {
+      // A replay may outlive its server receipt, so never abandon a possibly committed artifact.
+      if (!replaying && discardsCreateIntent(error)) {
+        removeArtifactCreateIntent(
+          auth.profileId,
+          this.userDataPath,
+          request.sourceKey,
+          auth.scope,
+          intent.idempotencyKey
+        )
+      }
+      throw error
+    }
     auth.assertCurrent()
     saveArtifactShareRecord(auth.profileId, this.userDataPath, request.sourceKey, {
       slug: response.artifact.slug,

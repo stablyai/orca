@@ -52,6 +52,38 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     await expect(publishedLink(userDataPath)).resolves.toBe('https://share.onorca.dev/a/artifact-1')
   })
 
+  it('replays the exact create when content is unchanged after response loss', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    server.loseNextCreateResponse = true
+    vi.stubGlobal('fetch', server.fetch)
+
+    await expect(service(userDataPath).publish(writeRequest)).rejects.toThrow('response lost')
+    await expect(service(userDataPath).publish(writeRequest)).resolves.toMatchObject({
+      status: 'ok',
+      value: { item: { artifact: { slug: 'artifact-1' } } }
+    })
+    expect(server.createMutations).toBe(1)
+    expect(server.artifactContent('artifact-1')).toBe(writeRequest.content)
+  })
+
+  it('updates a recovered share when its content changed after response loss', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    server.loseNextCreateResponse = true
+    vi.stubGlobal('fetch', server.fetch)
+
+    await expect(service(userDataPath).share(writeRequest)).rejects.toThrow('response lost')
+    await expect(
+      service(userDataPath).share({ ...writeRequest, content: '<h1>Changed share</h1>' })
+    ).resolves.toMatchObject({
+      status: 'ok',
+      value: { artifact: { slug: 'artifact-1' } }
+    })
+    expect(server.createMutations).toBe(1)
+    expect(server.artifactContent('artifact-1')).toBe('<h1>Changed share</h1>')
+  })
+
   it('clears the durable mapping when a committed delete retry returns 404', async () => {
     const userDataPath = await createUserDataPath()
     const server = new ArtifactFaultServer()
@@ -81,6 +113,43 @@ describe('ArtifactCloudService committed response loss recovery', () => {
     expect(server.artifactSlugs()).toEqual([])
     await expect(publishedLink(userDataPath)).resolves.toBeNull()
   })
+
+  it('drops an uncommitted validation failure so corrected content can create', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    server.rejectNextCreateStatus = 422
+    vi.stubGlobal('fetch', server.fetch)
+
+    await expect(service(userDataPath).publish(writeRequest)).rejects.toMatchObject({
+      statusCode: 422
+    })
+    await expect(
+      service(userDataPath).publish({ ...writeRequest, content: '<h1>Corrected</h1>' })
+    ).resolves.toMatchObject({
+      status: 'ok',
+      value: { item: { artifact: { slug: 'artifact-1' } } }
+    })
+    expect(server.createMutations).toBe(1)
+    expect(server.artifactContent('artifact-1')).toBe('<h1>Corrected</h1>')
+  })
+
+  it('keeps a replay intent when validation changes after the original commit', async () => {
+    const userDataPath = await createUserDataPath()
+    const server = new ArtifactFaultServer()
+    server.loseNextCreateResponse = true
+    vi.stubGlobal('fetch', server.fetch)
+
+    await expect(service(userDataPath).publish(writeRequest)).rejects.toThrow('response lost')
+    server.rejectNextCreateStatus = 422
+    const changed = { ...writeRequest, content: '<h1>Changed after validation</h1>' }
+    await expect(service(userDataPath).publish(changed)).rejects.toMatchObject({ statusCode: 422 })
+    await expect(service(userDataPath).publish(changed)).resolves.toMatchObject({
+      status: 'ok',
+      value: { item: { artifact: { slug: 'artifact-1' } } }
+    })
+    expect(server.createMutations).toBe(1)
+    expect(server.artifactContent('artifact-1')).toBe(changed.content)
+  })
 })
 
 class ArtifactFaultServer {
@@ -89,6 +158,7 @@ class ArtifactFaultServer {
   deleteMutations = 0
   loseNextCreateResponse = false
   loseNextDeleteResponse = false
+  rejectNextCreateStatus: number | null = null
   private readonly artifacts = new Map<string, string>()
   private readonly createsByKey = new Map<string, { body: string; response: object }>()
 
@@ -116,7 +186,15 @@ class ArtifactFaultServer {
   }
 
   private create(init?: RequestInit): Response {
+    if (this.rejectNextCreateStatus !== null) {
+      const status = this.rejectNextCreateStatus
+      this.rejectNextCreateStatus = null
+      return jsonResponse({ code: 'artifact_validation_failed' }, status)
+    }
     const key = new Headers(init?.headers).get('idempotency-key')
+    if (new Headers(init?.headers).get('authorization') !== 'Bearer token-a') {
+      throw new Error('Missing artifact authorization')
+    }
     if (!key) {
       throw new Error('Missing idempotency key')
     }
@@ -158,6 +236,13 @@ class ArtifactFaultServer {
     const slug = decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
     if (!this.artifacts.has(slug)) {
       return jsonResponse({ code: 'artifact_not_found' }, 404)
+    }
+    const headers = new Headers(init?.headers)
+    if (
+      headers.get('authorization') !== 'Bearer token-a' ||
+      headers.get('x-orca-edit-token') !== `edit-${slug}`
+    ) {
+      return jsonResponse({ code: 'artifact_forbidden' }, 403)
     }
     this.artifacts.set(slug, String(init?.body))
     return jsonResponse(createResponseBody(slug), 200)

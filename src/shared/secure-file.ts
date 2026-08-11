@@ -1,8 +1,11 @@
 import { randomBytes } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
   existsSync,
+  fsyncSync,
   mkdirSync,
+  openSync,
   renameSync,
   rmSync,
   statSync,
@@ -87,7 +90,15 @@ export function writeSecureJsonFile(targetPath: string, value: unknown): void {
   writeSecureFile(targetPath, JSON.stringify(value, null, 2))
 }
 
-export function writeSecureFile(targetPath: string, contents: string): void {
+export function writeDurableSecureJsonFile(targetPath: string, value: unknown): void {
+  writeSecureFile(targetPath, JSON.stringify(value, null, 2), { durable: true })
+}
+
+export function writeSecureFile(
+  targetPath: string,
+  contents: string,
+  options: { durable?: boolean } = {}
+): void {
   const dir = dirname(targetPath)
   if (!existsSync(dir)) {
     mkdirSync(dir, { recursive: true, mode: 0o700 })
@@ -101,6 +112,9 @@ export function writeSecureFile(targetPath: string, contents: string): void {
       encoding: 'utf-8',
       mode: 0o600
     })
+    if (options.durable) {
+      flushFile(tmpFile)
+    }
     // Why: writeFileSync mode is a no-op on Windows, so restrict the credential's ACL synchronously before the rename publishes it under inherited ACLs.
     applySecurePathRestriction(tmpFile, false, process.platform, true)
     renameSync(tmpFile, targetPath)
@@ -108,9 +122,21 @@ export function writeSecureFile(targetPath: string, contents: string): void {
     if (applySecurePathRestriction(targetPath, false, process.platform, true)) {
       rememberHardenedPath(targetPath, false)
     }
+    if (options.durable && process.platform !== 'win32') {
+      flushFile(dir)
+    }
   } catch (error) {
     rmSync(tmpFile, { force: true })
     throw error
+  }
+}
+
+function flushFile(path: string): void {
+  const descriptor = openSync(path, 'r')
+  try {
+    fsyncSync(descriptor)
+  } finally {
+    closeSync(descriptor)
   }
 }
 

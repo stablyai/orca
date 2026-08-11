@@ -1,7 +1,8 @@
+import { execFileSync } from 'node:child_process'
 import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MAX_PENDING_ARTIFACT_CREATES,
   clearArtifactCreateIntents,
@@ -10,6 +11,8 @@ import {
   removeArtifactCreateIntent
 } from './artifact-create-intent-store'
 import type { ArtifactShareScope } from './artifact-share-record-store'
+
+vi.mock('child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
 
 const createdPaths: string[] = []
 const scope: ArtifactShareScope = {
@@ -115,6 +118,7 @@ describe('artifact create intent store', () => {
 
   it('clears pending content at the profile lifecycle boundary', async () => {
     const userDataPath = await createUserDataPath()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
     getOrCreateArtifactCreateIntent(
       'local-profile',
       userDataPath,
@@ -129,6 +133,71 @@ describe('artifact create intent store', () => {
     expect(
       getArtifactCreateIntent('local-profile', userDataPath, '/repo/report.html', scope)
     ).toBeNull()
+    expect(await readdir(directory)).toEqual([])
+  })
+
+  it('removes crash-left temporary writes before admitting another intent', async () => {
+    const userDataPath = await createUserDataPath()
+    const directory = join(userDataPath, 'profiles', 'local-profile', 'artifact-create-intents')
+    getOrCreateArtifactCreateIntent(
+      'local-profile',
+      userDataPath,
+      '/repo/report.html',
+      scope,
+      'key-a',
+      body
+    )
+    removeArtifactCreateIntent('local-profile', userDataPath, '/repo/report.html', scope, 'key-a')
+    await writeFile(join(directory, 'crash-left.tmp'), 'partial')
+
+    getOrCreateArtifactCreateIntent(
+      'local-profile',
+      userDataPath,
+      '/repo/other.html',
+      scope,
+      'key-b',
+      body
+    )
+
+    expect((await readdir(directory)).some((name) => name.endsWith('.tmp'))).toBe(false)
+  })
+
+  it('hardens one Windows journal directory without per-file PowerShell launches', async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    vi.mocked(execFileSync).mockImplementation((file) =>
+      String(file).endsWith('whoami.exe') ? '"USER","S-1-5-21-1000"' : ''
+    )
+    try {
+      const userDataPath = await createUserDataPath()
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/report.html',
+        scope,
+        'key-a',
+        body
+      )
+      getOrCreateArtifactCreateIntent(
+        'local-profile',
+        userDataPath,
+        '/repo/other.html',
+        scope,
+        'key-b',
+        body
+      )
+
+      const powershellCalls = vi
+        .mocked(execFileSync)
+        .mock.calls.filter(([file]) => String(file).endsWith('powershell.exe'))
+      expect(powershellCalls).toHaveLength(1)
+      expect((powershellCalls[0]![1] as string[]).at(-1)).toBe('1')
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, 'platform', originalPlatform)
+      }
+      vi.mocked(execFileSync).mockReset()
+    }
   })
 
   it('refuses to overwrite an unreadable matching intent', async () => {
