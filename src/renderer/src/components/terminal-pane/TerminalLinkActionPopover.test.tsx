@@ -201,6 +201,8 @@ describe('TerminalLinkActionPopover', () => {
     expect(mocks.writeClipboardText).toHaveBeenCalledOnce()
     resolveWrite?.()
     await waitFor(() => expect(mocks.toastSuccess).toHaveBeenCalledOnce())
+    fireEvent.click(copyButton)
+    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledTimes(2))
   })
 
   it('shows a failure toast when copying fails', async () => {
@@ -221,6 +223,8 @@ describe('TerminalLinkActionPopover', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
 
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalledWith('Failed to copy link'))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy link' }))
+    await waitFor(() => expect(mocks.writeClipboardText).toHaveBeenCalledTimes(2))
   })
 
   it('does not offer copy link for non-URL destinations', () => {
