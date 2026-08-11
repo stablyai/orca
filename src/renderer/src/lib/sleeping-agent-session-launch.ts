@@ -1,16 +1,26 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
+import {
+  hasAgentSessionWorkspaceMetadata,
+  resolveAgentSessionWorkspaceOwner
+} from '@/lib/agent-session-workspace-owner'
+import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
 import { isWslUncPath } from '../../../shared/wsl-paths'
+import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  getSleepingAgentSessionExecutionHostId,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export type ResumeSleepingAgentSessionsOptions = {
@@ -25,21 +35,33 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchPlatform(worktreeId: string): NodeJS.Platform {
+function getResumeLaunchTarget(
+  worktreeId: string,
+  worktree: ReturnType<typeof resolveAgentSessionWorkspaceOwner>['worktree'] | null,
+  repo: ReturnType<typeof resolveAgentSessionWorkspaceOwner>['repo'],
+  executionHostId: ExecutionHostId
+): { platform: NodeJS.Platform; shell: ReturnType<typeof resolveLocalWindowsAgentStartupShell> } {
   const state = useAppStore.getState()
-  const worktree = state.getKnownWorktreeById(worktreeId)
-  const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
   const projectRuntime = getLocalProjectExecutionRuntimeContext(state, worktreeId)
+  let platform: NodeJS.Platform
   if (projectRuntime?.status === 'repair-required') {
-    return projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+    platform = projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : CLIENT_PLATFORM
+  } else if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
+    platform = 'linux'
+  } else if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
+    platform = 'linux'
+  } else {
+    platform = CLIENT_PLATFORM
   }
-  if (projectRuntime?.status === 'resolved' && projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
+  return {
+    platform,
+    shell: resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote:
+        Boolean(repo?.connectionId) || parseExecutionHostId(executionHostId)?.kind !== 'local',
+      terminalWindowsShell: state.settings?.terminalWindowsShell
+    })
   }
-  if (repo?.connectionId || (worktree?.path && isWslUncPath(worktree.path))) {
-    return 'linux'
-  }
-  return CLIENT_PLATFORM
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -68,6 +90,36 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  let executionHostId: ExecutionHostId
+  let repo: ReturnType<typeof resolveAgentSessionWorkspaceOwner>['repo'] = null
+  let worktree: ReturnType<typeof resolveAgentSessionWorkspaceOwner>['worktree'] | null = null
+  const expectedExecutionHostId = getSleepingAgentSessionExecutionHostId(record)
+  try {
+    const owner = resolveAgentSessionWorkspaceOwner(
+      state,
+      record.worktreeId,
+      expectedExecutionHostId ?? undefined,
+      {
+        allowLegacyExpectedOwner: Boolean(record.connectionId && !record.executionHostId)
+      }
+    )
+    executionHostId = owner.executionHostId
+    repo = owner.repo
+    worktree = owner.worktree
+  } catch {
+    if (!hasAgentSessionWorkspaceMetadata(state, record.worktreeId)) {
+      executionHostId =
+        expectedExecutionHostId ?? getExecutionHostIdForWorktree(state, record.worktreeId)
+    } else {
+      toast.error(
+        translate(
+          'auto.lib.resume.sleeping.agent.session.f235f604fd',
+          'This agent session cannot be resumed.'
+        )
+      )
+      return false
+    }
+  }
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
@@ -84,7 +136,10 @@ export function launchSleepingAgentSession(
     ...(launchConfig?.ompResumeFilePath
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
-    platform: getResumeLaunchPlatform(record.worktreeId)
+    ...getResumeLaunchTarget(record.worktreeId, worktree, repo, executionHostId),
+    repoId: repo?.id ?? null,
+    connectionId: repo?.connectionId ?? record.connectionId ?? null,
+    executionHostId
   })
   if (!startupPlan) {
     toast.error(
@@ -102,6 +157,8 @@ export function launchSleepingAgentSession(
   })
   state.queueTabStartupCommand(tab.id, {
     command: startupPlan.launchCommand,
+    executionHostId,
+    ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     resumeProviderSession: record.providerSession,
@@ -119,6 +176,7 @@ export function launchSleepingAgentSession(
   })
   state.claimAutomaticAgentResume(tab.id, {
     worktreeId: record.worktreeId,
+    executionHostId,
     launchAgent: record.agent,
     providerSession: record.providerSession
   })

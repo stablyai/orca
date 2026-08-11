@@ -6,6 +6,7 @@ const mockQueueTabStartupCommand = vi.fn()
 const mockSetActiveTabType = vi.fn()
 const mockSetTabBarOrder = vi.fn()
 const runtimeMocks = vi.hoisted(() => ({
+  createWebRuntimeAgentSessionTerminal: vi.fn(),
   createWebRuntimeSessionTerminal: vi.fn(),
   getRuntimeEnvironmentIdForWorktree: vi.fn<() => string | null>(() => null),
   isWebRuntimeSessionActive: vi.fn(() => false)
@@ -47,6 +48,7 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 }))
 
 vi.mock('@/runtime/web-runtime-session', () => ({
+  createWebRuntimeAgentSessionTerminal: runtimeMocks.createWebRuntimeAgentSessionTerminal,
   createWebRuntimeSessionTerminal: runtimeMocks.createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive: runtimeMocks.isWebRuntimeSessionActive
 }))
@@ -58,6 +60,10 @@ describe('launchAiVaultSessionInNewTab', () => {
     vi.clearAllMocks()
     runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue(null)
     runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(false)
+    runtimeMocks.createWebRuntimeAgentSessionTerminal.mockResolvedValue({
+      outcome: { status: 'created' },
+      promptDelivered: true
+    })
     runtimeMocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
     mockState.tabsByWorktree = {}
     mockState.openFiles = []
@@ -98,17 +104,24 @@ describe('launchAiVaultSessionInNewTab', () => {
       agent: 'claude',
       worktreeId: 'wt-1',
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      cwd: 'C:\\Users\\alice\\repo',
+      draftPrompt: 'Apply session rules',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
       envToDelete: ['CODEX_HOME'],
       launchConfig: {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      }
+      },
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
 
+    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      startupCwd: 'C:\\Users\\alice\\repo'
+    })
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith('tab-1', {
       command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      draftPrompt: 'Apply session rules',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
       envToDelete: ['CODEX_HOME'],
       launchConfig: {
@@ -117,6 +130,7 @@ describe('launchAiVaultSessionInNewTab', () => {
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
       },
       launchAgent: 'claude',
+      resumeProviderSession: { key: 'session_id', id: 'session-1' },
       telemetry: {
         agent_kind: 'claude',
         launch_source: 'sidebar',
@@ -147,6 +161,8 @@ describe('launchAiVaultSessionInNewTab', () => {
       worktreeId: 'wt-1',
       targetGroupId: 'group-1',
       command: "codex resume 'session-1'",
+      cwd: '/workspace/runtime',
+      draftPrompt: 'Apply session rules',
       env: { CODEX_PROFILE: 'runtime' },
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       launchConfig: {
@@ -158,13 +174,20 @@ describe('launchAiVaultSessionInNewTab', () => {
     })
 
     expect(result.tabId).toBeNull()
-    expect(runtimeMocks.createWebRuntimeSessionTerminal).toHaveBeenCalledWith({
+    expect(runtimeMocks.createWebRuntimeAgentSessionTerminal).toHaveBeenCalledWith({
       worktreeId: 'wt-1',
       environmentId: 'env-1',
       targetGroupId: 'group-1',
       agentSessionKind: 'resume',
       launchAgent: 'codex',
       command: "codex resume 'session-1'",
+      cwd: '/workspace/runtime',
+      promptDelivery: 'draft',
+      promptDeliveryOwner: 'client',
+      agent: 'codex',
+      promptAfterReady: 'Apply session rules',
+      submitPrompt: false,
+      forcePromptPaste: false,
       env: { CODEX_PROFILE: 'runtime' },
       envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
       launchConfig: {
@@ -183,5 +206,31 @@ describe('launchAiVaultSessionInNewTab', () => {
       await expect(result.runtimeLaunch).resolves.toEqual({ status: 'created' })
     }
     expect(mockSetActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  it('reports a failed runtime launch when the client-owned draft is not delivered', async () => {
+    runtimeMocks.getRuntimeEnvironmentIdForWorktree.mockReturnValue('env-1')
+    runtimeMocks.isWebRuntimeSessionActive.mockReturnValue(true)
+    runtimeMocks.createWebRuntimeAgentSessionTerminal.mockResolvedValue({
+      outcome: { status: 'created' },
+      promptDelivered: false
+    })
+
+    const result = launchAiVaultSessionInNewTab({
+      agent: 'codex',
+      worktreeId: 'wt-1',
+      command: "codex resume 'session-1'",
+      draftPrompt: 'Apply session rules',
+      providerSession: { key: 'session_id', id: 'session-1' }
+    })
+
+    expect(result.tabId).toBeNull()
+    if (result.tabId === null) {
+      await expect(result.runtimeLaunch).resolves.toEqual({
+        status: 'failed',
+        message: "Your draft wasn't sent — paste it once the agent is ready."
+      })
+    }
+    expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 })

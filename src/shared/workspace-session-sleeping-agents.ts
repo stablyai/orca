@@ -5,11 +5,15 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 
 const terminalTabIdSchema = z
   .string()
   .min(1)
   .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
+const executionHostIdSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && parseExecutionHostId(value)?.id === value
+)
 
 const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,
@@ -86,6 +90,7 @@ const sleepingAgentSessionRecordSchema = z
     paneKey: z.string().refine((value) => value.length > 0),
     tabId: terminalTabIdSchema.optional(),
     worktreeId: z.string().min(1),
+    executionHostId: executionHostIdSchema.optional(),
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: agentProviderSessionSchema,
     prompt: z.string(),
@@ -112,7 +117,6 @@ export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
   if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
     return undefined
   }
-
   const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
     null
   )
@@ -125,6 +129,5 @@ export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
       cleaned[paneKey] = parsed.data
     }
   }
-
   return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
 }, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())

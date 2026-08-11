@@ -7,8 +7,8 @@ import {
 } from '@/lib/onboarding-folder-agent-startup'
 
 describe('buildOnboardingFolderAgentStartup', () => {
-  it('queues the persisted default agent with onboarding telemetry', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+  it('queues the persisted default agent with onboarding telemetry', async () => {
+    const startup = await buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex'
     })
@@ -31,8 +31,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
   })
 
-  it('respects the blank terminal preference', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+  it('respects the blank terminal preference', async () => {
+    const startup = await buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'blank'
     })
@@ -40,8 +40,47 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup).toBeUndefined()
   })
 
-  it('does not infer an agent from auto mode', () => {
-    const startup = buildOnboardingFolderAgentStartup({
+  it('omits native-chat preferences from terminal-default folder launches', async () => {
+    const startup = await buildOnboardingFolderAgentStartup({
+      ...getDefaultSettings('/tmp/orca-workspaces'),
+      defaultTuiAgent: 'codex',
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: false,
+      nativeChatSessionOptions: {
+        codex: {
+          model: 'gpt-5.2-codex',
+          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+        }
+      }
+    })
+
+    expect(startup?.command).not.toContain("'-m'")
+    expect(startup?.sessionOptions).toBeUndefined()
+  })
+
+  it('applies native-chat preferences to chat-default folder launches', async () => {
+    const startup = await buildOnboardingFolderAgentStartup({
+      ...getDefaultSettings('/tmp/orca-workspaces'),
+      defaultTuiAgent: 'codex',
+      experimentalNativeChat: true,
+      openAgentTabsInChatByDefault: true,
+      nativeChatSessionOptions: {
+        codex: {
+          model: 'gpt-5.2-codex',
+          valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+        }
+      }
+    })
+
+    expect(startup?.command).toContain("'-m' 'gpt-5.2-codex'")
+    expect(startup?.sessionOptions).toEqual({
+      model: 'gpt-5.2-codex',
+      effort: 'medium'
+    })
+  })
+
+  it('does not infer an agent from auto mode', async () => {
+    const startup = await buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: null
     })
@@ -86,9 +125,9 @@ describe('buildOnboardingFolderAgentStartup', () => {
     ).toBe(false)
   })
 
-  it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
+  it('builds the skipped-onboarding folder startup from the persisted default agent', async () => {
     expect(
-      buildDismissedOnboardingFolderAgentStartup(
+      await buildDismissedOnboardingFolderAgentStartup(
         {
           ...getDefaultSettings('/tmp/orca-workspaces'),
           defaultTuiAgent: 'codex',

@@ -11,6 +11,7 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../shared/types'
 import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -30,7 +31,12 @@ function getClientPlatform(): NodeJS.Platform {
 }
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null
+  settings: GlobalSettings | null,
+  context?: {
+    repoId?: string | null
+    connectionId?: string | null
+    nativeChatTranscriptIsLocalReadable?: boolean
+  }
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
   if (
@@ -48,12 +54,19 @@ export function buildOnboardingFolderAgentStartup(
     cmdOverrides: settings.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveNativeChatSessionOptionDefaults(
-      settings.nativeChatSessionOptions,
-      agent
-    ),
+    sessionOptions:
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: settings.experimentalNativeChat,
+        openAgentTabsInChatByDefault: settings.openAgentTabsInChatByDefault,
+        agent,
+        nativeChatTranscriptIsLocalReadable: context?.nativeChatTranscriptIsLocalReadable
+      }) === 'chat'
+        ? resolveNativeChatSessionOptionDefaults(settings.nativeChatSessionOptions, agent)
+        : undefined,
     platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    repoId: context?.repoId,
+    connectionId: context?.connectionId
   })
   if (!startupPlan) {
     return undefined
@@ -91,10 +104,15 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean
+  hasExistingProject: boolean,
+  context?: {
+    repoId?: string | null
+    connectionId?: string | null
+    nativeChatTranscriptIsLocalReadable?: boolean
+  }
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings)
+  return buildOnboardingFolderAgentStartup(settings, context)
 }

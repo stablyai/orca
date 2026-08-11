@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   buildAgentDraftLaunchPlan,
+  buildAgentResumeStartupPlan,
+  buildAgentSessionRulesPrompt,
   buildAgentStartupPlan,
   isShellProcess
 } from './tui-agent-startup'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { useAppStore } from '@/store'
+import type { GlobalSettings, Repo } from '../../../shared/types'
+import { planLaunchAgentStartupPrompt } from './launch-agent-startup-prompt-plan'
 
 const emptyLaunchConfig = (agentCommand: string) => ({
   agentCommand,
@@ -142,6 +147,35 @@ describe('buildAgentStartupPlan', () => {
         platform: 'linux'
       })?.launchCommand
     ).toBe("traecli -- 'help me name this config'")
+  })
+
+  it('passes the prompt to Prime Agent as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'prime-agent',
+      launchCommand: "prime-agent -- 'Summarize the failing tests'",
+      expectedProcess: 'prime-agent',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('prime-agent')
+    })
+  })
+
+  // Why: without the separator these dispatch to Prime Agent's `help`/`agents` subcommands instead.
+  it('keeps subcommand-shaped Prime Agent prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'prime-agent',
+        prompt: 'help me name this config',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("prime-agent -- 'help me name this config'")
   })
 
   it('uses cursor-agent as the actual launch binary', () => {
@@ -371,6 +405,239 @@ describe('buildAgentDraftLaunchPlan', () => {
       expectedProcess: 'openclaude',
       launchConfig: emptyLaunchConfig('openclaude')
     })
+  })
+})
+
+describe('agent session rules resolution', () => {
+  const originalSettings = useAppStore.getState().settings
+  const originalRepos = useAppStore.getState().repos
+
+  afterEach(() => {
+    useAppStore.setState({ settings: originalSettings, repos: originalRepos })
+  })
+
+  function setSessionRule(content: string, repos: Repo[] = []): void {
+    useAppStore.setState({
+      settings: {
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'custom-rule',
+              label: 'Custom rule',
+              content,
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      } as GlobalSettings,
+      repos
+    })
+  }
+
+  it('uses native inline system instructions for Claude', () => {
+    setSessionRule('Use graphify.')
+
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'Fix the bug',
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "claude --append-system-prompt '## Custom rule\n\nUse graphify.' 'Fix the bug'"
+    )
+  })
+
+  it('falls back to prefixing the prompt for agents with no native rules injection', () => {
+    setSessionRule('Use graphify.')
+
+    const plan = buildAgentStartupPlan({
+      agent: 'gemini',
+      prompt: 'Investigate this regression',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toContain('## Agent session rules')
+    expect(plan?.launchCommand).toContain('Use graphify.')
+  })
+
+  it('prefixes rules for post-ready prompt delivery only when native injection is unavailable', () => {
+    setSessionRule('Use graphify.')
+
+    expect(
+      buildAgentSessionRulesPrompt({
+        agent: 'gemini',
+        prompt: 'Investigate this regression'
+      })
+    ).toContain('## Agent session rules')
+    expect(
+      buildAgentSessionRulesPrompt({ agent: 'claude', prompt: 'Investigate this regression' })
+    ).toBe('Investigate this regression')
+  })
+
+  it('prefills rules for an empty fallback-agent launch without submitting them', () => {
+    setSessionRule('Use graphify.')
+
+    const fallback = planLaunchAgentStartupPrompt({
+      base: {
+        agent: 'gemini',
+        cmdOverrides: {},
+        platform: 'linux',
+        isRemote: false
+      },
+      prompt: '',
+      promptDelivery: 'auto-submit',
+      isFollowupPath: false
+    })
+    expect(fallback.pasteDraftAfterLaunch).toContain('Use graphify.')
+    expect(fallback.pasteDraftAfterLaunch).toContain('## User request')
+    expect(fallback.submitPastedPrompt).toBe(false)
+
+    const native = planLaunchAgentStartupPrompt({
+      base: {
+        agent: 'claude',
+        cmdOverrides: {},
+        platform: 'linux',
+        isRemote: false
+      },
+      prompt: '',
+      promptDelivery: 'auto-submit',
+      isFollowupPath: false
+    })
+    expect(native.pasteDraftAfterLaunch).toBeNull()
+  })
+
+  it('moves native-rule text to post-ready delivery for cmd.exe launches', () => {
+    setSessionRule('Use graphify & keep %PATH% literal.')
+
+    const submitted = planLaunchAgentStartupPrompt({
+      base: {
+        agent: 'claude',
+        cmdOverrides: {},
+        platform: 'win32',
+        shell: 'cmd',
+        isRemote: true
+      },
+      prompt: 'Investigate this regression',
+      promptDelivery: 'auto-submit',
+      isFollowupPath: false
+    })
+
+    expect(submitted.startupPlan?.launchCommand).toBe('claude')
+    expect(submitted.pasteDraftAfterLaunch).toContain('Use graphify & keep %PATH% literal.')
+    expect(submitted.pasteDraftAfterLaunch).toContain('Investigate this regression')
+    expect(submitted.submitPastedPrompt).toBe(true)
+
+    const empty = planLaunchAgentStartupPrompt({
+      base: {
+        agent: 'claude',
+        cmdOverrides: {},
+        platform: 'win32',
+        shell: 'cmd',
+        isRemote: true
+      },
+      prompt: '',
+      promptDelivery: 'auto-submit',
+      isFollowupPath: false
+    })
+    expect(empty.pasteDraftAfterLaunch).toContain('Use graphify & keep %PATH% literal.')
+    expect(empty.submitPastedPrompt).toBe(false)
+  })
+
+  it('applies repository overrides before a resume launch', () => {
+    setSessionRule('Use graphify.', [
+      {
+        id: 'repo-1',
+        agentSessionRules: { disabledRuleIds: ['custom-rule'] }
+      } as Repo
+    ])
+
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: 'session-1' },
+      cmdOverrides: {},
+      platform: 'darwin',
+      repoId: 'repo-1'
+    })
+
+    expect(plan?.launchCommand).toBe("claude '--resume' 'session-1'")
+  })
+
+  it('isolates repository overrides by connection when repo ids collide', () => {
+    setSessionRule('Use graphify.', [
+      {
+        id: 'repo-1',
+        connectionId: null,
+        agentSessionRules: { disabledRuleIds: ['custom-rule'] }
+      } as Repo,
+      {
+        id: 'repo-1',
+        connectionId: 'ssh-1'
+      } as Repo
+    ])
+
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'Fix the bug',
+      cmdOverrides: {},
+      platform: 'linux',
+      repoId: 'repo-1',
+      connectionId: 'ssh-1'
+    })
+
+    expect(plan?.launchCommand).toContain(' --append-system-prompt ')
+  })
+
+  it('isolates local and runtime repository overrides when connection ids are both null', () => {
+    setSessionRule('Use graphify.', [
+      {
+        id: 'repo-1',
+        connectionId: null,
+        agentSessionRules: { disabledRuleIds: ['custom-rule'] }
+      } as Repo,
+      {
+        id: 'repo-1',
+        path: '/runtime/repo',
+        displayName: 'Runtime repo',
+        badgeColor: 'blue',
+        addedAt: 1,
+        connectionId: null,
+        executionHostId: 'runtime:env-a'
+      } as Repo
+    ])
+
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'Fix the bug',
+      cmdOverrides: {},
+      platform: 'linux',
+      repoId: 'repo-1',
+      connectionId: null,
+      executionHostId: 'runtime:env-a'
+    })
+
+    expect(plan?.launchCommand).toContain(' --append-system-prompt ')
+
+    const fallback = planLaunchAgentStartupPrompt({
+      base: {
+        agent: 'aider',
+        cmdOverrides: {},
+        platform: 'linux',
+        isRemote: false,
+        repoId: 'repo-1',
+        connectionId: null,
+        executionHostId: 'runtime:env-a'
+      },
+      prompt: 'Inspect the graph',
+      promptDelivery: 'submit-after-ready',
+      isFollowupPath: true
+    })
+    expect(fallback.pasteDraftAfterLaunch).toContain('Use graphify.')
   })
 })
 
