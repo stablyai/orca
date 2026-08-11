@@ -273,7 +273,7 @@ export function OrchestrationWorkerModelSetting(props: {
             <SelectItem value={AGENT_DEFAULT_MODEL}>
               {translate(
                 'auto.components.settings.OrchestrationWorkerModelSetting.agentDefault',
-                'Use agent default'
+                'Agent default'
               )}
             </SelectItem>
             {customSelectedModel ? (
@@ -315,7 +315,7 @@ export function OrchestrationWorkerModelSetting(props: {
             <SelectItem value={AGENT_DEFAULT_EFFORT}>
               {translate(
                 'auto.components.settings.OrchestrationWorkerModelSetting.effortDefault',
-                'Use agent default'
+                'Agent default'
               )}
             </SelectItem>
             {effortChoices.map((choice) => (
@@ -329,7 +329,7 @@ export function OrchestrationWorkerModelSetting(props: {
       <p className="text-[11px] text-muted-foreground">
         {translate(
           'auto.components.settings.OrchestrationWorkerModelSetting.defaultHint',
-          'Use agent default stores no model or effort override. Available effort levels follow the selected model.'
+          'Agent default stores no model or effort override. Available effort levels follow the selected model.'
         )}
       </p>
     </section>

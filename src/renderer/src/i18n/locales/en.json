@@ -10292,15 +10292,15 @@
           "allowAccess": "Allow access"
         },
         "OrchestrationWorkerModelSetting": {
-          "defaultHint": "Use agent default stores no model or effort override. Available effort levels follow the selected model.",
+          "defaultHint": "Agent default stores no model or effort override. Available effort levels follow the selected model.",
           "defaultWorkerSelectLabel": "Default worker provider",
           "requireAgent": "No default worker",
           "modelSelectLabel": "{{value0}} model",
           "modelPlaceholder": "Select provider",
           "modelUnavailable": "Not available",
-          "agentDefault": "Use agent default",
+          "agentDefault": "Agent default",
           "effortSelectLabel": "{{value0}} effort",
-          "effortDefault": "Use agent default",
+          "effortDefault": "Agent default",
           "effortPlaceholder": "Select model",
           "effortPlaceholderNoProvider": "Select provider",
           "effortUnavailable": "Not available",

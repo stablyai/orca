@@ -39,6 +39,8 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).toContain('aria-label="Default worker provider"')
     expect(markup).toContain('aria-label="Codex model"')
     expect(markup).toContain('aria-label="Codex effort"')
+    expect(markup).toContain('Agent default')
+    expect(markup).not.toContain('Use agent default')
     expect(markup).not.toContain('Aider model')
   })
 
