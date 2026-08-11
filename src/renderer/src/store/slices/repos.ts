@@ -72,6 +72,7 @@ import {
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill-discovery'
@@ -858,31 +859,92 @@ function mergeFetchedProjectCompatibilityForHost({
   }
 }
 
+function isPlainCatalogObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+// Why: catalog fetches rebuild every entry from IPC, so identity alone never matches;
+// structural equality is what lets an unchanged refetch stay a no-op.
+function areCatalogEntriesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((entry, index) => areCatalogEntriesEqual(entry, b[index]))
+    )
+  }
+  if (!isPlainCatalogObject(a) || !isPlainCatalogObject(b)) {
+    return false
+  }
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) {
+    return false
+  }
+  return keys.every(
+    (key) => Object.prototype.hasOwnProperty.call(b, key) && areCatalogEntriesEqual(a[key], b[key])
+  )
+}
+
+// Why: returning `base` unchanged keeps referential-equality selectors quiet, so a
+// `repos:changed` echo doesn't re-force folder path-status fetches for every row.
 function mergeByIdentity<T>(
   base: readonly T[],
   overlay: readonly T[],
   getIdentity: (entry: T) => string
-): T[] {
+): readonly T[] {
   const merged = [...base]
   const indexById = new Map(merged.map((entry, index) => [getIdentity(entry), index]))
+  let changed = false
   for (const entry of overlay) {
     const identity = getIdentity(entry)
     const index = indexById.get(identity)
     if (index === undefined) {
       indexById.set(identity, merged.length)
       merged.push(entry)
-    } else {
-      merged[index] = entry
+      changed = true
+      continue
     }
+    if (areCatalogEntriesEqual(merged[index], entry)) {
+      continue
+    }
+    merged[index] = entry
+    changed = true
   }
-  return merged
+  return changed ? merged : base
+}
+
+// Why: `preserved` keeps `previous`'s order and element refs, so an equal-length no-op
+// merge can hand the original store array straight back.
+function unchangedMergeSource<T>(
+  previous: readonly T[],
+  preserved: readonly T[],
+  merged: readonly T[]
+): readonly T[] {
+  return merged === preserved && preserved.length === previous.length ? previous : merged
+}
+
+// Why: the sidebar effect watching these catalog arrays is the only thing that refills the
+// folder path-status cache, so a no-op refetch must not wipe it — nothing would repopulate it.
+function catalogRowsUnchanged<T>(next: readonly T[], previous: readonly T[]): boolean {
+  return (
+    next === previous ||
+    (next.length === previous.length && next.every((row, index) => row === previous[index]))
+  )
 }
 
 function mergeFetchedReposForHost(
   previous: readonly Repo[],
-  fetched: Repo[],
+  fetched: readonly Repo[],
   hostId: string
-): Repo[] {
+): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
   const preserved = previous.filter((repo) => {
@@ -975,7 +1037,7 @@ function mergeFetchedProjectGroupsForHost(
   previous: readonly ProjectGroup[],
   fetched: ProjectGroup[],
   hostId: string
-): ProjectGroup[] {
+): readonly ProjectGroup[] {
   const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
   const preserved = previous.filter((group) => {
     const existingHostId = getProjectGroupHostId(group)
@@ -984,7 +1046,11 @@ function mergeFetchedProjectGroupsForHost(
       fetchedIdentities.has(getProjectGroupHostIdentity(group))
     )
   })
-  return mergeByIdentity(preserved, fetched, getProjectGroupHostIdentity)
+  return unchangedMergeSource(
+    previous,
+    preserved,
+    mergeByIdentity(preserved, fetched, getProjectGroupHostIdentity)
+  )
 }
 
 function getFolderWorkspaceHostId(
@@ -1032,7 +1098,7 @@ function mergeFetchedFolderWorkspacesForHost({
   fetched: FolderWorkspace[]
   projectGroups: readonly ProjectGroup[]
   hostId: string
-}): FolderWorkspace[] {
+}): readonly FolderWorkspace[] {
   const fetchedIdentities = new Set(
     fetched.map((workspace) => getFolderWorkspaceHostIdentity(workspace, projectGroups))
   )
@@ -1043,13 +1109,17 @@ function mergeFetchedFolderWorkspacesForHost({
       fetchedIdentities.has(getFolderWorkspaceHostIdentity(workspace, projectGroups))
     )
   })
-  return mergeByIdentity(preserved, fetched, (workspace) =>
-    getFolderWorkspaceHostIdentity(workspace, projectGroups)
+  return unchangedMergeSource(
+    previous,
+    preserved,
+    mergeByIdentity(preserved, fetched, (workspace) =>
+      getFolderWorkspaceHostIdentity(workspace, projectGroups)
+    )
   )
 }
 
 type FetchedRepoCatalog = {
-  repos: Repo[]
+  repos: readonly Repo[]
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }
@@ -1110,7 +1180,7 @@ function mergeFetchedRepoCatalog(
   catalog: FetchedRepoCatalog,
   currentRepos: readonly Repo[]
 ): {
-  repos: Repo[]
+  repos: readonly Repo[]
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
@@ -1239,7 +1309,7 @@ async function fetchProjectGroupCatalogForTarget(
 function mergeFetchedProjectGroupCatalog(
   catalog: FetchedProjectGroupCatalog,
   currentProjectGroups: readonly ProjectGroup[]
-): { projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
+): { projectGroups: readonly ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
   return {
     projectGroups: mergeFetchedProjectGroupsForHost(
       currentProjectGroups,
@@ -1292,7 +1362,7 @@ function mergeFetchedFolderWorkspaceCatalog(
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): {
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
   return {
@@ -1619,11 +1689,11 @@ function getFolderWorkspacePathStatusRequestSnapshotForRead(
 }
 
 export type RepoSlice = {
-  repos: Repo[]
+  repos: readonly Repo[]
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
-  projectGroups: ProjectGroup[]
-  folderWorkspaces: FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
   // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
@@ -1932,7 +2002,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
-          folderWorkspacePathStatuses: {},
+          ...(catalogRowsUnchanged(prunedRepos, s.repos)
+            ? {}
+            : { folderWorkspacePathStatuses: {} }),
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
@@ -2083,7 +2155,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
-          folderWorkspacePathStatuses: {},
+          ...(catalogRowsUnchanged(finalizedRepos, s.repos)
+            ? {}
+            : { folderWorkspacePathStatuses: {} }),
           activeRepoId: s.activeRepoId,
           filterRepoIds: s.filterRepoIds,
           setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
@@ -2165,15 +2239,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return
       }
-      set((current) =>
-        isHostCatalogFenceCurrent(get, fence)
-          ? {
-              projectGroups: mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
-                .projectGroups,
-              folderWorkspacePathStatuses: {}
-            }
-          : current
-      )
+      set((current) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return current
+        }
+        const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
+        return {
+          projectGroups,
+          ...(catalogRowsUnchanged(projectGroups, current.projectGroups)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
+      })
     } catch (err) {
       console.error('Failed to fetch project groups:', err)
     }
@@ -2185,15 +2262,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return
       }
-      set((s) =>
-        isHostCatalogFenceCurrent(get, fence)
-          ? {
-              projectGroups: mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
-                .projectGroups,
-              folderWorkspacePathStatuses: {}
-            }
-          : s
-      )
+      set((s) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return s
+        }
+        const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
+        return {
+          projectGroups,
+          ...(catalogRowsUnchanged(projectGroups, s.projectGroups)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
+      })
     }
 
     try {
@@ -2251,7 +2331,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           current.folderWorkspaces,
           current.projectGroups
         )
-        return { folderWorkspaces, folderWorkspacePathStatuses: {} }
+        return {
+          folderWorkspaces,
+          ...(catalogRowsUnchanged(folderWorkspaces, current.folderWorkspaces)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
       })
     } catch (err) {
       console.error('Failed to fetch folder workspaces:', err)
@@ -2279,13 +2364,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             current.projectGroups
           )
         )
+        const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+          catalog,
+          current.folderWorkspaces,
+          current.projectGroups
+        )
         return {
-          folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
-            catalog,
-            current.folderWorkspaces,
-            current.projectGroups
-          ).folderWorkspaces,
-          folderWorkspacePathStatuses: {}
+          folderWorkspaces,
+          ...(catalogRowsUnchanged(folderWorkspaces, current.folderWorkspaces)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
         }
       })
     }
@@ -3268,7 +3356,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const startup = buildDismissedOnboardingFolderAgentStartup(
           get().settings,
           onboarding,
-          hadProjectBeforeAdd
+          hadProjectBeforeAdd,
+          isNativeChatTranscriptLocalReadable(repo.connectionId)
         )
         activateAndRevealWorktree(folderWorktree.id, {
           sidebarRevealBehavior: 'auto',

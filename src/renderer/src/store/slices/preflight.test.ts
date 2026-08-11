@@ -265,11 +265,12 @@ describe('createPreflightSlice', () => {
       new Error('Project runtime requires repair before preflight: wsl-distro-required')
     )
     const store = createTestStore()
+    const repos: AppState['repos'] = [makeRepo({ id: 'repo-1', path: 'C:\\repo' })]
     store.setState({
       settings: {
         localWindowsRuntimeDefault: { kind: 'wsl', distro: null }
       },
-      repos: [makeRepo({ id: 'repo-1', path: 'C:\\repo' })],
+      repos,
       worktreesByRepo: {},
       activeRepoId: 'repo-1',
       activeWorktreeId: null

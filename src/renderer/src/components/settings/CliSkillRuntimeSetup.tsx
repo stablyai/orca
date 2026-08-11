@@ -8,6 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
@@ -139,16 +140,23 @@ function normalizeWindowsSkillUpdateCommand(
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 
 /**
- * Re-adds the npx preflight for Orca's own setup terminal, which
- * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
- * string stays bare for POSIX-family shells; only the executed one is wrapped.
+ * Adapts a copied skill command for Orca's inline setup terminal auto-paste.
+ * Host Windows installs may gain an npx preflight; WSL-targeted PowerShell wrappers
+ * must become bash-native because the daemon forces wsl.exe for WSL worktrees.
  */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
-  terminalShellOverride: string | undefined,
+  effectiveShell: string | undefined,
   currentPlatform = getSkillCommandPlatform()
 ): string {
-  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+  // Why: the created tab is authoritative when project runtime replaces the requested shell.
+  const wslNative = isWslShellName(effectiveShell)
+    ? decodeWslSetupTerminalCommand(copiedCommand)
+    : null
+  if (wslNative) {
+    return wslNative
+  }
+  if (!isSetupTerminalForcedToPowerShell(effectiveShell)) {
     return copiedCommand
   }
   return wrapWindowsSkillCommandWithNpxPrerequisite(
@@ -156,6 +164,30 @@ export function buildSkillSetupTerminalCommand(
     currentPlatform,
     'orca-setup-terminal'
   )
+}
+
+function decodeWslSetupTerminalCommand(command: string): string | null {
+  if (
+    !command.startsWith("& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe") ||
+    !command.includes(' } # Runs: ')
+  ) {
+    return null
+  }
+
+  const encoded = /-- sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
+    command
+  )?.[1]
+  if (!encoded) {
+    return null
+  }
+
+  try {
+    const binary = atob(encoded)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {

@@ -24,6 +24,7 @@ import {
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
 import { translate } from '@/i18n/i18n'
+import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
 
 export type WorkspaceCleanupFailure = {
   worktreeId: string
@@ -34,6 +35,7 @@ export type WorkspaceCleanupFailure = {
 export type WorkspaceCleanupRemoveResult = {
   removedIds: string[]
   failures: WorkspaceCleanupFailure[]
+  preservedBranches?: PreservedBranchCleanup[]
 }
 
 export type WorkspaceCleanupRemoveOptions = {
@@ -300,6 +302,7 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
   removeWorkspaceCleanupCandidates: async (worktreeIds, options) => {
     const removedIds: string[] = []
     const failures: WorkspaceCleanupFailure[] = []
+    const preservedBranches: PreservedBranchCleanup[] = []
     const approvedCandidatesByWorktreeId = new Map(
       (options?.approvedCandidates ?? []).map((candidate) => [candidate.worktreeId, candidate])
     )
@@ -336,6 +339,13 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       )
       if (result.ok) {
         removedIds.push(candidate.worktreeId)
+        if (result.preservedBranch) {
+          preservedBranches.push({
+            worktreeId: candidate.worktreeId,
+            branchName: result.preservedBranch.branchName,
+            expectedHead: result.preservedBranch.head
+          })
+        }
       } else {
         failures.push({
           worktreeId: candidate.worktreeId,
@@ -361,7 +371,11 @@ export const createWorkspaceCleanupSlice: StateCreator<AppState, [], [], Workspa
       }))
     }
 
-    return { removedIds, failures }
+    return {
+      removedIds,
+      failures,
+      ...(preservedBranches.length > 0 ? { preservedBranches } : {})
+    }
   }
 })
 

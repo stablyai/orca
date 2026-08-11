@@ -792,6 +792,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'preserved-branch-review'
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
@@ -896,6 +897,8 @@ export type UISlice = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideWorkspacesFromOtherDevices: boolean
+  setHideWorkspacesFromOtherDevices: (v: boolean) => void
   alwaysShowDefaultBranchWorkspace: boolean
   setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
@@ -2089,6 +2092,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
   hideDetachedHeadWorkspaces: false,
   setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  hideWorkspacesFromOtherDevices: false,
+  setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
   alwaysShowDefaultBranchWorkspace: true,
   setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
@@ -2497,6 +2502,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
         hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
         // Why !== false: profiles written before #8873 have no key, and they are
         // precisely the ones showing the bug, so absence must mean "exempt".
         alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,

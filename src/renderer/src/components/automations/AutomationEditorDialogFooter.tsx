@@ -31,7 +31,7 @@ type AutomationEditorDialogFooterProps = {
   isHermesCreate: boolean
   isSaving: boolean
   canSave: boolean
-  repos: Repo[]
+  repos: readonly Repo[]
   projectHostSetups: ProjectHostSetup[]
   automationYamlHooksByRepoKey: Record<string, OrcaHooks | null>
   getAutomationHooksCacheKey: (repoId: string) => string

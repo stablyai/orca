@@ -114,7 +114,7 @@ type RepoOption = ReturnType<typeof useAppStore.getState>['repos'][number]
 const EMPTY_REPO_SEARCH_REPOS: readonly RepoOption[] = []
 
 type SmartWorkspaceNameFieldProps = {
-  repos: RepoOption[]
+  repos: readonly RepoOption[]
   repoId: string
   onRepoChange: (repoId: string) => void
   value: string

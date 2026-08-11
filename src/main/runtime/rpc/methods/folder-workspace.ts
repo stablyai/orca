@@ -5,6 +5,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-item-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -94,8 +95,11 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'folderWorkspace.create',
     params: FolderWorkspaceCreate,
-    handler: async (params, { runtime }) => ({
-      folderWorkspace: await runtime.createFolderWorkspace(params)
+    handler: async (params, context) => ({
+      folderWorkspace: await context.runtime.createFolderWorkspace({
+        ...params,
+        creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+      })
     })
   }),
   defineMethod({

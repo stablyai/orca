@@ -7,6 +7,9 @@
       "webDescription": "重试 Web 客户端或重新连接到配对的运行时"
     }
   },
+  "githubChecks": {
+    "retrying": "正在重试..."
+  },
   "settings": {
     "appearance": {
       "language": {
@@ -3462,7 +3465,12 @@
             "c781f992e4": "destructive",
             "be8f0ff166": "删除",
             "f3a8c2d1e7": "搜索快捷命令...",
-            "b4e7f9a2c1": "没有匹配的命令"
+            "b4e7f9a2c1": "没有匹配的命令",
+            "8d525e5f15": "已复制",
+            "53b17a4b1b": "无法复制",
+            "a9a564b7e7": "复制 {{value0}}",
+            "69a1441a21": "无可复制内容",
+            "192a4616a5": "快捷命令操作"
           },
           "shell": {
             "icons": {
@@ -7113,7 +7121,11 @@
           "f2bf411640": "无法从此主机加载命令",
           "7ecfee5b8e": "重试",
           "601d6af51f": "正在加载命令…",
-          "923ba89646": "无法从此主机刷新命令。正在显示上次加载的命令"
+          "923ba89646": "无法从此主机刷新命令。正在显示上次加载的命令",
+          "8d525e5f15": "已复制",
+          "53b17a4b1b": "无法复制",
+          "a9a564b7e7": "复制 {{value0}}",
+          "69a1441a21": "无可复制内容"
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "标签条顺序",
@@ -11664,9 +11676,9 @@
                 "actionRequiredHint": "此检查需要在 GitHub 上执行手动操作(例如批准工作流运行)后才能解除合并阻止",
                 "b3195cba33": "取消将作者标记为机器人",
                 "f588b46a6c": "将作者标记为机器人",
-                "checkDetailsLoadFailed": "加载检查详细信息失败。",
                 "checksUnresolvedStripHint": "这些检查已结束，但没有通过或失败结论",
-                "checksUnresolvedChip": "未解决"
+                "checksUnresolvedChip": "未解决",
+                "e45324fbed": "加载检查详细信息失败。"
               },
               "empty": {
                 "state": {
@@ -12604,14 +12616,9 @@
         "use": {
           "onboarding": {
             "flow": {
-              "dce4bdce5b": "无法打开 SSH 设置",
-              "fd74e7558e": "克隆失败",
               "52acfbef51": "无法保存进度"
             }
           }
-        },
-        "AgentFeatureSetupStep": {
-          "97dcdc010f": "安装 CLI 和技能"
         },
         "WindowsTerminalStep": {
           "powerShell": "PowerShell",
@@ -12723,10 +12730,6 @@
             "emptyHintBranches": "没有匹配的分支。",
             "emptyHintLinear": "开始输入以搜索 Linear Issue",
             "emptyHintJira": "开始输入以搜索 Jira Issue，或粘贴 Issue URL"
-          },
-          "ProjectHostSetupCombobox": {
-            "empty": "此项目没有已就绪的主机。",
-            "placeholder": "选择主机"
           },
           "ProjectCombobox": {
             "empty": "没有匹配搜索的项目。",
@@ -13412,11 +13415,6 @@
                 }
               }
             }
-          },
-          "FeatureTourWorkspaceCard": {
-            "a23ed9da7f": "codex",
-            "2f33dc932b": "claude",
-            "9220794f6a": "处理中"
           },
           "ReviewAnimatedVisual": {
             "8df4d52b68": "pr-view",
@@ -14948,19 +14946,26 @@
           "53f06f0ad5": "重试来源",
           "pendingAutomationMissing": "自动化已不可用。",
           "pendingAutomationRunMissing": "运行历史已不可用。",
-          "noSearchMatches": "没有自动化匹配你的搜索。",
-          "projectDefaultBaseRef": "项目默认",
-          "createFromBaseRef": "从 {{baseRef}} 创建",
-          "missingWorkspace": "缺少工作区",
-          "runUsageSummary": "{{cost}} 估计 · {{tokens}} tokens",
-          "usageUnavailable": "用量不可用",
-          "noRunUsageYet": "尚无运行用量",
-          "noWorkspace": "没有工作区",
-          "latestSavedOutput": "最近保存的输出",
+          "noSearchMatches": "没有匹配的自动化。",
           "paused": "已暂停",
           "runCount": "{{count}} 次运行",
           "runCount_one": "{{count}} 次运行",
-          "runCount_other": "{{count}} 次运行"
+          "runCount_other": "{{count}} 次运行",
+          "projectDefaultBaseRef": "项目默认",
+          "createFromBaseRef": "从 {{baseRef}} 创建",
+          "missingWorkspace": "缺少工作区",
+          "runUsageSummary": "约 {{cost}} · {{tokens}} tokens",
+          "usageUnavailable": "用量不可用",
+          "noRunUsageYet": "尚无运行用量",
+          "noWorkspace": "无工作区",
+          "latestSavedOutput": "最近保存的输出",
+          "backToList": "全部自动化",
+          "tableName": "名称",
+          "tableProject": "项目",
+          "tableStatus": "状态",
+          "tableActions": "操作",
+          "newAutomation": "新建自动化",
+          "rowActions": "自动化操作"
         },
         "CreateFromPicker": {
           "f061f49e3f": "搜索仓库分支...",
@@ -15090,12 +15095,18 @@
           "18f000ad4e": "高级",
           "874b72195b": "当此自动化创建工作区时，使用与手动创建工作树相同的方式准备——运行项目的设置并打开其终端标签页。"
         },
+        "AutomationsPageSkeleton": {
+          "55527b7bcf": "正在加载自动化"
+        },
         "AutomationListSearchField": {
           "tooLong": "搜索文本过长 — 列表未筛选",
           "label": "搜索自动化",
-          "placeholder": "按名称、项目或提示搜索",
+          "placeholder": "搜索...",
           "tooLongShort": "过长",
           "clear": "清除搜索"
+        },
+        "AutomationListLocalRows": {
+          "c92c9463c6": "自动化操作"
         }
       },
       "agent": {

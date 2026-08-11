@@ -128,6 +128,7 @@ export function FolderWorkspacePrChecksRow({
             checksLoading={row.isRefreshing}
             checkDetailsContextKey={row.refreshIdentity}
             onLoadCheckDetails={onLoadCheckDetails}
+            githubRepository={row.githubRepository ?? null}
             worktreeId={row.worktree.id}
             detailsStickySurface="card"
           />
