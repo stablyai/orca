@@ -40,6 +40,10 @@ All changes must consider the SSH use case. Don't assume local-only execution.
 
 All changes must consider folder workspaces as well as git worktrees. Don't assume every workspace is a git worktree.
 
+## Supervised Worker Signals
+
+Orca reports a supervised worker that stopped making progress as an `escalation` in its Run's mailbox, and it never acts on the worker: no stop, kill, restart, interrupt, close, focus, or terminal write. Keep that property. Before changing what counts as progress evidence, the classification, the cadence, or the message, read [`docs/reference/wedged-worker-detection.md`](./docs/reference/wedged-worker-detection.md).
+
 ## Remote Wire Compatibility
 
 Clients and remote Orca servers update independently, so mixed versions are the normal state. Before changing anything a paired client and host exchange — RPC params, stream frames, or the content either side publishes over them — follow [`docs/reference/remote-wire-compatibility.md`](./docs/reference/remote-wire-compatibility.md). A new optional field is safe; a new stream opcode must be capability-negotiated because decoders drop unknown opcodes silently; and changing what the host publishes reaches old clients even with no wire change.
