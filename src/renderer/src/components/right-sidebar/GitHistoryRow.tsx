@@ -94,7 +94,13 @@ export const GitHistoryRow = React.forwardRef<HTMLElement, GitHistoryRowProps>(
                 {item.subject}
               </span>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6} className="max-w-96 whitespace-pre-wrap">
+            {/* Why: fit conventional 72-char commit lines; text-wrap stops the
+                primitive's text-balance from re-breaking authored lines. */}
+            <TooltipContent
+              side="bottom"
+              sideOffset={6}
+              className="max-w-[min(76ch,calc(100vw-2rem))] text-wrap whitespace-pre-wrap"
+            >
               {rowTooltip}
             </TooltipContent>
           </Tooltip>
