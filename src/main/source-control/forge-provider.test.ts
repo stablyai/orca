@@ -1,3 +1,4 @@
+import { supportsHostedReviewCreation } from '../../shared/hosted-review-creation-providers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -174,6 +175,12 @@ describe('forge provider interface', () => {
       ['azure-devops', true],
       ['gitea', true]
     ])
+    // Why: the shared list is what the Create blocker and the renderer read.
+    // When it drifted from this one, Bitbucket had a working createReview but
+    // still reported "provider does not support creating a pull request".
+    for (const provider of FORGE_PROVIDERS) {
+      expect(supportsHostedReviewCreation(provider.id)).toBe(provider.supportsReviewCreation)
+    }
     createGitHubPullRequestMock.mockResolvedValue({
       ok: true,
       number: 12,
