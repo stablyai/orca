@@ -13,7 +13,9 @@ import {
 } from '../../../../shared/orchestration-worker-model-settings'
 import {
   getAgentSessionOptionCatalog,
-  mergeCatalogModels
+  mergeCatalogModels,
+  type AgentSessionOptionCatalog,
+  type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
@@ -28,10 +30,43 @@ const REQUIRE_EXPLICIT_AGENT = '__require_explicit_agent__'
 type WorkerModelAgent = {
   id: TuiAgent
   label: string
-  models: { id: string; label: string }[]
+  models: CatalogModel[]
 }
 
 type DiscoveredModels = Partial<Record<TuiAgent, CommitMessageModelCapability[]>>
+
+function toDiscoveredCatalogModel(
+  catalog: AgentSessionOptionCatalog,
+  model: CommitMessageModelCapability
+): CatalogModel {
+  const fallbackOptions = catalog.unknownModelOptions ?? []
+  const fallbackEffort = fallbackOptions.find((option) => option.id === 'effort')
+  if (!model.thinkingLevels?.length || fallbackEffort?.kind.type !== 'select') {
+    return { id: model.id, label: model.label, options: fallbackOptions }
+  }
+
+  const choices = model.thinkingLevels.map(({ id, label }) => ({
+    value: id,
+    label
+  }))
+  const defaultValue =
+    (model.defaultThinkingLevel &&
+      choices.some((choice) => choice.value === model.defaultThinkingLevel) &&
+      model.defaultThinkingLevel) ||
+    (choices.some((choice) => choice.value === fallbackEffort.kind.defaultValue)
+      ? fallbackEffort.kind.defaultValue
+      : choices[0].value)
+  const discoveredEffort = {
+    ...fallbackEffort,
+    kind: { ...fallbackEffort.kind, choices, defaultValue }
+  }
+
+  return {
+    id: model.id,
+    label: model.label,
+    options: fallbackOptions.map((option) => (option.id === 'effort' ? discoveredEffort : option))
+  }
+}
 
 export function getWorkerModelAgents(discoveredModels: DiscoveredModels = {}): WorkerModelAgent[] {
   return getAgentCatalog().flatMap((agent) => {
@@ -43,11 +78,9 @@ export function getWorkerModelAgents(discoveredModels: DiscoveredModels = {}): W
             label: agent.label,
             models: mergeCatalogModels(
               catalog.models,
-              (discoveredModels[agent.id] ?? []).map((model) => ({
-                id: model.id,
-                label: model.label,
-                options: []
-              }))
+              (discoveredModels[agent.id] ?? []).map((model) =>
+                toDiscoveredCatalogModel(catalog, model)
+              )
             )
           }
         ]
@@ -59,7 +92,8 @@ export function updateOrchestrationWorkerModel(
   currentModels: OrchestrationWorkerModels | null | undefined,
   currentEfforts: OrchestrationWorkerEfforts | null | undefined,
   agent: TuiAgent,
-  model: string
+  model: string,
+  modelOverride?: CatalogModel
 ): { models: OrchestrationWorkerModels; efforts: OrchestrationWorkerEfforts } {
   const models = { ...currentModels }
   const efforts = { ...currentEfforts }
@@ -68,7 +102,7 @@ export function updateOrchestrationWorkerModel(
     delete efforts[agent]
   } else {
     models[agent] = model
-    const option = getOrchestrationWorkerEffortOption(agent, model)
+    const option = getOrchestrationWorkerEffortOption(agent, model, modelOverride)
     if (
       option?.kind.type !== 'select' ||
       !option.kind.choices.some((choice) => choice.value === efforts[agent])
@@ -117,8 +151,9 @@ export function OrchestrationWorkerModelSetting(props: {
   // narrow from the agent above them instead of listing every agent at once.
   const modelAgent = modelAgents.find((agent) => agent.id === selectedAgent)
   const selectedModel = selectedAgent ? props.models?.[selectedAgent] : undefined
+  const selectedModelCatalog = modelAgent?.models.find((model) => model.id === selectedModel)
   const effortOption = selectedAgent
-    ? getOrchestrationWorkerEffortOption(selectedAgent, selectedModel)
+    ? getOrchestrationWorkerEffortOption(selectedAgent, selectedModel, selectedModelCatalog)
     : undefined
   const effortChoices = effortOption?.kind.type === 'select' ? effortOption.kind.choices : []
   const selectedEffort =
@@ -126,7 +161,8 @@ export function OrchestrationWorkerModelSetting(props: {
       ? resolveOrchestrationWorkerEffort(
           selectedAgent,
           selectedModel,
-          props.efforts?.[selectedAgent]
+          props.efforts?.[selectedAgent],
+          selectedModelCatalog
         )
       : undefined) ?? AGENT_DEFAULT_EFFORT
   const modelSelectValue = modelAgent ? (selectedModel ?? AGENT_DEFAULT_MODEL) : undefined
@@ -256,7 +292,8 @@ export function OrchestrationWorkerModelSetting(props: {
               props.models,
               props.efforts,
               modelAgent.id,
-              model
+              model,
+              modelAgent.models.find((candidate) => candidate.id === model)
             )
             props.onChange(next.models, next.efforts)
           }}

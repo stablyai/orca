@@ -45,6 +45,33 @@ describe('OrchestrationWorkerModelSetting', () => {
     expect(markup).not.toContain('Aider model')
   })
 
+  it('carries discovered effort levels and the Codex fallback into worker model options', () => {
+    const agents = getWorkerModelAgents({
+      codex: [
+        {
+          id: 'gpt-account-model',
+          label: 'GPT Account Model',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' }
+          ],
+          defaultThinkingLevel: 'high'
+        },
+        { id: 'gpt-unseeded-model', label: 'GPT Unseeded Model' }
+      ]
+    })
+    const codex = agents.find((agent) => agent.id === 'codex')!
+    const effortChoices = (modelId: string) => {
+      const effort = codex.models
+        .find((model) => model.id === modelId)
+        ?.options.find((option) => option.id === 'effort')
+      return effort?.kind.type === 'select' ? effort.kind.choices.map((choice) => choice.value) : []
+    }
+
+    expect(effortChoices('gpt-account-model')).toEqual(['low', 'high'])
+    expect(effortChoices('gpt-unseeded-model')).toEqual(['low', 'medium', 'high', 'xhigh'])
+  })
+
   it('keeps all three controls visible when no provider is selected', () => {
     const markup = renderToStaticMarkup(
       <OrchestrationWorkerModelSetting
