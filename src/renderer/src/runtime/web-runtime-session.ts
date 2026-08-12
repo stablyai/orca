@@ -73,6 +73,7 @@ import {
   recordWebSessionBrowserPlacement
 } from './web-session-browser-placement'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
+import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -475,6 +476,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     : null
   let unsubscribeFocusGuard = (): void => {}
   let guardedPageId = provisionalPageId
+  let createdPageId: string | null = null
   try {
     if (shouldFocusOnCreate && matchesWebSessionIntentOwner(intentOwner)) {
       recordWebSessionFocusIntent(
@@ -524,6 +526,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         timeoutMs: 15_000
       })) as RuntimeRpcResponse<BrowserTabCreateResult>
     )
+    createdPageId = created.browserPageId
     if (created.browserPageId !== provisionalPageId) {
       moveWebSessionBrowserPlacement({
         environmentId,
@@ -548,13 +551,33 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     try {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
-        acceptCurrentSnapshot: true
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true,
+        errorMode: 'throw'
       })
     } catch (error) {
-      console.warn(
-        '[web-runtime-session] browser created but reconciliation failed:',
-        error instanceof Error ? error.message : String(error)
+      if (
+        !hasMaterializedWebRuntimeBrowserPage(
+          useAppStore.getState(),
+          environmentId,
+          args.worktreeId,
+          created.browserPageId,
+          args.clientTargetGroupId ?? args.targetGroupId
+        )
+      ) {
+        throw error
+      }
+    }
+    if (
+      !hasMaterializedWebRuntimeBrowserPage(
+        useAppStore.getState(),
+        environmentId,
+        args.worktreeId,
+        created.browserPageId,
+        args.clientTargetGroupId ?? args.targetGroupId
       )
+    ) {
+      throw new Error('The created browser tab did not materialize in the client.')
     }
     const remainingFocusIntent = shouldFocusOnCreate
       ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
@@ -569,13 +592,52 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     return true
   } catch (error) {
     unsubscribeFocusGuard()
+    let recoveryError: unknown = null
     forgetWebSessionBrowserPlacement({
       environmentId,
       worktreeId: args.worktreeId,
-      remotePageId: provisionalPageId
+      remotePageId: guardedPageId
     })
+    if (createdPageId) {
+      try {
+        const closeResult = unwrapRuntimeRpcResult(
+          (await callEnvironment({
+            method: 'browser.tabClose',
+            params: {
+              worktree: toRuntimeWorktreeSelector(args.worktreeId),
+              page: createdPageId
+            },
+            timeoutMs: 15_000
+          })) as RuntimeRpcResponse<{ closed: boolean }>
+        )
+        if (!closeResult.closed) {
+          throw new Error('The paired runtime did not close the unreconciled browser tab.')
+        }
+        await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
+          expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
+          afterCurrentInFlight: true,
+          errorMode: 'throw'
+        })
+        if (
+          hasMaterializedWebRuntimeBrowserPage(
+            useAppStore.getState(),
+            environmentId,
+            args.worktreeId,
+            createdPageId
+          )
+        ) {
+          throw new Error('The closed browser tab remained materialized in the client.')
+        }
+      } catch (cleanupError) {
+        recoveryError = cleanupError
+        console.warn(
+          '[web-runtime-session] failed to clean up unreconciled browser tab:',
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        )
+      }
+    }
     if (shouldFocusOnCreate) {
-      clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, provisionalPageId)
+      clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
     }
     if (args.clientTargetGroupId && args.clientTargetGroupCreated) {
       const reserved = isWebSessionBrowserPlacementGroupReserved({
@@ -594,6 +656,11 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         '[web-runtime-session] failed to create browser tab:',
         error instanceof Error ? error.message : String(error)
       )
+    }
+    if (recoveryError) {
+      throw new Error('The paired runtime could not recover the failed browser creation.', {
+        cause: recoveryError
+      })
     }
     return false
   }
@@ -624,6 +691,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       hostTabId: string
       hostTerminalHandle: string
     }
+    afterCurrentInFlight?: boolean
+    errorMode?: 'warn' | 'throw'
   } = {}
 ): Promise<void> {
   const expectedEnvironmentPairingRevision =
@@ -639,9 +708,10 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       // re-accept its current version after the exact provisional handoff is known.
       acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
-    const listSessionTabs = options.confirmAgentSessionHandoff
-      ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
-      : listRemoteRuntimeSessionTabsDeduped
+    const listSessionTabs =
+      options.confirmAgentSessionHandoff || options.afterCurrentInFlight
+        ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
+        : listRemoteRuntimeSessionTabsDeduped
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -679,6 +749,9 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       return patch === state ? state : patch
     })
   } catch (error) {
+    if (options.errorMode === 'throw') {
+      throw error
+    }
     // Why: host creation already succeeded; the long-lived session.tabs subscription catches up if this eager refresh fails.
     console.warn(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',

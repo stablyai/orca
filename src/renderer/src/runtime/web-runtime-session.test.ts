@@ -55,7 +55,8 @@ const mocks = vi.hoisted(() => ({
   trackTerminalPaneSplit: vi.fn(),
   deliverLaunchPromptToAgentTab: vi.fn(),
   seedNativeChatLaunchDraftForAgentTab: vi.fn(),
-  getRuntimeEnvironmentIdForWorktree: vi.fn()
+  getRuntimeEnvironmentIdForWorktree: vi.fn(),
+  hasMaterializedWebRuntimeBrowserPage: vi.fn()
 }))
 
 vi.mock('../store', () => ({
@@ -85,6 +86,10 @@ vi.mock('@/lib/worktree-runtime-owner', () => ({
 vi.mock('@/lib/agent-launch-prompt-delivery', () => ({
   deliverLaunchPromptToAgentTab: mocks.deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab: mocks.seedNativeChatLaunchDraftForAgentTab
+}))
+
+vi.mock('./web-runtime-browser-materialization', () => ({
+  hasMaterializedWebRuntimeBrowserPage: mocks.hasMaterializedWebRuntimeBrowserPage
 }))
 
 const ENVIRONMENT_ID = 'web-env-1'
@@ -299,6 +304,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     mocks.applyFreshWebSessionTabsSnapshot.mockReturnValue({ state: 'after' })
     mocks.resolveHostSessionTabIdForWebSessionTab.mockReturnValue(null)
     mocks.deliverLaunchPromptToAgentTab.mockResolvedValue(true)
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(true)
   })
 
   afterEach(() => {
@@ -729,6 +735,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
   })
 
   it('cleans up and reports failure when the created browser cannot reconcile', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
     const runtimeCall = vi
       .fn()
       .mockResolvedValueOnce({
@@ -742,6 +749,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
       })
       .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(
@@ -772,6 +780,95 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         groupId: 'client-preview-group'
       })
     ).toBe(false)
+  })
+
+  it('accepts subscription materialization when the eager reconciliation fails', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(true)
+
+    expect(mocks.hasMaterializedWebRuntimeBrowserPage).toHaveBeenCalledWith(
+      expect.anything(),
+      ENVIRONMENT_ID,
+      WORKTREE_ID,
+      'remote-browser-page-1',
+      undefined
+    )
+    expect(runtimeCall).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports ambiguous failure when exact host cleanup is not confirmed', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+      .mockResolvedValueOnce({
+        id: 'close',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'close timed out' }
+      })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        clientTargetGroupId: 'client-preview-group',
+        clientTargetGroupCreated: true
+      })
+    ).rejects.toThrow('could not recover the failed browser creation')
+
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+  })
+
+  it('cleans up when applying the host snapshot fails before materialization', async () => {
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockReturnValue(false)
+    mocks.applyFreshWebSessionTabsSnapshot.mockImplementationOnce(() => {
+      throw new Error('store reconcile failed')
+    })
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+      .mockResolvedValueOnce({ id: 'list-after-close', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID })).resolves.toBe(
+      false
+    )
+
+    expect(runtimeCall.mock.calls.map(([request]) => request.method)).toEqual([
+      'browser.tabCreate',
+      'session.tabs.list',
+      'browser.tabClose',
+      'session.tabs.list'
+    ])
   })
 
   it('keeps the requested worktree selected while the browser snapshot catches up', async () => {

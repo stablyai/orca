@@ -11,8 +11,11 @@ const mocks = vi.hoisted(() => ({
   createEmptySplitGroup: vi.fn(() => 'group-2'),
   createWebRuntimeSessionBrowserTab: vi.fn(),
   environmentId: null as string | null,
-  connectionId: null as string | null
+  connectionId: null as string | null,
+  toastError: vi.fn()
 }))
+
+vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
@@ -92,6 +95,23 @@ describe('openFileInBrowserTab', () => {
       stagedTitle: 'example.html',
       stagedFocusAddressBar: false
     })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('reports a paired-runtime recovery failure without an unhandled rejection', async () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.createWebRuntimeSessionBrowserTab.mockRejectedValue(new Error('cleanup unknown'))
+
+    openFilePreviewToSide({
+      language: 'html',
+      filePath: '/srv/repo/example.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    })
+
+    await vi.waitFor(() =>
+      expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
+    )
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 

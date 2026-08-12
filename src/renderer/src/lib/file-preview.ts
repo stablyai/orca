@@ -12,11 +12,15 @@ export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
 const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
 
 function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
-  void result.then((created) => {
-    if (!created) {
+  void result
+    .then((created) => {
+      if (!created) {
+        toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      }
+    })
+    .catch(() => {
       toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
-    }
-  })
+    })
 }
 
 export type WorkspaceFileBrowserOpenTarget =
