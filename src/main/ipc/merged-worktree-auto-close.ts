@@ -69,7 +69,11 @@ export async function autoCloseMergedWorktreesForRepo(
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       failed.push({ worktreeId: decision.worktreeId, error: message })
-      outcomeByWorktreeId.set(decision.worktreeId, `close-failed(${message})`)
+      // Why first-line-only: Git refusal messages span multiple lines, and the
+      // sweep log promises one physical line per sweep — the grep target must
+      // hold precisely in the failure case an operator searches for.
+      const firstLine = message.split('\n', 1)[0].trim()
+      outcomeByWorktreeId.set(decision.worktreeId, `close-failed(${firstLine})`)
     }
   }
 

@@ -104,6 +104,25 @@ describe('autoCloseMergedWorktreesForRepo', () => {
     info.mockRestore()
   })
 
+  it('keeps the sweep line on one physical line when the refusal message spans several', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    removeManagedWorktree.mockRejectedValue(
+      new Error(
+        "Command failed: git worktree remove /tmp/x\nfatal: '/tmp/x' contains modified or untracked files, use --force to delete it\n"
+      )
+    )
+
+    await autoCloseMergedWorktreesForRepo(createStore(true), runtime, REPO, {
+      now: NOW,
+      scan: scanReturning([CLOSE_DECISION])
+    })
+
+    const line = info.mock.calls[0]?.[0] as string
+    expect(line).toContain('feature=close-failed(Command failed: git worktree remove /tmp/x)')
+    expect(line.split('\n')).toHaveLength(1)
+    info.mockRestore()
+  })
+
   it('reports a removal that Git refused instead of throwing', async () => {
     removeManagedWorktree.mockRejectedValue(
       new Error('Worktree has uncommitted or untracked changes.')
