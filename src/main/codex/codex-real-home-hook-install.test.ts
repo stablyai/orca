@@ -497,7 +497,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
               {
                 hooks: [
                   { type: 'command', command: userCommand },
-                  { type: 'command', command: material.command, timeout: 10 }
+                  { type: 'command', command: material.command, timeout: 3 }
                 ]
               }
             ]
@@ -522,7 +522,7 @@ describe('ensureRealHomeCodexHookState (opt-out sweep)', () => {
         groupIndex: 0,
         handlerIndex: 1,
         command: material.command,
-        timeoutSec: 10
+        timeoutSec: 3
       }
     ]
     writeFileSync(getRealConfigTomlPath(), upsertHookTrustEntriesInContent('', entries), 'utf-8')

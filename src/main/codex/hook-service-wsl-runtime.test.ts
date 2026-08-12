@@ -4,7 +4,6 @@ import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { dirname, join, win32 as pathWin32 } from 'node:path'
 
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from '../agent-hooks/hook-stdin-contract'
 import {
   computeTrustKey,
@@ -73,7 +72,7 @@ function getManagedTrustEntry(
     groupIndex: 0,
     handlerIndex: 0,
     command,
-    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    timeoutSec: 3
   }
 }
 
