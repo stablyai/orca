@@ -728,6 +728,52 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     ).toBe(false)
   })
 
+  it('cleans up and reports failure when the created browser cannot reconcile', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({
+        id: 'list',
+        ok: false,
+        error: { code: 'remote_runtime_timeout', message: 'session tabs timed out' }
+      })
+      .mockResolvedValueOnce({ id: 'close', ok: true, result: { closed: true } })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        clientTargetGroupId: 'client-preview-group',
+        clientTargetGroupCreated: true,
+        focusOnCreate: false
+      })
+    ).resolves.toBe(false)
+
+    expect(runtimeCall).toHaveBeenNthCalledWith(3, {
+      selector: ENVIRONMENT_ID,
+      method: 'browser.tabClose',
+      params: {
+        worktree: `id:${WORKTREE_ID}`,
+        page: 'remote-browser-page-1'
+      },
+      timeoutMs: 15_000
+    })
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
+    expect(
+      isWebSessionBrowserPlacementGroupReserved({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        groupId: 'client-preview-group'
+      })
+    ).toBe(false)
+  })
+
   it('keeps the requested worktree selected while the browser snapshot catches up', async () => {
     const snapshot = makeSnapshot()
     const setStateResults: unknown[] = []
