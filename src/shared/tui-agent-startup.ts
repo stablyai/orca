@@ -6,6 +6,7 @@ import {
   type SleepingAgentLaunchConfig
 } from './agent-session-resume'
 import {
+  appendSessionRulesConfigOverride,
   appendSessionRulesFileCleanup,
   appendSessionRulesFlag,
   hasNativeSessionRulesInjection,
@@ -91,10 +92,21 @@ export function buildAgentStartupPlan(args: {
   if (!trimmedPrompt && !allowEmptyPromptLaunch) {
     return null
   }
-  // Why: cmd.exe can't reliably carry rules text inline via any path — native flag or prepended
-  // prompt alike — so this overrides the agent's own promptInjectionMode entirely and defers
-  // everything (rules + whatever prompt there is) to a paste-and-submit follow-up instead.
-  if (sessionRulesTextRequiresPostReadyDelivery(args.agentSessionRulesText, rulesDeliveryShell)) {
+  const hasNativeRulesInjection = hasNativeSessionRulesInjection(
+    config,
+    args.agentSessionRulesFilePath,
+    args.agentSessionRulesText,
+    rulesDeliveryShell
+  )
+  // Why: cmd.exe can't reliably carry rules text inline via any path with no file alternative —
+  // native flag or prepended prompt alike — so this overrides the agent's own promptInjectionMode
+  // entirely and defers everything (rules + whatever prompt there is) to a paste-and-submit
+  // follow-up instead. A file-backed native flag is exempt (hasNativeRulesInjection already
+  // accounts for that), since only a short path needs quoting there, not the rules text itself.
+  if (
+    !hasNativeRulesInjection &&
+    sessionRulesTextRequiresPostReadyDelivery(args.agentSessionRulesText, rulesDeliveryShell)
+  ) {
     return {
       agent,
       launchCommand: baseCommand.command,
@@ -107,17 +119,16 @@ export function buildAgentStartupPlan(args: {
       ...(args.agentEnv ? { env: { ...args.agentEnv } } : {})
     }
   }
-  const hasNativeRulesInjection = hasNativeSessionRulesInjection(
+  const commandWithSessionRules = appendSessionRulesConfigOverride(
+    appendSessionRulesFlag(
+      baseCommand.command,
+      config,
+      args.agentSessionRulesFilePath,
+      hasNativeRulesInjection ? args.agentSessionRulesText : null,
+      rulesDeliveryShell
+    ),
     config,
-    args.agentSessionRulesFilePath,
     args.agentSessionRulesText,
-    rulesDeliveryShell
-  )
-  const commandWithSessionRules = appendSessionRulesFlag(
-    baseCommand.command,
-    config,
-    args.agentSessionRulesFilePath,
-    hasNativeRulesInjection ? args.agentSessionRulesText : null,
     rulesDeliveryShell
   )
   const withSessionRulesCleanup = (launchCommand: string): string =>
@@ -249,9 +260,13 @@ export function buildAgentResumeStartupPlan(args: {
   sessionOptions?: Record<string, SessionOptionValue>
   /** Why: see buildAgentStartupPlan — remote launches use the plain `orca` shim. */
   isRemote?: boolean
-  /** Why: accepted for a uniform call shape with buildAgentStartupPlan/buildAgentDraftLaunchPlan —
-   * resume has no initial prompt to inject into, so the renderer wrapper applies session rules to
-   * the returned plan's draftPrompt itself instead (see tui-agent-startup.ts's own resume wrapper). */
+  /** Why: resume has no initial prompt to prepend rules to via the generic text/file native-flag
+   * path, so the renderer wrapper applies session rules to the returned plan's draftPrompt itself
+   * instead when no unconditional mechanism (config.sessionRulesConfigOverride) covers this agent —
+   * see tui-agent-startup.ts's own resume wrapper. A config-override agent (e.g. Codex) still gets
+   * its rules embedded directly into launchCommand below, since that mechanism needs no prompt to
+   * attach to. agentSessionRulesFilePath is accepted for a uniform call shape but currently unused
+   * here — no agent combines a resume launch with a file-backed native flag yet. */
   agentSessionRulesFilePath?: string | null
   agentSessionRulesText?: string | null
 }): AgentStartupPlan | null {
@@ -279,9 +294,15 @@ export function buildAgentResumeStartupPlan(args: {
     ...args,
     agentCommand: baseCommand.command
   })
+  const commandWithSessionRules = appendSessionRulesConfigOverride(
+    baseCommand.command,
+    config,
+    args.agentSessionRulesText,
+    shell
+  )
   return {
     agent: args.agent,
-    launchCommand: buildAgentResumeLaunchCommand(args.agent, baseCommand.command, argv, shell),
+    launchCommand: buildAgentResumeLaunchCommand(args.agent, commandWithSessionRules, argv, shell),
     expectedProcess: config.expectedProcess,
     followupPrompt: null,
     launchConfig,

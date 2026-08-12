@@ -251,19 +251,22 @@ export function sessionRulesTextRequiresPostReadyDelivery(
 /** True when the agent has a confirmed native flag for session rules (text on argv, or a file path) and
  * there is rules content to deliver, and the current shell can reliably carry it inline. False whenever
  * sessionRulesTextRequiresPostReadyDelivery is true, even if a flag is configured — availability means
- * "safe to use now", not just "a flag name exists". */
+ * "safe to use now", not just "a flag name exists". A file path is exempt from that shell check: only a
+ * short path is being quoted (not the arbitrary multi-line rules text itself), so it is safe to use
+ * inline even on cmd.exe or across a Windows-to-WSL boundary where inline text is not. */
 export function hasNativeSessionRulesInjection(
   config: TuiAgentConfig,
   filePath: string | null | undefined,
   text: string | null | undefined,
   shell: AgentStartupShell | undefined
 ): boolean {
+  if (config.sessionRulesFileFlag && filePath) {
+    return true
+  }
   if (shell && sessionRulesTextRequiresPostReadyDelivery(text, shell)) {
     return false
   }
-  return Boolean(
-    (config.sessionRulesTextFlag && text?.trim()) || (config.sessionRulesFileFlag && filePath)
-  )
+  return Boolean(config.sessionRulesTextFlag && text?.trim())
 }
 
 /** Wrap session rules ahead of a (possibly empty) user section, under matching headers so the two are
@@ -292,8 +295,9 @@ export function buildAgentSessionRulesOnlyDraft(
   return wrapSessionRulesText(text, '')
 }
 
-/** Append the native session-rules flag to a launch command — text-on-argv when the agent has one
- * (preferred, no temp file involved), else a file-path flag when that's what the agent supports. */
+/** Append the native session-rules flag to a launch command — a file-path flag when a rules file was
+ * actually written for this launch (safe to quote inline anywhere), else text-on-argv when the agent
+ * supports that instead. */
 export function appendSessionRulesFlag(
   command: string,
   config: TuiAgentConfig,
@@ -301,13 +305,34 @@ export function appendSessionRulesFlag(
   text: string | null | undefined,
   shell: AgentStartupShell
 ): string {
-  if (config.sessionRulesTextFlag && text?.trim()) {
-    return `${command} ${config.sessionRulesTextFlag} ${quoteStartupArg(text, shell)}`
-  }
   if (config.sessionRulesFileFlag && filePath) {
     return `${command} ${config.sessionRulesFileFlag} ${quoteStartupArg(filePath, shell)}`
   }
+  if (config.sessionRulesTextFlag && text?.trim()) {
+    return `${command} ${config.sessionRulesTextFlag} ${quoteStartupArg(text, shell)}`
+  }
   return command
+}
+
+/** Append a Codex-style `-c key=value` config-override flag carrying session rules, when the agent
+ * declares one. Unconditional by design (see TuiAgentConfig.sessionRulesConfigOverride): applied
+ * whenever there is rules text and the shell can safely carry it inline, on top of whatever
+ * prepend-to-prompt/paste-after-ready fallback the caller also applies for this agent. */
+export function appendSessionRulesConfigOverride(
+  command: string,
+  config: TuiAgentConfig,
+  text: string | null | undefined,
+  shell: AgentStartupShell
+): string {
+  if (
+    !config.sessionRulesConfigOverride ||
+    !text?.trim() ||
+    sessionRulesTextRequiresPostReadyDelivery(text, shell)
+  ) {
+    return command
+  }
+  const { flag, key } = config.sessionRulesConfigOverride
+  return `${command} ${flag} ${quoteStartupArg(`${key}=${text}`, shell)}`
 }
 
 /** Append the shell-appropriate cleanup for a temporary session-rules file, when one was written. */
@@ -324,7 +349,7 @@ export function appendSessionRulesFileCleanup(
     shell === 'powershell'
       ? `Remove-Item ${quoted} -ErrorAction SilentlyContinue`
       : shell === 'cmd'
-        ? `del ${quoted}`
+        ? `del /f /q ${quoted}`
         : `rm -f ${quoted}`
   return `${command}${commandSeparator(shell)}${cleanup}`
 }
