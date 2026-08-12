@@ -2128,6 +2128,107 @@
       "demotionRule": "Keep experimental or demote to protection none if the gate flakes, permits a late-created tab or unrelated PTY to close, duplicates provider shutdown, or performs more than one ownership replan per bounded yield."
     },
     {
+      "id": "terminal-session.worktree-scan-teardown-authority",
+      "title": "Unknown worktree scans preserve live terminal sessions",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "git-main-runtime-renderer-contract",
+      "surfaces": [
+        "worktree discovery",
+        "terminal session teardown",
+        "folder workspace reconciliation",
+        "SSH and paired-runtime worktree refresh"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
+      "coverageNotes": "Deterministic contracts cover local and hydrated terminal identity, folder workspaces, direct SSH, WSL, paired runtimes, retryable empty SSH scans, and nonempty authoritative deletion. Live macOS Electron and Docker SSH evidence remain required before promotion.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/12913",
+        "https://github.com/stablyai/orca/pull/12916"
+      ],
+      "invariant": "A missing, unreadable, disconnected, or otherwise empty worktree scan is non-authoritative and cannot remove workspace rows, tab identity, or provider sessions; a nonempty authoritative scan still retires only worktrees proven absent on the owning host.",
+      "oracle": "Inject empty local, WSL, direct-SSH, paired-runtime, folder-workspace, and hydrated-session results and require exact rows and terminal tab identities to survive with zero teardown RPCs. Then return a nonempty authoritative inventory that omits one linked worktree and require exactly that worktree state and provider session to retire while the main and sibling worktrees survive.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/worktrees.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/repo-worktree-resolution-scan.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/renderer/src/store/slices/worktrees.test.ts",
+        "src/main/ipc/worktrees.test.ts",
+        "src/main/runtime/repo-worktree-resolution-scan.test.ts",
+        "src/main/runtime/orca-runtime.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/store/slices/worktrees.test.ts",
+          "assertions": [
+            "authoritative-empty legacy results preserve exact live and hydrated terminal tab identities with no teardown RPC",
+            "folder-workspace and paired-runtime rows survive empty legacy host results",
+            "a nonempty authoritative result retires one missing linked worktree and keeps the surviving sibling"
+          ]
+        },
+        {
+          "file": "src/main/ipc/worktrees.test.ts",
+          "assertions": [
+            "empty local and direct-SSH scans are published as non-authoritative without guessing between colliding hosts"
+          ]
+        },
+        {
+          "file": "src/main/runtime/repo-worktree-resolution-scan.test.ts",
+          "assertions": [
+            "an empty WSL worktree inventory is classified as non-authoritative"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "empty SSH scans remain retryable and republish persisted rows without terminal teardown",
+            "fresh nonempty revalidation retires only a linked worktree absent from the authoritative inventory"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/worktrees.test.ts src/main/ipc/worktrees.test.ts src/main/runtime/repo-worktree-resolution-scan.test.ts src/main/runtime/orca-runtime.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 23.63,
+          "summary": "Four affected suites passed 1,604 tests with one skip across empty-scan authority, terminal preservation, host isolation, retry, and real deletion cleanup."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "four deterministic worktree discovery, runtime, renderer, and teardown suites"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "One local deterministic run is recorded; CI and soak history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The focused oracle failed on baseline 9060a88dde and the latest-base disabled candidate by publishing empty scans as authoritative and issuing teardown for the exact live worktree. The candidate preserved terminal identity and passed the same nonempty real-deletion control."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The candidate adds no polling, timers, subprocesses, network calls, or global provider scans. Empty results take an O(1) classification path, warnings are bounded, existing scan caches remain bounded, and empty SSH results reuse persisted metadata while remaining retryable."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Collect a headed macOS Electron run with exact PTY identity and marker liveness across a transient .git outage.",
+        "Collect live Docker SSH and paired headed/headless runtime evidence, plus physical Windows or WSL coverage."
+      ],
+      "knownGaps": [
+        "Physical Linux, Windows, and WSL terminal process evidence is not yet recorded.",
+        "Headed and headless paired-runtime process evidence is not yet recorded.",
+        "The deterministic provider matrix proves ownership and teardown calls, while live SSH and Electron journeys remain pending."
+      ],
+      "demotionRule": "Keep experimental or demote if an empty or unknown scan can issue teardown, a real deletion stops surviving sessions, an empty scan becomes cached as authoritative, provider retry fanout grows, or the focused gate flakes without a product or harness defect."
+    },
+    {
       "id": "terminal-session.explicit-close-retirement",
       "title": "Explicit terminal close retires parked PTYs and agent authority exactly once",
       "maturity": "experimental",

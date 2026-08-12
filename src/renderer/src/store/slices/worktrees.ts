@@ -693,6 +693,12 @@ async function teardownMissingWorktreeTerminalsBestEffort(
   if (!detected.authoritative || !knownWorktreeIds || knownWorktreeIds.length === 0) {
     return
   }
+  // Why: a readable repo always lists its own main worktree, so an empty scan means git could not
+  // read it — `listWorktrees` maps "not a git repository" to `[]`, which happens while `.git` is
+  // briefly moved aside. Reconciling against that marks every workspace missing and kills its terminals.
+  if (detected.worktrees.length === 0) {
+    return
+  }
   const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
   const missingIds = knownWorktreeIds.filter((worktreeId) => !detectedIds.has(worktreeId))
   if (missingIds.length === 0) {
@@ -2888,7 +2894,12 @@ function mergeFetchedWorktrees(
       args.setup,
       matchOptions
     )
-    if (!args.refresh.result.authoritative && worktrees.length === 0 && currentForHost.length > 0) {
+    // Why: legacy hosts can still label an unreadable repo as authoritative-empty.
+    if (
+      args.refresh.result.worktrees.length === 0 &&
+      (currentForHost.length > 0 ||
+        getKnownWorktreeIdsForPurge(s, args.repoId, args.hostId).length > 0)
+    ) {
       return areDetectedWorktreeResultsEqual(s.detectedWorktreesByRepo[args.repoId], mergedDetected)
         ? s
         : {

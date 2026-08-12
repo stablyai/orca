@@ -1249,6 +1249,21 @@ async function listDetectedWorktreesForCapturedRepo(
     if (!isCurrent()) {
       return null
     }
+    if (gitWorktrees.length === 0) {
+      warnOnce(
+        loggedWorktreeListFailures,
+        `${repo.id}:${repo.path}`,
+        `[worktrees] ignoring empty worktree scan for repo "${repo.displayName}" (${repo.id}) at ${repo.path}`
+      )
+      const worktrees = repo.connectionId
+        ? buildDisconnectedDetectedWorktrees(
+            store,
+            repo,
+            listDisconnectedSshWorktrees(store, repo, sshWorktreeMetaIndex)
+          )
+        : []
+      return { repoId: repo.id, authoritative: false, source: 'metadata-fallback', worktrees }
+    }
     const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
     if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
       return {

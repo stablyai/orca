@@ -39607,13 +39607,14 @@ describe('OrcaRuntimeService', () => {
 
     // Warm the scan cache while the worktree still exists.
     vi.mocked(listWorktrees).mockResolvedValueOnce([
+      makeWorktreeInfo(TEST_REPO_PATH),
       { path: '/tmp/deleted', head: 'abc', branch: 'd', isBare: false, isMainWorktree: false }
     ])
     await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [deletedId])
     expect(localProvider.shutdown).not.toHaveBeenCalled()
 
     // The worktree is now gone; the cached scan must not mask that.
-    vi.mocked(listWorktrees).mockResolvedValue([])
+    vi.mocked(listWorktrees).mockResolvedValue([makeWorktreeInfo(TEST_REPO_PATH)])
     const result = await runtime.teardownMissingManagedWorktreeTerminals(`id:${TEST_REPO_ID}`, [
       deletedId
     ])
@@ -40075,6 +40076,33 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('worktree scan cache: treats empty SSH scans as retryable', async () => {
+    const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
+    const remoteStore = {
+      ...store,
+      getRepo: (id: string) => (id === remoteRepo.id ? remoteRepo : undefined),
+      getRepos: () => [remoteRepo]
+    }
+    const provider = { listWorktrees: vi.fn() }
+    provider.listWorktrees
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([makeWorktreeInfo(TEST_REPO_PATH)])
+    registerSshGitProvider('ssh-1', provider as never)
+    const runtime = new OrcaRuntimeService(remoteStore as never)
+
+    try {
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: false })
+      await expect(
+        runtime.listDetectedManagedWorktrees(`id:${TEST_REPO_ID}`)
+      ).resolves.toMatchObject({ authoritative: true })
+      expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
+    } finally {
+      unregisterSshGitProvider('ssh-1')
+    }
+  })
+
   it('worktree scan cache: invalidates when SSH availability changes', async () => {
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-1' }
     const remoteStore = {
@@ -40133,7 +40161,7 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
-  it('worktree scan cache: SSH state changes invalidate empty resolved snapshots', async () => {
+  it('worktree scan cache: SSH state changes invalidate degraded empty snapshots', async () => {
     const remoteRepo = { ...store.getRepo(TEST_REPO_ID)!, connectionId: 'ssh-empty' }
     const remoteStore = {
       ...store,
@@ -40145,14 +40173,14 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(remoteStore as never)
 
     try {
-      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
+      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 1 })
       runtime.notifySshStateChanged('ssh-empty', {
         targetId: 'ssh-empty',
         status: 'connected',
         error: null,
         reconnectAttempt: 0
       })
-      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 0 })
+      await expect(runtime.listManagedWorktrees()).resolves.toMatchObject({ totalCount: 1 })
       expect(provider.listWorktrees).toHaveBeenCalledTimes(2)
     } finally {
       unregisterSshGitProvider('ssh-empty')
