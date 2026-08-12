@@ -255,11 +255,7 @@ async function probeLocalEnvValue(
   }
 }
 
-/**
- * Mirrors bd's own actor resolution, evaluated on the repo's host:
- * BEADS_ACTOR, then `git config user.name`, then $USER.
- */
-export async function resolveBeadsActor(target: BeadsExecutionTarget): Promise<string | null> {
+async function resolveBeadsActorUncached(target: BeadsExecutionTarget): Promise<string | null> {
   if (target.connectionId) {
     return (
       (await probeSshEnvValue(target, 'BEADS_ACTOR')) ??
@@ -274,4 +270,45 @@ export async function resolveBeadsActor(target: BeadsExecutionTarget): Promise<s
     // Windows spells $USER as USERNAME.
     (process.env.USERNAME?.trim() || null)
   )
+}
+
+type BeadsActorCacheEntry = { actor: string | null; expiresAt: number }
+
+const beadsActorCache = new Map<string, BeadsActorCacheEntry>()
+const beadsActorInFlight = new Map<string, Promise<string | null>>()
+
+/** @internal - tests only */
+export function _resetBeadsActorCache(): void {
+  beadsActorCache.clear()
+  beadsActorInFlight.clear()
+}
+
+/**
+ * Mirrors bd's own actor resolution, evaluated on the repo's host:
+ * BEADS_ACTOR, then `git config user.name`, then $USER.
+ * Cached like the bd version probe (host generation keyed, short failure TTL) —
+ * the actor mixes host env with repo-local git config, so the key adds the cwd.
+ */
+export async function resolveBeadsActor(target: BeadsExecutionTarget): Promise<string | null> {
+  const cacheKey = `${bdHostCacheKey(target)}:${target.repoPath}`
+  const cached = beadsActorCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.actor
+  }
+  const inFlight = beadsActorInFlight.get(cacheKey)
+  if (inFlight) {
+    return inFlight
+  }
+  const probe = (async (): Promise<string | null> => {
+    const actor = await resolveBeadsActorUncached(target)
+    beadsActorCache.set(cacheKey, {
+      actor,
+      expiresAt: Date.now() + (actor !== null ? VERSION_CACHE_TTL_MS : VERSION_FAILURE_CACHE_TTL_MS)
+    })
+    return actor
+  })().finally(() => {
+    beadsActorInFlight.delete(cacheKey)
+  })
+  beadsActorInFlight.set(cacheKey, probe)
+  return probe
 }

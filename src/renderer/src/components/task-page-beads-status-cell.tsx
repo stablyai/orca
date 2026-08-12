@@ -7,7 +7,6 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import type { BeadsIssueStatus } from '../../../shared/beads-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { TaskPageBeadsIssueRow } from './task-page-beads-issues'
 import {
   BEADS_STATUS_ICONS,
@@ -17,22 +16,9 @@ import {
   getBeadsStatusTone
 } from './task-page-beads-status-visuals'
 
-type UpdateBeadsIssueStatusAction = (
-  sourceContext: TaskSourceContext,
-  issueId: string,
-  status: BeadsIssueStatus
-) => Promise<unknown>
-
-// Why: the status-write store action ships separately; read it dynamically so
-// the pill degrades to a read-only badge until the store gains the action.
-function selectUpdateBeadsIssueStatus(state: unknown): UpdateBeadsIssueStatusAction | null {
-  const action = (state as Record<string, unknown>)['updateBeadsIssueStatus']
-  return typeof action === 'function' ? (action as UpdateBeadsIssueStatusAction) : null
-}
-
-/** Status pill with icon + label like GHStatusCell; dropdown writes through the beads store when available. */
+/** Status pill with icon + label like GHStatusCell; the dropdown writes through the beads store. */
 export function BeadsStatusCell({ row }: { row: TaskPageBeadsIssueRow }): React.JSX.Element {
-  const updateStatus = useAppStore(selectUpdateBeadsIssueStatus)
+  const updateStatus = useAppStore((s) => s.updateBeadsIssueStatus)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
   const [draftStatus, setDraftStatus] = useState<BeadsIssueStatus | null>(null)
@@ -45,20 +31,6 @@ export function BeadsStatusCell({ row }: { row: TaskPageBeadsIssueRow }): React.
   const statusLabels = getBeadsStatusLabels()
   const statusShortLabels = getBeadsStatusShortLabels()
   const ShownIcon = BEADS_STATUS_ICONS[shownStatus]
-
-  if (!updateStatus) {
-    return (
-      <span
-        className={cn(
-          'inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-medium',
-          getBeadsStatusTone(shownStatus)
-        )}
-      >
-        <ShownIcon className="size-2.5" />
-        <span>{statusShortLabels[shownStatus]}</span>
-      </span>
-    )
-  }
 
   const handleStatusChange = (next: BeadsIssueStatus): void => {
     if (pending || next === shownStatus) {

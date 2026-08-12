@@ -49,6 +49,16 @@ function countOf(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
+/** Newest-first by updatedAt; Date.parse handles offset timestamps, localeCompare is the stable fallback. */
+export function compareBeadsUpdatedAtDesc(a: BeadsIssue, b: BeadsIssue): number {
+  const aTime = Date.parse(a.updatedAt)
+  const bTime = Date.parse(b.updatedAt)
+  if (Number.isNaN(aTime) || Number.isNaN(bTime)) {
+    return b.updatedAt.localeCompare(a.updatedAt)
+  }
+  return bTime - aTime
+}
+
 /** Parses one raw `bd list/show/ready --json` item; returns null for garbage. */
 export function normalizeBeadsIssue(raw: unknown): BeadsIssue | null {
   if (!raw || typeof raw !== 'object') {

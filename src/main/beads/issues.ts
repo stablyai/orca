@@ -1,4 +1,5 @@
 import {
+  compareBeadsUpdatedAtDesc,
   normalizeBeadsIssue,
   type BeadsIssue,
   type BeadsIssuePreset,
@@ -46,15 +47,30 @@ export function isPlausibleBeadsIssueId(id: string): boolean {
   return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id)
 }
 
+function truncateBdOutput(output: string): string {
+  return output.length > 200 ? `${output.slice(0, 200)}…` : output
+}
+
+/** Empty stdout is an empty list; anything else must parse as a JSON array or the load failed. */
 function parseBdIssueArray(stdout: string): BeadsIssue[] {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stdout)
-  } catch {
+  const trimmed = stdout.trim()
+  if (trimmed === '') {
     return []
   }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(trimmed)
+  } catch {
+    throw new Error(`bd returned unparseable JSON output: ${truncateBdOutput(trimmed)}`)
+  }
   if (!Array.isArray(parsed)) {
-    return []
+    // Why: bd can exit 0 while printing {"error": ...} — an empty list here would silently hide the failure.
+    const bdError = (parsed as { error?: unknown } | null)?.error
+    throw new Error(
+      typeof bdError === 'string'
+        ? `bd reported an error: ${bdError}`
+        : `bd returned a non-array JSON payload: ${truncateBdOutput(trimmed)}`
+    )
   }
   return parsed
     .map((raw) => normalizeBeadsIssue(raw))
@@ -142,9 +158,8 @@ export async function listBeadsIssues(
   }
   const result = await runBd(target, args)
   if (result.exitCode === 0) {
-    const issues = parseBdIssueArray(result.stdout)
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
+    // Sorted like the renderer (parsed timestamps) so offset timestamps truncate correctly.
+    const issues = parseBdIssueArray(result.stdout).sort(compareBeadsUpdatedAtDesc).slice(0, limit)
     return { issues, status: workspaceStatusFromVersion(info, true) }
   }
   if (result.spawnFailed) {

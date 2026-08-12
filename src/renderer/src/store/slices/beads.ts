@@ -85,8 +85,10 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
     }
     const cacheKey = beadsIssueListCacheKey(sourceContext, plan)
     const cached = get().beadsListCache[cacheKey]
-    const goodData = cached !== undefined && cached.error === undefined ? cached.data : null
-    const reusable = options?.force ? null : goodData
+    // Error entries still carry the last-good data, so consecutive failures must not drop it.
+    const goodData = cached?.data ?? null
+    // Why: an errored entry never satisfies the cache — the refresh must retry.
+    const reusable = options?.force || cached?.error !== undefined ? null : goodData
     if (reusable && Date.now() - (cached?.fetchedAt ?? 0) < CACHE_TTL) {
       return reusable
     }

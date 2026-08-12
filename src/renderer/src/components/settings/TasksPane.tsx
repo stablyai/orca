@@ -131,18 +131,20 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
     setPreviousAutoExpanded(autoExpandedProvider)
   }
 
+  // Why: drifted profiles keep the saved default out of the stored list (the Tasks picker
+  // resurrects it); guard and toggle against the merged list or the default silently
+  // vanishes — or a stored-single provider stays unhideable while two are rendered.
+  const mergedVisible = normalizeTaskProviderSettings({
+    visibleTaskProviders: settings.visibleTaskProviders,
+    defaultTaskSource: settings.defaultTaskSource
+  }).visibleTaskProviders
+
   const toggleProvider = (provider: TaskProvider): void => {
-    const isVisible = visibleProviders.includes(provider)
-    if (isVisible && visibleProviders.length === 1) {
+    const isVisible = mergedVisible.includes(provider)
+    if (isVisible && mergedVisible.length === 1) {
       return
     }
 
-    // Why: drifted profiles keep the saved default out of the stored list (the Tasks picker
-    // resurrects it); toggle against the merged list or the default silently vanishes.
-    const mergedVisible = normalizeTaskProviderSettings({
-      visibleTaskProviders: settings.visibleTaskProviders,
-      defaultTaskSource: settings.defaultTaskSource
-    }).visibleTaskProviders
     const nextProviders = isVisible
       ? mergedVisible.filter((entry) => entry !== provider)
       : TASK_PROVIDERS.filter((entry) => entry === provider || mergedVisible.includes(entry))
@@ -214,7 +216,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
             const readiness = readinessByProvider[provider]
             const Icon = meta.Icon
             const visible = readiness.visible
-            const canHide = visibleProviders.length > 1
+            const canHide = mergedVisible.length > 1
 
             return (
               <TaskSourceProviderCard

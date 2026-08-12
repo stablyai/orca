@@ -24,6 +24,7 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 
 import {
   _resetBdVersionCache,
+  _resetBeadsActorCache,
   isBdNotInitializedOutput,
   isSupportedBdVersion,
   parseBdVersionLine
@@ -65,6 +66,7 @@ beforeEach(() => {
   gitExecFileAsyncMock.mockReset()
   getSshGitProviderMock.mockReset()
   _resetBdVersionCache()
+  _resetBeadsActorCache()
   delete process.env.BEADS_ACTOR
 })
 
@@ -148,6 +150,68 @@ describe('listBeadsIssues', () => {
     )
   })
 
+  it('sorts by parsed timestamps so offset timestamps truncate correctly', async () => {
+    queueVersionOk()
+    // The +09:00 issue is 03:00Z — older than 05:00Z despite the larger raw string.
+    const offsetIssue = {
+      ...RAW_ISSUE,
+      id: 'probe-offset',
+      updated_at: '2026-01-01T12:00:00+09:00'
+    }
+    const utcIssue = { ...RAW_ISSUE, id: 'probe-utc', updated_at: '2026-01-01T05:00:00Z' }
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([offsetIssue, utcIssue]),
+      stderr: ''
+    })
+
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 1 })
+
+    expect(result.issues.map((issue) => issue.id)).toEqual(['probe-utc'])
+  })
+
+  it('surfaces unparseable exit-0 stdout as a load error instead of an empty list', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'not json at all', stderr: '' })
+
+    await expect(listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })).rejects.toThrow(
+      /unparseable JSON/
+    )
+  })
+
+  it('surfaces an exit-0 {"error":...} payload as a load error', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ error: 'database is locked' }),
+      stderr: ''
+    })
+
+    await expect(listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })).rejects.toThrow(
+      'database is locked'
+    )
+  })
+
+  it('surfaces an exit-0 non-array payload as a load error', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ issues: [] }),
+      stderr: ''
+    })
+
+    await expect(listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })).rejects.toThrow(
+      /non-array JSON payload/
+    )
+  })
+
+  it('treats empty exit-0 stdout as an empty list, not an error', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '\n', stderr: '' })
+
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
+
+    expect(result.issues).toEqual([])
+    expect(result.status.initialized).toBe(true)
+  })
+
   it('maps a not-initialized failure to initialized:false instead of an error', async () => {
     queueVersionOk()
     commandExecFileAsyncMock.mockRejectedValueOnce({
@@ -220,6 +284,19 @@ describe('listBeadsIssues', () => {
       ['list', '--json', '-n', '200', '-a', 'Config Name'],
       expect.anything()
     )
+  })
+
+  it('caches the resolved actor per host/cwd across assigned fetches', async () => {
+    queueVersionOk()
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'Config Name\n', stderr: '' })
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+    await listBeadsIssues(LOCAL_TARGET, { preset: 'assigned', limit: 200 })
+
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+    await listBeadsIssues(LOCAL_TARGET, { preset: 'assigned', limit: 200 })
+
+    // The env/git actor probes ran once; the second fetch reused the cache.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('routes ready through bd ready and truncates client-side', async () => {

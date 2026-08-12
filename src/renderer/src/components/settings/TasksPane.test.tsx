@@ -408,6 +408,36 @@ describe('TasksPane', () => {
     expect(mocks.refreshPreflightStatus).toHaveBeenCalledWith({ force: true })
   })
 
+  it('lets a stored-single provider hide when the resurrected default keeps two visible', async () => {
+    // Drifted profile: only Jira is stored, but the saved GitHub default is
+    // resurrected by the Tasks picker — two providers are effectively visible.
+    const settings = {
+      visibleTaskProviders: ['jira'],
+      defaultTaskSource: 'github'
+    } as GlobalSettings
+    mocks.readiness.jira = { connected: true, checking: false, visible: true }
+    const updateSettings = vi.fn()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    await act(async () => {
+      root?.render(<TasksPane settings={settings} updateSettings={updateSettings} />)
+    })
+
+    const hideJira = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.getAttribute('aria-label') === 'Hide Jira from Tasks'
+    )
+    expect(hideJira).toBeDefined()
+    await act(async () => {
+      hideJira?.click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({
+      visibleTaskProviders: ['github'],
+      defaultTaskSource: 'github'
+    })
+  })
+
   it('renders the dedicated Beads setup steps and retries via preflight', async () => {
     // With every earlier provider finished, uninstalled bd makes Beads the
     // first incomplete card, so it auto-expands.

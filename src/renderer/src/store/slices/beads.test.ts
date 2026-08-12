@@ -180,6 +180,35 @@ describe('beads slice', () => {
     expect(store.getState().beadsListCache[cacheKey]?.data).toEqual(goodResult)
   })
 
+  it('keeps the last good list across two consecutive failed refreshes', async () => {
+    const context = makeContext()
+    const cacheKey = beadsIssueListCacheKey(context, OPEN_PLAN)
+    const goodResult = { issues: [makeIssue('orca-a1')], status: READY_STATUS }
+    beadsListIssues.mockResolvedValueOnce(goodResult)
+    await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
+
+    for (let failure = 0; failure < 2; failure += 1) {
+      store.setState((s) => ({
+        beadsListCache: {
+          ...s.beadsListCache,
+          [cacheKey]: { ...s.beadsListCache[cacheKey], fetchedAt: Date.now() - 61_000 }
+        }
+      }))
+      beadsListIssues.mockRejectedValueOnce(new Error('bd exploded'))
+      await store
+        .getState()
+        .fetchBeadsIssues(context, OPEN_PLAN)
+        .catch(() => {})
+      await vi.waitFor(() => {
+        expect(store.getState().beadsListCache[cacheKey]?.error).toBe('load-failed')
+      })
+    }
+
+    // The second failure must not blank the retained list.
+    expect(store.getState().beadsListCache[cacheKey]?.data).toEqual(goodResult)
+    expect(beadsListIssues).toHaveBeenCalledTimes(3)
+  })
+
   it('invalidation strands in-flight reads so late results cannot repopulate the cache', async () => {
     const context = makeContext()
     let resolveRead!: (value: unknown) => void

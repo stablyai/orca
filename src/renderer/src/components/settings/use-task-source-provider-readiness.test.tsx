@@ -75,7 +75,7 @@ beforeEach(() => {
     preflightStatus: {
       gh: { installed: true, authenticated: true },
       glab: { installed: true, authenticated: true },
-      bd: { installed: true }
+      bd: { installed: true, version: '1.1.2', versionSupported: true }
     },
     preflightStatusChecked: true,
     preflightStatusContextKey: 'local',
@@ -136,8 +136,23 @@ describe('useTaskSourceProviderReadiness', () => {
     await renderProbe()
     expect(latest?.beads.connected).toBe(false)
 
-    mocks.state.preflightStatus = { bd: { installed: false } }
+    mocks.state.preflightStatus = {
+      bd: { installed: false, version: null, versionSupported: false }
+    }
     await renderProbe()
+    expect(latest?.beads.connected).toBe(false)
+  })
+
+  it('reports beads disconnected when bd is installed but below the supported version', async () => {
+    // An outdated bd cannot serve the Tasks page, so Settings must not show it green.
+    mocks.state.preflightStatus = {
+      gh: { installed: true, authenticated: true },
+      glab: { installed: true, authenticated: true },
+      bd: { installed: true, version: '1.0.5', versionSupported: false }
+    }
+
+    await renderProbe()
+
     expect(latest?.beads.connected).toBe(false)
   })
 
