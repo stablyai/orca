@@ -72,6 +72,7 @@ import {
   moveWebSessionBrowserPlacement,
   recordWebSessionBrowserPlacement
 } from './web-session-browser-placement'
+import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -449,6 +450,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return false
   }
+  assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
   const shouldFocusOnCreate = args.focusOnCreate !== false

@@ -37,6 +37,14 @@ function ownerState(hostId?: string, runtimeOwnerEnvironmentId?: string): Record
   }
 }
 
+function browserCapableRuntime(environmentId: string): Record<string, unknown> {
+  return {
+    runtimeStatusByEnvironmentId: new Map([
+      [environmentId, { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }]
+    ])
+  }
+}
+
 beforeEach(() => {
   mocks.createRemote.mockReset().mockResolvedValue(true)
   mocks.getState.mockReset().mockImplementation(() => mocks.state)
@@ -80,6 +88,7 @@ describe('openWorkspaceBrowserTab', () => {
     const createBrowserTab = vi.fn()
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
       createBrowserTab,
       defaultBrowserSessionProfileId: 'client-profile',
       defaultBrowserSessionProfileIdByHostId: {}
@@ -124,7 +133,7 @@ describe('openWorkspaceBrowserTab', () => {
     ])
   })
 
-  it('keeps the worktree session profile when a runtime open soft-fails', async () => {
+  it('uses the desktop provider when the runtime cannot stream browsers', async () => {
     const createBrowserTab = vi.fn()
     const sshHost = toSshExecutionHostId('ssh-target')
     mocks.state = {
@@ -141,7 +150,7 @@ describe('openWorkspaceBrowserTab', () => {
       intent: { kind: 'search', engine: 'google' }
     })
 
-    expect(mocks.createRemote).toHaveBeenCalledOnce()
+    expect(mocks.createRemote).not.toHaveBeenCalled()
     expect(createBrowserTab).toHaveBeenCalledWith(
       WORKSPACE_ID,
       'https://www.google.com/search?q=hooks',
@@ -184,19 +193,13 @@ describe('openWorkspaceBrowserTab', () => {
 
     mocks.state = {
       ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      ...browserCapableRuntime('hub-a'),
       createBrowserTab: vi.fn(),
       defaultBrowserSessionProfileId: 'focused-profile',
       defaultBrowserSessionProfileIdByHostId: { local: 'local-profile' }
     }
     mocks.createRemote.mockResolvedValue(false)
-    await openWorkspaceBrowserTab(request)
-    expect(mocks.state.createBrowserTab).toHaveBeenCalledWith(WORKSPACE_ID, secretUrl, {
-      activate: true,
-      browserRuntimeEnvironmentId: null,
-      focusAddressBar: false,
-      sessionProfileId: 'local-profile',
-      targetGroupId: undefined,
-      title: 'Search Kagi'
-    })
+    await expect(openWorkspaceBrowserTab(request)).rejects.toThrow('Unable to search with Kagi.')
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 })

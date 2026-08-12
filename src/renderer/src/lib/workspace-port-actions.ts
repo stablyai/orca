@@ -130,7 +130,10 @@ export async function openWorkspacePortInBrowser(args: {
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
-      const tab = args.createBrowserTab(worktreeId, url, { activate: true })
+      const tab = args.createBrowserTab(worktreeId, url, {
+        activate: true,
+        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+      })
       if (!tab.activePageId) {
         return { ok: false, reason: 'Failed to create a browser page.' }
       }

@@ -128,7 +128,6 @@ import type { AppState } from '../store/types'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '../store/pinned-tab-close-guard'
 import {
   closeWebRuntimeSessionTab,
-  createWebRuntimeSessionBrowserTab,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
@@ -2147,35 +2146,23 @@ export function useIpcEvents(): void {
       window.api.ui.onNewBrowserTab(() => {
         const store = useAppStore.getState()
         if (isFloatingWorkspacePanelFocused()) {
-          void createFloatingWorkspaceBrowserTab(store)
+          void createFloatingWorkspaceBrowserTab(store).catch((error) => {
+            toast.error(error instanceof Error ? error.message : String(error))
+          })
           return
         }
         const worktreeId = store.activeWorktreeId
-        if (worktreeId) {
-          const environmentId = getWorktreeRuntimeEnvironmentId(worktreeId)
-          if (environmentId) {
-            if (!isWebRuntimeSessionActive(environmentId)) {
-              store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-                title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-                focusAddressBar: true
-              })
-              return
-            }
-            void (async () => {
-              // Why: paired web tabs are host-owned; on RPC failure leave local state so the next host snapshot stays authoritative.
-              await createWebRuntimeSessionBrowserTab({
-                worktreeId,
-                environmentId,
-                url: store.browserDefaultUrl ?? 'about:blank'
-              })
-            })()
-            return
-          }
-          store.createBrowserTab(worktreeId, store.browserDefaultUrl ?? 'about:blank', {
-            title: translate('auto.hooks.useIpcEvents.f6300deb8b', 'New Browser Tab'),
-            focusAddressBar: true
-          })
+        if (!worktreeId) {
+          return
         }
+        const targetGroupId =
+          store.activeGroupIdByWorktree[worktreeId] ?? store.groupsByWorktree[worktreeId]?.[0]?.id
+        if (!targetGroupId) {
+          return
+        }
+        void store.openNewBrowserTabInActiveWorkspace(targetGroupId).catch((error) => {
+          toast.error(error instanceof Error ? error.message : String(error))
+        })
       })
     )
 
@@ -2217,7 +2204,9 @@ export function useIpcEvents(): void {
       if (!worktreeId) {
         return
       }
-      void openMobileEmulatorTab(worktreeId, { placement: 'rightSplit' })
+      void openMobileEmulatorTab(worktreeId, { placement: 'rightSplit' }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error))
+      })
     })
     if (unsubscribeNewSimulatorTab) {
       unsubs.push(unsubscribeNewSimulatorTab)

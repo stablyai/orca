@@ -1480,23 +1480,37 @@ function WorktreeJumpPaletteContent({
   // Why: filtering via buildQuickActionContext() inside a memo with stable primitive deps
   // instead of calling it inline every render — a fresh context object as a useMemo dep
   // defeated the middleItems memo (new identity every keystroke).
+  const quickActionAvailabilityInputs = useMemo(
+    () => ({
+      activeView,
+      activeWorktreeId,
+      worktreesByRepo,
+      repos,
+      sshConnectionStates,
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      isLoading,
+      activeRuntimeEnvironmentId: settings?.activeRuntimeEnvironmentId,
+      runtimeStatusByEnvironmentId
+    }),
+    [
+      activeView,
+      activeWorktreeId,
+      worktreesByRepo,
+      repos,
+      sshConnectionStates,
+      activeGroupIdByWorktree,
+      groupsByWorktree,
+      isLoading,
+      settings?.activeRuntimeEnvironmentId,
+      runtimeStatusByEnvironmentId
+    ]
+  )
   const availableActionResults = useMemo(() => {
+    void quickActionAvailabilityInputs
     const ctx = buildQuickActionContext()
     return actionResults.filter((action) => action.isAvailable(ctx).available)
-  }, [
-    actionResults,
-    buildQuickActionContext,
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- these are the availability-determining primitives buildQuickActionContext reads from the store; listing them ensures the memo recomputes when availability actually changes, not on every render.
-    activeView,
-    activeWorktreeId,
-    worktreesByRepo,
-    repos,
-    sshConnectionStates,
-    activeGroupIdByWorktree,
-    groupsByWorktree,
-    isLoading,
-    settings?.activeRuntimeEnvironmentId
-  ])
+  }, [actionResults, buildQuickActionContext, quickActionAvailabilityInputs])
 
   const middleItems = useMemo<(SettingsPaletteItem | QuickActionPaletteItem)[]>(
     () =>

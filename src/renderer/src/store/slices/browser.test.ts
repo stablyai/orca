@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: browser slice behavior shares one mocked store harness; splitting only the tests would duplicate more setup than it saves. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { createBrowserSlice, isLocalBrowserPageOwner } from './browser'
 import type { AppState } from '../types'
@@ -64,6 +64,18 @@ function createTestStore() {
 
 function settingsWithRuntime(id: string): AppState['settings'] {
   return { activeRuntimeEnvironmentId: id } as AppState['settings']
+}
+
+function runtimeStatuses(capabilities: string[]): AppState['runtimeStatusByEnvironmentId'] {
+  return new Map([
+    [
+      'env-1',
+      {
+        status: { capabilities },
+        checkedAt: 1
+      }
+    ]
+  ]) as AppState['runtimeStatusByEnvironmentId']
 }
 
 function seedUnifiedBrowserTab(
@@ -548,6 +560,35 @@ describe('createBrowserSlice runtime guard', () => {
     runtimeEnvironmentCall.mockResolvedValue({ id: 'rpc-1', ok: true, result: {} })
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects direct client-local materialization in the web client', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+
+    expect(() => store.getState().createBrowserTab('wt-1', 'about:blank')).toThrow(
+      'must be created by a capable paired runtime'
+    )
+    expect(store.getState().browserTabsByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('rejects direct remote materialization without the provider capability', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+    store.setState({ runtimeStatusByEnvironmentId: runtimeStatuses([]) })
+
+    expect(() =>
+      store.getState().createBrowserTab('wt-1', 'about:blank', {
+        browserRuntimeEnvironmentId: 'env-1'
+      })
+    ).toThrow('paired runtime does not support browser streaming')
+    expect(store.getState().browserTabsByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+  })
+
   it('fetches browser profiles from the active runtime environment', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -956,6 +997,7 @@ describe('createBrowserSlice runtime guard', () => {
     store.setState({
       activeWorktreeId: 'wt-remote',
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
       browserDefaultUrl: 'about:blank',
       repos: [
         {
@@ -1006,15 +1048,12 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
-  it('does not create a local fallback tab when remote browser creation fails', async () => {
+  it('uses the desktop client browser when a remote npm host cannot stream', async () => {
     const store = createTestStore()
-    // Why: a remote-owned workspace must stay remote-owned. If the remote host
-    // cannot create the page, we must NOT silently open a local desktop tab —
-    // that produces confusing split ownership (issue #5321 UX requirement).
-    createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
     store.setState({
       activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
       worktreesByRepo: {
         'repo-1': [
           {
@@ -1028,6 +1067,39 @@ describe('createBrowserSlice runtime guard', () => {
     })
 
     await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    const tab = store.getState().browserTabsByWorktree['wt-remote']?.[0]
+    const page = tab ? store.getState().browserPagesByWorkspace[tab.id]?.[0] : undefined
+    expect(page?.browserRuntimeEnvironmentId).toBeNull()
+    expect(store.getState().createUnifiedTab).toHaveBeenCalled()
+  })
+
+  it('does not create a local fallback tab when remote browser creation fails', async () => {
+    const store = createTestStore()
+    // Why: a remote-owned workspace must stay remote-owned. If the remote host
+    // cannot create the page, we must NOT silently open a local desktop tab —
+    // that produces confusing split ownership (issue #5321 UX requirement).
+    createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(store.getState().openNewBrowserTabInActiveWorkspace('group-1')).rejects.toThrow(
+      'The paired runtime could not create a managed browser tab.'
+    )
 
     expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-remote',
@@ -1081,6 +1153,7 @@ describe('createBrowserSlice runtime guard', () => {
     store.setState({
       activeWorktreeId: 'wt-remote',
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
       worktreesByRepo: {
         'repo-1': [
           {
@@ -1093,7 +1166,9 @@ describe('createBrowserSlice runtime guard', () => {
       }
     })
 
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+    await expect(store.getState().openNewBrowserTabInActiveWorkspace('group-1')).rejects.toThrow(
+      'remote down'
+    )
 
     expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
     expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()

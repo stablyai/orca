@@ -306,6 +306,27 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     vi.clearAllMocks()
   })
 
+  it('rejects before RPC when the selected runtime does not advertise screencast', async () => {
+    mocks.getState.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: ENVIRONMENT_ID },
+      runtimeStatusByEnvironmentId: new Map([
+        [ENVIRONMENT_ID, { status: { capabilities: [] }, checkedAt: 1 }]
+      ])
+    })
+    const runtimeCall = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID
+      })
+    ).rejects.toThrow('does not support browser streaming')
+
+    expect(runtimeCall).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
   it('applies an empty host snapshot without retaining delayed browser focus', async () => {
     const snapshot = makeSnapshot()
     let resolveList!: (response: unknown) => void

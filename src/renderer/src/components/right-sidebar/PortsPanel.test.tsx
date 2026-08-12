@@ -353,7 +353,8 @@ describe('PortsPanel runtime routing', () => {
       'repo::/workspace/app',
       'http://127.0.0.1:63468',
       {
-        activate: true
+        activate: true,
+        browserRuntimeEnvironmentId: 'env-1'
       }
     )
     expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
@@ -579,7 +580,7 @@ describe('PortsPanel runtime routing', () => {
     expect(createBrowserTab).toHaveBeenCalledWith(
       'repo::/workspace/app',
       'http://127.0.0.1:63468',
-      { activate: true }
+      { activate: true, browserRuntimeEnvironmentId: 'env-1' }
     )
     expect(setRemoteBrowserPageHandle).toHaveBeenCalledWith('local-page-1', {
       environmentId: 'env-1',

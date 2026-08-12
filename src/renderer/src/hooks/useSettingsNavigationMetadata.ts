@@ -437,12 +437,19 @@ export function buildSettingsNavigationMetadata({
     {
       id: 'floating-workspace',
       title: translate('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
-        'Global terminal, browser, and markdown tabs.'
-      ),
+      description: showDesktopOnlySettings
+        ? translate(
+            'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
+            'Global terminal, browser, and markdown tabs.'
+          )
+        : translate(
+            'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
+            'Global terminal and markdown tabs.'
+          ),
       icon: PanelsTopLeft,
-      searchEntries: getFloatingWorkspaceSearchEntries(),
+      searchEntries: getFloatingWorkspaceSearchEntries({
+        includeBrowser: showDesktopOnlySettings
+      }),
       group: 'workflows'
     },
     {
