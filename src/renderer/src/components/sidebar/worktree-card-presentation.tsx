@@ -4,6 +4,7 @@ import {
   getFlushWorktreeCardPaddingLeft,
   getNewCardStyleParentContentMarginLeft
 } from './worktree-list/rows/indentation'
+import { shouldMarkPrimaryWorkspaceTitle } from './worktree-card-model'
 import {
   hasWorktreeCardDetails,
   WorktreeCardDetailsHover,
@@ -89,7 +90,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const showUnreadQuickAction = !affiliateListMode && showStatus && !newCardStyle
   // Why: the slot owns the unread/status lane; legacy keeps the bell toggle, the new card keeps the glyph passive.
   const showCombinedStatusSlot = showStatus
-  const showTitleRowPrimary = compactCards && worktree.isMainWorktree && !isFolder
+  const showTitleRowPrimary =
+    compactCards &&
+    worktree.isMainWorktree &&
+    !isFolder &&
+    shouldMarkPrimaryWorkspaceTitle(visibleCardTitle)
   const showMetaRowDetails = !newCardStyle && !compactCards && (hasDetails || hasPorts)
   const showTitleRowIndicators = (newCardStyle || compactCards) && (hasDetails || hasPorts)
   // Why: grouped views can hide the repo badge; don't reserve a blank metadata lane unless there's real content.

@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, Server, ServerOff, Star, Trash2 } from 'lucide-react'
+import { AlertCircle, ServerOff, Star, Trash2 } from 'lucide-react'
 
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Badge } from '@/components/ui/badge'
@@ -9,7 +9,11 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { Repo } from '../../../../shared/repo-types'
 import { resolveRepoHeaderColor } from './project-header-color'
-import { formatSparseDirectoryPreview, shouldBeginWorktreeRename } from './worktree-card-model'
+import {
+  formatSparseDirectoryPreview,
+  shouldBeginWorktreeRename,
+  shouldMarkPrimaryWorkspaceTitle
+} from './worktree-card-model'
 import type { WorktreeCardPresentation } from './worktree-card-presentation'
 import { WorktreeCardSshHostControl } from './WorktreeCardSshHostControl'
 import { WorktreeTitleInlineRename } from './WorktreeTitleInlineRename'
@@ -115,42 +119,29 @@ export function WorktreeCardHeader({
           />
         )}
 
-        {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && (
+        {/* Why: connected runtime rows drop the glyph — repeating the server on
+            every row is noise; only the disconnected exception earns a mark. */}
+        {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && isRuntimeDisconnected && (
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="shrink-0 inline-flex items-center">
-                {isRuntimeDisconnected ? (
-                  // Passive by design: runtime ("Orca server") hosts have no
-                  // renderer-reachable connect API, unlike the SSH glyph above which is
-                  // now a control. Don't "fix" the inconsistency by wiring one up.
-                  <ServerOff className="size-3 text-destructive" />
-                ) : (
-                  <Server className="size-3 text-muted-foreground" />
-                )}
+                {/* Passive by design: runtime ("Orca server") hosts have no
+                    renderer-reachable connect API, unlike the SSH glyph above which is
+                    now a control. Don't "fix" the inconsistency by wiring one up. */}
+                <ServerOff className="size-3 text-destructive" />
               </span>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>
-              {isRuntimeDisconnected
-                ? runtimeHostLabel
-                  ? translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostDisconnectedNamed',
-                      '{{hostName}} disconnected',
-                      { hostName: runtimeHostLabel }
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostDisconnected',
-                      'Server disconnected'
-                    )
-                : runtimeHostLabel
-                  ? translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostProjectNamed',
-                      'Project on {{hostName}}',
-                      { hostName: runtimeHostLabel }
-                    )
-                  : translate(
-                      'auto.components.sidebar.WorktreeCard.runtimeHostProject',
-                      'Project on Orca server'
-                    )}
+              {runtimeHostLabel
+                ? translate(
+                    'auto.components.sidebar.WorktreeCard.runtimeHostDisconnectedNamed',
+                    '{{hostName}} disconnected',
+                    { hostName: runtimeHostLabel }
+                  )
+                : translate(
+                    'auto.components.sidebar.WorktreeCard.runtimeHostDisconnected',
+                    'Server disconnected'
+                  )}
             </TooltipContent>
           </Tooltip>
         )}
@@ -214,24 +205,27 @@ export function WorktreeCardHeader({
             </TooltipContent>
           </Tooltip>
         ) : null}
-        {!compactCards && worktree.isMainWorktree && !isFolder && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Badge
-                variant="outline"
-                className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
-              >
-                {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
-              </Badge>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
-              {translate(
-                'auto.components.sidebar.WorktreeCard.0777de5970',
-                'Primary worktree (original clone directory)'
-              )}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        {!compactCards &&
+          worktree.isMainWorktree &&
+          !isFolder &&
+          shouldMarkPrimaryWorkspaceTitle(visibleCardTitle) && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="outline"
+                  className="h-[16px] px-1.5 text-[10px] font-medium rounded shrink-0 leading-none text-foreground/70 border-foreground/20 bg-foreground/[0.06]"
+                >
+                  {translate('auto.components.sidebar.WorktreeCard.7d517f82e2', 'primary')}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                {translate(
+                  'auto.components.sidebar.WorktreeCard.0777de5970',
+                  'Primary worktree (original clone directory)'
+                )}
+              </TooltipContent>
+            </Tooltip>
+          )}
 
         {worktree.isSparse && (
           <Tooltip>

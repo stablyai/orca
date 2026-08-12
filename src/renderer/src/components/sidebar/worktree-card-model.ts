@@ -101,6 +101,13 @@ export function shouldBeginWorktreeRename(
   )
 }
 
+// Why: a title of "main"/"master" already reads as the primary workspace; the
+// badge only earns its keep when a rename hides that convention.
+export function shouldMarkPrimaryWorkspaceTitle(title: string): boolean {
+  const normalized = title.trim().toLowerCase()
+  return normalized !== 'main' && normalized !== 'master'
+}
+
 export function formatSparseDirectoryPreview(directories: string[]): string {
   const preview = directories.slice(0, 4).join(', ')
   return directories.length <= 4 ? preview : `${preview}, +${directories.length - 4} more`

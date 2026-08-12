@@ -232,22 +232,25 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).toContain('Remote Mac disconnected')
   })
 
-  it('distinguishes connected worktrees on different Orca servers', () => {
+  // Why: connected rows drop the per-row server glyph (mixed-host chips and host
+  // sections carry identity); the disconnected exception must still name the
+  // per-row owner, not the repo's host.
+  it('names the owning Orca server only on the disconnected exception', () => {
     runtimeEnvironments = [
       { id: 'env-1', name: 'Remote Mac' },
       { id: 'env-2', name: 'Build Linux' }
     ]
-    runtimeStatusByEnvironmentId.set('env-1', { status: { runtimeId: 'r1' } })
     runtimeStatusByEnvironmentId.set('env-2', { status: { runtimeId: 'r2' } })
+    // No status entry for env-1 → the worktree's owner is disconnected.
 
-    const remoteMacMarkup = renderToStaticMarkup(
+    const disconnectedOwnerMarkup = renderToStaticMarkup(
       <WorktreeCard
         worktree={{ ...makeWorktree(), runtimeOwnerEnvironmentId: 'env-1' }}
         repo={{ ...makeRepo(), connectionId: undefined, executionHostId: 'runtime:env-2' }}
         isActive={false}
       />
     )
-    const buildLinuxMarkup = renderToStaticMarkup(
+    const connectedMarkup = renderToStaticMarkup(
       <WorktreeCard
         worktree={makeWorktree()}
         repo={{ ...makeRepo(), connectionId: undefined, executionHostId: 'runtime:env-2' }}
@@ -255,8 +258,9 @@ describe('WorktreeCard SSH reconnect prompt', () => {
       />
     )
 
-    expect(remoteMacMarkup).toContain('Project on Remote Mac')
-    expect(buildLinuxMarkup).toContain('Project on Build Linux')
+    expect(disconnectedOwnerMarkup).toContain('Remote Mac disconnected')
+    expect(connectedMarkup).not.toContain('Project on Build Linux')
+    expect(connectedMarkup).not.toContain('disconnected')
   })
 
   it('reads nested SSH readiness from the owning HUB instead of client-local SSH state', () => {
