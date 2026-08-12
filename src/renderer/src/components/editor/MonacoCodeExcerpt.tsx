@@ -57,9 +57,11 @@ export default function MonacoCodeExcerpt({
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
+  const resolvedTheme = resolveMonacoThemeName(settings?.editorColorTheme, isDark)
+
   useEffect(() => {
-    monaco.editor.setTheme(resolveMonacoThemeName(settings?.editorColorTheme, isDark))
-  }, [isDark, settings?.editorColorTheme])
+    monaco.editor.setTheme(resolvedTheme)
+  }, [resolvedTheme])
 
   useEffect(() => {
     if (lines.length === 0) {
@@ -71,6 +73,14 @@ export default function MonacoCodeExcerpt({
     // Why: notebook languages like Python are loaded lazily by Monaco. The
     // async colorizer waits for that tokenizer; colorizeModelLine can render
     // only default-token spans if called before the contribution finishes.
+    //
+    // Why resolvedTheme is a dependency here too, not just in the setTheme
+    // effect above: colorize() bakes theme-specific `mtk*` token classes into
+    // the returned HTML at call time — it does not react to a later
+    // monaco.editor.setTheme() call. Without this dependency, switching the
+    // editor color theme (Settings > Appearance > Code Editor) would leave
+    // already-rendered excerpts stuck showing the previous theme's colors
+    // until their code/language happened to change for some other reason.
     void ensureColorizationLanguage(language)
       .catch(() => undefined)
       .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
@@ -85,7 +95,7 @@ export default function MonacoCodeExcerpt({
     return () => {
       cancelled = true
     }
-  }, [code, language, lines])
+  }, [code, language, lines, resolvedTheme])
 
   return (
     <div
