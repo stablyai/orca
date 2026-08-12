@@ -31,7 +31,7 @@ type UseFileExplorerDragDropResult = {
   setDragSourcePath: (
     path: string | null,
     isDirectory?: boolean,
-    selectionDirectoryFlags?: ReadonlyArray<readonly [string, boolean]>
+    selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
   ) => void
   isRootDragOver: boolean
   isNativeDragOver: boolean
@@ -77,7 +77,7 @@ export function useFileExplorerDragDrop({
     (
       path: string | null,
       isDirectory = false,
-      selectionDirectoryFlags?: ReadonlyArray<readonly [string, boolean]>
+      selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
     ) => {
       setDragSourcePathState(path)
       if (path !== null) {

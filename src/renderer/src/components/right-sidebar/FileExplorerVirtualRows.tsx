@@ -56,7 +56,7 @@ type FileExplorerVirtualRowsProps = {
   onDragSourceChange: (
     path: string | null,
     isDirectory?: boolean,
-    selectionDirectoryFlags?: ReadonlyArray<readonly [string, boolean]>
+    selectionDirectoryFlags?: readonly (readonly [string, boolean])[]
   ) => void
   onDragExpandDir: (dirPath: string) => void
   onNativeDragTargetChange: (dir: string | null) => void
