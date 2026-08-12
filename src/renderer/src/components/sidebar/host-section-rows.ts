@@ -4,6 +4,7 @@ import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
+  normalizeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostKind,
   type ExecutionHostScope
@@ -11,9 +12,11 @@ import {
 import type { ExecutionHostHealth } from '../../../../shared/execution-host-registry'
 import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
+import {
+  getFolderWorkspaceExecutionHostIdForRows,
+  getProjectGroupExecutionHostIdForRows
+} from './worktree-list/listing/host-filtering'
 import type { Row } from './worktree-list/grouping/row-types'
 
 export type HostHeaderRow = {
@@ -56,19 +59,6 @@ function getRepoHostId(
   return defaultHostId
 }
 
-function getSshHostId(connectionId: string): ExecutionHostId {
-  return `ssh:${encodeURIComponent(connectionId)}` as ExecutionHostId
-}
-
-function getFolderWorkspaceHostId(
-  folderWorkspace: Pick<FolderWorkspace, 'connectionId'>,
-  projectGroup: Pick<ProjectGroup, 'connectionId'>,
-  defaultHostId: ExecutionHostId
-): ExecutionHostId {
-  const connectionId = folderWorkspace.connectionId ?? projectGroup.connectionId
-  return connectionId ? getSshHostId(connectionId) : defaultHostId
-}
-
 function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId | null {
   switch (row.type) {
     case 'item':
@@ -78,9 +68,29 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'new-external-worktrees-inbox':
       return getRepoHostId(row.repo, defaultHostId)
     case 'folder-workspace':
-      return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
-    case 'header':
-      return row.repo ? getRepoHostId(row.repo, defaultHostId) : null
+      // Why: placement must match the visibility filter's resolver, or a
+      // stamped remote group renders under whichever host happens to be focused.
+      return getFolderWorkspaceExecutionHostIdForRows({
+        folderWorkspace: row.folderWorkspace,
+        projectGroup: row.projectGroup,
+        defaultHostId
+      })
+    case 'header': {
+      if (row.repo) {
+        return getRepoHostId(row.repo, defaultHostId)
+      }
+      // Why: a stamped project group already names its host; pending-buffering
+      // it instead would attach it to whichever host section follows.
+      const projectGroup = row.projectGroup
+      if (
+        projectGroup &&
+        typeof projectGroup.id === 'string' &&
+        (normalizeExecutionHostId(projectGroup.executionHostId) || projectGroup.connectionId)
+      ) {
+        return getProjectGroupExecutionHostIdForRows(projectGroup, defaultHostId)
+      }
+      return null
+    }
   }
 }
 
