@@ -291,4 +291,3 @@ export function detachManagedPaneForExternalMove(args: CloseManagedPaneArgs): bo
   teardownManagedPane(args, 'detach')
   return true
 }
-
