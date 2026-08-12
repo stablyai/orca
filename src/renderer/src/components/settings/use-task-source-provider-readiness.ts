@@ -56,6 +56,7 @@ export function useTaskSourceProviderReadiness(
     reviewReadyForConnection &&
     preflightStatus?.glab?.installed === true &&
     preflightStatus.glab.authenticated === true
+  const bdInstalled = reviewReadyForConnection && preflightStatus?.bd?.installed === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
   const linearChecking =
@@ -89,9 +90,17 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      // Beads has no credentials: "connected" is just the bd CLI preflight probe.
+      beads: {
+        connected: bdInstalled,
+        checking: reviewChecking,
+        unavailable: reviewUnavailable,
+        visible: visible.has('beads')
       }
     }
   }, [
+    bdInstalled,
     githubConnected,
     gitlabConnected,
     jiraChecking,

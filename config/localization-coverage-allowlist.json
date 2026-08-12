@@ -68,5 +68,26 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/icons/BeadsIcon.tsx",
+    "kind": "jsx-text",
+    "text": "bd",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TaskSourceSimpleSetup.tsx",
+    "kind": "jsx-expression",
+    "text": "brew install beads",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/components/settings/TaskSourceSimpleSetup.tsx",
+    "kind": "jsx-expression",
+    "text": "https://beads.gascity.com",
+    "dynamic": false,
+    "count": 1
   }
 ]

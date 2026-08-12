@@ -441,7 +441,9 @@ export default function SmartWorkspaceNameField({
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
         gitlabInstalled: gitlabSourceAvailable,
-        linearConnected: linearStatus.connected === true
+        linearConnected: linearStatus.connected === true,
+        // Why: smart-name lookup has no beads source; availability is irrelevant here.
+        bdInstalled: false
       }),
     [gitlabSourceAvailable, linearStatus.connected]
   )

@@ -444,6 +444,32 @@ describe('automation target availability', () => {
     })
   })
 
+  it('blocks manual runs when the saved Beads workspace is not initialized', () => {
+    expect(
+      getAutomationTargetAvailability({
+        automation: makeAutomation({
+          sourceContext: {
+            kind: 'task-source',
+            provider: 'beads',
+            projectId: 'repo-1',
+            hostId: 'local',
+            repoId: 'repo-1',
+            providerIdentity: { provider: 'beads', prefix: 'orca' }
+          }
+        }),
+        repo: makeRepo(),
+        workspace: makeWorkspace(),
+        projectHostSetups: [],
+        sshConnectionStates: new Map(),
+        sourceHostAvailability: [{ hostId: 'local', reason: 'uninitialized-source-workspace' }]
+      })
+    ).toMatchObject({
+      canRunNow: false,
+      reason: 'source-tool-unavailable',
+      message: 'Prepare the saved Beads source.'
+    })
+  })
+
   it('explains runtime-host automation availability before the unsupported manual-run fallback', () => {
     const automation = makeAutomation({
       runContext: {

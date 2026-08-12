@@ -12,6 +12,8 @@ export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword('auto.components.settings.tasks.search.412ec3c702', 'linear'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.5430396e11', 'jira'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.604d8e4089', 'atlassian'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.beads', 'beads'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.bd', 'bd'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.44083ae418', 'display'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.58cda6f9c0', 'hide'),
   ...translateSearchKeyword('auto.components.settings.tasks.search.setup', 'setup'),

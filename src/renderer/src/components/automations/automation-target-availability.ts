@@ -207,10 +207,8 @@ function getAutomationSourceAvailability(
         `Connect the saved ${providerLabel} source account before running manually.`
       )
     case 'unavailable-source-tool':
-      return unavailable(
-        'source-tool-unavailable',
-        `Install or configure the ${providerLabel} source tool before running manually.`
-      )
+    case 'uninitialized-source-workspace':
+      return unavailable('source-tool-unavailable', `Prepare the saved ${providerLabel} source.`)
     case 'unsupported-provider':
     case 'missing-task-source-capability':
       return unavailable(
@@ -261,6 +259,8 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
       return 'Linear'
     case 'jira':
       return 'Jira'
+    case 'beads':
+      return 'Beads'
   }
 }
 

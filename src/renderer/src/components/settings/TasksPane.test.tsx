@@ -21,7 +21,12 @@ const mocks = vi.hoisted(() => ({
     checking: boolean
     onOpenIntegrations: () => void
   }[],
-  jiraSetupProps: [] as { onOpenIntegrations: () => void }[]
+  jiraSetupProps: [] as { onOpenIntegrations: () => void }[],
+  beadsSetupProps: [] as {
+    connected: boolean
+    unavailable?: boolean
+    onRetryConnection: () => void
+  }[]
 }))
 
 vi.mock('./use-task-source-provider-readiness', () => ({
@@ -65,6 +70,14 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
+  },
+  BeadsSetupSteps: (props: {
+    connected: boolean
+    unavailable?: boolean
+    onRetryConnection: () => void
+  }) => {
+    mocks.beadsSetupProps.push(props)
+    return <div data-testid="beads-setup">Beads setup</div>
   }
 }))
 
@@ -124,6 +137,7 @@ describe('TasksPane', () => {
   beforeEach(() => {
     mocks.linearSetupProps = []
     mocks.jiraSetupProps = []
+    mocks.beadsSetupProps = []
     mocks.openSettingsPage.mockClear()
     mocks.openSettingsTarget.mockClear()
     mocks.readiness = {
@@ -137,7 +151,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      beads: { connected: true, checking: false, visible: true }
     }
   })
 
@@ -390,6 +405,26 @@ describe('TasksPane', () => {
     await act(async () => {
       retry?.click()
     })
+    expect(mocks.refreshPreflightStatus).toHaveBeenCalledWith({ force: true })
+  })
+
+  it('renders the dedicated Beads setup steps and retries via preflight', async () => {
+    // With every earlier provider finished, uninstalled bd makes Beads the
+    // first incomplete card, so it auto-expands.
+    mocks.readiness.linear = {
+      connected: true,
+      checking: false,
+      skillInstalled: true,
+      skillChecking: false,
+      visible: true
+    }
+    mocks.readiness.beads = { connected: false, checking: false, visible: true }
+    await renderInteractivePane()
+
+    expect(container?.querySelector('[data-testid="beads-setup"]')).not.toBeNull()
+    expect(mocks.beadsSetupProps.at(-1)).toEqual(expect.objectContaining({ connected: false }))
+
+    mocks.beadsSetupProps.at(-1)?.onRetryConnection()
     expect(mocks.refreshPreflightStatus).toHaveBeenCalledWith({ force: true })
   })
 })

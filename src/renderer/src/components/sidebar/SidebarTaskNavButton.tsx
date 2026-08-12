@@ -14,10 +14,12 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { useRepoMap } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getTaskPresetQuery } from '../../../../shared/task-preset-query'
 import {
   normalizeVisibleTaskProviders,
+  resolveBeadsTaskProviderAvailability,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
@@ -101,7 +103,11 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          bdInstalled: resolveBeadsTaskProviderAvailability({
+            localBdInstalled: preflightStatusCurrent && preflightStatus?.bd?.installed === true,
+            repoHostIds: repos.map((repo) => getRepoExecutionHostId(repo))
+          })
         },
         defaultTaskSource
       ),
@@ -110,7 +116,8 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
       linearStatus.connected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
-      preflightStatus?.glab?.installed
+      preflightStatus,
+      repos
     ]
   )
   const resolvedDefaultTaskSource = React.useMemo(

@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Github, Gitlab } from 'lucide-react'
+import { BeadsIcon } from '@/components/icons/BeadsIcon'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
   TASK_PROVIDERS,
+  normalizeTaskProviderSettings,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
@@ -13,7 +15,7 @@ import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { BeadsSetupSteps, CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -89,6 +91,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  beads: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.beadsLabel', 'Beads')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.beadsDescription',
+        'Browse Beads (bd) issues stored in your repos and start workspaces from them.'
+      )
+    },
+    Icon: ({ className }) => <BeadsIcon className={className} />
   }
 }
 
@@ -123,9 +137,15 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
       return
     }
 
+    // Why: drifted profiles keep the saved default out of the stored list (the Tasks picker
+    // resurrects it); toggle against the merged list or the default silently vanishes.
+    const mergedVisible = normalizeTaskProviderSettings({
+      visibleTaskProviders: settings.visibleTaskProviders,
+      defaultTaskSource: settings.defaultTaskSource
+    }).visibleTaskProviders
     const nextProviders = isVisible
-      ? visibleProviders.filter((entry) => entry !== provider)
-      : TASK_PROVIDERS.filter((entry) => entry === provider || visibleProviders.includes(entry))
+      ? mergedVisible.filter((entry) => entry !== provider)
+      : TASK_PROVIDERS.filter((entry) => entry === provider || mergedVisible.includes(entry))
 
     updateSettings({
       visibleTaskProviders: nextProviders,
@@ -226,6 +246,16 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'beads' ? (
+                  <BeadsSetupSteps
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    unavailable={readiness.unavailable}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('beads')}
+                    onRetryConnection={() => void refreshPreflightStatus({ force: true })}
                   />
                 ) : (
                   <CodeHostSetupSteps

@@ -201,6 +201,21 @@ import {
 } from '@/components/linear-project-view-surfaces'
 import JiraIssueWorkspace from '@/components/JiraIssueWorkspace'
 import { TaskPageJiraIssueList } from '@/components/task-page-jira-issue-list'
+import BeadsItemDialog from '@/components/BeadsItemDialog'
+import TaskPageBeadsFilterDropdowns from '@/components/task-page-beads-filter-dropdowns'
+import { TaskPageBeadsIssueList } from '@/components/task-page-beads-issue-list'
+import {
+  EMPTY_BEADS_FACET_FILTERS,
+  deriveTaskPageBeadsFacetOptions,
+  deriveTaskPageBeadsListState,
+  filterBeadsIssueRows,
+  getBeadsTaskSourceHostAvailability,
+  hasActiveBeadsFacetFilters,
+  useTaskPageBeadsIssues,
+  type TaskPageBeadsFacetFilters,
+  type TaskPageBeadsIssueRow
+} from '@/components/task-page-beads-issues'
+import { deriveTaskPageBeadsRepoNotices } from '@/components/task-page-beads-list-notices'
 import {
   getSingleJiraProjectScope,
   getTaskPageJiraStatusOrderScopeKey,
@@ -382,6 +397,7 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
+import type { BeadsIssue, BeadsIssuePreset } from '../../../shared/beads-types'
 import type { PreflightStatus } from '../../../preload/api-types'
 import {
   LINEAR_ISSUE_LIST_MAX,
@@ -422,7 +438,9 @@ import {
 import { TaskPageJiraSortControls } from './task-page-jira-sort-controls'
 import { bindTaskPageJiraItemSourceContext } from './task-page-jira-item-source-context'
 import {
+  mergeRenderedVisibleTaskProviders,
   normalizeVisibleTaskProviders,
+  resolveBeadsTaskProviderAvailability,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../shared/task-providers'
@@ -441,6 +459,7 @@ import {
   getLinearPriorityLabel,
   getLinearViewOptions,
   getSourceOptions,
+  getBeadsPresets,
   type GitHubTaskKind,
   type GitLabIssueFilter,
   type GitLabTaskFilter,
@@ -486,6 +505,8 @@ function isGitLabIssueFilter(
 const TASK_SEARCH_DEBOUNCE_MS = 300
 const LINEAR_ITEM_LIMIT = 36
 const JIRA_ITEM_LIMIT = 50
+// Why: stable identity keeps the beads fetch hook's memos quiet while another source is active.
+const EMPTY_TASK_SOURCE_CONTEXTS: readonly TaskSourceContext[] = []
 const PR_CHECKS_EAGER_PREFETCH_LIMIT = 20
 
 const GITHUB_TASK_GRID_CLASS =
@@ -525,9 +546,23 @@ function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
   )
 }
 
+function getBeadsIssueWorkspaceSeed(issue: BeadsIssue): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'beads',
+      number: 0,
+      title: `${issue.id} ${issue.title}`,
+      beadsIdentifier: issue.id
+    })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+
+// Why: beads keeps providerIdentity null (prefix unknown pre-fetch) so this scope
+// matches the openTaskPage prefetch context in store/slices/ui.ts.
 function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,
-  provider: 'github' | 'gitlab',
+  provider: 'github' | 'gitlab' | 'beads',
   gitlabProjectRef?: GitLabProjectRef | null
 ): TaskSourceContext | null {
   if (!repo) {
@@ -3160,17 +3195,27 @@ export default function TaskPage(): React.JSX.Element {
     [settings?.visibleTaskProviders]
   )
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
+  const bdTaskSourceAvailable = useMemo(
+    () =>
+      resolveBeadsTaskProviderAvailability({
+        localBdInstalled: preflightStatusCurrent && preflightStatus?.bd?.installed === true,
+        repoHostIds: eligibleRepos.map((repo) => getRepoExecutionHostId(repo))
+      }),
+    [eligibleRepos, preflightStatus?.bd?.installed, preflightStatusCurrent]
+  )
   const visibleTaskProviders = useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          bdInstalled: bdTaskSourceAvailable
         },
         defaultTaskSource
       ),
     [
+      bdTaskSourceAvailable,
       defaultTaskSource,
       linearConnected,
       preferredVisibleTaskProviders,
@@ -3194,9 +3239,11 @@ export default function TaskPage(): React.JSX.Element {
   )
   const hideTaskSource = useCallback(
     (provider: TaskProvider, label: string) => {
-      const visibleWithoutProvider = preferredVisibleTaskProviders.filter(
-        (visibleProvider) => visibleProvider !== provider
-      )
+      // Why: filter the rendered list, not the stored one — a default-resurrected provider absent from storage must survive the write.
+      const visibleWithoutProvider = mergeRenderedVisibleTaskProviders(
+        preferredVisibleTaskProviders,
+        visibleTaskProviders
+      ).filter((visibleProvider) => visibleProvider !== provider)
       // Why: an empty provider list normalizes to "all providers", so keep one other source visible or hiding this one has no effect.
       const nextVisibleTaskProviders: TaskProvider[] =
         visibleWithoutProvider.length > 0 ? visibleWithoutProvider : ['github']
@@ -3216,7 +3263,7 @@ export default function TaskPage(): React.JSX.Element {
         )
       })
     },
-    [defaultTaskSource, preferredVisibleTaskProviders, updateSettings]
+    [defaultTaskSource, preferredVisibleTaskProviders, updateSettings, visibleTaskProviders]
   )
 
   // Why: seed preset + query synchronously so the first fetch issues one request; a prior post-mount re-seed caused a throwaway empty-query fetch, doubling time-to-first-paint.
@@ -3240,7 +3287,7 @@ export default function TaskPage(): React.JSX.Element {
   )
   const taskSourceRepoContexts = useMemo(
     () =>
-      taskSource === 'github' || taskSource === 'gitlab'
+      taskSource === 'github' || taskSource === 'gitlab' || taskSource === 'beads'
         ? selectedRepos
             .map((repo) => getTaskPageRepoSourceContext(repo, taskSource))
             .filter((context): context is TaskSourceContext => context !== null)
@@ -3353,7 +3400,61 @@ export default function TaskPage(): React.JSX.Element {
     },
     [hostRegistryById, taskSource]
   )
+  // Beads tab state — fetch/error state lives in the beads slice cache; search filters client-side.
+  const [activeBeadsPreset, setActiveBeadsPreset] = useState<BeadsIssuePreset>(
+    () => taskResumeState?.beadsPreset ?? 'open'
+  )
+  const [beadsSearchInput, setBeadsSearchInput] = useState(() => taskResumeState?.beadsQuery ?? '')
+  const [appliedBeadsSearch, setAppliedBeadsSearch] = useState(
+    () => taskResumeState?.beadsQuery ?? ''
+  )
+  const [beadsRefreshNonce, setBeadsRefreshNonce] = useState(0)
+  const [beadsFacetFilters, setBeadsFacetFilters] =
+    useState<TaskPageBeadsFacetFilters>(EMPTY_BEADS_FACET_FILTERS)
+  const [openBeadsDetailRow, setOpenBeadsDetailRow] = useState<TaskPageBeadsIssueRow | null>(null)
+  const beadsIssuesState = useTaskPageBeadsIssues({
+    enabled: taskSource === 'beads',
+    contexts: taskSource === 'beads' ? taskSourceRepoContexts : EMPTY_TASK_SOURCE_CONTEXTS,
+    preset: activeBeadsPreset,
+    refreshNonce: beadsRefreshNonce
+  })
+  const beadsFacetOptions = useMemo(
+    () => deriveTaskPageBeadsFacetOptions(beadsIssuesState.rows),
+    [beadsIssuesState.rows]
+  )
+  const displayedBeadsRows = useMemo(
+    () => filterBeadsIssueRows(beadsIssuesState.rows, appliedBeadsSearch, beadsFacetFilters),
+    [appliedBeadsSearch, beadsFacetFilters, beadsIssuesState.rows]
+  )
+  const beadsListState = useMemo(
+    () =>
+      deriveTaskPageBeadsListState({
+        results: beadsIssuesState.results,
+        filteredCount: displayedBeadsRows.length,
+        totalCount: beadsIssuesState.rows.length,
+        queryActive:
+          appliedBeadsSearch.trim().length > 0 || hasActiveBeadsFacetFilters(beadsFacetFilters)
+      }),
+    [
+      appliedBeadsSearch,
+      beadsFacetFilters,
+      beadsIssuesState.results,
+      beadsIssuesState.rows.length,
+      displayedBeadsRows.length
+    ]
+  )
+  const beadsRepoNotices = useMemo(
+    () => deriveTaskPageBeadsRepoNotices(beadsIssuesState.results),
+    [beadsIssuesState.results]
+  )
   const taskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
+    if (taskSource === 'beads') {
+      return getBeadsTaskSourceHostAvailability({
+        contexts: taskSourceRepoContexts,
+        hostRegistryById,
+        results: beadsIssuesState.results
+      })
+    }
     if (taskSource !== 'github' && taskSource !== 'gitlab') {
       return []
     }
@@ -3372,6 +3473,7 @@ export default function TaskPage(): React.JSX.Element {
       })
     ]
   }, [
+    beadsIssuesState.results,
     hostRegistryById,
     preflightStatus,
     preflightStatusChecked,
@@ -3521,6 +3623,20 @@ export default function TaskPage(): React.JSX.Element {
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      beads:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('beads'),
+          sourceCount: selectedRepos.length,
+          hostLabelById,
+          // Why: host reachability + runtime capability only — bd-install state is
+          // fetch-derived and surfaced once the beads source is active.
+          hostAvailability: getBeadsTaskSourceHostAvailability({
+            contexts: selectedRepos
+              .map((repo) => getTaskPageRepoSourceContext(repo, 'beads'))
+              .filter((context): context is TaskSourceContext => context !== null),
+            hostRegistryById
+          })
         }) ?? undefined
     }
   }, [
@@ -3602,6 +3718,7 @@ export default function TaskPage(): React.JSX.Element {
   const linearSearchPersistReadyRef = useRef(false)
   const linearViewPersistReadyRef = useRef(false)
   const jiraSearchPersistReadyRef = useRef(false)
+  const beadsSearchPersistReadyRef = useRef(false)
   const [taskResumeApplied, setTaskResumeApplied] = useState(false)
 
   // Why: useState only inits once, so sync taskSource from the store when a sidebar source-icon click changes pageData.taskSource.
@@ -4726,6 +4843,11 @@ export default function TaskPage(): React.JSX.Element {
     setActiveJiraPreset(jiraPreset)
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
+
+    const beadsQuery = taskResumeState?.beadsQuery ?? ''
+    setActiveBeadsPreset(taskResumeState?.beadsPreset ?? 'open')
+    setBeadsSearchInput(beadsQuery)
+    setAppliedBeadsSearch(beadsQuery)
 
     // Why: settings/UI hydrate async; apply the restored Tasks context exactly once so later source/filter clicks stay local.
     taskResumeAppliedRef.current = true
@@ -8619,6 +8741,27 @@ export default function TaskPage(): React.JSX.Element {
     if (!taskResumeApplied) {
       return
     }
+    const timeout = window.setTimeout(() => {
+      setAppliedBeadsSearch(beadsSearchInput)
+    }, TASK_SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timeout)
+  }, [beadsSearchInput, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
+    if (!beadsSearchPersistReadyRef.current) {
+      beadsSearchPersistReadyRef.current = true
+      return
+    }
+    setTaskResumeState({ beadsQuery: appliedBeadsSearch.trim() })
+  }, [appliedBeadsSearch, setTaskResumeState, taskResumeApplied])
+
+  useEffect(() => {
+    if (!taskResumeApplied) {
+      return
+    }
     if (taskSource !== 'jira') {
       return
     }
@@ -8864,6 +9007,37 @@ export default function TaskPage(): React.JSX.Element {
     [openComposerForJiraItem]
   )
 
+  const openComposerForBeadsItem = useCallback(
+    (row: TaskPageBeadsIssueRow): void => {
+      // Why: beads issues have no web URL — url stays '' and link consumers guard on it.
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        type: 'issue',
+        provider: 'beads',
+        number: 0,
+        title: `${row.issue.id} ${row.issue.title}`,
+        url: '',
+        beadsIdentifier: row.issue.id
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        taskSourceContext: row.sourceContext,
+        prefilledName: getBeadsIssueWorkspaceSeed(row.issue),
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
+
+  const handleUseBeadsItem = useCallback(
+    (row: TaskPageBeadsIssueRow): void => {
+      openComposerForBeadsItem(row)
+    },
+    [openComposerForBeadsItem]
+  )
+  const handleViewBeadsItemDetails = useCallback((row: TaskPageBeadsIssueRow): void => {
+    setOpenBeadsDetailRow(row)
+  }, [])
+
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
@@ -8871,7 +9045,8 @@ export default function TaskPage(): React.JSX.Element {
     hasJiraDetail: Boolean(selectedJiraIssue),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
-    hasLinearViewContext: Boolean(selectedLinearCustomView)
+    hasLinearViewContext: Boolean(selectedLinearCustomView),
+    hasBeadsDetail: Boolean(openBeadsDetailRow)
   })
 
   return (
@@ -8930,7 +9105,17 @@ export default function TaskPage(): React.JSX.Element {
                                   { taskSource: source.id },
                                   { recordTasksInteraction: false }
                                 )
-                                void updateSettings({ defaultTaskSource: source.id }).catch(() => {
+                                // Why: persist every rendered picker option too, or resurrected providers (e.g. github kept visible only by the old default) vanish once the default moves.
+                                const mergedVisible = mergeRenderedVisibleTaskProviders(
+                                  preferredVisibleTaskProviders,
+                                  visibleTaskProviders
+                                )
+                                void updateSettings({
+                                  defaultTaskSource: source.id,
+                                  ...(mergedVisible.length !== preferredVisibleTaskProviders.length
+                                    ? { visibleTaskProviders: mergedVisible }
+                                    : {})
+                                }).catch(() => {
                                   toast.error(
                                     translate(
                                       'auto.components.TaskPage.609532fae7',
@@ -9990,6 +10175,145 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                     </div>
                   </>
+                ) : taskSource === 'beads' ? (
+                  <>
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <div className="min-w-0 w-full sm:w-[200px]">
+                        <TaskProjectSourceCombobox
+                          groups={taskPickerGroups}
+                          selected={repoSelection}
+                          getRepoHostLabel={getTaskPickerRepoHostLabel}
+                          onChange={(next) => {
+                            const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                            setRepoSelection(normalized)
+                            void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
+                              () => {
+                                toast.error(
+                                  translate(
+                                    'auto.components.TaskPage.dfd72673e7',
+                                    'Failed to save project selection.'
+                                  )
+                                )
+                              }
+                            )
+                          }}
+                          onSelectAll={() => {
+                            const allIds = new Set(taskPickerRepos.map((r) => r.id))
+                            setRepoSelection(allIds)
+                            void updateSettings({ defaultRepoSelection: null }).catch(() => {
+                              toast.error(
+                                translate(
+                                  'auto.components.TaskPage.dfd72673e7',
+                                  'Failed to save project selection.'
+                                )
+                              )
+                            })
+                          }}
+                          triggerClassName="h-8 w-full rounded-md border border-border/50 bg-muted/50 px-2 text-xs font-medium shadow-sm transition hover:bg-muted/50 focus:ring-2 focus:ring-ring/20 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                    <div
+                      // Why: mirrors the GitHub query bar — presets row, then Filters + search + actions as one joined card top.
+                      className="flex min-w-0 flex-col gap-2.5 rounded-md rounded-b-none border border-border/50 bg-muted/35 px-3 py-2.5"
+                      data-contextual-tour-target="tasks-search-presets"
+                    >
+                      <div className="flex flex-wrap gap-1.5">
+                        {getBeadsPresets().map((preset) => {
+                          const active = !beadsSearchInput && activeBeadsPreset === preset.id
+                          return (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => {
+                                setBeadsSearchInput('')
+                                setAppliedBeadsSearch('')
+                                setBeadsFacetFilters(EMPTY_BEADS_FACET_FILTERS)
+                                setActiveBeadsPreset(preset.id)
+                                setTaskResumeState({ beadsPreset: preset.id, beadsQuery: '' })
+                              }}
+                              className={cn(
+                                'rounded-md border px-2.5 py-1 text-xs font-medium transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background shadow-xs'
+                                  : 'border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60'
+                              )}
+                            >
+                              {preset.label}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <TaskPageBeadsFilterDropdowns
+                          filters={beadsFacetFilters}
+                          options={beadsFacetOptions}
+                          onChange={setBeadsFacetFilters}
+                        />
+                        <div className="relative min-w-0 flex-1 basis-64">
+                          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={beadsSearchInput}
+                            onChange={(e) => setBeadsSearchInput(e.target.value)}
+                            placeholder={translate(
+                              'auto.components.TaskPage.beadsSearchPlaceholder',
+                              'Filter by title, id, or label...'
+                            )}
+                            className="h-8 rounded-md border-border/60 bg-background pl-8 pr-8 text-xs text-foreground shadow-xs"
+                          />
+                          {beadsSearchInput ? (
+                            <button
+                              type="button"
+                              aria-label={translate(
+                                'auto.components.TaskPage.b797bdd7c3',
+                                'Clear search'
+                              )}
+                              onClick={() => {
+                                setBeadsSearchInput('')
+                                setAppliedBeadsSearch('')
+                                setTaskResumeState({ beadsQuery: '' })
+                              }}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          ) : null}
+                        </div>
+                        <div
+                          className="flex shrink-0 items-center gap-2"
+                          data-contextual-tour-target="tasks-actions"
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setBeadsRefreshNonce((n) => n + 1)}
+                                disabled={beadsIssuesState.loading}
+                                aria-label={translate(
+                                  'auto.components.TaskPage.beadsRefreshIssues',
+                                  'Refresh Beads issues'
+                                )}
+                                className="size-8 border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60"
+                              >
+                                {beadsIssuesState.loading ? (
+                                  <LoaderCircle className="size-4 animate-spin" />
+                                ) : (
+                                  <RefreshCw className="size-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" sideOffset={6}>
+                              {translate(
+                                'auto.components.TaskPage.beadsRefreshIssues',
+                                'Refresh Beads issues'
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      </div>
+                    </div>
+                  </>
                 ) : null}
               </div>
             </section>
@@ -10990,6 +11314,38 @@ export default function TaskPage(): React.JSX.Element {
                 />
               </div>
             )
+          ) : taskSource === 'beads' && openBeadsDetailRow ? (
+            <BeadsItemDialog
+              key={`${openBeadsDetailRow.sourceContext.repoId ?? ''}:${openBeadsDetailRow.issue.id}`}
+              row={openBeadsDetailRow}
+              repoName={
+                openBeadsDetailRow.sourceContext.repoId
+                  ? (repoMap.get(openBeadsDetailRow.sourceContext.repoId)?.displayName ?? null)
+                  : null
+              }
+              backLabel="Beads list"
+              onUse={(row) => {
+                setOpenBeadsDetailRow(null)
+                handleUseBeadsItem(row)
+              }}
+              onClose={() => setOpenBeadsDetailRow(null)}
+            />
+          ) : taskSource === 'beads' ? (
+            // Why: same joined-card table shell as the GitHub list — flush under the filter chrome.
+            <div className="flex min-h-0 min-w-0 max-h-full flex-col overflow-hidden rounded-md rounded-t-none border border-t-0 border-border/50 bg-background shadow-sm">
+              <TaskPageBeadsIssueList
+                allWorktrees={allWorktrees}
+                formatUpdatedAt={formatRelativeTime}
+                listState={beadsListState}
+                onRetry={() => setBeadsRefreshNonce((n) => n + 1)}
+                onStartWorkspace={handleUseBeadsItem}
+                onViewDetails={handleViewBeadsItemDetails}
+                repoBadges={repoMap}
+                repoNotices={beadsRepoNotices}
+                rows={displayedBeadsRows}
+                selectedRepoCount={selectedRepos.length}
+              />
+            </div>
           ) : taskSource === 'linear' && selectedLinearIssue ? (
             <LinearIssueWorkspace
               issue={selectedLinearIssue}
