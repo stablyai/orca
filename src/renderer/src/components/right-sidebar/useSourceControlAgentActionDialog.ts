@@ -6,6 +6,7 @@ import {
 } from '@/lib/source-control-launch-agent-selection'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { renderSourceControlActionCommandTemplate } from '../../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import type { TuiAgent } from '../../../../shared/types'
@@ -44,6 +45,7 @@ export function useSourceControlAgentActionDialog({
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
   const settings = useAppStore((state) => state.settings)
   const repo = useRepoById(repoId ?? null)
+  const executionHostId = useMemo(() => (repo ? getRepoExecutionHostId(repo) : null), [repo])
   const launchAgentScope = useMemo(
     () => resolveSourceControlLaunchAgentScope({ settings, repo, actionId }),
     [actionId, repo, settings]
@@ -177,6 +179,7 @@ export function useSourceControlAgentActionDialog({
       repoId,
       settings,
       repo,
+      executionHostId,
       worktreeId,
       groupId,
       promptDelivery,

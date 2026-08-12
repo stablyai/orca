@@ -1,6 +1,7 @@
 import { planSourceControlAgentActionLaunch } from '@/lib/source-control-agent-action-plan'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { buildSourceControlAgentConnectionErrorPlan } from './source-control-agent-action-dialog-support'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
@@ -18,6 +19,7 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   isRemote?: boolean
   repoId?: string | null
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
 }
 
 export function buildSourceControlAgentDeliveryPlan({
@@ -30,7 +32,8 @@ export function buildSourceControlAgentDeliveryPlan({
   launchPlatform,
   isRemote,
   repoId,
-  connectionId
+  connectionId,
+  executionHostId
 }: BuildSourceControlAgentDeliveryPlanArgs): SourceControlAgentActionDeliveryPlanState {
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
@@ -56,7 +59,8 @@ export function buildSourceControlAgentDeliveryPlan({
     platform: launchPlatform,
     isRemote,
     repoId,
-    connectionId
+    connectionId,
+    executionHostId
   })
   if (!result.ok) {
     return { status: 'error', error: result.error }

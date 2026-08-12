@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
 import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'
 import type { SourceControlAgentActionDeliveryPlanState } from './SourceControlAgentActionDialogForm'
 import { runSourceControlAgentActionStart } from './runSourceControlAgentActionStart'
@@ -23,6 +24,9 @@ type UseSourceControlAgentActionStartArgs = {
   repoId?: string | null
   settings: GlobalSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi' | 'connectionId'> | null
+  /** Why: disambiguates a repo's rules when a local/runtime repo shares an id
+   * without a distinguishing connectionId (see resolveAgentSessionRulesText). */
+  executionHostId?: ExecutionHostId | null
   worktreeId?: string | null
   groupId?: string | null
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -76,6 +80,7 @@ export function useSourceControlAgentActionStart({
   repoId,
   settings,
   repo,
+  executionHostId,
   worktreeId,
   groupId,
   promptDelivery,
@@ -111,7 +116,8 @@ export function useSourceControlAgentActionStart({
         launchPlatform,
         isRemote,
         repoId,
-        connectionId: repo?.connectionId
+        connectionId: repo?.connectionId,
+        executionHostId
       })
     },
     [
@@ -124,7 +130,8 @@ export function useSourceControlAgentActionStart({
       launchPlatform,
       isRemote,
       repoId,
-      repo
+      repo,
+      executionHostId
     ]
   )
 

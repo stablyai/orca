@@ -1,5 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { planSourceControlAgentActionLaunch } from './source-control-agent-action-plan'
+import { useAppStore } from '@/store'
+import type { GlobalSettings, Repo } from '../../../shared/types'
 
 describe('planSourceControlAgentActionLaunch', () => {
   it('rejects disabled agents', () => {
@@ -108,5 +110,74 @@ describe('planSourceControlAgentActionLaunch', () => {
 
     expect(result.ok && result.delivery).toBe('draft-native')
     expect(result.ok && result.commandLabel).toContain('--prefill')
+  })
+
+  describe('executionHostId threading', () => {
+    const originalSettings = useAppStore.getState().settings
+    const originalRepos = useAppStore.getState().repos
+
+    afterEach(() => {
+      useAppStore.setState({ settings: originalSettings, repos: originalRepos })
+    })
+
+    // Why: a local repo and a runtime repo can share an id with a null
+    // connectionId; without executionHostId in the launch context, the repo
+    // is ambiguous and repo-scoped agent-session-rules silently fall back to
+    // global-only rules regardless of what the repo configures.
+    function setRepoOnlyRule(repos: Repo[]): void {
+      useAppStore.setState({
+        settings: {
+          agentSessionRules: {
+            enabled: true,
+            rules: [],
+            seenBuiltinRuleIds: []
+          }
+        } as unknown as GlobalSettings,
+        repos
+      })
+    }
+
+    it('disambiguates a repo-scoped session rule via executionHostId when repo ids collide', () => {
+      setRepoOnlyRule([
+        {
+          id: 'repo-1',
+          connectionId: null,
+          agentSessionRules: {
+            enabled: true,
+            extraRules: [
+              {
+                id: 'custom-repo-rule',
+                label: 'Repo rule',
+                content: 'REPO ONLY RULE TEXT',
+                enabled: true,
+                source: 'custom'
+              }
+            ]
+          }
+        } as Repo,
+        {
+          id: 'repo-1',
+          path: '/runtime/repo',
+          displayName: 'Runtime repo',
+          badgeColor: 'blue',
+          addedAt: 1,
+          connectionId: null,
+          executionHostId: 'runtime:env-a'
+        } as Repo
+      ])
+
+      const result = planSourceControlAgentActionLaunch({
+        agent: 'claude',
+        commandInput: 'Fix checks',
+        promptDelivery: 'submit-after-ready',
+        detectedAgents: ['claude'],
+        platform: 'linux',
+        repoId: 'repo-1',
+        connectionId: null,
+        executionHostId: 'local'
+      })
+
+      expect(result.ok && result.plan.launchCommand).toContain('REPO ONLY RULE TEXT')
+    })
   })
 })

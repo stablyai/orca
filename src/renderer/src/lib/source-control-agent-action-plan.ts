@@ -11,6 +11,7 @@ import type { TuiAgent } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export type SourceControlLaunchPlanDelivery =
   | 'argv'
@@ -45,6 +46,7 @@ export function planSourceControlAgentActionLaunch(args: {
   isRemote?: boolean
   repoId?: string | null
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
@@ -114,7 +116,8 @@ export function planSourceControlAgentActionLaunch(args: {
       sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true,
       repoId: args.repoId,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      executionHostId: args.executionHostId
     })
     delivery = 'paste-submit'
   } else if (args.promptDelivery === 'draft') {
@@ -128,7 +131,8 @@ export function planSourceControlAgentActionLaunch(args: {
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
       repoId: args.repoId,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      executionHostId: args.executionHostId
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -158,7 +162,8 @@ export function planSourceControlAgentActionLaunch(args: {
         sessionOptions: args.sessionOptions,
         allowEmptyPromptLaunch: true,
         repoId: args.repoId,
-        connectionId: args.connectionId
+        connectionId: args.connectionId,
+        executionHostId: args.executionHostId
       })
       delivery = 'draft-paste'
     }
@@ -174,7 +179,8 @@ export function planSourceControlAgentActionLaunch(args: {
       sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: true,
       repoId: args.repoId,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      executionHostId: args.executionHostId
     })
     delivery = 'draft-paste'
   } else {
@@ -189,7 +195,8 @@ export function planSourceControlAgentActionLaunch(args: {
       sessionOptions: args.sessionOptions,
       allowEmptyPromptLaunch: false,
       repoId: args.repoId,
-      connectionId: args.connectionId
+      connectionId: args.connectionId,
+      executionHostId: args.executionHostId
     })
     delivery = 'argv'
   }
