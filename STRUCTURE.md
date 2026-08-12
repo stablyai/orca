@@ -33,8 +33,10 @@
 
 ## 2026-08-08 정리 이력
 
-- `docs/*.md` 41개(레포 자신의 durable 정책 위반하며 tracked 상태였음) → `docs/reference/`로 이관
-  (업스트림 `origin/main`엔 이 41개가 없음을 `git diff` 확인 후 진행 — 이 fork 고유 콘텐츠)
+- `docs/*.md` 41개(레포 자신의 durable 정책 위반하며 tracked 상태였음) → `docs/reference/`로 이관.
+  ⚠ 이때 "업스트림에 없으니 fork 고유 콘텐츠"라고 판정한 게 틀렸음(2026-08-09 재감사에서 발견) —
+  실제로는 업스트림 저작 파일을 업스트림이 삭제한 것. 2026-08-12에 업스트림 논리를 따라 41개를
+  `docs/reference/`에서 다시 삭제해 해소(아래 절 참고).
 - `TERMINAL-GARBLE-INVESTIGATION.md` + 관련 스크립트 4개(`tools/terminal-garble-*.mjs`) →
   `20260717_terminal-garble/` 작업단위로 통합(report.md + 스크립트, 상대경로 import 4곳 수정)
   ⚠ 그때 `production-repro.mjs`의 `REPLAY_SCRIPT`는 import가 아니라 cwd 기준 경로 문자열이라 놓쳤고,
@@ -54,13 +56,21 @@ README가 스스로를 "throwaway probe"라 부르고 `spike-<topic>` 어휘 순
 
 ## 미해결
 
-- ⚠ **업스트림 저작 파일을 재배치했다.** 2026-08-08에 `docs/*.md` 41개를 `docs/reference/`로 옮기면서
-  "업스트림 `origin/main`엔 없으니 fork 고유 콘텐츠"라고 판정했는데 **판정 방법이 틀렸다**. 그 파일들은
-  `merge-base`(057a8149)에 존재하므로 업스트림 저작이고, 현재 origin/main에 없는 이유는 업스트림이
-  그 사이 **삭제**했기 때문이다. 이 fork는 origin/main보다 1,498커밋 이상 뒤에 있고(로컬 캐시
-  origin/main 기준 2026-08-10, 이후로도 계속 벌어지는 중) 향후 병합 시 rename/delete 충돌이
-  예약돼 있다.
-  → 판정 기준: `git cat-file -e <merge-base>:<path>`로 저작 출처를 가른다. "현재 업스트림에 없다"는
-     "우리가 만들었다"와 다르다.
-  → 되돌릴지(업스트림 삭제를 그대로 적용) 유지할지(레포 자체 durable 정책 우선)는 소유자 판단 대기.
 - `tools/spikes/`는 2026-08-08에 죽은 폴더로 확인돼 삭제됨(해소).
+
+## 업스트림 저작 파일 재배치 오판정 — 해소 (2026-08-12)
+
+2026-08-08에 `docs/*.md` 41개를 `docs/reference/`로 옮기면서 "업스트림 `origin/main`엔 없으니
+fork 고유 콘텐츠"라고 판정했는데 **판정 방법이 틀렸다**. `git cat-file -e <merge-base>:<path>`로
+재확인한 결과 41개 전부 `merge-base`(057a8149)에 존재해 업스트림 저작이었고, 현재 origin/main에
+없는 이유는 업스트림이 그 사이 **삭제**했기 때문이었다(재검증: 2026-08-12, 41/41 merge-base에
+존재·41/41 현재 origin/main에 부재).
+
+**소유자 판단(2026-08-12): 업스트림 논리를 따른다.** `origin`은 `stablyai/orca`이고 이 저장소를
+소유·통제하는 건 그쪽이지 이 fork(`noobear` 리모트)가 아니다 — 업스트림이 이미 지운 파일을 fork가
+`docs/reference/`에 남겨둘 근거가 없다. 41개 파일을 `docs/reference/`에서 삭제해 업스트림 상태에
+맞췄다. 이 fork가 향후 업스트림과 실제로 리베이스/머지할 계획이 있을 때만 "유지" 판단이 의미가
+있었는데, 그 계획이 없어 되돌리는 쪽으로 정리한다.
+
+→ 판정 기준(재사용): `git cat-file -e <merge-base>:<path>`로 저작 출처를 가른다. "현재 업스트림에
+없다"는 "우리가 만들었다"와 다르다.
