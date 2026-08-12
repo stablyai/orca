@@ -14,10 +14,8 @@ import {
 } from './SpreadsheetCell'
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
-  anchorsVerticalMerge,
   buildSpreadsheetMergeIndex,
-  planSpreadsheetMergePlacement,
-  sumSpreadsheetRowHeights
+  planSpreadsheetMergePlacement
 } from './spreadsheet-merged-cells'
 import { SpreadsheetGridOverlay } from './SpreadsheetGridOverlay'
 import { buildSpreadsheetOverlayPlacements } from './spreadsheet-grid-overlay'
@@ -156,13 +154,26 @@ export function SpreadsheetGrid({
       buildSpreadsheetOverlayPlacements({
         drawings,
         sparklines,
+        mergedRanges,
+        rows,
+        cellStyles,
         mergeIndex,
         columnWidths,
         rowCount: rows.length,
         getRowHeight: getRowHeightPx,
         rowNumberColumnPx
       }),
-    [drawings, sparklines, mergeIndex, columnWidths, rows, getRowHeightPx, rowNumberColumnPx]
+    [
+      drawings,
+      sparklines,
+      mergedRanges,
+      cellStyles,
+      mergeIndex,
+      columnWidths,
+      rows,
+      getRowHeightPx,
+      rowNumberColumnPx
+    ]
   )
 
   const rowVirtualizer = useVirtualizer({
@@ -292,14 +303,7 @@ export function SpreadsheetGrid({
                   left: 0,
                   height: virtualRow.size,
                   width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`,
-                  // Why: the translate makes every row its own stacking context, so
-                  // a z-index inside one cannot rise above the next row. A row whose
-                  // merged cell reaches into the rows below has to be lifted here,
-                  // as a sibling, or those rows paint over the text.
-                  ...(anchorsVerticalMerge(mergeIndex, virtualRow.index, columnCount)
-                    ? { zIndex: 1 }
-                    : {})
+                  transform: `translateY(${virtualRow.start}px)`
                 }}
               >
                 <div
@@ -336,10 +340,15 @@ export function SpreadsheetGrid({
                   }
                   const valueRowIndex = merge?.rowIndex ?? virtualRow.index
                   const valueColumnIndex = merge?.columnIndex ?? columnIndex
+                  // Why: a merge that spans rows hands its value to the overlay,
+                  // which can draw across the whole band; the cells here only paint
+                  // the band's fill and borders.
                   const cell =
-                    mergePlacement !== null && !mergePlacement.showsValue
-                      ? ''
-                      : (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
+                    mergePlacement === null
+                      ? (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
+                      : mergePlacement.showsValue && merge !== undefined && merge.rowSpan === 1
+                        ? (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
+                        : ''
                   const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
                   // Why: a left-aligned label runs across empty neighbours the way
                   // a spreadsheet draws it, instead of being clipped to its column.
@@ -367,11 +376,11 @@ export function SpreadsheetGrid({
                       defaultVerticalAlignment={defaultVerticalAlignment}
                       overflowWidth={overflowWidth}
                       columnSpan={mergePlacement?.columnSpan}
-                      rowSpanHeightPx={
+                      ariaLabel={
+                        mergePlacement?.showsValue === true &&
                         merge !== undefined &&
-                        merge.rowSpan > 1 &&
-                        mergePlacement?.showsValue === true
-                          ? sumSpreadsheetRowHeights(merge, getRowHeightPx)
+                        merge.rowSpan > 1
+                          ? (rows[valueRowIndex]?.[valueColumnIndex] ?? undefined)
                           : undefined
                       }
                     />
@@ -382,7 +391,11 @@ export function SpreadsheetGrid({
             )
           })}
         </div>
-        <SpreadsheetGridOverlay placements={overlay} />
+        <SpreadsheetGridOverlay
+          placements={overlay}
+          fontSizePx={fontSizePx}
+          defaultVerticalAlignment={defaultVerticalAlignment}
+        />
       </div>
     </div>
   )

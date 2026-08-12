@@ -148,71 +148,59 @@ describe('SpreadsheetGrid overlay and overflow', () => {
   })
 })
 
-describe('SpreadsheetGrid vertical merge stacking', () => {
-  const HEADER = ['A', 'B']
-  const ROWS = [
-    ['Título', ''],
-    ['', ''],
-    ['', ''],
-    ['x', 'y']
-  ]
-
-  function liftedRowIndexes(): string[] {
+describe('SpreadsheetGrid vertical merges', () => {
+  function renderWithMerge(
+    mergedRanges: { rowIndex: number; columnIndex: number; rowSpan: number; columnSpan: number }[]
+  ): void {
+    render(
+      <SpreadsheetGrid
+        header={['A', 'B', 'C', 'D']}
+        rows={Array.from({ length: 8 }, (_, index) => [`v${index}`, '', '', ''])}
+        columnCount={4}
+        mergedRanges={mergedRanges}
+        defaultVerticalAlignment="bottom"
+      />
+    )
     expect(container!.querySelectorAll('[role="cell"]').length).toBeGreaterThan(0)
-    const dataRows = [
-      ...container!.querySelectorAll<HTMLElement>('[role="row"][aria-rowindex]')
-    ].filter((row) => row.getAttribute('aria-rowindex') !== '1')
-    expect(dataRows.length).toBeGreaterThan(0)
-    return dataRows
-      .filter((row) => row.style.zIndex === '1')
-      .map((row) => row.getAttribute('aria-rowindex')!)
   }
 
-  it('lifts no data row on a sheet without merges', () => {
-    render(<SpreadsheetGrid header={HEADER} rows={ROWS} columnCount={2} />)
+  function dataRows(): HTMLElement[] {
+    return [...container!.querySelectorAll('[role="row"][aria-rowindex]')].filter(
+      (row) => row.getAttribute('aria-rowindex') !== '1'
+    ) as HTMLElement[]
+  }
 
-    expect(liftedRowIndexes()).toEqual([])
+  it('numbers every rendered row, including the ones a merge covers', () => {
+    renderWithMerge([{ rowIndex: 1, columnIndex: 0, rowSpan: 3, columnSpan: 2 }])
+
+    const numbers = [...container!.querySelectorAll('[role="rowheader"]')].map((cell) =>
+      cell.textContent?.trim()
+    )
+    expect(numbers).toEqual(['1', '2', '3', '4', '5', '6', '7', '8'])
   })
 
-  it('lifts exactly the row that anchors a merge reaching into the row below', () => {
-    render(
-      <SpreadsheetGrid
-        header={HEADER}
-        rows={ROWS}
-        columnCount={2}
-        mergedRanges={[{ rowIndex: 1, columnIndex: 0, rowSpan: 2, columnSpan: 2 }]}
-      />
-    )
+  it('leaves every row in the same layer, so none can paint over another', () => {
+    renderWithMerge([{ rowIndex: 1, columnIndex: 0, rowSpan: 3, columnSpan: 2 }])
 
-    expect(liftedRowIndexes()).toEqual(['3'])
+    expect(dataRows().map((row) => row.style.zIndex)).toEqual(Array.from({ length: 8 }, () => ''))
   })
 
-  it('lifts no row for a merge that only spans columns', () => {
-    render(
-      <SpreadsheetGrid
-        header={HEADER}
-        rows={ROWS}
-        columnCount={2}
-        mergedRanges={[{ rowIndex: 1, columnIndex: 0, rowSpan: 1, columnSpan: 2 }]}
-      />
-    )
+  it('draws the value of a row-spanning merge once, outside the rows', () => {
+    renderWithMerge([{ rowIndex: 1, columnIndex: 0, rowSpan: 3, columnSpan: 2 }])
 
-    expect(liftedRowIndexes()).toEqual([])
+    const inCells = [...container!.querySelectorAll('[role="cell"]')].filter((cell) =>
+      cell.textContent?.includes('v1')
+    )
+    expect(inCells).toHaveLength(0)
+    expect(container!.textContent).toContain('v1')
   })
 
-  it('lifts both anchors when two merges reach down from different rows', () => {
-    render(
-      <SpreadsheetGrid
-        header={HEADER}
-        rows={ROWS}
-        columnCount={2}
-        mergedRanges={[
-          { rowIndex: 0, columnIndex: 0, rowSpan: 2, columnSpan: 1 },
-          { rowIndex: 2, columnIndex: 1, rowSpan: 2, columnSpan: 1 }
-        ]}
-      />
-    )
+  it('leaves a merge confined to one row drawing its own value', () => {
+    renderWithMerge([{ rowIndex: 1, columnIndex: 0, rowSpan: 1, columnSpan: 2 }])
 
-    expect(liftedRowIndexes()).toEqual(['2', '4'])
+    const inCells = [...container!.querySelectorAll('[role="cell"]')].filter((cell) =>
+      cell.textContent?.includes('v1')
+    )
+    expect(inCells).toHaveLength(1)
   })
 })

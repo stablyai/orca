@@ -2,6 +2,7 @@ import type { ResolvedXlsxSparkline } from './xlsx-sparkline'
 import type { XlsxSheetDrawing } from './xlsx-drawings'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
 import type { SpreadsheetMergeIndex } from './spreadsheet-merged-cells'
+import type { SpreadsheetCellStyle } from './SpreadsheetCell'
 
 export type SpreadsheetOverlayRect = {
   left: number
@@ -22,14 +23,24 @@ type SpreadsheetSparklinePlacement = SpreadsheetOverlayRect & {
   sparkline: ResolvedXlsxSparkline
 }
 
+/** The value of a merge that spans rows, drawn over the band the merge paints. */
+export type SpreadsheetMergedTextPlacement = SpreadsheetOverlayRect & {
+  rowIndex: number
+  columnIndex: number
+  text: string
+  style: SpreadsheetCellStyle | undefined
+}
+
 export type SpreadsheetOverlayPlacements = {
   drawings: SpreadsheetDrawingPlacement[]
   sparklines: SpreadsheetSparklinePlacement[]
+  mergedTexts: SpreadsheetMergedTextPlacement[]
 }
 
 export const EMPTY_SPREADSHEET_OVERLAY: SpreadsheetOverlayPlacements = {
   drawings: [],
-  sparklines: []
+  sparklines: [],
+  mergedTexts: []
 }
 
 /**
@@ -90,6 +101,9 @@ function buildOffsets(count: number, getSize: (index: number) => number): number
 export function buildSpreadsheetOverlayPlacements({
   drawings,
   sparklines,
+  mergedRanges,
+  rows,
+  cellStyles,
   mergeIndex,
   columnWidths,
   rowCount,
@@ -98,6 +112,9 @@ export function buildSpreadsheetOverlayPlacements({
 }: {
   drawings: readonly XlsxSheetDrawing[] | undefined
   sparklines: readonly (readonly (ResolvedXlsxSparkline | undefined)[] | undefined)[] | undefined
+  mergedRanges?: readonly XlsxMergedRange[]
+  rows?: readonly (readonly string[])[]
+  cellStyles?: readonly (readonly (SpreadsheetCellStyle | undefined)[])[]
   mergeIndex: SpreadsheetMergeIndex
   columnWidths: readonly number[]
   rowCount: number
@@ -106,7 +123,10 @@ export function buildSpreadsheetOverlayPlacements({
 }): SpreadsheetOverlayPlacements {
   const hasDrawings = drawings !== undefined && drawings.length > 0
   const hasSparklines = sparklines !== undefined && sparklines.length > 0
-  if (!hasDrawings && !hasSparklines) {
+  // Why: only a merge that spans rows needs the overlay. One confined to a single
+  // row is drawn by its own cell, which already spans the columns.
+  const tallMerges = (mergedRanges ?? []).filter((merge) => merge.rowSpan > 1)
+  if (!hasDrawings && !hasSparklines && tallMerges.length === 0) {
     return EMPTY_SPREADSHEET_OVERLAY
   }
 
@@ -134,7 +154,22 @@ export function buildSpreadsheetOverlayPlacements({
     }
   }
 
-  return { drawings: drawingPlacements, sparklines: sparklinePlacements }
+  const mergedTexts: SpreadsheetMergedTextPlacement[] = []
+  for (const merge of tallMerges) {
+    const text = rows?.[merge.rowIndex]?.[merge.columnIndex] ?? ''
+    if (text === '') {
+      continue
+    }
+    mergedTexts.push({
+      rowIndex: merge.rowIndex,
+      columnIndex: merge.columnIndex,
+      text,
+      style: cellStyles?.[merge.rowIndex]?.[merge.columnIndex],
+      ...rectFor(mergeRange(merge))
+    })
+  }
+
+  return { drawings: drawingPlacements, sparklines: sparklinePlacements, mergedTexts }
 }
 
 function singleCell(rowIndex: number, columnIndex: number): XlsxDrawingRange {

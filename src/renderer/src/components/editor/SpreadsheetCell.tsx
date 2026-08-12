@@ -96,12 +96,11 @@ type SpreadsheetCellProps = {
   /** Columns this cell spans when it anchors a merged range. */
   columnSpan?: number
   /**
-   * Total height of the rows a merge covers, set only on the cell that owns the
-   * value. Rows are virtualized independently, so a real row span is not
-   * available; giving the anchor the merged height lets its text use the whole
-   * band instead of being clipped to the first row.
+   * Value to announce when the cell draws none itself. A merge that spans rows
+   * hands its text to the overlay, which is outside the table — without this the
+   * value would leave the accessibility tree with it.
    */
-  rowSpanHeightPx?: number
+  ariaLabel?: string
 }
 
 export function SpreadsheetCell({
@@ -112,7 +111,7 @@ export function SpreadsheetCell({
   defaultVerticalAlignment,
   overflowWidth,
   columnSpan,
-  rowSpanHeightPx
+  ariaLabel
 }: SpreadsheetCellProps): React.JSX.Element {
   const wrapsText = cellStyle?.wrapText === true
   const indentPx = computeSpreadsheetIndentPx(cellStyle?.indent, fontSizePx)
@@ -120,6 +119,7 @@ export function SpreadsheetCell({
     <div
       role="cell"
       aria-colindex={ariaColumnIndex}
+      aria-label={ariaLabel}
       className={cn(
         'flex border-b border-r border-spreadsheet-gridline px-2',
         overflowWidth === null ? 'overflow-hidden' : 'overflow-visible',
@@ -147,13 +147,7 @@ export function SpreadsheetCell({
         // so a cell with one underline keeps the grid intact everywhere else.
         ...buildSpreadsheetCellBorderStyle(cellStyle?.borders),
         ...(indentPx === undefined ? {} : { paddingLeft: indentPx }),
-        ...(columnSpan === undefined ? {} : { gridColumn: `span ${columnSpan}` }),
-        // Why: `alignSelf: start` stops the grid stretching this back to one row's
-        // track, and the raised layer keeps it above the band cells of the same
-        // merge, which the rows below render after it.
-        ...(rowSpanHeightPx === undefined
-          ? {}
-          : { height: rowSpanHeightPx, alignSelf: 'start', zIndex: 1 })
+        ...(columnSpan === undefined ? {} : { gridColumn: `span ${columnSpan}` })
       }}
       title={cell}
     >

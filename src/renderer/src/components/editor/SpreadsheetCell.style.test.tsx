@@ -239,55 +239,6 @@ describe('SpreadsheetCell borders, indent and spans', () => {
     expect(cell.style.zIndex).toBe('')
   })
 
-  it('gives a merged anchor the whole band height above the rows it covers', () => {
-    const cell = renderCell({ rowSpanHeightPx: 48 })
-
-    expect(cell.style.height).toBe('48px')
-    expect(cell.style.alignSelf).toBe('start')
-    expect(cell.style.zIndex).toBe('1')
-  })
-
-  it('spans columns and rows at once for a range merged both ways', () => {
-    const cell = renderCell({ columnSpan: 4, rowSpanHeightPx: 48 })
-
-    expect(cell.style.gridColumn).toBe('span 4')
-    expect(cell.style.height).toBe('48px')
-  })
-
-  it('rests a bottom-aligned merged anchor on the foot of the whole band', () => {
-    const cell = renderCell({
-      cellStyle: { verticalAlignment: 'bottom' },
-      rowSpanHeightPx: 48
-    })
-
-    expect(cell.className).toContain('items-end')
-    expect(cell.style.height).toBe('48px')
-  })
-
-  it('fills the whole band of a merged anchor that declares a background', () => {
-    const cell = renderCell({
-      cellStyle: { backgroundColor: '#dbe5f1' },
-      rowSpanHeightPx: 72
-    })
-
-    expect(cell.style.backgroundColor).toBe('#dbe5f1')
-    expect(cell.style.height).toBe('72px')
-  })
-
-  it('applies a zero band height rather than treating it as unset', () => {
-    const cell = renderCell({ rowSpanHeightPx: 0 })
-
-    expect(cell.style.height).toBe('0px')
-    expect(cell.style.alignSelf).toBe('start')
-  })
-
-  it('carries the band height alongside an overflowing label width', () => {
-    const cell = renderCell({ overflowWidth: 320, rowSpanHeightPx: 48 })
-
-    expect(cell.style.height).toBe('48px')
-    expect(label(cell).style.maxWidth).toBe('320px')
-  })
-
   it('leaves the shared style record it was given untouched', () => {
     const cellStyle: CellProps['cellStyle'] = {
       backgroundColor: '#eeeeee',
