@@ -9,6 +9,7 @@ import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
+import { fetchKiroRateLimits } from './kiro-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
 export type Deferred<T> = {
@@ -89,6 +90,7 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
+  vi.mocked(fetchKiroRateLimits).mockImplementation(async () => unavailableProvider('kiro'))
 }
 
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
@@ -106,6 +108,7 @@ export function resetRateLimitProviderMocks(): void {
     error: null,
     status: 'unavailable'
   })
+  vi.mocked(fetchKiroRateLimits).mockResolvedValue(unavailableProvider('kiro'))
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)
   vi.mocked(readGrokAuthSession).mockReturnValue({ status: 'missing' })
 }
