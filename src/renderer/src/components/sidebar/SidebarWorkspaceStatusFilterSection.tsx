@@ -8,13 +8,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/types'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
+import { getEffectiveHiddenWorkspaceStatusIds } from './workspace-status-visibility'
 import { translate } from '@/i18n/i18n'
 
 export function getWorkspaceStatusVisibilityLabel(
   statuses: readonly WorkspaceStatusDefinition[],
   hiddenStatusIds: readonly WorkspaceStatus[]
 ): string {
-  const visible = statuses.filter((status) => !hiddenStatusIds.includes(status.id))
+  const effectiveHiddenIds = getEffectiveHiddenWorkspaceStatusIds(hiddenStatusIds, statuses)
+  const visible = statuses.filter((status) => !effectiveHiddenIds.includes(status.id))
   if (visible.length === statuses.length) {
     return translate(
       'auto.components.sidebar.SidebarWorkspaceStatusFilterSection.allStatuses',
@@ -40,13 +42,15 @@ export function toggleHiddenWorkspaceStatusId(
   hiddenStatusIds: readonly WorkspaceStatus[],
   statuses: readonly WorkspaceStatusDefinition[],
   statusId: WorkspaceStatus
-): WorkspaceStatus[] {
+): readonly WorkspaceStatus[] {
   const hidden = new Set(hiddenStatusIds)
   if (hidden.delete(statusId)) {
     return [...hidden]
   }
   if (statuses.every((status) => status.id === statusId || hidden.has(status.id))) {
-    return [...hiddenStatusIds]
+    // Why the same array back: a fresh copy would churn store identity into the
+    // debounced persisted-UI write for a click that changed nothing.
+    return hiddenStatusIds
   }
   hidden.add(statusId)
   return [...hidden]
@@ -68,11 +72,21 @@ const SidebarWorkspaceStatusFilterSection = React.memo(
     const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
     const setHiddenWorkspaceStatusIds = useAppStore((s) => s.setHiddenWorkspaceStatusIds)
 
+    const effectiveHiddenIds = getEffectiveHiddenWorkspaceStatusIds(
+      hiddenWorkspaceStatusIds,
+      workspaceStatuses
+    )
+
     const toggleStatus = useCallback(
       (statusId: WorkspaceStatus) => {
-        setHiddenWorkspaceStatusIds(
-          toggleHiddenWorkspaceStatusId(hiddenWorkspaceStatusIds, workspaceStatuses, statusId)
+        const next = toggleHiddenWorkspaceStatusId(
+          hiddenWorkspaceStatusIds,
+          workspaceStatuses,
+          statusId
         )
+        if (next !== hiddenWorkspaceStatusIds) {
+          setHiddenWorkspaceStatusIds([...next])
+        }
       },
       [hiddenWorkspaceStatusIds, setHiddenWorkspaceStatusIds, workspaceStatuses]
     )
@@ -98,11 +112,14 @@ const SidebarWorkspaceStatusFilterSection = React.memo(
         >
           {workspaceStatuses.map((status) => {
             const StatusIcon = getWorkspaceStatusVisualMeta(status).icon
-            const visible = !hiddenWorkspaceStatusIds.includes(status.id)
+            const visible = !effectiveHiddenIds.includes(status.id)
             return (
               <DropdownMenuCheckboxItem
                 key={status.id}
                 checked={visible}
+                // Why disabled and not just a no-op click: the last visible
+                // status cannot be hidden, so say so instead of swallowing it.
+                disabled={visible && effectiveHiddenIds.length === workspaceStatuses.length - 1}
                 onCheckedChange={() => toggleStatus(status.id)}
                 onSelect={(e) => e.preventDefault()}
               >

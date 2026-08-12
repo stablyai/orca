@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  computeVisibleWorktreeIds,
-  isDefaultBranchWorkspace,
-  type SidebarFilterState
-} from './visible-worktrees'
+import { computeVisibleWorktreeIds, isDefaultBranchWorkspace } from './visible-worktrees'
+import type { SidebarFilterState } from './sidebar-filter-state'
 import type { Repo, Worktree } from '../../../../shared/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 

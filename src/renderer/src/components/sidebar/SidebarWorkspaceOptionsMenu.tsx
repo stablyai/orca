@@ -20,6 +20,7 @@ import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import SidebarWorkspaceStatusFilterSection from './SidebarWorkspaceStatusFilterSection'
+import { getEffectiveHiddenWorkspaceStatusIds } from './workspace-status-visibility'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
 import { SidebarHostScopeMenuSection } from './SidebarHostScopeMenuSection'
@@ -46,6 +47,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const hiddenWorkspaceStatusIds = useAppStore((s) => s.hiddenWorkspaceStatusIds)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const repos = useAppStore((s) => s.repos)
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
@@ -81,7 +83,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     return count
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
-  const hiddenStatusCount = hiddenWorkspaceStatusIds.length
+  // Why not the raw list: a status deleted after being hidden would otherwise
+  // count as an active filter with no row left to untick.
+  const hiddenStatusCount = getEffectiveHiddenWorkspaceStatusIds(
+    hiddenWorkspaceStatusIds,
+    workspaceStatuses
+  ).length
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
   // Why gated on the parent row: the exemption only narrows the list during the

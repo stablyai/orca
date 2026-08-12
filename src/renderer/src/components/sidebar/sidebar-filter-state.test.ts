@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  computeClearFilterActions,
   isDefaultBranchWorkspace,
-  isSleepingSweepExemptionNarrowingList,
-  sidebarHasActiveFilters
+  isSleepingSweepExemptionNarrowingList
 } from './visible-worktrees'
+import { computeClearFilterActions, sidebarHasActiveFilters } from './sidebar-filter-state'
 import type { Worktree } from '../../../../shared/types'
 
 function makeWorktree(id: string, repoId = 'repo1'): Worktree {

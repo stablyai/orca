@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { isWorkspaceStatusHidden } from './workspace-status-visibility'
+import {
+  getEffectiveHiddenWorkspaceStatusIds,
+  isWorkspaceStatusHidden
+} from './workspace-status-visibility'
 import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 
 describe('isWorkspaceStatusHidden', () => {
@@ -22,5 +25,33 @@ describe('isWorkspaceStatusHidden', () => {
     expect(
       isWorkspaceStatusHidden({ workspaceStatus: 'completed' }, ['completed'], undefined)
     ).toBe(false)
+  })
+
+  it('shows everything again once every surviving status is hidden', () => {
+    // Reachable by deleting the one status the user had left visible.
+    const hiddenEverything = STATUSES.map((status) => status.id)
+
+    expect(isWorkspaceStatusHidden({ workspaceStatus: 'todo' }, hiddenEverything, STATUSES)).toBe(
+      false
+    )
+  })
+})
+
+describe('getEffectiveHiddenWorkspaceStatusIds', () => {
+  const STATUSES = [...DEFAULT_WORKSPACE_STATUSES]
+
+  it('drops ids of statuses that no longer exist', () => {
+    expect(getEffectiveHiddenWorkspaceStatusIds(['completed', 'deleted-id'], STATUSES)).toEqual([
+      'completed'
+    ])
+  })
+
+  it('clears the filter when it would hide every status', () => {
+    expect(
+      getEffectiveHiddenWorkspaceStatusIds(
+        STATUSES.map((status) => status.id),
+        STATUSES
+      )
+    ).toEqual([])
   })
 })

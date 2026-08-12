@@ -123,12 +123,8 @@ import {
   readWorkspaceDragDataIds
 } from './workspace-status'
 import { useWorkspaceStatusDocumentDrop } from './use-workspace-status-drop'
-import {
-  computeClearFilterActions,
-  computeVisibleWorktreeIds,
-  setVisibleWorktreeIds,
-  sidebarHasActiveFilters
-} from './visible-worktrees'
+import { computeVisibleWorktreeIds, setVisibleWorktreeIds } from './visible-worktrees'
+import { computeClearFilterActions, sidebarHasActiveFilters } from './sidebar-filter-state'
 import { isWorkspaceStatusHidden } from './workspace-status-visibility'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -5579,10 +5575,16 @@ const WorktreeList = React.memo(function WorktreeList({
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
       worktreeLineageById,
-      forcedVisibleWorktreeIds: agentSendTargetWorktreeId ? [agentSendTargetWorktreeId] : undefined
+      // Why the active workspace: "Move to status" sits on the row itself, so
+      // marking the workspace you are working in as a hidden status would
+      // otherwise delete its row while its panes stay open.
+      forcedVisibleWorktreeIds: [agentSendTargetWorktreeId, activeWorktreeId].filter(
+        (id): id is string => Boolean(id)
+      )
     })
     return ids.map((id) => worktreeMap.get(id)).filter((w): w is Worktree => w != null)
   }, [
+    activeWorktreeId,
     agentSendTargetWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
