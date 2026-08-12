@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
+import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   recoverMobileRelayPairing,
@@ -234,6 +236,49 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: when the desktop has revoked the device behind the journal (e.g. the
+  // user rotated the QR), every recovery credential comes back BAD_OUTER_CREDENTIAL.
+  // Waiting out the invite TTL + grace strand the user on "recovery pending" for
+  // no recoverable reason — the credentials will never become valid again.
+  it('abandons a journal immediately when every credential is permanently rejected', async () => {
+    const saved = journal()
+    const rejected = () =>
+      client(async () => {
+        throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+      })
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay: vi.fn(() => rejected()) }),
+      // Why: pin now inside the invite lifetime so the time-based abandon branch
+      // cannot be the reason recovery returns 'abandoned'.
+      now: () => now
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
+    expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  // Why: one transient failure leaves the door open to reconciling on the next
+  // launch; only all-permanent is enough to abandon.
+  it('keeps the journal when at least one credential had a transient failure', async () => {
+    const saved = journal()
+    const connectRelay = vi.fn((args: { credential?: string }) =>
+      args.credential
+        ? client(async () => {
+            throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+          })
+        : client(async () => {
+            throw new Error('relay unreachable')
+          })
+    )
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay }),
+      now: () => now
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
   it('keeps a just-expired journal so a brief outage cannot discard it', async () => {
