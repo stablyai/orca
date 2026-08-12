@@ -103,6 +103,34 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('forceInApp opens a local link in Orca when the setting is off', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      forceInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not force a remote link into the Orca browser', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      forceInApp: true,
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('routes to the system browser when a remote runtime environment is active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
 
@@ -143,6 +171,21 @@ describe('openHttpLink', () => {
     expect(openUrlMock).toHaveBeenNthCalledWith(2, 'http://localhost:5180/ssh')
     expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+
+  // Why: runtimes bind per workspace, so activeRuntimeEnvironmentId is commonly
+  // null while a pane is remote — ownership must come from the click source.
+  it('keeps a runtime-owned link out of Orca when no runtime is globally active', () => {
+    storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: null }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      sourceOwner: { kind: 'runtime', runtimeEnvironmentId: 'env-1' }
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(setActiveWorktreeMock).not.toHaveBeenCalled()
   })
 
   it('labels explicit local links from the local scan instead of a merged remote port', async () => {
@@ -379,6 +422,89 @@ describe('openHttpLink', () => {
 
     await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/')).resolves.toBe(null)
     expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+
+  // Why: the hover label must describe the click's real destination — a remote pane's
+  // loopback URL opens raw in the system browser, so a local worktree label would lie.
+  it.each([
+    ['runtime', { kind: 'runtime', runtimeEnvironmentId: 'env-1' }] as const,
+    ['ssh', { kind: 'ssh', connectionId: 'conn-1' }] as const
+  ])('does not label a %s-owned localhost link without an active runtime', async (_kind, owner) => {
+    storeState.settings = {
+      localhostWorktreeLabelsEnabled: true,
+      activeRuntimeEnvironmentId: null
+    }
+    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
+    storeState.workspacePortScan = {
+      result: {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-main',
+              displayName: 'main',
+              path: '/repo/main',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+
+    await expect(resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/', owner)).resolves.toBe(
+      null
+    )
+    expect(registerLocalhostLabelMock).not.toHaveBeenCalled()
+  })
+
+  // Why: a local pane keeps its label from the local scan even while another pane's
+  // runtime is globally active — the same scan the click resolves.
+  it('labels a local-owned localhost link from the local scan', async () => {
+    storeState.settings = {
+      localhostWorktreeLabelsEnabled: true,
+      activeRuntimeEnvironmentId: 'env-other'
+    }
+    storeState.repos = [{ id: 'repo-1', displayName: 'snapstudio' }]
+    storeState.worktreesByRepo = { 'repo-1': [{ id: 'wt-main', projectId: 'repo-1' }] }
+    storeState.workspacePortScansByKey = {
+      'local:all': {
+        platform: 'darwin',
+        scannedAt: 1,
+        ports: [
+          {
+            id: 'tcp:5180',
+            kind: 'workspace',
+            port: 5180,
+            protocol: 'http',
+            bindHost: '127.0.0.1',
+            connectHost: 'localhost',
+            owner: {
+              repoId: 'repo-1',
+              worktreeId: 'wt-main',
+              displayName: 'main',
+              path: '/repo/main',
+              confidence: 'cwd'
+            }
+          }
+        ]
+      }
+    }
+    registerLocalhostLabelMock.mockResolvedValue({
+      url: 'http://snapstudio-main.orca.localhost:60016/'
+    })
+
+    await expect(
+      resolveLocalhostHttpLinkDisplayUrl('http://localhost:5180/', { kind: 'local' })
+    ).resolves.toBe('http://snapstudio-main.orca.localhost:60016/')
   })
 })
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   resolveWorkspaceKanbanCardDropCommitTarget,
   resolveWorkspaceCardDropIndexFromRects,
+  resolveWorkspaceCardDropIndicatorY,
   resolveWorkspaceStatusDropTargetFromRects
 } from './workspace-kanban-card-pointer-drag-dom'
 
@@ -40,6 +41,47 @@ describe('workspace kanban pointer drag card drop index', () => {
 
   it('inserts at the end when the pointer is below every card midpoint', () => {
     expect(resolveWorkspaceCardDropIndexFromRects(cardRects, 140)).toBe(3)
+  })
+
+  // Why: a virtualized lane only renders its window, so rendered position is
+  // not lane position. Without the carried index a drop into a scrolled lane
+  // would land near the top of the list.
+  it('uses the lane index of a rendered card rather than its rendered position', () => {
+    const virtualized = [
+      { top: 0, bottom: 40, index: 20 },
+      { top: 48, bottom: 88, index: 21 },
+      { top: 96, bottom: 136, index: 22 }
+    ]
+    expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 10)).toBe(20)
+    expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 70)).toBe(22)
+    expect(resolveWorkspaceCardDropIndexFromRects(virtualized, 140)).toBe(23)
+  })
+})
+
+describe('workspace kanban drop indicator placement', () => {
+  const cardRects = [
+    { top: 100, bottom: 140 },
+    { top: 148, bottom: 188 }
+  ]
+
+  it('places the line above, between, and below rendered cards', () => {
+    expect(resolveWorkspaceCardDropIndicatorY(cardRects, 0, 90)).toBe(95)
+    expect(resolveWorkspaceCardDropIndicatorY(cardRects, 1, 90)).toBe(144)
+    expect(resolveWorkspaceCardDropIndicatorY(cardRects, 2, 90)).toBe(193)
+  })
+
+  it('falls back to the lane top when the lane renders no cards', () => {
+    expect(resolveWorkspaceCardDropIndicatorY([], 0, 90)).toBe(104)
+  })
+
+  it('anchors to the rendered card that owns the lane index', () => {
+    const virtualized = [
+      { top: 100, bottom: 140, index: 20 },
+      { top: 148, bottom: 188, index: 21 }
+    ]
+    expect(resolveWorkspaceCardDropIndicatorY(virtualized, 20, 90)).toBe(95)
+    expect(resolveWorkspaceCardDropIndicatorY(virtualized, 21, 90)).toBe(144)
+    expect(resolveWorkspaceCardDropIndicatorY(virtualized, 22, 90)).toBe(193)
   })
 })
 

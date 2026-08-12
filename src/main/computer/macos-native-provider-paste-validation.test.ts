@@ -3,21 +3,36 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 
 const {
-  claimSupervisedMacOSProviderMock,
+  chmodSyncMock,
   connectMacOSProviderSocketMock,
-  releaseSupervisedMacOSProviderMock,
-  startSupervisedMacOSProviderMock
+  mkdtempSyncMock,
+  resolveMacOSComputerUseExecutablePathMock,
+  rmSyncMock,
+  spawnMock,
+  writeFileSyncMock
 } = vi.hoisted(() => ({
-  claimSupervisedMacOSProviderMock: vi.fn(),
+  chmodSyncMock: vi.fn(),
   connectMacOSProviderSocketMock: vi.fn(),
-  releaseSupervisedMacOSProviderMock: vi.fn(),
-  startSupervisedMacOSProviderMock: vi.fn()
+  mkdtempSyncMock: vi.fn(),
+  resolveMacOSComputerUseExecutablePathMock: vi.fn(),
+  rmSyncMock: vi.fn(),
+  spawnMock: vi.fn(),
+  writeFileSyncMock: vi.fn()
 }))
 
-vi.mock('./computer-provider-supervisor-client', () => ({
-  claimSupervisedMacOSProvider: claimSupervisedMacOSProviderMock,
-  releaseSupervisedMacOSProvider: releaseSupervisedMacOSProviderMock,
-  startSupervisedMacOSProvider: startSupervisedMacOSProviderMock
+vi.mock('child_process', () => ({
+  spawn: spawnMock
+}))
+
+vi.mock('fs', () => ({
+  chmodSync: chmodSyncMock,
+  mkdtempSync: mkdtempSyncMock,
+  rmSync: rmSyncMock,
+  writeFileSync: writeFileSyncMock
+}))
+
+vi.mock('./macos-native-provider-paths', () => ({
+  resolveMacOSComputerUseExecutablePath: resolveMacOSComputerUseExecutablePathMock
 }))
 
 vi.mock('./macos-native-provider-socket', () => ({
@@ -46,6 +61,11 @@ class FakeSocket extends EventEmitter {
   }
 }
 
+class FakeProvider extends EventEmitter {
+  kill = vi.fn()
+  unref = vi.fn()
+}
+
 async function loadClientModule() {
   vi.resetModules()
   return await import('./macos-native-provider-client')
@@ -67,17 +87,20 @@ function macOSProviderCapabilities() {
 
 describe('MacOSNativeProviderClient paste validation', () => {
   const sockets: FakeSocket[] = []
+  const providers: FakeProvider[] = []
 
   beforeEach(() => {
     vi.useFakeTimers()
     sockets.length = 0
-    claimSupervisedMacOSProviderMock.mockResolvedValue(undefined)
-    releaseSupervisedMacOSProviderMock.mockResolvedValue(undefined)
-    startSupervisedMacOSProviderMock.mockResolvedValue({
-      sessionId: 'session-1',
-      socketPath: '/tmp/session-1/provider.sock',
-      socketToken: 'token-session-1',
-      termination: new Promise<never>(() => {})
+    providers.length = 0
+    mkdtempSyncMock.mockImplementation((prefix: string) => `${prefix}${sockets.length}`)
+    resolveMacOSComputerUseExecutablePathMock.mockReturnValue(
+      '/Applications/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos'
+    )
+    spawnMock.mockImplementation(() => {
+      const provider = new FakeProvider()
+      providers.push(provider)
+      return provider
     })
     connectMacOSProviderSocketMock.mockImplementation(async () => {
       const socket = new FakeSocket()
@@ -87,10 +110,13 @@ describe('MacOSNativeProviderClient paste validation', () => {
   })
 
   afterEach(() => {
-    claimSupervisedMacOSProviderMock.mockReset()
+    chmodSyncMock.mockReset()
     connectMacOSProviderSocketMock.mockReset()
-    releaseSupervisedMacOSProviderMock.mockReset()
-    startSupervisedMacOSProviderMock.mockReset()
+    mkdtempSyncMock.mockReset()
+    resolveMacOSComputerUseExecutablePathMock.mockReset()
+    rmSyncMock.mockReset()
+    spawnMock.mockReset()
+    writeFileSyncMock.mockReset()
     vi.useRealTimers()
   })
 
@@ -102,8 +128,9 @@ describe('MacOSNativeProviderClient paste validation', () => {
     const call = client.action('pasteText', { app: 'TextEdit', text })
     await Promise.resolve()
 
+    expect(providers).toHaveLength(0)
     expect(sockets).toHaveLength(0)
-    expect(startSupervisedMacOSProviderMock).not.toHaveBeenCalled()
+    expect(spawnMock).not.toHaveBeenCalled()
     expect(connectMacOSProviderSocketMock).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(0)

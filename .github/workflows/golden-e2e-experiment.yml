@@ -1,18 +1,6 @@
 name: Golden E2E Experiment
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/golden-e2e-experiment.yml'
-      - 'package.json'
-      - 'tests/e2e/golden-core-flows.spec.ts'
-      - 'tests/e2e/fixtures/terminal-emoji-table.md'
-      - 'tests/e2e/helpers/**'
-      - 'tests/e2e/terminal-raw-emoji-table-scroll-restore.spec.ts'
-      - 'tests/e2e/terminal-webgl-atlas-budget.spec.ts'
-      - 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'
-      - 'src/renderer/src/components/sidebar/SidebarHeader.tsx'
-      - 'src/renderer/src/lib/pane-manager/**'
   workflow_dispatch:
     inputs:
       ref:
@@ -44,9 +32,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          # Why: pull_request merge refs disappear after merge, but experiment
-          # reruns still need a stable commit to checkout.
-          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install native build tools
         if: runner.os == 'Linux'

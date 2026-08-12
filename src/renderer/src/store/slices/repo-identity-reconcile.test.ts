@@ -14,6 +14,50 @@ describe('reconcileFetchedRepos', () => {
     expect(reconcileFetchedRepos(previous, next)).toBe(previous)
   })
 
+  it('reconciles repos whose nested records were rebuilt by hydration and IPC', () => {
+    // Why: main's hydrateRepo reconstructs hookSettings on every list and structured-clone
+    // rebuilds the rest, so a reference compare would report every real repo as changed.
+    const nested = (): Partial<Repo> => ({
+      hookSettings: { mode: 'auto', scripts: { setup: 'echo hi', archive: '' } },
+      gitRemoteIdentity: {
+        canonicalKey: 'github.com/o/n',
+        remoteName: 'origin',
+        remoteUrl: 'git@github.com:o/n.git'
+      },
+      importedExternalWorktreePaths: ['/a', '/b']
+    })
+    const previous = [makeRepo('a', nested())]
+    const next = structuredClone([makeRepo('a', nested())]) as Repo[]
+
+    expect(reconcileFetchedRepos(previous, next)).toBe(previous)
+  })
+
+  it('treats a changed nested field as a real change', () => {
+    const previous = [makeRepo('a', { importedExternalWorktreePaths: ['/a'] })]
+    const next = [makeRepo('a', { importedExternalWorktreePaths: ['/b'] })]
+    const result = reconcileFetchedRepos(previous, next)
+
+    expect(result).not.toBe(previous)
+    expect(result[0].importedExternalWorktreePaths).toEqual(['/b'])
+  })
+
+  it('treats a nested field gaining a key as a real change', () => {
+    const previous = [
+      makeRepo('a', { hookSettings: { mode: 'auto', scripts: { setup: '', archive: '' } } })
+    ]
+    const next = [
+      makeRepo('a', {
+        hookSettings: {
+          mode: 'auto',
+          setupRunPolicy: 'run-by-default',
+          scripts: { setup: '', archive: '' }
+        }
+      })
+    ]
+
+    expect(reconcileFetchedRepos(previous, next)).not.toBe(previous)
+  })
+
   it('reuses unchanged repo objects while reflecting a reorder', () => {
     const previous = [makeRepo('a'), makeRepo('b')]
     const next = [makeRepo('b'), makeRepo('a')]

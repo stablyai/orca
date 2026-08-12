@@ -62,13 +62,3 @@ export type PrimaryActionInputs = {
   // while the request is in flight instead of flashing it in after ~1s.
   isHostedReviewCreationLoading?: boolean
 }
-
-export const PRIMARY_LABEL_BY_KIND: Record<Exclude<PrimaryActionKind, 'commit'>, string> = {
-  stage: 'Stage All',
-  push: 'Push',
-  pull: 'Pull',
-  sync: 'Sync',
-  publish: 'Publish Branch',
-  create_pr_intent: 'Create PR',
-  create_pr: 'Create PR'
-}

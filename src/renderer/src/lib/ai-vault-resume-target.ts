@@ -178,7 +178,7 @@ function getAiVaultResumeFolderTargetStatus(
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
   if (groupHostId) {
     return getAiVaultResumeExecutionHostTargetStatus(groupHostId)
   }
@@ -202,7 +202,7 @@ function getAiVaultResumeFolderExecutionHostId(
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
   if (groupHostId) {
     return groupHostId
   }

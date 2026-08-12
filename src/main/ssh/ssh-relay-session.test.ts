@@ -21,7 +21,6 @@ vi.mock('./ssh-relay-deploy', () => ({
 }))
 
 vi.mock('./ssh-pty-consumer-session', () => ({
-  SSH_PTY_SOURCE_WINDOW_SU: 256 * 1024,
   openSshPtyConsumerSession: openConsumerSessionMock
 }))
 
@@ -207,50 +206,12 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it('installs all managed hooks in one relay RPC before plugins and PTY registration', async () => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockResolvedValue({ installers: 14, errors: 0 })
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const sftp = vi.fn()
-    const mockConn = {
-      sftp,
-      getHostKeyFingerprint: vi.fn(() => 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')
-    } as unknown as SshConnection
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-
-    await session.establish(mockConn)
-
-    const managedHookCalls = muxRequestMock.mock.calls.filter(
-      ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
-    )
-    const managedHookCallIndex = muxRequestMock.mock.calls.findIndex(
-      ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
-    )
-    const installPluginsCallIndex = muxRequestMock.mock.calls.findIndex(
-      ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
-    )
-    expect(managedHookCalls).toEqual([
-      [
-        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
-        { hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA' }
-      ]
-    ])
-    expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
-    const installPluginsParams = muxRequestMock.mock.calls[installPluginsCallIndex]?.[1]
-    expect(installPluginsParams).toMatchObject({
-      piExtensionSource: expect.stringContaining('/hook/pi'),
-      ompExtensionSource: expect.stringContaining('/hook/omp')
-    })
-    expect(sftp).not.toHaveBeenCalled()
-    expect(managedHookCallIndex).toBeLessThan(installPluginsCallIndex)
-    expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
-  })
-
   it('continues provider registration when the relay managed-hook request fails', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw new Error('runtime unavailable')
       }
@@ -260,6 +221,12 @@ describe('SshRelaySession', () => {
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
     await session.establish({} as SshConnection)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        expect.anything()
+      )
+    )
 
     expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
     expect(
@@ -270,6 +237,9 @@ describe('SshRelaySession', () => {
   it('suppresses expected managed-hook teardown errors during disconnect', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
       if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
         throw Object.assign(new Error('request disposed'), { code: 'DISPOSED' })
       }
@@ -281,6 +251,12 @@ describe('SshRelaySession', () => {
 
     try {
       await session.establish({} as SshConnection)
+      await vi.waitFor(() =>
+        expect(muxRequestMock).toHaveBeenCalledWith(
+          AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+          expect.anything()
+        )
+      )
 
       expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
       expect(warn.mock.calls.flat().join(' ')).not.toContain('relay managed hook install failed')
@@ -520,7 +496,9 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-1')
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-1', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
+      'pty-1'
+    ])
   })
 
   it('establish re-attaches durable leases after app restart', async () => {
@@ -534,6 +512,7 @@ describe('SshRelaySession', () => {
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
       { targetId: 'target-1', ptyId: 'pty-live', state: 'detached' },
+      { targetId: 'target-1', ptyId: 'pty-live-2', state: 'detached' },
       { targetId: 'target-1', ptyId: 'pty-expired', state: 'expired' }
     ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
 
@@ -542,9 +521,14 @@ describe('SshRelaySession', () => {
     await session.establish(mockConn)
 
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
+    expect(mockAttach).toHaveBeenCalledWith('pty-live-2')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
+      'target-1',
+      expect.arrayContaining(['pty-live', 'pty-live-2'])
+    )
   })
 
   it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
@@ -654,11 +638,7 @@ describe('SshRelaySession', () => {
 
     await expect(establish).rejects.toThrow('Session disposed during establish')
     expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      'target-1',
-      'pty-1',
-      'attached'
-    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('does not mark PTYs attached if detach wins while reattach is in flight', async () => {
@@ -688,11 +668,7 @@ describe('SshRelaySession', () => {
     await reconnect
 
     expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      'target-1',
-      'pty-1',
-      'attached'
-    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {

@@ -8,6 +8,7 @@
  * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
  */
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type ParkedTerminalPaneCapture = {
   ptyId: string | null
@@ -49,6 +50,11 @@ export const parkedWatchersByTabId = new Map<string, ParkedTabWatcherEntry>()
 
 export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
+}
+
+// Why: the floating workspace is synthetic, so repo/folder surface lists never include it.
+export function terminalWatcherLiveWorkspaceIds(workspaceIds: Iterable<string>): Set<string> {
+  return new Set([...workspaceIds, FLOATING_TERMINAL_WORKTREE_ID])
 }
 
 /**

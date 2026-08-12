@@ -327,11 +327,9 @@ function NewWorktreeModalContent({
           })
         }
       })
-      .catch(() => {
-        if (!stale) {
-          setRepos([])
-        }
-      })
+      // Why (F10): a dropped connection rejects this call — keep the last-good list (the content
+      // remounts with the new host's cache when the client changes) instead of emptying the picker.
+      .catch(() => undefined)
       .finally(() => {
         if (!stale) {
           setLoading(false)

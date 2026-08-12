@@ -20,8 +20,6 @@ const AGENT_NAME_GROUPS = [
 
 type AgentNameGroup = (typeof AGENT_NAME_GROUPS)[number]
 
-export type GroupAddress = '@all' | '@idle' | `@${AgentNameGroup}` | `@worktree:${string}`
-
 export function isGroupAddress(to: string): boolean {
   return to.startsWith('@')
 }

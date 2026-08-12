@@ -1,26 +1,82 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TERMINAL_WORKTREE_PARK_DELAY_MS } from './terminal-hidden-view-parking'
 import {
+  clearTerminalProviderSnapshotCapabilities,
+  synchronizeTerminalProviderSnapshotCapabilities
+} from '../terminal/terminal-provider-snapshot-capability'
+import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  hasPendingRetentionSpawnWork,
   isEvictionExemptTerminalPty,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-hidden-worktree-retention'
 
+describe('hasPendingRetentionSpawnWork', () => {
+  const remoteTab = {
+    id: 'tab-remote',
+    ptyId: 'remote:env-1@@terminal-1',
+    pendingActivationSpawn: true as const
+  }
+
+  it('treats a host-backed paired PTY as settled despite activation residue', () => {
+    expect(hasPendingRetentionSpawnWork(remoteTab, {})).toBe(false)
+    expect(hasPendingRetentionSpawnWork({ ...remoteTab, pendingActivationSpawn: 2 }, {})).toBe(
+      false
+    )
+  })
+
+  it('preserves real startup work and non-paired activation guards', () => {
+    expect(hasPendingRetentionSpawnWork(remoteTab, { [remoteTab.id]: ['echo', 'pending'] })).toBe(
+      true
+    )
+    expect(
+      hasPendingRetentionSpawnWork(
+        { id: 'tab-local', ptyId: 'pty-local', pendingActivationSpawn: true },
+        {}
+      )
+    ).toBe(true)
+    expect(
+      hasPendingRetentionSpawnWork(
+        { id: 'tab-unbound', ptyId: null, pendingActivationSpawn: true },
+        {}
+      )
+    ).toBe(true)
+  })
+})
+
 describe('isEvictionExemptTerminalPty', () => {
   const worktreeId = 'repo::/worktree'
+  const currentPtyId = `${worktreeId}@@session-1`
+
+  beforeEach(async () => {
+    clearTerminalProviderSnapshotCapabilities()
+    await synchronizeTerminalProviderSnapshotCapabilities([currentPtyId], async () => [
+      { id: currentPtyId, authoritative: true }
+    ])
+  })
+  afterEach(() => clearTerminalProviderSnapshotCapabilities())
 
   it('exempts only live local ptys a remount could not reattach', () => {
     expect(isEvictionExemptTerminalPty('pty-local-detached', worktreeId)).toBe(true)
     expect(isEvictionExemptTerminalPty('other::wt@@session-1', worktreeId)).toBe(true)
   })
 
-  it('never exempts snapshot-backed, SSH, remote-runtime, or unbound ptys', () => {
-    expect(isEvictionExemptTerminalPty(`${worktreeId}@@session-1`, worktreeId)).toBe(false)
+  it('never exempts authoritative, SSH, remote-runtime, or unbound ptys', () => {
+    expect(isEvictionExemptTerminalPty(currentPtyId, worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty('ssh:conn-1@@pty-1', worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty('remote:env-1@@t-1', worktreeId)).toBe(false)
     expect(isEvictionExemptTerminalPty(null, worktreeId)).toBe(false)
+  })
+
+  it('exempts a preserved daemon without an authoritative snapshot', async () => {
+    clearTerminalProviderSnapshotCapabilities()
+    await synchronizeTerminalProviderSnapshotCapabilities([currentPtyId], async () => [
+      { id: currentPtyId, authoritative: false }
+    ])
+
+    expect(isEvictionExemptTerminalPty(currentPtyId, worktreeId)).toBe(true)
   })
 })
 

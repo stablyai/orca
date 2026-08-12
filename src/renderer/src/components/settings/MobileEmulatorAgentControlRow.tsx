@@ -13,7 +13,7 @@ import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRunti
 import { useMobileEmulatorAgentSetupState } from '../emulator-pane/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
 import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
-import { StepBadge } from './BrowserUseStepBadge'
+import { StepBadge } from './SetupStepBadge'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
@@ -177,9 +177,9 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
               await ensureOrcaCliAvailableForAgentSkillTerminal()
             }}
             onRecheck={setup.refreshCliSkill}
-            // Why: this row builds its commands for the local host only, so the
-            // local-host freshness scan can vouch for the copy it points at.
-            freshnessSkillName={ORCA_CLI_SKILL_NAME}
+            freshnessSkillName={
+              activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
+            }
           />
         </div>
 

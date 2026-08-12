@@ -3,7 +3,6 @@
 // the per-distro relay manager state machine with fault injection.
 import { EventEmitter } from 'node:events'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -34,9 +33,13 @@ function createGuestHarness(): GuestHarness {
   const clientDataCallbacks: ((data: Buffer) => void)[] = []
   const closeCallbacks: (() => void)[] = []
   const transport: MultiplexerTransport = {
-    write: (data) => {
-      setImmediate(() => relayFeed?.(data))
+    write: (data, onSettled) => {
+      setImmediate(() => {
+        relayFeed?.(data)
+        onSettled?.({ ok: true })
+      })
     },
+    supportsWriteSettlement: true,
     onData: (cb) => {
       clientDataCallbacks.push(cb)
     },
@@ -44,21 +47,24 @@ function createGuestHarness(): GuestHarness {
       closeCallbacks.push(cb)
     }
   }
-  const guestDispatcher = new RelayDispatcher((data: Buffer) => {
-    setImmediate(() => {
-      for (const cb of clientDataCallbacks) {
-        cb(data)
-      }
-    })
-  })
+  const guestDispatcher = new RelayDispatcher(
+    (data: Buffer, onSettled) => {
+      setImmediate(() => {
+        for (const cb of clientDataCallbacks) {
+          cb(data)
+        }
+        onSettled({ ok: true })
+      })
+    },
+    { supportsWriteCallback: true }
+  )
   relayFeed = (data) => guestDispatcher.feed(data)
   const mux = new SshChannelMultiplexer(transport)
   return { transport, guestDispatcher, mux }
 }
 
-// Why skipIf: the fs bridge runs inside the Linux guest and is POSIX-only by
-// design (posix.resolve). On a Windows dev host tmpdir() yields C:\ paths the
-// bridge correctly refuses; Windows coverage comes from the live rig runs.
+// Why skipIf: the fs bridge runs inside the Linux guest and is POSIX-only;
+// Windows coverage comes from the live rig runs.
 describe.skipIf(process.platform === 'win32')(
   'createWslHookSftpAdapter over the guest fs bridge',
   () => {
@@ -66,7 +72,7 @@ describe.skipIf(process.platform === 'win32')(
     let harness: GuestHarness
 
     beforeEach(() => {
-      home = mkdtempSync(join(tmpdir(), 'wsl-guest-home-'))
+      home = mkdtempSync(join('/tmp', 'wsl-guest-home-'))
       harness = createGuestHarness()
       registerWslHookFsHandlers(harness.guestDispatcher, home)
     })
@@ -166,12 +172,18 @@ describe('WslHookRelayManager', () => {
     return child as unknown as ChildProcessWithoutNullStreams & { emitClose: () => void }
   }
 
-  function guestTransport(registerInstallPlugins = true): MultiplexerTransport {
+  function guestTransport(
+    options: { registerInstallPlugins?: boolean; detectedAgents?: string[] } = {}
+  ): MultiplexerTransport {
+    const { registerInstallPlugins = true, detectedAgents = ['codex'] } = options
     const harness = createGuestHarness()
     harnesses.push(harness)
     registerWslHookFsHandlers(harness.guestDispatcher, home)
     harness.guestDispatcher.onRequest(AGENT_HOOK_REQUEST_REPLAY_METHOD, async () => ({
       replayed: 0
+    }))
+    harness.guestDispatcher.onRequest('preflight.detectAgents', async () => ({
+      agents: detectedAgents
     }))
     // A guest bundle predating the plugin overlay omits this handler (-32601).
     if (registerInstallPlugins) {
@@ -212,6 +224,7 @@ describe('WslHookRelayManager', () => {
       waitForSentinel: vi.fn(async () => guestTransport()),
       ingest: vi.fn(),
       installHooks: vi.fn(async () => []),
+      managedHookSettings: () => null,
       pluginSources: () => ({ opencodePluginSource: '// opencode plugin source' }),
       warn: vi.fn(),
       transientRetryDelayMs: 1,
@@ -219,6 +232,13 @@ describe('WslHookRelayManager', () => {
     }
     return { manager: new WslHookRelayManager(deps), deps }
   }
+
+  it('exposes the stable guest endpoint instance key with a port fallback', () => {
+    expect(createManager({}).manager.getInstanceKey()).toBe('testinstance')
+    expect(createManager({ instanceKey: () => 'unsafe/key' }).manager.getInstanceKey()).toBe(
+      'port43117'
+    )
+  })
 
   it('starts one relay per distro, installs hooks, exposes the guest endpoint path, and forwards envelopes', async () => {
     const { manager, deps } = createManager({})
@@ -228,7 +248,8 @@ describe('WslHookRelayManager', () => {
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
     // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
-      codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`
+      codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`,
+      agents: ['codex']
     })
 
     expect(manager.getGuestEndpointFilePath('Ubuntu')).toBe(
@@ -261,7 +282,7 @@ describe('WslHookRelayManager', () => {
   })
 
   it('leaves the overlay dir null when the guest bundle lacks the installPlugins handler', async () => {
-    const waitForSentinel = vi.fn(async () => guestTransport(false))
+    const waitForSentinel = vi.fn(async () => guestTransport({ registerInstallPlugins: false }))
     const { manager, deps } = createManager({ waitForSentinel })
     manager.ensureForDistro('Ubuntu')
     // Connect still completes (hooks install); the -32601 is swallowed silently.
@@ -269,6 +290,17 @@ describe('WslHookRelayManager', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBeNull()
     expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('installPlugins'))
+    manager.disposeAll()
+  })
+
+  it('does not mutate managed agent homes when no WSL agents are detected', async () => {
+    const waitForSentinel = vi.fn(async () => guestTransport({ detectedAgents: [] }))
+    const { manager, deps } = createManager({ waitForSentinel })
+
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(manager.getOpenCodeOverlayDir('Ubuntu')).toBe(opencodeOverlayDir))
+
+    expect(deps.installHooks).not.toHaveBeenCalled()
     manager.disposeAll()
   })
 
@@ -349,14 +381,92 @@ describe('WslHookRelayManager', () => {
     manager.disposeAll()
   })
 
-  it('is inert off-Windows and when remote hooks are disabled', async () => {
+  it('is inert off-Windows, when remote hooks are disabled, and when agent status hooks are off', async () => {
     const offPlatform = createManager({ platform: () => 'darwin' })
     offPlatform.manager.ensureForDistro('Ubuntu')
     const disabled = createManager({ remoteHooksEnabled: () => false })
     disabled.manager.ensureForDistro('Ubuntu')
+    const hooksOff = createManager({
+      managedHookSettings: () => ({ agentStatusHooksEnabled: false })
+    })
+    hooksOff.manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(offPlatform.deps.spawnRelay).not.toHaveBeenCalled()
     expect(disabled.deps.spawnRelay).not.toHaveBeenCalled()
+    expect(hooksOff.deps.spawnRelay).not.toHaveBeenCalled()
+  })
+
+  it('stops live relays and refuses to revive them once agent status hooks are switched off', async () => {
+    const settings = { agentStatusHooksEnabled: true }
+    const { manager, deps } = createManager({ managedHookSettings: () => settings })
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+
+    settings.agentStatusHooksEnabled = false
+    manager.disposeAll({ permanent: false })
+    // Reattach and crash recovery both re-enter ensureForDistro; neither may reinstall guest hooks now.
+    manager.ensureForDistro('Ubuntu')
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(deps.installHooks).toHaveBeenCalledTimes(1)
+    expect(manager.getGuestEndpointFilePath('Ubuntu')).toBeNull()
+
+    // Re-enabling puts the relay back without waiting for the next WSL spawn.
+    settings.agentStatusHooksEnabled = true
+    manager.resumeStoppedRelays()
+    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(2))
+    manager.disposeAll()
+  })
+
+  it('does not resume a relay whose distro the user shut down while hooks were off', async () => {
+    const settings = { agentStatusHooksEnabled: true }
+    const isDistroRunning = vi.fn(async () => true)
+    const { manager, deps } = createManager({
+      isDistroRunning,
+      managedHookSettings: () => settings
+    })
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
+
+    settings.agentStatusHooksEnabled = false
+    manager.disposeAll({ permanent: false })
+    settings.agentStatusHooksEnabled = true
+    // Why: resuming through `wsl -d` would boot the VM the user shut down, and no agent inside it
+    // is waiting on status — the next WSL terminal re-ensures anyway.
+    isDistroRunning.mockResolvedValue(false)
+    manager.resumeStoppedRelays()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    // A second resume must not retry a distro already consumed by the first.
+    isDistroRunning.mockResolvedValue(true)
+    manager.resumeStoppedRelays()
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+  })
+
+  it('abandons a launch that was still in flight when hooks were switched off', async () => {
+    let failSentinel: ((error: unknown) => void) | undefined
+    const { manager, deps } = createManager({
+      waitForSentinel: vi.fn(
+        () =>
+          new Promise<MultiplexerTransport>((_resolve, reject) => {
+            failSentinel = reject
+          })
+      )
+    })
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.spawnRelay).toHaveBeenCalledTimes(1))
+
+    manager.disposeAll({ permanent: false })
+    // The teardown's child kill reaches the in-flight launch as a startup failure; its retry and
+    // guest-install paths must not run, or the user would get an untracked relay after opting out.
+    failSentinel?.(startupError(1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    expect(deps.runInstall).not.toHaveBeenCalled()
   })
 
   it('requires WSL fs-bridge home coordinates before exposing an endpoint path', () => {

@@ -9,6 +9,7 @@ import { UI_LANGUAGE_SPANISH } from '../../../shared/ui-language'
 import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { i18n } from '@/i18n/i18n'
+import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { MacosTccPromptNoticeHost } from './MacosTccPromptNoticeHost'
 import { useMacosTccPromptNotice } from './useMacosTccPromptNotice'
 
@@ -95,7 +96,7 @@ it('isolates plugin language-pack discovery from its parent render path', async 
   expect(subscribeToMacosTccPromptNotice).toHaveBeenCalledOnce()
 })
 
-it('keeps the notice open until the user closes it', async () => {
+it('connects the notice to the macOS prompt and keeps it open until closed', async () => {
   useAppStore.setState({
     settings: { ...getDefaultSettings('/tmp'), uiLanguage: 'en' }
   })
@@ -111,6 +112,13 @@ it('keeps the notice open until the user closes it', async () => {
 
   showNotice?.({ promptCount: 1 }, acknowledge)
 
+  expect(toastWarning).toHaveBeenCalledWith(
+    'Seeing “Orca would like to access…” prompts?',
+    expect.objectContaining({
+      description:
+        'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
+    })
+  )
   const options = toastWarning.mock.calls[0]?.[1] as
     | { duration?: number; onDismiss?: () => void }
     | undefined
@@ -141,4 +149,9 @@ it('acknowledges when opening Settings closes the notice', async () => {
     | undefined
   options?.action?.onClick()
   expect(acknowledge).toHaveBeenCalledOnce()
+  expect(useAppStore.getState().settingsNavigationTarget).toEqual({
+    pane: 'developer-permissions',
+    repoId: null,
+    sectionId: FULL_DISK_ACCESS_SETTINGS_TARGET_ID
+  })
 })

@@ -35,10 +35,6 @@ export function _getRuntimeDetectPromiseCountForTest(): number {
   return runtimeDetectPromises.size
 }
 
-export function _getRuntimeRefreshPromiseCountForTest(): number {
-  return runtimeRefreshPromises.size
-}
-
 export const createRuntimeDetectedAgentsSlice: StateCreator<
   AppState,
   [],

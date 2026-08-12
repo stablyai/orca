@@ -51,7 +51,21 @@ function statusPill(status: SkillFreshnessDisplayStatus): React.JSX.Element {
 // somewhere the update cannot reach — and green must never stand in for that last
 // case, which is real drift the user would otherwise have no way to see.
 export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
-  const { inventory } = useSkillFreshness()
+  const { inventory, loading, error } = useSkillFreshness()
+  if (loading && !inventory) {
+    return (
+      <IntegrationStatusPill tone="neutral">
+        {translate('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')}
+      </IntegrationStatusPill>
+    )
+  }
+  if (error && !inventory) {
+    return (
+      <IntegrationStatusPill tone="attention">
+        {translate('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
+      </IntegrationStatusPill>
+    )
+  }
   const status = getSkillFreshnessDisplayStatus(inventory, skillName)
   // Why: the dialog lists every placement, so Details is offered whenever a placement
   // is what drove the status — an available update, or a copy that blocked one.

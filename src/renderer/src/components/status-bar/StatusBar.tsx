@@ -71,6 +71,7 @@ import {
 } from '@/lib/codex-session-restart'
 import { UpdateStatusSegment } from './UpdateStatusSegment'
 import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
+import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
 import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
 import { isStatusBarItemAvailable } from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
@@ -84,6 +85,7 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/lib/floating-terminal'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { summarizeCodexRestartStatus } from './codex-restart-status-summary'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -968,7 +970,10 @@ function MiniBar({
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   return (
-    <div className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0">
+    <div
+      data-usage-bar
+      className="w-[48px] h-[6px] rounded-full bg-muted overflow-hidden flex-shrink-0"
+    >
       <div
         className="h-full rounded-full transition-all duration-300 bg-muted-foreground/40"
         style={{ width: `${getDisplayedUsagePercentage(usedPct, display)}%` }}
@@ -1168,11 +1173,9 @@ const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 function VerboseProviderUsage({
   p,
-  compact,
   display
 }: {
   p: ProviderRateLimits
-  compact: boolean
   display: UsagePercentageDisplay
 }): React.JSX.Element {
   if (p.buckets && p.buckets.length > 0) {
@@ -1232,13 +1235,8 @@ function VerboseProviderUsage({
     return window !== null
   })
 
-  const meterWindow = p.session ?? p.weekly
-
   return (
     <>
-      {meterWindow && !compact ? (
-        <MiniBar usedPct={clampUsedPercent(meterWindow.usedPercent)} display={display} />
-      ) : null}
       {visibleWindows.map((window, index) => (
         <React.Fragment key={window.key}>
           {index > 0 ? <span className="text-muted-foreground">·</span> : null}
@@ -1312,22 +1310,20 @@ export function ProviderSegment({
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
       {mode === 'verbose' ? (
-        <VerboseProviderUsage p={p} compact={compact} display={display} />
-      ) : (
         <>
           {tightest && !compact ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
-          {tightest ? (
-            <WindowLabel
-              w={tightest.window}
-              label={tightest.label}
-              display={display}
-              showLabel={!compact}
-            />
-          ) : null}
+          <VerboseProviderUsage p={p} display={display} />
         </>
-      )}
+      ) : tightest ? (
+        <WindowLabel
+          w={tightest.window}
+          label={tightest.label}
+          display={display}
+          showLabel={!compact}
+        />
+      ) : null}
       {isStale && <AlertTriangle size={11} className="text-muted-foreground/80" />}
     </span>
   )
@@ -2355,6 +2351,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
       <div className="flex-1" />
 
       <div className="flex items-center gap-3">
+        {!isPairedWebClientWindow() ? <CaffeinateStatusSegment iconOnly={iconOnly} /> : null}
         <RemoteServerUpdateStatusSegment iconOnly={iconOnly} />
         <SkillUpdateStatusSegment iconOnly={iconOnly} />
         <UpdateStatusSegment compact={compact} iconOnly={iconOnly} />
@@ -2375,7 +2372,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                   className="relative inline-flex size-5 cursor-pointer items-center justify-center rounded border border-border bg-secondary text-secondary-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground"
                   aria-label={
                     showFloatingWorkspaceAttentionDot
-                      ? `${floatingTerminalActionLabel}, new activity`
+                      ? translate(
+                          'auto.components.status.bar.StatusBar.floatingTerminalNewActivity',
+                          '{{label}}, new activity',
+                          { label: floatingTerminalActionLabel }
+                        )
                       : floatingTerminalActionLabel
                   }
                   onClick={() => {

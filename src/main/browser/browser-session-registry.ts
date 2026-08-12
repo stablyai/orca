@@ -16,13 +16,20 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
-  getOrcaProfileBrowserPartitionSegment,
   getOrcaProfileBrowserSessionPartition
 } from '../../shared/orca-profiles'
-import type { BrowserSessionProfile, BrowserSessionProfileScope } from '../../shared/types'
+import type {
+  BrowserSessionProfile,
+  BrowserSessionProfileCreateOptions,
+  BrowserSessionProfileScope
+} from '../../shared/types'
 import { browserManager } from './browser-manager'
 import { hasSystemMediaAccess, requestSystemMediaAccess } from './browser-media-access'
 import { cleanElectronUserAgent, setupClientHintsOverride } from './browser-session-ua'
+import {
+  clearBrowserSessionUserAgentMode,
+  setBrowserSessionUserAgentMode
+} from './browser-session-user-agent-mode'
 import { resolveChromiumCookiesPath } from './chromium-cookie-path'
 import { isAutoGrantedBrowserSessionPermission } from './browser-session-permission-policy'
 import {
@@ -31,10 +38,12 @@ import {
   installBrowserWebAuthnAccessHandlers
 } from './browser-webauthn-access'
 
+// Why: no userAgent fields — the session UA is always derived from the running
+// engine at startup (clean or native), never persisted. Imports before Aug 2026
+// stored a synthesized source-browser UA here; persistMeta drops those legacy
+// keys on the next write because this loader no longer carries them.
 type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
-  userAgent: string | null
-  userAgentByPartition: Record<string, string>
   pendingCookieDbPath: string | null
   pendingCookieImports: Record<string, string>
   profiles: BrowserSessionProfile[]
@@ -46,8 +55,8 @@ export type BrowserSessionRegistryProfileOptions = {
 }
 
 const BROWSER_SESSION_META_FILE_NAME = 'browser-session-meta.json'
-const LEGACY_BROWSER_SESSION_PARTITION_RE =
-  /^persist:orca-browser-session-[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
+const BROWSER_SESSION_PROFILE_ID_RE =
+  /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/
 
 // Why: source of truth for valid partitions; will-attach-webview consults it so a compromised renderer can't smuggle in an arbitrary partition.
 
@@ -111,11 +120,8 @@ class BrowserSessionRegistry {
     }
   }
 
-  private persistSource(source: BrowserSessionProfile['source'], userAgent?: string | null): void {
-    this.persistMeta({
-      defaultSource: source,
-      ...(userAgent !== undefined ? { userAgent } : {})
-    })
+  private persistSource(source: BrowserSessionProfile['source']): void {
+    this.persistMeta({ defaultSource: source })
   }
 
   // Why: non-default profiles are in-memory only; without this they vanish on restart.
@@ -128,15 +134,6 @@ class BrowserSessionRegistry {
     try {
       const raw = readFileSync(this.metadataPath, 'utf-8')
       const data = JSON.parse(raw)
-      const legacyUserAgent = typeof data?.userAgent === 'string' ? data.userAgent : null
-      const userAgentByPartition: Record<string, string> =
-        data && typeof data.userAgentByPartition === 'object' && data.userAgentByPartition
-          ? { ...data.userAgentByPartition }
-          : {}
-      if (legacyUserAgent && !userAgentByPartition[this.defaultPartition]) {
-        userAgentByPartition[this.defaultPartition] = legacyUserAgent
-      }
-
       const legacyPendingCookieDbPath =
         typeof data?.pendingCookieDbPath === 'string' ? data.pendingCookieDbPath : null
       const pendingCookieImports: Record<string, string> =
@@ -148,8 +145,6 @@ class BrowserSessionRegistry {
       }
       return {
         defaultSource: data?.defaultSource ?? null,
-        userAgent: legacyUserAgent,
-        userAgentByPartition,
         pendingCookieDbPath: legacyPendingCookieDbPath,
         pendingCookieImports,
         profiles: Array.isArray(data?.profiles) ? data.profiles : []
@@ -157,8 +152,6 @@ class BrowserSessionRegistry {
     } catch {
       return {
         defaultSource: null,
-        userAgent: null,
-        userAgentByPartition: {},
         pendingCookieDbPath: null,
         pendingCookieImports: {},
         profiles: []
@@ -181,19 +174,16 @@ class BrowserSessionRegistry {
     }
 
     // Why: nothing else installs policies on the default partition (hydrate skips it), so without this its guest permissions would be denied.
-    this.setupSessionPolicies(this.defaultPartition)
+    this.setupSessionPolicies(this.getDefaultProfile())
 
-    const partitions = new Set([
-      this.defaultPartition,
-      ...this.listProfiles().map((p) => p.partition)
-    ])
-    for (const partition of partitions) {
+    for (const profile of this.listProfiles()) {
+      const partition = profile.partition
       try {
         const sess = session.fromPartition(partition)
-        const persistedUa = meta.userAgentByPartition[partition]
-        if (persistedUa) {
-          sess.setUserAgent(persistedUa)
-          setupClientHintsOverride(sess, persistedUa)
+        const userAgentMode = profile.userAgentMode ?? 'clean'
+        setBrowserSessionUserAgentMode(sess, userAgentMode)
+
+        if (profile.userAgentMode === 'native') {
           continue
         }
 
@@ -312,20 +302,6 @@ class BrowserSessionRegistry {
     }
   }
 
-  persistUserAgent(partition: string, userAgent: string | null): void {
-    const meta = this.loadPersistedMeta()
-    const userAgentByPartition = { ...meta.userAgentByPartition }
-    if (userAgent) {
-      userAgentByPartition[partition] = userAgent
-    } else {
-      delete userAgentByPartition[partition]
-    }
-    this.persistMeta({
-      userAgentByPartition,
-      userAgent: userAgentByPartition[this.defaultPartition] ?? null
-    })
-  }
-
   getDefaultProfile(): BrowserSessionProfile {
     return this.profiles.get('default')!
   }
@@ -360,9 +336,18 @@ class BrowserSessionRegistry {
     return this.profiles.get(profileId)?.partition ?? null
   }
 
-  createProfile(scope: BrowserSessionProfileScope, label: string): BrowserSessionProfile | null {
-    // Why: block scope:'default' here — only the constructor makes the default profile; a second one sharing the partition breaks delete.
-    if (scope === 'default') {
+  createProfile(
+    scope: BrowserSessionProfileScope,
+    label: string,
+    options: BrowserSessionProfileCreateOptions = {}
+  ): BrowserSessionProfile | null {
+    // Why: the registry is also an IPC boundary, so runtime types alone cannot keep invalid values out of persisted metadata.
+    if (
+      (scope !== 'isolated' && scope !== 'imported') ||
+      (options.userAgentMode !== undefined &&
+        options.userAgentMode !== 'clean' &&
+        options.userAgentMode !== 'native')
+    ) {
       return null
     }
     const id = randomUUID()
@@ -373,10 +358,11 @@ class BrowserSessionRegistry {
       scope,
       partition,
       label,
-      source: null
+      source: null,
+      ...(options.userAgentMode ? { userAgentMode: options.userAgentMode } : {})
     }
     this.profiles.set(id, profile)
-    this.setupSessionPolicies(partition)
+    this.setupSessionPolicies(profile)
     this.persistProfiles()
     return profile
   }
@@ -409,18 +395,15 @@ class BrowserSessionRegistry {
     const meta = this.loadPersistedMeta()
     const pendingCookieImports = { ...meta.pendingCookieImports }
     delete pendingCookieImports[profile.partition]
-    const userAgentByPartition = { ...meta.userAgentByPartition }
-    delete userAgentByPartition[profile.partition]
     this.persistMeta({
       pendingCookieImports,
-      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null,
-      userAgentByPartition,
-      userAgent: userAgentByPartition[this.defaultPartition] ?? null
+      pendingCookieDbPath: pendingCookieImports[this.defaultPartition] ?? null
     })
 
     // Why: clear the partition's storage so deleting a profile doesn't leave orphaned cookies/cache behind.
     try {
       const sess = session.fromPartition(profile.partition)
+      clearBrowserSessionUserAgentMode(sess)
       this.clearSessionPolicies(profile.partition, sess)
       await sess.clearStorageData()
       await sess.clearCache()
@@ -441,12 +424,8 @@ class BrowserSessionRegistry {
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
       delete pendingCookieImports[this.defaultPartition]
-      const userAgentByPartition = { ...meta.userAgentByPartition }
-      delete userAgentByPartition[this.defaultPartition]
       this.persistMeta({
         defaultSource: null,
-        userAgent: null,
-        userAgentByPartition,
         pendingCookieDbPath: null,
         pendingCookieImports
       })
@@ -471,25 +450,18 @@ class BrowserSessionRegistry {
       typeof candidate.id === 'string' &&
       typeof candidate.partition === 'string' &&
       typeof candidate.label === 'string' &&
-      this.isProfileOwnedSessionPartition(candidate.partition)
+      (candidate.userAgentMode === undefined ||
+        candidate.userAgentMode === 'clean' ||
+        candidate.userAgentMode === 'native') &&
+      this.isProfileOwnedSessionPartition(candidate.id, candidate.partition)
     )
   }
 
-  private isProfileOwnedSessionPartition(partition: string): boolean {
-    if (
-      this.activeOrcaProfileId === DEFAULT_LOCAL_ORCA_PROFILE_ID &&
-      LEGACY_BROWSER_SESSION_PARTITION_RE.test(partition)
-    ) {
-      return true
-    }
-
-    const segment = getOrcaProfileBrowserPartitionSegment(this.activeOrcaProfileId)
-    const prefix = `persist:orca-profile-${segment}-browser-session-`
-    if (!partition.startsWith(prefix)) {
-      return false
-    }
-    const profileId = partition.slice(prefix.length)
-    return /^[\da-f-]{8}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{4}-[\da-f-]{12}$/.test(profileId)
+  private isProfileOwnedSessionPartition(profileId: string, partition: string): boolean {
+    return (
+      BROWSER_SESSION_PROFILE_ID_RE.test(profileId) &&
+      partition === getOrcaProfileBrowserSessionPartition(this.activeOrcaProfileId, profileId)
+    )
   }
 
   hydrateFromPersisted(profiles: BrowserSessionProfile[]): void {
@@ -499,7 +471,7 @@ class BrowserSessionRegistry {
       }
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        this.setupSessionPolicies(profile.partition)
+        this.setupSessionPolicies(profile)
       }
     }
   }
@@ -514,14 +486,16 @@ class BrowserSessionRegistry {
     browserManager.handleGuestWillDownload({ guestWebContentsId: webContents.id, item })
   }
 
-  private setupSessionPolicies(partition: string): void {
+  private setupSessionPolicies(profile: BrowserSessionProfile): void {
+    const { partition } = profile
+    const sess = session.fromPartition(partition)
+    setBrowserSessionUserAgentMode(sess, profile.userAgentMode ?? 'clean')
     if (this.configuredPartitions.has(partition)) {
       return
     }
 
-    const sess = session.fromPartition(partition)
     browserManager.installCertificateRequestGuard(sess)
-    if (typeof sess.getUserAgent === 'function') {
+    if (profile.userAgentMode !== 'native' && typeof sess.getUserAgent === 'function') {
       const cleanUA = cleanElectronUserAgent(sess.getUserAgent())
       sess.setUserAgent(cleanUA)
       setupClientHintsOverride(sess, cleanUA)

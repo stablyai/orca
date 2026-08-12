@@ -60,10 +60,24 @@ export function handleMockSessionTabsRequest(
   // absent or `id:`-prefixed selector means.
   resolveWorktreeId: (selector: unknown) => string | undefined
 ): boolean {
-  if (request.method !== 'session.tabs.list') {
-    return false
+  if (request.method === 'session.tabs.list') {
+    const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
+    respond(success(request.id, createMockSessionTabs(worktreeId)))
+    return true
   }
-  const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
-  respond(success(request.id, createMockSessionTabs(worktreeId)))
-  return true
+  if (request.method === 'session.tabs.subscribe') {
+    // Without a live stream the client's health loop keeps invalidating list
+    // fetches mid-flight (barrier bump on the failed probe), so the session
+    // screen never leaves 'Loading tabs'. snapshot then updated => 'live'.
+    const worktreeId = resolveWorktreeId(request.params?.worktree) ?? 'mock'
+    const snapshot = createMockSessionTabs(worktreeId)
+    respond(success(request.id, { type: 'snapshot', ...snapshot }, true))
+    respond(success(request.id, { type: 'updated', ...snapshot }, true))
+    return true
+  }
+  if (request.method === 'session.tabs.unsubscribe') {
+    respond(success(request.id, { unsubscribed: true }))
+    return true
+  }
+  return false
 }

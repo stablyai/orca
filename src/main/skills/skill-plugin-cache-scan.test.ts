@@ -211,6 +211,48 @@ describe('plugin skill candidate scan', () => {
     expect(result).toEqual({ candidates: [], issues: [] })
   })
 
+  // Why this exists: the bound below is a deliberate tradeoff, and only the miss side of
+  // it was covered. Descending further would spend the entry budget on vendor payload —
+  // the cost that caused the false-attention root collapse in #10865 — while missing a
+  // copy only ever costs a Details row, because a plugin-cache placement is not
+  // convergeable by any update command. So the failure direction is silence, which is the
+  // safe one. Pinning BOTH sides means raising or lowering the bound has to be deliberate
+  // rather than an accident of refactoring. See #11454.
+  it.each([
+    [0, true],
+    [1, true],
+    [2, true],
+    [3, false],
+    [4, false]
+  ])(
+    'finds a nested skill %i level(s) below a package: %s',
+    async (intermediateDepth, expectFound) => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-plugin-nested-depth-'))
+      temporaryDirectories.push(root)
+      const packageRoot = join(root, 'vendor', 'plugin', '1.0.0')
+      const hostSkill = join(packageRoot, 'skills', 'host-skill')
+      await mkdir(join(packageRoot, '.codex-plugin'), { recursive: true })
+      await mkdir(hostSkill, { recursive: true })
+      await writeFile(join(packageRoot, '.codex-plugin', 'plugin.json'), '{"skills":"./skills"}\n')
+      await writeFile(join(hostSkill, 'SKILL.md'), '# Host skill\n')
+
+      let parent = hostSkill
+      for (let level = 1; level <= intermediateDepth; level += 1) {
+        parent = join(parent, `nested-${level}`)
+      }
+      const candidate = join(parent, 'orca-cli')
+      await mkdir(candidate, { recursive: true })
+      await writeFile(join(candidate, 'SKILL.md'), '# Orca CLI\n')
+
+      const result = await scanKnownPluginSkillCandidates(root, new Set(['orca-cli']))
+
+      expect(result.candidates).toEqual(expectFound ? [{ name: 'orca-cli', path: candidate }] : [])
+      // Why: pruned payload must never surface as a coverage issue either way — that is
+      // what keeps an ordinary large plugin cache from reporting a permanent problem.
+      expect(result.issues).toEqual([])
+    }
+  )
+
   it('reports a depth-truncated subtree as scan coverage instead of a skill candidate', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-plugin-skill-depth-'))
     temporaryDirectories.push(root)

@@ -1,4 +1,4 @@
-import { MARINE_CREATURES } from '../constants/marine-creatures'
+import { MARINE_CREATURES } from '../../../src/shared/marine-creatures'
 
 // Why: matches the desktop fallback in
 // src/renderer/src/components/sidebar/worktree-name-suggestions.ts. The

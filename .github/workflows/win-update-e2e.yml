@@ -20,7 +20,7 @@ on:
     branches:
       - Jinwoo-H/windows-update-survival
     paths:
-      - 'tools/win-update-e2e/**'
+      - 'tests/tools/win-update-e2e/**'
       - '.github/workflows/win-update-e2e.yml'
   workflow_dispatch:
     inputs:
@@ -125,7 +125,7 @@ jobs:
           ORCA_E2E_DIAG_DIR: artifacts/diag
         run: |
           $log = "artifacts/harness-output.log"
-          node tools/win-update-e2e/run.mjs `
+          node tests/tools/win-update-e2e/run.mjs `
             --from "$env:FROM_EXE" `
             --to "$env:TO_EXE" `
             --expect "$env:EXPECT" `

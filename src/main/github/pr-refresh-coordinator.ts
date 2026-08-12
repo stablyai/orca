@@ -11,12 +11,11 @@ import type {
 import { getPRForBranchOutcome, type GitHubPRBranchLookupOptions } from './client'
 import { getOriginGitHubApiRepository } from './github-api-repository'
 import { ghRepoExecOptions, githubRepoContext } from './gh-utils'
+import { getRateLimit, repositoryRateLimitGuard, spendsSharedGitHubComQuota } from './rate-limit'
 import {
-  getRateLimit,
-  noteRepositoryRateLimitSpend,
-  repositoryRateLimitGuard,
-  spendsSharedGitHubComQuota
-} from './rate-limit'
+  lookupBackoffDelayMs,
+  NO_REVIEW_REFRESH_INTERVAL_MS
+} from '../source-control/hosted-review-refresh-pacing'
 import { recordCoalescedCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 
@@ -74,8 +73,6 @@ const BACKGROUND_BUDGET_WINDOW_MS = 5 * 60_000
 const MIN_BACKGROUND_SPACING_MS = 10_000
 const BACKGROUND_BUDGET_MAX = 20
 const POST_PUSH_DELAY_MS = 2_500
-const BACKOFF_BASE_MS = 60_000
-const BACKOFF_MAX_MS = 15 * 60_000
 const DIAGNOSTIC_BREADCRUMB_MIN_INTERVAL_MS = 30_000
 const ACTIVE_BURST_WINDOW_MS = 30_000
 const ACTIVE_BURST_MAX = 3
@@ -424,8 +421,7 @@ function removeQueuedAliasForInvalidCandidate(key: string, alias: GitHubPRRefres
  */
 function nextVisibleErrorRetryAt(key: string): number {
   const failures = (errorBackoff.get(key)?.failures ?? 0) + 1
-  const retryAt =
-    Date.now() + Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 4))
+  const retryAt = Date.now() + lookupBackoffDelayMs(failures)
   errorBackoff.set(key, { failures, retryAt })
   return retryAt
 }
@@ -509,7 +505,7 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
     return 30 * 60_000
   }
   if (candidate.cachedHasPR === false) {
-    return 15 * 60_000
+    return NO_REVIEW_REFRESH_INTERVAL_MS
   }
   if (
     candidate.cachedHasPR === true &&
@@ -776,9 +772,8 @@ async function drainQueue(): Promise<void> {
           // Why: tab/worktree churn can enqueue many distinct active refreshes that each probe local Git.
           noteActiveStart(next)
         }
-        for (const bucket of buckets) {
-          noteRepositoryRateLimitSpend(repository, bucket, 1, executionOptions)
-        }
+        // Why (#11532): the lookup itself now debits the snapshot, so every
+        // caller is accounted for; debiting here too would double-count.
       }
 
       const outcome = await getPRForBranchOutcome(

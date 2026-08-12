@@ -22,7 +22,7 @@ import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   SCROLLBACK_PRESETS_ROWS,
   getFallbackTerminalFonts,
@@ -54,6 +54,9 @@ import { ExperimentalPane } from './ExperimentalPane'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
+import { AutomationsSettingsPane } from './AutomationsSettingsPane'
+import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
@@ -121,6 +124,7 @@ import {
   buildRepoIdToRepresentative,
   buildSettingsProjectList,
   getSettingsProjectHostRepo,
+  getSettingsTargetHostSelection,
   removeSettingsProjectFromAllHosts,
   resolveSettingsTargetRepoId
 } from './settings-project-list'
@@ -176,6 +180,7 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
 function getSettingsSectionId(
   pane: SettingsNavTarget,
@@ -350,9 +355,8 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  // Why: skill freshness only covers the validated global rail (not WSL), so the nav pill stays presence-only under WSL.
-  const { inventory: skillFreshnessInventory } = useSkillFreshness()
-  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
+  const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
+  const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
@@ -372,6 +376,9 @@ function Settings(): React.JSX.Element {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+    null
+  )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
@@ -445,6 +452,17 @@ function Settings(): React.JSX.Element {
       settingsMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!highlightedSettingsTargetId) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => setHighlightedSettingsTargetId(null),
+      SETTINGS_TARGET_HIGHLIGHT_MS
+    )
+    return () => window.clearTimeout(timeout)
+  }, [highlightedSettingsTargetId])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
@@ -642,13 +660,30 @@ function Settings(): React.JSX.Element {
       repoIdToHostSelection.keys()
     )
     if (targetRepoId) {
-      const hostSelection = repoIdToHostSelection.get(targetRepoId)
+      const hostSelection = settingsNavigationTarget.hostId
+        ? getSettingsTargetHostSelection(
+            settingsProjectList,
+            targetRepoId,
+            settingsNavigationTarget.hostId
+          )
+        : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
-        setSettingsProjectHostSelection(hostSelection.projectId, hostSelection.hostId)
+        setSettingsProjectHostSelection(
+          hostSelection.projectId,
+          hostSelection.hostId,
+          'setupId' in hostSelection && typeof hostSelection.setupId === 'string'
+            ? hostSelection.setupId
+            : undefined
+        )
       }
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    setHighlightedSettingsTargetId(
+      settingsNavigationTarget.pane === 'developer-permissions'
+        ? (settingsNavigationTarget.sectionId ?? null)
+        : null
+    )
     // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
@@ -678,6 +713,7 @@ function Settings(): React.JSX.Element {
     repoIdToRepresentative,
     setSettingsProjectHostSelection,
     settings,
+    settingsProjectList,
     settingsNavigationTarget
   ])
 
@@ -1168,6 +1204,8 @@ function Settings(): React.JSX.Element {
         hasRepos={repos.length > 0}
         searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
+        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+        searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
         onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
@@ -1267,7 +1305,7 @@ function Settings(): React.JSX.Element {
                     title={translate('auto.components.settings.Settings.linearTitle', 'Linear')}
                     description={translate(
                       'auto.components.settings.Settings.linearDescription',
-                      'Give agents the skill to read and update your linked Linear tickets.'
+                      'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
                     )}
                     searchEntries={getSectionSearchEntries('linear')}
                   >
@@ -1306,6 +1344,20 @@ function Settings(): React.JSX.Element {
                       ) : null}
                     </SettingsSection>
                   </>
+                ) : null}
+
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="orca-account"
+                    title={translate('auto.components.settings.orcaAccount.title', 'Orca Account')}
+                    description={translate(
+                      'auto.components.settings.orcaAccount.description',
+                      'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+                    )}
+                    searchEntries={getSectionSearchEntries('orca-account')}
+                  >
+                    {isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}
+                  </SettingsSection>
                 ) : null}
 
                 <SettingsSection
@@ -1376,6 +1428,35 @@ function Settings(): React.JSX.Element {
                 ) : null}
 
                 <SettingsSection
+                  id="automations"
+                  title={translate('auto.components.settings.automations.title', 'Automations')}
+                  description={translate(
+                    'auto.components.settings.automations.description',
+                    'Schedule agent work and choose whether Automations appears in the sidebar.'
+                  )}
+                  searchEntries={getSectionSearchEntries('automations')}
+                >
+                  {isSectionMounted('automations') ? (
+                    <AutomationsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="artifacts"
+                  title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.artifacts.description',
+                    'Share HTML and Markdown files with your team and manage their public links.'
+                  )}
+                  searchEntries={getSectionSearchEntries('artifacts')}
+                >
+                  {isSectionMounted('artifacts') ? (
+                    <ArtifactsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title={translate(
                     'auto.components.settings.Settings.70100f94c7',
@@ -1417,8 +1498,8 @@ function Settings(): React.JSX.Element {
                   id="tasks"
                   title={translate('auto.components.settings.Settings.11faa2f7dd', 'Task Sources')}
                   description={translate(
-                    'auto.components.settings.Settings.dd72ed437a',
-                    'Choose which task providers appear in the Tasks page and sidebar.'
+                    'auto.components.settings.Settings.tasksDescription',
+                    'Connect providers, install the Linear skill, and choose what appears in Tasks.'
                   )}
                   searchEntries={getSectionSearchEntries('tasks')}
                 >
@@ -1467,7 +1548,6 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('quick-commands') ? (
                     <QuickCommandsPane
                       settings={settings}
-                      updateSettings={updateSettings}
                       addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
                   ) : null}
@@ -1683,7 +1763,9 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
-                      <DeveloperPermissionsPane />
+                      <DeveloperPermissionsPane
+                        highlightedSettingId={highlightedSettingsTargetId}
+                      />
                     ) : null}
                   </SettingsSection>
                 ) : null}

@@ -1,5 +1,5 @@
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
-import type { MobileSessionTab } from '../../app/h/[hostId]/session/mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-route-types'
 import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSheetModal'
 import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 

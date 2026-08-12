@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES,
+  buildJiraIssueSearchJql,
   buildSmartWorkspaceSourceRows,
   getBranchSearchRequest,
   getSmartWorkspaceEmptyHint,
   getVisibleBranchResults,
   getVisibleHeldProviderResults,
+  isBlockingJiraUrlIntent,
   isSmartWorkspaceSourceQueryWithinLimit,
   shouldHoldSourceResultsForQuery
 } from './smart-workspace-source-results'
@@ -370,6 +372,70 @@ describe('Branch source results', () => {
     ])
   })
 
+  it('gives Jira intent exclusive ownership of Smart results', () => {
+    const jiraIssue = {
+      id: 'jira-1',
+      key: 'ORCA-123',
+      siteId: 'site-1',
+      title: 'Link Jira'
+    } as never
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'smart',
+      value: 'https://company.atlassian.net/browse/ORCA-123',
+      branches: [{ refName: 'origin/main', localBranchName: 'main' }],
+      githubItems: [{ repoId: 'repo-a', type: 'issue', number: 1, title: 'GitHub' } as never],
+      gitlabItems: [{ repoId: 'repo-a', type: 'issue', number: 2, title: 'GitLab' } as never],
+      linearIssues: [{ id: 'linear-1', identifier: 'ENG-1', title: 'Linear' } as never],
+      jiraIntent: true,
+      jiraIssue,
+      gitlabAvailable: true,
+      linearAvailable: true,
+      resultLimit: 12
+    })
+
+    expect(rows).toEqual([{ kind: 'jira', value: 'jira-site-1-ORCA-123', issue: jiraIssue }])
+  })
+
+  it('suppresses typed and provider rows while unresolved Jira intent owns the query', () => {
+    expect(
+      buildSmartWorkspaceSourceRows({
+        mode: 'smart',
+        value: 'https://company.atlassian.net/browse/ORCA-123',
+        branches: [{ refName: 'origin/main', localBranchName: 'main' }],
+        githubItems: [{ repoId: 'repo-a', type: 'issue', number: 1, title: 'GitHub' } as never],
+        gitlabItems: [],
+        linearIssues: [],
+        jiraIntent: true,
+        jiraIssue: null,
+        gitlabAvailable: false,
+        linearAvailable: false,
+        resultLimit: 12
+      })
+    ).toEqual([])
+  })
+
+  it('keeps a resolved Jira row when ignored URL data exceeds the generic search limit', () => {
+    const jiraIssue = {
+      key: 'ORCA-123',
+      siteId: 'site-1'
+    } as never
+    expect(
+      buildSmartWorkspaceSourceRows({
+        mode: 'smart',
+        value: `https://company.atlassian.net/browse/ORCA-123#${'x'.repeat(2100)}`,
+        branches: [],
+        githubItems: [],
+        gitlabItems: [],
+        linearIssues: [],
+        jiraIntent: true,
+        jiraIssue,
+        gitlabAvailable: false,
+        linearAvailable: false,
+        resultLimit: 12
+      })
+    ).toEqual([{ kind: 'jira', value: 'jira-site-1-ORCA-123', issue: jiraIssue }])
+  })
+
   it('ignores malformed Linear collection rows instead of throwing during render', () => {
     expect(() =>
       buildSmartWorkspaceSourceRows({
@@ -411,6 +477,12 @@ describe('Branch source results', () => {
   it('describes empty Branch results after the empty-query search runs', () => {
     expect(getSmartWorkspaceEmptyHint('branches')).toBe('No matching branches.')
   })
+
+  it('describes Jira mode as searchable and supports pasted URLs', () => {
+    expect(getSmartWorkspaceEmptyHint('jira')).toBe(
+      'Start typing to search Jira issues, or paste an issue URL.'
+    )
+  })
 })
 
 describe('source query byte limits', () => {
@@ -422,5 +494,49 @@ describe('source query byte limits', () => {
         'é'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES / 2 + 1)
       )
     ).toBe(false)
+  })
+})
+
+describe('Jira issue search', () => {
+  it('keeps valid Jira URL intent blocking in both Smart and Jira modes', () => {
+    const firstUrl = 'https://company.atlassian.net/browse/ORCA-1'
+    const secondUrl = 'https://company.atlassian.net/browse/ORCA-2'
+
+    expect(isBlockingJiraUrlIntent('smart', firstUrl)).toBe(true)
+    expect(isBlockingJiraUrlIntent('jira', firstUrl)).toBe(true)
+    expect(isBlockingJiraUrlIntent('jira', secondUrl)).toBe(true)
+    expect(isBlockingJiraUrlIntent('text', secondUrl)).toBe(false)
+    expect(isBlockingJiraUrlIntent('jira', 'ordinary workspace name')).toBe(false)
+  })
+
+  it('builds text and exact-key JQL without accepting oversized input', () => {
+    expect(buildJiraIssueSearchJql('test')).toBe('text ~ "test*"')
+    expect(buildJiraIssueSearchJql('orca-123')).toBe('key = "ORCA-123"')
+    expect(buildJiraIssueSearchJql('say "hello"')).toBe('text ~ "say \\"hello\\"*"')
+    expect(
+      buildJiraIssueSearchJql('x'.repeat(SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES + 1))
+    ).toBeNull()
+  })
+
+  it('renders connected Jira search results in Jira mode', () => {
+    const jiraIssue = {
+      key: 'ORCA-123',
+      siteId: 'site-1',
+      title: 'Search Jira'
+    } as never
+    const rows = buildSmartWorkspaceSourceRows({
+      mode: 'jira',
+      value: 'search',
+      branches: [],
+      githubItems: [],
+      gitlabItems: [],
+      jiraIssues: [jiraIssue],
+      linearIssues: [],
+      gitlabAvailable: false,
+      linearAvailable: false,
+      resultLimit: 12
+    })
+
+    expect(rows).toEqual([{ kind: 'jira', value: 'jira-site-1-ORCA-123', issue: jiraIssue }])
   })
 })

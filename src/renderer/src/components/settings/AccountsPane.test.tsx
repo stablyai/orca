@@ -48,7 +48,7 @@ describe('AccountsPane', () => {
 
     expect(markup).toContain('Account location')
     expect(markup).toContain('aria-label="Account location"')
-    expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+    expect(markup).toContain('role="radio" aria-checked="true" aria-disabled="true"')
   })
 
   it('selects the WSL account location under auto when the global project runtime is WSL', () => {
@@ -70,8 +70,8 @@ describe('AccountsPane', () => {
       )
 
       expect(markup).toContain('aria-label="Account location"')
-      // The resolved WSL radio is the checked option (disabled while capabilities load).
-      expect(markup).toContain('role="radio" aria-checked="true" disabled=""')
+      // The resolved WSL radio is the checked option (unavailable while capabilities load).
+      expect(markup).toContain('role="radio" aria-checked="true" aria-disabled="true"')
     } finally {
       if (originalOwnUserAgent) {
         Object.defineProperty(globalThis.navigator, 'userAgent', originalOwnUserAgent)
@@ -103,8 +103,8 @@ describe('AccountsPane', () => {
 
   it('scopes account copy to the active remote server and disables local sign-in actions', () => {
     // Note: static SSR markup reads the store's initial state (zustand v5), so
-    // this exercises the fallback server label; the named-server path is
-    // covered by live validation against a paired server.
+    // this exercises the pre-hydration path where no server name is known yet.
+    // The named-server label is covered in provider-account-scope.test.ts.
     const markup = renderPane(
       {
         ...getDefaultSettings('/tmp'),

@@ -48,7 +48,10 @@ import {
   toHostSessionTabId,
   toWebTerminalSurfaceTabId
 } from './web-terminal-surface-id'
-import { deliverLaunchPromptToAgentTab } from '../lib/agent-launch-prompt-delivery'
+import {
+  deliverLaunchPromptToAgentTab,
+  seedNativeChatLaunchDraftForAgentTab
+} from '../lib/agent-launch-prompt-delivery'
 import {
   listRemoteRuntimeSessionTabsAfterCurrentInFlight,
   listRemoteRuntimeSessionTabsDeduped
@@ -57,6 +60,7 @@ import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -182,6 +186,28 @@ export async function createWebRuntimeAgentSessionTerminal(
   return { outcome: created.outcome, promptDelivered }
 }
 
+/**
+ * Launch a web-host agent terminal whose draft already rode in on the launch
+ * command (argv prefill). No post-ready paste runs for that delivery, so seed
+ * the chat-composer copy here once the mirrored host tab id is known.
+ */
+export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
+  args: CreateWebRuntimeSessionTerminalArgs & {
+    agent: TuiAgent
+    launchDraft: string
+  }
+): Promise<WebRuntimeTerminalCreateOutcome> {
+  const created = await createWebRuntimeSessionTerminalResult(args)
+  if (created.outcome.status !== 'failed' && created.hostTabId) {
+    seedNativeChatLaunchDraftForAgentTab({
+      tabId: toWebTerminalSurfaceTabId(created.hostTabId),
+      agent: args.agent,
+      text: args.launchDraft
+    })
+  }
+  return created.outcome
+}
+
 async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
@@ -204,7 +230,7 @@ async function createWebRuntimeSessionTerminalResult(
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
   if (args.selectWorktree !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   let hostCreated = false
   let createdTabId: string | undefined
@@ -398,6 +424,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   profileId?: string | null
   targetGroupId?: string
   selectWorktree?: boolean
+  stagedTitle?: string
+  stagedFocusAddressBar?: boolean
+  failureLogMode?: 'details' | 'operation-only'
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -412,7 +441,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldSelectWorktree = args.selectWorktree !== false
   const stagedFromWorktreeId = useAppStore.getState().activeWorktreeId
   if (shouldSelectWorktree) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
   }
   try {
     const response = await callEnvironment({
@@ -441,6 +470,8 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       remotePageId: created.browserPageId,
       url: args.url,
       targetGroupId: args.targetGroupId,
+      title: args.stagedTitle,
+      focusAddressBar: args.stagedFocusAddressBar,
       restoreFocus:
         shouldSelectWorktree &&
         (stagedFromWorktreeId === args.worktreeId ||
@@ -451,10 +482,14 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     })
     return true
   } catch (error) {
-    console.warn(
-      '[web-runtime-session] failed to create browser tab:',
-      error instanceof Error ? error.message : String(error)
-    )
+    if (args.failureLogMode === 'operation-only') {
+      console.warn('[web-runtime-session] failed to create browser tab')
+    } else {
+      console.warn(
+        '[web-runtime-session] failed to create browser tab:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
     return false
   }
 }
@@ -465,6 +500,8 @@ function stageWebRuntimeBrowserTab(args: {
   remotePageId: string
   url?: string
   targetGroupId?: string
+  title?: string
+  focusAddressBar?: boolean
   restoreFocus?: boolean
 }): void {
   const remotePageId = args.remotePageId.trim()
@@ -478,7 +515,7 @@ function stageWebRuntimeBrowserTab(args: {
     remotePageId
   )
   if (args.restoreFocus !== false) {
-    selectWebRuntimeSessionWorktree(args.worktreeId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, args.environmentId)
   }
 
   if (existing) {
@@ -493,8 +530,8 @@ function stageWebRuntimeBrowserTab(args: {
   const url = args.url?.trim() || 'about:blank'
   // Why: the snapshot can arrive after React renders a fallback; stage the handle now so the worktree stays selected.
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
-    title: url === 'about:blank' ? 'New Browser Tab' : url,
-    focusAddressBar: true,
+    title: args.title ?? (url === 'about:blank' ? 'New Browser Tab' : url),
+    focusAddressBar: args.focusAddressBar ?? true,
     browserRuntimeEnvironmentId: args.environmentId,
     targetGroupId: args.targetGroupId
   })
@@ -508,8 +545,8 @@ function stageWebRuntimeBrowserTab(args: {
   })
 }
 
-function selectWebRuntimeSessionWorktree(worktreeId: string): void {
-  useAppStore.getState().setActiveWorktree(worktreeId)
+function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
+  useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
 }
 
 function findLocalBrowserPageForRemotePage(
@@ -881,9 +918,12 @@ async function callWebRuntimeSessionTabMethod(
         tabId: hostTabId,
         ...(method === 'session.tabs.activate'
           ? {
-              // Why: the additive intent protects new hosts while notifyClients:false protects old hosts.
+              // Why: the additive navigation target protects new hosts while notifyClients:false protects old hosts.
               notifyClients: false,
-              navigation: 'caller' as const
+              navigation: 'caller' as const,
+              // Why: every caller here is a tab click, shortcut, or palette pick —
+              // the gesture that is supposed to wake a slept pane.
+              intent: 'user' as const
             }
           : {}),
         ...(isLifecycleClose

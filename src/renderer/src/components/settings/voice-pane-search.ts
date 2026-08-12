@@ -73,6 +73,31 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
       )
     ]
   },
+  {
+    title: translate('auto.components.settings.voice.pane.search.microphoneTitle', 'Microphone'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.microphoneDescription',
+      'Choose which input device voice dictation uses.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.e360027a65',
+        'microphone'
+      ),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.micInput', 'input'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.micDevice', 'device'),
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.micAirpods', 'airpods'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.micDefault',
+        'system default'
+      )
+    ]
+  },
   getOpenaiTranscriptionSearchEntry(),
   {
     title: translate('auto.components.settings.voice.pane.search.7e62cd7c41', 'Speech Model'),

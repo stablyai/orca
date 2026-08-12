@@ -1,5 +1,7 @@
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
+import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -20,6 +22,7 @@ export type EditorPathMutationTarget = {
   worktreePath: string
   relativePath: string
   runtimeEnvironmentId?: string | null
+  allowLocalWindowsWslAliases?: true
 }
 
 export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
@@ -46,6 +49,10 @@ export type EditorFileSavedDetail = {
 }
 
 export type EditorRequestFileCloseDetail = {
+  fileId: string
+}
+
+export type EditorRequestCmdSaveDetail = {
   fileId: string
 }
 
@@ -89,13 +96,17 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
 export function isAutosaveSuspendedForFile(
   file: Pick<
     OpenFile,
-    'externalMutation' | 'pendingDiskBaselineVerification' | 'pendingLiveDiskVerification'
+    | 'externalMutation'
+    | 'pendingDiskBaselineVerification'
+    | 'pendingLiveDiskVerification'
+    | 'pendingOwnerMigration'
   >
 ): boolean {
   return (
     file.externalMutation === 'changed' ||
     file.pendingDiskBaselineVerification === true ||
-    file.pendingLiveDiskVerification === true
+    file.pendingLiveDiskVerification === true ||
+    file.pendingOwnerMigration === true
   )
 }
 
@@ -130,7 +141,12 @@ export function getOpenFilesForExternalFileChange(
       return false
     }
     if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-      return file.filePath === absolutePath
+      return (
+        file.filePath === absolutePath ||
+        (target.allowLocalWindowsWslAliases === true &&
+          isLocalWindowsDesktopClient() &&
+          areLocalWindowsWslPathAliases(file.filePath, absolutePath))
+      )
     }
     if (file.mode === 'diff') {
       return (

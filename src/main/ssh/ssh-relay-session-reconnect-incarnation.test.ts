@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 import type * as NodeCrypto from 'node:crypto'
 import { SshRelaySession } from './ssh-relay-session'
+import { runRemoteOrcaCli } from './ssh-remote-orca-cli'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
 type MockMuxInstance = {
@@ -220,12 +221,8 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       const reconnect = session.reconnect(mockConn)
       await vi.advanceTimersByTimeAsync(750)
 
-      expect(
-        vi
-          .mocked(mockStore.markSshRemotePtyLease)
-          .mock.calls.filter(([, , state]) => state === 'attached')
-          .map(([, id]) => id)
-      ).toHaveLength(48)
+      expect(setPtyOwnership).toHaveBeenCalledTimes(48)
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
       expect(peakActive).toBeLessThanOrEqual(8)
 
       await vi.advanceTimersByTimeAsync(20_000)
@@ -235,6 +232,11 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       expect(attempts.get('pty-0')).toBe(2)
       expect(attempts.get('pty-1')).toBe(2)
       expect(session.getState()).toBe('ready')
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+      expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
+        'target-1',
+        expect.arrayContaining(ptyIds.slice(2))
+      )
       expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
         'target-1',
         expect.any(String),
@@ -375,11 +377,32 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
 
     const winningCliHandler = muxInstances[2]?.requestHandlers.get('orca.cli')
     expect(winningCliHandler).toBeDefined()
-    await winningCliHandler?.({ argv: ['status'], cwd: '/', env: {} })
+    await winningCliHandler?.({
+      argv: ['artifacts', 'share', 'report.html'],
+      cwd: '/srv/repo',
+      env: {},
+      stdin: '<h1>Remote</h1>',
+      artifactInput: {
+        sourceKey: '/srv/repo/report.html',
+        fileName: 'report.html',
+        contentType: 'text/html'
+      }
+    })
 
     expect(runtime.registerOrchestrationCompatibilitySshAttachment).toHaveBeenCalledWith(
       'target-1',
       winningIncarnation
+    )
+    expect(vi.mocked(runRemoteOrcaCli)).toHaveBeenCalledWith(
+      runtime,
+      expect.objectContaining({
+        stdin: '<h1>Remote</h1>',
+        artifactInput: {
+          sourceKey: '/srv/repo/report.html',
+          fileName: 'report.html',
+          contentType: 'text/html'
+        }
+      })
     )
     expect(randomUUID).toHaveBeenCalledTimes(3)
   })
@@ -420,7 +443,7 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       incarnationId
     })
     expect(vi.mocked(mockStore.persistPtyBinding).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(mockStore.markSshRemotePtyLease).mock.invocationCallOrder[0]!
+      vi.mocked(mockStore.markSshRemotePtyLeasesAttachedAsync).mock.invocationCallOrder[0]!
     )
   })
 
@@ -564,7 +587,9 @@ describe('SshRelaySession reconnect incarnation ordering', () => {
       leafId: INCARNATION_LEAF_ID,
       incarnationId
     })
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
+      'pty-live'
+    ])
     expect(consoleError).toHaveBeenCalledWith(
       '[ssh-relay-session] Failed to persist reconnect incarnation:',
       expect.any(Error)

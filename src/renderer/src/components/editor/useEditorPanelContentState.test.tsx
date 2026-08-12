@@ -41,6 +41,10 @@ vi.mock('@/lib/connection-context', () => ({
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
 }))
 
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: vi.fn(() => null)
+}))
+
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: mocks.getState
@@ -422,7 +426,7 @@ describe('useEditorPanelContentState', () => {
         connectionId: 'ssh-1'
       }),
       expect.objectContaining({
-        compare: expect.objectContaining({ mergeBase: 'merge-base' }),
+        compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
         filePath: 'api/src/file.ts'
       })
     )

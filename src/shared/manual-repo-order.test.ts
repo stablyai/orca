@@ -27,6 +27,26 @@ describe('manual repo order', () => {
     expect(applyManualRepoOrder([localBravo, localAlpha], [])).toEqual([localBravo, localAlpha])
   })
 
+  it('returns the input array when no overlay exists', () => {
+    const repos = [localBravo, localAlpha]
+
+    expect(applyManualRepoOrder(repos, [])).toBe(repos)
+  })
+
+  it('returns the input array when the saved order moves nothing', () => {
+    const repos = [localAlpha, remoteCharlie, localBravo, remoteDelta]
+
+    expect(applyManualRepoOrder(repos, getManualRepoOrder(repos))).toBe(repos)
+  })
+
+  it('returns a new array when the saved order actually reorders', () => {
+    const repos = [localBravo, localAlpha]
+    const reordered = applyManualRepoOrder(repos, getManualRepoOrder([localAlpha, localBravo]))
+
+    expect(reordered).not.toBe(repos)
+    expect(reordered).toEqual([localAlpha, localBravo])
+  })
+
   it('restores a host-qualified cross-host interleaving', () => {
     const order = getManualRepoOrder([localAlpha, remoteCharlie, localBravo, remoteDelta])
 

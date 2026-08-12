@@ -13,6 +13,14 @@ const MAXIMUM_DECLARED_SKILL_SCAN_DEPTH = 6
 // Why: a skill package's own payload (templates, fixtures, sample apps) is not a skill
 // tree, and it is what drives ordinary caches past the depth and entry bounds. Descend
 // far enough to still find a skill grouped under a package, then stop.
+//
+// Changing this is a real tradeoff, not a tuning knob. Raising it spends the entry budget
+// on vendor payload — the cost that made ordinary caches collapse to a poison sentinel and
+// pin every skill amber (#10865). Lowering it, or leaving it, means a skill buried deeper
+// is never seen; that costs only a Details row, because a plugin-cache placement is not
+// convergeable by any update command. So the failure direction here is silence, which is
+// the safe one. Both sides of the boundary are pinned by test (#11454) — if you move this,
+// that test will fail, and it is meant to.
 const MAXIMUM_NESTED_SKILL_DEPTH = 2
 // Why: sized against a real multi-vendor cache, which reads ~7k entries once payload is
 // pruned. The bound still exists to stop a hostile or runaway tree; it is not a budget

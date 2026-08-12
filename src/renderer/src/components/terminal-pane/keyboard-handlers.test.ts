@@ -110,6 +110,26 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
       )
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
   })
+
+  it('forwards trusted Ctrl+Enter authority to the shared policy', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        () => true,
+        () => false,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+  })
 })
 
 describe('runTerminalSearchNavigation', () => {

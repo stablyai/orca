@@ -122,9 +122,11 @@ import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
+import {
+  createClaudeUsageSlice,
+  createCodexUsageSlice,
+  createOpenCodeUsageSlice
+} from './usage-provider-slices'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -144,7 +146,9 @@ import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
 import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createTaskCreationDraftsSlice } from './task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from './remote-server-updates'
+import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
 
 function createTestStore() {
   return create<AppState>()((...a) => ({
@@ -187,7 +191,9 @@ function createTestStore() {
     ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
     ...createNewIssueDraftSlice(...a),
-    ...createRemoteServerUpdatesSlice(...a)
+    ...createTaskCreationDraftsSlice(...a),
+    ...createRemoteServerUpdatesSlice(...a),
+    ...createTerminalQuickCommandHostsSlice(...a)
   }))
 }
 

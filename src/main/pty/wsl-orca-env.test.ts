@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
+  SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
+} from '../../shared/setup-agent-sequencing'
+import {
   addOrcaWslInteropEnv,
   addWorktreeSetupWslInteropEnv,
   stampWslOrchestrationCompatibilityHost
@@ -12,6 +16,20 @@ describe('addOrcaWslInteropEnv', () => {
     addOrcaWslInteropEnv(env)
 
     expect(env.WSLENV).toBe('ORCA_TERMINAL_HANDLE/u')
+  })
+
+  it('imports setup-gated startup env into WSL without path translation', () => {
+    const env: Record<string, string> = {
+      [SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]: 'codex',
+      [SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]: 'while :; do sleep 1; done'
+    }
+
+    addOrcaWslInteropEnv(env)
+
+    expect(env.WSLENV?.split(':')).toEqual([
+      `${SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV}/u`,
+      `${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}/u`
+    ])
   })
 
   it('preserves existing WSLENV entries and does not duplicate the handle entry', () => {
@@ -30,6 +48,8 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
       ORCA_CLI_COMMAND: 'orca-ide',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
+      ORCA_PRIME_AGENT_STATUS_EXTENSION:
+        'C:\\Users\\jin\\AppData\\Roaming\\Orca\\prime-agent-managed-status-extension\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
@@ -38,6 +58,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_AGENT_HOOK_TOKEN: 'token',
       ORCA_AGENT_HOOK_ENV: 'dev',
       ORCA_AGENT_HOOK_VERSION: '1',
+      ORCA_WSL_HOOK_INSTANCE: 'testinstance',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND: 'wsl',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID: 'local',
       ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION: 'Ubuntu'
@@ -49,6 +70,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
+    expect(env.WSLENV).toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION/p')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')
@@ -57,6 +79,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_TOKEN/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_ENV/u')
     expect(env.WSLENV).toContain('ORCA_AGENT_HOOK_VERSION/u')
+    expect(env.WSLENV).toContain('ORCA_WSL_HOOK_INSTANCE/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_KIND/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_ID/u')
     expect(env.WSLENV).toContain('ORCA_ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION/u')

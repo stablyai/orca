@@ -78,6 +78,31 @@ export function getLocalProjectExecutionRuntimeContext(
   })
 }
 
+/** Resolves the Windows default only when no project can own the runtime. */
+export function getGlobalWindowsExecutionRuntimeContext(
+  state: LocalProjectRuntimeState,
+  worktreeId?: string | null,
+  appPlatform: NodeJS.Platform = getRendererAppPlatform(),
+  wslContext: LocalProjectRuntimeWslContext = {}
+): ProjectExecutionRuntimeResolution | undefined {
+  if (
+    appPlatform !== 'win32' ||
+    worktreeId ||
+    state.activeRepoId ||
+    state.activeWorktreeId ||
+    !state.settings?.localWindowsRuntimeDefault
+  ) {
+    return undefined
+  }
+  return resolveProjectExecutionRuntime({
+    appPlatform: 'win32',
+    projectId: getLocalPreflightProjectId(state, worktreeId),
+    projectRuntimePreference: { kind: 'inherit-global' },
+    globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
+    ...wslContext
+  })
+}
+
 export function getLocalRepoProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   repoId: string | null | undefined,
@@ -148,24 +173,16 @@ export function getLocalAgentPreflightContext(
     return getProjectRuntimePreflightContext(projectRuntime)
   }
 
-  if (
-    appPlatform === 'win32' &&
-    !worktreeId &&
-    !state.activeRepoId &&
-    !state.activeWorktreeId &&
-    state.settings?.localWindowsRuntimeDefault
-  ) {
-    // Why: Settings -> Agents is global and can mount before any project is
-    // active; still respect the Windows/WSL runtime default for PATH detection.
-    return getProjectRuntimePreflightContext(
-      resolveProjectExecutionRuntime({
-        appPlatform: 'win32',
-        projectId: getLocalPreflightProjectId(state, worktreeId),
-        projectRuntimePreference: { kind: 'inherit-global' },
-        globalWindowsRuntimeDefault: state.settings.localWindowsRuntimeDefault,
-        ...wslContext
-      })
-    )
+  // Why: Settings -> Agents is global and can mount before any project is
+  // active; still respect the Windows/WSL runtime default for PATH detection.
+  const globalRuntime = getGlobalWindowsExecutionRuntimeContext(
+    state,
+    worktreeId,
+    appPlatform,
+    wslContext
+  )
+  if (globalRuntime) {
+    return getProjectRuntimePreflightContext(globalRuntime)
   }
 
   const explicitAgentRuntime = appPlatform === 'win32' ? state.settings?.localAgentRuntime : null

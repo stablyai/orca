@@ -1,5 +1,10 @@
 /* oxlint-disable max-lines */
 import { HeadlessEmulator } from './headless-emulator'
+import {
+  installDeviceAttributesResponder,
+  STARTUP_DA1_RESPONSE,
+  StartupDeviceAttributesQueryFilter
+} from './startup-device-attributes-responder'
 import { isValidPtySize, normalizePtySize } from './daemon-pty-size'
 import { PostReadyFlushGate } from './post-ready-flush-gate'
 import {
@@ -18,6 +23,7 @@ import {
   type PtyIngressEmission,
   type PtyStartupIngressIntent
 } from '../../shared/pty-startup-ingress'
+import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import type {
   PendingOutputRecord,
   SessionState,
@@ -26,6 +32,7 @@ import type {
   TerminalSnapshot
 } from './types'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
+import { createPtySlaveEchoProbe } from '../../shared/pty-slave-line-discipline-echo'
 
 const SHELL_READY_TIMEOUT_MS = 15_000
 // Why: Codex skips marker-gated command delivery; this only bounds older daemon/local paths that still report shell-ready for Codex.
@@ -53,6 +60,9 @@ export type SubprocessHandle = {
   /** Shell the subprocess actually spawned, after fallbacks. The host reconciles the caller's shell-ready
    *  assumption against it so a fallback shell without a ready marker never gates startup commands. */
   shellPath?: string
+  /** Slave device path, so startup replies can read the line discipline's ECHO bit before
+   *  writing. Absent on handles with no POSIX slave to read (ConPTY, tests). */
+  slavePath?: string
   write(data: string): void
   resize(cols: number, rows: number): void
   /** Stop reading the PTY fd (node-pty pause()) so a flooding child blocks on write. Optional:
@@ -112,6 +122,8 @@ export class Session {
   private readonly onSessionExit?: (code: number) => void
   private attachedClients: AttachedClient[] = []
   private preReadyStdinQueue: string[] = []
+  private releaseStartupDeviceAttributesResponder: (() => void) | null = null
+  private startupDeviceAttributesQueryFilter: StartupDeviceAttributesQueryFilter | null = null
   private shellReadyScanState: ShellReadyScanState | null = null
   private shellReadyTimer: ReturnType<typeof setTimeout> | null = null
   private killTimer: ReturnType<typeof setTimeout> | null = null
@@ -144,6 +156,8 @@ export class Session {
       wslDistro: opts.wslDistro
       // No onData: the daemon emulator must never reply to query sequences — the renderer's xterm is
       // the authoritative responder and a daemon reply would race ahead and clobber it. See HeadlessEmulator.
+      // The one exception is DA1 while the shell-ready barrier holds (below): the renderer's reply
+      // would be queued behind the marker it is needed to produce, so it cannot be authoritative there.
     })
     // Why: seed recovery must precede listener registration; shells can emit their prompt synchronously once onData subscribes.
     // Why the every() short-circuit is safe: writeSync only fails emulator-wide (disposed / no sync write API), so later
@@ -156,6 +170,15 @@ export class Session {
     if (opts.shellReadySupported) {
       this._shellState = 'pending'
       this.shellReadyScanState = createShellReadyScanState()
+      // Why: `write` queues everything until the ready marker, including the renderer's DA1
+      // reply — and a shell that withholds its first prompt until DA1 is answered (fish) then
+      // never emits the marker that would release it. Answer from the daemon, past the queue.
+      this.releaseStartupDeviceAttributesResponder = installDeviceAttributesResponder({
+        parser: this.emulator.responderParser,
+        response: STARTUP_DA1_RESPONSE,
+        reply: (data) => this.subprocess.write(data)
+      })
+      this.startupDeviceAttributesQueryFilter = new StartupDeviceAttributesQueryFilter()
       this.shellReadyTimer = setTimeout(() => {
         this.onShellReadyTimeout()
       }, opts.shellReadyTimeoutMs ?? SHELL_READY_TIMEOUT_MS)
@@ -164,11 +187,13 @@ export class Session {
     }
 
     this.postReadyFlushGate = new PostReadyFlushGate(() => this.flushPreReadyQueue())
+    const echoProbe = createPtySlaveEchoProbe(this.subprocess.slavePath)
     this.startupIngress = new PtyStartupIngress({
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.emitSubprocessOutput(emission)
+      onEmission: (emission) => this.emitSubprocessOutput(emission),
+      ...(echoProbe ? { echoProbe } : {})
     })
     this.subprocess.onData((data) => this.handleSubprocessData(data))
     this.subprocess.onExit((code) => this.handleSubprocessExit(code))
@@ -216,6 +241,14 @@ export class Session {
 
   write(data: string): void {
     if (this._state === 'exited' || this._disposed) {
+      return
+    }
+
+    // Daemon POSIX PTYs need the local provider's cooked-echo containment (#13137).
+    if (
+      extractOnlyCookedEchoSafeQueryReplies(data) &&
+      this.startupIngress.answerLiveQueryReply(data)
+    ) {
       return
     }
 
@@ -508,6 +541,7 @@ export class Session {
 
     // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
     // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
+    this.releaseStartupDeviceAttributes()
     this.releaseHeldShellReadyBytes()
     this.startupIngress.drainAndClose()
     const wasTerminating = this._isTerminating && this._state !== 'exited'
@@ -614,26 +648,34 @@ export class Session {
       return
     }
 
+    let releaseStartupDeviceAttributes = false
     if (this._shellState === 'pending' && this.shellReadyScanState) {
       const scanned = scanForShellReady(this.shellReadyScanState, data)
       data = scanned.output
       if (scanned.matched) {
         this.transitionToReady(scanned.postMarkerBytesObserved)
+        releaseStartupDeviceAttributes = true
       }
     } else {
       this.postReadyFlushGate.notifyData()
     }
 
     this.startupIngress.accept(data)
+    if (releaseStartupDeviceAttributes) {
+      this.releaseStartupDeviceAttributes()
+    }
   }
 
   private emitSubprocessOutput(emission: PtyIngressEmission): void {
-    const { data } = emission
+    let { data } = emission
     const rawLength = emission.rawEndSeq - emission.rawStartSeq
     // Why: absolute raw count (daemon stream thinning can drop bytes) lets a snapshot cover the gaps while the renderer dedups the tail.
     this.outputSequence += rawLength
     if (data.length > 0) {
       this.emulator.write(data)
+      data = this.startupDeviceAttributesQueryFilter?.accept(data) ?? data
+    }
+    if (data.length > 0) {
       this.recordPendingOutput({ kind: 'output', data })
     }
 
@@ -653,6 +695,7 @@ export class Session {
       return
     }
 
+    this.releaseStartupDeviceAttributes()
     this.releaseHeldShellReadyBytes()
     this.startupIngress.drainAndClose()
     this._exitCode = code
@@ -698,6 +741,21 @@ export class Session {
     return this.startupIngress.closeQueryAuthority()
   }
 
+  /** Hands DA1 back to the renderer once the barrier is done, however it ended. */
+  private releaseStartupDeviceAttributes(): void {
+    this.releaseStartupDeviceAttributesResponder?.()
+    this.releaseStartupDeviceAttributesResponder = null
+    const pending = this.startupDeviceAttributesQueryFilter?.release() ?? ''
+    this.startupDeviceAttributesQueryFilter = null
+    if (pending.length === 0) {
+      return
+    }
+    this.recordPendingOutput({ kind: 'output', data: pending })
+    for (const client of this.attachedClients) {
+      client.onData(pending, 0, true, this.outputSequence)
+    }
+  }
+
   private transitionToReady(postMarkerBytesObserved = false): void {
     this._shellState = 'ready'
     this.shellReadyScanState = null
@@ -717,6 +775,7 @@ export class Session {
       return
     }
     this._shellState = 'timed_out'
+    this.releaseStartupDeviceAttributes()
     this.releaseHeldShellReadyBytes()
     this.flushPreReadyQueue()
   }

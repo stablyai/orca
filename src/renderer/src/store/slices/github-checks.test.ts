@@ -15,6 +15,13 @@ describe('deriveCheckStatusFromChecks', () => {
     ]
     expect(deriveCheckStatusFromChecks(checks)).toBe('failure')
   })
+
+  it('keeps an unknown terminal conclusion neutral rather than pending', () => {
+    const checks = [
+      { name: 'future-check', status: 'completed', conclusion: 'future_state', url: null }
+    ] as unknown as PRCheckDetail[]
+    expect(deriveCheckStatusFromChecks(checks)).toBe('neutral')
+  })
 })
 
 describe('normalizeBranchName', () => {

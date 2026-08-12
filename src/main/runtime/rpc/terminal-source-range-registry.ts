@@ -1,4 +1,4 @@
-import { TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION } from '../../../shared/terminal-multiplex-flow-control'
+import { TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION } from '../../../shared/terminal-multiplex-flow-control'
 import {
   TerminalSourceRangeLedger,
   type TerminalSourceRangeBudget
@@ -11,7 +11,7 @@ export class TerminalSourceRangeRegistry {
   private retainedBytes = 0
 
   open(streamGeneration: string): TerminalSourceRangeLedger | null {
-    if (this.ledgers.size >= TERMINAL_MULTIPLEX_MAX_STREAMS_PER_CONNECTION) {
+    if (this.ledgers.size >= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION) {
       return null
     }
     let ledger: TerminalSourceRangeLedger

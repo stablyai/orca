@@ -5,7 +5,11 @@ import type {
   PtySourceSpan,
   PtySourceTransform
 } from '../shared/pty-source-credit-contract'
-import { ptySourceSpanIsSplittable } from '../shared/pty-source-credit-contract'
+import {
+  ptySourceDeliveryKey,
+  ptySourceSpanIsSplittable,
+  samePtySourceDelivery
+} from '../shared/pty-source-credit-contract'
 import {
   assertNonNegativeSafeInteger,
   assertPositiveSafeInteger,
@@ -167,6 +171,21 @@ export function snapshotDeliveryRecord(record: DeliveryRecord): PtySourceDeliver
     exitPublished: record.exitPublished,
     generationClosed: record.generationClosed
   })
+}
+
+// Why: identity equality is re-checked because a delivery key outlives the token that made it.
+export function matchingDeliverySnapshot(
+  deliveries: ReadonlyMap<string, DeliveryRecord>,
+  closedSnapshots: ReadonlyMap<string, PtySourceDeliverySnapshot>,
+  identity: PtySourceDeliveryIdentity
+): PtySourceDeliverySnapshot | null {
+  const key = ptySourceDeliveryKey(identity)
+  const active = deliveries.get(key)
+  if (active && samePtySourceDelivery(active.identity, identity)) {
+    return snapshotDeliveryRecord(active)
+  }
+  const closed = closedSnapshots.get(key)
+  return closed && samePtySourceDelivery(closed, identity) ? closed : null
 }
 
 export function retainedSourceTotal(records: Iterable<DeliveryRecord>): number {

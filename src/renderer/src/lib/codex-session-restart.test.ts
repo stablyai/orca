@@ -27,9 +27,14 @@ function setLaunchAgentOnFirstTab(launchAgent: TuiAgent): void {
 
 describe('CODEX_ACCOUNT_RESTART_STARTUP', () => {
   it('waits for shell readiness before relaunching Codex after an account switch', () => {
+    // Why launchAgent is load-bearing: pty:spawn runs the managed-auth
+    // readiness gate and Codex launch prep only for launchAgent 'codex', so
+    // dropping it would let a restart respawn race the account handoff and
+    // record a launch account the pane does not actually read.
     expect(CODEX_ACCOUNT_RESTART_STARTUP).toEqual({
       command: 'codex',
-      startupCommandDelivery: 'shell-ready'
+      startupCommandDelivery: 'shell-ready',
+      launchAgent: 'codex'
     })
     expect(shouldUseShellReadyStartupDelivery(CODEX_ACCOUNT_RESTART_STARTUP)).toBe(true)
   })
@@ -124,6 +129,7 @@ describe('markLiveCodexSessionsForRestart', () => {
       previousAccountLabel: ACCOUNT_A,
       nextAccountLabel: ACCOUNT_B
     })
+    expect(window.api.codexAccounts.listStalePanes).not.toHaveBeenCalled()
   })
 
   it('marks every live Codex split pane and ignores non-Codex panes', async () => {
@@ -803,6 +809,27 @@ describe('markRestoredStaleCodexSessionsForRestart', () => {
       nextAccountLabel: ACCOUNT_B,
       previousAccountId: 'account-a',
       nextAccountId: 'account-b'
+    })
+  })
+
+  it('keeps a system-default home-route change as a restart notice', async () => {
+    vi.mocked(window.api.codexAccounts.listStalePanes).mockResolvedValue([
+      {
+        ptyId: 'pty-1',
+        launchAccountId: null,
+        activeAccountId: null,
+        reason: 'home-route-change'
+      }
+    ])
+
+    await markRestoredStaleCodexSessionsForRestart()
+
+    expect(useAppStore.getState().codexRestartNoticeByPtyId['pty-1']).toEqual({
+      previousAccountLabel: 'System default',
+      nextAccountLabel: 'System default',
+      previousAccountId: null,
+      nextAccountId: null,
+      homeRouteChanged: true
     })
   })
 

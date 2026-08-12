@@ -19,7 +19,7 @@ import {
 } from './automation-project-groups'
 
 type AutomationProjectComboboxProps = {
-  repos: Repo[]
+  repos: readonly Repo[]
   value: string
   onValueChange: (repoId: string) => void
   placeholder?: string

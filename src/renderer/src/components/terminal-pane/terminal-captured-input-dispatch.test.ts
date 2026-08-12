@@ -84,21 +84,21 @@ describe('sendCapturedTerminalInput', () => {
 
 describe('requestCapturedTerminalReconfirmation', () => {
   it('reconfirms only through the still-current captured binding', () => {
-    const requestDroidReconfirmation = vi.fn()
-    const binding = { requestDroidReconfirmation }
+    const requestWindowsShiftEnterReconfirmation = vi.fn()
+    const binding = { requestWindowsShiftEnterReconfirmation }
 
     requestCapturedTerminalReconfirmation(binding, binding)
 
-    expect(requestDroidReconfirmation).toHaveBeenCalledOnce()
+    expect(requestWindowsShiftEnterReconfirmation).toHaveBeenCalledOnce()
   })
 
   it('does not call a disposed binding or its replacement', () => {
-    const original = { requestDroidReconfirmation: vi.fn() }
-    const replacement = { requestDroidReconfirmation: vi.fn() }
+    const original = { requestWindowsShiftEnterReconfirmation: vi.fn() }
+    const replacement = { requestWindowsShiftEnterReconfirmation: vi.fn() }
 
     requestCapturedTerminalReconfirmation(replacement, original)
 
-    expect(original.requestDroidReconfirmation).not.toHaveBeenCalled()
-    expect(replacement.requestDroidReconfirmation).not.toHaveBeenCalled()
+    expect(original.requestWindowsShiftEnterReconfirmation).not.toHaveBeenCalled()
+    expect(replacement.requestWindowsShiftEnterReconfirmation).not.toHaveBeenCalled()
   })
 })

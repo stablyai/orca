@@ -18,6 +18,7 @@ const __dirname = import.meta.dirname
 const ROOT = join(__dirname, '..', '..')
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
+const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')
 const MANAGED_HOOK_RUNTIME_ENTRY = join(
   ROOT,
   'src',
@@ -89,6 +90,21 @@ for (const platform of PLATFORMS) {
   })
 
   await build({
+    entryPoints: [AI_VAULT_SERVICE_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'relay-ai-vault-service.js'),
+    external: ['electron'],
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+
+  await build({
     entryPoints: [MANAGED_HOOK_RUNTIME_ENTRY],
     bundle: true,
     platform: 'node',
@@ -110,10 +126,12 @@ for (const platform of PLATFORMS) {
   // so a companion-only change always deploys beside the matching relay host.
   const relayContent = readFileSync(join(outDir, 'relay.js'))
   const watcherContent = readFileSync(join(outDir, 'relay-watcher.js'))
+  const aiVaultServiceContent = readFileSync(join(outDir, 'relay-ai-vault-service.js'))
   const managedHookRuntimeContent = readFileSync(join(outDir, 'managed-hook-runtime.js'))
   const hash = createHash('sha256')
     .update(relayContent)
     .update(watcherContent)
+    .update(aiVaultServiceContent)
     .update(managedHookRuntimeContent)
   // Why: changing the remote node-pty patch must select a fresh immutable Windows relay directory.
   if (platform.startsWith('win32-')) {

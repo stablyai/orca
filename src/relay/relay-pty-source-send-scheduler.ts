@@ -1,4 +1,7 @@
-import type { PtySourceDeliveryIdentity } from '../shared/pty-source-credit-contract'
+import type {
+  PtySourceDeliveryIdentity,
+  PtySourceDeliverySnapshot
+} from '../shared/pty-source-credit-contract'
 import type { PtySourceRecoveryCheckpoint } from '../shared/pty-source-recovery-contract'
 import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
 import type { RelayDispatcher, SinkWriteSettlement } from './dispatcher'
@@ -100,7 +103,23 @@ export class RelayPtySourceSendScheduler {
     if (!record || record.restoreRequired) {
       return
     }
-    if (this.pruneClosed(id, record)) {
+    if (record.sourceExitState === 'pending') {
+      // Why: the credit-mode exit frame is in flight; pruning now diverts publishPendingExit
+      // into a duplicate legacy pty.exit, and pumping a closed delivery throws. The exit
+      // settlement (which fires onCapacity) resumes progress.
+      return
+    }
+    const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+    if (
+      record.sourceExitState === 'idle' &&
+      record.legacyExitAccepted &&
+      (!snapshot || snapshot.state === 'closed' || snapshot.state === 'closing')
+    ) {
+      // Why: preserve partial exit progress so the retry targets only the source owner.
+      this.onCapacity(id)
+      return
+    }
+    if (this.pruneClosed(id, record, snapshot)) {
       this.onCapacity(id)
       return
     }
@@ -114,7 +133,10 @@ export class RelayPtySourceSendScheduler {
     let sealedUnsettled = 0
     let outstandingSourceUnits = 0
     for (const record of this.deliveries.values()) {
-      const snapshot = this.session.sourceDeliverySnapshot(record.identity)
+      const snapshot = this.session.sourceDeliverySnapshotIfKnown(record.identity)
+      if (!snapshot) {
+        continue
+      }
       outstandingSourceUnits += snapshot.sentEndSu - snapshot.creditedEndSu
       if (record.activating) {
         activating++
@@ -262,11 +284,20 @@ export class RelayPtySourceSendScheduler {
     })
   }
 
-  pruneClosed(id: string, record: RelayPtySourceDeliveryRecord): boolean {
-    if (this.session.sourceDeliverySnapshot(record.identity).state !== 'closed') {
+  pruneClosed(
+    id: string,
+    record: RelayPtySourceDeliveryRecord,
+    snapshot: PtySourceDeliverySnapshot | null = this.session.sourceDeliverySnapshotIfKnown(
+      record.identity
+    )
+  ): boolean {
+    // Why: an evicted tombstone probes null and must count as closed — this runs from paths
+    // (credit callbacks, write settlements) where a throw escapes every caller's try/catch.
+    if (snapshot && snapshot.state !== 'closed') {
       return false
     }
     if (this.deliveries.get(id) === record) {
+      this.wakeSendWaiters(record)
       this.deliveries.delete(id)
     }
     return true

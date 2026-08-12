@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import type {
   Repo,
@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import WorkspaceKanbanCard from './WorkspaceKanbanCard'
+import WorkspaceKanbanLaneCardList from './WorkspaceKanbanLaneCardList'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import { getWorkspaceStatusVisualMeta } from './workspace-status'
 import { translate } from '@/i18n/i18n'
@@ -32,6 +32,7 @@ type WorkspaceKanbanStatusLaneProps = {
   isDragTarget: boolean
   canCreateWorktree: boolean
   nativeDragEnabled?: boolean
+  renderCards: boolean
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onDragOver: (event: React.DragEvent, statusId: string) => void
@@ -49,7 +50,7 @@ type WorkspaceKanbanStatusLaneProps = {
   onColumnResizeKeyDown: (event: React.KeyboardEvent<HTMLElement>) => void
 }
 
-export default function WorkspaceKanbanStatusLane({
+function WorkspaceKanbanStatusLane({
   status,
   items,
   totalCount,
@@ -62,6 +63,7 @@ export default function WorkspaceKanbanStatusLane({
   isDragTarget,
   canCreateWorktree,
   nativeDragEnabled = true,
+  renderCards,
   selectedWorktreeIds,
   selectedWorktrees,
   onDragOver,
@@ -75,6 +77,7 @@ export default function WorkspaceKanbanStatusLane({
   onColumnResizeStart,
   onColumnResizeKeyDown
 }: WorkspaceKanbanStatusLaneProps): React.JSX.Element {
+  const laneScrollRef = useRef<HTMLDivElement | null>(null)
   const meta = getWorkspaceStatusVisualMeta(status)
   // Why: a lane that is empty on its own merits is still "Empty" under a query —
   // only a lane whose cards were filtered away has anything to say about matches.
@@ -180,32 +183,26 @@ export default function WorkspaceKanbanStatusLane({
       </div>
 
       <div
+        ref={laneScrollRef}
         data-workspace-board-lane-scroll=""
         className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-1.5 py-2 scrollbar-sleek"
       >
         {items.length > 0 ? (
-          <div className="space-y-2">
-            {items.map((worktree) => {
-              const isSelected = selectedWorktreeIds.has(worktree.id)
-              return (
-                <WorkspaceKanbanCard
-                  key={worktree.id}
-                  worktree={worktree}
-                  repo={repoMap.get(worktree.repoId)}
-                  isActive={activeWorktreeId === worktree.id}
-                  isSelected={isSelected}
-                  nativeDragEnabled={nativeDragEnabled}
-                  selectedWorktrees={
-                    isSelected && selectedWorktrees.length > 0 ? selectedWorktrees : undefined
-                  }
-                  onActivate={onActivate}
-                  onSelectionGesture={onSelectionGesture}
-                  onContextMenuSelect={onContextMenuSelect}
-                  onAssignWorkspaceStatus={onAssignWorkspaceStatus}
-                />
-              )
-            })}
-          </div>
+          renderCards ? (
+            <WorkspaceKanbanLaneCardList
+              items={items}
+              repoMap={repoMap}
+              activeWorktreeId={activeWorktreeId}
+              scrollRef={laneScrollRef}
+              selectedWorktreeIds={selectedWorktreeIds}
+              selectedWorktrees={selectedWorktrees}
+              nativeDragEnabled={nativeDragEnabled}
+              onActivate={onActivate}
+              onSelectionGesture={onSelectionGesture}
+              onContextMenuSelect={onContextMenuSelect}
+              onAssignWorkspaceStatus={onAssignWorkspaceStatus}
+            />
+          ) : null
         ) : (
           <div className="flex h-20 items-center justify-center rounded-md border border-dashed border-border/70 text-[11px] text-muted-foreground">
             {isFiltered
@@ -241,3 +238,5 @@ export default function WorkspaceKanbanStatusLane({
     </section>
   )
 }
+
+export default React.memo(WorkspaceKanbanStatusLane)

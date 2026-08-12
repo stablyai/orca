@@ -1,22 +1,24 @@
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/pty-session-id-format'
+import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import type { TerminalTab } from '../../../../shared/types'
 
 // Why: cold-park hysteresis keeps a hidden pane mounted for 30s so quick tab
 // flips never pay a re-hydrate; hot-retain keeps a bounded recently-visible
-// working set warm for 15 minutes beyond that. The cap (not the clock) is the
-// primary evictor — 8 worktrees covers the ordinary working set at ~4-5MB
-// renderer floor each, so parking only engages for the many-worktree tail it
+// working set warm for 5 minutes beyond that. The cap (not the clock) is the
+// primary evictor — 4 worktrees covers the ordinary working set, so parking
+// only engages for the many-worktree tail it
 // was built for. Reveal cost is a flat ~170ms remount regardless of buffer
 // size, so cutting remount *frequency* beats shaving replay.
 export const TERMINAL_WORKTREE_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 15 * 60_000
-export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 8
+export const TERMINAL_WORKTREE_HOT_RETAIN_MS = 5 * 60_000
+export const TERMINAL_WORKTREE_HOT_RETAIN_LIMIT = 4
 export const TERMINAL_WORKTREE_PARK_DELAY_MS = TERMINAL_WORKTREE_COLD_PARK_DELAY_MS
 export const TERMINAL_TAB_COLD_PARK_DELAY_MS = 30_000
-export const TERMINAL_TAB_HOT_RETAIN_MS = 15 * 60_000
-export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 12
+export const TERMINAL_TAB_HOT_RETAIN_MS = 5 * 60_000
+export const TERMINAL_TAB_HOT_RETAIN_LIMIT = 6
 
 // Why: tests override these per call (instead of process.env reads inside the
 // module) to shrink the 30s hysteresis to test-friendly durations.
@@ -56,6 +58,13 @@ function getPendingActivationSpawnCount(value: boolean | number | undefined): nu
   return typeof value === 'number' && value > 0 ? value : 0
 }
 
+function hasPendingActivationSpawn(tab: ColdParkableTerminalTab): boolean {
+  return (
+    getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0 &&
+    (!tab.ptyId || !isRemoteRuntimePtyId(tab.ptyId))
+  )
+}
+
 // Why: snapshot-backed = local daemon session owned by this worktree (foreign
 // ids reattach through a path parking cannot replay). SSH is restorable too,
 // via isParkRestorableTerminalPty + main's headless model; only remote-runtime
@@ -77,12 +86,24 @@ export function isSnapshotBackedTerminalPty(ptyId: string | null, worktreeId: st
 export type TerminalParkRestorePolicy = {
   /** settings.terminalSshViewParking !== false — the C1 SSH-parking kill switch. */
   sshParkingEnabled?: boolean
+  /** Exact paired environments whose host advertises bounded snapshot restore. */
+  pairedRuntimeParkingEnvironmentIds?: ReadonlySet<string>
 }
 
-// Why: SSH bytes transit local main, so main's headless model (served over
-// pty:getMainBufferSnapshot) can re-hydrate a parked SSH reveal, with the
-// relay's replay buffer as fallback — fact-mode watchers cover side effects
-// either way. Remote-runtime ptys never transit main; they stay un-parkable.
+export function selectPairedRuntimeParkingEnvironmentIds(
+  statuses: ReadonlyMap<string, { status: { capabilities?: readonly string[] } | null | undefined }>
+): Set<string> {
+  const capable = new Set<string>()
+  for (const [environmentId, entry] of statuses) {
+    if (entry.status?.capabilities?.includes(TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY)) {
+      capable.add(environmentId)
+    }
+  }
+  return capable
+}
+
+// Why: SSH uses local main's model; paired PTYs are eligible only when their
+// exact host advertises authoritative bounded restore.
 export function isParkRestorableTerminalPty(
   ptyId: string | null,
   worktreeId: string,
@@ -90,6 +111,13 @@ export function isParkRestorableTerminalPty(
 ): boolean {
   if (isSnapshotBackedTerminalPty(ptyId, worktreeId)) {
     return true
+  }
+  if (ptyId && isRemoteRuntimePtyId(ptyId)) {
+    const environmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
+    return (
+      environmentId !== null &&
+      policy?.pairedRuntimeParkingEnvironmentIds?.has(environmentId) === true
+    )
   }
   return policy?.sshParkingEnabled === true && ptyId !== null && parseAppSshPtyId(ptyId) !== null
 }
@@ -130,7 +158,7 @@ export function canParkTerminalWorktreeRenderers(args: {
     if (args.pendingStartupByTabId[tab.id] !== undefined) {
       return false
     }
-    if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+    if (hasPendingActivationSpawn(tab)) {
       return false
     }
     return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)
@@ -164,7 +192,7 @@ export function canParkTerminalTabRenderer(args: {
   if (args.pendingStartupByTabId[tab.id] !== undefined) {
     return false
   }
-  if (getPendingActivationSpawnCount(tab.pendingActivationSpawn) > 0) {
+  if (hasPendingActivationSpawn(tab)) {
     return false
   }
   return isParkRestorableTerminalPty(tab.ptyId, args.worktreeId, args.restorePolicy)

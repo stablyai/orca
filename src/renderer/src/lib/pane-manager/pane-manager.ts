@@ -41,6 +41,7 @@ import {
 } from './pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import { releaseHiddenWebglRetention } from './terminal-webgl-hidden-retention'
 import { schedulePaneRevealPresent, schedulePaneRevealRepaint } from './pane-reveal-repaint'
 import { fitRevealedPane } from './pane-reveal-fit'
 import { PaneIdentityRegistry } from './pane-identity-registry'
@@ -72,6 +73,7 @@ export class PaneManager {
   private styleOptions: PaneStyleOptions = {}
   private destroyed = false
   private renderingSuspended: boolean
+  private atlasRecoveryVisible: boolean
   private identities = new PaneIdentityRegistry()
   private pendingPaneReparentFrameIds = new Set<number>()
 
@@ -82,6 +84,7 @@ export class PaneManager {
     this.root = root
     this.options = options
     this.renderingSuspended = options.initialRenderingSuspended === true
+    this.atlasRecoveryVisible = !this.renderingSuspended
     // Why: atlas recovery must reach every live manager — see
     // resetAllTerminalWebglAtlases for the shared-atlas rationale.
     registerLivePaneManager(this)
@@ -207,8 +210,15 @@ export class PaneManager {
     })
   }
 
-  getPanes(): ManagedPane[] {
-    return Array.from(this.panes.values()).map(toPublicPane)
+  getPanes(limit = Number.POSITIVE_INFINITY): ManagedPane[] {
+    const panes: ManagedPane[] = []
+    for (const pane of this.panes.values()) {
+      if (panes.length >= limit) {
+        break
+      }
+      panes.push(toPublicPane(pane))
+    }
+    return panes
   }
 
   /** Why separate from getPanes: the census runs on the crash path, where
@@ -271,6 +281,7 @@ export class PaneManager {
       gpuRenderingEnabled: pane.gpuRenderingEnabled,
       webglAttachmentDeferred: pane.webglAttachmentDeferred,
       webglDisabledAfterContextLoss: pane.webglDisabledAfterContextLoss,
+      webglAttachFailedSinceRecovery: pane.webglAttachFailedSinceRecovery === true,
       hasComplexScriptOutput: pane.hasComplexScriptOutput,
       terminalWebglAutoDecision: getTerminalWebglAutoDecision(),
       hasWebgl: Boolean(pane.webglAddon)
@@ -358,6 +369,14 @@ export class PaneManager {
     resetPaneWebglTextureAtlases(this.panes.values())
   }
 
+  setAtlasRecoveryVisible(visible: boolean): void {
+    this.atlasRecoveryVisible = visible
+  }
+
+  isVisibleForAtlasRecovery(): boolean {
+    return this.atlasRecoveryVisible && !this.destroyed
+  }
+
   scheduleRevealRepaint(): void {
     // Why: the settled-frame callback can fire after destroy(); repainting
     // disposed panes could throw in attach and latch the global WebGL
@@ -373,12 +392,15 @@ export class PaneManager {
 
   suspendRendering(): void {
     this.renderingSuspended = true
-    suspendPaneRendering(this.panes.values())
+    suspendPaneRendering(this.panes.values(), {
+      owner: this,
+      livePanes: () => (this.destroyed ? [] : this.panes.values())
+    })
   }
 
   resumeRendering(): void {
     this.renderingSuspended = false
-    resumePaneRendering(this.panes.values())
+    resumePaneRendering(this.panes.values(), this)
   }
 
   movePane(sourcePaneId: number, targetPaneId: number, zone: DropZone): void {
@@ -392,6 +414,7 @@ export class PaneManager {
   destroy(): void {
     this.destroyed = true
     unregisterLivePaneManager(this)
+    releaseHiddenWebglRetention(this)
     cancelActivePaneDrag(this.dragState)
     this.cancelPendingPaneReparentFrames()
     for (const pane of this.panes.values()) {

@@ -17,6 +17,7 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
@@ -117,7 +118,6 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   if (target === 'local' && process.platform === 'win32') {
     return [
       "Write-Output '{}'",
-      '$inputData = [Console]::In.ReadToEnd()',
       // Why: endpoint.cmd is cmd syntax, not PowerShell. Parse its `set KEY=...`
       // lines so surviving PTYs can refresh to the current Orca server.
       'if ($env:ORCA_AGENT_HOOK_ENDPOINT -and (Test-Path -LiteralPath $env:ORCA_AGENT_HOOK_ENDPOINT)) {',
@@ -129,7 +129,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '    }',
       '  } catch {}',
       '}',
+      // Why (#11549 class): missing Orca context means a user-wide hook fired outside an
+      // Orca pane. ReadToEnd blocks forever if that caller abandons the pipe, so the guard
+      // must run before the hook owns stdin; the payload would be discarded anyway.
       'if (-not $env:ORCA_AGENT_HOOK_PORT -or -not $env:ORCA_AGENT_HOOK_TOKEN -or -not $env:ORCA_PANE_KEY) { exit 0 }',
+      '$inputData = [Console]::In.ReadToEnd()',
       'if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }',
       'try {',
       '  $payload = $inputData | ConvertFrom-Json',
@@ -183,6 +187,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 export class CopilotHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()

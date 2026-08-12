@@ -15,13 +15,19 @@ import {
   getBitbucketPullRequestForBranchOrThrow,
   getBitbucketRepoSlug
 } from '../bitbucket/client'
+import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
 import {
   getGiteaPullRequest,
   getGiteaPullRequestForBranchOrThrow,
   getGiteaRepoSlug
 } from '../gitea/client'
 import { createGiteaPullRequest } from '../gitea/pull-request-creation'
-import { createGitHubPullRequest, getPRForBranchOutcome, getRepoSlug } from '../github/client'
+import {
+  createGitHubPullRequest,
+  getGitHubPRLookupRateLimitBlock,
+  getPRForBranchOutcome,
+  getRepoSlug
+} from '../github/client'
 import { getMergeRequest, getMergeRequestForBranchOrThrow, getProjectSlug } from '../gitlab/client'
 import { createGitLabMergeRequest } from '../gitlab/merge-request-creation'
 import {
@@ -122,6 +128,29 @@ function unwrapGitHubPRForBranchOutcome(
   return outcome.kind === 'found' ? mapGitHubReview(outcome.pr) : null
 }
 
+/**
+ * Why (#11532): hosted-review lookups reach GitHub outside the PR refresh
+ * coordinator's paced queue, so they need the same rate-limit floor. Throwing
+ * (rather than returning null) keeps a low budget from reading as "no pull
+ * request" — callers preserve the last known review and back off.
+ */
+async function assertGitHubReviewRateLimitBudget(
+  input: ForgeProviderRepositoryContext
+): Promise<void> {
+  const block = await getGitHubPRLookupRateLimitBlock(
+    input.repoPath,
+    input.connectionId,
+    getHostedReviewLocalGitOptions(input)
+  )
+  if (block) {
+    throw new Error(
+      `GitHub PR lookup failed (rate_limited): GitHub rate limit is low. Try again after ${new Date(
+        block.resetAt * 1000
+      ).toLocaleTimeString()}.`
+    )
+  }
+}
+
 const gitHubForgeProvider = {
   id: 'github',
   supportsReviewCreation: true,
@@ -131,6 +160,7 @@ const gitHubForgeProvider = {
   resolveRepository: async (context) =>
     getRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
+    await assertGitHubReviewRateLimitBudget(input)
     const fallbackReviewNumber =
       input.linkedReviewNumber == null ? (input.fallbackReviewNumber ?? null) : null
     const executionArgs = hostedReviewExecutionArgs(input)
@@ -149,6 +179,7 @@ const gitHubForgeProvider = {
     return unwrapGitHubPRForBranchOutcome(outcome)
   },
   async getReviewByNumber(input) {
+    await assertGitHubReviewRateLimitBudget(input)
     const executionArgs = hostedReviewExecutionArgs(input)
     const outcome =
       executionArgs.length > 0
@@ -168,7 +199,7 @@ const gitHubForgeProvider = {
 
 const bitbucketForgeProvider = {
   id: 'bitbucket',
-  supportsReviewCreation: false,
+  supportsReviewCreation: true,
   resolveRepository: (context) =>
     getBitbucketRepoSlug(
       context.repoPath,
@@ -195,7 +226,8 @@ const bitbucketForgeProvider = {
       ...hostedReviewExecutionArgs(input)
     )
     return pr ? mapBitbucketReview(pr) : null
-  }
+  },
+  createReview: createBitbucketPullRequest
 } satisfies ForgeProvider
 
 const azureDevOpsForgeProvider = {

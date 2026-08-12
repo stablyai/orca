@@ -1,9 +1,10 @@
 /* eslint-disable max-lines -- Why: the cleanup dialog keeps scan status,
    filters, row actions, localized review copy, and force-aware confirmation
    in one modal flow. */
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle,
+  Info,
   Loader2,
   RefreshCcw,
   Search,
@@ -11,7 +12,6 @@ import {
   Trash2,
   X
 } from 'lucide-react'
-import { toast } from 'sonner'
 import { useShallow } from 'zustand/react/shallow'
 import {
   Dialog,
@@ -40,7 +40,6 @@ import { Progress } from '@/components/ui/progress'
 import RepoMultiCombobox from '@/components/ui/repo-multi-combobox'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -64,11 +63,9 @@ import {
   type WorkspaceCleanupSortKey,
   type WorkspaceCleanupTimeFilter
 } from './workspace-cleanup-presentation'
-import {
-  startWorkspaceCleanupBackgroundRemoval,
-  type WorkspaceCleanupRemovalProgress
-} from './workspace-cleanup-background-removal'
-import { CandidateRow } from './workspace-cleanup-candidate-row'
+import type { WorkspaceCleanupRemovalProgress } from './workspace-cleanup-background-removal'
+import { countEstimatedInactiveWorkspaces } from './inactive-workspace-estimate'
+import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import {
   getCandidateStatus,
@@ -83,16 +80,14 @@ import {
   type WorkspaceCleanupView,
   type WorkspaceCleanupViewCounts
 } from './workspace-cleanup-view-selection'
-import { filterWorkspaceCleanupRemovalCandidates } from './workspace-cleanup-removal-candidates'
+import {
+  DEFAULT_WORKSPACE_CLEANUP_FILTERS,
+  useWorkspaceCleanupDialogSession,
+  type WorkspaceCleanupDialogSession
+} from './workspace-cleanup-dialog-session'
 import { translate } from '@/i18n/i18n'
 
-const DEFAULT_FILTERS: WorkspaceCleanupFilters = {
-  query: '',
-  time: 'all',
-  review: 'all',
-  git: 'all',
-  context: 'all'
-}
+const WORKSPACE_CLEANUP_CLOSE_LINGER_MS = 300
 
 const EMPTY_REVIEW_INFO: WorkspaceCleanupReviewInfo = {
   hasReview: false,
@@ -174,13 +169,67 @@ function formatScanErrorReason(message: string | undefined): string {
   return message.replace(/\.$/, '')
 }
 
-export default function WorkspaceCleanupDialog(): React.JSX.Element {
-  const activeModal = useAppStore((s) => s.activeModal)
-  const openModal = useAppStore((s) => s.openModal)
-  const closeModal = useAppStore((s) => s.closeModal)
+export default function WorkspaceCleanupDialog(): React.JSX.Element | null {
+  // Why: scans and removals outlive the modal; only the subscribed projection tree may unmount.
+  const session = useWorkspaceCleanupDialogSession()
+  const [lingering, setLingering] = useState(session.open)
+  useEffect(() => {
+    if (session.open) {
+      setLingering(true)
+      return
+    }
+    const timer = window.setTimeout(() => setLingering(false), WORKSPACE_CLEANUP_CLOSE_LINGER_MS)
+    return () => window.clearTimeout(timer)
+  }, [session.open])
+
+  if (!session.open && !lingering) {
+    return null
+  }
+  return <WorkspaceCleanupDialogContent session={session} />
+}
+
+function WorkspaceCleanupDialogContent({
+  session
+}: {
+  session: WorkspaceCleanupDialogSession
+}): React.JSX.Element {
+  const {
+    open,
+    loading,
+    selectedIds,
+    setSelectedIds,
+    expandedRowIds,
+    setExpandedRowIds,
+    activeView,
+    setActiveView,
+    confirming,
+    confirmCandidates,
+    removalProgress,
+    removalInFlight,
+    rowFailures,
+    repoSelection,
+    setRepoSelection,
+    filters,
+    setFilters,
+    sortKey,
+    setSortKey,
+    sortDirection,
+    setSortDirection,
+    selectedDefaultsScanAtRef,
+    removalInFlightRef,
+    close: closeModal,
+    markCandidateViewed,
+    restoreDismissals: resetDismissals,
+    startScan: startWorkspaceCleanupScan,
+    ignoreCandidate,
+    applyScanDefaults,
+    openConfirmRemove,
+    cancelConfirmRemove,
+    backToWorkspaceCleanupList,
+    confirmRemove
+  } = session
   const scan = useAppStore((s) => s.workspaceCleanupScan)
   const scanProgress = useAppStore((s) => s.workspaceCleanupProgress)
-  const loading = useAppStore((s) => s.workspaceCleanupLoading)
   const error = useAppStore((s) => s.workspaceCleanupError)
   const repos = useAppStore((s) => s.repos)
   const reviewStateInputs = useAppStore(
@@ -191,142 +240,32 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       settings: s.settings
     }))
   )
-  const scanWorkspaceCleanup = useAppStore((s) => s.scanWorkspaceCleanup)
-  const markCandidateViewed = useAppStore((s) => s.markWorkspaceCleanupCandidateViewed)
-  const dismissCandidates = useAppStore((s) => s.dismissWorkspaceCleanupCandidates)
-  const resetDismissals = useAppStore((s) => s.resetWorkspaceCleanupDismissals)
-  const removeCandidates = useAppStore((s) => s.removeWorkspaceCleanupCandidates)
-  const markWorktreesQueuedForDeletion = useAppStore((s) => s.markWorktreesQueuedForDeletion)
-  const clearWorktreeDeleteState = useAppStore((s) => s.clearWorktreeDeleteState)
-  const deletingWorktreeIds = useAppStore(
-    useShallow(
-      (s) =>
-        new Set(
-          Object.entries(s.deleteStateByWorktreeId)
-            .filter(([, state]) => state.isDeleting)
-            .map(([worktreeId]) => worktreeId)
-        )
-    )
+  const deletionPhaseByWorktreeId = useAppStore(
+    useShallow((s) => {
+      const phases: Record<string, WorkspaceCleanupDeletionPhase> = {}
+      for (const [worktreeId, state] of Object.entries(s.deleteStateByWorktreeId)) {
+        if (state.isDeleting) {
+          phases[worktreeId] = state.phase ?? 'deleting'
+        }
+      }
+      return phases
+    })
+  )
+  const deletingWorktreeIds = useMemo(
+    () => new Set(Object.keys(deletionPhaseByWorktreeId)),
+    [deletionPhaseByWorktreeId]
   )
 
-  const open = activeModal === 'workspace-cleanup'
-  const openRef = useRef(open)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
-  const [expandedRowIds, setExpandedRowIds] = useState<Set<string>>(() => new Set())
   const [rowsScrollElement, setRowsScrollElement] = useState<HTMLDivElement | null>(null)
-  const [activeView, setActiveView] = useState<WorkspaceCleanupView>('ready')
-  const [confirming, setConfirming] = useState(false)
-  const [confirmCandidates, setConfirmCandidates] = useState<WorkspaceCleanupCandidate[]>([])
-  const [removalProgress, setRemovalProgress] = useState<WorkspaceCleanupRemovalProgress | null>(
-    null
-  )
-  const [rowFailures, setRowFailures] = useState<Record<string, string>>({})
-  const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(() => new Set())
-  const [filters, setFilters] = useState<WorkspaceCleanupFilters>(DEFAULT_FILTERS)
-  const [sortKey, setSortKey] = useState<WorkspaceCleanupSortKey>('activity')
-  const [sortDirection, setSortDirection] = useState<WorkspaceCleanupSortDirection>('asc')
-  const selectedDefaultsScanAtRef = useRef<number | null>(null)
-  const autoScanAttemptedForOpenRef = useRef(false)
-  const latestReadyToastScanAtRef = useRef<number | null>(null)
-  const wasOpenRef = useRef(false)
-  const removalInFlightRef = useRef(false)
-  // Why: the dialog stays mounted across cleanup runs, so late settlements from
-  // an earlier batch must not mutate a newer batch's row/selection state.
-  const removalBatchIdRef = useRef(0)
-  const mountedRef = useMountedRef()
   const eligibleRepos = useMemo(() => repos.filter((repo) => isGitRepoKind(repo)), [repos])
   const eligibleRepoIds = useMemo(() => eligibleRepos.map((repo) => repo.id), [eligibleRepos])
-
-  useEffect(() => {
-    openRef.current = open
-  }, [open])
-
-  const startWorkspaceCleanupScan = useCallback(
-    (options: { notifyWhenReady?: boolean } = {}) => {
-      setRowFailures({})
-      void scanWorkspaceCleanup()
-        .then((result) => {
-          if (!mountedRef.current || !options.notifyWhenReady || openRef.current) {
-            return
-          }
-          if (latestReadyToastScanAtRef.current === result.scannedAt) {
-            return
-          }
-          latestReadyToastScanAtRef.current = result.scannedAt
-          const suggestedCount = result.candidates.filter(
-            (candidate) => candidate.selectedByDefault
-          ).length
-          toast.success(
-            translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.0e2d235c63',
-              'Inactive workspace scan ready'
-            ),
-            {
-              description: formatWorkspaceCleanupReadyToastDescription(
-                result.candidates.length,
-                suggestedCount
-              ),
-              action: {
-                label: translate(
-                  'auto.components.workspace.cleanup.WorkspaceCleanupDialog.4a35c08764',
-                  'Review'
-                ),
-                onClick: () => openModal('workspace-cleanup')
-              }
-            }
-          )
-        })
-        .catch((err: unknown) => {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.662b8ec3f8',
-                'Workspace cleanup scan failed'
-              ),
-              {
-                description: err instanceof Error ? err.message : String(err)
-              }
-            )
-          }
-        })
-    },
-    [mountedRef, openModal, scanWorkspaceCleanup]
-  )
-
-  useEffect(() => {
-    if (!open) {
-      wasOpenRef.current = false
-      autoScanAttemptedForOpenRef.current = false
-      return
-    }
-    if (!wasOpenRef.current) {
-      wasOpenRef.current = true
-      autoScanAttemptedForOpenRef.current = false
-      if (!removalInFlightRef.current) {
-        setActiveView('ready')
-        setConfirming(false)
-        setRowFailures({})
-        setFilters(DEFAULT_FILTERS)
-        setSortKey('activity')
-        setSortDirection('asc')
-        setSelectedIds(new Set())
-      }
-    }
-    // Why: reopening mid-batch keeps the deletion progress view; a broad scan
-    // started here would be discarded by the removal's scan invalidation, so
-    // skip it while a removal batch is running (matches the reset guard above).
-    if (!loading && !autoScanAttemptedForOpenRef.current && !removalInFlightRef.current) {
-      autoScanAttemptedForOpenRef.current = true
-      startWorkspaceCleanupScan({ notifyWhenReady: true })
-    }
-  }, [loading, open, startWorkspaceCleanupScan])
 
   useEffect(() => {
     if (!open) {
       return
     }
     setRepoSelection(new Set(eligibleRepoIds))
-  }, [eligibleRepoIds, open])
+  }, [eligibleRepoIds, open, setRepoSelection])
 
   const candidates = useMemo(() => scan?.candidates ?? [], [scan?.candidates])
   const reviewInfoByWorktreeId = useMemo(() => {
@@ -342,6 +281,10 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     }
     return new Set(eligibleRepoIds)
   }, [eligibleRepoIds, repoSelection])
+  const selectedScanErrors = useMemo(
+    () => (scan?.errors ?? []).filter((error) => effectiveRepoSelection.has(error.repoId)),
+    [effectiveRepoSelection, scan?.errors]
+  )
   const filteredCandidates = useMemo(() => {
     if (
       effectiveRepoSelection.size === 0 ||
@@ -351,19 +294,43 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     }
     return candidates.filter((candidate) => effectiveRepoSelection.has(candidate.repoId))
   }, [candidates, effectiveRepoSelection, eligibleRepoIds.length])
+  // Why: the Resource Manager button counts from the renderer's activity record only,
+  // so it routinely disagrees with the scanned list. Reconcile it rather than leaving
+  // the user to wonder which number is real.
+  const estimatedInactiveCount = useMemo(() => {
+    if (!open) {
+      return null
+    }
+    return countEstimatedInactiveWorkspaces(
+      Object.values(reviewStateInputs.worktreesByRepo).flat(),
+      new Map(reviewStateInputs.repos.map((repo) => [repo.id, repo])),
+      Date.now()
+    )
+  }, [open, reviewStateInputs])
+  // Why: the reconciliation only holds for a complete scan; a failed or partial
+  // one would blame the difference on git-history checks instead of the error.
+  const estimateMismatchNotice =
+    !loading &&
+    !error &&
+    selectedScanErrors.length === 0 &&
+    scan &&
+    estimatedInactiveCount !== null &&
+    estimatedInactiveCount !== candidates.length &&
+    filteredCandidates.length === candidates.length
+      ? translate(
+          'auto.components.workspace.cleanup.WorkspaceCleanupDialog.f637f63882',
+          "Resource Manager counts {{value0}}; this list found {{value1}}. That counter reads Orca's activity record alone, while this scan also checks each workspace's git history and skips disconnected remotes.",
+          { value0: estimatedInactiveCount, value1: candidates.length }
+        )
+      : null
 
   useEffect(() => {
     if (loading || !scan || selectedDefaultsScanAtRef.current === scan.scannedAt) {
       return
     }
     selectedDefaultsScanAtRef.current = scan.scannedAt
-    if (removalInFlightRef.current) {
-      return
-    }
-    setSelectedIds(getDefaultSelectedWorkspaceCleanupIds(scan.candidates, deletingWorktreeIds))
-    setConfirming(false)
-    setRowFailures({})
-  }, [deletingWorktreeIds, loading, scan])
+    applyScanDefaults(scan.candidates, deletingWorktreeIds)
+  }, [applyScanDefaults, deletingWorktreeIds, loading, scan, selectedDefaultsScanAtRef])
 
   const visibleCandidates = useMemo(() => {
     const rows = filteredCandidates.filter((candidate) => !candidate.blockers.includes('dismissed'))
@@ -406,10 +373,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
   const repoNameById = useMemo(
     () => new Map(repos.map((repo) => [repo.id, repo.displayName || repo.path])),
     [repos]
-  )
-  const selectedScanErrors = useMemo(
-    () => (scan?.errors ?? []).filter((error) => effectiveRepoSelection.has(error.repoId)),
-    [effectiveRepoSelection, scan?.errors]
   )
   const scanNoticeMessage = useMemo(
     () => formatScanNoticeMessage(selectedScanErrors, repoNameById),
@@ -462,7 +425,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
       )
       return next.size === current.size ? current : next
     })
-  }, [activeRowIds, confirming, deletingWorktreeIds, open])
+  }, [activeRowIds, confirming, deletingWorktreeIds, open, setSelectedIds])
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -477,66 +440,31 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     startWorkspaceCleanupScan({ notifyWhenReady: true })
   }, [startWorkspaceCleanupScan])
 
-  const ignoreCandidate = useCallback(
-    (candidate: WorkspaceCleanupCandidate) => {
-      void dismissCandidates([candidate])
-        .then(() => {
-          if (mountedRef.current) {
-            setSelectedIds((current) => {
-              const next = new Set(current)
-              next.delete(candidate.worktreeId)
-              return next
-            })
-          }
-        })
-        .catch((err: unknown) => {
-          if (mountedRef.current) {
-            toast.error(
-              translate(
-                'auto.components.workspace.cleanup.WorkspaceCleanupDialog.7f451a3e2c',
-                'Could not ignore cleanup suggestion'
-              ),
-              {
-                description: err instanceof Error ? err.message : String(err)
-              }
-            )
-          }
-        })
+  const toggleExpandedRow = useCallback(
+    (worktreeId: string) => {
+      setExpandedRowIds((current) => toggleSetMember(current, worktreeId))
     },
-    [dismissCandidates, mountedRef]
+    [setExpandedRowIds]
   )
 
-  const toggleExpandedRow = useCallback((worktreeId: string) => {
-    setExpandedRowIds((current) => toggleSetMember(current, worktreeId))
-  }, [])
-
-  const toggleSelectedRow = useCallback((worktreeId: string) => {
-    setSelectedIds((current) => toggleSetMember(current, worktreeId))
-  }, [])
-
-  const openConfirmRemove = useCallback((candidates: readonly WorkspaceCleanupCandidate[]) => {
-    const nextCandidates = filterWorkspaceCleanupRemovalCandidates(
-      candidates,
-      useAppStore.getState().deleteStateByWorktreeId
-    )
-    if (nextCandidates.length === 0) {
-      return
-    }
-    setConfirmCandidates(nextCandidates)
-    setConfirming(true)
-  }, [])
+  const toggleSelectedRow = useCallback(
+    (worktreeId: string) => {
+      setSelectedIds((current) => toggleSetMember(current, worktreeId))
+    },
+    [setSelectedIds]
+  )
 
   // Why: stable per-row handlers so React.memo keeps unchanged CandidateRow
   // instances from re-rendering on scan stream-in and selection changes.
   const handleRemoveRow = useCallback(
     (candidate: WorkspaceCleanupCandidate) => {
-      if (loading) {
+      if (loading || removalInFlightRef.current) {
         return
       }
       setSelectedIds(new Set([candidate.worktreeId]))
       openConfirmRemove([candidate])
     },
-    [loading, openConfirmRemove]
+    [loading, openConfirmRemove, removalInFlightRef, setSelectedIds]
   )
 
   const handleViewCandidate = useCallback(
@@ -547,131 +475,6 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
     },
     [closeModal, markCandidateViewed]
   )
-
-  const cancelConfirmRemove = useCallback(() => {
-    if (removalProgress) {
-      closeModal()
-      return
-    }
-    setConfirming(false)
-    setConfirmCandidates([])
-  }, [closeModal, removalProgress])
-
-  const clearQueuedDeleteState = useCallback(
-    (worktreeId: string) => {
-      const deleteState = useAppStore.getState().deleteStateByWorktreeId[worktreeId]
-      // Why: candidates that fail before removal starts would otherwise stay
-      // marked "Queued for deletion" in the sidebar; rows already in the
-      // 'deleting' phase or failed with an error keep their own state.
-      if (deleteState?.isDeleting && deleteState.error === null && deleteState.phase === 'queued') {
-        clearWorktreeDeleteState(worktreeId)
-      }
-    },
-    [clearWorktreeDeleteState]
-  )
-
-  const deselectRemovedIds = useCallback((removedIds: readonly string[]) => {
-    if (removedIds.length === 0) {
-      return
-    }
-    setSelectedIds((current) => {
-      const next = new Set(current)
-      for (const id of removedIds) {
-        next.delete(id)
-      }
-      return next
-    })
-  }, [])
-
-  const confirmRemove = useCallback(() => {
-    if (confirmCandidates.length === 0 || removalInFlightRef.current) {
-      return
-    }
-    const removableCandidates = filterWorkspaceCleanupRemovalCandidates(
-      confirmCandidates,
-      useAppStore.getState().deleteStateByWorktreeId
-    )
-    if (removableCandidates.length === 0) {
-      setConfirming(false)
-      setConfirmCandidates([])
-      return
-    }
-    removalInFlightRef.current = true
-    removalBatchIdRef.current += 1
-    const removalBatchId = removalBatchIdRef.current
-    // Why: a hung late settlement retains these callbacks for the renderer's
-    // lifetime; capture only ids so it cannot pin the candidate objects.
-    const removableWorktreeIds = removableCandidates.map((candidate) => candidate.worktreeId)
-    setRowFailures({})
-    markWorktreesQueuedForDeletion(removableWorktreeIds)
-    startWorkspaceCleanupBackgroundRemoval({
-      candidates: removableCandidates,
-      removeCandidates,
-      onProgress: (progress) => {
-        if (mountedRef.current) {
-          setRemovalProgress(progress)
-        }
-      },
-      onRowFailed: (failure) => {
-        clearQueuedDeleteState(failure.worktreeId)
-      },
-      onResult: (result) => {
-        const nextFailures: Record<string, string> = {}
-        for (const failure of result.failures) {
-          nextFailures[failure.worktreeId] = failure.message
-          clearQueuedDeleteState(failure.worktreeId)
-        }
-        if (mountedRef.current) {
-          setRowFailures(nextFailures)
-          deselectRemovedIds(result.removedIds)
-          setRemovalProgress(null)
-          setConfirming(false)
-          setConfirmCandidates([])
-        }
-        removalInFlightRef.current = false
-      },
-      onLateResult: (result) => {
-        for (const failure of result.failures) {
-          // Why: a late failure can come from a hung preflight whose row never
-          // reached 'deleting'; clear its queued overlay like every other path.
-          clearQueuedDeleteState(failure.worktreeId)
-        }
-        if (!mountedRef.current || removalBatchIdRef.current !== removalBatchId) {
-          return
-        }
-        setRowFailures((current) => {
-          const next = { ...current }
-          for (const id of result.removedIds) {
-            delete next[id]
-          }
-          for (const failure of result.failures) {
-            next[failure.worktreeId] = failure.message
-          }
-          return next
-        })
-        deselectRemovedIds(result.removedIds)
-      },
-      onError: () => {
-        for (const worktreeId of removableWorktreeIds) {
-          clearWorktreeDeleteState(worktreeId)
-        }
-        if (mountedRef.current) {
-          setRemovalProgress(null)
-          setConfirming(false)
-          setConfirmCandidates([])
-        }
-        removalInFlightRef.current = false
-      }
-    })
-  }, [
-    clearQueuedDeleteState,
-    clearWorktreeDeleteState,
-    confirmCandidates,
-    deselectRemovedIds,
-    markWorktreesQueuedForDeletion,
-    mountedRef,
-    removeCandidates
-  ])
 
   const selectedCount = selectedCandidates.length
 
@@ -779,7 +582,11 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                     variant="destructive"
                     size="sm"
                     onClick={() => openConfirmRemove(selectedCandidates)}
-                    disabled={selectedCount === 0 || loading}
+                    // Why: leaving the progress view no longer closes the dialog, so the
+                    // list is reachable mid-batch; a second batch would silently no-op.
+                    disabled={
+                      selectedCount === 0 || loading || removalProgress !== null || removalInFlight
+                    }
                   >
                     <Trash2 className="size-3.5" />
                     {translate(
@@ -816,6 +623,13 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
               <div className="flex items-center gap-2 border-b border-border bg-muted/25 px-5 py-2 text-xs text-muted-foreground">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 <span>{scanNoticeMessage}</span>
+              </div>
+            ) : null}
+
+            {estimateMismatchNotice ? (
+              <div className="flex items-start gap-2 border-b border-border bg-muted/25 px-5 py-2 text-xs text-muted-foreground">
+                <Info className="mt-0.5 size-3.5 shrink-0" />
+                <span>{estimateMismatchNotice}</span>
               </div>
             ) : null}
 
@@ -899,7 +713,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                           'auto.components.workspace.cleanup.WorkspaceCleanupDialog.e94b1f8bb4',
                           'Clear filters'
                         )}
-                        onAction={() => setFilters(DEFAULT_FILTERS)}
+                        onAction={() => setFilters(DEFAULT_WORKSPACE_CLEANUP_FILTERS)}
                       />
                     ) : null}
                     {!loading &&
@@ -927,7 +741,12 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
                           last={activeRows.length > 1 && index === activeRows.length - 1}
                           expanded={expandedRowIds.has(candidate.worktreeId)}
                           lastActivityLabel={formatRelativeTime(candidate.lastActivityAt)}
-                          removing={loading || deletingWorktreeIds.has(candidate.worktreeId)}
+                          deletionPhase={deletionPhaseByWorktreeId[candidate.worktreeId]}
+                          removing={
+                            loading ||
+                            removalInFlight ||
+                            deletingWorktreeIds.has(candidate.worktreeId)
+                          }
                           selected={
                             selectedIds.has(candidate.worktreeId) &&
                             !loading &&
@@ -952,6 +771,7 @@ export default function WorkspaceCleanupDialog(): React.JSX.Element {
             candidates={confirmCandidates}
             reviewInfoByWorktreeId={reviewInfoByWorktreeId}
             progress={removalProgress}
+            onBack={backToWorkspaceCleanupList}
             onCancel={cancelConfirmRemove}
             onConfirm={confirmRemove}
           />
@@ -1275,12 +1095,14 @@ function ConfirmRemove({
   candidates,
   reviewInfoByWorktreeId,
   progress,
+  onBack,
   onCancel,
   onConfirm
 }: {
   candidates: WorkspaceCleanupCandidate[]
   reviewInfoByWorktreeId: ReadonlyMap<string, WorkspaceCleanupReviewInfo>
   progress: WorkspaceCleanupRemovalProgress | null
+  onBack: () => void
   onCancel: () => void
   onConfirm: () => void
 }): React.JSX.Element {
@@ -1332,10 +1154,10 @@ function ConfirmRemove({
             variant="ghost"
             size="icon-sm"
             aria-label={translate(
-              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.191f0bc98e',
-              'Close'
+              'auto.components.workspace.cleanup.WorkspaceCleanupDialog.74f6c16279',
+              'Back'
             )}
-            onClick={onCancel}
+            onClick={onBack}
           >
             <X className="size-4" />
           </Button>
@@ -1479,31 +1301,6 @@ function hasActiveWorkspaceCleanupPanelControls(
     sortKey !== 'activity' ||
     sortDirection !== 'asc'
   )
-}
-
-function getDefaultSelectedWorkspaceCleanupIds(
-  candidates: readonly WorkspaceCleanupCandidate[],
-  deletingWorktreeIds: ReadonlySet<string> = new Set()
-): Set<string> {
-  return new Set(
-    candidates
-      .filter(
-        (candidate) => candidate.selectedByDefault && !deletingWorktreeIds.has(candidate.worktreeId)
-      )
-      .map((candidate) => candidate.worktreeId)
-  )
-}
-
-function formatWorkspaceCleanupReadyToastDescription(
-  inactiveCount: number,
-  suggestedCount: number
-): string {
-  if (inactiveCount === 0) {
-    return 'No inactive workspaces found.'
-  }
-  const inactiveNoun = inactiveCount === 1 ? 'workspace' : 'workspaces'
-  const suggestedNoun = suggestedCount === 1 ? 'suggestion' : 'suggestions'
-  return `${inactiveCount} inactive ${inactiveNoun} found, with ${suggestedCount} cleanup ${suggestedNoun}.`
 }
 
 function formatWorkspaceCleanupRemovalProgress(progress: WorkspaceCleanupRemovalProgress): string {

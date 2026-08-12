@@ -15,6 +15,7 @@ import {
   ptySourceCancellationResult,
   RecentPtySourceCancellationIndex
 } from './pty-source-cancellation-index'
+import { notifyPtySourceCreditAvailable } from './pty-source-credit-availability-notice'
 import { ownedPtySourceDelivery } from './pty-source-delivery-ownership'
 import {
   RelayPtySourceCreditLedger,
@@ -141,6 +142,10 @@ export class SshPtySourceCreditAdapter {
     return this.sourceCredit.snapshot(identity)
   }
 
+  snapshotIfKnown(identity: PtySourceDeliveryIdentity): PtySourceDeliverySnapshot | null {
+    return this.sourceCredit.snapshotIfKnown(identity)
+  }
+
   acknowledge(
     params: Record<string, unknown>,
     grant: Readonly<PtyConsumerSessionGrant> | null
@@ -205,6 +210,9 @@ export class SshPtySourceCreditAdapter {
     this.identityByToken.delete(token)
     this.recentCancellations.remember(proof)
     this.clearGraceWhenSettled(identity.ownerGeneration)
+    // Why: the publication must retire its record the moment the delivery closes, or the next
+    // exit seals a dead ledger entry.
+    notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
     return ptySourceCancellationResult(proof)
   }
 
@@ -247,9 +255,7 @@ export class SshPtySourceCreditAdapter {
       return
     }
     this.disposed = true
-    for (const timer of this.graceTimers.values()) {
-      clearTimeout(timer)
-    }
+    this.graceTimers.forEach((timer) => clearTimeout(timer))
     this.graceTimers.clear()
     this.sourceCredit.closeGeneration(this.relayProviderGeneration)
     this.identityByToken.clear()
@@ -262,6 +268,7 @@ export class SshPtySourceCreditAdapter {
         continue
       }
       this.cancelExact(token, identity, 'client-detached')
+      notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
     }
   }
 
@@ -274,6 +281,7 @@ export class SshPtySourceCreditAdapter {
           continue
         }
         this.cancelExact(token, identity, 'reconnect-grace-expired')
+        notifyPtySourceCreditAvailable(this.onCreditAvailable, identity.id)
       }
     }, PTY_CONSUMER_OWNER_GRACE_MS)
     timer.unref?.()
@@ -281,7 +289,10 @@ export class SshPtySourceCreditAdapter {
   }
 
   private cancelExact(token: string, identity: PtySourceDeliveryIdentity, reason: string): void {
-    if (this.sourceCredit.snapshot(identity).state !== 'closed') {
+    // Why: this runs from the bare grace setTimeout, where an evicted tombstone probing unknown
+    // would throw straight into uncaughtException.
+    const snapshot = this.sourceCredit.snapshotIfKnown(identity)
+    if (snapshot && snapshot.state !== 'closed') {
       const proof = this.sourceCredit.cancel(identity, reason)
       this.recentCancellations.remember(proof)
       this.publishCancellation?.(proof)
@@ -314,10 +325,7 @@ export class SshPtySourceCreditAdapter {
   }
 
   private clearGraceTimer(ownerGeneration: number): void {
-    const timer = this.graceTimers.get(ownerGeneration)
-    if (timer) {
-      clearTimeout(timer)
-      this.graceTimers.delete(ownerGeneration)
-    }
+    clearTimeout(this.graceTimers.get(ownerGeneration))
+    this.graceTimers.delete(ownerGeneration)
   }
 }

@@ -166,18 +166,40 @@ describe('SshRelaySession recovery race fencing', () => {
     })
   }
 
+  function pendingRecovery(recoveryEndSu: number) {
+    return {
+      status: 'pending',
+      clientGeneration: 2,
+      ownerGeneration: 2,
+      ptyIncarnation: 'incarnation-1',
+      deliveryToken: 'new-token',
+      checkpointSourceEndSu: 4,
+      recoveryEndSu
+    }
+  }
+
+  function completeRecovery(params: Record<string, unknown>): void {
+    const complete = onNotificationByMethodMock.mock.calls.findLast(
+      ([method]) => method === 'pty.recoveryComplete'
+    )?.[1] as ((params: Record<string, unknown>) => void) | undefined
+    complete?.(params)
+  }
+
   async function prepareRecovery(targetId: string): Promise<{
     session: SshRelaySession
     deps: ReturnType<typeof createMockDeps>
   }> {
     let generation = 0
     openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
-      mode: 'negotiated',
-      clientInstanceId: options.clientInstanceId,
-      clientGeneration: ++generation,
-      ownerGeneration: generation,
-      ownerLease: `owner-lease-${generation}`,
-      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      state: {
+        mode: 'negotiated',
+        clientInstanceId: options.clientInstanceId,
+        clientGeneration: ++generation,
+        ownerGeneration: generation,
+        ownerLease: `owner-lease-${generation}`,
+        outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+      },
+      resumed: options.resume !== undefined
     }))
     vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([
       {
@@ -242,15 +264,7 @@ describe('SshRelaySession recovery race fencing', () => {
       })
       return {
         incarnationId: 'incarnation-1',
-        sourceRecovery: {
-          status: 'pending',
-          clientGeneration: 2,
-          ownerGeneration: 2,
-          ptyIncarnation: 'incarnation-1',
-          deliveryToken: 'new-token',
-          checkpointSourceEndSu: 4,
-          recoveryEndSu: 8
-        },
+        sourceRecovery: pendingRecovery(8),
         sourceActivationLease
       }
     })
@@ -268,11 +282,7 @@ describe('SshRelaySession recovery race fencing', () => {
     expect(recoveryActivationLease.retire).not.toHaveBeenCalled()
     expect(muxRequestMock).not.toHaveBeenCalledWith('pty.cancelDelivery', expect.anything())
     expect(setPtyOwnership).not.toHaveBeenCalled()
-    expect(deps.mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      targetId,
-      'pty-1',
-      'attached'
-    )
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('settles exact cancellation before publishing an exit with incomplete recovery data', async () => {
@@ -320,15 +330,7 @@ describe('SshRelaySession recovery race fencing', () => {
       })
       return {
         incarnationId: 'incarnation-1',
-        sourceRecovery: {
-          status: 'pending',
-          clientGeneration: 2,
-          ownerGeneration: 2,
-          ptyIncarnation: 'incarnation-1',
-          deliveryToken: 'new-token',
-          checkpointSourceEndSu: 4,
-          recoveryEndSu: 8
-        },
+        sourceRecovery: pendingRecovery(8),
         sourceActivationLease
       }
     })
@@ -401,10 +403,7 @@ describe('SshRelaySession recovery race fencing', () => {
     const { session, deps } = await prepareRecovery(targetId)
     attachForReconnectMock.mockImplementation(async () => {
       queueMicrotask(() => {
-        const complete = onNotificationByMethodMock.mock.calls.findLast(
-          ([method]) => method === 'pty.recoveryComplete'
-        )?.[1] as ((params: Record<string, unknown>) => void) | undefined
-        complete?.({
+        completeRecovery({
           id: 'pty-1',
           clientGeneration: 2,
           ownerGeneration: 2,
@@ -416,19 +415,12 @@ describe('SshRelaySession recovery race fencing', () => {
       })
       return {
         incarnationId: 'incarnation-1',
-        sourceRecovery: {
-          status: 'pending',
-          clientGeneration: 2,
-          ownerGeneration: 2,
-          ptyIncarnation: 'incarnation-1',
-          deliveryToken: 'new-token',
-          checkpointSourceEndSu: 4,
-          recoveryEndSu: 4
-        }
+        sourceRecovery: pendingRecovery(4)
       }
     })
     await session.reconnect(deps.mockConn)
     const closeCount = vi.mocked(closeSshPtyOutputGeneration).mock.calls.length
+    const muxDisposeCount = muxDisposeMock.mock.calls.length
 
     emitSourceFrame({
       targetId,
@@ -440,11 +432,9 @@ describe('SshRelaySession recovery race fencing', () => {
     })
 
     expect(acceptOutputDataMock).not.toHaveBeenCalled()
-    expect(closeSshPtyOutputGeneration).toHaveBeenCalledTimes(closeCount + 1)
-    expect(closeSshPtyOutputGeneration).toHaveBeenLastCalledWith(
-      23,
-      'ssh_source_frame_stale_or_non_contiguous'
-    )
+    expect(closeSshPtyOutputGeneration).toHaveBeenCalledTimes(closeCount)
+    expect(muxDisposeMock).toHaveBeenCalledTimes(muxDisposeCount)
+    await vi.waitFor(() => expect(attachForReconnectMock).toHaveBeenCalledTimes(2))
   })
 
   it('drops late frames from a token after its cancellation proof is validated', async () => {
@@ -463,10 +453,7 @@ describe('SshRelaySession recovery race fencing', () => {
           sourceStartSu: 5,
           sourceEndSu: 8
         })
-        const complete = onNotificationByMethodMock.mock.calls.findLast(
-          ([method]) => method === 'pty.recoveryComplete'
-        )?.[1] as ((params: Record<string, unknown>) => void) | undefined
-        complete?.({
+        completeRecovery({
           id: 'pty-1',
           clientGeneration: 2,
           ownerGeneration: 2,
@@ -478,15 +465,7 @@ describe('SshRelaySession recovery race fencing', () => {
       })
       return {
         incarnationId: 'incarnation-1',
-        sourceRecovery: {
-          status: 'pending',
-          clientGeneration: 2,
-          ownerGeneration: 2,
-          ptyIncarnation: 'incarnation-1',
-          deliveryToken: 'new-token',
-          checkpointSourceEndSu: 4,
-          recoveryEndSu: 8
-        }
+        sourceRecovery: pendingRecovery(8)
       }
     })
     await session.reconnect(deps.mockConn)
@@ -559,15 +538,7 @@ describe('SshRelaySession recovery race fencing', () => {
     }
     attachForReconnectMock.mockResolvedValue({
       incarnationId: 'incarnation-1',
-      sourceRecovery: {
-        status: 'pending',
-        clientGeneration: 2,
-        ownerGeneration: 2,
-        ptyIncarnation: 'incarnation-1',
-        deliveryToken: 'new-token',
-        checkpointSourceEndSu: 4,
-        recoveryEndSu: 12
-      },
+      sourceRecovery: pendingRecovery(12),
       sourceActivationLease
     })
 
@@ -651,15 +622,7 @@ describe('SshRelaySession recovery race fencing', () => {
         })
         return {
           incarnationId: 'incarnation-1',
-          sourceRecovery: {
-            status: 'pending',
-            clientGeneration: 2,
-            ownerGeneration: 2,
-            ptyIncarnation: 'incarnation-1',
-            deliveryToken: 'new-token',
-            checkpointSourceEndSu: 4,
-            recoveryEndSu: 8
-          },
+          sourceRecovery: pendingRecovery(8),
           sourceActivationLease: activationLease
         }
       })
@@ -704,6 +667,51 @@ describe('SshRelaySession recovery race fencing', () => {
     }
   )
 
+  it('overwrites the migration checkpoint with the post-recovery one for the same pty', async () => {
+    const targetId = 'post-recovery-checkpoint-rekey'
+    const { session, deps } = await prepareRecovery(targetId)
+    attachForReconnectMock.mockImplementation(async () => {
+      queueMicrotask(() => {
+        emitSourceFrame({
+          targetId,
+          token: 'new-token',
+          clientGeneration: 2,
+          ownerGeneration: 2,
+          sourceStartSu: 4,
+          sourceEndSu: 8
+        })
+        completeRecovery({
+          id: 'pty-1',
+          clientGeneration: 2,
+          ownerGeneration: 2,
+          ptyIncarnation: 'incarnation-1',
+          deliveryToken: 'new-token',
+          checkpointSourceEndSu: 4,
+          recoveryEndSu: 4
+        })
+      })
+      return { incarnationId: 'incarnation-1', sourceRecovery: pendingRecovery(4) }
+    })
+    await session.reconnect(deps.mockConn)
+    expect(acceptOutputDataMock).toHaveBeenCalledOnce()
+
+    // The pre-migration identity is gone from the intake, so only the checkpoint
+    // recorded after recovery can answer the next reconnect.
+    vi.mocked(getSshPtyAcceptedSourceCheckpoints).mockReturnValue([])
+    attachForReconnectMock.mockResolvedValue({
+      incarnationId: 'incarnation-1',
+      sourceRecovery: { status: 'restoreRequired', reason: 'checkpointUnavailable' }
+    })
+    await session.reconnect(deps.mockConn)
+
+    expect(attachForReconnectMock).toHaveBeenCalledTimes(2)
+    expect(attachForReconnectMock.mock.calls.at(-1)?.[2]).toMatchObject({
+      status: 'checkpoint',
+      deliveryToken: 'new-token',
+      acceptedSourceEndSu: 8
+    })
+  })
+
   it('keeps a stale overlapping recovery from canceling or mutating its replacement', async () => {
     const targetId = 'overlapping-recovery'
     const { session, deps } = await prepareRecovery(targetId)
@@ -723,10 +731,7 @@ describe('SshRelaySession recovery race fencing', () => {
       const ownerGeneration = openConsumerSessionMock.mock.calls.length
       if (ownerGeneration === 3) {
         queueMicrotask(() => {
-          const complete = onNotificationByMethodMock.mock.calls.findLast(
-            ([method]) => method === 'pty.recoveryComplete'
-          )?.[1] as ((params: Record<string, unknown>) => void) | undefined
-          complete?.({
+          completeRecovery({
             id: 'pty-1',
             clientGeneration: 3,
             ownerGeneration: 3,
@@ -768,8 +773,10 @@ describe('SshRelaySession recovery race fencing', () => {
     expect(muxRequestMock.mock.calls.filter(([method]) => method === 'pty.cancelDelivery')).toEqual(
       []
     )
-    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledTimes(1)
-    expect(deps.mockStore.markSshRemotePtyLease).toHaveBeenCalledWith(targetId, 'pty-1', 'attached')
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+    expect(deps.mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(targetId, [
+      'pty-1'
+    ])
     expect(setPtyOwnership).toHaveBeenCalledTimes(1)
     expect(staleLease.transferToRecovery).toHaveBeenCalledOnce()
     expect(staleLease.commit).not.toHaveBeenCalled()

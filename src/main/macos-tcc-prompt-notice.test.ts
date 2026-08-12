@@ -30,6 +30,7 @@ vi.mock('node:fs', async (importOriginal) => ({
 
 const {
   TCC_PROMPT_NOTICE_THRESHOLD,
+  TCC_PROMPT_NOTICE_VERSION,
   TCC_PROMPT_WATCH_START_FALLBACK_MS,
   acknowledgePendingTccPromptNotice,
   consumePendingTccPromptNotice,
@@ -67,7 +68,11 @@ describe('tcc prompt notice threshold', () => {
     handleTccPromptForTests()
     expect(writeFileAtomically).toHaveBeenCalledTimes(1)
     const [, contents] = writeFileAtomically.mock.calls[0] as [string, string]
-    expect(JSON.parse(contents)).toMatchObject({ promptCount: 1, notified: false })
+    expect(JSON.parse(contents)).toMatchObject({
+      noticeVersion: TCC_PROMPT_NOTICE_VERSION,
+      promptCount: 1,
+      notified: false
+    })
   })
 
   it('never fires again once dismissed, even past the threshold', () => {
@@ -303,9 +308,9 @@ describe('tcc prompt notice threshold', () => {
   })
 
   it.each([
-    { promptCount: 2, notified: false },
-    { promptCount: 1, notified: true }
-  ])('requires a fresh detection for a legacy tally: $promptCount/$notified', (persisted) => {
+    { promptCount: 2, notified: false, acknowledgedAfterClose: false },
+    { promptCount: 1, notified: true, acknowledgedAfterClose: true }
+  ])('re-arms a legacy tally after a fresh detection: $promptCount/$notified', (persisted) => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     readTallyFile.mockReturnValue(JSON.stringify({ ...persisted, dismissed: false }))
@@ -329,11 +334,35 @@ describe('tcc prompt notice threshold', () => {
     }
   })
 
+  it('preserves a legacy permanent opt-out', () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    readTallyFile.mockReturnValue(
+      JSON.stringify({
+        promptCount: 1,
+        notified: true,
+        dismissed: true,
+        acknowledgedAfterClose: true
+      })
+    )
+    try {
+      const mainWindow = createWindowStub()
+      initTccPromptNotice(mainWindow as never)
+
+      expect(watchStart).not.toHaveBeenCalled()
+      expect(mainWindow.webContents.send).not.toHaveBeenCalled()
+      expect(consumePendingTccPromptNotice(1)).toBeNull()
+    } finally {
+      Object.defineProperty(process, 'platform', platform!)
+    }
+  })
+
   it('replays an unclosed notice from the new delivery contract', () => {
     const platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     readTallyFile.mockReturnValue(
       JSON.stringify({
+        noticeVersion: TCC_PROMPT_NOTICE_VERSION,
         promptCount: 1,
         notified: false,
         dismissed: false,
@@ -359,6 +388,7 @@ describe('tcc prompt notice threshold', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     readTallyFile.mockReturnValue(
       JSON.stringify({
+        noticeVersion: TCC_PROMPT_NOTICE_VERSION,
         promptCount: 1,
         notified: true,
         dismissed: false,
