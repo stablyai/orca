@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { SlidersHorizontal } from 'lucide-react'
+import { ChevronsDownUp, ChevronsUpDown, SlidersHorizontal } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -30,11 +31,15 @@ import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 type SidebarWorkspaceOptionsMenuProps = {
   preserveWorkspaceBoardOpen?: boolean
   onMenuOpenChange?: (open: boolean) => void
+  collapsibleSectionKeys?: readonly string[]
 }
+
+const EMPTY_SECTION_KEYS: readonly string[] = []
 
 const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsMenu({
   preserveWorkspaceBoardOpen = false,
-  onMenuOpenChange
+  onMenuOpenChange,
+  collapsibleSectionKeys = EMPTY_SECTION_KEYS
 }: SidebarWorkspaceOptionsMenuProps) {
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
@@ -54,6 +59,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const setGroupBy = useAppStore((s) => s.setGroupBy)
   const projectOrderBy = useAppStore((s) => s.projectOrderBy)
   const setProjectOrderBy = useAppStore((s) => s.setProjectOrderBy)
+  const collapsedGroups = useAppStore((s) => s.collapsedGroups)
+  const setCollapsedGroups = useAppStore((s) => s.setCollapsedGroups)
 
   const [open, setOpen] = useState(false)
   const { hostOptions } = useSidebarHostScopeOptions()
@@ -112,6 +119,16 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const projectOrderLabel =
     PROJECT_ORDER_OPTIONS.find((opt) => opt.id === projectOrderBy)?.label ?? 'Manual'
   const hostVisibilityLabel = getSidebarHostVisibilityLabel(visibleWorkspaceHostIds, hostOptions)
+  const canCollapseAll = collapsibleSectionKeys.some((key) => !collapsedGroups.has(key))
+  const canExpandAll = collapsedGroups.size > 0
+
+  const collapseAllSections = useCallback(() => {
+    setCollapsedGroups(new Set([...collapsedGroups, ...collapsibleSectionKeys]))
+  }, [collapsedGroups, collapsibleSectionKeys, setCollapsedGroups])
+
+  const expandAllSections = useCallback(() => {
+    setCollapsedGroups([])
+  }, [setCollapsedGroups])
 
   return (
     <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
@@ -171,6 +188,22 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         className="w-72 pb-2"
         data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
       >
+        <DropdownMenuItem disabled={!canCollapseAll} onSelect={collapseAllSections}>
+          <ChevronsDownUp className="size-3.5" />
+          {translate(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.collapseAllSections',
+            'Collapse all sections'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={!canExpandAll} onSelect={expandAllSections}>
+          <ChevronsUpDown className="size-3.5" />
+          {translate(
+            'auto.components.sidebar.SidebarWorkspaceOptionsMenu.expandAllSections',
+            'Expand all sections'
+          )}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+
         {/* Why: host + project filters share one section and the same single-row
             shell as Sort by (label left, value right) so the menu stays flat. */}
         {(showHostScopeControls || repos.length > 1) && (

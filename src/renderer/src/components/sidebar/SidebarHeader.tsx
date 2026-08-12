@@ -10,10 +10,12 @@ import { translate } from '@/i18n/i18n'
 
 type SidebarHeaderProps = {
   onWorkspaceBoardMenuOpenChange: (open: boolean) => void
+  collapsibleSectionKeys?: readonly string[]
 }
 
 const SidebarHeader = React.memo(function SidebarHeader({
-  onWorkspaceBoardMenuOpenChange
+  onWorkspaceBoardMenuOpenChange,
+  collapsibleSectionKeys
 }: SidebarHeaderProps) {
   const openModal = useAppStore((s) => s.openModal)
   const newWorktreeShortcutLabel = useShortcutLabel('workspace.create')
@@ -35,6 +37,7 @@ const SidebarHeader = React.memo(function SidebarHeader({
         <SidebarWorkspaceOptionsMenu
           preserveWorkspaceBoardOpen
           onMenuOpenChange={onWorkspaceBoardMenuOpenChange}
+          collapsibleSectionKeys={collapsibleSectionKeys}
         />
 
         <Tooltip>

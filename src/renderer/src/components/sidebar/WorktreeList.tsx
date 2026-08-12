@@ -5192,6 +5192,7 @@ type WorktreeListProps = {
   onWorkspaceBoardDragPreviewStart?: () => void
   onWorkspaceBoardDragPreviewCommit?: () => void
   onWorkspaceBoardDragPreviewCancel?: () => void
+  onCollapsibleSectionKeysChange?: (keys: readonly string[]) => void
 }
 
 export function installWorktreeVisibleRefreshVisibilityListener(onChange: () => void): () => void {
@@ -5205,7 +5206,8 @@ const WorktreeList = React.memo(function WorktreeList({
   workspaceBoardOpen = false,
   onWorkspaceBoardDragPreviewStart = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
   onWorkspaceBoardDragPreviewCommit = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
-  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK
+  onWorkspaceBoardDragPreviewCancel = NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK,
+  onCollapsibleSectionKeysChange
 }: WorktreeListProps) {
   // ── Granular selectors (each is a primitive or shallow-stable ref) ──
   const allWorktrees = useAllWorktrees()
@@ -5865,6 +5867,27 @@ const WorktreeList = React.memo(function WorktreeList({
       workspaceHostScope
     ]
   )
+  const collapsibleSectionKeys = useMemo(
+    () =>
+      sectionRows.flatMap((row) => {
+        if (row.type === 'host-header') {
+          return [row.key]
+        }
+        if (row.type !== 'header' || row.count === 0) {
+          return []
+        }
+        const isCollapsibleHeader =
+          (groupBy === 'repo' && Boolean(row.repo || row.projectGroup)) ||
+          (groupBy === 'workspace-status' &&
+            getWorkspaceStatusFromGroupKey(row.key, workspaceStatuses) !== null) ||
+          row.key === PINNED_GROUP_KEY
+        return isCollapsibleHeader ? [row.key] : []
+      }),
+    [groupBy, sectionRows, workspaceStatuses]
+  )
+  useEffect(() => {
+    onCollapsibleSectionKeysChange?.(collapsibleSectionKeys)
+  }, [collapsibleSectionKeys, onCollapsibleSectionKeysChange])
   const renderedSidebarRowKeys = useMemo(() => {
     const keys = new Set<string>()
     for (const row of sectionRows) {

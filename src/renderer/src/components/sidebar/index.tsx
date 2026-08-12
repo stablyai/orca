@@ -70,6 +70,15 @@ function Sidebar({
     solidifyWorkspaceBoardFromDrag,
     cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
+  const [collapsibleSectionKeys, setCollapsibleSectionKeys] = React.useState<readonly string[]>([])
+  const handleCollapsibleSectionKeysChange = React.useCallback((keys: readonly string[]) => {
+    setCollapsibleSectionKeys((current) => {
+      if (current.length === keys.length && current.every((key, index) => key === keys[index])) {
+        return current
+      }
+      return [...keys]
+    })
+  }, [])
 
   const setLiveSidebarWidth = React.useCallback((width: number) => {
     document.documentElement.style.setProperty('--workspace-sidebar-live-width', `${width}px`)
@@ -115,7 +124,10 @@ function Sidebar({
           <>
             {/* Fixed controls */}
             <SidebarNav />
-            <SidebarHeader onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen} />
+            <SidebarHeader
+              onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+              collapsibleSectionKeys={collapsibleSectionKeys}
+            />
 
             <WorktreeList
               scrollOffsetRef={worktreeScrollOffsetRef}
@@ -124,6 +136,7 @@ function Sidebar({
               onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
               onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+              onCollapsibleSectionKeysChange={handleCollapsibleSectionKeysChange}
             />
 
             <div className="relative shrink-0">

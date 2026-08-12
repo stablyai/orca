@@ -1138,6 +1138,18 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).toHaveBeenCalledWith({ groupBy: 'none', collapsedGroups: [] })
   })
 
+  it('replaces and persists collapsed groups in bulk', () => {
+    const setUI = vi.fn(() => Promise.resolve())
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.setState({ collapsedGroups: new Set(['repo:old']) })
+    store.getState().setCollapsedGroups(['repo:one', 'host:local'])
+
+    expect([...store.getState().collapsedGroups]).toEqual(['repo:one', 'host:local'])
+    expect(setUI).toHaveBeenCalledWith({ collapsedGroups: ['repo:one', 'host:local'] })
+  })
+
   it('hydrates persisted per-worktree dotfile visibility', () => {
     const store = createUIStore()
 

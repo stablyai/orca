@@ -4625,7 +4625,9 @@
           "65a9820bd1": "Agent statuses",
           "219ebf1961": "Branch name",
           "folderPathIdentity": "Branch / folder path",
-          "cli": "Orca CLI"
+          "cli": "Orca CLI",
+          "collapseAllSections": "Collapse all sections",
+          "expandAllSections": "Expand all sections"
         },
         "SshTargetRow": {
           "4677394048": "Connecting…",
