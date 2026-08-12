@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import {
   parseLoopbackUrlWithPort,
@@ -146,7 +147,11 @@ export function openHttpLink(url: string, opts: OpenHttpLinkOptions = {}): void 
         intent: { kind: 'url' },
         expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId
       }).catch((error) => {
-        toast.error(error instanceof Error ? error.message : 'Unable to open URL.')
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.')
+        )
       })
     }
     return
