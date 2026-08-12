@@ -49,6 +49,7 @@ describe('FileExplorerVirtualRows add-as-project action', () => {
   it('passes visibility and the row node to the add-as-project handler', () => {
     const onAddFolderAsProject = vi.fn()
     const element = FileExplorerVirtualRows({
+      fontSize: 12,
       virtualizer: {
         getTotalSize: () => 26,
         getVirtualItems: () => [{ index: 0, key: 'src', start: 0 }],

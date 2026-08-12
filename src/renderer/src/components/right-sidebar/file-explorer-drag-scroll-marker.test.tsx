@@ -49,6 +49,7 @@ const directoryNode: TreeNode = {
 
 function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
   return FileExplorerVirtualRows({
+    fontSize: 12,
     virtualizer: {
       getTotalSize: () => nodes.length * 26,
       getVirtualItems: () =>

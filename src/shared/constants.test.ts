@@ -77,6 +77,10 @@ describe('getDefaultSettings', () => {
     expect(getDefaultSettings('/tmp').confirmClosePinnedTab).toBe(true)
   })
 
+  it('defaults File Explorer font size to 12px (previous text-xs)', () => {
+    expect(getDefaultSettings('/tmp').fileExplorerFontSize).toBe(12)
+  })
+
   it('keeps file-editor word wrapping enabled by default', () => {
     expect(getDefaultSettings('/tmp').editorWordWrap).toBe(true)
   })

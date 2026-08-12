@@ -11,6 +11,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 type FileExplorerVirtualRowsProps = {
   virtualizer: Virtualizer<HTMLDivElement, Element>
+  fontSize: number
   inlineInputIndex: number
   rowProjection: FileExplorerRowProjection
   inlineInput: InlineInput | null
@@ -57,6 +58,7 @@ type FileExplorerVirtualRowsProps = {
 export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): React.JSX.Element {
   const {
     virtualizer,
+    fontSize,
     inlineInputIndex,
     rowProjection,
     inlineInput,
@@ -131,6 +133,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
             >
               <InlineInputRow
                 depth={inlineDepth}
+                fontSize={fontSize}
                 inlineInput={inlineInput!}
                 onSubmit={handleInlineSubmit}
                 onCancel={dismissInlineInput}
@@ -167,6 +170,7 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
           >
             <FileExplorerRow
               node={n}
+              fontSize={fontSize}
               isExpanded={expanded.has(n.path)}
               isLoading={n.isDirectory && Boolean(dirCache[n.path]?.loading)}
               isSelected={selectedPaths.has(n.path) || activeFileId === n.path}

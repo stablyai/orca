@@ -87,11 +87,13 @@ export type InlineInput = {
 
 export function InlineInputRow({
   depth,
+  fontSize = 12,
   inlineInput,
   onSubmit,
   onCancel
 }: {
   depth: number
+  fontSize?: number
   inlineInput: InlineInput
   onSubmit: (value: string) => void
   onCancel: () => void
@@ -204,8 +206,12 @@ export function InlineInputRow({
 
   return (
     <div
-      className="flex items-center w-full h-[26px] px-2 gap-1"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      className="flex items-center w-full px-2 gap-1"
+      style={{
+        paddingLeft: `${depth * 16 + 8}px`,
+        height: `${fontSize + 14}px`,
+        fontSize: `${fontSize}px`
+      }}
     >
       <span className="size-3 shrink-0" />
       {inlineInput.type === 'folder' ? (
@@ -216,7 +222,8 @@ export function InlineInputRow({
       <input
         key={inlineInputKey}
         ref={setInputRef}
-        className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none border border-ring rounded-sm px-1"
+        className="flex-1 min-w-0 bg-transparent text-foreground outline-none border border-ring rounded-sm px-1"
+        style={{ fontSize: `${fontSize}px` }}
         defaultValue={inlineInput.type === 'rename' ? inlineInput.existingName : ''}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -255,6 +262,7 @@ export function InlineInputRow({
 
 type FileExplorerRowProps = {
   node: TreeNode
+  fontSize?: number
   isExpanded: boolean
   isLoading: boolean
   isSelected: boolean
@@ -443,6 +451,7 @@ export async function copyFileToOsClipboard(
 
 export function FileExplorerRow({
   node,
+  fontSize = 12,
   isExpanded,
   isLoading,
   isSelected,
@@ -541,12 +550,16 @@ export function FileExplorerRow({
           data-file-explorer-row=""
           data-selected={isSelected ? 'true' : undefined}
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left transition-colors',
             !isSelected && 'hover:bg-accent hover:text-foreground',
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
           )}
-          style={{ paddingLeft: `${node.depth * 16 + 8}px` }}
+          style={{
+            paddingLeft: `${node.depth * 16 + 8}px`,
+            fontSize: `${fontSize}px`,
+            minHeight: `${fontSize + 14}px`
+          }}
           ref={setRowDragNode}
           data-native-file-drop-dir={rowDropDir}
           // Why: marks this draggable row so the wheel-capture handler can rescue
