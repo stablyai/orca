@@ -1536,6 +1536,83 @@ describe('web native chat preload API', () => {
       }
     ])
   })
+
+  it('sends the host PTY handle instead of the client-scoped runtime id', async () => {
+    const requests: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          requests.push({ method, params })
+          return Promise.resolve({
+            id: 'read-pty',
+            ok: true,
+            result: { messages: [] },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.nativeChat.readSession(
+      'claude',
+      'session-1',
+      40,
+      undefined,
+      'remote:web-env-1@@pty-host-1'
+    )
+
+    expect(requests).toEqual([
+      {
+        method: 'nativeChat.readSession',
+        params: expect.objectContaining({ ptyId: 'pty-host-1' })
+      }
+    ])
+  })
+
+  it('fails closed when a scoped PTY names another runtime owner', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-env-1')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.nativeChat.readSession(
+        'claude',
+        'same-id',
+        40,
+        undefined,
+        'remote:other-env@@term-1'
+      )
+    ).rejects.toThrow('Unknown Orca runtime environment: other-env')
+
+    const frames: unknown[] = []
+    expect(() =>
+      globals.window.api.nativeChat.subscribe(
+        {
+          subscriptionId: 'sub-mismatched-owner',
+          agent: 'claude',
+          sessionId: 'same-id',
+          ptyId: 'remote:other-env@@term-1'
+        },
+        (frame) => frames.push(frame)
+      )
+    ).not.toThrow()
+    expect(frames).toEqual([
+      expect.objectContaining({
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'Unknown Orca runtime environment: other-env'
+      })
+    ])
+  })
 })
 
 describe('web MiniMax preload API', () => {

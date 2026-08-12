@@ -10983,6 +10983,37 @@ describe('OrcaRuntimeService', () => {
     expect(cwds.get('pty-debian')).toBe('\\\\wsl.localhost\\Debian\\home\\me\\repo')
   })
 
+  it('resolves native-chat transcript hosts from authoritative PTY context', () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.preparePtyExecutionContext('pty-ubuntu', 'Ubuntu', { resetIncarnation: true })
+    runtime.registerPty('pty-ubuntu', TEST_WORKTREE_ID, null, undefined, true)
+    runtime.registerPty('pty-host', TEST_WORKTREE_ID, null, undefined, false)
+    runtime.registerPty('pty-unknown', TEST_WORKTREE_ID)
+    runtime.registerPty('pty-ssh', TEST_WORKTREE_ID, 'ssh-1', undefined, false)
+
+    expect(runtime.resolveNativeChatTranscriptHost('pty-ubuntu')).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+    expect(runtime.resolveNativeChatTranscriptHost('pty-host')).toEqual({ kind: 'host' })
+    expect(runtime.resolveNativeChatTranscriptHost('pty-unknown')).toBeUndefined()
+    expect(runtime.resolveNativeChatTranscriptHost('pty-ssh')).toBeNull()
+    expect(runtime.resolveNativeChatTranscriptHost('missing')).toBeNull()
+  })
+
+  it('resolves paired-runtime terminal handles before transcript provenance', () => {
+    const runtime = new OrcaRuntimeService(store)
+    const handle = runtime.preAllocateHandleForPty('pty-ubuntu')
+    runtime.preparePtyExecutionContext('pty-ubuntu', 'Ubuntu', { resetIncarnation: true })
+    runtime.registerPty('pty-ubuntu', TEST_WORKTREE_ID, null, undefined, true)
+
+    expect(runtime.resolveNativeChatTranscriptHostForHandle(handle)).toEqual({
+      kind: 'wsl',
+      distro: 'Ubuntu'
+    })
+    expect(runtime.resolveNativeChatTranscriptHostForHandle('term_missing')).toBeNull()
+  })
+
   it('does not retain WSL context when a PTY id is reused', () => {
     setPlatform('win32')
     const runtime = new OrcaRuntimeService(store)
@@ -48404,6 +48435,7 @@ describe('OrcaRuntimeService', () => {
       expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
       // The guarded resolver surfaces the staleness so clients can re-derive.
       expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
+      expect(runtime.resolveNativeChatTranscriptHostForHandle(handle)).toBeNull()
     })
 
     it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {

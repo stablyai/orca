@@ -227,7 +227,9 @@ export function registerCoreHandlers(
     prepareRuntimeSessionResume: async (environmentId, args) =>
       prepareRuntimeAiVaultSessionResume(app.getPath('userData'), environmentId, args)
   })
-  registerNativeChatHandlers()
+  registerNativeChatHandlers({
+    resolveTranscriptHost: (ptyId) => runtime.resolveNativeChatTranscriptHost(ptyId)
+  })
   registerClipboardHandlers(store)
   registerUpdaterHandlers(store)
   registerSpeechHandlers(store)

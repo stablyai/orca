@@ -51,14 +51,16 @@ export function useMobileNativeChatSession(args: {
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
+  ptyId: string | null
 }): MobileNativeChatSession {
-  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
+  const { client, sourceIdentity, agent, sessionId, transcriptPath, ptyId } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
   const identity = encodeNativeChatTranscriptIdentity([
     sourceIdentity,
     agent,
     sessionId,
-    transcriptPath
+    transcriptPath,
+    ptyId
   ])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
@@ -145,7 +147,8 @@ export function useMobileNativeChatSession(args: {
         sessionId,
         limit: limitRef.current,
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
-        ...(transcriptPath ? { transcriptPath } : {})
+        ...(transcriptPath ? { transcriptPath } : {}),
+        ...(ptyId ? { ptyId } : {})
       },
       (raw) => {
         if (cancelled) {
@@ -206,7 +209,7 @@ export function useMobileNativeChatSession(args: {
       cancelled = true
       unsubscribe()
     }
-  }, [client, agent, sessionId, transcriptPath, identity, setList])
+  }, [client, agent, sessionId, transcriptPath, ptyId, identity, setList])
 
   const loadEarlier = useCallback(() => {
     if (!client || !agent || !sessionId || loadingEarlierRef.current || !hasMore) {
@@ -232,7 +235,8 @@ export function useMobileNativeChatSession(args: {
           sessionId,
           limit: beforeOffset === null ? nextLimit : pageLimit,
           ...(beforeOffset === null ? {} : { beforeOffset }),
-          ...(transcriptPath ? { transcriptPath } : {})
+          ...(transcriptPath ? { transcriptPath } : {}),
+          ...(ptyId ? { ptyId } : {})
         })
         if (!response.ok) {
           return
@@ -271,7 +275,7 @@ export function useMobileNativeChatSession(args: {
         }
       }
     })()
-  }, [client, agent, sessionId, transcriptPath, hasMore, setList])
+  }, [client, agent, sessionId, transcriptPath, ptyId, hasMore, setList])
 
   // Held for any unsettled read, not just an in-flight one: a stream error or a
   // dropped client would otherwise trade the conversation for an error card.

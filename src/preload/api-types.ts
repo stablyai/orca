@@ -911,6 +911,8 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  /** PTY identity resolved to transcript provenance by its owning host. */
+  ptyId?: string
   /** First snapshot size; later readSession calls grow this for pagination. */
   limit?: number
 }
@@ -922,7 +924,8 @@ export type NativeChatApi = {
     agent: AgentType,
     sessionId: string,
     limit?: number,
-    transcriptPath?: string
+    transcriptPath?: string,
+    ptyId?: string
   ) => Promise<NativeChatReadSessionResult>
   /** Live-tail a transcript. The first frame is a bounded race-safe snapshot;
    *  later frames contain only newly appended messages. */

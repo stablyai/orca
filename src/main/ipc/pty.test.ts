@@ -4791,12 +4791,20 @@ describe('registerPtyHandlers', () => {
               cols: 80,
               rows: 24,
               sessionId: testCase.sessionId,
+              worktreeId: 'repo-1::\\\\server\\share\\repo',
               cwd: '\\\\server\\share\\repo'
             })
 
             expect(runtime.preparePtyExecutionContext).toHaveBeenLastCalledWith(
               testCase.sessionId,
               testCase.expectedWslDistro
+            )
+            expect(runtime.registerPty).toHaveBeenLastCalledWith(
+              testCase.sessionId,
+              'repo-1::\\\\server\\share\\repo',
+              null,
+              undefined,
+              testCase.expectedWslDistro !== null
             )
           }
         })

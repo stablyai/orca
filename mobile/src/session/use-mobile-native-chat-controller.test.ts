@@ -15,6 +15,7 @@ const holdUnconfirmedSend = vi.fn()
 const viewMode = { isTabChatView: (_tabId: string) => true }
 const sessionState = { messages: [] as unknown[], status: 'ready', transcriptLoading: false }
 const draftsArgs: Record<string, unknown>[] = []
+const nativeChatSessionArgs: Record<string, unknown>[] = []
 const promptsState = {
   permission: null as unknown,
   question: null as unknown,
@@ -31,7 +32,10 @@ vi.mock('./use-mobile-session-view-mode', () => ({
   })
 }))
 vi.mock('./use-mobile-native-chat-session', () => ({
-  useMobileNativeChatSession: () => sessionState
+  useMobileNativeChatSession: (args: Record<string, unknown>) => {
+    nativeChatSessionArgs.push(args)
+    return sessionState
+  }
 }))
 vi.mock('./use-mobile-native-chat-drafts', () => ({
   useMobileNativeChatDrafts: (args: Record<string, unknown>) => {
@@ -133,6 +137,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
+    expect(nativeChatSessionArgs.at(-1)).toEqual(expect.objectContaining({ ptyId: 'term-1' }))
   })
   afterEach(() => {
     act(() => renderer?.unmount())

@@ -31,6 +31,8 @@ export type UseNativeChatLiveSessionArgs = {
   sessionId: string | null
   /** Authoritative transcript path from the hook, preferred over reconstructing it from sessionId. Null when not reported. */
   transcriptPath?: string | null
+  /** PTY identity used by the owning host to resolve transcript provenance. */
+  ptyId?: string | null
   /** Runtime owner (Model B): non-null routes read/subscribe to the remote host; null keeps the local IPC path. */
   runtimeEnvironmentId?: string | null
   /** False suspends transcript IO while retaining the last committed session. */
@@ -122,7 +124,8 @@ export function useNativeChatLiveSession(
     runtimeEnvironmentId ?? null,
     agent,
     sessionId,
-    transcriptPath ?? null
+    transcriptPath ?? null,
+    args.ptyId ?? null
   ])
   const retainedSourceKeyRef = useRef(sourceKey)
 
@@ -175,7 +178,13 @@ export function useNativeChatLiveSession(
         return
       }
       void transport
-        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined)
+        .readSession(
+          agent,
+          activeSessionId,
+          limitRef.current,
+          transcriptPath ?? undefined,
+          args.ptyId ?? undefined
+        )
         .then((result) => {
           if (cancelled || !latestEnabled.current || frameArrived) {
             return
@@ -211,6 +220,7 @@ export function useNativeChatLiveSession(
         agent,
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
+        ptyId: args.ptyId ?? undefined,
         limit: limitRef.current
       },
       (frame) => {
@@ -246,7 +256,16 @@ export function useNativeChatLiveSession(
       closeStream()
     }
     // `transport` identity changes on an owner flip, re-running this effect to re-subscribe against the new host.
-  }, [agent, enabled, sessionId, sourceKey, transcriptPath, transport, transcriptLifecycleControl])
+  }, [
+    agent,
+    enabled,
+    args.ptyId,
+    sessionId,
+    sourceKey,
+    transcriptPath,
+    transport,
+    transcriptLifecycleControl
+  ])
 
   const loadEarlier = useCallback(() => {
     if (
@@ -263,7 +282,13 @@ export function useNativeChatLiveSession(
     const lifecycleRevision = transcriptLifecycleControl.revision()
     setLoadingEarlier(true)
     void transport
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
+      .readSession(
+        agent,
+        sessionId,
+        nextLimit,
+        transcriptPath ?? undefined,
+        args.ptyId ?? undefined
+      )
       .then((result) => {
         // Ignore a stale resolve from a swapped session or flipped owner — either would paint the wrong host's history.
         if (
@@ -296,6 +321,7 @@ export function useNativeChatLiveSession(
     agent,
     sessionId,
     transcriptPath,
+    args.ptyId,
     transport,
     hasMore,
     loadingEarlier,

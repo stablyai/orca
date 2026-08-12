@@ -127,6 +127,7 @@ function NativeChatResolvedView({
     agent,
     sessionId,
     transcriptPath,
+    ptyId: targetPtyId,
     runtimeEnvironmentId,
     enabled: isVisible
   })

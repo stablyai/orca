@@ -1,6 +1,7 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import {
+  isTranscriptPathCompatibleWithHost,
   needsWslHostTranslation,
   toHostReadableTranscriptPath
 } from './host-readable-transcript-path'
@@ -111,9 +112,14 @@ function subscribeViaResolvePoll(
     try {
       if (exactPath && !hostReadableExactPath) {
         if (!needsWslHostTranslation(exactPath)) {
-          // Non-WSL paths stay raw: installTranscriptWatcher already handles a
-          // not-yet-created file, so don't spend an extra probe per tick.
-          hostReadableExactPath = exactPath
+          // Why: live retries must enforce the same PTY provenance as reads
+          // before installing a watcher on an exact UNC or drive path.
+          if (
+            !args.transcriptHost ||
+            isTranscriptPathCompatibleWithHost(exactPath, args.transcriptHost)
+          ) {
+            hostReadableExactPath = exactPath
+          }
         } else if (Date.now() - lastWslTranslateAt >= FALLBACK_RESOLVE_POLL_MS) {
           // Why: translating probes the UNC twin per distro over the 9P
           // share, and the guest file usually appears well after the hook does,
@@ -122,7 +128,8 @@ function subscribeViaResolvePoll(
           // the current drive (`C:\home\…`) and bind chat to a look-alike file.
           lastWslTranslateAt = Date.now()
           hostReadableExactPath = await toHostReadableTranscriptPath(exactPath, {
-            signal: resolveController.signal
+            signal: resolveController.signal,
+            transcriptHost: args.transcriptHost
           })
         }
       }

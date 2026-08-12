@@ -100,12 +100,15 @@ function createSender(id: number): SenderHarness {
   }
 }
 
-function subscribe(sender: SenderHarness['sender'], subscriptionId: string): void {
+function subscribe(sender: SenderHarness['sender'], subscriptionId: string, ptyId?: string): void {
   const listener = listeners.get('nativeChat:subscribe')
   if (!listener) {
     throw new Error('subscribe listener not registered')
   }
-  listener({ sender }, { subscriptionId, agent: 'claude', sessionId: `session-${subscriptionId}` })
+  listener(
+    { sender },
+    { subscriptionId, agent: 'claude', sessionId: `session-${subscriptionId}`, ptyId }
+  )
 }
 
 type InitialSnapshotCallback = (
@@ -115,6 +118,42 @@ type InitialSnapshotCallback = (
   error?: string,
   lifecycle?: NativeChatTurnLifecycle
 ) => void
+
+it('resolves PTY provenance before installing the desktop watcher', async () => {
+  clearNativeChatSubscriptions()
+  handlers.clear()
+  listeners.clear()
+  const resolveTranscriptHost = vi.fn(() => ({ kind: 'wsl' as const, distro: 'Ubuntu' }))
+  registerNativeChatHandlers({ resolveTranscriptHost })
+  subscribeTranscript.mockResolvedValue({ unsubscribe: vi.fn(), watching: true })
+  const sender = createSender(99)
+
+  subscribe(sender.sender, 'pty-route', 'pty-1')
+  await vi.waitFor(() => expect(subscribeTranscript).toHaveBeenCalledOnce())
+
+  expect(resolveTranscriptHost).toHaveBeenCalledWith('pty-1')
+  expect(subscribeTranscript.mock.calls[0]?.[0]).toEqual(
+    expect.objectContaining({ transcriptHost: { kind: 'wsl', distro: 'Ubuntu' } })
+  )
+})
+
+it('fails closed without installing a watcher for a missing PTY identity', async () => {
+  clearNativeChatSubscriptions()
+  handlers.clear()
+  listeners.clear()
+  registerNativeChatHandlers({ resolveTranscriptHost: () => null })
+  const sender = createSender(100)
+
+  subscribe(sender.sender, 'missing-route', 'missing-pty')
+  await vi.waitFor(() => expect(sender.sender.send).toHaveBeenCalledOnce())
+
+  expect(subscribeTranscript).not.toHaveBeenCalled()
+  expect(sender.sender.send.mock.calls[0]?.[1]).toEqual(
+    expect.objectContaining({
+      frame: expect.objectContaining({ error: 'Transcript unavailable' })
+    })
+  )
+})
 
 // The onInitialSnapshot callback the handler passed into the Nth subscribeTranscript
 // call; transcript-watch fires it during setup, so tests invoke it directly.

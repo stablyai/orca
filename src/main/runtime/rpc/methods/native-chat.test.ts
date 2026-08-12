@@ -21,9 +21,13 @@ const cachedResult = vi.hoisted(() => ({
     }
   }
 }))
-const tailRead = vi.hoisted(() => ({ signal: undefined as AbortSignal | undefined }))
+const tailRead = vi.hoisted(() => ({
+  args: undefined as undefined | { transcriptHost?: unknown },
+  signal: undefined as AbortSignal | undefined
+}))
 const watcher = vi.hoisted(() => ({
   args: null as null | {
+    transcriptHost?: unknown
     onInitialSnapshot?: (
       messages: NativeChatMessage[],
       hasMore: boolean,
@@ -63,7 +67,12 @@ const watcher = vi.hoisted(() => ({
   unsubscribe: vi.fn()
 }))
 vi.mock('../../../native-chat/transcript-watch', () => ({
-  readNativeChatTranscriptTail: ({ limit }: { limit: number }, signal?: AbortSignal) => {
+  readNativeChatTranscriptTail: (
+    args: { limit: number; transcriptHost?: unknown },
+    signal?: AbortSignal
+  ) => {
+    const { limit } = args
+    tailRead.args = args
     tailRead.signal = signal
     const messages = cachedResult.value.messages
     return Promise.resolve({
@@ -140,7 +149,12 @@ function streamingContext(clientKind: RpcContext['clientKind']): RpcContext {
 }
 
 function ctxWith(clientKind: RpcContext['clientKind']): RpcContext {
-  return { runtime: {} as RpcContext['runtime'], clientKind }
+  return {
+    runtime: {
+      resolveNativeChatTranscriptHostForHandle: vi.fn()
+    } as unknown as RpcContext['runtime'],
+    clientKind
+  }
 }
 
 function firstOutput(result: unknown): string {
@@ -163,6 +177,27 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     await readSessionHandler()({ agent: 'claude', sessionId: 's' }, context)
 
     expect(tailRead.signal).toBe(controller.signal)
+  })
+
+  it('resolves terminal-handle provenance on the transcript-owning runtime', async () => {
+    const context = ctxWith('runtime')
+    const resolveHost = vi
+      .mocked(context.runtime.resolveNativeChatTranscriptHostForHandle)
+      .mockReturnValue({ kind: 'wsl', distro: 'Ubuntu' })
+
+    await readSessionHandler()({ agent: 'claude', sessionId: 's', ptyId: 'term-1' }, context)
+
+    expect(resolveHost).toHaveBeenCalledWith('term-1')
+    expect(tailRead.args?.transcriptHost).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+  })
+
+  it('fails closed when a supplied terminal handle is stale', async () => {
+    const context = ctxWith('runtime')
+    vi.mocked(context.runtime.resolveNativeChatTranscriptHostForHandle).mockReturnValue(null)
+
+    await expect(
+      readSessionHandler()({ agent: 'claude', sessionId: 'same-id', ptyId: 'term-stale' }, context)
+    ).resolves.toEqual({ error: 'Transcript unavailable' })
   })
 
   it('clips oversized tool output for mobile clients', async () => {
@@ -365,6 +400,60 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
     expect(Object.values(block.input)).toEqual(expect.arrayContaining(['first', 'second']))
   })
 
+  it('does not overwrite an existing key with a generated collision suffix', async () => {
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'Write',
+              input: { 'prefix~1': 'x'.repeat(3980), prefix: '', prefixExtended: 'third' }
+            }
+          ]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      input: Record<string, unknown>
+    }
+
+    expect(Object.keys(block.input)).toHaveLength(3)
+    expect(Object.hasOwn(block.input, 'prefix~1')).toBe(true)
+  })
+
+  it('preserves an own __proto__ tool-call key', async () => {
+    cachedResult.value = {
+      messages: [
+        {
+          ...makeMessage('ignored'),
+          blocks: [
+            {
+              type: 'tool-call',
+              name: 'Write',
+              input: { ['__proto__']: 'safe' }
+            }
+          ]
+        }
+      ]
+    }
+    const result = await readSessionHandler()(
+      { agent: 'claude', sessionId: 's' },
+      ctxWith('mobile')
+    )
+    const block = (result as { messages: NativeChatMessage[] }).messages[0].blocks[0] as {
+      input: Record<string, unknown>
+    }
+
+    expect(Object.hasOwn(block.input, '__proto__')).toBe(true)
+    expect(block.input.__proto__).toBe('safe')
+  })
+
   it('passes oversized tool output through intact for runtime (web/desktop) clients', async () => {
     cachedResult.value = { messages: [makeMessage(OVERSIZED)] }
     const result = await readSessionHandler()(
@@ -416,6 +505,39 @@ describe('nativeChat.readSession clientKind truncation gating', () => {
 })
 
 describe('nativeChat.subscribe initial snapshot', () => {
+  it('uses the same PTY provenance for the live watcher', async () => {
+    const context = streamingContext('runtime')
+    const resolveHost = vi.fn(() => ({ kind: 'wsl' as const, distro: 'Ubuntu' }))
+    context.runtime.resolveNativeChatTranscriptHostForHandle = resolveHost
+
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 's', subscriptionId: 'sub-pty', ptyId: 'term-1' },
+      context,
+      vi.fn()
+    )
+
+    expect(resolveHost).toHaveBeenCalledWith('term-1')
+    expect(activeWatcherArgs().transcriptHost).toEqual({ kind: 'wsl', distro: 'Ubuntu' })
+  })
+
+  it('emits an error without watching when a terminal handle is stale', async () => {
+    const context = streamingContext('runtime')
+    context.runtime.resolveNativeChatTranscriptHostForHandle = vi.fn(() => null)
+    const emitted: unknown[] = []
+    watcher.args = null
+
+    await subscribeHandler()(
+      { agent: 'claude', sessionId: 'same-id', ptyId: 'term-stale' },
+      context,
+      (value) => emitted.push(value)
+    )
+
+    expect(watcher.args).toBeNull()
+    expect(emitted).toEqual([
+      expect.objectContaining({ type: 'snapshot', error: 'Transcript unavailable' })
+    ])
+  })
+
   it('preserves long assistant text across mobile stream frame types', async () => {
     watcher.watching = true
     watcher.args = null

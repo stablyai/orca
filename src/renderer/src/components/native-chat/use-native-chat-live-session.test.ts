@@ -137,6 +137,41 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(transport.subscribe).toHaveBeenCalledOnce()
   })
 
+  it('rebinds reads and subscriptions when the owning PTY changes', async () => {
+    const root = await render({
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      ptyId: 'pty-1',
+      runtimeEnvironmentId: 'env-1'
+    })
+    const transport = getMockTransport('env-1')
+
+    expect(transport.readSession).toHaveBeenLastCalledWith(
+      AGENT,
+      SESSION,
+      NATIVE_CHAT_INITIAL_LIMIT,
+      undefined,
+      'pty-1'
+    )
+    expect(transport.subscribe.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ ptyId: 'pty-1' })
+    )
+
+    await rerender(root, {
+      paneKey: PANE,
+      agent: AGENT,
+      sessionId: SESSION,
+      ptyId: 'pty-2',
+      runtimeEnvironmentId: 'env-1'
+    })
+
+    expect(transport.unsubscribe).toHaveBeenCalledOnce()
+    expect(transport.subscribe.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ ptyId: 'pty-2' })
+    )
+  })
+
   it('re-subscribes against the new owner on an owner flip (R5)', async () => {
     const root = await render({
       paneKey: PANE,

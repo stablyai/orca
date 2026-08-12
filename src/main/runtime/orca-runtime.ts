@@ -1062,6 +1062,7 @@ import {
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
+import type { NativeChatTranscriptHost } from '../native-chat/transcript-host'
 
 function sanitizeNestedRepoRuntimeImportError(context: string, error: unknown): string {
   console.warn(`[project-groups] ${context}`, error)
@@ -3390,6 +3391,35 @@ export class OrcaRuntimeService {
 
   getLocalProvider(): IPtyProvider | null {
     return this.getLocalProviderFn ? this.getLocalProviderFn() : null
+  }
+
+  resolveNativeChatTranscriptHost(ptyId: string): NativeChatTranscriptHost | null | undefined {
+    const pty = this.ptysById.get(ptyId)
+    if (!pty || pty.connectionId !== null) {
+      return null
+    }
+    const distro = this.wslDistroByPtyId.get(ptyId) ?? pty?.wslDistro ?? null
+    if (distro) {
+      return { kind: 'wsl', distro }
+    }
+    if (pty.isWsl === false) {
+      return { kind: 'host' }
+    }
+    return undefined
+  }
+
+  resolveNativeChatTranscriptHostForHandle(
+    handle: string
+  ): NativeChatTranscriptHost | null | undefined {
+    let ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId ?? null
+    if (!ptyId) {
+      try {
+        ptyId = this.resolveLiveLeafForHandle(handle)?.ptyId ?? null
+      } catch {
+        return null
+      }
+    }
+    return ptyId ? this.resolveNativeChatTranscriptHost(ptyId) : null
   }
 
   private async stopPtysForDestructiveWorktreeRemoval(

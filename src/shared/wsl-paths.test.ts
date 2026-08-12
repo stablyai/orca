@@ -16,6 +16,10 @@ describe('wsl path helpers', () => {
       distro: 'Debian',
       linuxPath: '/home/jin'
     })
+    expect(parseWslUncPath('\\\\?\\UNC\\wsl.localhost\\Ubuntu\\home\\jin')).toEqual({
+      distro: 'Ubuntu',
+      linuxPath: '/home/jin'
+    })
   })
 
   it('rejects ordinary Windows and POSIX paths', () => {

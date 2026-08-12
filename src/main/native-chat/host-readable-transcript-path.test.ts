@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const wslMocks = vi.hoisted(() => ({
+  getWslHomeAsync: vi.fn(),
+  listWslDistrosAsync: vi.fn()
+}))
+
+vi.mock('../wsl', () => wslMocks)
+
 import {
   isGuestAbsoluteLinuxPath,
+  isTranscriptPathCompatibleWithHost,
   needsWslHostTranslation,
   resetHostReadableTranscriptPathCacheForTests,
   toHostReadableTranscriptPath,
-  wslCodexSessionsDirs
+  wslClaudeProjectsDirs,
+  wslClaudeProjectsDirsForDistro,
+  wslCodexSessionsDirs,
+  wslCodexSessionsDirsForDistro
 } from './host-readable-transcript-path'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
@@ -41,6 +52,28 @@ describe('needsWslHostTranslation', () => {
   })
 })
 
+describe('isTranscriptPathCompatibleWithHost', () => {
+  it('constrains exact Windows paths to their authoritative host', () => {
+    expect(
+      isTranscriptPathCompatibleWithHost(ROLLOUT_UNC, { kind: 'wsl', distro: 'Ubuntu' }, 'win32')
+    ).toBe(true)
+    expect(
+      isTranscriptPathCompatibleWithHost(ROLLOUT_UNC, { kind: 'wsl', distro: 'Debian' }, 'win32')
+    ).toBe(false)
+    expect(isTranscriptPathCompatibleWithHost(ROLLOUT_UNC, { kind: 'host' }, 'win32')).toBe(false)
+    expect(
+      isTranscriptPathCompatibleWithHost('C:\\Users\\ada\\x.jsonl', { kind: 'host' }, 'win32')
+    ).toBe(true)
+    expect(
+      isTranscriptPathCompatibleWithHost(
+        'C:\\Users\\ada\\x.jsonl',
+        { kind: 'wsl', distro: 'Ubuntu' },
+        'win32'
+      )
+    ).toBe(false)
+  })
+})
+
 describe('toHostReadableTranscriptPath', () => {
   it('translates a WSL guest path to its UNC twin on Windows (#10326)', async () => {
     await expect(
@@ -50,6 +83,100 @@ describe('toHostReadableTranscriptPath', () => {
         listWslHomeDirs: async () => [UBUNTU_HOME]
       })
     ).resolves.toBe(ROLLOUT_UNC)
+  })
+
+  it('translates through only the authoritative WSL distro', async () => {
+    const listWslHomeDirs = vi.fn(async () => [DEBIAN_HOME])
+    const pathExists = vi.fn(async (candidate: string) => candidate === ROLLOUT_UNC)
+
+    await expect(
+      toHostReadableTranscriptPath(ROLLOUT_LINUX, {
+        platform: 'win32',
+        transcriptHost: { kind: 'wsl', distro: 'Ubuntu' },
+        listWslHomeDirs,
+        pathExists
+      })
+    ).resolves.toBe(ROLLOUT_UNC)
+
+    expect(listWslHomeDirs).not.toHaveBeenCalled()
+    expect(pathExists).toHaveBeenCalledTimes(1)
+    expect(pathExists).toHaveBeenCalledWith(ROLLOUT_UNC)
+  })
+
+  it('does not reinterpret a guest path when the PTY belongs to the host', async () => {
+    const listWslHomeDirs = vi.fn(async () => [UBUNTU_HOME])
+    const pathExists = vi.fn(async () => true)
+
+    await expect(
+      toHostReadableTranscriptPath(ROLLOUT_LINUX, {
+        platform: 'win32',
+        transcriptHost: { kind: 'host' },
+        listWslHomeDirs,
+        pathExists
+      })
+    ).resolves.toBeNull()
+
+    expect(listWslHomeDirs).not.toHaveBeenCalled()
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
+  it('rejects exact paths that contradict authoritative provenance', async () => {
+    const pathExists = vi.fn(async () => true)
+
+    await expect(
+      toHostReadableTranscriptPath(ROLLOUT_UNC, {
+        platform: 'win32',
+        transcriptHost: { kind: 'host' },
+        pathExists
+      })
+    ).resolves.toBeNull()
+    await expect(
+      toHostReadableTranscriptPath(ROLLOUT_UNC, {
+        platform: 'win32',
+        transcriptHost: { kind: 'wsl', distro: 'Debian' },
+        pathExists
+      })
+    ).resolves.toBeNull()
+    await expect(
+      toHostReadableTranscriptPath('C:\\Users\\ada\\rollout.jsonl', {
+        platform: 'win32',
+        transcriptHost: { kind: 'wsl', distro: 'Ubuntu' },
+        pathExists
+      })
+    ).resolves.toBeNull()
+
+    expect(pathExists).not.toHaveBeenCalled()
+  })
+
+  it('classifies extended WSL UNC paths before authoritative probing', async () => {
+    const extendedUnc =
+      '\\\\?\\UNC\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout.jsonl'
+    const pathExists = vi.fn(async () => true)
+
+    await expect(
+      toHostReadableTranscriptPath(extendedUnc, {
+        platform: 'win32',
+        transcriptHost: { kind: 'host' },
+        pathExists
+      })
+    ).resolves.toBeNull()
+    await expect(
+      toHostReadableTranscriptPath(extendedUnc, {
+        platform: 'win32',
+        transcriptHost: { kind: 'wsl', distro: 'Debian' },
+        pathExists
+      })
+    ).resolves.toBeNull()
+    await expect(
+      toHostReadableTranscriptPath(extendedUnc, {
+        platform: 'win32',
+        transcriptHost: { kind: 'wsl', distro: 'Ubuntu' },
+        pathExists
+      })
+    ).resolves.toBe(extendedUnc)
+
+    expect(pathExists).toHaveBeenCalledOnce()
+    expect(pathExists).toHaveBeenCalledWith(extendedUnc)
   })
 
   it('never probes the bare guest path on Windows', async () => {
@@ -133,6 +260,7 @@ describe('toHostReadableTranscriptPath', () => {
       })
     }
     await wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs })
+    await wslClaudeProjectsDirs({ platform: 'win32', listWslHomeDirs })
     expect(listWslHomeDirs).toHaveBeenCalledTimes(1)
   })
 
@@ -175,6 +303,73 @@ describe('wslCodexSessionsDirs', () => {
     ).resolves.toEqual([])
   })
 
+  it('loads only the requested distro for targeted resolution', async () => {
+    const getWslHomeDir = vi.fn(async () => UBUNTU_HOME)
+
+    await expect(
+      wslCodexSessionsDirsForDistro('Ubuntu', { platform: 'win32', getWslHomeDir })
+    ).resolves.toEqual([
+      `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
+      `${UBUNTU_HOME}\\.codex\\sessions`
+    ])
+    expect(getWslHomeDir).toHaveBeenCalledWith('Ubuntu')
+  })
+
+  it('coalesces concurrent targeted home probes across agents', async () => {
+    let finish!: (home: string | null) => void
+    const pending = new Promise<string | null>((resolve) => (finish = resolve))
+    const getWslHomeDir = vi.fn(() => pending)
+
+    const codex = wslCodexSessionsDirsForDistro('Ubuntu', {
+      platform: 'win32',
+      getWslHomeDir
+    })
+    const claude = wslClaudeProjectsDirsForDistro('ubuntu', {
+      platform: 'win32',
+      getWslHomeDir
+    })
+
+    expect(getWslHomeDir).toHaveBeenCalledTimes(1)
+    finish(UBUNTU_HOME)
+    await expect(codex).resolves.toHaveLength(2)
+    await expect(claude).resolves.toEqual([`${UBUNTU_HOME}\\.claude\\projects`])
+  })
+
+  it('coalesces concurrent broad and targeted home probes', async () => {
+    let finish!: (home: string | null) => void
+    const pending = new Promise<string | null>((resolve) => (finish = resolve))
+    wslMocks.listWslDistrosAsync.mockResolvedValue(['Ubuntu'])
+    wslMocks.getWslHomeAsync.mockReturnValue(pending)
+
+    const broad = wslCodexSessionsDirs({ platform: 'win32' })
+    await Promise.resolve()
+    const targeted = wslCodexSessionsDirsForDistro('Ubuntu', { platform: 'win32' })
+
+    expect(wslMocks.getWslHomeAsync).toHaveBeenCalledTimes(1)
+    finish(UBUNTU_HOME)
+    await expect(broad).resolves.toHaveLength(2)
+    await expect(targeted).resolves.toHaveLength(2)
+  })
+
+  it('negatively caches a failed targeted home probe for the retry window', async () => {
+    vi.useFakeTimers()
+    try {
+      const getWslHomeDir = vi.fn(async () => null)
+      const load = (): Promise<string[]> =>
+        wslCodexSessionsDirsForDistro('Ubuntu', { platform: 'win32', getWslHomeDir })
+
+      await expect(load()).resolves.toEqual([])
+      await expect(load()).resolves.toEqual([])
+      expect(getWslHomeDir).toHaveBeenCalledTimes(1)
+
+      vi.setSystemTime(Date.now() + 30_001)
+      await expect(load()).resolves.toEqual([])
+      expect(getWslHomeDir).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('lists the managed and system Codex roots per distro home', async () => {
     await expect(
       wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
@@ -182,5 +377,31 @@ describe('wslCodexSessionsDirs', () => {
       `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
       `${UBUNTU_HOME}\\.codex\\sessions`
     ])
+  })
+})
+
+describe('wslClaudeProjectsDirs', () => {
+  it('returns nothing off Windows', async () => {
+    await expect(
+      wslClaudeProjectsDirs({ platform: 'linux', listWslHomeDirs: async () => [UBUNTU_HOME] })
+    ).resolves.toEqual([])
+  })
+
+  it('lists the Claude projects root for each distro home', async () => {
+    await expect(
+      wslClaudeProjectsDirs({
+        platform: 'win32',
+        listWslHomeDirs: async () => [UBUNTU_HOME, DEBIAN_HOME]
+      })
+    ).resolves.toEqual([`${UBUNTU_HOME}\\.claude\\projects`, `${DEBIAN_HOME}\\.claude\\projects`])
+  })
+
+  it('loads only the requested distro for targeted resolution', async () => {
+    const getWslHomeDir = vi.fn(async () => DEBIAN_HOME)
+
+    await expect(
+      wslClaudeProjectsDirsForDistro('Debian', { platform: 'win32', getWslHomeDir })
+    ).resolves.toEqual([`${DEBIAN_HOME}\\.claude\\projects`])
+    expect(getWslHomeDir).toHaveBeenCalledWith('Debian')
   })
 })

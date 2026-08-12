@@ -54,3 +54,16 @@ describe('Codex WSL scan gate', () => {
     expect(mocks.walk).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('Claude WSL scan gate', () => {
+  it('routes WSL project-tree scans through the shared filesystem gate', async () => {
+    await resolveSessionFilePath('claude', 'session-id', {
+      claudeProjectsDir: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.claude\\projects'
+    })
+
+    expect(mocks.gate).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: 'readdir', priority: 'scan' }),
+      expect.any(Function)
+    )
+  })
+})

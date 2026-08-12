@@ -1,16 +1,13 @@
 import type { NativeChatApi, NativeChatAppendedMessages } from '../../../../preload/api-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import {
-  callRuntimeRpc,
-  RuntimeRpcCallError,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, RuntimeRpcCallError } from '@/runtime/runtime-rpc-client'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
 import {
   parseRuntimeNativeChatReadSessionResult,
   parseRuntimeNativeChatTurnLifecycle,
   RUNTIME_NATIVE_CHAT_READ_ERROR
 } from './native-chat-runtime-contract'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 /** The read/subscribe surface the live-session hook needs, decoupled from where
  *  the transcript actually lives. Same shape as `window.api.nativeChat`, so the
@@ -43,21 +40,39 @@ export function toRuntimeNativeChatErrorMessage(err: unknown): string {
  *  using this adapter (R3). Preserves whatever `subscribe` returns (sync fn on
  *  desktop, promise on the web bridge) — the hook's teardown handles both (R6). */
 const localNativeChatTransport: NativeChatSessionTransport = {
-  readSession: (agent, sessionId, limit, transcriptPath) =>
-    window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
+  readSession: (agent, sessionId, limit, transcriptPath, ptyId) =>
+    ptyId
+      ? window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath, ptyId)
+      : window.api.nativeChat.readSession(agent, sessionId, limit, transcriptPath),
   subscribe: (args, onFrame) => window.api.nativeChat.subscribe(args, onFrame)
 }
 
 function createRuntimeNativeChatTransport(environmentId: string): NativeChatSessionTransport {
-  const target: RuntimeClientTarget = { kind: 'environment', environmentId }
+  const route = (
+    ptyId: string | undefined
+  ): { target: { kind: 'environment'; environmentId: string }; hostPtyId?: string } => {
+    const parsed = ptyId ? parseRemoteRuntimePtyId(ptyId) : null
+    const targetEnvironmentId = parsed?.environmentId?.trim() || environmentId
+    return {
+      target: { kind: 'environment', environmentId: targetEnvironmentId },
+      ...(ptyId ? { hostPtyId: parsed?.handle || ptyId } : {})
+    }
+  }
 
   return {
-    readSession: async (agent, sessionId, limit, transcriptPath) => {
+    readSession: async (agent, sessionId, limit, transcriptPath, ptyId) => {
       try {
+        const { target, hostPtyId } = route(ptyId)
         const result = await callRuntimeRpc<unknown>(
           target,
           'nativeChat.readSession',
-          { agent, sessionId, limit, transcriptPath },
+          {
+            agent,
+            sessionId,
+            limit,
+            transcriptPath,
+            ...(hostPtyId ? { ptyId: hostPtyId } : {})
+          },
           { timeoutMs: 15_000 }
         )
         return parseRuntimeNativeChatReadSessionResult(result)
@@ -66,7 +81,9 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
       }
     },
     subscribe: (args, onFrame) => {
-      const { subscriptionId, agent, sessionId, transcriptPath, limit } = args
+      const { subscriptionId, agent, sessionId, transcriptPath, ptyId, limit } = args
+      const { target, hostPtyId } = route(ptyId)
+      const targetEnvironmentId = target.environmentId
       let cancelled = false
       let receivedInitial = false
       let handleUnsubscribe: (() => void) | null = null
@@ -103,9 +120,16 @@ function createRuntimeNativeChatTransport(environmentId: string): NativeChatSess
         void window.api.runtimeEnvironments
           .subscribe(
             {
-              selector: environmentId,
+              selector: targetEnvironmentId,
               method: 'nativeChat.subscribe',
-              params: { subscriptionId, agent, sessionId, transcriptPath, limit },
+              params: {
+                subscriptionId,
+                agent,
+                sessionId,
+                transcriptPath,
+                ...(hostPtyId ? { ptyId: hostPtyId } : {}),
+                limit
+              },
               timeoutMs: 15_000
             },
             {

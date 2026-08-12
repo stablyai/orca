@@ -5,7 +5,7 @@ export type WslUncPathInfo = {
 
 export function parseWslUncPath(path: string): WslUncPathInfo | null {
   const normalized = path.replace(/\\/g, '/')
-  const match = normalized.match(/^\/\/(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
+  const match = normalized.match(/^(?:\/\/|\/\/\?\/UNC\/)(wsl\.localhost|wsl\$)\/([^/]+)(\/.*)?$/i)
   if (!match) {
     return null
   }

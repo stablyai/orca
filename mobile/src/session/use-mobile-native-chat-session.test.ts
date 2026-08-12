@@ -32,13 +32,14 @@ describe('useMobileNativeChatSession', () => {
     renderer = null
   })
 
-  function Harness({ client }: { client: RpcClient | null }): null {
+  function Harness({ client, ptyId }: { client: RpcClient | null; ptyId?: string }): null {
     state = useMobileNativeChatSession({
       client,
       sourceIdentity: 'host-a\0workspace-a',
       agent: 'claude',
       sessionId: 'session',
-      transcriptPath: null
+      transcriptPath: null,
+      ptyId: ptyId ?? null
     })
     return null
   }
@@ -48,6 +49,40 @@ describe('useMobileNativeChatSession', () => {
       renderer = create(createElement(Harness, { client }))
     })
   }
+
+  it('scopes subscriptions and pagination reads to the terminal handle', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { messages: [], hasMore: false }
+    })
+    const subscribe: RpcClient['subscribe'] = vi.fn((_method, _params, onData) => {
+      onData({
+        type: 'snapshot',
+        messages: Array.from({ length: 40 }, (_unused, index) => message(`old-${index}`)),
+        hasMore: true
+      })
+      return () => {}
+    })
+    const client = { sendRequest, subscribe } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(createElement(Harness, { client, ptyId: 'term-1' }))
+    })
+    expect(subscribe).toHaveBeenCalledWith(
+      'nativeChat.subscribe',
+      expect.objectContaining({ ptyId: 'term-1' }),
+      expect.any(Function)
+    )
+
+    await act(async () => {
+      state?.loadEarlier()
+      await Promise.resolve()
+    })
+    expect(sendRequest).toHaveBeenCalledWith(
+      'nativeChat.readSession',
+      expect.objectContaining({ ptyId: 'term-1' })
+    )
+  })
 
   it('drops an older-page response captured before transcript replacement', async () => {
     let resolveEarlier: (response: unknown) => void = () => {}

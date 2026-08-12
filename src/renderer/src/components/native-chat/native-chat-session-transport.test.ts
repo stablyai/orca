@@ -11,6 +11,7 @@ import {
   RUNTIME_NATIVE_CHAT_RECONNECT_MS,
   toRuntimeNativeChatErrorMessage
 } from './native-chat-session-transport'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 
 const nativeChatReadSession = vi.fn()
 const nativeChatSubscribe = vi.fn()
@@ -66,6 +67,15 @@ describe('getNativeChatSessionTransport — selection', () => {
     expect(runtimeEnvironmentsCall).not.toHaveBeenCalled()
   })
 
+  it('forwards PTY provenance identity through the local adapter', async () => {
+    nativeChatReadSession.mockResolvedValue({ messages: [] })
+    const transport = getNativeChatSessionTransport(null)
+
+    await transport.readSession('claude', 'sess-1', 40, undefined, 'pty-1')
+
+    expect(nativeChatReadSession).toHaveBeenCalledWith('claude', 'sess-1', 40, undefined, 'pty-1')
+  })
+
   it('returns the runtime adapter for an owner on the desktop client', async () => {
     markRuntimeEnvironmentCompatible(ENV)
     runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
@@ -80,6 +90,47 @@ describe('getNativeChatSessionTransport — selection', () => {
       timeoutMs: 15_000
     })
     expect(nativeChatReadSession).not.toHaveBeenCalled()
+  })
+
+  it('forwards PTY provenance identity to the owning runtime', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
+    const transport = getNativeChatSessionTransport(ENV)
+
+    await transport.readSession(
+      'claude',
+      'sess-1',
+      40,
+      undefined,
+      toRemoteRuntimePtyId('pty-host-1', ENV)
+    )
+
+    expect(runtimeEnvironmentsCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ ptyId: 'pty-host-1' })
+      })
+    )
+  })
+
+  it('routes a scoped PTY to its encoded owner during an owner flip', async () => {
+    markRuntimeEnvironmentCompatible('env-a')
+    runtimeEnvironmentsCall.mockResolvedValue(okEnvelope({ messages: [] }))
+    const transport = getNativeChatSessionTransport('env-b')
+
+    await transport.readSession(
+      'claude',
+      'sess-1',
+      40,
+      undefined,
+      toRemoteRuntimePtyId('term-a', 'env-a')
+    )
+
+    expect(runtimeEnvironmentsCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-a',
+        params: expect.objectContaining({ ptyId: 'term-a' })
+      })
+    )
   })
 
   it('validates lifecycle metadata on runtime read responses', async () => {
@@ -204,6 +255,51 @@ describe('runtime subscribe', () => {
       messages: [message('m-replacement')],
       hasMore: true
     })
+  })
+
+  it('forwards PTY provenance identity to the runtime stream', async () => {
+    markRuntimeEnvironmentCompatible(ENV)
+    stubSubscribe()
+    const transport = getNativeChatSessionTransport(ENV)
+
+    transport.subscribe(
+      {
+        subscriptionId: 's-pty',
+        agent: 'claude',
+        sessionId: 'sess-1',
+        ptyId: toRemoteRuntimePtyId('pty-host-1', ENV)
+      },
+      vi.fn()
+    )
+    await Promise.resolve()
+
+    expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ ptyId: 'pty-host-1' })
+      }),
+      expect.any(Object)
+    )
+  })
+
+  it('subscribes against the scoped PTY owner during an owner flip', async () => {
+    stubSubscribe()
+    const transport = getNativeChatSessionTransport('env-b')
+
+    transport.subscribe(
+      {
+        subscriptionId: 's-owner-flip',
+        agent: 'claude',
+        sessionId: 'sess-1',
+        ptyId: toRemoteRuntimePtyId('term-a', 'env-a')
+      },
+      vi.fn()
+    )
+    await Promise.resolve()
+
+    expect(runtimeEnvironmentsSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: 'env-a' }),
+      expect.any(Object)
+    )
   })
 
   it('validates lifecycle metadata on runtime stream frames', async () => {

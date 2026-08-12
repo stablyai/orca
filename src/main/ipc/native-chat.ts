@@ -12,6 +12,7 @@ import {
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
+import type { NativeChatTranscriptHost } from '../native-chat/transcript-host'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -26,20 +27,41 @@ export type NativeChatReadSessionArgs = {
   /** Authoritative transcript path from the agent hook (providerSession), used to
    *  locate the file when the session id no longer names it (recent Claude Code). */
   transcriptPath?: string
+  /** PTY whose host owns this transcript. */
+  ptyId?: string
+}
+
+type NativeChatHandlerDeps = {
+  resolveTranscriptHost?: (ptyId: string) => NativeChatTranscriptHost | null | undefined
+}
+
+function requestedTranscriptHost(
+  ptyId: string | undefined,
+  deps: NativeChatHandlerDeps
+): NativeChatTranscriptHost | null | undefined {
+  return ptyId ? deps.resolveTranscriptHost?.(ptyId) : undefined
 }
 
 // Why: render and parse only the recent window so long transcripts do not stall
 // either the main process or the message list. Pagination raises this limit.
 const DESKTOP_READ_WINDOW = 300
 
-async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
+async function readSession(
+  args: NativeChatReadSessionArgs,
+  deps: NativeChatHandlerDeps
+): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
+  const transcriptHost = requestedTranscriptHost(args.ptyId, deps)
+  if (transcriptHost === null) {
+    return { error: 'Transcript unavailable' }
+  }
   return readNativeChatTranscriptTail({
     agent,
     sessionId,
     transcriptPath: args.transcriptPath,
+    transcriptHost,
     limit
   })
 }
@@ -52,6 +74,7 @@ export type NativeChatSubscribeArgs = {
   sessionId: string
   /** Authoritative transcript path from the agent hook (providerSession). */
   transcriptPath?: string
+  ptyId?: string
   limit?: number
 }
 
@@ -165,7 +188,11 @@ function takePendingSubscription(
   return true
 }
 
-async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArgs): Promise<void> {
+async function handleSubscribe(
+  event: IpcMainEvent,
+  args: NativeChatSubscribeArgs,
+  deps: NativeChatHandlerDeps
+): Promise<void> {
   const sender = event.sender
   if (sender.isDestroyed()) {
     return
@@ -175,11 +202,26 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   // Replace any prior subscription under the same id (session change/resubscribe).
   const pending = beginPendingSubscription(sender.id, subscriptionId)
   registerSenderCleanup(sender)
+  const transcriptHost = requestedTranscriptHost(args.ptyId, deps)
+  if (transcriptHost === null) {
+    takePendingSubscription(sender.id, subscriptionId, pending)
+    sender.send('nativeChat:appended', {
+      subscriptionId,
+      frame: {
+        type: 'snapshot',
+        messages: [],
+        hasMore: false,
+        error: 'Transcript unavailable'
+      }
+    } satisfies NativeChatAppendedPayload)
+    return
+  }
 
   const subscribeArgs: SubscribeNativeChatTranscriptArgs = {
     agent,
     sessionId,
     transcriptPath,
+    transcriptHost,
     initialLimit: limit,
     onInitialSnapshot: (messages, hasMore, _beforeOffset, error, lifecycle) => {
       if (sender.isDestroyed()) {
@@ -287,12 +329,12 @@ export function _getNativeChatPendingSubscriptionCountForTest(): number {
   return count
 }
 
-export function registerNativeChatHandlers(): void {
+export function registerNativeChatHandlers(deps: NativeChatHandlerDeps = {}): void {
   ipcMain.handle('nativeChat:readSession', (_event, args: NativeChatReadSessionArgs) =>
-    readSession(args)
+    readSession(args, deps)
   )
   ipcMain.on('nativeChat:subscribe', (event, args: NativeChatSubscribeArgs) => {
-    void handleSubscribe(event, args)
+    void handleSubscribe(event, args, deps)
   })
   ipcMain.on('nativeChat:unsubscribe', (event, args: { subscriptionId: string }) => {
     teardownSubscription(event.sender.id, args.subscriptionId)

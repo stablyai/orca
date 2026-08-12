@@ -1189,6 +1189,10 @@ function shouldSkipCodexHomeEnvForWindowsShell(
   return isWslShellName(shellPath) || (typeof cwd === 'string' && parseWslPath(cwd) !== null)
 }
 
+function isWslForRegisteredSpawn(result: PtySpawnResult, fallback: boolean): boolean {
+  return result.wslDistro === undefined ? fallback : result.wslDistro !== null
+}
+
 // Why: with the real-home flag ON, a host system-default launch resolves to a
 // null managed home. Signal the env builder to strip a nested-Orca-inherited
 // override instead of injecting one, so Codex runs on the user's own ~/.codex.
@@ -5148,11 +5152,22 @@ export function registerPtyHandlers(
           if (result.incarnationId) {
             ptyIncarnationById.set(result.id, result.incarnationId)
           }
-          runtime?.registerPty(result.id, owner.surface.worktreeId, args.connectionId ?? null, {
-            tabId: owner.surface.tabId,
-            leafId: owner.surface.leafId,
-            ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
-          })
+          runtime?.registerPty(
+            result.id,
+            owner.surface.worktreeId,
+            args.connectionId ?? null,
+            {
+              tabId: owner.surface.tabId,
+              leafId: owner.surface.leafId,
+              ...(result.incarnationId ? { incarnationId: result.incarnationId } : {})
+            },
+            !args.connectionId
+              ? isWslForRegisteredSpawn(
+                  result,
+                  shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
+                )
+              : undefined
+          )
           if (!args.connectionId) {
             options?.onCodexHomePtySpawned?.({
               id: result.id,
@@ -5281,7 +5296,10 @@ export function registerPtyHandlers(
                 }
               : undefined,
             !args.connectionId
-              ? shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
+              ? isWslForRegisteredSpawn(
+                  result,
+                  shouldSkipCodexHomeEnvForWindowsShell(daemonShellOverride, cwd)
+                )
               : undefined
           )
         } else {
@@ -6866,7 +6884,10 @@ export function registerPtyHandlers(
                 }
               : undefined,
             !args.connectionId
-              ? shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
+              ? isWslForRegisteredSpawn(
+                  result,
+                  shouldSkipCodexHomeEnvForWindowsShell(effectiveShellOverride, cwd)
+                )
               : undefined
           )
           pendingRegistrationPtyId = null

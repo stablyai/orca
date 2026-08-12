@@ -5,6 +5,7 @@ import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/ws
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import { runWslTranscriptFsTask } from './wsl-transcript-fs-gate'
+import type { NativeChatTranscriptHost } from './transcript-host'
 
 /**
  * True for guest-absolute Linux paths that Win32 cannot open as-is.
@@ -30,12 +31,36 @@ export function needsWslHostTranslation(
   return platform === 'win32' && isGuestAbsoluteLinuxPath(path.trim())
 }
 
+export function isTranscriptPathCompatibleWithHost(
+  path: string,
+  transcriptHost: NativeChatTranscriptHost,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (platform !== 'win32') {
+    return true
+  }
+  const unc = parseWslUncPath(path)
+  if (transcriptHost.kind === 'host') {
+    return !unc && !needsWslHostTranslation(path, platform)
+  }
+  const distro = transcriptHost.distro.trim()
+  return (
+    distro.length > 0 &&
+    (unc
+      ? unc.distro.toLowerCase() === distro.toLowerCase()
+      : needsWslHostTranslation(path, platform))
+  )
+}
+
 export type HostReadableTranscriptPathDeps = {
   platform?: NodeJS.Platform
   pathExists?: (path: string) => Promise<boolean>
   signal?: AbortSignal
+  /** PTY-owned execution host. Undefined preserves legacy discovery. */
+  transcriptHost?: NativeChatTranscriptHost
   /** Each installed WSL distro's `$HOME` as a Windows UNC path. */
   listWslHomeDirs?: () => Promise<string[]>
+  getWslHomeDir?: (distro: string) => Promise<string | null>
 }
 
 // Why: candidates are `\\wsl.localhost` UNC paths served over 9P. A sync probe
@@ -69,10 +94,14 @@ const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
 let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
+const cachedWslHomeByDistro = new Map<string, { home: string | null; expiresAt: number }>()
+const inflightWslHomeByDistro = new Map<string, Promise<string | null>>()
 
 async function defaultListWslHomeDirs(): Promise<string[]> {
   const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
+    (await listWslDistrosAsync()).map((distro) =>
+      wslHomeDirForDistro(distro, { platform: 'win32' })
+    )
   )
   return homes.filter((home): home is string => Boolean(home))
 }
@@ -100,6 +129,8 @@ export function resetHostReadableTranscriptPathCacheForTests(): void {
   cachedWslHomeDirs = null
   cachedWslHomeDirsExpiresAt = 0
   inflightWslHomeDirs = null
+  cachedWslHomeByDistro.clear()
+  inflightWslHomeByDistro.clear()
 }
 
 /**
@@ -126,11 +157,32 @@ export async function toHostReadableTranscriptPath(
   const pathExists =
     deps.pathExists ?? ((candidate: string) => pathExistsAsync(candidate, deps.signal))
   const platform = deps.platform ?? process.platform
+  if (platform === 'win32' && deps.transcriptHost) {
+    if (!isTranscriptPathCompatibleWithHost(path, deps.transcriptHost, platform)) {
+      return null
+    }
+    const unc = parseWslUncPath(path)
+    if (unc) {
+      return (await pathExists(path)) ? path : null
+    }
+  }
   // Why: classify BEFORE probing — Win32 resolves a bare `/home/…` against the
   // current drive (`C:\home\…`), so a probe first could bind chat to a local
   // look-alike file instead of the real WSL transcript.
   if (!needsWslHostTranslation(path, platform)) {
     return (await pathExists(path)) ? path : null
+  }
+
+  if (deps.transcriptHost?.kind === 'host') {
+    return null
+  }
+  if (deps.transcriptHost?.kind === 'wsl') {
+    const distro = deps.transcriptHost.distro.trim()
+    if (!distro) {
+      return null
+    }
+    const uncPath = toWindowsWslPath(path, distro)
+    return (await pathExists(uncPath)) ? uncPath : null
   }
 
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
@@ -180,6 +232,76 @@ export async function wslCodexSessionsDirs(
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')
   ])
+}
+
+/** Codex roots for one PTY-proven WSL distro, without enumerating others. */
+export async function wslCodexSessionsDirsForDistro(
+  distro: string,
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'getWslHomeDir'> = {}
+): Promise<string[]> {
+  const home = await wslHomeDirForDistro(distro, deps)
+  return home
+    ? [
+        joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
+        joinUnderWslHome(home, '.codex', 'sessions')
+      ]
+    : []
+}
+
+/** Each WSL distro's Claude projects root, searched after the host root misses. */
+export async function wslClaudeProjectsDirs(
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs'> = {}
+): Promise<string[]> {
+  const platform = deps.platform ?? process.platform
+  if (platform !== 'win32') {
+    return []
+  }
+  const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
+  return homeDirs.map((home) => joinUnderWslHome(home, '.claude', 'projects'))
+}
+
+/** Claude projects root for one PTY-proven WSL distro. */
+export async function wslClaudeProjectsDirsForDistro(
+  distro: string,
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'getWslHomeDir'> = {}
+): Promise<string[]> {
+  const home = await wslHomeDirForDistro(distro, deps)
+  return home ? [joinUnderWslHome(home, '.claude', 'projects')] : []
+}
+
+async function wslHomeDirForDistro(
+  distro: string,
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'getWslHomeDir'>
+): Promise<string | null> {
+  if ((deps.platform ?? process.platform) !== 'win32') {
+    return null
+  }
+  const normalizedDistro = distro.trim()
+  if (!normalizedDistro) {
+    return null
+  }
+  const key = normalizedDistro.toLowerCase()
+  const cached = cachedWslHomeByDistro.get(key)
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.home
+  }
+  const inflight = inflightWslHomeByDistro.get(key)
+  if (inflight) {
+    return inflight
+  }
+  const load = deps.getWslHomeDir ?? getWslHomeAsync
+  const request = load(normalizedDistro)
+    .catch(() => null)
+    .then((home) => {
+      cachedWslHomeByDistro.set(key, {
+        home,
+        expiresAt: Date.now() + (home ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
+      })
+      return home
+    })
+    .finally(() => inflightWslHomeByDistro.delete(key))
+  inflightWslHomeByDistro.set(key, request)
+  return request
 }
 
 // Why: node:path.join is posix-flavoured off Windows and would mangle the
