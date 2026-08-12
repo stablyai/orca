@@ -84,6 +84,33 @@ export function sumSpreadsheetRowHeights(
   return height
 }
 
+/**
+ * True when a row owns the value of a merge that reaches into the rows below it.
+ *
+ * Such a row is painted above its neighbours, because a virtualized row carries a
+ * `transform` and is therefore its own stacking context — a z-index on the cell
+ * inside cannot rise above the next row, so the lift has to happen on the row.
+ */
+export function anchorsVerticalMerge(
+  mergeIndex: SpreadsheetMergeIndex,
+  rowIndex: number,
+  columnCount: number
+): boolean {
+  for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+    const merge = mergeIndex.find(rowIndex, columnIndex)
+    if (merge === undefined) {
+      continue
+    }
+    if (merge.rowSpan > 1 && merge.rowIndex === rowIndex) {
+      return true
+    }
+    // Why: skip to the end of this merge rather than testing every column it
+    // covers, so a sheet of wide merges stays cheap to scan.
+    columnIndex = merge.columnIndex + merge.columnSpan - 1
+  }
+  return false
+}
+
 export type SpreadsheetMergePlacement = {
   /** Grid tracks this cell occupies, already clamped to the rendered window. */
   columnSpan: number

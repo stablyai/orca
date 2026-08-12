@@ -14,6 +14,7 @@ import {
 } from './SpreadsheetCell'
 import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 import {
+  anchorsVerticalMerge,
   buildSpreadsheetMergeIndex,
   planSpreadsheetMergePlacement,
   sumSpreadsheetRowHeights
@@ -184,9 +185,13 @@ export function SpreadsheetGrid({
   useEffect(() => {
     columnVirtualizer.measure()
   }, [columnVirtualizer, columnWidths])
+  // Why: keyed on the sizes themselves rather than on getRowHeightPx, whose
+  // identity changes with every cellStyles render and would re-measure the whole
+  // sheet on each one.
+  const rowHeightSignature = rowResize.widthOverrides.join(',')
   useEffect(() => {
     rowVirtualizer.measure()
-  }, [rowVirtualizer, getRowHeightPx])
+  }, [rowVirtualizer, rowHeightSignature])
 
   const virtualRows = rowVirtualizer.getVirtualItems()
   const virtualColumns = columnVirtualizer.getVirtualItems()
@@ -287,7 +292,14 @@ export function SpreadsheetGrid({
                   left: 0,
                   height: virtualRow.size,
                   width: '100%',
-                  transform: `translateY(${virtualRow.start}px)`
+                  transform: `translateY(${virtualRow.start}px)`,
+                  // Why: the translate makes every row its own stacking context, so
+                  // a z-index inside one cannot rise above the next row. A row whose
+                  // merged cell reaches into the rows below has to be lifted here,
+                  // as a sibling, or those rows paint over the text.
+                  ...(anchorsVerticalMerge(mergeIndex, virtualRow.index, columnCount)
+                    ? { zIndex: 1 }
+                    : {})
                 }}
               >
                 <div

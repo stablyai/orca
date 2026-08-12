@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  anchorsVerticalMerge,
   buildSpreadsheetMergeIndex,
   planSpreadsheetMergePlacement,
   sumSpreadsheetRowHeights
@@ -128,6 +129,98 @@ describe('sumSpreadsheetRowHeights', () => {
     const titleMerge: XlsxMergedRange = { rowIndex: 7, columnIndex: 1, rowSpan: 2, columnSpan: 4 }
 
     expect(sumSpreadsheetRowHeights(titleMerge, () => 24)).toBe(48)
+  })
+})
+
+describe('anchorsVerticalMerge', () => {
+  const anchors = (ranges: readonly XlsxMergedRange[], rowIndex: number, columnCount = 10) =>
+    anchorsVerticalMerge(buildSpreadsheetMergeIndex(ranges), rowIndex, columnCount)
+
+  it('lifts no row on a sheet without merges', () => {
+    expect(anchors([], 0)).toBe(false)
+    expect(anchors([], 7)).toBe(false)
+  })
+
+  it('leaves a purely horizontal merge flat', () => {
+    const wide: XlsxMergedRange = { rowIndex: 2, columnIndex: 0, rowSpan: 1, columnSpan: 3 }
+
+    expect(anchors([wide], 2)).toBe(false)
+  })
+
+  it('lifts the row that owns a merge reaching into the row below', () => {
+    const title: XlsxMergedRange = { rowIndex: 1, columnIndex: 0, rowSpan: 2, columnSpan: 2 }
+
+    expect(anchors([title], 1)).toBe(true)
+  })
+
+  it('does not lift the covered row, whose band has nothing to overflow', () => {
+    const title: XlsxMergedRange = { rowIndex: 1, columnIndex: 0, rowSpan: 2, columnSpan: 2 }
+
+    expect(anchors([title], 2)).toBe(false)
+  })
+
+  it('lifts only the first of the four rows a tall merge covers', () => {
+    const tall: XlsxMergedRange = { rowIndex: 3, columnIndex: 1, rowSpan: 4, columnSpan: 2 }
+
+    expect(anchors([tall], 3)).toBe(true)
+    expect(anchors([tall], 4)).toBe(false)
+    expect(anchors([tall], 5)).toBe(false)
+    expect(anchors([tall], 6)).toBe(false)
+  })
+
+  it('finds a vertical merge that starts away from the first column', () => {
+    const offset: XlsxMergedRange = { rowIndex: 0, columnIndex: 3, rowSpan: 2, columnSpan: 1 }
+
+    expect(anchors([offset], 0)).toBe(true)
+  })
+
+  it('lifts a row holding a horizontal merge beside a vertical one', () => {
+    const horizontal: XlsxMergedRange = { rowIndex: 4, columnIndex: 0, rowSpan: 1, columnSpan: 2 }
+    const vertical: XlsxMergedRange = { rowIndex: 4, columnIndex: 4, rowSpan: 3, columnSpan: 1 }
+
+    expect(anchors([horizontal, vertical], 4)).toBe(true)
+  })
+
+  it('leaves a row of two horizontal merges flat', () => {
+    const left: XlsxMergedRange = { rowIndex: 6, columnIndex: 0, rowSpan: 1, columnSpan: 2 }
+    const right: XlsxMergedRange = { rowIndex: 6, columnIndex: 4, rowSpan: 1, columnSpan: 3 }
+
+    expect(anchors([left, right], 6)).toBe(false)
+  })
+
+  it('scans nothing when the sheet reports no columns', () => {
+    const title: XlsxMergedRange = { rowIndex: 1, columnIndex: 0, rowSpan: 2, columnSpan: 2 }
+
+    expect(anchors([title], 1, 0)).toBe(false)
+  })
+
+  it('stops at the rendered column count instead of reaching a later merge', () => {
+    const farRight: XlsxMergedRange = { rowIndex: 1, columnIndex: 6, rowSpan: 2, columnSpan: 1 }
+
+    expect(anchors([farRight], 1, 6)).toBe(false)
+    expect(anchors([farRight], 1, 7)).toBe(true)
+  })
+
+  it('does not skip past the column where a vertical merge begins', () => {
+    const wide: XlsxMergedRange = { rowIndex: 1, columnIndex: 0, rowSpan: 1, columnSpan: 5 }
+    const vertical: XlsxMergedRange = { rowIndex: 1, columnIndex: 5, rowSpan: 2, columnSpan: 1 }
+
+    expect(anchors([wide, vertical], 1)).toBe(true)
+  })
+
+  it('lifts only the anchor rows across a sheet of mixed merges', () => {
+    const ranges: readonly XlsxMergedRange[] = [
+      { rowIndex: 0, columnIndex: 0, rowSpan: 1, columnSpan: 4 },
+      { rowIndex: 1, columnIndex: 0, rowSpan: 3, columnSpan: 2 },
+      { rowIndex: 5, columnIndex: 2, rowSpan: 2, columnSpan: 1 }
+    ]
+    const index = buildSpreadsheetMergeIndex(ranges)
+
+    const lifted = [0, 1, 2, 3, 4, 5, 6, 7].filter((rowIndex) =>
+      anchorsVerticalMerge(index, rowIndex, 10)
+    )
+
+    expect(lifted).toEqual([1, 5])
   })
 })
 

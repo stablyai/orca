@@ -147,3 +147,72 @@ describe('SpreadsheetGrid overlay and overflow', () => {
     expect(cell?.className).toContain('overflow-hidden')
   })
 })
+
+describe('SpreadsheetGrid vertical merge stacking', () => {
+  const HEADER = ['A', 'B']
+  const ROWS = [
+    ['Título', ''],
+    ['', ''],
+    ['', ''],
+    ['x', 'y']
+  ]
+
+  function liftedRowIndexes(): string[] {
+    expect(container!.querySelectorAll('[role="cell"]').length).toBeGreaterThan(0)
+    const dataRows = [
+      ...container!.querySelectorAll<HTMLElement>('[role="row"][aria-rowindex]')
+    ].filter((row) => row.getAttribute('aria-rowindex') !== '1')
+    expect(dataRows.length).toBeGreaterThan(0)
+    return dataRows
+      .filter((row) => row.style.zIndex === '1')
+      .map((row) => row.getAttribute('aria-rowindex')!)
+  }
+
+  it('lifts no data row on a sheet without merges', () => {
+    render(<SpreadsheetGrid header={HEADER} rows={ROWS} columnCount={2} />)
+
+    expect(liftedRowIndexes()).toEqual([])
+  })
+
+  it('lifts exactly the row that anchors a merge reaching into the row below', () => {
+    render(
+      <SpreadsheetGrid
+        header={HEADER}
+        rows={ROWS}
+        columnCount={2}
+        mergedRanges={[{ rowIndex: 1, columnIndex: 0, rowSpan: 2, columnSpan: 2 }]}
+      />
+    )
+
+    expect(liftedRowIndexes()).toEqual(['3'])
+  })
+
+  it('lifts no row for a merge that only spans columns', () => {
+    render(
+      <SpreadsheetGrid
+        header={HEADER}
+        rows={ROWS}
+        columnCount={2}
+        mergedRanges={[{ rowIndex: 1, columnIndex: 0, rowSpan: 1, columnSpan: 2 }]}
+      />
+    )
+
+    expect(liftedRowIndexes()).toEqual([])
+  })
+
+  it('lifts both anchors when two merges reach down from different rows', () => {
+    render(
+      <SpreadsheetGrid
+        header={HEADER}
+        rows={ROWS}
+        columnCount={2}
+        mergedRanges={[
+          { rowIndex: 0, columnIndex: 0, rowSpan: 2, columnSpan: 1 },
+          { rowIndex: 2, columnIndex: 1, rowSpan: 2, columnSpan: 1 }
+        ]}
+      />
+    )
+
+    expect(liftedRowIndexes()).toEqual(['2', '4'])
+  })
+})
