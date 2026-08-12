@@ -26,11 +26,12 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/runtime/relay/relay-http-client.ts', 2],
   ['main/source-control/hosted-review-api-request.ts', 1],
   ['main/speech/openai-transcription-client.ts', 1],
+  ['main/opencode2/hook-service.ts', 1],
+  ['main/opencode2/service-client.ts', 2],
   // fetch appears only inside injected-page script source strings, not as a
   // call this process makes
   ['main/amp/hook-service.ts', 1],
   ['main/opencode/hook-service.ts', 1],
-  ['main/opencode2/hook-service.ts', 3],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],

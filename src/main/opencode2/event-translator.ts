@@ -44,11 +44,7 @@ export function buildOpenCode2StatusPayload(
   })
 }
 
-const WORKING_EVENTS = new Set([
-  'session.status',
-  'session.execution.started',
-  'session.step.started'
-])
+const WORKING_EVENTS = new Set(['session.execution.started', 'session.step.started'])
 const IDLE_EVENTS = new Set([
   'session.execution.succeeded',
   'session.execution.failed',
@@ -62,14 +58,17 @@ const USER_PROMPT_EVENTS = new Set(['session.input.promoted', 'session.input.adm
 /**
  * Accumulates streaming text fragments per assistant message so `text.ended`
  * can deliver the full reply even when intermediate deltas were throttled.
- * Bounded: a never-ending stream cannot grow the map without bound.
+ * Bounded: entry count and per-entry length are capped so a never-ending
+ * stream cannot grow the map without bound.
  */
 export class OpenCode2TextAccumulator {
   private readonly pending = new Map<string, string>()
   private readonly maxEntries: number
+  private readonly maxEntryChars: number
 
-  constructor(maxEntries = 64) {
+  constructor(maxEntries = 64, maxEntryChars = 64_000) {
     this.maxEntries = maxEntries
+    this.maxEntryChars = maxEntryChars
   }
 
   append(messageId: string, delta: string): void {
@@ -79,7 +78,8 @@ export class OpenCode2TextAccumulator {
         this.pending.delete(oldest)
       }
     }
-    this.pending.set(messageId, `${this.pending.get(messageId) ?? ''}${delta}`)
+    const next = `${this.pending.get(messageId) ?? ''}${delta}`
+    this.pending.set(messageId, next.slice(0, this.maxEntryChars))
   }
 
   take(messageId: string): string | null {
@@ -123,10 +123,8 @@ export function translateOpenCode2Event(
       }
       text = delta
     } else if (event === 'session.text.ended') {
-      text = readOpenCode2RecordString(record, 'text')
-      if (assistantMessageId) {
-        text = text ?? textAccumulator.take(assistantMessageId)
-      }
+      const accumulated = assistantMessageId ? textAccumulator.take(assistantMessageId) : null
+      text = readOpenCode2RecordString(record, 'text') ?? accumulated
     }
     return { familyEvent: 'MessagePart', role: 'assistant', ...(text ? { text } : {}) }
   }

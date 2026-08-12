@@ -30,11 +30,15 @@ describe('resolveOpenCode2ServiceInfoPath', () => {
     expect(resolveOpenCode2ServiceInfoPath()).toBe(join('/xdg/state', 'opencode', 'service.json'))
   })
 
-  it('falls back to ~/.local/state', () => {
+  it('falls back to the home-based state dir', () => {
     vi.stubEnv('XDG_STATE_HOME', '')
-    vi.stubEnv('HOME', '/home/user')
+    vi.stubEnv('LOCALAPPDATA', '')
+    // Why: homedir() reads USERPROFILE on Windows and HOME on POSIX; stub the
+    // platform-correct variable so the assertion holds on both.
+    const home = process.platform === 'win32' ? 'C:\\Users\\test' : '/home/user'
+    vi.stubEnv(process.platform === 'win32' ? 'USERPROFILE' : 'HOME', home)
     expect(resolveOpenCode2ServiceInfoPath()).toBe(
-      join('/home/user', '.local', 'state', 'opencode', 'service.json')
+      join(home, '.local', 'state', 'opencode', 'service.json')
     )
   })
 })

@@ -868,11 +868,18 @@ export class AgentHookServer {
       agentType,
       intent: request.intent
     })
-    this.onInterruptInferred?.({
-      paneKey: inferred.paneKey,
-      agentType,
-      providerSession: existing.providerSession
-    })
+    // Why: match the class's guarded listener pattern — a throwing provider
+    // callback must not surface an error for an inference that already
+    // mutated and published the done row.
+    try {
+      this.onInterruptInferred?.({
+        paneKey: inferred.paneKey,
+        agentType,
+        providerSession: existing.providerSession
+      })
+    } catch (err) {
+      console.warn('[agent-hooks] interrupt-inference listener failed', err)
+    }
     return true
   }
 

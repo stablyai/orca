@@ -307,6 +307,20 @@ export function getPtyIdForPaneKey(paneKey: string): string | undefined {
   return paneKeyPtyId.get(paneKey)
 }
 
+// Why: identifies an opencode2 launch from the spawn request (renderer/CLI
+// agent launches thread launchAgent) or the command itself (typed-in-shell
+// starts carry neither launchAgent nor telemetry).
+function isOpenCode2AgentLaunch(
+  launchAgent: TuiAgent | undefined,
+  command: string | null | undefined
+): boolean {
+  if (launchAgent === 'opencode2') {
+    return true
+  }
+  const firstToken = command?.trim().split(/\s+/)[0]
+  return firstToken === 'opencode2'
+}
+
 // Why: let consumers tear down paneKey-scoped state on PTY exit so their timers can't leak; a callback registry keeps the cross-module dependency narrow.
 type PaneKeyTeardownListener = (paneKey: string) => void
 const paneKeyTeardownListeners = new Set<PaneKeyTeardownListener>()
@@ -5314,6 +5328,28 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
         const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
+        // Why: same opencode2 watcher registration as the pty:spawn path —
+        // headless/CLI spawns must attribute daemon sessions too.
+        if (
+          !args.connectionId &&
+          paneKey &&
+          isOpenCode2AgentLaunch(
+            isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
+            launchCommand
+          )
+        ) {
+          const registrationCwd = cwd?.trim()
+          if (registrationCwd) {
+            openCode2HookService.registerTerminal({
+              ptyId: result.id,
+              cwd: registrationCwd,
+              paneKey,
+              ...(typeof args.worktreeId === 'string' && args.worktreeId.length > 0
+                ? { worktreeId: args.worktreeId }
+                : {})
+            })
+          }
+        }
         const pendingSerializer = paneKey ? pendingByPaneKey.get(paneKey) : undefined
         const inheritRendererReadiness =
           result.isReattach === true &&
@@ -6898,13 +6934,13 @@ export function registerPtyHandlers(
         // Why: opencode2 sessions live in the shared service daemon, so the
         // status watcher needs each opencode2 terminal's cwd + pane key to
         // attribute daemon sessions back to the right Orca tab
-        // (docs/adr/0003-opencode2-shared-daemon-launch.md).
+        // (docs/adr/0003-opencode2-shared-daemon-launch.md). Derived from the
+        // launch agent (renderer/CLI spawns) or the launch command itself
+        // (typed-in-shell starts), not just telemetry.
         if (
           !args.connectionId &&
           rememberedPaneKey &&
-          args.telemetry &&
-          agentKindSchema.safeParse(args.telemetry.agent_kind).success &&
-          args.telemetry.agent_kind === 'opencode2'
+          isOpenCode2AgentLaunch(args.launchAgent, launchCommand)
         ) {
           const registrationCwd = cwd?.trim()
           if (registrationCwd) {

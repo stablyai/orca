@@ -60,6 +60,7 @@ function openReadonlyDatabase(dbPath: string): SyncDatabase {
 function canReadOpenCode2Sessions(db: SyncDatabase): boolean {
   return (
     tableExists(db, OPENCODE2_SESSION_TABLE) &&
+    columnExists(db, OPENCODE2_SESSION_TABLE, 'id') &&
     columnExists(db, OPENCODE2_SESSION_TABLE, 'time_created') &&
     columnExists(db, OPENCODE2_SESSION_TABLE, 'time_updated')
   )
@@ -77,7 +78,18 @@ function canCountOpenCode2Messages(db: SyncDatabase): boolean {
   return (
     tableExists(db, OPENCODE2_MESSAGE_TABLE) &&
     columnExists(db, OPENCODE2_MESSAGE_TABLE, 'session_id') &&
-    columnExists(db, OPENCODE2_MESSAGE_TABLE, 'type')
+    columnExists(db, OPENCODE2_MESSAGE_TABLE, 'type') &&
+    columnExists(db, OPENCODE2_MESSAGE_TABLE, 'data')
+  )
+}
+
+// Why: preview and first-prompt queries additionally read time/ordering
+// columns; a beta schema drift must fail soft to "no preview", not throw.
+function canPreviewOpenCode2Messages(db: SyncDatabase): boolean {
+  return (
+    canCountOpenCode2Messages(db) &&
+    columnExists(db, OPENCODE2_MESSAGE_TABLE, 'time_created') &&
+    columnExists(db, OPENCODE2_MESSAGE_TABLE, 'seq')
   )
 }
 
@@ -186,7 +198,7 @@ function extractMessageText(data: string): string | null {
 }
 
 function readFirstUserPromptFromDb(db: SyncDatabase, sessionId: string): string | null {
-  if (!canCountOpenCode2Messages(db) || !columnExists(db, OPENCODE2_MESSAGE_TABLE, 'data')) {
+  if (!canPreviewOpenCode2Messages(db)) {
     return null
   }
   try {
@@ -208,7 +220,7 @@ function readFirstUserPromptFromDb(db: SyncDatabase, sessionId: string): string 
 }
 
 function buildPreviewQuery(db: SyncDatabase): string | null {
-  if (!canCountOpenCode2Messages(db) || !columnExists(db, OPENCODE2_MESSAGE_TABLE, 'data')) {
+  if (!canPreviewOpenCode2Messages(db)) {
     return null
   }
   return `SELECT type, data, time_created

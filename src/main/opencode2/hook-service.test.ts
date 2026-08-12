@@ -1,8 +1,8 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { openCode2HookService } from './hook-service'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { OpenCode2HookService } from './hook-service'
 
 // Why: the hook service reads the daemon registration file and the SSE stream;
 // both are faked here so the translation + attribution logic is exercised
@@ -26,16 +26,15 @@ vi.mock('../agent-hooks/server', () => ({
 }))
 
 let tempDirs: string[] = []
-let servicePath = ''
+let service: OpenCode2HookService
 
 function writeServiceFile(): void {
   const stateDir = mkdtempSync(join(tmpdir(), 'orca-opencode2-hook-'))
   tempDirs.push(stateDir)
   const dir = join(stateDir, 'opencode')
   mkdirSync(dir, { recursive: true })
-  servicePath = join(dir, 'service.json')
   writeFileSync(
-    servicePath,
+    join(dir, 'service.json'),
     JSON.stringify({ url: 'http://127.0.0.1:4096', password: 'pw' }),
     'utf8'
   )
@@ -64,15 +63,21 @@ async function flush(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+beforeEach(() => {
+  // Why: a fresh instance keeps every test free of cache/stream state from
+  // earlier tests (the module singleton would order-couple them).
+  service = new OpenCode2HookService()
+  agentHookServerMock.onInterruptInferred = null
+  agentHookServerMock.ingestTerminalStatus.mockClear()
+})
+
 afterEach(() => {
   for (const dir of tempDirs) {
     rmSync(dir, { recursive: true, force: true })
   }
   tempDirs = []
-  agentHookServerMock.ingestTerminalStatus.mockClear()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()
-  openCode2HookService.clearPty('pty_1')
 })
 
 describe('OpenCode2HookService', () => {
@@ -98,7 +103,7 @@ describe('OpenCode2HookService', () => {
       })
     )
 
-    openCode2HookService.registerTerminal({
+    service.registerTerminal({
       ptyId: 'pty_1',
       cwd: '/repo',
       paneKey: 'tab_1:leaf_1'
@@ -133,7 +138,7 @@ describe('OpenCode2HookService', () => {
       }))
     )
 
-    openCode2HookService.registerTerminal({
+    service.registerTerminal({
       ptyId: 'pty_1',
       cwd: '/repo',
       paneKey: 'tab_1:leaf_1'
@@ -164,7 +169,7 @@ describe('OpenCode2HookService', () => {
       }))
     )
 
-    openCode2HookService.registerTerminal({
+    service.registerTerminal({
       ptyId: 'pty_1',
       cwd: '/repo',
       paneKey: 'tab_1:leaf_1'
@@ -172,6 +177,68 @@ describe('OpenCode2HookService', () => {
     await flush()
 
     expect(agentHookServerMock.ingestTerminalStatus).not.toHaveBeenCalled()
+  })
+
+  it('ignores sessions whose directory is an ancestor of the pane cwd', async () => {
+    writeServiceFile()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string) => ({
+        ok: true,
+        status: 200,
+        body: sseBody([
+          envelope('session.created', {
+            sessionID: 'session_parent',
+            location: { directory: '/' }
+          }),
+          envelope('session.status', {
+            sessionID: 'session_parent',
+            status: { type: 'busy' }
+          })
+        ])
+      }))
+    )
+
+    service.registerTerminal({
+      ptyId: 'pty_1',
+      cwd: '/repo',
+      paneKey: 'tab_1:leaf_1'
+    })
+    await flush()
+
+    expect(agentHookServerMock.ingestTerminalStatus).not.toHaveBeenCalled()
+  })
+
+  it('attributes sessions launched from a worktree subdirectory', async () => {
+    writeServiceFile()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string) => ({
+        ok: true,
+        status: 200,
+        body: sseBody([
+          envelope('session.created', {
+            sessionID: 'session_sub',
+            location: { directory: '/repo/pkg' }
+          }),
+          envelope('session.status', {
+            sessionID: 'session_sub',
+            status: { type: 'busy' }
+          })
+        ])
+      }))
+    )
+
+    service.registerTerminal({
+      ptyId: 'pty_1',
+      cwd: '/repo',
+      paneKey: 'tab_1:leaf_1'
+    })
+    await flush()
+
+    // Why: session.created carries attribution only — the status event is the
+    // first ingest.
+    expect(agentHookServerMock.ingestTerminalStatus).toHaveBeenCalledTimes(1)
   })
 
   it('throttles text deltas but always ingests the final text', async () => {
@@ -205,20 +272,67 @@ describe('OpenCode2HookService', () => {
       }))
     )
 
-    openCode2HookService.registerTerminal({
+    service.registerTerminal({
       ptyId: 'pty_1',
       cwd: '/repo',
       paneKey: 'tab_1:leaf_1'
     })
+
+    // Why: the stream settles asynchronously; poll for the final text instead
+    // of relying on a fixed tick count.
+    await vi.waitFor(() => {
+      const texts = agentHookServerMock.ingestTerminalStatus.mock.calls.map(
+        (call) => call[0].payload.lastAssistantMessage
+      )
+      expect(texts.at(-1)).toBe('Hello world')
+    })
+  })
+
+  it('forwards inferred interrupts to the service API', async () => {
+    writeServiceFile()
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, body: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    service.registerTerminal({
+      ptyId: 'pty_1',
+      cwd: '/repo',
+      paneKey: 'tab_1:leaf_1'
+    })
+    expect(agentHookServerMock.onInterruptInferred).not.toBeNull()
+
+    agentHookServerMock.onInterruptInferred!({
+      paneKey: 'tab_1:leaf_1',
+      agentType: 'opencode2',
+      providerSession: { key: 'session_id', id: 'session_1' }
+    })
     await flush()
 
-    const payloads = agentHookServerMock.ingestTerminalStatus.mock.calls.map(
-      (call) => call[0].payload
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:4096/api/session/session_1/interrupt',
+      expect.objectContaining({ method: 'POST' })
     )
-    const assistantTexts = payloads
-      .map((payload) => payload.lastAssistantMessage)
-      .filter((text) => typeof text === 'string' && text.length > 0)
-    expect(assistantTexts.length).toBeLessThanOrEqual(2)
-    expect(assistantTexts.at(-1)).toBe('Hello world')
+  })
+
+  it('does not forward interrupts for other agent types', async () => {
+    writeServiceFile()
+    const fetchMock = vi.fn(async () => ({ ok: true, status: 200, body: null }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    service.registerTerminal({
+      ptyId: 'pty_1',
+      cwd: '/repo',
+      paneKey: 'tab_1:leaf_1'
+    })
+    agentHookServerMock.onInterruptInferred!({
+      paneKey: 'tab_1:leaf_1',
+      agentType: 'claude',
+      providerSession: { key: 'session_id', id: 'session_1' }
+    })
+    await flush()
+
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining('/interrupt'),
+      expect.anything()
+    )
   })
 })

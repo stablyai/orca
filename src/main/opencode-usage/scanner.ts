@@ -93,15 +93,7 @@ export async function listOpenCodeDatabases(): Promise<string[]> {
   try {
     const entries = await readdir(dataDirectory, { withFileTypes: true })
     return entries
-      .filter(
-        (entry) =>
-          entry.isFile() &&
-          /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name) &&
-          // Why: v2 (opencode-next.db / opencode-local.db) sessions live in a
-          // different, beta-unstable schema; v2 usage tracking is deferred, so
-          // never feed the v2 DB to the v1 usage parser.
-          !isOpenCodeV2DatabaseName(entry.name)
-      )
+      .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
       .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch {
@@ -562,7 +554,13 @@ export async function scanOpenCodeUsageDatabases(
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  const dbPaths = await listOpenCodeDatabases()
+  // Why: this shared list feeds both ai-vault discovery (which routes v2 DBs
+  // to the opencode2 scanner) and the v1 usage parser (which must never see
+  // the v2 schema) — the v2 exclusion applies only at the usage consumption
+  // site below.
+  const dbPaths = (await listOpenCodeDatabases()).filter(
+    (dbPath) => !isOpenCodeV2DatabaseName(basename(dbPath))
+  )
   const previousByPath = new Map(
     previousProcessedDatabases.map((database) => [database.path, database])
   )

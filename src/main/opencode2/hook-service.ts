@@ -1,4 +1,3 @@
-import { sep } from 'node:path'
 import type { AgentProviderSessionMetadata } from '../../shared/agent-session-resume'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -9,6 +8,7 @@ import {
   OpenCode2TextAccumulator,
   translateOpenCode2Event
 } from './event-translator'
+import { fetchOpenCode2SessionDirectory, postOpenCode2SessionInterrupt } from './service-client'
 import {
   buildOpenCode2AuthHeaders,
   readOpenCode2ServiceInfo,
@@ -20,6 +20,7 @@ import {
   parseOpenCode2SseEnvelope,
   readOpenCode2RecordString
 } from './sse-consumer'
+import { OpenCode2SessionDirectoryCache } from './session-directory-cache'
 
 // Why: opencode2 keeps sessions in a shared background service, so status
 // events come from the service's `/api/event` SSE stream instead of an
@@ -29,7 +30,6 @@ import {
 // best-effort — a missing service, beta API drift, or schema change degrades
 // to "no status" without affecting the terminal.
 
-const SESSION_DIRECTORY_CACHE_MAX = 512
 const TEXT_INGEST_THROTTLE_MS = 150
 const STREAM_RETRY_MS = 5000
 
@@ -40,23 +40,47 @@ export type OpenCode2TerminalRegistration = {
   worktreeId?: string
 }
 
+// Why: Windows and macOS filesystems compare paths case-insensitively, and the
+// daemon can report POSIX-style separators while the pane cwd uses backslashes.
+// Compare both sides on a shared, case-normalized, separator-unified form.
+function comparableDirectoryPath(value: string, platform: NodeJS.Platform): string {
+  let normalized = value.replace(/\\/g, '/')
+  normalized = normalized.replace(/\/{2,}/g, '/')
+  if (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1)
+  }
+  return platform === 'win32' || platform === 'darwin' ? normalized.toLowerCase() : normalized
+}
+
 // Why: attribute a daemon session to the terminal whose cwd is the session's
 // directory or an ancestor of it (sessions launched from a worktree subdir).
 // The reverse (session directory is an ancestor of the pane cwd) is a
 // different workspace and must not flip this pane's status.
-function isSessionDirectoryInCwd(cwd: string, directory: string): boolean {
-  const boundary = cwd.endsWith(sep) ? cwd : `${cwd}${sep}`
-  return directory === cwd || directory.startsWith(boundary)
+function isSessionDirectoryInCwd(
+  cwd: string,
+  directory: string,
+  platform: NodeJS.Platform
+): boolean {
+  const comparableCwd = comparableDirectoryPath(cwd, platform)
+  const comparableDirectory = comparableDirectoryPath(directory, platform)
+  return (
+    comparableDirectory === comparableCwd || comparableDirectory.startsWith(`${comparableCwd}/`)
+  )
 }
 
 export class OpenCode2HookService {
   private readonly terminals = new Map<string, OpenCode2TerminalRegistration>()
-  private readonly sessionDirectories = new Map<string, string>()
+  private readonly directoryCache = new OpenCode2SessionDirectoryCache()
+  private readonly pendingDirectoryFetches = new Set<string>()
   private readonly lastPromptByPaneKey = new Map<string, string>()
   private readonly textAccumulator = new OpenCode2TextAccumulator()
   private readonly lastTextIngestAtByPaneKey = new Map<string, number>()
   private controller: AbortController | null = null
   private retryTimer: NodeJS.Timeout | null = null
+  // Why: openStream assigns `this.controller` only after `await fetch`
+  // resolves; this flag closes the window where concurrent registerTerminal
+  // calls would both pass ensureStreaming and open two SSE streams.
+  private streamOpening = false
   private attachedInterruptListener = false
 
   registerTerminal(registration: OpenCode2TerminalRegistration): void {
@@ -96,9 +120,10 @@ export class OpenCode2HookService {
   }
 
   private ensureStreaming(): void {
-    if (this.controller || this.retryTimer) {
+    if (this.controller || this.retryTimer || this.streamOpening) {
       return
     }
+    this.streamOpening = true
     void this.openStream()
   }
 
@@ -116,6 +141,7 @@ export class OpenCode2HookService {
   private async openStream(): Promise<void> {
     const info = readOpenCode2ServiceInfo()
     if (!info) {
+      this.streamOpening = false
       this.scheduleRetry()
       return
     }
@@ -131,6 +157,7 @@ export class OpenCode2HookService {
         throw new Error(`opencode2 service event stream failed: ${response.status}`)
       }
       this.controller = controller
+      this.streamOpening = false
       void consumeOpenCode2EventStream(
         response.body,
         (payload) => this.handleEnvelope(payload, info),
@@ -144,6 +171,7 @@ export class OpenCode2HookService {
         }
       )
     } catch (err) {
+      this.streamOpening = false
       if ((err as Error).name !== 'AbortError') {
         this.scheduleRetry()
       }
@@ -177,7 +205,7 @@ export class OpenCode2HookService {
     const directory =
       envelope.event === 'session.created'
         ? this.rememberSessionDirectoryFromLocation(sessionId, record)
-        : (this.sessionDirectories.get(sessionId) ?? null)
+        : this.directoryCache.get(sessionId)
     if (!directory) {
       // Why: unknown session — fetch its directory once so later events attribute.
       void this.fetchSessionDirectory(sessionId, info)
@@ -257,71 +285,43 @@ export class OpenCode2HookService {
     if (!directory) {
       return null
     }
-    this.cacheSessionDirectory(sessionId, directory)
+    this.directoryCache.remember(sessionId, directory)
     return directory
-  }
-
-  private cacheSessionDirectory(sessionId: string, directory: string): void {
-    if (this.sessionDirectories.size >= SESSION_DIRECTORY_CACHE_MAX) {
-      const oldest = this.sessionDirectories.keys().next().value
-      if (typeof oldest === 'string') {
-        this.sessionDirectories.delete(oldest)
-      }
-    }
-    this.sessionDirectories.set(sessionId, directory)
   }
 
   private async fetchSessionDirectory(
     sessionId: string,
     info: OpenCode2ServiceInfo
   ): Promise<void> {
-    if (this.sessionDirectories.has(sessionId)) {
+    if (
+      this.pendingDirectoryFetches.has(sessionId) ||
+      !this.directoryCache.shouldFetch(sessionId)
+    ) {
       return
     }
+    this.pendingDirectoryFetches.add(sessionId)
     try {
-      const response = await fetch(`${info.url}/api/session/${encodeURIComponent(sessionId)}`, {
-        headers: { ...buildOpenCode2AuthHeaders(info) },
-        signal: AbortSignal.timeout(5000)
-      })
-      if (!response.ok) {
-        await cancelUnreadResponseBody(response)
-        return
+      const result = await fetchOpenCode2SessionDirectory(info, sessionId)
+      if (result.ok) {
+        this.directoryCache.remember(sessionId, result.directory)
+      } else {
+        this.directoryCache.rememberFailure(sessionId)
       }
-      const body = (await response.json()) as {
-        data?: { location?: { directory?: unknown } }
-      }
-      const directory = body.data?.location?.directory
-      if (typeof directory === 'string' && directory.trim().length > 0) {
-        this.cacheSessionDirectory(sessionId, directory.trim())
-      }
-    } catch {
-      // best-effort; the next event retries attribution
+    } finally {
+      this.pendingDirectoryFetches.delete(sessionId)
     }
   }
 
   private async postInterrupt(sessionId: string): Promise<void> {
     const info = readOpenCode2ServiceInfo()
-    if (!info) {
-      return
-    }
-    try {
-      const response = await fetch(
-        `${info.url}/api/session/${encodeURIComponent(sessionId)}/interrupt`,
-        {
-          method: 'POST',
-          headers: { ...buildOpenCode2AuthHeaders(info) },
-          signal: AbortSignal.timeout(5000)
-        }
-      )
-      await cancelUnreadResponseBody(response)
-    } catch {
-      // best-effort; the TUI's own Escape handling remains the fallback
+    if (info) {
+      await postOpenCode2SessionInterrupt(info, sessionId)
     }
   }
 
   private findTerminalByDirectory(directory: string): OpenCode2TerminalRegistration | null {
     for (const registration of this.terminals.values()) {
-      if (isSessionDirectoryInCwd(registration.cwd, directory)) {
+      if (isSessionDirectoryInCwd(registration.cwd, directory, process.platform)) {
         return registration
       }
     }
