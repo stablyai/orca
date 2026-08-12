@@ -7,7 +7,9 @@ import { scanAiVaultSessions } from './session-scanner'
 import {
   isolatedScanRoots,
   jsonLines,
-  writeAntigravityScannerFixture
+  writeAntigravityScannerFixture,
+  writeOmpScannerFixture,
+  writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -165,7 +167,6 @@ describe('scanAiVaultSessions', () => {
       'Indexed Codex resume picker title',
       'Vault polish pass'
     ])
-
     const claude = result.sessions.find((session) => session.agent === 'claude')
     expect(claude).toMatchObject({
       sessionId: 'claude-session',
@@ -596,43 +597,8 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const ompSessionFile = join(roots.ompSessionsDir, 'omp-session.jsonl')
-    await mkdir(roots.ompSessionsDir, { recursive: true })
-    await writeFile(
-      ompSessionFile,
-      jsonLines([
-        {
-          type: 'session',
-          version: 3,
-          id: 'omp-session',
-          title: 'OMP session title',
-          timestamp: '2026-05-01T10:08:30.000Z',
-          cwd: '/tmp/omp'
-        },
-        {
-          type: 'model_change',
-          model: 'gpt-5.4-mini',
-          timestamp: '2026-05-01T10:08:30.500Z'
-        },
-        {
-          type: 'message',
-          timestamp: '2026-05-01T10:08:31.000Z',
-          message: { role: 'user', content: [{ type: 'text', text: 'OMP title' }] }
-        },
-        {
-          type: 'message',
-          timestamp: '2026-05-01T10:08:32.000Z',
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: 'OMP answer' }],
-            model: 'gpt-5.4-mini',
-            // totalTokens deliberately != input+output so the assertion proves
-            // the explicit-total field is read, not an input/output sum.
-            usage: { input: 10, output: 5, totalTokens: 160 }
-          }
-        }
-      ])
-    )
+    const ompSessionFile = await writeOmpScannerFixture(roots.ompSessionsDir)
+    const primeAgentSessionFile = await writePrimeAgentScannerFixture(roots.primeAgentSessionsDir)
 
     await mkdir(roots.devinTranscriptsDir, { recursive: true })
     await writeFile(
@@ -768,6 +734,10 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('pi')).toBe("cd '/tmp/pi' && pi --session 'pi-session'")
     // OMP resumes by absolute transcript path, not by internal session id.
     expect(commandByAgent.get('omp')).toBe(`cd '/tmp/omp' && omp --resume '${ompSessionFile}'`)
+    // Prime Agent's `--resume <path|id>` takes the same absolute-path form as OMP.
+    expect(commandByAgent.get('prime-agent')).toBe(
+      `cd '/tmp/prime-agent' && prime-agent --resume '${primeAgentSessionFile}'`
+    )
     expect(commandByAgent.get('devin')).toBe("cd '/tmp/devin' && devin --resume 'devin-session'")
     expect(commandByAgent.get('droid')).toBe("cd '/tmp/droid' && droid --resume 'droid-session'")
     expect(commandByAgent.get('kimi')).toBe(
@@ -777,6 +747,12 @@ describe('scanAiVaultSessions', () => {
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')
     expect(ompSession?.totalTokens).toBe(160)
+
+    // Prime Agent keeps Pi's `model_change.modelId` key, so the pre-reply model
+    // must come through even though no assistant message was written yet.
+    const primeAgentSession = result.sessions.find((session) => session.agent === 'prime-agent')
+    expect(primeAgentSession?.model).toBe('inference/big-model')
+    expect(primeAgentSession?.title).toBe('Prime Agent title')
   })
 
   it('captures an in-progress OMP model from model_change before any assistant reply', async () => {

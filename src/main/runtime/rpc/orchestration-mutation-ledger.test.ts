@@ -38,7 +38,7 @@ describe('durable orchestration mutation ledger', () => {
     }
   })
 
-  function createHarness(dbPath: string | ':memory:' = ':memory:') {
+  function createHarness(dbPath: (string & {}) | ':memory:' = ':memory:') {
     const db = new OrchestrationDb(dbPath)
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)

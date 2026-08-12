@@ -58,7 +58,7 @@ export type PaneManagerOptions = {
   onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalTuiScrollSensitivity?: () => number | undefined
-  onLinkClick?: (event: MouseEvent | undefined, url: string) => void
+  onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
   /** Resolved per hover so link-routing setting changes apply without recreating panes. */
   // Why: required so dropping the wiring is a compile error — an optional hint with a
   // default would silently serve stale copy that no test can distinguish.
@@ -114,6 +114,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
@@ -141,6 +142,12 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
+  webglRebuildDeferred?: boolean
+  // Why per-pane: one pane's failed WebGL attach must not strand every other
+  // pane on the DOM renderer until the next recovery boundary. Optional so
+  // absent means "never failed"; only the attach failure path sets it.
+  webglAttachFailedSinceRecovery?: boolean
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean

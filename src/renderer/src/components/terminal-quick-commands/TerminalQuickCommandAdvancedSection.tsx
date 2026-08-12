@@ -7,11 +7,12 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import { TerminalQuickCommandCollapsibleRow } from './TerminalQuickCommandCollapsibleRow'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
   draft: TerminalQuickCommand
-  repos: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
   selectedRepoId: string
@@ -50,42 +51,26 @@ export function TerminalQuickCommandAdvancedSection({
         <ChevronDown className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')} />
       </Button>
 
-      <div
-        className={cn(
-          'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-          advancedOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        )}
-        aria-hidden={!advancedOpen}
-      >
-        <div className="min-h-0">
-          <div
-            className={cn(
-              'space-y-4 px-1 pt-1 pb-1 transition-[opacity,transform] duration-150 ease-out',
-              advancedOpen
-                ? 'translate-y-0 opacity-100 delay-200'
-                : '-translate-y-1 opacity-0 delay-0'
-            )}
-          >
-            {!isTerminalAgentQuickCommand(draft) ? (
-              <TerminalQuickCommandAppendEnterSwitch
-                appendEnter={draft.appendEnter}
-                onToggle={toggleAppendEnter}
-              />
-            ) : null}
-            <TerminalQuickCommandScopeField
-              repos={repos}
-              selectedScope={selectedScope}
-              selectedRepoId={selectedRepoId}
-              selectedRepoMissing={selectedRepoMissing}
-              lastRepoScopeId={lastRepoScopeIdRef.current}
-              rememberRepoScopeId={(repoId) => {
-                lastRepoScopeIdRef.current = repoId
-              }}
-              setDraft={setDraft}
-            />
-          </div>
-        </div>
-      </div>
+      <TerminalQuickCommandCollapsibleRow open={advancedOpen} className="space-y-4 px-1 pt-2 pb-1">
+        <TerminalQuickCommandScopeField
+          repos={repos}
+          selectedScope={selectedScope}
+          selectedRepoId={selectedRepoId}
+          selectedRepoMissing={selectedRepoMissing}
+          lastRepoScopeId={lastRepoScopeIdRef.current}
+          rememberRepoScopeId={(repoId) => {
+            lastRepoScopeIdRef.current = repoId
+          }}
+          setDraft={setDraft}
+        />
+        {!isTerminalAgentQuickCommand(draft) ? (
+          <TerminalQuickCommandAppendEnterSwitch
+            appendEnter={draft.appendEnter}
+            disabled={!advancedOpen}
+            onToggle={toggleAppendEnter}
+          />
+        ) : null}
+      </TerminalQuickCommandCollapsibleRow>
     </div>
   )
 }

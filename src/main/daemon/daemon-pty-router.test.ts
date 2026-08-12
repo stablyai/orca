@@ -229,6 +229,19 @@ it('preserves unavailable inspection from the owning legacy daemon', async () =>
   })
 })
 
+it('forwards the owning legacy daemon sequence from attach', async () => {
+  const legacy = createAdapter('legacy', ['legacy-session'])
+  const providerSequence = { value: 204, generation: 'continued' as const }
+  vi.mocked(legacy.attach).mockResolvedValueOnce({ providerSequence })
+  const router = new DaemonPtyRouter({
+    current: createAdapter('current'),
+    legacy: [legacy]
+  })
+  await router.discoverLegacySessions()
+
+  await expect(router.attach('legacy-session')).resolves.toEqual({ providerSequence })
+})
+
 describe('DaemonPtyRouter', () => {
   it('reports separate conservative resume and fresh-create boundaries', () => {
     const current = createAdapter(
@@ -395,7 +408,7 @@ describe('DaemonPtyRouter', () => {
     expect(current.confirmForegroundProcess).toHaveBeenCalledWith('current-session')
   })
 
-  it('preserves v30/v31 session owners and routes new sessions to v32', async () => {
+  it('preserves older session owners and routes new sessions to v33', async () => {
     const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
     const legacyV30 = createAdapter(
       'v30',
@@ -409,22 +422,27 @@ describe('DaemonPtyRouter', () => {
       undefined,
       STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
     )
-    const router = new DaemonPtyRouter({ current, legacy: [legacyV30, legacyV31] })
+    const legacyV32 = createAdapter('v32', ['v32-session'], undefined, 32)
+    const router = new DaemonPtyRouter({ current, legacy: [legacyV30, legacyV31, legacyV32] })
 
     await router.discoverLegacySessions()
 
     await router.spawn({ sessionId: 'v30-session', cols: 80, rows: 24 })
     await router.spawn({ sessionId: 'v31-session', cols: 80, rows: 24 })
+    await router.spawn({ sessionId: 'v32-session', cols: 80, rows: 24 })
     const fresh = await router.spawn({ cols: 80, rows: 24 })
     router.write('v30-session', 'old-v30\n')
     router.write('v31-session', 'old-v31\n')
+    router.write('v32-session', 'old-v32\n')
     router.write(fresh.id, 'new\n')
 
     expect(legacyV30.spawn).toHaveBeenCalledWith({ sessionId: 'v30-session', cols: 80, rows: 24 })
     expect(legacyV31.spawn).toHaveBeenCalledWith({ sessionId: 'v31-session', cols: 80, rows: 24 })
+    expect(legacyV32.spawn).toHaveBeenCalledWith({ sessionId: 'v32-session', cols: 80, rows: 24 })
     expect(current.spawn).toHaveBeenCalledWith({ cols: 80, rows: 24 })
     expect(legacyV30.write).toHaveBeenCalledWith('v30-session', 'old-v30\n')
     expect(legacyV31.write).toHaveBeenCalledWith('v31-session', 'old-v31\n')
+    expect(legacyV32.write).toHaveBeenCalledWith('v32-session', 'old-v32\n')
     expect(current.write).toHaveBeenCalledWith(fresh.id, 'new\n')
   })
 
@@ -526,10 +544,22 @@ describe('DaemonPtyRouter', () => {
   it('does not report absence while any possible daemon owner is unavailable', async () => {
     const current = createAdapter('current')
     const legacy = createAdapter('legacy')
-    vi.mocked(legacy.probePtyLiveness).mockResolvedValue(null)
+    vi.mocked(legacy.listProcesses).mockRejectedValue(new Error('legacy inventory unavailable'))
     const router = new DaemonPtyRouter({ current, legacy: [legacy] })
 
     await expect(router.probePtyLiveness('unknown-session')).resolves.toBeNull()
+  })
+
+  it('reports absence after every possible daemon owner returns a complete inventory', async () => {
+    const current = createAdapter('current')
+    const legacy = createAdapter('legacy')
+    const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+    await expect(router.probePtyLiveness('missing-session')).resolves.toBe(false)
+    expect(current.listProcesses).toHaveBeenCalledOnce()
+    expect(legacy.listProcesses).toHaveBeenCalledOnce()
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
   })
 
   it('routes an attach to a legacy session created after startup inventory', async () => {

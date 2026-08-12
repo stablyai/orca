@@ -3,10 +3,10 @@ import {
   createNativeChatTranscriptRetention,
   encodeNativeChatTranscriptIdentity
 } from '../../../src/shared/native-chat-transcript-retention'
+import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
-import { createNativeChatMerger, replaceList } from './mobile-native-chat-merge'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
@@ -273,11 +273,12 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
+  // Held for any unsettled read, not just an in-flight one: a stream error or a
+  // dropped client would otherwise trade the conversation for an error card.
   const visibleMessages = transcriptRetentionRef.current.visible({
     identity,
     messages,
-    settled: settledReady,
-    loading: status === 'loading'
+    settled: settledReady
   })
 
   return {

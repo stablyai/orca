@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import {
   getAgentSessionOptionCatalog,
   type AgentSessionOptionCatalog,
+  type CatalogCommandDelivery,
   type CatalogModel
 } from '../../../src/shared/agent-session-option-catalog'
 import type {
@@ -95,13 +96,19 @@ export function useMobileNativeChatSessionOptions(args: {
   scopeKey: string | null
   /** Provider model from live agent status, when the hook reported one. */
   reportedModel: string | null
-  dispatchCommand: (command: string) => Promise<MobileNativeChatSendOutcome>
+  dispatchCommand: (
+    command: string,
+    options?: { delivery?: CatalogCommandDelivery }
+  ) => Promise<MobileNativeChatSendOutcome>
   /** A model change that must happen in the agent's own TUI picker was
    *  dispatched — bring the terminal view forward. */
   onAgentPicker?: () => void
 }): MobileNativeChatSessionOptionsController {
   const { agent, scopeKey, reportedModel, dispatchCommand, onAgentPicker } = args
   const catalog = useMemo(
+    // Widening this to a `defaultModelIsCliDefault` catalog (grok) also needs the
+    // effective-model resolution desktop does — `previousModelId` below is tracked-only,
+    // so a CLI-default model would render option rows that do nothing when tapped.
     () => (agent === 'claude' || agent === 'codex' ? getAgentSessionOptionCatalog(agent) : null),
     [agent]
   )
@@ -294,7 +301,9 @@ export function useMobileNativeChatSessionOptions(args: {
                 ?.options.find((option) => option.id === id)?.apply
         const midSession = apply?.midSession
         if (midSession?.kind === 'agent-picker') {
-          const outcome = await dispatchCommand(midSession.command)
+          const outcome = midSession.delivery
+            ? await dispatchCommand(midSession.command, { delivery: midSession.delivery })
+            : await dispatchCommand(midSession.command)
           if (outcome === 'rejected') {
             return false
           }

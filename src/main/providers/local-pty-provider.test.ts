@@ -13,7 +13,9 @@ const {
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
   readWindowsConptyProcessIdsMock,
-  killWithDescendantSweepMock
+  killWithDescendantSweepMock,
+  isWslAvailableAsyncMock,
+  wslUncDirectoryExistsMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
@@ -24,7 +26,9 @@ const {
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsConptyProcessIdsMock: vi.fn(),
-  killWithDescendantSweepMock: vi.fn()
+  killWithDescendantSweepMock: vi.fn(),
+  isWslAvailableAsyncMock: vi.fn(),
+  wslUncDirectoryExistsMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -97,10 +101,10 @@ vi.mock('../wsl', () => ({
   toWindowsWslPath: (path: string, distro: string) =>
     `\\\\wsl.localhost\\${distro}${path.replace(/\//g, '\\')}`,
   getDefaultWslDistro: () => 'Ubuntu',
-  isWslAvailable: () => true,
+  isWslAvailableAsync: () => isWslAvailableAsyncMock(),
   // Why: WSL worktree validation now asks the distro; these tests use WSL UNC
   // cwds that are meant to exist, so report them present without spawning wsl.exe.
-  wslUncDirectoryExists: () => true
+  wslUncDirectoryExists: (...args: unknown[]) => wslUncDirectoryExistsMock(...args)
 }))
 
 import {
@@ -166,6 +170,10 @@ describe('LocalPtyProvider', () => {
     )
     readWindowsConptyProcessIdsMock.mockReset()
     readWindowsConptyProcessIdsMock.mockResolvedValue(null)
+    isWslAvailableAsyncMock.mockReset()
+    isWslAvailableAsyncMock.mockResolvedValue(true)
+    wslUncDirectoryExistsMock.mockReset()
+    wslUncDirectoryExistsMock.mockReturnValue(true)
 
     exitCb = undefined
     mockProc = {
@@ -974,6 +982,52 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
+    it.each(['/home/jin/repo', '/a', '/c'])(
+      'preserves a POSIX cwd through the preferred WSL distro (%s)',
+      async (cwd) => {
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+          cwd,
+          prevalidatedCwd: `\\\\wsl.localhost\\Debian${cwd.replaceAll('/', '\\')}`,
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Debian'
+        })
+
+        const spawnCall = spawnMock.mock.calls.at(-1)!
+        expect(spawnCall[0]).toBe('wsl.exe')
+        expect(spawnCall[1]).toEqual([
+          '-d',
+          'Debian',
+          '--',
+          'sh',
+          '-c',
+          expect.stringContaining(`cd '${cwd}'`)
+        ])
+        expect(spawnCall[2].cwd).not.toBe(cwd)
+        expect(wslUncDirectoryExistsMock).not.toHaveBeenCalled()
+      }
+    )
+
+    it('revalidates when cwd evidence does not exactly match the resolved WSL path', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+      await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'repo-1::C:\\Users\\jin\\repo',
+        cwd: '/a',
+        prevalidatedCwd: '\\\\wsl.localhost\\Debian\\c',
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian'
+      })
+
+      expect(wslUncDirectoryExistsMock).toHaveBeenCalledWith('\\\\wsl.localhost\\Debian\\a')
+    })
+
     it('resolves and persists the default distro for Windows cwd WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       const buildSpawnEnv = vi.fn(
@@ -1032,6 +1086,32 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[0]).toBe(PWSH7_ABS)
       expect(spawnCall[1]).toContain('-EncodedCommand')
       expect(pwshAvailable).not.toHaveBeenCalled()
+    })
+
+    it('awaits PowerShell availability before resolving an automatic Windows shell', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let resolveAvailability!: (available: boolean) => void
+      const pwshAvailable = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveAvailability = resolve
+          })
+      )
+      provider.configure({
+        getWindowsShell: () => 'powershell.exe',
+        getWindowsPowerShellImplementation: () => 'auto',
+        pwshAvailable
+      })
+
+      const callsBeforeSpawn = spawnMock.mock.calls.length
+      const spawn = provider.spawn({ cols: 80, rows: 24, cwd: 'C:\\Users\\jin\\repo' })
+      await Promise.resolve()
+      expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn)
+
+      resolveAvailability(true)
+      await spawn
+      expect(spawnMock).toHaveBeenCalledTimes(callsBeforeSpawn + 1)
+      expect(spawnMock.mock.calls.at(-1)?.[0]).toBe(PWSH7_ABS)
     })
 
     it('marks Orca terminal handle for WSL import when buildSpawnEnv opts in', async () => {
@@ -2005,6 +2085,30 @@ describe('LocalPtyProvider', () => {
           process.env.SHELL = originalShell
         }
       }
+    })
+  })
+
+  describe('getProfiles', () => {
+    it('awaits asynchronous WSL availability on Windows', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      let resolveAvailability!: (available: boolean) => void
+      isWslAvailableAsyncMock.mockReturnValue(
+        new Promise((resolve) => {
+          resolveAvailability = resolve
+        })
+      )
+
+      const profiles = provider.getProfiles()
+      let settled = false
+      void profiles.then(() => {
+        settled = true
+      })
+      await Promise.resolve()
+      expect(settled).toBe(false)
+
+      resolveAvailability(true)
+      await expect(profiles).resolves.toContainEqual({ name: 'WSL', path: 'wsl.exe' })
+      expect(isWslAvailableAsyncMock).toHaveBeenCalledOnce()
     })
   })
 

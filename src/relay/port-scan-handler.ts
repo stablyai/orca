@@ -16,11 +16,11 @@ const SYSTEM_PORTS_TO_EXCLUDE = new Set([22])
 const MAX_DETECTED_PORTS = 50
 
 export class PortScanHandler {
-  constructor(dispatcher: RelayDispatcher) {
+  constructor(dispatcher: Pick<RelayDispatcher, 'onRequest'>) {
     dispatcher.onRequest('ports.detect', async (_params, context: RequestContext) => {
       if (process.platform === 'linux') {
         return {
-          ports: await this.scanLinuxListeningPorts(),
+          ports: await this.scanLinuxListeningPorts(context.signal),
           platform: process.platform
         }
       }
@@ -37,11 +37,13 @@ export class PortScanHandler {
     })
   }
 
-  private async scanLinuxListeningPorts(): Promise<DetectedPort[]> {
+  private async scanLinuxListeningPorts(signal?: AbortSignal): Promise<DetectedPort[]> {
+    signal?.throwIfAborted()
     const [tcp4, tcp6] = await Promise.all([
-      this.readProcNet('/proc/net/tcp'),
-      this.readProcNet('/proc/net/tcp6')
+      this.readProcNet('/proc/net/tcp', signal),
+      this.readProcNet('/proc/net/tcp6', signal)
     ])
+    signal?.throwIfAborted()
 
     const listeningSockets = [...tcp4, ...tcp6]
     if (listeningSockets.length === 0) {
@@ -49,7 +51,7 @@ export class PortScanHandler {
     }
 
     const inodeSet = new Set(listeningSockets.map((s) => s.inode))
-    const inodeToPid = await this.mapInodesToPids(inodeSet)
+    const inodeToPid = await this.mapInodesToPids(inodeSet, signal)
 
     const seen = new Set<string>()
     const results: DetectedPort[] = []
@@ -57,6 +59,7 @@ export class PortScanHandler {
     const relayParentPid = process.ppid
 
     for (const socket of listeningSockets) {
+      signal?.throwIfAborted()
       const key = `${socket.host}:${socket.port}`
       if (seen.has(key)) {
         continue
@@ -72,7 +75,7 @@ export class PortScanHandler {
         continue
       }
 
-      const processName = pid != null ? await this.getProcessName(pid) : undefined
+      const processName = pid != null ? await this.getProcessName(pid, signal) : undefined
 
       if (processName === 'sshd') {
         continue
@@ -93,14 +96,18 @@ export class PortScanHandler {
   }
 
   private async readProcNet(
-    path: string
+    path: string,
+    signal?: AbortSignal
   ): Promise<{ port: number; host: string; inode: number }[]> {
+    signal?.throwIfAborted()
     let content: string
     try {
       content = await readFile(path, 'utf-8')
     } catch {
+      signal?.throwIfAborted()
       return []
     }
+    signal?.throwIfAborted()
 
     const lines = content.split('\n')
     const results: { port: number; host: string; inode: number }[] = []
@@ -133,7 +140,11 @@ export class PortScanHandler {
     return results
   }
 
-  private async mapInodesToPids(inodes: Set<number>): Promise<Map<number, number>> {
+  private async mapInodesToPids(
+    inodes: Set<number>,
+    signal?: AbortSignal
+  ): Promise<Map<number, number>> {
+    signal?.throwIfAborted()
     const result = new Map<number, number>()
     if (inodes.size === 0) {
       return result
@@ -143,27 +154,35 @@ export class PortScanHandler {
     try {
       pids = (await readdir('/proc')).filter((name) => /^\d+$/.test(name))
     } catch {
+      signal?.throwIfAborted()
       return result
     }
+    signal?.throwIfAborted()
 
     for (const pidStr of pids) {
+      signal?.throwIfAborted()
       const fdDir = `/proc/${pidStr}/fd`
       let fds: string[]
       try {
         fds = await readdir(fdDir)
       } catch {
+        signal?.throwIfAborted()
         continue
       }
+      signal?.throwIfAborted()
 
       const pid = Number.parseInt(pidStr, 10)
 
       for (const fd of fds) {
+        signal?.throwIfAborted()
         let link: string
         try {
           link = await readlink(`${fdDir}/${fd}`)
         } catch {
+          signal?.throwIfAborted()
           continue
         }
+        signal?.throwIfAborted()
 
         const match = link.match(/^socket:\[(\d+)\]$/)
         if (!match) {
@@ -180,9 +199,11 @@ export class PortScanHandler {
     return result
   }
 
-  private async getProcessName(pid: number): Promise<string | undefined> {
+  private async getProcessName(pid: number, signal?: AbortSignal): Promise<string | undefined> {
+    signal?.throwIfAborted()
     try {
       const cmdline = await readFile(`/proc/${pid}/cmdline`, 'utf-8')
+      signal?.throwIfAborted()
       if (!cmdline) {
         return undefined
       }
@@ -195,6 +216,7 @@ export class PortScanHandler {
       const parts = exe.split('/')
       return parts.at(-1)
     } catch {
+      signal?.throwIfAborted()
       return undefined
     }
   }

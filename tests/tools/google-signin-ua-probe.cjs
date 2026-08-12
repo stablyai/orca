@@ -9,12 +9,26 @@ const MODES = new Set([
   'electron-auth',
   'electron-fixed',
   'firefox-auth',
-  'firefox-fixed'
+  'firefox-fixed',
+  // Replicates the SHIPPED app exactly (setupClientHintsOverride +
+  // applyGoogleAuthUserAgent): Firefox UA is written to the WebContents on auth
+  // navs and to the request header only for auth-host URLs; every other request
+  // keeps whatever UA the WebContents carries. Logs incoming vs outgoing
+  // identity for ALL requests to expose cross-host mismatches during the flow.
+  'app-current',
+  // Same, but with the STA-3811 fix: the header layer strips client hints on any
+  // request already carrying the Firefox auth UA, regardless of destination host.
+  'app-fixed'
 ])
 const mode = process.argv.find((arg) => arg.startsWith('--mode='))?.slice('--mode='.length)
 if (!mode || !MODES.has(mode)) {
   throw new Error(`Expected --mode=${[...MODES].join('|')}`)
 }
+
+const headless = process.argv.includes('--headless')
+const exitAfterMs = Number(
+  process.argv.find((arg) => arg.startsWith('--exit-after-ms='))?.slice('--exit-after-ms='.length)
+)
 
 const profileRoot = mkdtempSync(join(tmpdir(), `orca-google-signin-${mode}-`))
 const partition = `persist:google-signin-${mode}`
@@ -56,6 +70,30 @@ function safeUrl(rawUrl) {
   } catch {
     return '<invalid>'
   }
+}
+
+function hostOf(rawUrl) {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase()
+  } catch {
+    return '<invalid>'
+  }
+}
+
+// A Firefox UA paired with any sec-ch-ua header is the cross-host tell we hunt:
+// real Firefox emits no client hints, so the two surfaces contradict each other.
+function detectUaHintMismatch(headers) {
+  const ua = headers['user-agent'] || ''
+  const isFirefox = /Firefox\/\d/.test(ua) && !/Chrome\//.test(ua)
+  const hasHints = Object.keys(headers).some((key) => key.startsWith('sec-ch-ua'))
+  if (isFirefox && hasHints) {
+    return 'firefox-ua-with-chrome-hints'
+  }
+  const isChrome = /Chrome\/\d/.test(ua)
+  if (isChrome && !hasHints) {
+    return 'chrome-ua-without-hints'
+  }
+  return null
 }
 
 function setHeader(headers, name, value) {
@@ -126,8 +164,47 @@ app.whenReady().then(async () => {
   identities.cleaned = cleanElectronUserAgent(identities.native)
   browserSession.setUserAgent(identityForUrl('about:blank', identities))
 
+  const isAppMode = mode === 'app-current' || mode === 'app-fixed'
+
   browserSession.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
+    const incoming = relevantHeaders(headers)
+
+    if (isAppMode) {
+      // Mirror setupClientHintsOverride: only auth-host URLs get the Firefox UA
+      // header + hint strip; every other request keeps its incoming UA (which is
+      // the WebContents UA — Firefox while the auth document is on screen).
+      if (isGoogleAuthUrl(details.url)) {
+        setHeader(headers, 'user-agent', identities.firefox)
+        removeClientHints(headers)
+      } else {
+        const currentUa = incoming['user-agent']
+        // STA-3811 fix: a request already carrying the Firefox auth UA came from
+        // the auth document; real Firefox sends no client hints, so strip them
+        // instead of rewriting to Chrome — keeping UA and hints one story.
+        if (mode === 'app-fixed' && currentUa === identities.firefox) {
+          removeClientHints(headers)
+        } else {
+          // Real setupClientHintsOverride builds Chrome hints once from the
+          // session's cleaned UA (a closure), never from the per-request UA.
+          applyChromeClientHints(headers, identities.cleaned)
+        }
+      }
+      const outgoing = relevantHeaders(headers)
+      const uaMismatch = detectUaHintMismatch(outgoing)
+      log('request', {
+        url: safeUrl(details.url),
+        host: hostOf(details.url),
+        resourceType: details.resourceType,
+        isAuthHost: isGoogleAuthUrl(details.url),
+        incoming,
+        outgoing,
+        uaHintMismatch: uaMismatch
+      })
+      callback({ requestHeaders: headers })
+      return
+    }
+
     const identity = identityForUrl(details.url, identities)
     setHeader(headers, 'user-agent', identity)
     if (identity === identities.firefox) {
@@ -144,8 +221,15 @@ app.whenReady().then(async () => {
     callback({ requestHeaders: headers })
   })
 
+  if (Number.isFinite(exitAfterMs) && exitAfterMs > 0) {
+    setTimeout(() => {
+      log('exit', { reason: 'timeout', exitAfterMs })
+      app.quit()
+    }, exitAfterMs)
+  }
+
   const window = new BrowserWindow({
-    show: true,
+    show: !headless,
     title: `Google sign-in UA probe: ${mode}`,
     width: 980,
     height: 840,
@@ -159,6 +243,24 @@ app.whenReady().then(async () => {
 
   window.webContents.on('did-start-navigation', (_event, url, _inPlace, isMainFrame) => {
     if (!isMainFrame) {
+      return
+    }
+    if (isAppMode) {
+      // Mirror applyGoogleAuthUserAgent: Firefox UA on auth navs, restore the
+      // cleaned session UA otherwise. This WebContents UA is what leaks onto
+      // cross-host subresource requests while the auth document is on screen.
+      const current = window.webContents.getUserAgent()
+      if (isGoogleAuthUrl(url)) {
+        if (current !== identities.firefox) {
+          window.webContents.setUserAgent(identities.firefox)
+        }
+      } else if (current === identities.firefox) {
+        window.webContents.setUserAgent(identities.cleaned)
+      }
+      log('main-frame-navigation', {
+        url: safeUrl(url),
+        appliedUserAgent: window.webContents.getUserAgent()
+      })
       return
     }
     const identity = identityForUrl(url, identities)

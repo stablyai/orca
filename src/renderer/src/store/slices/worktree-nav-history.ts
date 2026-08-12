@@ -43,7 +43,7 @@ export type WorktreeNavHistoryTaskDetailEntry =
 export type WorktreeNavHistoryViewEntry =
   | WorktreeNavHistorySimpleViewEntry
   | WorktreeNavHistoryTaskDetailEntry
-export type WorktreeNavHistoryEntry = string | WorktreeNavHistoryViewEntry
+export type WorktreeNavHistoryEntry = (string & {}) | WorktreeNavHistoryViewEntry
 
 export type WorktreeNavHistorySlice = {
   // Linear history, oldest -> newest.

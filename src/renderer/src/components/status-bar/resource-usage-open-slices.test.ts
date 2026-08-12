@@ -117,7 +117,16 @@ describe('resource usage open slices', () => {
   })
 
   it('gates repo and worktree slices only while closed', () => {
-    const repos = [{ id: 'repo-1', path: '/repo', kind: 'git' }] as AppState['repos']
+    const repos = [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git'
+      }
+    ] as AppState['repos']
     const row = worktree()
     const worktreesByRepo = {
       'repo-1': [row]

@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
-// Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron. See docs/design/agent-status-over-ssh.md §5.
+// Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron; parsing that drifts back into this file stops applying to SSH panes.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -92,6 +92,8 @@ type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   stateStartedAt: number
   /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
   restoredUnconfirmed?: true
+  /** User-hidden resume identity retained solely for destructive liveness checks. */
+  retainedForLiveness?: true
 }
 
 type NormalizedLocalHook = {
@@ -234,7 +236,7 @@ function dropHydratedIdleClaudeSubagents(
   }
 }
 
-// Why: the sole gate for keeping a providerSessionOnly row; shared so hydrate and relay-ingest can't drift.
+// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
 function isValidPiProviderSessionOnly(
   providerSession: AgentProviderSessionMetadata | undefined,
   agentType: AgentType | undefined
@@ -297,7 +299,15 @@ function sanitizeHydratedEntry(
   }
   const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
   const providerSessionOnly = record.providerSessionOnly === true
-  if (providerSessionOnly && !isValidPiProviderSessionOnly(providerSession, payload.agentType)) {
+  const retainedForLiveness = record.retainedForLiveness === true
+  const validRetainedIdentity = Boolean(
+    retainedForLiveness && providerSession && payload.agentType && payload.agentType !== 'unknown'
+  )
+  if (
+    providerSessionOnly &&
+    !isValidPiProviderSessionOnly(providerSession, payload.agentType) &&
+    !validRetainedIdentity
+  ) {
     return null
   }
   const source = isAgentHookSource(record.source) ? record.source : undefined
@@ -322,6 +332,7 @@ function sanitizeHydratedEntry(
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
     providerSession,
     providerSessionOnly: providerSessionOnly ? true : undefined,
+    retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
     receivedAt,
     stateStartedAt
@@ -1144,7 +1155,7 @@ export class AgentHookServer {
       this.connectionTimestampWatermarkById.set(payload.connectionId, now)
     }
     if (payload.providerSessionOnly) {
-      // Why: Pi session_start replaces stale turn state and survives replay, but must not emit prompt telemetry or a fabricated status.
+      // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
       onAccepted?.()
       const enriched = this.attachStatusTiming(payload, now)
       this.clearAssistantMessageRetry(enriched.paneKey)
@@ -2229,8 +2240,21 @@ export class AgentHookServer {
 
   /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
   dropStatusEntry(paneKey: string): void {
-    if (!this.deleteStatusEntry(paneKey, { preserveAuthority: true })) {
+    const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+    if (!deleted) {
       return
+    }
+    if (
+      deleted.providerSession &&
+      deleted.payload.agentType &&
+      deleted.payload.agentType !== 'unknown'
+    ) {
+      const retained: EnrichedAgentHookEventPayload = {
+        ...deleted,
+        providerSessionOnly: true,
+        retainedForLiveness: true
+      }
+      this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()

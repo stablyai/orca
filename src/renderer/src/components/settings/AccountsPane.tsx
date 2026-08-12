@@ -19,6 +19,7 @@ import { Label } from '../ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Separator } from '../ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { Switch } from '../ui/switch'
 import {
   AlertTriangle,
   ExternalLink,
@@ -382,12 +383,12 @@ export function AccountsPane({
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
   const [codexAction, setCodexAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<
-    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string | 'system'}`
+    'idle' | 'adding' | `reauth:${string}` | `remove:${string}` | `select:${string}`
   >('idle')
   // Why: capture the account's runtime slot when the dialog opens; the roster
   // can change underneath an open dialog and lose the slot to diff for restarts.
@@ -1555,25 +1556,19 @@ export function AccountsPane({
               )}
             </p>
           </div>
-          <button
-            role="switch"
-            aria-checked={settings.geminiCliOAuthEnabled}
-            onClick={() => {
+          <Switch
+            aria-label={translate(
+              'auto.components.settings.AccountsPane.96f3649526',
+              'Use Gemini CLI credentials (experimental)'
+            )}
+            checked={settings.geminiCliOAuthEnabled}
+            onCheckedChange={(checked) => {
               recordFeatureInteraction('usage-tracking')
               updateSettings({
-                geminiCliOAuthEnabled: !settings.geminiCliOAuthEnabled
+                geminiCliOAuthEnabled: checked
               })
             }}
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.geminiCliOAuthEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-            }`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.geminiCliOAuthEnabled ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          />
         </SearchableSetting>
       </section>
     ) : null,

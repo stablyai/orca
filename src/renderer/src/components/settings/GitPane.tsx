@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings, SourceControlGroupOrder } from '../../../../shared/types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
+import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from '../../../../shared/source-control-group-order'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { getGitPaneSearchEntries } from './git-search'
 import { SearchableSetting } from './SearchableSetting'
@@ -19,6 +21,7 @@ import {
   getKeepLocalMainUpToDateTitle
 } from './keep-local-main-up-to-date-setting'
 import { translate } from '@/i18n/i18n'
+import { SettingsRow, SettingsSegmentedControl } from './SettingsFormControls'
 
 export { getGitPaneSearchEntries }
 
@@ -37,6 +40,14 @@ const KEEP_LOCAL_MAIN_UP_TO_DATE_KEYWORDS = [
   'fresh base',
   'safely',
   'worktree'
+]
+const SOURCE_CONTROL_GROUP_ORDER_KEYWORDS = [
+  'group order',
+  'changes first',
+  'staged first',
+  'untracked first',
+  'source control',
+  'git changes'
 ]
 
 export function shouldShowAutoRenameBranchSetting(
@@ -58,6 +69,68 @@ type GitPaneProps = {
   onBranchPromptDirtyChange?: (dirty: boolean) => void
   branchPromptDiscardSignal?: number
   settingsSearchQuery?: string
+}
+
+export function SourceControlGroupOrderSetting({
+  settings,
+  updateSettings
+}: {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+}): React.JSX.Element {
+  const value = settings.sourceControlGroupOrder ?? DEFAULT_SOURCE_CONTROL_GROUP_ORDER
+  const title = translate(
+    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
+    'Source Control Group Order'
+  )
+  const description = translate(
+    'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
+    'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+  )
+
+  return (
+    <SearchableSetting
+      title={title}
+      description={description}
+      keywords={SOURCE_CONTROL_GROUP_ORDER_KEYWORDS}
+      className="max-w-none"
+    >
+      <SettingsRow
+        label={title}
+        description={description}
+        alignTop
+        control={
+          <SettingsSegmentedControl<SourceControlGroupOrder>
+            value={value}
+            onChange={(nextValue) => {
+              if (nextValue !== value) {
+                void updateSettings({ sourceControlGroupOrder: nextValue })
+              }
+            }}
+            ariaLabel={title}
+            size="sm"
+            options={[
+              {
+                value: 'changes-first',
+                label: translate('auto.components.settings.GitPane.changesFirst', 'Changes first')
+              },
+              {
+                value: 'staged-first',
+                label: translate('auto.components.settings.GitPane.stagedFirst', 'Staged first')
+              },
+              {
+                value: 'untracked-first',
+                label: translate(
+                  'auto.components.settings.GitPane.untrackedFirst',
+                  'Untracked first'
+                )
+              }
+            ]}
+          />
+        }
+      />
+    </SearchableSetting>
+  )
 }
 
 export function GitPane({
@@ -203,27 +276,33 @@ export function GitPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.refreshLocalBaseRefOnWorktreeCreate}
-          onClick={() =>
+        <Switch
+          aria-label={keepLocalMainUpToDateTitle}
+          checked={settings.refreshLocalBaseRefOnWorktreeCreate}
+          onCheckedChange={(checked) =>
             updateSettings({
-              refreshLocalBaseRefOnWorktreeCreate: !settings.refreshLocalBaseRefOnWorktreeCreate
+              refreshLocalBaseRefOnWorktreeCreate: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.refreshLocalBaseRefOnWorktreeCreate
-              ? 'bg-foreground'
-              : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.refreshLocalBaseRefOnWorktreeCreate ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </SearchableSetting>
+    ) : null,
+    matchesSettingsSearch(searchQuery, {
+      title: translate(
+        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
+        'Source Control Group Order'
+      ),
+      description: translate(
+        'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
+        'Choose whether Changes, Staged Changes, or Untracked Files appear first in Source Control.'
+      ),
+      keywords: SOURCE_CONTROL_GROUP_ORDER_KEYWORDS
+    }) ? (
+      <SourceControlGroupOrderSetting
+        key="source-control-group-order"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null,
     compareAgainstUpstreamMatchesSearch(searchQuery) ? (
       <CompareAgainstUpstreamSetting
@@ -282,24 +361,15 @@ export function GitPane({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={settings.enableGitHubAttribution}
-          onClick={() =>
+        <Switch
+          aria-label={translate('auto.components.settings.GitPane.e02ea23a32', 'Orca Attribution')}
+          checked={settings.enableGitHubAttribution}
+          onCheckedChange={(checked) =>
             updateSettings({
-              enableGitHubAttribution: !settings.enableGitHubAttribution
+              enableGitHubAttribution: checked
             })
           }
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            settings.enableGitHubAttribution ? 'bg-foreground' : 'bg-muted-foreground/30'
-          }`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              settings.enableGitHubAttribution ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+        />
       </SearchableSetting>
     ) : null
   ].filter(Boolean)

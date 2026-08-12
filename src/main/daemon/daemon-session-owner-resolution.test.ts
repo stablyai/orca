@@ -21,31 +21,103 @@ function provider(
 }
 
 describe('DaemonSessionOwnerResolver', () => {
-  it('coalesces concurrent all-provider inventories', async () => {
-    let release!: () => void
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
+  it('coalesces complete multi-provider absence without dispatching an attach', async () => {
+    let releaseFallback!: (processes: PtyProcessInfo[]) => void
+    let releaseCurrent!: (processes: PtyProcessInfo[]) => void
+    let releaseLegacy!: (processes: PtyProcessInfo[]) => void
+    const fallbackGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseFallback = resolve
     })
-    const firstInventory = vi.fn(async () => {
-      await gate
-      return []
+    const currentGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseCurrent = resolve
     })
-    const secondInventory = vi.fn(async () => {
-      await gate
-      return []
+    const legacyGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseLegacy = resolve
     })
-    const first = provider(firstInventory)
-    const second = provider(secondInventory)
-    const resolver = new DaemonSessionOwnerResolver([first, second], new Map())
+    const fallbackInventory = vi.fn(() => fallbackGate)
+    const currentInventory = vi.fn(() => currentGate)
+    const legacyInventory = vi.fn(() => legacyGate)
+    const fallback = provider(fallbackInventory)
+    const current = provider(currentInventory)
+    const legacy = provider(legacyInventory)
+    const resolver = new DaemonSessionOwnerResolver([fallback, current, legacy], new Map())
 
-    const resolutions = Promise.all([resolver.resolve('one'), resolver.resolve('two')])
-    await vi.waitFor(() => expect(firstInventory).toHaveBeenCalledOnce())
-    expect(secondInventory).toHaveBeenCalledOnce()
-    release()
+    const resolutions = [
+      resolver.spawnAttachOnly({
+        sessionId: 'pty-persisted-alpha',
+        expectedIncarnationId: 'incarnation-persisted-alpha',
+        attachOnly: true,
+        cols: 80,
+        rows: 24
+      }),
+      resolver.spawnAttachOnly({
+        sessionId: 'pty-persisted-beta',
+        expectedIncarnationId: 'incarnation-persisted-beta',
+        attachOnly: true,
+        cols: 80,
+        rows: 24
+      })
+    ]
+    let settled = 0
+    for (const resolution of resolutions) {
+      void resolution.then(
+        () => {
+          settled += 1
+        },
+        () => {
+          settled += 1
+        }
+      )
+    }
 
-    await expect(resolutions).resolves.toEqual([{ kind: 'unknown' }, { kind: 'unknown' }])
-    expect(firstInventory).toHaveBeenCalledOnce()
-    expect(secondInventory).toHaveBeenCalledOnce()
+    expect(fallbackInventory).toHaveBeenCalledOnce()
+    expect(currentInventory).toHaveBeenCalledOnce()
+    expect(legacyInventory).toHaveBeenCalledOnce()
+    releaseFallback([])
+    releaseCurrent([])
+    for (let iteration = 0; iteration < 10; iteration += 1) {
+      await Promise.resolve()
+    }
+    expect(settled).toBe(0)
+    expect(fallback.spawn).not.toHaveBeenCalled()
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
+    releaseLegacy([])
+
+    const results = await Promise.allSettled(resolutions)
+    expect(results).toEqual([
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.any(SessionNotFoundError)
+      }),
+      expect.objectContaining({
+        status: 'rejected',
+        reason: expect.any(SessionNotFoundError)
+      })
+    ])
+    expect(settled).toBe(2)
+    expect(fallbackInventory).toHaveBeenCalledOnce()
+    expect(currentInventory).toHaveBeenCalledOnce()
+    expect(legacyInventory).toHaveBeenCalledOnce()
+    expect(fallback.spawn).not.toHaveBeenCalled()
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
+
+    await expect(
+      resolver.spawnAttachOnly({
+        sessionId: 'pty-persisted-alpha',
+        expectedIncarnationId: 'incarnation-persisted-alpha',
+        attachOnly: true,
+        cols: 80,
+        rows: 24
+      })
+    ).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(fallbackInventory).toHaveBeenCalledTimes(2)
+    expect(currentInventory).toHaveBeenCalledTimes(2)
+    expect(legacyInventory).toHaveBeenCalledTimes(2)
+    expect(fallback.spawn).not.toHaveBeenCalled()
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
   })
 
   it('bounds restore inventory requests across many panes and daemon generations', async () => {
@@ -312,6 +384,10 @@ describe('DaemonSessionOwnerResolver', () => {
     const resolver = new DaemonSessionOwnerResolver([first, second], new Map())
 
     await expect(resolver.resolve('session')).resolves.toEqual({ kind: 'unknown' })
+    expect(first.listProcesses).toHaveBeenCalledOnce()
+    expect(second.listProcesses).toHaveBeenCalledOnce()
+    expect(first.spawn).not.toHaveBeenCalled()
+    expect(second.spawn).not.toHaveBeenCalled()
   })
 
   it('reports confirmed absence from a sole owner', async () => {
@@ -337,19 +413,19 @@ describe('DaemonSessionOwnerResolver', () => {
   })
 
   it('preserves an unresolved owner when any provider inventory fails', async () => {
-    const resolver = new DaemonSessionOwnerResolver(
-      [
-        provider(async () => []),
-        provider(async () => {
-          throw new Error('offline')
-        })
-      ],
-      new Map()
-    )
+    const reachable = provider(async () => [])
+    const unreachable = provider(async () => {
+      throw new Error('offline')
+    })
+    const resolver = new DaemonSessionOwnerResolver([reachable, unreachable], new Map())
 
     await expect(
       resolver.spawnAttachOnly({ sessionId: 'missing', attachOnly: true, cols: 80, rows: 24 })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    expect(reachable.listProcesses).toHaveBeenCalledOnce()
+    expect(unreachable.listProcesses).toHaveBeenCalledOnce()
+    expect(reachable.spawn).not.toHaveBeenCalled()
+    expect(unreachable.spawn).not.toHaveBeenCalled()
   })
 
   it('does not turn a raced owner refusal into absence while another provider is unresolved', async () => {
@@ -372,6 +448,8 @@ describe('DaemonSessionOwnerResolver', () => {
     await expect(
       resolver.spawnAttachOnly({ sessionId: 'session', attachOnly: true, cols: 80, rows: 24 })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    expect(candidate.listProcesses).toHaveBeenCalledOnce()
+    expect(candidate.spawn).not.toHaveBeenCalled()
   })
 
   it('does not turn a post-inventory owner refusal into aggregate absence', async () => {
@@ -389,6 +467,8 @@ describe('DaemonSessionOwnerResolver', () => {
     await expect(
       resolver.spawnAttachOnly({ sessionId: 'session', attachOnly: true, cols: 80, rows: 24 })
     ).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    expect(candidate.listProcesses).toHaveBeenCalledOnce()
+    expect(candidate.spawn).toHaveBeenCalledOnce()
   })
 
   it('pre-routes every uniquely inventoried session for serialized restores', async () => {
@@ -427,6 +507,52 @@ describe('DaemonSessionOwnerResolver', () => {
     await expect(resolution).resolves.toEqual({ kind: 'unknown' })
     await resolver.resolve('session')
     expect(inventory).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed across identity replacement then confirms absence on retry', async () => {
+    let releaseCurrent!: (processes: PtyProcessInfo[]) => void
+    let releaseLegacy!: (processes: PtyProcessInfo[]) => void
+    const currentGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseCurrent = resolve
+    })
+    const legacyGate = new Promise<PtyProcessInfo[]>((resolve) => {
+      releaseLegacy = resolve
+    })
+    const currentInventory = vi
+      .fn<() => Promise<PtyProcessInfo[]>>()
+      .mockReturnValueOnce(currentGate)
+      .mockResolvedValueOnce([])
+    const legacyInventory = vi
+      .fn<() => Promise<PtyProcessInfo[]>>()
+      .mockReturnValueOnce(legacyGate)
+      .mockResolvedValueOnce([])
+    const current = provider(currentInventory)
+    const legacy = provider(legacyInventory)
+    const resolver = new DaemonSessionOwnerResolver([current, legacy], new Map())
+    const attach = {
+      sessionId: 'pty-persisted-after-identity-change',
+      expectedIncarnationId: 'incarnation-before-identity-change',
+      attachOnly: true,
+      cols: 80,
+      rows: 24
+    } as const
+
+    const staleAttempt = resolver.spawnAttachOnly(attach)
+    expect(currentInventory).toHaveBeenCalledOnce()
+    expect(legacyInventory).toHaveBeenCalledOnce()
+    resolver.invalidateProvider(current)
+    releaseCurrent([])
+    releaseLegacy([])
+
+    await expect(staleAttempt).rejects.toBeInstanceOf(TerminalSessionOwnerUnverifiedError)
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
+
+    await expect(resolver.spawnAttachOnly(attach)).rejects.toBeInstanceOf(SessionNotFoundError)
+    expect(currentInventory).toHaveBeenCalledTimes(2)
+    expect(legacyInventory).toHaveBeenCalledTimes(2)
+    expect(current.spawn).not.toHaveBeenCalled()
+    expect(legacy.spawn).not.toHaveBeenCalled()
   })
 
   it('restores a proven route when identity changes during exact reattach', async () => {

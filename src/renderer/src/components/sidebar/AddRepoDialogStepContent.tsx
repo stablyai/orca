@@ -46,6 +46,7 @@ type AddRepoDialogStepContentProps = {
   hostSelector?: ReactNode
   showRemoteAction?: boolean
   canCreateProject?: boolean
+  actionsDisabled?: boolean
   manualCreateParentEntry?: boolean
   browseHostKind?: 'local' | 'ssh' | 'runtime'
   createDefaultParent: string
@@ -115,6 +116,7 @@ export function AddRepoDialogStepContent({
   hostSelector,
   showRemoteAction = true,
   canCreateProject = true,
+  actionsDisabled = false,
   manualCreateParentEntry = isRuntimeEnvironmentActive,
   browseHostKind = 'local',
   createDefaultParent,
@@ -159,6 +161,7 @@ export function AddRepoDialogStepContent({
         hostSelector={hostSelector}
         showRemoteAction={showRemoteAction}
         canCreateProject={canCreateProject}
+        actionsDisabled={actionsDisabled}
         browseHostKind={browseHostKind}
         onBrowse={onBrowse}
         onOpenCloneStep={onOpenCloneStep}

@@ -132,6 +132,17 @@ describe('folderWorkspaceToWorktree', () => {
     })
   })
 
+  it('projects runtime ownership from the folder execution host', () => {
+    const worktree = folderWorkspaceToWorktree(
+      makeFolderWorkspace({ executionHostId: 'runtime:shared%20server' })
+    )
+
+    expect(worktree).toMatchObject({
+      hostId: 'runtime:shared%20server',
+      runtimeOwnerEnvironmentId: 'shared server'
+    })
+  })
+
   it('keeps review-style tasks attached only to the folder workspace record', () => {
     const githubPr = folderWorkspaceToWorktree(
       makeFolderWorkspace({

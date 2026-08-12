@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/types'
 import { Label } from '../ui/label'
+import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
@@ -86,23 +87,13 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalPet}
-              onClick={() => {
-                updateSettings({ experimentalPet: !settings.experimentalPet })
+            <Switch
+              aria-label={translate('auto.components.settings.ExperimentalPane.dd6f0a1d45', 'Pet')}
+              checked={settings.experimentalPet}
+              onCheckedChange={(checked) => {
+                updateSettings({ experimentalPet: checked })
               }}
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalPet ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalPet ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            />
           </div>
         </SearchableSetting>
       ) : null}
@@ -129,25 +120,18 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalActivity}
-              onClick={() =>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.ExperimentalPane.a05bcdaf57',
+                'Agents View'
+              )}
+              checked={settings.experimentalActivity}
+              onCheckedChange={(checked) =>
                 updateSettings({
-                  experimentalActivity: !settings.experimentalActivity
+                  experimentalActivity: checked
                 })
               }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalActivity ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalActivity ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            />
           </div>
         </SearchableSetting>
       ) : null}
@@ -188,25 +172,18 @@ export function ExperimentalPane({
                 )}
               </p>
             </div>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={settings.experimentalTerminalAttention}
-              onClick={() =>
+            <Switch
+              aria-label={translate(
+                'auto.components.settings.ExperimentalPane.ec897e8d89',
+                'Terminal attention'
+              )}
+              checked={settings.experimentalTerminalAttention}
+              onCheckedChange={(checked) =>
                 updateSettings({
-                  experimentalTerminalAttention: !settings.experimentalTerminalAttention
+                  experimentalTerminalAttention: checked
                 })
               }
-              className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-                settings.experimentalTerminalAttention ? 'bg-foreground' : 'bg-muted-foreground/30'
-              }`}
-            >
-              <span
-                className={`inline-block h-3.5 w-3.5 transform rounded-full bg-background shadow-sm transition-transform ${
-                  settings.experimentalTerminalAttention ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+            />
           </div>
         </SearchableSetting>
       ) : null}

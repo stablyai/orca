@@ -1,6 +1,7 @@
 type TerminalNativeOnlyShortcutKeyEvent = {
   key: string
   code?: string
+  repeat?: boolean
 }
 
 type TerminalNativeOnlyShortcutCompanionEvent = TerminalNativeOnlyShortcutKeyEvent & {
@@ -107,7 +108,9 @@ export function createTerminalNativeOnlyShortcutTracker(): TerminalNativeOnlySho
     prepareKeyDown: (event) => {
       // Why: replace a lost-keyup entry for this key without disarming other
       // held native-only keys during normal key rollover.
-      pendingKeys.delete(getTerminalShortcutKeyIdentity(event))
+      if (!event.repeat) {
+        pendingKeys.delete(getTerminalShortcutKeyIdentity(event))
+      }
     },
     armKeyDown: (event) => {
       pendingKeys.set(getTerminalShortcutKeyIdentity(event), event.key)

@@ -179,8 +179,8 @@ describe('commandExecFileAsync Windows command shims', () => {
 describe('runner execFile timeout handling', () => {
   beforeEach(() => {
     execFileMock.mockReset()
-    execFileSyncMock.mockReset()
     spawnMock.mockReset()
+    execFileSyncMock.mockReset()
     vi.useFakeTimers()
   })
 
@@ -227,6 +227,22 @@ describe('runner execFile timeout handling', () => {
     })
     const rejection = expect(promise).rejects.toThrow('gh timed out.')
     await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('kills an active gh execution when its caller aborts', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+
+    controller.abort()
 
     await rejection
     expect(child.kill).toHaveBeenCalled()

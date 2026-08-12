@@ -19,7 +19,7 @@ export type LinearMcpIssueListRequest = {
   createdAt?: string
   updatedAt?: string
   includeArchived?: boolean
-  workspaceId?: string | 'all'
+  workspaceId?: (string & {}) | 'all'
 }
 
 export type LinearMcpIssueListResult = {
@@ -30,7 +30,7 @@ export type LinearMcpIssueListResult = {
     hasMore: boolean
     nextCursor?: string
     orderBy: 'createdAt' | 'updatedAt'
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     partial: boolean
     workspaceErrors: {
       workspace: LinearWorkspaceCandidate

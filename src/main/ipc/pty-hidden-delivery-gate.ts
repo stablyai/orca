@@ -18,8 +18,7 @@ export type HiddenPtyDeliveryGateSettings = Pick<
 
 const hiddenRendererPtys = new Set<string>()
 // Why: sidecar consumers (paste-draft pacing, background agent launches,
-// automation observers, and the kill-switch-off parked 2031 responder) need
-// live bytes even while no visible view exists. Any
+// automation observers) need live bytes even while no visible view exists. Any
 // registered interest suppresses the gate for that PTY.
 const deliveryInterestRendererPtys = new Set<string>()
 // Why: reveal must restore from the model only when bytes were actually

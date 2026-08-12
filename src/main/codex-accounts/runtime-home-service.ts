@@ -41,7 +41,6 @@ import {
 import {
   getOrcaManagedCodexHomePath,
   getOrcaUserDataPath,
-  getCodexSessionBackfillStateDirPath,
   getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncCodexGlobalInstructionsIntoManagedHome,
@@ -68,7 +67,11 @@ import {
 } from './runtime-selection'
 import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
-import { invalidateCodexSessionBackfillMarker } from '../codex/codex-session-backfill-marker'
+import {
+  hasCompletedCodexSessionBackfillMarker,
+  invalidateCodexSessionBackfillMarker
+} from '../codex/codex-session-backfill-marker'
+import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
 import {
   codexAuthCouldBelongToManagedAccount,
@@ -80,6 +83,7 @@ import { migrateLegacySharedAuthToPerAccountHome } from './legacy-shared-auth-mi
 import { CodexCredentialAbsenceGrace } from './codex-credential-absence-grace'
 import { syncLegacySharedCodexConfigForRetainedPanes } from './legacy-shared-config-compatibility'
 import {
+  getCodexPaneAccount,
   hasRecordedLegacySharedCodexPane,
   type CodexPaneHomeRoute
 } from '../codex/codex-pane-account-registry'
@@ -181,6 +185,9 @@ export class CodexRuntimeHomeService {
   private sharedAuthRefreshBlockedByManagedTransition = false
   // Why: transient auth.json read/parse failures must not deselect an account.
   private readonly credentialAbsenceGrace = new CodexCredentialAbsenceGrace()
+  private hostSystemDefaultSessionMigrationPending = false
+  private pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
+  private pendingHostSystemDefaultSessionMigrationTarget: string | null = null
 
   constructor(private readonly store: Store) {
     this.safeRecoverInterruptedRuntimeAuthOperation()
@@ -251,6 +258,53 @@ export class CodexRuntimeHomeService {
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
     return this.getRuntimeHomePath()
+  }
+
+  beginHostSystemDefaultSessionMigrationLaunch(
+    codexHomePath: string | null,
+    options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv } = {}
+  ): boolean | null {
+    if (
+      !this.isHostSystemDefaultSessionMigrationEligible() ||
+      (!codexHomePath && !options.reattached) ||
+      (codexHomePath &&
+        normalizeRuntimePathForComparison(codexHomePath) !==
+          normalizeRuntimePathForComparison(this.getRuntimeHomePath()))
+    ) {
+      return null
+    }
+    // Why: an older pass can clear launch preparation while PTY spawn awaits recovery.
+    return this.invalidateBackfillAfterManagedSystemDefaultLaunch(
+      options.reattached && !codexHomePath ? undefined : options.launchEnv
+    )
+  }
+
+  isHostSystemDefaultSessionMigrationEligible(): boolean {
+    return (
+      normalizeCodexRuntimeSelection(this.store.getSettings()).host === null &&
+      !hasCustomCodexHomeOverrideForLaunch()
+    )
+  }
+
+  prepareHostSystemDefaultSessionMigrationPass(): boolean {
+    const paths = resolveCodexSessionBackfillPaths(
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
+    if (
+      this.hostSystemDefaultSessionMigrationPending &&
+      this.pendingHostSystemDefaultSessionMigrationTarget !== paths.systemSessionsRoot
+    ) {
+      this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
+      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+    }
+    invalidateCodexSessionBackfillMarker(paths.markerPath)
+    return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
+  }
+
+  finishHostSystemDefaultSessionMigrationPass(): void {
+    this.hostSystemDefaultSessionMigrationPending = false
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
+    this.pendingHostSystemDefaultSessionMigrationTarget = null
   }
 
   // Why: a managed HOST account runs against its own self-contained CODEX_HOME
@@ -404,18 +458,26 @@ export class CodexRuntimeHomeService {
     this.lastHostAccountUsedSelfContainedHome = false
   }
 
-  private invalidateBackfillAfterManagedSystemDefaultLaunch(launchEnv?: NodeJS.ProcessEnv): void {
+  private invalidateBackfillAfterManagedSystemDefaultLaunch(
+    launchEnv?: NodeJS.ProcessEnv
+  ): boolean | null {
     const settings = this.store.getSettings()
-    if (normalizeCodexRuntimeSelection(settings).host !== null) {
-      return
+    if (
+      normalizeCodexRuntimeSelection(settings).host !== null ||
+      hasCustomCodexHomeOverrideForLaunch(launchEnv)
+    ) {
+      return null
     }
-    // Why: reached only when the real-home lane is selected but its gate is off,
-    // so the launch runs on the mirror and the backfill marker is stale.
-    if (this.isHostSystemDefaultRealHomeSelected(launchEnv)) {
-      invalidateCodexSessionBackfillMarker(
-        join(getCodexSessionBackfillStateDirPath(), 'backfill-complete.json')
+    if (!this.hostSystemDefaultSessionMigrationPending) {
+      const paths = resolveCodexSessionBackfillPaths(
+        resolveHostCodexSessionSourceHome(this.store.getSettings())
       )
+      this.pendingHostSystemDefaultSessionMigrationNeedsFullScan =
+        !hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)
+      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+      this.hostSystemDefaultSessionMigrationPending = true
     }
+    return this.prepareHostSystemDefaultSessionMigrationPass()
   }
 
   private startWslSessionBridgeForLaunch(
@@ -482,6 +544,40 @@ export class CodexRuntimeHomeService {
       return 'account-home'
     }
     return this.isHostSystemDefaultRealHome() ? 'real-home' : 'shared-home'
+  }
+
+  getRetainedHostCodexHookHomePaths(ptyIds: readonly string[]): string[] {
+    const settings = this.store.getSettings()
+    const homes = new Map<string, string>()
+    for (const ptyId of ptyIds) {
+      const record = getCodexPaneAccount(ptyId)
+      if (!record || record.selectionKey !== 'host') {
+        continue
+      }
+      if (
+        record.homeRoute === undefined ||
+        record.homeRoute === 'shared-home' ||
+        record.homeRoute === 'custom-home'
+      ) {
+        const homePath = this.getRuntimeHomePath()
+        homes.set(normalizeRuntimePathForComparison(homePath), homePath)
+        continue
+      }
+      if (record.homeRoute !== 'account-home' || !record.accountId) {
+        continue
+      }
+      const account = settings.codexManagedAccounts.find(
+        (candidate) => candidate.id === record.accountId
+      )
+      if (!account || this.getWslManagedHomePath(account)) {
+        continue
+      }
+      const homePath = this.getTrustedSelfContainedManagedHomePath(account)
+      if (homePath) {
+        homes.set(normalizeRuntimePathForComparison(homePath), homePath)
+      }
+    }
+    return [...homes.values()]
   }
 
   // Why: the real-home hook installer flips this gate off when the trust-grant

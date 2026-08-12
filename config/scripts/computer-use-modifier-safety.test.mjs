@@ -11,7 +11,7 @@ function source(path) {
 function sourceBetween(contents, startMarker, endMarker) {
   const start = contents.indexOf(startMarker)
   const end = contents.indexOf(endMarker, start + startMarker.length)
-  if (start < 0 || end < 0) {
+  if (start === -1 || end === -1) {
     throw new Error(`Missing source boundary: ${startMarker} → ${endMarker}`)
   }
   return contents.slice(start, end)
@@ -30,7 +30,8 @@ describe('computer-use modifier safety', () => {
     expect(mouseInput).toContain('event.flags = flags')
     // Every click event flows through the shared delivery plan and carries
     // the modifier flags on the mouse event itself.
-    expect(clickInput).toContain('SyntheticMouseClickDelivery.steps(clickCount: count)')
+    expect(clickInput).toContain('SyntheticMouseClickDelivery.deliver(')
+    expect(clickInput).toContain('currentSyntheticClickRecipient(')
     expect(clickInput).toContain('event.flags = flags')
     expect(clickInput).not.toContain('down: true')
   })

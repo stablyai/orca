@@ -938,7 +938,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (activePageId) {
       const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
       const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
-      const targetPage = activePageIndex >= 0 ? restoredPages[activePageIndex] : null
+      const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
       if (targetPage && targetPage.id !== restoredPages[0]?.id) {
         get().setActiveBrowserPage(restored.id, targetPage.id)
       }
@@ -1651,21 +1651,25 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         }
         const hydratedTabs: BrowserWorkspace[] = []
         for (const tab of tabs) {
-          const persistedPages = persistedPagesByWorkspace[tab.id] ?? [
-            {
-              id: createBrowserUuid(),
-              workspaceId: tab.id,
-              worktreeId,
-              url: normalizeUrl(tab.url),
-              title: tab.title,
-              loading: false,
-              faviconUrl: tab.faviconUrl ?? null,
-              canGoBack: tab.canGoBack,
-              canGoForward: tab.canGoForward,
-              loadError: tab.loadError ?? null,
-              createdAt: tab.createdAt
-            } satisfies BrowserPage
-          ]
+          // Salvage can leave an empty page array; hydrate it like a missing array.
+          const storedPages = persistedPagesByWorkspace[tab.id]
+          const persistedPages = storedPages?.length
+            ? storedPages
+            : [
+                {
+                  id: createBrowserUuid(),
+                  workspaceId: tab.id,
+                  worktreeId,
+                  url: normalizeUrl(tab.url),
+                  title: tab.title,
+                  loading: false,
+                  faviconUrl: tab.faviconUrl ?? null,
+                  canGoBack: tab.canGoBack,
+                  canGoForward: tab.canGoForward,
+                  loadError: tab.loadError ?? null,
+                  createdAt: tab.createdAt
+                } satisfies BrowserPage
+              ]
           const nextPages = persistedPages.map((page) => {
             // Why: in-memory hydration callers can bypass the persistence schema's unknown-key stripping.
             const { allowWindowClose: _legacyAllowWindowClose, ...persistedPage } =

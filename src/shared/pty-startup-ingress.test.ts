@@ -908,7 +908,7 @@ describe('PtyStartupIngress', () => {
     expect(writes).toEqual([FOREGROUND_REPLY])
     // Bounded in wall-clock, not in probes: under fork contention each probe takes
     // longer and the budget buys fewer of them, instead of the wait growing.
-    expect(echoProbe.calls).toBeLessThanOrEqual(11)
+    expect(echoProbe.calls).toBeLessThanOrEqual(10)
     ingress.accept(POSIX_COOKED_ECHOES[0]?.(FOREGROUND_REPLY) ?? '')
     ingress.drainAndClose()
     expect(visible(emissions)).toBe('')

@@ -19,6 +19,11 @@ import {
   type GitExec
 } from './git-handler-ops'
 import {
+  branchDiffEntryAtPinnedOids,
+  isFullGitObjectId,
+  parseOptionalBranchDiffHeadOid
+} from './git-handler-branch-diff-ops'
+import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
   computeSubmoduleRangeEntries,
@@ -1148,6 +1153,7 @@ export class GitHandler {
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+    const headOid = parseOptionalBranchDiffHeadOid(params)
     const options = {
       includePatch: params.includePatch as boolean | undefined,
       filePath: params.filePath as string | undefined,
@@ -1158,18 +1164,36 @@ export class GitHandler {
         'branchDiff',
         worktreePath,
         baseRef,
+        headOid ?? null,
         options.includePatch ?? null,
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () =>
-        branchDiffEntries(
+      () => {
+        if (
+          headOid &&
+          isFullGitObjectId(baseRef) &&
+          options.includePatch === true &&
+          typeof options.filePath === 'string' &&
+          options.filePath.length > 0
+        ) {
+          return branchDiffEntryAtPinnedOids(
+            this.gitBuffer.bind(this),
+            worktreePath,
+            baseRef,
+            headOid,
+            options.filePath,
+            options.oldPath
+          )
+        }
+        return branchDiffEntries(
           this.git.bind(this),
           this.gitBuffer.bind(this),
           worktreePath,
           baseRef,
           options
         )
+      }
     )
     return this.maybeStreamResponse(result, params, context)
   }

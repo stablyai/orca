@@ -9,12 +9,13 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   HERMES_AGENT_NAME_RE,
+  QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
   containsAgentName,
+  containsAgentSpinnerGlyph,
   containsAny,
-  containsBrailleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
@@ -34,6 +35,7 @@ export function clearWorkingIndicators(title: string): string {
   cleaned = cleaned.replace(GEMINI_WORKING, '')
   cleaned = cleaned.replace(GEMINI_SILENT_WORKING, '')
   cleaned = cleaned.replace(BRAILLE_SPINNER_RE, '')
+  cleaned = cleaned.replace(QUARTER_CIRCLE_SPINNER_RE, '')
   if (cleaned.startsWith('. ')) {
     cleaned = cleaned.slice(2)
   }
@@ -56,7 +58,7 @@ export function createAgentStatusTracker(
 ): {
   handleTitle: (title: string) => void
   seedTitle: (title: string) => void
-  restoreLastExit: () => void
+  restoreLastExit: () => AgentStatus | null
   reset: () => void
 } {
   // Why: trackers restored mid-session need a last-known status without firing
@@ -92,11 +94,13 @@ export function createAgentStatusTracker(
       lastStatus = detectAgentStatusFromTitle(title)
       restorableExitStatus = null
     },
-    restoreLastExit(): void {
-      if (lastStatus === null && restorableExitStatus !== null) {
-        lastStatus = restorableExitStatus
+    restoreLastExit(): AgentStatus | null {
+      const restoredStatus = lastStatus === null ? restorableExitStatus : null
+      if (restoredStatus !== null) {
+        lastStatus = restoredStatus
       }
       restorableExitStatus = null
+      return restoredStatus
     },
     reset(): void {
       lastStatus = null
@@ -179,7 +183,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (isPiTerminalTitle(title)) {
     return 'idle'
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     return 'working'
   }
 

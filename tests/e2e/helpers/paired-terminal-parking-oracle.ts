@@ -12,6 +12,7 @@ import {
 import { expect } from './orca-app'
 import { verifyHiddenPairedTerminalOutputSuppression } from './paired-terminal-hidden-output-oracle'
 import { createPairedTerminalParkingFixture } from './paired-terminal-parking-fixture'
+import { verifyPairedTerminalTitleFanout } from './paired-terminal-title-fanout-oracle'
 import { getTerminalContent, waitForActivePanePtyId } from './terminal'
 
 const TARGET_WORKTREE_COUNT = 6
@@ -135,6 +136,7 @@ export async function runPairedTerminalParkingOracle(
     await expectHostTerminalsUnmounted(options.hostPage, seed.fallbackWorktreeId, remoteTabs)
 
     const hiddenFloodTokens = await verifyHiddenPairedTerminalOutputSuppression(page, remoteTabs)
+    await verifyPairedTerminalTitleFanout(page, remoteTabs)
     const baseline = await readPairedRetentionSample(
       page,
       remoteTabs.map((tab) => tab.tabId)

@@ -9,17 +9,7 @@ import {
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
-
-function hasFlag(tokens: readonly string[], flags: readonly string[]): boolean {
-  return agentArgOptionTokens(tokens).some((token) =>
-    flags.some(
-      (flag) =>
-        token === flag ||
-        token.startsWith(`${flag}=`) ||
-        (flag.startsWith('-') && !flag.startsWith('--') && token.startsWith(flag))
-    )
-  )
-}
+import { hasFlag } from './agent-cli-flag-detection'
 
 function hasCodexEffortOverride(tokens: readonly string[]): boolean {
   if (hasFlag(tokens, ['--reasoning-effort'])) {
@@ -214,7 +204,7 @@ function codexEffort(includeExtraHigh: boolean): CatalogOption {
       launchArgs: (value) => ['-c', `model_reasoning_effort=${String(value)}`],
       agentArgsOverride: hasCodexEffortOverride,
       removeAgentArgs: removeCodexEffortOverride,
-      midSession: { kind: 'agent-picker', command: '/model' }
+      midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
     }
   }
 }
@@ -238,12 +228,9 @@ export const CODEX_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     launchArgs: (value) => ['-m', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['-m', '--model']),
     removeAgentArgs: (tokens) => removeAgentArgOption(tokens, ['-m', '--model']),
-    // Codex accepts a model argument in its live /model command.
-    midSession: {
-      kind: 'command',
-      build: (value) => `/model ${String(value)}`,
-      pickerCommand: '/model'
-    }
+    // Codex classifies multi-character writes as pasted prose; type the bare
+    // command and let its own picker apply the account-supported model.
+    midSession: { kind: 'agent-picker', command: '/model', delivery: 'type' }
   },
   unknownModelOptions: [codexEffort(true)]
 }

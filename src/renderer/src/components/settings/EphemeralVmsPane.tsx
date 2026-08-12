@@ -163,6 +163,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         )}
         terminalWorktreeId="settings-ephemeral-vms-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        terminalRuntime={activeSkillRuntime.agentRuntime}
         installed={skillDetected}
         loading={skillLoading}
         error={activeSkillRuntime.installDisabledReason ?? skillError}

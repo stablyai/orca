@@ -66,9 +66,9 @@ export class MacosLoginSessionDeathWatch {
   private probeInFlight = false
   private stopped = false
   private retired = false
-  private scheduledProbeTimer: unknown | null = null
+  private scheduledProbeTimer: unknown = null
   private scheduledProbeAtMs: number | null = null
-  private ptyExitDebounceTimer: unknown | null = null
+  private ptyExitDebounceTimer: unknown = null
   private pendingProbeTrigger: string | null = null
   private probeAbortController: AbortController | null = null
 

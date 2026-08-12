@@ -74,7 +74,7 @@ async function snapshotGitCommon(
   previous?: GitCommonSnapshot,
   includePrimary = true,
   forceFullScan = false,
-  statusRefPaths: Set<string> = new Set()
+  statusRefPaths = new Set<string>()
 ): Promise<GitCommonSnapshot> {
   const worktreesDir = join(commonDirPath, 'worktrees')
   const [worktreesDirSignature, primarySignatures, statusRefSignatures] = await Promise.all([
