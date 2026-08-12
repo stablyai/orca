@@ -23,6 +23,7 @@ import {
   type TaskPageBeadsRepoNotice
 } from './task-page-beads-list-notices'
 import { BeadsRepoNoticeRows } from './task-page-beads-repo-notice-rows'
+import { splitBeadsIssueIdForWrap } from './task-page-beads-issue-id-wrap'
 import { copyBeadsIssueText, openOrStartBeadsWorkspace } from './task-page-beads-row-actions'
 import { BeadsStatusCell } from './task-page-beads-status-cell'
 import { BEADS_STATUS_ICONS } from './task-page-beads-status-visuals'
@@ -105,6 +106,7 @@ function BeadsIssueRow({
 }): React.JSX.Element {
   const { issue } = row
   const IdIcon = BEADS_STATUS_ICONS[issue.status]
+  const idParts = splitBeadsIssueIdForWrap(issue.id)
   const attachedWorkspaceLabel = attachedWorkspace
     ? getBeadsIssueWorkspaceAttachmentLabel(attachedWorkspace)
     : null
@@ -132,7 +134,16 @@ function BeadsIssueRow({
               className="inline-flex min-w-0 items-center gap-1 rounded-md border border-border/40 px-1.5 py-0.5 text-muted-foreground"
             >
               <IdIcon className="size-3 shrink-0" aria-hidden="true" />
-              <span className="min-w-0 truncate font-mono text-[11px] font-normal">{issue.id}</span>
+              {idParts ? (
+                <span className="flex min-w-0 flex-col text-left font-mono text-[11px] font-normal leading-[14px]">
+                  <span className="truncate">{idParts[0]}</span>
+                  <span className="truncate">{idParts[1]}</span>
+                </span>
+              ) : (
+                <span className="min-w-0 truncate font-mono text-[11px] font-normal">
+                  {issue.id}
+                </span>
+              )}
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
