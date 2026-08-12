@@ -32,7 +32,10 @@ import {
   getTerminalUrlOpenHint,
   installFilePathLinkClickFallback
 } from './terminal-link-handlers'
-import { terminalUrlOpenHintOptionsFor } from './terminal-link-open-hints'
+import {
+  terminalHttpLinkActionDestinationsFor,
+  terminalUrlOpenHintOptionsFor
+} from './terminal-link-open-hints'
 import { createTerminalHandleLinkProvider } from './terminal-handle-links'
 import type { LinkHandlerDeps } from './terminal-link-handlers'
 import { handleOscLink } from './terminal-osc-link-routing'
@@ -53,6 +56,7 @@ import {
   type HttpLinkSourceOwner
 } from '@/lib/http-link-routing'
 import { resolveTerminalHttpLinkSourceOwner } from './terminal-http-link-source-owner'
+import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/workspace-browser-tab-open'
 import type {
   GlobalSettings,
   SetupSplitDirection,
@@ -742,15 +746,24 @@ export function useTerminalPaneLifecycle({
       resolvePaneLinkCwd(paneCwdRef.current, paneId, startupCwd)
     const getHttpLinkSourceOwnerForPane = (paneId: number) =>
       resolveTerminalHttpLinkSourceOwner(paneTransportsRef.current.get(paneId))
+    const canOpenRuntimeBrowserForPane = (paneId: number): boolean => {
+      const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
+      return (
+        sourceOwner.kind === 'runtime' &&
+        canOpenWorkspaceBrowserTabOnRuntime(
+          useAppStore.getState(),
+          worktreeId,
+          sourceOwner.runtimeEnvironmentId
+        )
+      )
+    }
     const getHttpLinkActionDestinations = (paneId: number): TerminalHttpLinkActionDestinations => {
       const sourceOwner = getHttpLinkSourceOwnerForPane(paneId)
-      if (sourceOwner.kind !== 'local') {
-        return { primary: 'system' }
-      }
-      const options = terminalUrlOpenHintOptionsFor(settingsRef.current, sourceOwner)
-      return options.openLinksInApp
-        ? { primary: 'orca', alternate: 'system' }
-        : { primary: 'system', alternate: 'orca' }
+      return terminalHttpLinkActionDestinationsFor(
+        settingsRef.current,
+        sourceOwner,
+        canOpenRuntimeBrowserForPane(paneId)
+      )
     }
     const getLinkActionContext = (paneId: number): TerminalLinkActionContext | null => {
       if (settingsRef.current?.terminalLinkActionPopoverEnabled === false) {
@@ -901,7 +914,8 @@ export function useTerminalPaneLifecycle({
       getTerminalUrlOpenHint({
         ...terminalUrlOpenHintOptionsFor(
           settingsRef.current,
-          getHttpLinkSourceOwnerForPane(paneId)
+          getHttpLinkSourceOwnerForPane(paneId),
+          canOpenRuntimeBrowserForPane(paneId)
         ),
         showActions: settingsRef.current?.terminalLinkActionPopoverEnabled !== false
       })

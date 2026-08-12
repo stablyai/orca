@@ -21,6 +21,36 @@ export type OpenWorkspaceBrowserTabRequest = {
   targetGroupId?: string
   url: string
   intent: WorkspaceBrowserTabIntent
+  expectedRuntimeEnvironmentId?: string
+}
+
+function isExpectedRuntimeBrowserRoute(
+  availability: ClientCreationActionAvailability,
+  route: ReturnType<typeof resolveWorktreeOperationRoute>,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  if (availability.state !== 'enabled' || availability.provider !== 'paired-runtime' || !route) {
+    return false
+  }
+  const environmentId = route.runtimeEnvironmentId?.trim() || null
+  if (environmentId !== expectedRuntimeEnvironmentId.trim()) {
+    return false
+  }
+  const host = parseExecutionHostId(route.executionHostId)
+  return (
+    !route.executionHostId ||
+    Boolean(host && (host.kind !== 'runtime' || host.environmentId === environmentId))
+  )
+}
+
+export function canOpenWorkspaceBrowserTabOnRuntime(
+  state: AppState,
+  workspaceId: string,
+  expectedRuntimeEnvironmentId: string
+): boolean {
+  const availability = getClientCreationActionPolicy(state, workspaceId)['managed-browser']
+  const route = resolveWorktreeOperationRoute(state, workspaceId)
+  return isExpectedRuntimeBrowserRoute(availability, route, expectedRuntimeEnvironmentId)
 }
 
 // Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
@@ -133,6 +163,13 @@ export async function openWorkspaceBrowserTab(
     throw openFailure(presentation.error, 'no active worktree route')
   }
   const environmentId = route.runtimeEnvironmentId?.trim() || null
+  const expectedEnvironmentId = request.expectedRuntimeEnvironmentId?.trim() || null
+  if (
+    expectedEnvironmentId &&
+    !isExpectedRuntimeBrowserRoute(availability, route, expectedEnvironmentId)
+  ) {
+    throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
+  }
   const host = parseExecutionHostId(route.executionHostId)
   if (!environmentId) {
     if (!host || host.kind === 'runtime') {

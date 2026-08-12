@@ -4,7 +4,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
-import { openWorkspaceBrowserTab } from './workspace-browser-tab-open'
+import {
+  canOpenWorkspaceBrowserTabOnRuntime,
+  openWorkspaceBrowserTab
+} from './workspace-browser-tab-open'
 
 const mocks = vi.hoisted(() => ({
   createRemote: vi.fn(),
@@ -94,6 +97,10 @@ describe('openWorkspaceBrowserTab', () => {
       defaultBrowserSessionProfileIdByHostId: {}
     }
 
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
+      true
+    )
+
     await openWorkspaceBrowserTab({
       workspaceId: WORKSPACE_ID,
       url: 'https://example.com/docs?token=secret',
@@ -111,6 +118,50 @@ describe('openWorkspaceBrowserTab', () => {
       failureLogMode: 'operation-only'
     })
     expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('fails closed instead of opening on a runtime other than the asserted owner', async () => {
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-b')),
+      ...browserCapableRuntime('hub-b'),
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not fall back to a client browser for an incapable asserted runtime', async () => {
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      createBrowserTab: vi.fn(),
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+
+    expect(canOpenWorkspaceBrowserTabOnRuntime(mocks.state as never, WORKSPACE_ID, 'hub-a')).toBe(
+      false
+    )
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' },
+        expectedRuntimeEnvironmentId: 'hub-a'
+      })
+    ).rejects.toThrow('Unable to open URL.')
+    expect(mocks.createRemote).not.toHaveBeenCalled()
+    expect(mocks.state.createBrowserTab).not.toHaveBeenCalled()
   })
 
   // Two dev servers on one host must not share a tab title.
