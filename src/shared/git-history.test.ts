@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GitHistoryExecutor } from './git-history'
 import {
+  GIT_GRAPH_MAX_LIMIT,
   GIT_HISTORY_MAX_LIMIT,
   loadGitHistoryFromExecutor,
   parseGitHistoryLog
@@ -242,6 +243,46 @@ describe('git history loader', () => {
     expect(result.items).toHaveLength(GIT_HISTORY_MAX_LIMIT)
     expect(result.limit).toBe(GIT_HISTORY_MAX_LIMIT)
     expect(result.hasMore).toBe(true)
+  })
+
+  it('walks every branch, remote, and tag when allRefs is requested', async () => {
+    const { executor, calls } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { limit: 50, allRefs: true })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toEqual(
+      expect.arrayContaining(['--branches', '--remotes', '--tags', HEAD_OID, '-n51'])
+    )
+    expect(logCall).not.toContain('--all')
+    expect(result.allRefs).toBe(true)
+  })
+
+  it('omits the allRefs echo from HEAD-scoped results', async () => {
+    const { executor } = createHistoryExecutor()
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', { limit: 50 })
+
+    expect(result.allRefs).toBeUndefined()
+  })
+
+  it('raises the limit ceiling for allRefs graph loads', async () => {
+    const { executor, calls } = createHistoryExecutor(2)
+
+    const result = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: 500,
+      allRefs: true
+    })
+
+    const logCall = calls.find((args) => args[0] === 'log')
+    expect(logCall).toContain('-n501')
+    expect(result.limit).toBe(500)
+
+    const clamped = await loadGitHistoryFromExecutor(executor, '/repo', {
+      limit: GIT_GRAPH_MAX_LIMIT + 500,
+      allRefs: true
+    })
+    expect(clamped.limit).toBe(GIT_GRAPH_MAX_LIMIT)
   })
 
   it('returns an empty result for unborn repositories without running git log', async () => {

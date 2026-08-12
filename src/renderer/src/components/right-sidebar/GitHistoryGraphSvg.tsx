@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/git-history-graph'
 
 const SWIMLANE_HEIGHT = 24
-const SWIMLANE_WIDTH = 11
+export const SWIMLANE_WIDTH = 11
 const SWIMLANE_CURVE_RADIUS = 5
 const SWIMLANE_NODE_Y = SWIMLANE_HEIGHT / 2
 const CIRCLE_RADIUS = 3.5

@@ -110,20 +110,20 @@ export function buildGitHistoryViewModels(
     const outputSwimlanes: GitHistoryGraphNode[] = []
     let firstParentAdded = false
 
-    if (historyItem.parentIds.length > 0) {
-      for (const node of inputSwimlanes) {
-        if (node.id === historyItem.id) {
-          if (!firstParentAdded) {
-            outputSwimlanes.push({
-              id: historyItem.parentIds[0]!,
-              color: getLabelColorIdentifier(historyItem, colorMap) ?? node.color
-            })
-            firstParentAdded = true
-          }
-          continue
+    // Why: root commits close only their own lane — copying the others keeps
+    // unrelated histories (orphan branches, subtree merges) visually continuous.
+    for (const node of inputSwimlanes) {
+      if (node.id === historyItem.id) {
+        if (!firstParentAdded && historyItem.parentIds.length > 0) {
+          outputSwimlanes.push({
+            id: historyItem.parentIds[0]!,
+            color: getLabelColorIdentifier(historyItem, colorMap) ?? node.color
+          })
+          firstParentAdded = true
         }
-        outputSwimlanes.push(cloneNode(node))
+        continue
       }
+      outputSwimlanes.push(cloneNode(node))
     }
 
     for (let index = firstParentAdded ? 1 : 0; index < historyItem.parentIds.length; index += 1) {

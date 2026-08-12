@@ -5,6 +5,7 @@ import {
   shortGitHash
 } from './git-history-log-parser'
 import {
+  GIT_GRAPH_MAX_LIMIT,
   GIT_HISTORY_DEFAULT_LIMIT,
   GIT_HISTORY_MAX_LIMIT,
   type GitHistoryExecutor,
@@ -24,6 +25,8 @@ export type {
   GitHistoryResult
 } from './git-history-types'
 export {
+  GIT_GRAPH_DEFAULT_LIMIT,
+  GIT_GRAPH_MAX_LIMIT,
   GIT_HISTORY_BASE_REF_COLOR,
   GIT_HISTORY_DEFAULT_LIMIT,
   GIT_HISTORY_LANE_COLORS,
@@ -33,12 +36,12 @@ export {
 } from './git-history-types'
 export { compareGitHistoryItemRefsByCategory, parseGitHistoryLog } from './git-history-log-parser'
 
-function clampHistoryLimit(limit: number | undefined): number {
+function clampHistoryLimit(limit: number | undefined, allRefs: boolean): number {
   if (!Number.isFinite(limit)) {
     return GIT_HISTORY_DEFAULT_LIMIT
   }
   return Math.min(
-    GIT_HISTORY_MAX_LIMIT,
+    allRefs ? GIT_GRAPH_MAX_LIMIT : GIT_HISTORY_MAX_LIMIT,
     Math.max(1, Math.trunc(limit ?? GIT_HISTORY_DEFAULT_LIMIT))
   )
 }
@@ -169,7 +172,8 @@ export async function loadGitHistoryFromExecutor(
   cwd: string,
   options: GitHistoryOptions = {}
 ): Promise<GitHistoryResult> {
-  const limit = clampHistoryLimit(options.limit)
+  const allRefs = options.allRefs === true
+  const limit = clampHistoryLimit(options.limit, allRefs)
   const headOid = await resolveCommit(git, cwd, 'HEAD')
   if (!headOid) {
     return {
@@ -192,9 +196,10 @@ export async function loadGitHistoryFromExecutor(
       ? rawBaseRef
       : undefined
 
-  // Why: this panel is scoped to the active workspace. Upstream and base refs
-  // stay as comparison metadata so old workspaces do not list newly fetched upstream/base commits.
-  const historyRevisions = [headOid]
+  // Why: the sidebar panel is scoped to the active workspace, so upstream and
+  // base refs stay as comparison metadata; the graph view opts into every
+  // branch, remote, and tag. `--all` is avoided to keep notes/replace/stash out.
+  const historyRevisions = allRefs ? ['--branches', '--remotes', '--tags', headOid] : [headOid]
 
   let mergeBase: string | undefined
   if (remoteRef?.revision && currentRef.revision && remoteRef.revision !== currentRef.revision) {
@@ -235,6 +240,7 @@ export async function loadGitHistoryFromExecutor(
     hasIncomingChanges,
     hasOutgoingChanges,
     hasMore: parsed.length > limit,
-    limit
+    limit,
+    ...(allRefs ? { allRefs: true } : {})
   }
 }

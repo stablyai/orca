@@ -23,6 +23,11 @@ export const GIT_HISTORY_LANE_COLORS: readonly GitHistoryGraphColorId[] = [
 export const GIT_HISTORY_DEFAULT_LIMIT = 50
 export const GIT_HISTORY_MAX_LIMIT = 200
 
+export const GIT_GRAPH_DEFAULT_LIMIT = 100
+// Why: all-refs graph loads capture whole-repo history; the single-branch cap
+// of 200 starves busy repos while old hosts still clamp to their own maximum.
+export const GIT_GRAPH_MAX_LIMIT = 1000
+
 export type GitHistoryRefCategory = 'branches' | 'remote branches' | 'tags' | 'commits'
 
 export type GitHistoryItemRef = {
@@ -56,6 +61,9 @@ export type GitHistoryItem = {
 export type GitHistoryOptions = {
   limit?: number
   baseRef?: string | null
+  // Wire compat: optional so old hosts strip it and answer with HEAD-only
+  // history; the missing `allRefs` echo on the result reveals the downgrade.
+  allRefs?: boolean
 }
 
 export type GitHistoryResult = {
@@ -68,6 +76,8 @@ export type GitHistoryResult = {
   hasOutgoingChanges: boolean
   hasMore: boolean
   limit: number
+  // Echoed by hosts that honored `options.allRefs`; absent from old hosts.
+  allRefs?: boolean
 }
 
 export type GitHistoryExecutor = (

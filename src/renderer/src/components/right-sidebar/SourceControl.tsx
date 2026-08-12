@@ -940,6 +940,7 @@ function SourceControlInner(): React.JSX.Element {
   const setPendingEditorReveal = useAppStore((s) => s.setPendingEditorReveal)
   const openConflictFile = useAppStore((s) => s.openConflictFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
+  const openGitGraph = useAppStore((s) => s.openGitGraph)
   const openBranchDiff = useAppStore((s) => s.openBranchDiff)
   const createEmptySplitGroup = useAppStore((s) => s.createEmptySplitGroup)
   const groupsByWorktree = useAppStore((s) => s.groupsByWorktree)
@@ -6302,6 +6303,7 @@ function SourceControlInner(): React.JSX.Element {
                 collapsed={collapsedSections.has('history')}
                 onToggle={() => toggleSection('history')}
                 onRefresh={() => void refreshGitHistory()}
+                onOpenGraph={activeWorktreeId ? () => openGitGraph(activeWorktreeId) : undefined}
                 onOpenCommit={(item) => void openHistoryCommitDiff(item)}
                 onLoadCommitFiles={loadCommitFiles}
                 onOpenCommitFile={openCommitFile}

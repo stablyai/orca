@@ -838,6 +838,7 @@ export type TabContentType =
   | 'diff'
   | 'conflict-review'
   | 'check-details'
+  | 'git-graph'
   | 'browser'
   | 'simulator'
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { GitCompareArrows, Eye, GitBranch, ShieldAlert, Pin, ListChecks } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { basename, normalizeRelativePath } from '@/lib/path'
@@ -87,6 +87,7 @@ export default function EditorFileTab({
   const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
   const isCheckDetails = file.mode === 'check-details'
+  const isGitGraph = file.mode === 'git-graph'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   // Why: only deleted/renamed mean the file is gone from its path, which is
   // what strikethrough conveys. 'changed' keeps a normal label — its surface
@@ -267,6 +268,10 @@ export default function EditorFileTab({
         />
       ) : isCheckDetails ? (
         <ListChecks
+          className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+        />
+      ) : isGitGraph ? (
+        <GitBranch
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
         />
       ) : isDiff ? (

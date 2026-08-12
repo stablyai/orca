@@ -71,8 +71,11 @@ export const GitCommitCompare = WorktreeSelector.extend({
 })
 
 export const GitHistory = WorktreeSelector.extend({
-  limit: z.number().int().min(1).max(200).optional(),
-  baseRef: z.string().nullable().optional()
+  // Why: 1000 is the all-refs graph ceiling (GIT_GRAPH_MAX_LIMIT); the shared
+  // loader still clamps HEAD-scoped requests to 200.
+  limit: z.number().int().min(1).max(1000).optional(),
+  baseRef: z.string().nullable().optional(),
+  allRefs: z.boolean().optional()
 })
 
 export const GitBranchDiff = GitFilePath.extend({

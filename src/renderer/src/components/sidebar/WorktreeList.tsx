@@ -15,6 +15,7 @@ import {
   FolderInput,
   FolderPlus,
   FolderX,
+  GitBranch,
   Loader2,
   Plus,
   Server,
@@ -663,6 +664,7 @@ type VirtualizedWorktreeViewportProps = {
   handleCreateForRepo: (projectId: string) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
   handleOpenWorktreeVisibility: (projectId: string) => void
+  handleOpenRepoGitGraph: (repo: Repo) => void
   handleShowImportedWorktrees: (projectId: string) => void
   handleKeepImportedWorktreesHidden: (projectId: string) => void
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
@@ -1330,6 +1332,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   handleCreateForRepo,
   handleOpenRepoSettings,
   handleOpenWorktreeVisibility,
+  handleOpenRepoGitGraph,
   handleShowImportedWorktrees,
   handleKeepImportedWorktreesHidden,
   importedWorktreeCardActionState,
@@ -4597,6 +4600,21 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                             onClick={stopRepoHeaderMenuEvent}
                             onKeyDown={stopRepoHeaderMenuEvent}
                           >
+                            {row.repo && isGitRepoKind(row.repo) ? (
+                              <DropdownMenuItem
+                                onSelect={() => {
+                                  if (row.repo) {
+                                    handleOpenRepoGitGraph(row.repo)
+                                  }
+                                }}
+                              >
+                                <GitBranch className="size-3.5" />
+                                {translate(
+                                  'auto.components.sidebar.WorktreeList.openGitGraph',
+                                  'Open Git Graph'
+                                )}
+                              </DropdownMenuItem>
+                            ) : null}
                             <DropdownMenuItem
                               onSelect={() => {
                                 if (row.repo) {
@@ -6057,6 +6075,26 @@ const WorktreeList = React.memo(function WorktreeList({
     [openModal]
   )
 
+  // Why: the graph is repo-scoped but tabs live in a workspace — reuse the
+  // active workspace when it belongs to this repo, else jump to the main
+  // (or first live) worktree so the tab lands somewhere sensible.
+  const handleOpenRepoGitGraph = useCallback((repo: Repo) => {
+    const state = useAppStore.getState()
+    const repoWorktrees = state.worktreesByRepo[repo.id] ?? []
+    const target =
+      repoWorktrees.find((candidate) => candidate.id === state.activeWorktreeId) ??
+      repoWorktrees.find((candidate) => candidate.isMainWorktree && !candidate.isArchived) ??
+      repoWorktrees.find((candidate) => !candidate.isArchived) ??
+      repoWorktrees[0]
+    if (!target) {
+      return
+    }
+    if (target.id !== state.activeWorktreeId) {
+      activateAndRevealWorktree(target.id)
+    }
+    state.openGitGraph(target.id)
+  }, [])
+
   const setImportedWorktreeCardState = useCallback(
     (projectId: string, state: ImportedWorktreeCardActionState | null) => {
       setImportedWorktreeCardActionState((previous) => {
@@ -6855,6 +6893,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleCreateForRepo={handleCreateForRepo}
         handleOpenRepoSettings={handleOpenRepoSettings}
         handleOpenWorktreeVisibility={handleOpenWorktreeVisibility}
+        handleOpenRepoGitGraph={handleOpenRepoGitGraph}
         handleShowImportedWorktrees={handleShowImportedWorktrees}
         handleKeepImportedWorktreesHidden={handleKeepImportedWorktreesHidden}
         importedWorktreeCardActionState={importedWorktreeCardActionState}

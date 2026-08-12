@@ -60,6 +60,29 @@ describe('GitHistoryPanel', () => {
     }
   )
 
+  it('renders the graph-view entry point only when a handler is wired', () => {
+    const withHandler = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result: makeHistoryResult() }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+        onOpenGraph={vi.fn()}
+      />
+    )
+    expect(withHandler).toContain('Open git graph')
+
+    const withoutHandler = renderToStaticMarkup(
+      <GitHistoryPanel
+        state={{ status: 'ready', result: makeHistoryResult() }}
+        collapsed={false}
+        onToggle={vi.fn()}
+        onRefresh={vi.fn()}
+      />
+    )
+    expect(withoutHandler).not.toContain('Open git graph')
+  })
+
   // The dense row is subject-only; author and date now surface on expand, so the
   // collapsed row shows the subject and short id (the short id via aria-label).
   it('renders the commit subject row', () => {

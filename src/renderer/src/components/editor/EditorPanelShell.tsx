@@ -97,42 +97,44 @@ export function EditorPanelShell({
 }: EditorPanelShellProps): JSX.Element {
   return (
     <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
-      {!model.isCombinedDiff && activeFile.mode !== 'check-details' && (
-        <EditorPanelHeader
-          activeFile={activeFile}
-          copiedPathVisible={copiedPathVisible}
-          isSingleDiff={model.isSingleDiff}
-          isDiffSurface={model.isDiffSurface}
-          isMarkdown={model.isMarkdown}
-          isCsv={model.isCsv}
-          isNotebook={model.isNotebook}
-          hasEditorToggle={model.hasEditorToggle}
-          availableEditorToggleModes={model.availableEditorToggleModes}
-          effectiveToggleValue={model.effectiveToggleValue}
-          canOpenPreviewToSide={model.canOpenPreviewToSide}
-          canShowMarkdownPreview={model.canShowMarkdownPreview}
-          canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
-          isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
-          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
-          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
-          showMarkdownTableOfContents={showMarkdownTableOfContents}
-          canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
-          markdownFrontmatterVisible={markdownFrontmatterVisible}
-          sideBySide={sideBySide}
-          openFileState={model.openFileState}
-          onCopyPath={onCopyPath}
-          onOpenDiffTargetFile={onOpenDiffTargetFile}
-          onOpenPreviewToSide={onOpenPreviewToSide}
-          onOpenMarkdownPreview={onOpenMarkdownPreview}
-          onOpenContainingFolder={onOpenContainingFolder}
-          onToggleSideBySide={onToggleSideBySide}
-          onEditorToggleChange={onEditorToggleChange}
-          onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
-          onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
-          onExportMarkdownToPdf={onExportMarkdownToPdf}
-          createMarkdownArtifactRequest={createMarkdownArtifactRequest}
-        />
-      )}
+      {!model.isCombinedDiff &&
+        activeFile.mode !== 'check-details' &&
+        activeFile.mode !== 'git-graph' && (
+          <EditorPanelHeader
+            activeFile={activeFile}
+            copiedPathVisible={copiedPathVisible}
+            isSingleDiff={model.isSingleDiff}
+            isDiffSurface={model.isDiffSurface}
+            isMarkdown={model.isMarkdown}
+            isCsv={model.isCsv}
+            isNotebook={model.isNotebook}
+            hasEditorToggle={model.hasEditorToggle}
+            availableEditorToggleModes={model.availableEditorToggleModes}
+            effectiveToggleValue={model.effectiveToggleValue}
+            canOpenPreviewToSide={model.canOpenPreviewToSide}
+            canShowMarkdownPreview={model.canShowMarkdownPreview}
+            canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
+            isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+            shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+            canExportMarkdownToPdf={model.canExportMarkdownToPdf}
+            showMarkdownTableOfContents={showMarkdownTableOfContents}
+            canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+            markdownFrontmatterVisible={markdownFrontmatterVisible}
+            sideBySide={sideBySide}
+            openFileState={model.openFileState}
+            onCopyPath={onCopyPath}
+            onOpenDiffTargetFile={onOpenDiffTargetFile}
+            onOpenPreviewToSide={onOpenPreviewToSide}
+            onOpenMarkdownPreview={onOpenMarkdownPreview}
+            onOpenContainingFolder={onOpenContainingFolder}
+            onToggleSideBySide={onToggleSideBySide}
+            onEditorToggleChange={onEditorToggleChange}
+            onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+            onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+            onExportMarkdownToPdf={onExportMarkdownToPdf}
+            createMarkdownArtifactRequest={createMarkdownArtifactRequest}
+          />
+        )}
       <Suspense fallback={<EditorLoadingFallback />}>
         <EditorContent
           activeFile={activeFile}

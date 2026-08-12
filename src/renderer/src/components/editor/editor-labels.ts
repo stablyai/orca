@@ -33,6 +33,10 @@ export function getEditorDisplayLabel(
     return file.checkRunDetails?.check.name ?? getBaseLabel(file, variant)
   }
 
+  if (file.mode === 'git-graph') {
+    return 'Git Graph'
+  }
+
   if (file.mode === 'markdown-preview') {
     return `${getBaseLabel(file, variant)} (preview)`
   }

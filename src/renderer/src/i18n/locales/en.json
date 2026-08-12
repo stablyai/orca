@@ -4846,7 +4846,8 @@
           "groupDeleteFailedDesc": "Something went wrong while deleting the group. No projects were removed.",
           "failedNestWorkspace": "Failed to nest workspace",
           "sidebarRowMissing": "Target no longer exists",
-          "failedUnnestWorkspace": "Failed to unnest workspace"
+          "failedUnnestWorkspace": "Failed to unnest workspace",
+          "openGitGraph": "Open Git Graph"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -10827,7 +10828,9 @@
             "62e685d5ec": "idle",
             "111e1d0db4": "error",
             "e5e81e59a6": "Resize commits",
-            "6d1e0a7c3b": "Failed to load commit files"
+            "6d1e0a7c3b": "Failed to load commit files",
+            "openGraph": "Open git graph",
+            "openGraphTooltip": "Open the all-branches graph"
           },
           "HostedReviewActions": {
             "4d5fb5a284": "Close",
@@ -15069,6 +15072,29 @@
           "openLink": "Open link",
           "updating": "Updating…",
           "update": "Update shared content"
+        }
+      },
+      "git": {
+        "graph": {
+          "GitGraphRow": {
+            "openCommit": "Open commit {{value0}}: {{value1}}"
+          },
+          "GitGraphView": {
+            "title": "Git Graph",
+            "refresh": "Refresh graph",
+            "remoteUnsupported": "The remote host runs an older Orca and returned current-branch history only. Update Orca on the host to see all branches.",
+            "loading": "Loading graph...",
+            "empty": "No commits yet",
+            "loadMore": "Load more commits"
+          },
+          "GitGraphWorktreeBadge": {
+            "openWorktree": "Open worktree {{value0}}",
+            "currentWorkspace": "Current workspace",
+            "clickToOpen": "Click to open this worktree"
+          },
+          "useGitGraphHistory": {
+            "loadFailed": "Failed to load the repository graph"
+          }
         }
       }
     },

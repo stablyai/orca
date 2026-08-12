@@ -162,7 +162,8 @@ export function useTabGroupWorkspaceModel({
             item.contentType === 'editor' ||
             item.contentType === 'diff' ||
             item.contentType === 'conflict-review' ||
-            item.contentType === 'check-details'
+            item.contentType === 'check-details' ||
+            item.contentType === 'git-graph'
         )
         .map((item) => {
           const file = worktreeState.openFiles.find((candidate) => candidate.id === item.entityId)
@@ -193,7 +194,8 @@ export function useTabGroupWorkspaceModel({
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
             item.contentType === 'conflict-review' ||
-            item.contentType === 'check-details')
+            item.contentType === 'check-details' ||
+            item.contentType === 'git-graph')
       )
       if (!otherReference) {
         const file = useAppStore.getState().openFiles.find((candidate) => candidate.id === entityId)
@@ -488,7 +490,8 @@ export function useTabGroupWorkspaceModel({
         item.contentType === 'editor' ||
         item.contentType === 'diff' ||
         item.contentType === 'conflict-review' ||
-        item.contentType === 'check-details'
+        item.contentType === 'check-details' ||
+        item.contentType === 'git-graph'
       ) {
         closeItem(item.id)
       }

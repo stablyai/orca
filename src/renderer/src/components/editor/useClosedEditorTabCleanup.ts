@@ -76,5 +76,7 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       break
     case 'check-details':
       break
+    case 'git-graph':
+      break
   }
 }

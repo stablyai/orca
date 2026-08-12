@@ -426,7 +426,8 @@ export class GitHandler {
     const worktreePath = params.worktreePath as string
     return loadGitHistoryFromExecutor(this.git.bind(this), worktreePath, {
       limit: typeof params.limit === 'number' ? params.limit : undefined,
-      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null
+      baseRef: typeof params.baseRef === 'string' ? params.baseRef : null,
+      ...(params.allRefs === true ? { allRefs: true } : {})
     })
   }
 

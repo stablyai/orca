@@ -24,6 +24,7 @@ import {
   type CheckRunDetailsTabPatch,
   type OpenCheckRunDetailsState
 } from '@/components/editor/check-run-details-tab'
+import { GIT_GRAPH_TAB_LABEL, buildGitGraphTabId } from '@/components/git-graph/git-graph-tab'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -295,7 +296,7 @@ export type OpenFile = {
   readOnly?: boolean
   /** Why: explicit live tail, only meaningful for a read-only local log. */
   liveTail?: boolean
-  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details'
+  mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
 }
 
 export type ActivityBarPosition = 'top' | 'side'
@@ -612,6 +613,7 @@ export type EditorSlice = {
     state: CheckRunDetailsTabPatch
   ) => void
   reloadOpenCheckRunDetailsTab: (fileId: string) => Promise<void>
+  openGitGraph: (worktreeId: string) => void
   openBranchAllDiffs: (
     worktreeId: string,
     worktreePath: string,
@@ -768,7 +770,7 @@ function openWorkspaceEditorItem(
   fileId: string,
   worktreeId: string,
   label: string,
-  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details',
+  contentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' | 'git-graph',
   isPreview?: boolean,
   targetGroupId?: string
 ): string {
@@ -800,7 +802,8 @@ function isEditorTabContentType(contentType: Tab['contentType']): boolean {
     contentType === 'editor' ||
     contentType === 'diff' ||
     contentType === 'conflict-review' ||
-    contentType === 'check-details'
+    contentType === 'check-details' ||
+    contentType === 'git-graph'
   )
 }
 
@@ -1729,14 +1732,21 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     let editorItemWorktreeId = file.worktreeId
     let editorItemFileId = file.filePath
     let editorItemLabel = file.relativePath
-    let editorItemContentType: 'editor' | 'diff' | 'conflict-review' | 'check-details' =
+    let editorItemContentType:
+      | 'editor'
+      | 'diff'
+      | 'conflict-review'
+      | 'check-details'
+      | 'git-graph' =
       file.mode === 'conflict-review'
         ? 'conflict-review'
         : file.mode === 'check-details'
           ? 'check-details'
-          : file.mode === 'diff'
-            ? 'diff'
-            : 'editor'
+          : file.mode === 'git-graph'
+            ? 'git-graph'
+            : file.mode === 'diff'
+              ? 'diff'
+              : 'editor'
     let editorItemTargetGroupId = options?.targetGroupId
     set((s) => {
       const worktreeId = file.worktreeId
@@ -2361,7 +2371,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           (entry.contentType === 'editor' ||
             entry.contentType === 'diff' ||
             entry.contentType === 'conflict-review' ||
-            entry.contentType === 'check-details')
+            entry.contentType === 'check-details' ||
+            entry.contentType === 'git-graph')
       )
       if (unifiedTab) {
         get().closeUnifiedTab(unifiedTab.id)
@@ -2416,7 +2427,8 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
           (item.contentType === 'editor' ||
             item.contentType === 'diff' ||
             item.contentType === 'conflict-review' ||
-            item.contentType === 'check-details') &&
+            item.contentType === 'check-details' ||
+            item.contentType === 'git-graph') &&
           (!activeWorktreeId || item.worktreeId === activeWorktreeId)
       )
       .map((item) => item.id)
@@ -3881,6 +3893,34 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
     void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
   },
 
+  // Why: the sidebar graph panel only fits the active branch; the whole-repo
+  // graph gets the center pane, one live tab per workspace.
+  openGitGraph: (worktreeId) => {
+    const id = buildGitGraphTabId(worktreeId)
+    set((s) => {
+      const activation = {
+        activeFileId: id,
+        activeTabType: 'editor' as const,
+        activeFileIdByWorktree: { ...s.activeFileIdByWorktree, [worktreeId]: id },
+        activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' as const }
+      }
+      if (s.openFiles.some((f) => f.id === id)) {
+        return activation
+      }
+      const newFile: OpenFile = {
+        id,
+        filePath: id,
+        relativePath: GIT_GRAPH_TAB_LABEL,
+        worktreeId,
+        language: 'plaintext',
+        isDirty: false,
+        mode: 'git-graph'
+      }
+      return { openFiles: [...s.openFiles, newFile], ...activation }
+    })
+    void openWorkspaceEditorItem(get(), id, worktreeId, GIT_GRAPH_TAB_LABEL, 'git-graph')
+  },
+
   // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.
   patchOpenCheckRunDetails: (worktreeId, contextKey, check, state) => {
     const id = buildCheckRunDetailsTabId(worktreeId, check)
@@ -5314,7 +5354,11 @@ function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
+    if (
+      file.mode === 'conflict-review' ||
+      file.mode === 'check-details' ||
+      file.mode === 'git-graph'
+    ) {
       return [file]
     }
 

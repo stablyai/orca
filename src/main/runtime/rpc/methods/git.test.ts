@@ -684,12 +684,35 @@ describe('git RPC methods', () => {
     const response = await dispatcher.dispatch(
       makeRequest('git.history', {
         worktree: 'id:wt-1',
-        limit: 201
+        limit: 1001
       })
     )
 
     expect(response.ok).toBe(false)
     expect(runtime.getRuntimeGitHistory).not.toHaveBeenCalled()
+  })
+
+  it('accepts all-refs graph limits and forwards the allRefs flag', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getRuntimeGitHistory: vi.fn().mockResolvedValue({ items: [] })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: GIT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('git.history', {
+        worktree: 'id:wt-1',
+        limit: 500,
+        allRefs: true
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(runtime.getRuntimeGitHistory).toHaveBeenCalledWith('id:wt-1', {
+      limit: 500,
+      baseRef: undefined,
+      allRefs: true
+    })
   })
 
   it('checks out a branch', async () => {
