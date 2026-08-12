@@ -3203,6 +3203,26 @@ describe('createPtySubprocess', () => {
       killSpy.mockRestore()
     })
   })
+
+  // First link of the daemon's #13892 chain: Session can only forward a probe this
+  // handle carries. See session-same-turn-query-reply-wiring.test.ts for the second.
+  describe('sync ECHO probe on the handle', () => {
+    itOnPosixHost('exposes the patched pty’s echoState as a usable probe', () => {
+      spawnMock.mockReturnValue({ ...mockPtyProcess(), readEchoState: () => 0 })
+
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+      expect(handle.echoSyncProbe?.()).toBe('quiet')
+    })
+
+    itOnPosixHost('omits the probe when node-pty lacks Orca’s patch', () => {
+      spawnMock.mockReturnValue(mockPtyProcess())
+
+      const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+
+      expect(handle.echoSyncProbe).toBeUndefined()
+    })
+  })
 })
 
 describe('checkPtySpawnHealth (retry on transient failure)', () => {

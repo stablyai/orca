@@ -1,5 +1,5 @@
 import type { PtyOwnerBackend } from './pty-owner-backend'
-import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
+import type { PtySlaveEchoProbe, PtySlaveEchoSyncProbe } from './pty-slave-line-discipline-echo'
 
 // Why this module exists: a startup color reply is written to the PTY master, so
 // whatever line discipline sits between Orca and the querying program can echo it
@@ -7,7 +7,9 @@ import type { PtySlaveEchoProbe } from './pty-slave-line-discipline-echo'
 // bytes stripped; a POSIX tty echoes it while the querying program is still cooked.
 // A program that queries before clearing ECHO loses that race if Orca answers
 // inside the query's own turn, so on POSIX the write waits until the slave's ECHO
-// bit is observably clear, and recognized echo shapes cover what remains.
+// bit is observably clear, and recognized echo shapes cover what remains. When a
+// fork-free probe can prove ECHO is already clear, the wait is skipped outright —
+// see `answer()`, and #13892 for why deferring a reply that needs no wait is unsafe.
 //
 // Deliberately NO re-send on a matched echo: ECHO copies bytes to the master
 // without consuming them from the slave's input queue, so a program that arms raw
@@ -181,7 +183,8 @@ export class PtyStartupReplyDelivery {
   constructor(
     private readonly ownerBackend: PtyOwnerBackend,
     private readonly writeProvider: (data: string) => void,
-    private readonly echoProbe?: PtySlaveEchoProbe
+    private readonly echoProbe?: PtySlaveEchoProbe,
+    private readonly echoSyncProbe?: PtySlaveEchoSyncProbe
   ) {}
 
   get hasExpectedEcho(): boolean {
@@ -203,6 +206,15 @@ export class PtyStartupReplyDelivery {
     if (!defersWrite(this.ownerBackend)) {
       // Why: ConPTY answers the query itself unless Orca beats it in this turn.
       return this.writeReply(reply)
+    }
+    // Why answer in this turn when the kernel is already quiet: ANY deferral, however
+    // short, lets a reply written later in the same turn overtake this one — fish's DA1
+    // read sentinel does exactly that, and the held OSC reply then lands in the NEXT
+    // child's stdin (#13892). Measured: the leak reproduces at a 5ms defer, so only a
+    // same-turn write closes it. Requiring an empty queue is what preserves order: a
+    // reply arriving behind a held one still queues instead of jumping it.
+    if (this.pendingWrites.length === 0 && this.echoSyncProbe?.() === 'quiet') {
+      return this.writeReply(reply, onFailed, true)
     }
     if (this.pendingWrites.length >= MAX_TRACKED_REPLIES) {
       this.flushPendingWrites()

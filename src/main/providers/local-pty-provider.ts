@@ -73,6 +73,7 @@ import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group
 import { readPtsName } from '../pty/node-pty-pts-name'
 import {
   createPtySlaveEchoProbe,
+  createPtySlaveEchoSyncProbe,
   readPtySlavePath
 } from '../../shared/pty-slave-line-discipline-echo'
 import {
@@ -935,6 +936,7 @@ export class LocalPtyProvider implements IPtyProvider {
       }
     }
     const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
+    const startupEchoSyncProbe = createPtySlaveEchoSyncProbe(proc)
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -944,7 +946,8 @@ export class LocalPtyProvider implements IPtyProvider {
       }),
       write: (data) => proc.write(data),
       onEmission: emitIngressData,
-      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
+      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {}),
+      ...(startupEchoSyncProbe ? { echoSyncProbe: startupEchoSyncProbe } : {})
     })
     startupIngressByPty.set(id, startupIngress)
 

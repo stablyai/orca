@@ -15,7 +15,9 @@ const shellContractFiles = [
 ]
 const patchedNodePtyContractFiles = [
   'src/main/daemon/node-pty-fd-leak.test.ts',
-  'src/main/pty/omp-shell-wrapper.node-pty.test.ts'
+  'src/main/pty/omp-shell-wrapper.node-pty.test.ts',
+  'src/shared/fish-query-reply-child-stdin.node-pty.test.ts',
+  'src/shared/pty-cooked-querier-reply-delivery.node-pty.test.ts'
 ]
 const nativeShellContractFiles = [...shellContractFiles, ...patchedNodePtyContractFiles]
 const testFilePatterns = [

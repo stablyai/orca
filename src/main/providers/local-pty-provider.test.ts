@@ -2186,4 +2186,34 @@ describe('LocalPtyProvider', () => {
       await expect(shutdown).resolves.toBeUndefined()
     })
   })
+
+  // Wiring guard for #13892; see session-same-turn-query-reply-wiring.test.ts for why
+  // this is asserted per host rather than once on PtyStartupIngress.
+  describe('same-turn query reply wiring', () => {
+    const OSC11_REPLY = '\x1b]11;rgb:1e1e/1e1e/1e1e\x07'
+
+    it('hands the pty’s sync ECHO probe to the startup ingress', async () => {
+      const write = vi.fn()
+      const readEchoState = vi.fn(() => 0)
+      spawnMock.mockReturnValueOnce({ ...mockProc, write, readEchoState })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      provider.write(id, OSC11_REPLY)
+
+      // Both matter: the probe must be CONSULTED, and a `quiet` verdict must reach the
+      // pty in this turn rather than behind the deferral timer.
+      expect(readEchoState).toHaveBeenCalled()
+      expect(write).toHaveBeenCalledWith(OSC11_REPLY)
+    })
+
+    it('still defers the reply when the pty reports the slave would echo', async () => {
+      const write = vi.fn()
+      spawnMock.mockReturnValueOnce({ ...mockProc, write, readEchoState: () => 1 })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      provider.write(id, OSC11_REPLY)
+
+      expect(write).not.toHaveBeenCalled()
+    })
+  })
 })

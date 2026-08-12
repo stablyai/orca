@@ -74,7 +74,10 @@ import {
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
-import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
+import {
+  createPtySlaveEchoSyncProbe,
+  readPtySlavePath
+} from '../../shared/pty-slave-line-discipline-echo'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -1059,10 +1062,12 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   })
 
   const slavePath = readPtySlavePath(proc)
+  const echoSyncProbe = createPtySlaveEchoSyncProbe(proc)
   return {
     pid: proc.pid,
     shellPath,
     ...(slavePath ? { slavePath } : {}),
+    ...(echoSyncProbe ? { echoSyncProbe } : {}),
     ...(startupCommandDeliveredInShellArgs ? { startupCommandDeliveredInShellArgs: true } : {}),
     getForegroundProcess: () => {
       // Why: node-pty's `.process` reports the live foreground name but reads a recycled pid on a reaped pty, so bail when dead.

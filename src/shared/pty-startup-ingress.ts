@@ -55,7 +55,12 @@ export class PtyStartupIngress {
   constructor(options: PtyStartupIngressOptions) {
     this.intent = options.intent
     this.ownerBackend = options.ownerBackend ?? 'posix-pty'
-    this.delivery = new PtyStartupReplyDelivery(this.ownerBackend, options.write, options.echoProbe)
+    this.delivery = new PtyStartupReplyDelivery(
+      this.ownerBackend,
+      options.write,
+      options.echoProbe,
+      options.echoSyncProbe
+    )
     this.onEmission = options.onEmission
     this.queryOpen = options.intent !== undefined
     if (options.intent) {
@@ -368,12 +373,7 @@ export class PtyStartupIngress {
   }
 
   private emit(span: PtyIngressSourceSpan, transformed: boolean, data = span.data): void {
-    this.onEmission({
-      data,
-      rawStartSeq: span.rawStartSeq,
-      rawEndSeq: span.rawEndSeq,
-      transformed
-    })
+    this.onEmission({ data, rawStartSeq: span.rawStartSeq, rawEndSeq: span.rawEndSeq, transformed })
   }
 
   private clearDeadline(): void {

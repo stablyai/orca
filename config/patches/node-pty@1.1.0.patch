@@ -93,7 +93,7 @@ index 8c4fca9022a6d6f015bca87f61625cde2278f428..0a01730616488119aa21ef441cf3c441
  //# sourceMappingURL=conpty_console_list_agent.js.map
 \ No newline at end of file
 diff --git a/lib/unixTerminal.js b/lib/unixTerminal.js
-index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088bf1865877 100644
+index 1ec12f796a822c78fba9ad7f6448c3987e325c23..68763e40312f4d60e2a7a432bf45b7bac33aa607 100644
 --- a/lib/unixTerminal.js
 +++ b/lib/unixTerminal.js
 @@ -28,8 +28,12 @@ var native = utils_1.loadNativeModule('pty');
@@ -111,6 +111,20 @@ index 1ec12f796a822c78fba9ad7f6448c3987e325c23..cec8b67aef02f8199e5606a0d257088b
  var DEFAULT_FILE = 'sh';
  var DEFAULT_NAME = 'xterm';
  var DESTROY_SOCKET_TIMEOUT_MS = 200;
+@@ -166,6 +170,13 @@ var UnixTerminal = /** @class */ (function (_super) {
+         enumerable: false,
+         configurable: true
+     });
++    /**
++     * Orca: slave ECHO bit, read synchronously off the master fd we already own.
++     * Guarded so an unpatched or prebuilt binding yields undefined, not a throw.
++     */
++    UnixTerminal.prototype.readEchoState = function () {
++        return typeof pty.echoState === 'function' ? pty.echoState(this._fd) : undefined;
++    };
+     /**
+      * openpty
+      */
 diff --git a/src/conpty_console_list_agent.ts b/src/conpty_console_list_agent.ts
 index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd8eeb4a79 100644
 --- a/src/conpty_console_list_agent.ts
@@ -130,7 +144,7 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d15c4dd44 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..555d8835ad6539c7091445207b5009b66954a992 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
 @@ -23,7 +23,9 @@
@@ -210,7 +224,39 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
    if (pty_nonblock(master) == -1) {
      throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
-@@ -684,15 +716,73 @@ pty_getproc(int fd, char *tty) {
+@@ -575,6 +607,31 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info) {
+   return name_;
+ }
+
++/**
++ * Slave line discipline ECHO bit -> 1 set, 0 clear, -1 unreadable.
++ *
++ * Orca: POSIX redirects a master's mode ioctls to the slave, so this reads the
++ * slave's ECHO with no fork and no extra fd. A kernel that did not redirect would
++ * answer from the master's own termios, whose ECHO defaults SET — so the degraded
++ * answer is "echoing", never a false "quiet".
++ */
++Napi::Value PtyEchoState(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  Napi::HandleScope scope(env);
++
++  if (info.Length() != 1 || !info[0].IsNumber()) {
++    return Napi::Number::New(env, -1);
++  }
++
++  int fd = info[0].As<Napi::Number>().Int32Value();
++  struct termios tio;
++  if (tcgetattr(fd, &tio) == -1) {
++    return Napi::Number::New(env, -1);
++  }
++
++  return Napi::Number::New(env, (tio.c_lflag & ECHO) ? 1 : 0);
++}
++
+ /**
+  * Nonblocking FD
+  */
+@@ -684,15 +741,73 @@ pty_getproc(int fd, char *tty) {
  #endif
 
  #if defined(__APPLE__)
@@ -286,7 +332,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
 
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +796,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,80 +821,118 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -429,3 +475,30 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
    }
  }
  #endif
+@@ -793,6 +946,7 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+   exports.Set("open",    Napi::Function::New(env, PtyOpen));
+   exports.Set("resize",  Napi::Function::New(env, PtyResize));
+   exports.Set("process", Napi::Function::New(env, PtyGetProc));
++  exports.Set("echoState", Napi::Function::New(env, PtyEchoState));
+   return exports;
+ }
+
+diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
+index 98733dc0cd752b554bd94e45904ca341ad141bba..2711baeae9a61f17d2b5dfbe01cead23212460a9 100644
+--- a/src/unixTerminal.ts
++++ b/src/unixTerminal.ts
+@@ -174,6 +174,14 @@ export class UnixTerminal extends Terminal {
+   get fd(): number { return this._fd; }
+   get ptsName(): string { return this._pty; }
+
++  /**
++   * Orca: slave ECHO bit, read synchronously off the master fd we already own.
++   * Guarded so an unpatched or prebuilt binding yields undefined, not a throw.
++   */
++  public readEchoState(): number | undefined {
++    return typeof (pty as any).echoState === 'function' ? (pty as any).echoState(this._fd) : undefined;
++  }
++
+   /**
+    * openpty
+    */

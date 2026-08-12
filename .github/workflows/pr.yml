@@ -238,6 +238,12 @@ jobs:
           native-runtime: node
 
       - name: Test real shell contracts
+        # Why these are required, not optional: this lane is the only end-to-end guard for
+        # #9993 and #13892, and both suites SKIP when their prerequisite is missing — which
+        # would report green with nothing exercised.
+        env:
+          ORCA_REQUIRE_FISH: '1'
+          ORCA_REQUIRE_NODE_PTY_ECHO_STATE: '1'
         run: |
           pnpm exec vitest run --config config/vitest.config.ts \
             src/main/daemon/shell-ready.test.ts \
@@ -246,6 +252,8 @@ jobs:
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            src/shared/pty-cooked-querier-reply-delivery.node-pty.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
@@ -281,6 +289,8 @@ jobs:
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/pty-cooked-querier-reply-delivery.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
