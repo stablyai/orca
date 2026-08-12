@@ -123,24 +123,65 @@ describe('absolute file CLI paths', () => {
     })
   })
 
-  it('leaves outside-worktree absolute paths for the runtime guard', async () => {
+  it('rejects outside-worktree absolute paths with an actionable error', async () => {
     const absolutePath = '/tmp/elsewhere/App.tsx'
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') })
+    )
+
+    await main(['file', 'open', '--path', absolutePath, '--worktree', 'id:wt-1'], '/tmp')
+
+    expect(process.exitCode).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Path is outside the selected worktree (/tmp/repo).')
+    )
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('only opens files inside a worktree')
+    )
+    expect(callMock).toHaveBeenCalledTimes(1)
+    expect(callMock).toHaveBeenCalledWith('worktree.show', { worktree: 'id:wt-1' })
+  })
+
+  it('rejects parent-segment relative paths that escape the worktree', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') })
+    )
+
+    await main(
+      ['file', 'open', '--path', '../shared/config.yaml', '--worktree', 'id:wt-1'],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    expect(console.error).toHaveBeenCalledWith(
+      expect.stringContaining('Path is outside the selected worktree (/tmp/repo).')
+    )
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('relativizes parent-segment paths that stay inside the worktree', async () => {
     queueFixtures(
       callMock,
       okFixture('req_show', { worktree: buildWorktree('/tmp/repo', 'feature') }),
       okFixture('req_open', {
         worktree: 'wt-1',
-        relativePath: absolutePath,
+        relativePath: 'src/App.tsx',
         kind: 'text',
         opened: true
       })
     )
 
-    await main(['file', 'open', '--path', absolutePath, '--worktree', 'id:wt-1'], '/tmp')
+    await main(
+      ['file', 'open', '--path', 'src/lib/../App.tsx', '--worktree', 'id:wt-1'],
+      '/tmp/repo'
+    )
 
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
     expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
       worktree: 'id:wt-1',
-      relativePath: absolutePath
+      relativePath: 'src/App.tsx'
     })
   })
 
