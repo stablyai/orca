@@ -4,6 +4,6 @@ import { getProviderLetter } from './StatusBar'
 describe('status bar provider labels', () => {
   it('distinguishes Kiro from Kimi in the narrow status bar', () => {
     expect(getProviderLetter('kimi')).toBe('K')
-    expect(getProviderLetter('kiro')).toBe('KI')
+    expect(getProviderLetter('kiro')).toBe('Q')
   })
 })
