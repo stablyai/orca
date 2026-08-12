@@ -6576,15 +6576,21 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
-  it('consumes yolo and verified auto-review permission events before status or notification relays', async () => {
+  it('consumes yolo and launchToken-owned auto-review permission events before status or notification relays', async () => {
     const setAgentStatus = vi.fn()
     const updateTabTitle = vi.fn()
     const observeAgentHookCompletionForNotification = vi.fn()
-    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) =>
-      metadata.launchToken === 'launch-yolo'
-        ? { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
-        : undefined
-    )
+    // Why (#13600): only launchToken-owned agentArgs authorize auto_review; wire stamps are untrusted.
+    const autoReviewAgentArgs = `-c 'approvals_reviewer="auto_review"' --ask-for-approval on-request`
+    const getAgentLaunchConfigForStatusMetadata = vi.fn((metadata: { launchToken?: string }) => {
+      if (metadata.launchToken === 'launch-yolo') {
+        return { agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '', agentEnv: {} }
+      }
+      if (metadata.launchToken === 'launch-restored') {
+        return { agentArgs: autoReviewAgentArgs, agentEnv: {} }
+      }
+      return undefined
+    })
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
@@ -6658,6 +6664,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(updateTabTitle).not.toHaveBeenCalled()
     expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
 
+    // Why: launchToken owns auto_review; a conflicting wire `user` stamp must not force Needs-You.
     onSetListenerRef.current({
       paneKey: FUTURE_PANE_KEY,
       tabId: 'tab-future',
@@ -6667,12 +6674,15 @@ describe('useIpcEvents agent status snapshot integration', () => {
       agentType: 'codex',
       launchToken: 'launch-restored',
       hookEventName: 'PermissionRequest',
-      codexApprovalReviewer: 'auto_review',
+      codexApprovalReviewer: 'user',
       toolName: 'exec_command',
       receivedAt: 1_700_000_000_301,
       stateStartedAt: 1_699_999_999_301
     })
 
+    expect(getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: FUTURE_PANE_KEY, launchToken: 'launch-restored' })
+    )
     expect(setAgentStatus).not.toHaveBeenCalled()
     expect(updateTabTitle).not.toHaveBeenCalled()
     expect(observeAgentHookCompletionForNotification).not.toHaveBeenCalled()
@@ -6760,6 +6770,101 @@ describe('useIpcEvents agent status snapshot integration', () => {
       { updatedAt: 1_700_000_000_400, stateStartedAt: 1_699_999_999_400 },
       expectWorktreeRouting('wt-1'),
       undefined
+    )
+    expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
+    expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps spoofed wire auto_review attention actionable without launchToken ownership', async () => {
+    // Why (#13600): wire/hook stamps alone must never suppress Needs-You.
+    const setAgentStatus = vi.fn()
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const getAgentLaunchConfigForStatusMetadata = vi.fn(() => undefined)
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus,
+      updateTabTitle,
+      getAgentLaunchConfigForStatusMetadata,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: true, agentTaskComplete: true } },
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+
+    useIpcEvents()
+    await Promise.resolve()
+
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      tabId: 'tab-future',
+      worktreeId: 'wt-1',
+      state: 'waiting',
+      prompt: 'spoofed auto-review permission',
+      agentType: 'codex',
+      launchToken: 'missing-launch',
+      hookEventName: 'PermissionRequest',
+      codexApprovalReviewer: 'auto_review',
+      toolName: 'exec_command',
+      receivedAt: 1_700_000_000_401,
+      stateStartedAt: 1_699_999_999_401
+    })
+
+    expect(getAgentLaunchConfigForStatusMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ paneKey: FUTURE_PANE_KEY, launchToken: 'missing-launch' })
+    )
+    expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatus).toHaveBeenCalledWith(
+      FUTURE_PANE_KEY,
+      expect.objectContaining({
+        state: 'waiting',
+        prompt: 'spoofed auto-review permission',
+        agentType: 'codex'
+      }),
+      'Codex - action required',
+      { updatedAt: 1_700_000_000_401, stateStartedAt: 1_699_999_999_401 },
+      expectWorktreeRouting('wt-1'),
+      { launchToken: 'missing-launch' }
     )
     expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Codex - action required')
     expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(1)
