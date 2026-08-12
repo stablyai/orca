@@ -2,6 +2,7 @@ import { lstatSync } from 'node:fs'
 import { lstat, opendir } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { resolveAbsoluteDirOverride } from './absolute-dir-override'
 import {
   GrokSessionPathLookupQueue,
   type GrokSessionPathScanner
@@ -41,8 +42,7 @@ export function resolveGrokHomeDir(
   env: GrokSessionPathEnv = process.env,
   homeDir: string = homedir()
 ): string {
-  const fromEnv = env.GROK_HOME?.trim()
-  return fromEnv || join(homeDir, '.grok')
+  return resolveAbsoluteDirOverride(env.GROK_HOME, join(homeDir, '.grok'))
 }
 
 export function resolveGrokSessionsDir(

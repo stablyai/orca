@@ -57,6 +57,20 @@ describe('grok-session-paths', () => {
     expect(resolveGrokHomeDir({}, '/home/ada')).toBe(join('/home/ada', '.grok'))
   })
 
+  // Why: a relative GROK_HOME resolves against the process cwd — `/` for a Finder-launched app —
+  // turning the sessions root into an unbounded walk of the whole disk (#13082).
+  it.each(['.', '..', 'rel/path', 'C:foo'])(
+    'ignores the non-absolute GROK_HOME %j',
+    (relativeHome) => {
+      expect(resolveGrokHomeDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok')
+      )
+      expect(resolveGrokSessionsDir({ GROK_HOME: relativeHome }, '/home/ada')).toBe(
+        join('/home/ada', '.grok', 'sessions')
+      )
+    }
+  )
+
   it('refuses to invent encodeURIComponent names longer than 255 bytes', () => {
     const longCwd = `/${'a'.repeat(200)}/${'b'.repeat(200)}`
     expect(Buffer.byteLength(encodeURIComponent(longCwd), 'utf8')).toBeGreaterThan(
