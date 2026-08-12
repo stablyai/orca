@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../../shared/serve-supervision'
 import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
 
 // Why #11935: a pre-`ready` graceful quit is deferred, so a lock-losing headless `orca serve`
@@ -51,7 +52,7 @@ describe('headless lock-loss exit contract', () => {
     expect(serveUnits.length).toBeGreaterThan(0)
     for (const unit of serveUnits) {
       expect(unit).toContain(
-        `RestartPreventExitStatus=${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE}`
+        `RestartPreventExitStatus=${SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE} ${SERVE_SUPERVISOR_STOP_EXIT_CODE}`
       )
       expect(unit).toContain('StartLimitIntervalSec=')
       expect(unit).toContain('StartLimitBurst=')

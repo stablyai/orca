@@ -167,7 +167,7 @@ ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.
 StandardOutput=journal
 StandardError=journal
 Restart=on-failure
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
 RestartSec=5
 
 [Install]
@@ -177,11 +177,24 @@ WantedBy=multi-user.target
 Replace `100.64.1.20` with the LAN, Tailscale, tunnel, or public hostname that
 clients should use.
 
-Exit status `3` means another process already owns this userData profile, so
-`RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
-cannot succeed. Any other permanent startup fault is capped at 5 starts per
-5 minutes; systemd's defaults (10s window, 5 starts) can never trip at
-`RestartSec=5`, which is how one bad launch could restart thousands of times.
+The foreground CLI supervises Electron after startup. Readiness requires a
+WebSocket handshake, a reachable local runtime RPC, and a ready runtime graph.
+After three failed health checks it restarts only the Electron main process;
+the detached daemon remains available so its PTY sessions can be reattached.
+Main-process restarts use delays of 1, 5, and 15 seconds, and the budget resets
+after five healthy minutes.
+
+Exit status `3` means another process may own this userData profile. On Linux,
+the supervisor first proves the recorded local owner is no longer alive,
+checks runtime health again under a recovery lock, quarantines the unchanged
+singleton artifacts, and retries exactly once. It never changes an active,
+remote-host, changed, or otherwise ambiguous lock. Exit status `4` means the
+bounded restart budget was exhausted or startup cannot safely continue, such
+as an unusable temporary directory. `RestartPreventExitStatus=3 4` stops the
+unit for both conditions instead of creating another outer restart loop.
+Any other permanent startup fault is capped at 5 starts per 5 minutes;
+systemd's defaults (10s window, 5 starts) can never trip at `RestartSec=5`,
+which is how one bad launch could restart thousands of times.
 The start limit counts operator-initiated starts too, so once it trips systemd
 refuses a plain `systemctl start` until the 5-minute window rolls over. Run
 `sudo systemctl reset-failed orca-serve.service` first to clear it — the
@@ -255,7 +268,7 @@ Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
 Restart=on-failure
-RestartPreventExitStatus=3
+RestartPreventExitStatus=3 4
 RestartSec=5
 
 [Install]
@@ -268,6 +281,31 @@ Enable both units:
 sudo systemctl daemon-reload
 sudo systemctl enable --now orca-xvfb.service orca-serve.service
 ```
+
+## Temporary Directory
+
+`orca serve` validates its temporary directory before Electron starts and
+again before every supervised restart. It reports `ENOSPC` explicitly instead
+of entering a restart loop. By default it uses the operating system temporary
+directory. To place Chromium's singleton socket and other temporary files on a
+dedicated filesystem, create a service-owned directory there and set
+`ORCA_SERVE_TMPDIR` to its absolute path:
+
+```bash
+sudo install -d -o orca -g orca -m 700 /srv/orca-tmp
+sudo systemctl edit orca-serve.service
+```
+
+```ini
+[Service]
+Environment=ORCA_SERVE_TMPDIR=/srv/orca-tmp
+```
+
+Replace `/srv/orca-tmp` with a directory on the filesystem intended for Orca,
+then run `sudo systemctl daemon-reload` and restart the service. Orca creates
+the directory when possible, verifies it with a private write probe, and
+passes the same path to Chromium through `TMPDIR`. Relative and unwritable
+paths are rejected.
 
 ## CLI Install Note
 
@@ -834,17 +872,22 @@ refuse to run there and print the command to run on the machine you want.
   from the client, and make sure firewalls allow the selected `--port`.
 - Journal shows `Another Orca instance is already running for this userData
   profile` and the unit exits `3`: another process already owns the profile, so
-  `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the
+  `RestartPreventExitStatus=3 4` leaves the unit `failed` on purpose. Find the
   owner with `systemctl status orca-serve` and `pgrep -af orca`. Stop it (or
   keep it and leave the unit down), then run
   `sudo systemctl reset-failed orca-serve && sudo systemctl start orca-serve` —
-  `reset-failed` clears the failed state and any start-limit counter. If no owner
-  exists, the lock is stale (Chromium recorded a pid that
-  has since been reused): remove `SingletonLock` and `SingletonSocket` from the
-  userData directory and start again. If an earlier crash-loop already leaked
-  AppImage mounts, list them with `findmnt -rn -t fuse.orca-linux.AppImage` and
-  release only the ones with no live owner using `fusermount -uz <target>` (or
+  `reset-failed` clears the failed state and any start-limit counter. If no
+  owner exists, inspect the startup log for the recovery refusal reason; Orca
+  deliberately leaves missing, malformed, remote-host, changed, or live-PID
+  locks untouched. Do not remove singleton artifacts until ownership has been
+  verified independently. If an earlier crash-loop already leaked AppImage
+  mounts, list them with `findmnt -rn -t fuse.orca-linux.AppImage` and release
+  only the ones with no live owner using `fusermount -uz <target>` (or
   `umount -l <target>`), leaving the running instance's mount alone.
+- `Orca serve temporary directory is unavailable` or `ENOSPC`: free space on
+  the selected filesystem, or configure `ORCA_SERVE_TMPDIR` as described in
+  [Temporary Directory](#temporary-directory). Exit status `4` intentionally
+  prevents systemd from retrying until the storage problem is corrected.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
   make the crashing version the next rollback binary. The loop trips
