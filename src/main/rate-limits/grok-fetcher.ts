@@ -10,6 +10,7 @@ import {
   type GrokAuthReadResult,
   type GrokAuthSession
 } from './grok-auth'
+import { classifyGrokBillingHttpFailure, readGrokBillingErrorBody } from './grok-billing-error'
 
 // Why: billing URL and headers must match Grok CLI or xAI rejects the request.
 const GROK_CLI_PROXY_BASE =
@@ -206,10 +207,8 @@ async function fetchBillingData(
     }
   }
   if (!res.ok) {
-    return {
-      kind: 'result',
-      result: result('error', `Grok usage request failed (HTTP ${res.status})`)
-    }
+    const failure = classifyGrokBillingHttpFailure(res.status, await readGrokBillingErrorBody(res))
+    return { kind: 'result', result: result(failure.status, failure.error, failure.usageMetadata) }
   }
   const data: unknown = await res.json()
   return {

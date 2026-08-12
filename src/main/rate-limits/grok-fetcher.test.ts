@@ -28,10 +28,12 @@ vi.mock('node:os', () => ({ homedir: () => '/home/test' }))
 import { fetchGrokRateLimits } from './grok-fetcher'
 
 function jsonResponse(body: unknown, status = 200): Response {
+  const raw = JSON.stringify(body)
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body
+    json: async () => body,
+    text: async () => raw
   } as Response
 }
 
@@ -188,6 +190,28 @@ describe('fetchGrokRateLimits', () => {
       })
     )
     expect(netFetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not fall back to monthly billing after a team-account 412', async () => {
+    authState.file = freshAuthJson()
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse(
+        {
+          code: "The system is not in a state required for the operation's execution",
+          error: 'No personal team.'
+        },
+        412
+      )
+    )
+
+    const result = await fetchGrokRateLimits()
+    expect(result.status).toBe('unavailable')
+    expect(result.error).toMatch(/team accounts/i)
+    expect(result.usageMetadata).toEqual({
+      failureKind: 'usage-unavailable',
+      source: 'oauth'
+    })
+    expect(netFetchMock).toHaveBeenCalledTimes(1)
   })
 
   // Why: 'unavailable' would make applyStalePolicy discard the last good
