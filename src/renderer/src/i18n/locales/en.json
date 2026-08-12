@@ -10088,6 +10088,14 @@
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
+        "EditorColorThemeSetting": {
+          "title": "Editor Color Theme",
+          "description": "Syntax highlighting theme used by file editors and diff views. \"Follow app theme\" switches between the default light and dark themes.",
+          "auto": "Follow app theme",
+          "vs": "Light",
+          "vsDark": "Dark",
+          "monokai": "Monokai"
+        },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
           "availableCount": "{{value0}} ready to update",

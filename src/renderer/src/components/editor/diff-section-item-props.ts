@@ -13,6 +13,7 @@ export type DiffSectionItemProps = {
     terminalFontSize?: number
     terminalFontFamily?: string
     diffWordWrap?: boolean
+    editorColorTheme?: 'auto' | 'vs' | 'vs-dark' | 'monokai'
   } | null
   sectionHeight: number | undefined
   worktreeId?: string

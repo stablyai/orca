@@ -10,6 +10,7 @@ import { scrollTopCache, cursorPositionCache, setWithLRU } from '@/lib/scroll-ca
 import '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
+import { resolveMonacoThemeName } from '@/lib/editor-theme'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
 import { MAX_REVEAL_CONTENT_WAIT_FRAMES, performReveal } from './monaco-reveal'
@@ -839,7 +840,7 @@ export default function MonacoEditor({
         language={language}
         // Why: defaultValue, not controlled value — Orca owns post-mount content sync; a controlled path would double setValue.
         defaultValue={content}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={resolveMonacoThemeName(settings?.editorColorTheme, isDark)}
         onChange={handleChange}
         onMount={handleMount}
         options={{

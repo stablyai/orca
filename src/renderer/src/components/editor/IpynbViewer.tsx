@@ -39,6 +39,7 @@ import {
 } from '@/lib/editor-font-zoom'
 import { getConnectionId } from '@/lib/connection-context'
 import { resolveDocumentTheme } from '@/lib/document-theme'
+import { resolveMonacoThemeName } from '@/lib/editor-theme'
 import { useAppStore } from '@/store'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import { cn } from '@/lib/utils'
@@ -374,8 +375,8 @@ function CodeCell({
   }, [])
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(resolveMonacoThemeName(settings?.editorColorTheme, isDark))
+  }, [isDark, settings?.editorColorTheme])
 
   if (!active) {
     return (
@@ -407,7 +408,7 @@ function CodeCell({
         height={editorHeight}
         defaultLanguage={cell.language}
         language={cell.language}
-        theme={isDark ? 'vs-dark' : 'vs'}
+        theme={resolveMonacoThemeName(settings?.editorColorTheme, isDark)}
         value={source}
         onMount={handleMount}
         onChange={(value) => onChange(value ?? '')}

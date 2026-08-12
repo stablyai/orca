@@ -2812,6 +2812,10 @@ export type GlobalSettings = {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** Monaco color theme for file/diff editors. 'auto' follows `theme` (light/dark); any
+   *  other value is an explicit override, same relationship as terminalThemeDark/Light
+   *  have to `theme` for the terminal. */
+  editorColorTheme?: 'auto' | 'vs' | 'vs-dark' | 'monokai'
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */
