@@ -2798,6 +2798,10 @@ export type GlobalSettings = {
    *  the repo's base and the checkout is clean. Defaults off: unlike the other
    *  automations this one removes a checkout. */
   autoCloseMergedWorktrees?: boolean
+  /** How many minutes a workspace must have existed before the auto-close sweep
+   *  may delete it. Zero closes a landed workspace on the next sweep; the
+   *  10-minute default protects a checkout made from an already-merged branch. */
+  autoCloseMergedWorktreesGraceMinutes?: number
   branchPrefix: BranchPrefixStrategy
   branchPrefixCustom: string
   enableGitHubAttribution: boolean

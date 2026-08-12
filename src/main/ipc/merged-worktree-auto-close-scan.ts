@@ -13,6 +13,7 @@ import {
   decideMergedWorktreeAutoClose,
   getMergedWorktreeAutoCloseStructuralSkipReason,
   normalizeAutoCloseBranchName,
+  resolveMergedWorktreeAutoCloseGraceMs,
   type MergedWorktreeAutoCloseDecision,
   type MergedWorktreeAutoCloseEvidence,
   type MergedWorktreeAutoCloseRepoContext
@@ -27,6 +28,13 @@ export type MergedWorktreeAutoCloseScanOptions = {
   signal?: AbortSignal
 }
 
+/** The grace window this profile configured, in ms. */
+function getMergedWorktreeAutoCloseGraceMs(store: Store): number {
+  return resolveMergedWorktreeAutoCloseGraceMs(
+    store.getSettings().autoCloseMergedWorktreesGraceMinutes
+  )
+}
+
 /**
  * Decide, for one repo, which workspaces have landed and can be closed. Every
  * workspace the repo owns gets a decision so callers can report why a
@@ -38,6 +46,7 @@ export async function scanMergedWorktreeAutoCloseCandidates(
   options: MergedWorktreeAutoCloseScanOptions = {}
 ): Promise<MergedWorktreeAutoCloseDecision[]> {
   const now = options.now ?? Date.now()
+  const graceMs = getMergedWorktreeAutoCloseGraceMs(store)
   const repoContext: MergedWorktreeAutoCloseRepoContext = {
     isFolderRepo: isFolderRepo(repo),
     isRemoteRepo: Boolean(repo.connectionId)
@@ -71,12 +80,13 @@ export async function scanMergedWorktreeAutoCloseCandidates(
     const structuralSkip = getMergedWorktreeAutoCloseStructuralSkipReason(
       worktree,
       repoContext,
-      now
+      now,
+      graceMs
     )
     const evidence = structuralSkip
       ? UNREAD_MERGED_WORKTREE_AUTO_CLOSE_EVIDENCE
       : await readMergedWorktreeAutoCloseEvidence(repo, worktree, gitOptions, options.signal)
-    decisions.push(decideMergedWorktreeAutoClose(worktree, repoContext, evidence, now))
+    decisions.push(decideMergedWorktreeAutoClose(worktree, repoContext, evidence, now, graceMs))
   }
   return decisions
 }

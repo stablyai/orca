@@ -1,9 +1,18 @@
 import type { GlobalSettings } from '../../../../shared/types'
+import {
+  DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES,
+  MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES,
+  MIN_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES,
+  resolveMergedWorktreeAutoCloseGraceMs
+} from '../../../../shared/merged-worktree-auto-close'
 import { translate } from '@/i18n/i18n'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
+import { NumberField } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+
+const MS_PER_MINUTE = 60 * 1000
 
 export const AUTO_CLOSE_MERGED_WORKSPACES_KEYWORDS = [
   'auto close',
@@ -14,7 +23,8 @@ export const AUTO_CLOSE_MERGED_WORKSPACES_KEYWORDS = [
   'landed',
   'squash merge',
   'stale workspace',
-  'worktree'
+  'worktree',
+  'grace period'
 ]
 
 function getAutoCloseMergedWorkspacesTitle(): string {
@@ -48,23 +58,55 @@ export function AutoCloseMergedWorkspacesSetting({
 }): React.JSX.Element {
   const title = getAutoCloseMergedWorkspacesTitle()
   const description = getAutoCloseMergedWorkspacesDescription()
+  const enabled = settings.autoCloseMergedWorktrees === true
+  // Why resolve rather than read: the sweep decides on the resolved window, so
+  // the field must show the same value a stale or absent setting resolves to.
+  const graceMinutes =
+    resolveMergedWorktreeAutoCloseGraceMs(settings.autoCloseMergedWorktreesGraceMinutes) /
+    MS_PER_MINUTE
 
   return (
     <SearchableSetting
       title={title}
       description={description}
       keywords={AUTO_CLOSE_MERGED_WORKSPACES_KEYWORDS}
-      className="flex items-center justify-between gap-4 py-2"
+      className="py-2"
     >
-      <div className="space-y-0.5">
-        <Label>{title}</Label>
-        <p className="text-xs text-muted-foreground">{description}</p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="space-y-0.5">
+          <Label>{title}</Label>
+          <p className="text-xs text-muted-foreground">{description}</p>
+        </div>
+        <Switch
+          aria-label={title}
+          checked={enabled}
+          onCheckedChange={(checked) => void updateSettings({ autoCloseMergedWorktrees: checked })}
+        />
       </div>
-      <Switch
-        aria-label={title}
-        checked={settings.autoCloseMergedWorktrees === true}
-        onCheckedChange={(checked) => void updateSettings({ autoCloseMergedWorktrees: checked })}
-      />
+      {enabled ? (
+        <NumberField
+          label={translate(
+            'auto.components.settings.GitPane.autoCloseMergedWorkspacesGraceLabel',
+            'Wait before closing'
+          )}
+          description={translate(
+            'auto.components.settings.GitPane.autoCloseMergedWorkspacesGraceDescription',
+            'How many minutes a workspace must have existed before Orca may close it. Set this to 0 to close a workspace as soon as its branch has landed. The default protects a workspace created from a branch that was already merged.'
+          )}
+          value={graceMinutes}
+          defaultValue={DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES}
+          min={MIN_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES}
+          max={MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES}
+          step={1}
+          suffix={translate(
+            'auto.components.settings.GitPane.autoCloseMergedWorkspacesGraceSuffix',
+            'minutes'
+          )}
+          onChange={(minutes) =>
+            void updateSettings({ autoCloseMergedWorktreesGraceMinutes: minutes })
+          }
+        />
+      ) : null}
     </SearchableSetting>
   )
 }

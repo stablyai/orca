@@ -1,6 +1,30 @@
+const MS_PER_MINUTE = 60 * 1000
+
 /** Why a grace window: a workspace created from an already-merged PR branch is
- *  merged from its first second; the user still needs it. */
-export const MERGED_WORKTREE_AUTO_CLOSE_MIN_AGE_MS = 10 * 60 * 1000
+ *  merged from its first second; the user still needs it. Configurable because a
+ *  user who never works that way wants a landed workspace gone on the next sweep. */
+export const DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES = 10
+export const MIN_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES = 0
+export const MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES = 24 * 60
+
+export const DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS =
+  DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES * MS_PER_MINUTE
+
+/**
+ * Settings store the window in minutes. A profile that never wrote the setting,
+ * or wrote a value no control can produce, gets the default rather than a
+ * window that would delete a checkout the user still needs.
+ */
+export function resolveMergedWorktreeAutoCloseGraceMs(graceMinutes: number | undefined): number {
+  if (graceMinutes === undefined || !Number.isFinite(graceMinutes)) {
+    return DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS
+  }
+  const clamped = Math.min(
+    MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES,
+    Math.max(MIN_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES, graceMinutes)
+  )
+  return clamped * MS_PER_MINUTE
+}
 
 export type MergedWorktreeAutoCloseSkipReason =
   | 'main-worktree'
@@ -53,7 +77,8 @@ export type MergedWorktreeAutoCloseRepoContext = {
 export function getMergedWorktreeAutoCloseStructuralSkipReason(
   worktree: MergedWorktreeAutoCloseSubject,
   repo: MergedWorktreeAutoCloseRepoContext,
-  now: number
+  now: number,
+  graceMs: number = DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS
 ): MergedWorktreeAutoCloseSkipReason | null {
   if (worktree.isMainWorktree) {
     return 'main-worktree'
@@ -72,10 +97,9 @@ export function getMergedWorktreeAutoCloseStructuralSkipReason(
   if (!normalizeAutoCloseBranchName(worktree.branch)) {
     return 'detached-head'
   }
-  if (
-    worktree.createdAt !== undefined &&
-    now - worktree.createdAt < MERGED_WORKTREE_AUTO_CLOSE_MIN_AGE_MS
-  ) {
+  // Why the `graceMs > 0` guard: with no grace at all a workspace whose
+  // recorded creation time sits slightly ahead of the clock must still close.
+  if (graceMs > 0 && worktree.createdAt !== undefined && now - worktree.createdAt < graceMs) {
     return 'recently-created'
   }
   return null
@@ -85,7 +109,8 @@ export function decideMergedWorktreeAutoClose(
   worktree: MergedWorktreeAutoCloseSubject,
   repo: MergedWorktreeAutoCloseRepoContext,
   evidence: MergedWorktreeAutoCloseEvidence,
-  now: number
+  now: number,
+  graceMs: number = DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS
 ): MergedWorktreeAutoCloseDecision {
   const identity = {
     worktreeId: worktree.id,
@@ -93,7 +118,12 @@ export function decideMergedWorktreeAutoClose(
     path: worktree.path,
     branch: normalizeAutoCloseBranchName(worktree.branch)
   }
-  const structuralSkip = getMergedWorktreeAutoCloseStructuralSkipReason(worktree, repo, now)
+  const structuralSkip = getMergedWorktreeAutoCloseStructuralSkipReason(
+    worktree,
+    repo,
+    now,
+    graceMs
+  )
   if (structuralSkip) {
     return { ...identity, action: 'skip', reason: structuralSkip }
   }

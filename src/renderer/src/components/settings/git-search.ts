@@ -147,7 +147,8 @@ export const getGitPaneSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword(
         'auto.components.settings.git.search.staleWorkspace',
         'stale workspace'
-      )
+      ),
+      ...translateSearchKeyword('auto.components.settings.git.search.gracePeriod', 'grace period')
     ]
   },
   ...getAutoRenameBranchSearchEntries(),

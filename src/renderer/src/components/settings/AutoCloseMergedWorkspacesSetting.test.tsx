@@ -20,4 +20,33 @@ describe('AutoCloseMergedWorkspacesSetting', () => {
     const html = render({ ...getDefaultSettings('/home/test'), autoCloseMergedWorktrees: true })
     expect(html).toContain('data-state="checked"')
   })
+
+  it('hides the grace window while the automation is off', () => {
+    expect(render(getDefaultSettings('/home/test'))).not.toContain('Wait before closing')
+  })
+
+  it('offers the grace window in minutes once the automation is on', () => {
+    const html = render({ ...getDefaultSettings('/home/test'), autoCloseMergedWorktrees: true })
+
+    expect(html).toContain('Wait before closing')
+    expect(html).toContain('value="10"')
+    expect(html).toContain('min="0"')
+  })
+
+  it('shows the configured window, including zero', () => {
+    const html = render({
+      ...getDefaultSettings('/home/test'),
+      autoCloseMergedWorktrees: true,
+      autoCloseMergedWorktreesGraceMinutes: 0
+    })
+
+    expect(html).toContain('value="0"')
+  })
+
+  it('falls back to the default window when the profile never wrote one', () => {
+    const settings = { ...getDefaultSettings('/home/test'), autoCloseMergedWorktrees: true }
+    delete settings.autoCloseMergedWorktreesGraceMinutes
+
+    expect(render(settings)).toContain('value="10"')
+  })
 })

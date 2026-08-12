@@ -6392,7 +6392,10 @@
           "compareBaseRepositoryDefault": "Repository default",
           "compareBaseBranchUpstream": "Branch upstream",
           "autoCloseMergedWorkspacesTitle": "Close Merged Workspaces Automatically",
-          "autoCloseMergedWorkspacesDescription": "Delete a local workspace once its branch has landed in the base branch, including squash merges. Orca keeps the workspace when it has uncommitted or untracked changes, when its branch was never pushed, when it is pinned, and always keeps the project checkout itself."
+          "autoCloseMergedWorkspacesDescription": "Delete a local workspace once its branch has landed in the base branch, including squash merges. Orca keeps the workspace when it has uncommitted or untracked changes, when its branch was never pushed, when it is pinned, and always keeps the project checkout itself.",
+          "autoCloseMergedWorkspacesGraceLabel": "Wait before closing",
+          "autoCloseMergedWorkspacesGraceDescription": "How many minutes a workspace must have existed before Orca may close it. Set this to 0 to close a workspace as soon as its branch has landed. The default protects a workspace created from a branch that was already merged.",
+          "autoCloseMergedWorkspacesGraceSuffix": "minutes"
         },
         "HiddenExperimentalGroup": {
           "d0f914a528": "Placeholder toggle",

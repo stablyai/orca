@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { GitWorktreeInfo, Repo } from '../../shared/types'
-import { MERGED_WORKTREE_AUTO_CLOSE_MIN_AGE_MS } from '../../shared/merged-worktree-auto-close'
+import type { GitWorktreeInfo, GlobalSettings, Repo } from '../../shared/types'
+import { DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS } from '../../shared/merged-worktree-auto-close'
 
 const {
   listRepoWorktreesMock,
@@ -36,7 +36,7 @@ vi.mock('../git/worktree-branch-merge-state', () => ({
 import { scanMergedWorktreeAutoCloseCandidates } from './merged-worktree-auto-close-scan'
 
 const NOW = 1_800_000_000_000
-const CREATED_AT = NOW - MERGED_WORKTREE_AUTO_CLOSE_MIN_AGE_MS - 1
+const CREATED_AT = NOW - DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS - 1
 
 const REPO: Repo = {
   id: 'repo-1',
@@ -57,10 +57,13 @@ function gitWorktree(overrides: Partial<GitWorktreeInfo> = {}): GitWorktreeInfo 
   }
 }
 
-function createStore(overrides: Partial<Store> = {}): Store {
+function createStore(
+  settings: Partial<GlobalSettings> = {},
+  createdAt: number = CREATED_AT
+): Store {
   return {
-    getWorktreeMeta: () => ({ createdAt: CREATED_AT }),
-    ...overrides
+    getWorktreeMeta: () => ({ createdAt }),
+    getSettings: () => settings as GlobalSettings
   } as unknown as Store
 }
 
@@ -147,6 +150,30 @@ describe('scanMergedWorktreeAutoCloseCandidates', () => {
     await expect(
       scanMergedWorktreeAutoCloseCandidates(createStore(), REPO, { now: NOW })
     ).resolves.toEqual([])
+  })
+
+  it('keeps a just-created workspace when the profile configured no grace window', async () => {
+    const store = createStore({}, NOW)
+
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(store, REPO, { now: NOW })
+
+    expect(decisions[0]).toMatchObject({ action: 'skip', reason: 'recently-created' })
+  })
+
+  it('closes a just-created workspace once the profile sets the grace window to zero', async () => {
+    const store = createStore({ autoCloseMergedWorktreesGraceMinutes: 0 }, NOW)
+
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(store, REPO, { now: NOW })
+
+    expect(decisions[0]).toMatchObject({ action: 'close' })
+  })
+
+  it('keeps a workspace younger than the grace window the profile configured', async () => {
+    const store = createStore({ autoCloseMergedWorktreesGraceMinutes: 30 }, NOW - 29 * 60_000)
+
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(store, REPO, { now: NOW })
+
+    expect(decisions[0]).toMatchObject({ action: 'skip', reason: 'recently-created' })
   })
 
   it('passes the project WSL distro to the merge probe', async () => {
