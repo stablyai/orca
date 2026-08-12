@@ -22,11 +22,21 @@ import {
   makeWorktree,
   TEST_REPO
 } from '../store/slices/store-test-helpers'
+import type {
+  AgentStatusBatchTransaction,
+  AgentStatusBatchUpdate,
+  AgentStatusUpdate
+} from '../store/slices/agent-status'
+import type { AppState } from '../store/types'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
-import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../shared/types'
+import type {
+  AgentStatusClearIpcPayload,
+  MigrationUnsupportedPtyEntry
+} from '../../../shared/agent-status-types'
+import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type * as CmdJRowIndexJump from '@/lib/cmd-j-row-index-jump'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
   FLOATING_WORKSPACE_GUEST_CLOSE_EVENT,
@@ -5000,6 +5010,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     terminalHandle?: string
     launchToken?: string
     providerSession?: { key: 'session_id'; id: string }
+    providerSessionOnly?: boolean
     orchestration?: {
       taskId?: string
       dispatchId?: string
@@ -5030,11 +5041,72 @@ describe('useIpcEvents agent status snapshot integration', () => {
     driver: { kind: 'mobile'; clientId: string }
   }) => void
 
+  function applyMockAgentStatusUpdate(state: StoreLike, update: AgentStatusBatchUpdate): boolean {
+    const statuses = state.agentStatusByPaneKey as Record<
+      string,
+      | ({ agentType?: string; state?: string; updatedAt?: number } & Record<string, unknown>)
+      | undefined
+    >
+    const existing = statuses[update.paneKey]
+    const updatedAt = update.timing?.updatedAt
+    if (
+      existing?.updatedAt !== undefined &&
+      updatedAt !== undefined &&
+      updatedAt < existing.updatedAt
+    ) {
+      return false
+    }
+    const next = { ...statuses }
+    if (update.kind === 'providerSession') {
+      delete next[update.paneKey]
+    } else {
+      next[update.paneKey] = {
+        ...existing,
+        ...update.payload,
+        updatedAt,
+        providerSession: update.metadata?.providerSession
+      }
+    }
+    state.agentStatusByPaneKey = next
+    return true
+  }
+
+  function installMockAgentStatusTransaction(state: StoreLike): void {
+    state.transactAgentStatuses = <Result>(
+      operation: (transaction: AgentStatusBatchTransaction) => Result
+    ): Result => {
+      const stagedState = {
+        ...state,
+        agentStatusByPaneKey: {
+          ...(state.agentStatusByPaneKey as Record<string, unknown>)
+        }
+      }
+      const attemptedUpdates: AgentStatusBatchUpdate[] = []
+      const effects: (() => void)[] = []
+      const result = operation({
+        getState: () => stagedState as AppState,
+        apply: (update) => {
+          attemptedUpdates.push(update)
+          return applyMockAgentStatusUpdate(stagedState, update)
+        },
+        afterCommit: (effect) => effects.push(effect)
+      })
+      const setStatuses = state.setAgentStatuses as (
+        updates: readonly AgentStatusBatchUpdate[]
+      ) => readonly boolean[]
+      setStatuses(attemptedUpdates)
+      for (const effect of effects) {
+        effect()
+      }
+      return result
+    }
+  }
+
   function buildStoreState(overrides: StoreLike): StoreLike {
     // Why: copy the defensive set of getState() fields the hook touches during
     // mount so individual tests only need to override workspaceSessionReady,
     // tabsByWorktree, and setAgentStatus.
-    return {
+    const state: StoreLike = {
       setUpdateStatus: vi.fn(),
       fetchRepos: vi.fn(),
       fetchWorktrees: vi.fn(),
@@ -5064,9 +5136,12 @@ describe('useIpcEvents agent status snapshot integration', () => {
       removeSshCredentialRequest: vi.fn(),
       clearTabPtyId: vi.fn(),
       updateTabTitle: vi.fn(),
+      updateTabTitles: vi.fn(),
       runtimePaneTitlesByTabId: {},
       terminalLayoutsByTabId: {},
       agentStatusByPaneKey: {},
+      setAgentStatuses: vi.fn(() => []),
+      recordAgentProviderSession: vi.fn(),
       clearTransientAgentStatuses: vi.fn(),
       getAgentLaunchConfigForStatusMetadata: vi.fn(() => undefined),
       recentlyClosedAgentStatusTabIds: {},
@@ -5078,6 +5153,45 @@ describe('useIpcEvents agent status snapshot integration', () => {
       settings: { terminalFontSize: 13 },
       ...overrides
     }
+    if (!('updateTabTitles' in overrides)) {
+      state.updateTabTitles = vi.fn((updates: readonly { tabId: string; title: string }[]) => {
+        const updateTitle = state.updateTabTitle as AppState['updateTabTitle']
+        for (const { tabId, title } of updates) {
+          updateTitle(tabId, title)
+        }
+      })
+    }
+    if (!('setAgentStatuses' in overrides)) {
+      state.setAgentStatuses = vi.fn((updates: readonly AgentStatusBatchUpdate[]) =>
+        updates.map((update) => {
+          if (update.kind === 'providerSession') {
+            const recordProviderSession =
+              state.recordAgentProviderSession as AppState['recordAgentProviderSession']
+            recordProviderSession(
+              update.paneKey,
+              update.agent,
+              update.providerSession,
+              update.timing,
+              update.routing,
+              update.metadata
+            )
+          } else {
+            const setStatus = state.setAgentStatus as AppState['setAgentStatus']
+            setStatus(
+              update.paneKey,
+              update.payload,
+              update.terminalTitle,
+              update.timing,
+              update.routing,
+              update.metadata
+            )
+          }
+          return true
+        })
+      )
+    }
+    installMockAgentStatusTransaction(state)
+    return state
   }
 
   function buildWindowApi(args: {
@@ -5087,6 +5201,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       cb: (data: { paneKey: string; resolution: 'adopted' | 'exited' }) => void
     ) => () => void
     getSnapshot?: () => Promise<AgentStatusSetData[]>
+    getMigrationUnsupportedSnapshot?: () => Promise<MigrationUnsupportedPtyEntry[]>
     drop?: (paneKey: string) => void
     remoteWorkspace?: Record<string, unknown>
     runtime?: Record<string, unknown>
@@ -5200,6 +5315,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
           onLegacyWorkerTerminalRecovery:
             args.onLegacyWorkerTerminalRecovery ?? vi.fn(() => () => {}),
           getSnapshot: args.getSnapshot ?? vi.fn(() => Promise.resolve([])),
+          ...(args.getMigrationUnsupportedSnapshot
+            ? { getMigrationUnsupportedSnapshot: args.getMigrationUnsupportedSnapshot }
+            : {}),
           drop: args.drop ?? vi.fn()
         },
         remoteWorkspace: args.remoteWorkspace
@@ -6136,6 +6254,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
       tabsByWorktree: {},
       workspaceSessionReady: false
     })
+    const setAgentStatuses = vi.mocked(storeState.setAgentStatuses as AppState['setAgentStatuses'])
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -6201,6 +6320,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     await Promise.resolve()
 
     expect(setAgentStatus).toHaveBeenCalledTimes(1)
+    expect(setAgentStatuses).toHaveBeenCalledTimes(1)
+    expect(setAgentStatuses.mock.calls[0]?.[0]).toHaveLength(1)
     expect(setAgentStatus).toHaveBeenCalledWith(
       FUTURE_PANE_KEY,
       expect.objectContaining({ state: 'working', prompt: 'p', agentType: 'claude' }),
@@ -6211,18 +6332,582 @@ describe('useIpcEvents agent status snapshot integration', () => {
     )
   })
 
+  it('applies a large snapshot with one status and two bounded title publications', async () => {
+    const paneCount = 100
+    const snapshot: AgentStatusSetData[] = []
+    const worktrees: AppState['worktreesByRepo'][string] = []
+    const tabsByWorktree: AppState['tabsByWorktree'] = {}
+    const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
+    for (let index = 0; index < paneCount; index += 1) {
+      const worktreeId = `wt-snapshot-${index}`
+      const tabId = `tab-snapshot-${index}`
+      const leafId = `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`
+      const paneKey = makePaneKey(tabId, leafId)
+      worktrees.push(makeWorktree({ id: worktreeId, repoId: TEST_REPO.id }))
+      tabsByWorktree[worktreeId] = [
+        makeTab({ id: tabId, worktreeId, title: 'Pi', ptyId: `pty-${index}` })
+      ]
+      terminalLayoutsByTabId[tabId] = {
+        root: { type: 'leaf', leafId },
+        activeLeafId: leafId,
+        expandedLeafId: null
+      }
+      snapshot.push({
+        paneKey,
+        worktreeId,
+        state: 'waiting',
+        prompt: `remote prompt ${index}`,
+        agentType: 'pi',
+        receivedAt: 1_700_000_000_000 + index,
+        stateStartedAt: 1_700_000_000_000 + index
+      })
+    }
+    let resolveSnapshot: ((entries: AgentStatusSetData[]) => void) | undefined
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [TEST_REPO],
+      worktreesByRepo: { [TEST_REPO.id]: worktrees },
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      activeWorktreeId: worktrees[0]?.id ?? null,
+      settings: {
+        ...store.getState().settings,
+        tabAutoGenerateTitle: true,
+        terminalFontSize: 13
+      }
+    } as Partial<AppState>)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState,
+        setState: store.setState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    let relevantPublications = 0
+    const unsubscribe = store.subscribe((state, previousState) => {
+      if (
+        state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey ||
+        state.tabsByWorktree !== previousState.tabsByWorktree
+      ) {
+        relevantPublications += 1
+      }
+    })
+    resolveSnapshot?.(snapshot)
+
+    await vi.waitFor(() => {
+      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.title).toBe(
+        'Pi - action required'
+      )
+      expect(store.getState().tabsByWorktree['wt-snapshot-99']?.[0]?.generatedTitle).toBeTruthy()
+    })
+
+    expect(relevantPublications).toBe(3)
+    unsubscribe()
+  })
+
+  it('indexes one 100-pane tab and its split tree once per snapshot', async () => {
+    const paneCount = 100
+    const tabId = 'tab-indexed-snapshot'
+    const worktreeId = 'wt-indexed-snapshot'
+    const leafIds = Array.from(
+      { length: paneCount },
+      (_, index) => `00000000-0000-4000-8001-${String(index).padStart(12, '0')}`
+    )
+    let leafIdLookupCount = 0
+    const leaves = leafIds.map((leafId) => {
+      const leaf = { type: 'leaf' } as TerminalPaneLayoutNode
+      Object.defineProperty(leaf, 'leafId', {
+        enumerable: true,
+        get: () => {
+          leafIdLookupCount += 1
+          return leafId
+        }
+      })
+      return leaf
+    })
+    const root = leaves
+      .slice(1)
+      .reduce<TerminalPaneLayoutNode>(
+        (tree, leaf) => ({ type: 'split', direction: 'vertical', first: tree, second: leaf }),
+        leaves[0]!
+      )
+    let tabIdLookupCount = 0
+    const tab = makeTab({ id: tabId, worktreeId, title: 'Workspace', ptyId: 'pty-indexed' })
+    Object.defineProperty(tab, 'id', {
+      enumerable: true,
+      get: () => {
+        tabIdLookupCount += 1
+        return tabId
+      }
+    })
+    const snapshot = leafIds.map(
+      (leafId, index): AgentStatusSetData => ({
+        paneKey: makePaneKey(tabId, leafId),
+        worktreeId,
+        state: 'working',
+        prompt: `indexed prompt ${index}`,
+        agentType: 'claude',
+        receivedAt: 1_700_000_000_000 + index,
+        stateStartedAt: 1_700_000_000_000 + index
+      })
+    )
+    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [TEST_REPO],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })]
+      },
+      tabsByWorktree: { [worktreeId]: [tab] },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root,
+          activeLeafId: leafIds[0]!,
+          expandedLeafId: null
+        }
+      },
+      setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
+      settings: { ...store.getState().settings, terminalFontSize: 13 }
+    } as Partial<AppState>)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState,
+        setState: store.setState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal('window', buildWindowApi({ getSnapshot, onSet: () => () => {} }))
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    tabIdLookupCount = 0
+    leafIdLookupCount = 0
+    resolveSnapshot(snapshot)
+
+    await vi.waitFor(() => {
+      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+    })
+    expect(tabIdLookupCount).toBe(1)
+    expect(leafIdLookupCount).toBe(paneCount)
+  })
+
+  it('indexes 100 distinct tab owners once per snapshot', async () => {
+    const paneCount = 100
+    const worktreeId = 'wt-indexed-tabs'
+    const tabs: AppState['tabsByWorktree'][string] = []
+    const snapshot: AgentStatusSetData[] = []
+    const unsupportedSnapshot: MigrationUnsupportedPtyEntry[] = []
+    let tabIdLookupCount = 0
+    for (let index = 0; index < paneCount; index += 1) {
+      const tabId = `tab-indexed-${index}`
+      const leafId = `00000000-0000-4000-8003-${String(index).padStart(12, '0')}`
+      const tab = makeTab({
+        id: tabId,
+        worktreeId,
+        title: 'Workspace',
+        ptyId: `pty-indexed-${index}`
+      })
+      Object.defineProperty(tab, 'id', {
+        enumerable: true,
+        get: () => {
+          tabIdLookupCount += 1
+          return tabId
+        }
+      })
+      tabs.push(tab)
+      snapshot.push({
+        paneKey: makePaneKey(tabId, leafId),
+        worktreeId,
+        state: 'working',
+        prompt: `indexed tab prompt ${index}`,
+        agentType: 'claude',
+        receivedAt: 1_700_000_000_500 + index,
+        stateStartedAt: 1_700_000_000_500 + index
+      })
+      unsupportedSnapshot.push({
+        ptyId: `pty-indexed-${index}`,
+        worktreeId,
+        tabId,
+        leafId,
+        paneKey: makePaneKey(tabId, leafId),
+        reason: 'legacy-numeric-pane-key',
+        source: 'local',
+        updatedAt: 1_700_000_000_500 + index
+      })
+    }
+    let resolveSnapshot!: (entries: AgentStatusSetData[]) => void
+    const getSnapshot = vi.fn(
+      () =>
+        new Promise<AgentStatusSetData[]>((resolve) => {
+          resolveSnapshot = resolve
+        })
+    )
+    let resolveUnsupportedSnapshot!: (entries: MigrationUnsupportedPtyEntry[]) => void
+    const getMigrationUnsupportedSnapshot = vi.fn(
+      () =>
+        new Promise<MigrationUnsupportedPtyEntry[]>((resolve) => {
+          resolveUnsupportedSnapshot = resolve
+        })
+    )
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [TEST_REPO],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })]
+      },
+      tabsByWorktree: { [worktreeId]: tabs },
+      terminalLayoutsByTabId: {},
+      setGeneratedTabTitlesFromAgentPrompts: vi.fn(),
+      settings: {
+        ...store.getState().settings,
+        terminalFontSize: 13,
+        tabAutoGenerateTitle: false
+      }
+    } as Partial<AppState>)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState,
+        setState: store.setState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        getMigrationUnsupportedSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    tabIdLookupCount = 0
+    resolveSnapshot(snapshot)
+
+    await vi.waitFor(() => {
+      expect(Object.keys(store.getState().agentStatusByPaneKey)).toHaveLength(paneCount)
+    })
+    expect(tabIdLookupCount).toBe(paneCount)
+    expect(getMigrationUnsupportedSnapshot).toHaveBeenCalledTimes(1)
+
+    tabIdLookupCount = 0
+    resolveUnsupportedSnapshot(unsupportedSnapshot)
+    await vi.waitFor(() => {
+      expect(Object.keys(store.getState().migrationUnsupportedByPtyId)).toHaveLength(paneCount)
+    })
+    expect(tabIdLookupCount).toBe(paneCount)
+  })
+
+  it('preserves inactive, SSH, and folder routing parity in one batch', async () => {
+    type RoutingCase = {
+      tabId: string
+      leafId: string
+      ownerId: string
+      payloadWorktreeId: string
+      connectionId?: string
+      rootless?: boolean
+      expected: boolean
+    }
+    const folderId = 'folder-routing'
+    const folderKey = folderWorkspaceKey(folderId)
+    const cases: RoutingCase[] = [
+      {
+        tabId: 'tab-routing-inactive',
+        leafId: '00000000-0000-4000-8002-000000000001',
+        ownerId: 'wt-routing-local',
+        payloadWorktreeId: 'wt-routing-local',
+        rootless: true,
+        expected: true
+      },
+      {
+        tabId: 'tab-routing-ssh-match',
+        leafId: '00000000-0000-4000-8002-000000000002',
+        ownerId: 'wt-routing-ssh',
+        payloadWorktreeId: 'wt-routing-ssh',
+        connectionId: 'ssh-live',
+        expected: true
+      },
+      {
+        tabId: 'tab-routing-ssh-mismatch',
+        leafId: '00000000-0000-4000-8002-000000000003',
+        ownerId: 'wt-routing-ssh',
+        payloadWorktreeId: 'wt-routing-ssh',
+        connectionId: 'ssh-stale',
+        expected: false
+      },
+      {
+        tabId: 'tab-routing-hydrating',
+        leafId: '00000000-0000-4000-8002-000000000004',
+        ownerId: 'wt-routing-hydrating',
+        payloadWorktreeId: 'wt-routing-hydrating',
+        connectionId: 'ssh-hydrating',
+        expected: true
+      },
+      {
+        tabId: 'tab-routing-hydrating-mismatch',
+        leafId: '00000000-0000-4000-8002-000000000005',
+        ownerId: 'wt-routing-hydrating',
+        payloadWorktreeId: 'wt-routing-other',
+        connectionId: 'ssh-hydrating',
+        expected: false
+      },
+      {
+        tabId: 'tab-routing-folder',
+        leafId: '00000000-0000-4000-8002-000000000006',
+        ownerId: folderKey,
+        payloadWorktreeId: folderKey,
+        connectionId: 'ssh-folder-stale',
+        expected: true
+      }
+    ]
+    const tabsByWorktree: AppState['tabsByWorktree'] = {}
+    const terminalLayoutsByTabId: AppState['terminalLayoutsByTabId'] = {}
+    for (const entry of cases) {
+      ;(tabsByWorktree[entry.ownerId] ??= []).push(
+        makeTab({
+          id: entry.tabId,
+          worktreeId: entry.ownerId,
+          title: 'Workspace',
+          ptyId: `pty-${entry.tabId}`
+        })
+      )
+      terminalLayoutsByTabId[entry.tabId] = {
+        root: entry.rootless ? null : { type: 'leaf', leafId: entry.leafId },
+        activeLeafId: entry.rootless ? null : entry.leafId,
+        expandedLeafId: null
+      }
+    }
+    const snapshot = cases.map(
+      (entry, index): AgentStatusSetData => ({
+        paneKey: makePaneKey(entry.tabId, entry.leafId),
+        worktreeId: entry.payloadWorktreeId,
+        ...(entry.connectionId ? { connectionId: entry.connectionId } : {}),
+        state: 'working',
+        prompt: `routing case ${index}`,
+        agentType: 'claude',
+        receivedAt: 1_700_000_001_000 + index,
+        stateStartedAt: 1_700_000_001_000 + index
+      })
+    )
+    const localRepo = { ...TEST_REPO, id: 'repo-routing-local', connectionId: null }
+    const sshRepo = { ...TEST_REPO, id: 'repo-routing-ssh', connectionId: 'ssh-live' }
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [localRepo, sshRepo],
+      worktreesByRepo: {
+        [localRepo.id]: [makeWorktree({ id: 'wt-routing-local', repoId: localRepo.id })],
+        [sshRepo.id]: [makeWorktree({ id: 'wt-routing-ssh', repoId: sshRepo.id })]
+      },
+      folderWorkspaces: [
+        {
+          id: folderId,
+          projectGroupId: 'group-routing',
+          name: 'Folder routing',
+          folderPath: '/folder-routing',
+          connectionId: 'ssh-folder-live',
+          linkedTask: null,
+          comment: '',
+          isArchived: false,
+          isUnread: false,
+          isPinned: false,
+          sortOrder: 0,
+          lastActivityAt: 0,
+          createdAt: 0,
+          updatedAt: 0
+        }
+      ],
+      tabsByWorktree,
+      terminalLayoutsByTabId,
+      activeWorktreeId: null,
+      settings: { ...store.getState().settings, terminalFontSize: 13 }
+    } as Partial<AppState>)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState,
+        setState: store.setState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({ getSnapshot: vi.fn().mockResolvedValue(snapshot), onSet: () => () => {} })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    await vi.waitFor(() => {
+      expect(
+        cases
+          .filter((entry) => entry.expected)
+          .every(
+            (entry) => store.getState().agentStatusByPaneKey[makePaneKey(entry.tabId, entry.leafId)]
+          )
+      ).toBe(true)
+    })
+    for (const entry of cases) {
+      expect(
+        store.getState().agentStatusByPaneKey[makePaneKey(entry.tabId, entry.leafId)] !== undefined
+      ).toBe(entry.expected)
+    }
+  })
+
+  it('projects ordered tab titles across panes in an inactive split snapshot', async () => {
+    const tabId = 'tab-inactive-split'
+    const worktreeId = 'wt-inactive-split'
+    const waitingPaneKey = makePaneKey(tabId, '00000000-0000-4000-8000-000000000001')
+    const donePaneKey = makePaneKey(tabId, '00000000-0000-4000-8000-000000000002')
+    const getSnapshot = vi.fn().mockResolvedValue([
+      {
+        paneKey: waitingPaneKey,
+        worktreeId,
+        state: 'waiting',
+        prompt: 'waiting turn',
+        agentType: 'pi',
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_700_000_000_000
+      },
+      {
+        paneKey: donePaneKey,
+        worktreeId,
+        state: 'done',
+        prompt: 'completed turn',
+        agentType: 'pi',
+        receivedAt: 1_700_000_000_001,
+        stateStartedAt: 1_700_000_000_001
+      }
+    ] satisfies AgentStatusSetData[])
+    const store = createTestStore()
+    store.setState({
+      workspaceSessionReady: true,
+      repos: [TEST_REPO],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: worktreeId, repoId: TEST_REPO.id })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: tabId, worktreeId, title: 'My Project' })]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: null,
+          activeLeafId: null,
+          expandedLeafId: null,
+          ptyIdsByLeafId: {}
+        }
+      },
+      activeWorktreeId: null,
+      settings: { ...store.getState().settings, terminalFontSize: 13 }
+    } as Partial<AppState>)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: store.subscribe,
+        getState: store.getState,
+        setState: store.setState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        getSnapshot,
+        onSet: () => () => {}
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+
+    await vi.waitFor(() => {
+      expect(store.getState().agentStatusByPaneKey[waitingPaneKey]?.state).toBe('waiting')
+      expect(store.getState().agentStatusByPaneKey[donePaneKey]?.state).toBe('done')
+      expect(store.getState().tabsByWorktree[worktreeId]?.[0]?.title).toBe('Pi ready')
+    })
+  })
+
   it('applies a burst leading-edge first, then coalesces the rest into one deferred batch', async () => {
     // Why: each live status event is its own IPC task, so N events used to pay
     // N full render passes (STA-3328 mechanism 2). The leading event must stay
     // synchronous (zero added latency); followers within the burst window must
     // apply together on one later task, in arrival order.
     vi.useFakeTimers()
-    const setAgentStatus = vi.fn()
+    let storeState: StoreLike
+    let publicationCount = 0
+    const applyStatus = (paneKey: string, payload: unknown): void => {
+      storeState.agentStatusByPaneKey = {
+        ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
+        [paneKey]: payload
+      }
+    }
+    const setAgentStatus = vi.fn((paneKey: string, payload: unknown) => {
+      applyStatus(paneKey, payload)
+      publicationCount += 1
+    })
+    const setAgentStatuses = vi.fn((updates: readonly AgentStatusBatchUpdate[]) => {
+      for (const update of updates) {
+        if (update.kind === 'providerSession') {
+          const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
+          delete next[update.paneKey]
+          storeState.agentStatusByPaneKey = next
+        } else {
+          applyStatus(update.paneKey, update.payload)
+        }
+      }
+      publicationCount += 1
+      return updates.map(() => true)
+    })
+    const recordAgentProviderSession = vi.fn()
     const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
       current: null
     }
-    const storeState: StoreLike = buildStoreState({
+    storeState = buildStoreState({
       setAgentStatus,
+      setAgentStatuses,
+      recordAgentProviderSession,
       workspaceSessionReady: true,
       tabsByWorktree: {
         'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
@@ -6235,7 +6920,6 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
-
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
       useAppStore: {
@@ -6273,15 +6957,275 @@ describe('useIpcEvents agent status snapshot integration', () => {
 
       emit(1_700_000_000_000, 'first')
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(publicationCount).toBe(1)
 
       emit(1_700_000_000_001, 'second')
       emit(1_700_000_000_002, 'third')
+      onSetListenerRef.current({
+        paneKey: FUTURE_PANE_KEY,
+        state: 'working',
+        prompt: 'provider identity',
+        agentType: 'pi',
+        providerSession: { key: 'session_id', id: 'pi-session' },
+        providerSessionOnly: true,
+        receivedAt: 1_700_000_000_003,
+        stateStartedAt: 1_700_000_000_003
+      })
       expect(setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses).not.toHaveBeenCalled()
 
       vi.advanceTimersByTime(40)
-      expect(setAgentStatus).toHaveBeenCalledTimes(3)
-      expect(setAgentStatus.mock.calls[1][1]).toEqual(expect.objectContaining({ prompt: 'second' }))
-      expect(setAgentStatus.mock.calls[2][1]).toEqual(expect.objectContaining({ prompt: 'third' }))
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses.mock.calls[0][0]).toEqual([
+        expect.objectContaining({
+          paneKey: FUTURE_PANE_KEY,
+          payload: expect.objectContaining({ prompt: 'second' })
+        }),
+        expect.objectContaining({
+          paneKey: FUTURE_PANE_KEY,
+          payload: expect.objectContaining({ prompt: 'third' })
+        }),
+        expect.objectContaining({
+          kind: 'providerSession',
+          paneKey: FUTURE_PANE_KEY,
+          agent: 'pi',
+          providerSession: { key: 'session_id', id: 'pi-session' }
+        })
+      ])
+      expect(recordAgentProviderSession).not.toHaveBeenCalled()
+      expect(publicationCount).toBe(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps a live event enqueued by a synchronous batch subscriber for the next flush', async () => {
+    vi.useFakeTimers()
+    const setAgentStatus = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    let reentered = false
+    const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
+      if (!reentered) {
+        reentered = true
+        onSetListenerRef.current?.({
+          paneKey: FUTURE_PANE_KEY,
+          state: 'working',
+          prompt: 'reentered',
+          agentType: 'claude',
+          receivedAt: 1_700_000_000_002,
+          stateStartedAt: 1_700_000_000_002
+        })
+      }
+      return updates.map(() => true)
+    })
+    const storeState = buildStoreState({
+      setAgentStatus,
+      setAgentStatuses,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (callback) => {
+          onSetListenerRef.current = callback
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      if (!onSetListenerRef.current) {
+        throw new Error('Expected agentStatus.onSet listener to be registered')
+      }
+
+      onSetListenerRef.current({
+        paneKey: FUTURE_PANE_KEY,
+        state: 'working',
+        prompt: 'leading',
+        agentType: 'claude',
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_700_000_000_000
+      })
+      onSetListenerRef.current({
+        paneKey: FUTURE_PANE_KEY,
+        state: 'working',
+        prompt: 'queued',
+        agentType: 'claude',
+        receivedAt: 1_700_000_000_001,
+        stateStartedAt: 1_700_000_000_001
+      })
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses.mock.calls[0][0][0].payload.prompt).toBe('queued')
+
+      vi.advanceTimersByTime(40)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(2)
+      expect(setAgentStatuses.mock.calls[1][0][0].payload.prompt).toBe('reentered')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('projects synthetic pane titles across ordered same-pane batch updates', async () => {
+    vi.useFakeTimers()
+    let storeState: StoreLike
+    const applyStatusUpdate = (update: AgentStatusUpdate): void => {
+      storeState.agentStatusByPaneKey = {
+        ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
+        [update.paneKey]: {
+          ...update.payload,
+          updatedAt: update.timing?.updatedAt,
+          providerSession: update.metadata?.providerSession
+        }
+      }
+    }
+    const setAgentStatus = vi.fn(
+      (
+        paneKey: string,
+        payload: AgentStatusUpdate['payload'],
+        terminalTitle?: string,
+        timing?: AgentStatusUpdate['timing'],
+        routing?: AgentStatusUpdate['routing'],
+        metadata?: AgentStatusUpdate['metadata']
+      ) => applyStatusUpdate({ paneKey, payload, terminalTitle, timing, routing, metadata })
+    )
+    const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
+      return updates.map((update) => {
+        const existing = (
+          storeState.agentStatusByPaneKey as Record<string, { updatedAt?: number } | undefined>
+        )[update.paneKey]
+        if (
+          existing?.updatedAt !== undefined &&
+          update.timing?.updatedAt !== undefined &&
+          update.timing.updatedAt < existing.updatedAt
+        ) {
+          return false
+        }
+        applyStatusUpdate(update)
+        return true
+      })
+    })
+    const updateTabTitle = vi.fn()
+    const observeAgentHookCompletionForNotification = vi.fn()
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    storeState = buildStoreState({
+      setAgentStatus,
+      setAgentStatuses,
+      updateTabTitle,
+      workspaceSessionReady: true,
+      tabsByWorktree: {
+        'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Codex' }]
+      },
+      terminalLayoutsByTabId: {
+        'tab-future': {
+          root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+          activeLeafId: FUTURE_LEAF_ID,
+          expandedLeafId: null
+        }
+      }
+    })
+    const updateTabTitles = vi.mocked(storeState.updateTabTitles as AppState['updateTabTitles'])
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./agent-hook-completion-notifications', () => ({
+      observeAgentHookCompletionForNotification,
+      resetAgentHookCompletionNotificationCoordinators: vi.fn(),
+      syncAgentHookCompletionNotificationsForStoreUpdate: vi.fn()
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (callback) => {
+          onSetListenerRef.current = callback
+          return () => {}
+        }
+      })
+    )
+
+    try {
+      const { useIpcEvents } = await import('./useIpcEvents')
+      useIpcEvents()
+      const onSet = onSetListenerRef.current
+      if (!onSet) {
+        throw new Error('Expected agentStatus.onSet listener to be registered')
+      }
+      const emit = (
+        receivedAt: number,
+        state: AgentStatusSetData['state'],
+        agentType?: string
+      ): void => {
+        onSet({
+          paneKey: FUTURE_PANE_KEY,
+          state,
+          prompt: state,
+          agentType,
+          receivedAt,
+          stateStartedAt: receivedAt
+        })
+      }
+
+      emit(1_700_000_000_000, 'working', 'pi')
+      emit(1_700_000_000_001, 'waiting', 'pi')
+      emit(1_700_000_000_002, 'waiting', 'pi')
+      emit(1_700_000_000_003, 'done', 'pi')
+      emit(1_700_000_000_002, 'waiting', 'pi')
+      vi.advanceTimersByTime(40)
+
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses.mock.calls[0][0]).toEqual([
+        expect.objectContaining({
+          payload: expect.objectContaining({ agentType: 'pi', state: 'waiting' }),
+          terminalTitle: 'Pi - action required'
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ agentType: 'pi', state: 'waiting' }),
+          terminalTitle: 'Pi - action required'
+        }),
+        expect.objectContaining({
+          payload: expect.objectContaining({ agentType: 'pi', state: 'done' }),
+          terminalTitle: 'Pi ready'
+        })
+      ])
+      expect(setAgentStatuses.mock.results[0].value).toEqual([true, true, true])
+      expect(updateTabTitle).toHaveBeenCalledOnce()
+      expect(updateTabTitle).toHaveBeenCalledWith('tab-future', 'Pi ready')
+      expect(updateTabTitles).toHaveBeenCalledTimes(1)
+      expect(observeAgentHookCompletionForNotification).toHaveBeenCalledTimes(4)
     } finally {
       vi.useRealTimers()
     }
@@ -6290,19 +7234,32 @@ describe('useIpcEvents agent status snapshot integration', () => {
   it('preserves queued set-clear order for working removal and done retention', async () => {
     vi.useFakeTimers()
     let storeState: StoreLike
+    const applyStatusUpdate = (
+      paneKey: string,
+      payload: { state: string },
+      timing: { updatedAt?: number } | undefined
+    ): void => {
+      storeState.agentStatusByPaneKey = {
+        ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
+        [paneKey]: { ...payload, updatedAt: timing?.updatedAt }
+      }
+    }
     const setAgentStatus = vi.fn(
       (
         paneKey: string,
         payload: { state: string },
         _title: unknown,
-        timing: { updatedAt: number }
+        timing: { updatedAt?: number } | undefined
       ) => {
-        storeState.agentStatusByPaneKey = {
-          ...(storeState.agentStatusByPaneKey as Record<string, unknown>),
-          [paneKey]: { ...payload, updatedAt: timing.updatedAt }
-        }
+        applyStatusUpdate(paneKey, payload, timing)
       }
     )
+    const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
+      for (const update of updates) {
+        applyStatusUpdate(update.paneKey, update.payload, update.timing)
+      }
+      return updates.map(() => true)
+    })
     const removeAgentStatus = vi.fn((paneKey: string) => {
       const next = { ...(storeState.agentStatusByPaneKey as Record<string, unknown>) }
       delete next[paneKey]
@@ -6316,6 +7273,7 @@ describe('useIpcEvents agent status snapshot integration', () => {
     }
     storeState = buildStoreState({
       setAgentStatus,
+      setAgentStatuses,
       removeAgentStatus,
       workspaceSessionReady: true,
       tabsByWorktree: {
@@ -6385,23 +7343,28 @@ describe('useIpcEvents agent status snapshot integration', () => {
       expect(storeState.agentStatusByPaneKey).toEqual({})
 
       vi.advanceTimersByTime(40)
-      expect(setAgentStatus).toHaveBeenCalledTimes(2)
+      expect(setAgentStatus).toHaveBeenCalledTimes(1)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(1)
       expect(storeState.agentStatusByPaneKey).toEqual({})
 
       emit(1_700_000_000_002, 'task')
       emit(1_700_000_000_003, 'task', 'done')
-      expect(setAgentStatus).toHaveBeenCalledTimes(3)
+      expect(setAgentStatus).toHaveBeenCalledTimes(2)
 
       onClearListenerRef.current({ paneKey: FUTURE_PANE_KEY })
 
-      expect(setAgentStatus).toHaveBeenCalledTimes(4)
-      expect(setAgentStatus.mock.calls[3][1]).toEqual(expect.objectContaining({ state: 'done' }))
+      expect(setAgentStatus).toHaveBeenCalledTimes(2)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(2)
+      expect(setAgentStatuses.mock.calls[1][0][0]).toEqual(
+        expect.objectContaining({ payload: expect.objectContaining({ state: 'done' }) })
+      )
       expect(removeAgentStatus).toHaveBeenCalledTimes(1)
       expect(storeState.agentStatusByPaneKey).toEqual({
         [FUTURE_PANE_KEY]: expect.objectContaining({ state: 'done' })
       })
       vi.advanceTimersByTime(40)
-      expect(setAgentStatus).toHaveBeenCalledTimes(4)
+      expect(setAgentStatus).toHaveBeenCalledTimes(2)
+      expect(setAgentStatuses).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }
@@ -6503,6 +7466,93 @@ describe('useIpcEvents agent status snapshot integration', () => {
     expect(() => notify()).not.toThrow()
     // Applied exactly once — the re-entrant flush is a no-op, not a loop.
     expect(setAgentStatusCalls).toBe(1)
+  })
+
+  // Why: the pending queue is spliced before the fold, so a throwing fold would drop every
+  // buffered event permanently. Before batching the queue was only replaced after the loop,
+  // so a throw left it intact — keep that.
+  it('keeps pending statuses queued when the retry fold throws', async () => {
+    const subscribeListenerRef: { current: StoreSubscribeListener | null } = { current: null }
+    const onSetListenerRef: { current: ((data: AgentStatusSetData) => void) | null } = {
+      current: null
+    }
+    let shouldThrow = true
+    const setAgentStatuses = vi.fn((updates: readonly AgentStatusUpdate[]) => {
+      if (shouldThrow) {
+        shouldThrow = false
+        throw new Error('fold blew up')
+      }
+      return updates.map(() => true)
+    })
+    const storeState: StoreLike = buildStoreState({
+      setAgentStatus: vi.fn(),
+      setAgentStatuses,
+      workspaceSessionReady: true,
+      settings: { terminalFontSize: 13, notifications: { enabled: false } },
+      // Pane does not exist yet -> the incoming event is buffered as pending.
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {}
+    })
+    const notify = (): void => subscribeListenerRef.current?.(storeState, storeState)
+
+    stubReactSyncEffect()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn((listener: StoreSubscribeListener) => {
+          subscribeListenerRef.current = listener
+          return () => {
+            subscribeListenerRef.current = null
+          }
+        }),
+        getState: () => storeState
+      }
+    }))
+    stubAuxiliaryModules()
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: (cb) => {
+          onSetListenerRef.current = cb
+          return () => {}
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    await Promise.resolve()
+    if (typeof onSetListenerRef.current !== 'function') {
+      throw new Error('Expected agentStatus.onSet listener to be registered')
+    }
+
+    onSetListenerRef.current({
+      paneKey: FUTURE_PANE_KEY,
+      state: 'working',
+      prompt: 'buffered',
+      agentType: 'claude',
+      receivedAt: 1_700_000_000_100,
+      stateStartedAt: 1_700_000_000_100
+    })
+
+    // Tab hydrates, so the next store update flushes the pending event — and throws.
+    storeState.tabsByWorktree = {
+      'wt-1': [{ id: 'tab-future', ptyId: 'pty-1', worktreeId: 'wt-1', title: 'Future Tab' }]
+    }
+    storeState.terminalLayoutsByTabId = {
+      'tab-future': {
+        root: { type: 'leaf', leafId: FUTURE_LEAF_ID },
+        activeLeafId: FUTURE_LEAF_ID,
+        expandedLeafId: null
+      }
+    }
+    expect(() => notify()).toThrow('fold blew up')
+
+    // The event must still be queued, so the next flush replays it.
+    notify()
+    const replayedAfterThrow = setAgentStatuses.mock.calls
+      .slice(1)
+      .flatMap((call) => call[0].map((update) => update.payload.prompt))
+    expect(replayedAfterThrow).toContain('buffered')
   })
 
   it('applies ready push events for an unmounted inactive terminal tab', async () => {
@@ -7728,6 +8778,9 @@ describe('useIpcEvents agent status snapshot integration', () => {
         }
       }
     })
+    const setAgentStatusBatch = vi.mocked(
+      storeState.setAgentStatuses as AppState['setAgentStatuses']
+    )
 
     stubReactSyncEffect()
     vi.doMock('../store', () => ({
@@ -7799,6 +8852,8 @@ describe('useIpcEvents agent status snapshot integration', () => {
     subscribeListenerRef.current(storeState, previousStoreState)
 
     expect(setAgentStatus).toHaveBeenCalledTimes(2)
+    expect(setAgentStatusBatch).toHaveBeenCalledTimes(1)
+    expect(setAgentStatusBatch.mock.calls[0]?.[0]).toHaveLength(2)
     expect(setAgentStatus).toHaveBeenNthCalledWith(
       1,
       FUTURE_PANE_KEY,

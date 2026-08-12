@@ -1081,6 +1081,25 @@ function isSetupSplitGeometryReady(
   )
 }
 
+/** Start time of the newest completed turn, counting turns already folded into history.
+ *  Why: batched publications coalesce done→working→done into a single store notification,
+ *  so the done EDGE survives only in stateHistory; comparing `state` alone misses it. */
+function resolveLatestAgentDoneStartedAt(entry: AgentStatusEntry | undefined): number | undefined {
+  if (!entry) {
+    return undefined
+  }
+  if (entry.state === 'done') {
+    return entry.stateStartedAt
+  }
+  const history = entry.stateHistory ?? []
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    if (history[index].state === 'done') {
+      return history[index].startedAt
+    }
+  }
+  return undefined
+}
+
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
  * managing input, output, title synchronization, and agent status tracking.
@@ -3595,10 +3614,10 @@ export function connectPanePty(
   const shouldApplyNativeWindowsRewriteRefresh = isNativeWindowsConpty
   const shouldApplyWindowsRendererUnicodeRefresh = CLIENT_PLATFORM === 'win32'
   const shouldProtectNativeWindowsSynchronizedOutput = isNativeWindowsConpty
-  let lastAgentStatusState = state.agentStatusByPaneKey[cacheKey]?.state
   let unsubscribeWindowsDoneTerminalModeReset: (() => void) | null = null
   if (isNativeWindowsConpty) {
     const initialAgentStatus = state.agentStatusByPaneKey[cacheKey]
+    let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
     if (
       !initialAgentStatus &&
       paneStartup?.telemetry?.launch_source === 'sidebar' &&
@@ -3617,13 +3636,18 @@ export function connectPanePty(
       const nextAgentStatusState = nextAgentStatus?.state
       if (nextAgentStatusState === 'done') {
         setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
-        if (lastAgentStatusState !== 'done') {
-          queueAgentIdleTerminalModeReset()
-        }
       } else if (nextAgentStatusState) {
         suppressNativeWindowsIdleCodexFocusReports = false
       }
-      lastAgentStatusState = nextAgentStatusState
+      const nextAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(nextAgentStatus)
+      // Why: a NEW completed turn — same-state `done` pings keep stateStartedAt, so they no-op.
+      if (
+        nextAgentDoneStartedAt !== undefined &&
+        nextAgentDoneStartedAt !== lastAgentDoneStartedAt
+      ) {
+        queueAgentIdleTerminalModeReset()
+      }
+      lastAgentDoneStartedAt = nextAgentDoneStartedAt
     })
   }
 
