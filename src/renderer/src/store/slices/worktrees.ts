@@ -121,6 +121,7 @@ import {
 import { getTerminalActivationSpawnSuppression } from './terminal-activation-spawn-suppression'
 import {
   preservedBranchCleanupKey,
+  preservedBranchCleanupScopeKey,
   type PreservedBranchCleanup
 } from '../../../../shared/preserved-branch-cleanup'
 import type {
@@ -133,6 +134,7 @@ import type {
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
 import { findIndexedWorktreeOwnerForHost } from '@/lib/worktree-runtime-owner-index'
 import { catalogRowsEqual, reuseEqualCatalogRows } from './worktree-catalog-reconciliation'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 export type { WorktreeSlice, WorktreeDeleteState } from './worktree-helpers'
 
 // Why: old runtime servers only have `worktree.list`; preserve the large-list UI hydration parity used before `worktree.detectedList` existed.
@@ -151,6 +153,14 @@ const preservedBranchRuntimeTargetByCleanupKey = new Map<
   string,
   { cleanup: PreservedBranchCleanup; target: ReturnType<typeof getActiveRuntimeTarget> }
 >()
+
+export function getPreservedBranchRuntimeTargetCountForTests(): number {
+  return preservedBranchRuntimeTargetByCleanupKey.size
+}
+
+export function resetPreservedBranchRuntimeTargetsForTests(): void {
+  preservedBranchRuntimeTargetByCleanupKey.clear()
+}
 const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 const runtimeDetectedWorktreeRefreshesInFlight = new Map<
@@ -4601,6 +4611,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       const preservedBranch = removalResult?.preservedBranch
       const cleanup = preservedBranch
         ? {
+            cleanupId: preservedBranch.cleanupId ?? createBrowserUuid(),
             worktreeId,
             branchName: preservedBranch.branchName,
             expectedHead: preservedBranch.head,
@@ -4611,20 +4622,41 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
           }
         : null
       if (preservedBranch) {
+        for (const [key, retained] of preservedBranchRuntimeTargetByCleanupKey) {
+          if (
+            preservedBranchCleanupScopeKey(retained.cleanup) ===
+            preservedBranchCleanupScopeKey(cleanup!)
+          ) {
+            preservedBranchRuntimeTargetByCleanupKey.delete(key)
+          }
+        }
         preservedBranchRuntimeTargetByCleanupKey.set(preservedBranchCleanupKey(cleanup!), {
           cleanup: cleanup!,
           target
         })
       }
-      if (preservedBranch && options?.suppressPreservedBranchToast !== true) {
-        showPreservedBranchToast(removalResult, worktreeBeforeRemoval, (branch, expectedHead) => {
-          void get().forceDeletePreservedBranch(worktreeId, branch, expectedHead, {
-            ...(hostId ? { hostId } : {}),
-            ...(removalRoute?.runtimeEnvironmentId
-              ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
-              : {})
-          })
-        })
+      if (preservedBranch && cleanup && options?.suppressPreservedBranchToast !== true) {
+        showPreservedBranchToast(
+          removalResult,
+          worktreeBeforeRemoval,
+          async (branch, expectedHead) => {
+            const result = await get().forceDeletePreservedBranch(
+              worktreeId,
+              branch,
+              expectedHead,
+              {
+                ...(hostId ? { hostId } : {}),
+                ...(removalRoute?.runtimeEnvironmentId
+                  ? { runtimeEnvironmentId: removalRoute.runtimeEnvironmentId }
+                  : {}),
+                cleanupId: cleanup.cleanupId
+              }
+            )
+            return result.ok
+          },
+          () => void get().releasePreservedBranchCleanups([cleanup]),
+          cleanup.cleanupId
+        )
       }
       pruneHostedReviewLinkMutationGenerations([worktreeId])
       return preservedBranch && cleanup
@@ -4632,6 +4664,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             ok: true as const,
             preservedBranch: {
               ...preservedBranch,
+              cleanupId: cleanup.cleanupId,
               ...(cleanup.hostId ? { hostId: cleanup.hostId } : {}),
               ...(cleanup.runtimeEnvironmentId
                 ? { runtimeEnvironmentId: cleanup.runtimeEnvironmentId }
@@ -4718,6 +4751,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
   forceDeletePreservedBranch: async (worktreeId, branchName, expectedHead, options) => {
     try {
       const requestedCleanup: PreservedBranchCleanup = {
+        ...(options?.cleanupId ? { cleanupId: options.cleanupId } : {}),
         worktreeId,
         branchName,
         expectedHead,
@@ -4728,20 +4762,25 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       const requestedCleanupKey = preservedBranchCleanupKey(requestedCleanup)
       const exactRetainedTarget = preservedBranchRuntimeTargetByCleanupKey.get(requestedCleanupKey)
-      const matchingRetainedTargets = exactRetainedTarget
-        ? [exactRetainedTarget]
-        : [...preservedBranchRuntimeTargetByCleanupKey.values()].filter(
-            ({ cleanup }) =>
-              cleanup.worktreeId === worktreeId &&
-              cleanup.branchName === branchName &&
-              cleanup.expectedHead === expectedHead
-          )
+      const matchingRetainedTargets =
+        exactRetainedTarget || options?.cleanupId
+          ? [exactRetainedTarget]
+          : [...preservedBranchRuntimeTargetByCleanupKey.values()].filter(
+              ({ cleanup }) =>
+                cleanup.worktreeId === worktreeId &&
+                cleanup.branchName === branchName &&
+                cleanup.expectedHead === expectedHead &&
+                (!options?.hostId || cleanup.hostId === options.hostId) &&
+                (!options?.runtimeEnvironmentId ||
+                  cleanup.runtimeEnvironmentId === options.runtimeEnvironmentId)
+            )
       const retainedTarget =
         exactRetainedTarget ??
-        (options?.hostId || options?.runtimeEnvironmentId || matchingRetainedTargets.length !== 1
-          ? undefined
-          : matchingRetainedTargets[0])
-      if ((options?.hostId || options?.runtimeEnvironmentId) && !retainedTarget) {
+        (matchingRetainedTargets.length === 1 ? matchingRetainedTargets[0] : undefined)
+      if (
+        (options?.cleanupId || options?.hostId || options?.runtimeEnvironmentId) &&
+        !retainedTarget
+      ) {
         throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
       }
       const cleanupHostId = options?.hostId ?? retainedTarget?.cleanup.hostId
@@ -4751,6 +4790,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
         getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
       const result = await (target.kind === 'local'
         ? window.api.worktrees.forceDeletePreservedBranch({
+            ...(requestedCleanup.cleanupId ? { cleanupId: requestedCleanup.cleanupId } : {}),
             worktreeId,
             branchName,
             expectedHead,
@@ -4760,6 +4800,7 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
             target,
             'worktree.forceDeleteBranch',
             {
+              ...(requestedCleanup.cleanupId ? { cleanupId: requestedCleanup.cleanupId } : {}),
               worktree: toRuntimeWorktreeSelector(worktreeId),
               branchName,
               expectedHead,
@@ -4792,6 +4833,82 @@ export const createWorktreeSlice: StateCreator<AppState, [], [], WorktreeSlice> 
       }
       return { ok: false as const, error }
     }
+  },
+
+  releasePreservedBranchCleanups: async (cleanups) => {
+    const releasesByTarget = new Map<
+      string,
+      {
+        target: ReturnType<typeof getActiveRuntimeTarget>
+        cleanups: PreservedBranchCleanup[]
+      }
+    >()
+    for (const cleanup of cleanups) {
+      const exactKey = preservedBranchCleanupKey(cleanup)
+      const exactRetained = preservedBranchRuntimeTargetByCleanupKey.get(exactKey)
+      const legacyMatches = cleanup.cleanupId
+        ? []
+        : [...preservedBranchRuntimeTargetByCleanupKey.entries()].filter(
+            ([, candidate]) =>
+              candidate.cleanup.worktreeId === cleanup.worktreeId &&
+              candidate.cleanup.branchName === cleanup.branchName &&
+              candidate.cleanup.expectedHead === cleanup.expectedHead &&
+              (!cleanup.hostId || candidate.cleanup.hostId === cleanup.hostId) &&
+              (!cleanup.runtimeEnvironmentId ||
+                candidate.cleanup.runtimeEnvironmentId === cleanup.runtimeEnvironmentId)
+          )
+      const key = exactRetained
+        ? exactKey
+        : legacyMatches.length === 1
+          ? legacyMatches[0]?.[0]
+          : undefined
+      const retained =
+        exactRetained ?? (legacyMatches.length === 1 ? legacyMatches[0]?.[1] : undefined)
+      if (!key || !retained) {
+        continue
+      }
+      const targetKey =
+        retained.target.kind === 'local' ? 'local' : `runtime:${retained.target.environmentId}`
+      const release = releasesByTarget.get(targetKey)
+      if (release) {
+        release.cleanups.push(retained.cleanup)
+      } else {
+        releasesByTarget.set(targetKey, {
+          target: retained.target,
+          cleanups: [retained.cleanup]
+        })
+      }
+    }
+    await Promise.all(
+      [...releasesByTarget.values()].map(async ({ target, cleanups: targetCleanups }) => {
+        try {
+          await (target.kind === 'local'
+            ? window.api.worktrees.releasePreservedBranchCleanups({ cleanups: targetCleanups })
+            : callRuntimeRpc(
+                target,
+                'worktree.releasePreservedBranchCleanups',
+                {
+                  cleanups: targetCleanups.map((cleanup) => ({
+                    ...(cleanup.cleanupId ? { cleanupId: cleanup.cleanupId } : {}),
+                    worktree: toRuntimeWorktreeSelector(cleanup.worktreeId),
+                    branchName: cleanup.branchName,
+                    expectedHead: cleanup.expectedHead,
+                    hostId: cleanup.hostId
+                  }))
+                },
+                { timeoutMs: 15_000 }
+              ))
+        } catch (error) {
+          if (!isRuntimeMethodNotFoundError(error)) {
+            console.warn('Failed to release preserved branch cleanup:', error)
+          }
+        } finally {
+          for (const cleanup of targetCleanups) {
+            preservedBranchRuntimeTargetByCleanupKey.delete(preservedBranchCleanupKey(cleanup))
+          }
+        }
+      })
+    )
   },
 
   clearWorktreeDeleteState: (worktreeId) => {

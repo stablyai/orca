@@ -285,6 +285,7 @@ export const WorktreeRemove = WorktreeSelector.extend({
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
+  cleanupId: OptionalString,
   hostId: OptionalString,
   branchName: z
     .unknown()
@@ -294,6 +295,20 @@ export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
     .pipe(z.string().min(1, 'Missing expected branch head'))
+})
+
+export const WorktreeReleasePreservedBranchCleanups = z.object({
+  cleanups: z
+    .array(
+      z.object({
+        cleanupId: OptionalString,
+        worktree: z.string().min(1),
+        branchName: z.string().min(1),
+        expectedHead: z.string().min(1).optional(),
+        hostId: OptionalString
+      })
+    )
+    .max(10_000)
 })
 
 export const WorktreeResolvePrBase = z.object({

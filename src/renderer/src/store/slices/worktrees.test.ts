@@ -28,6 +28,7 @@ import type {
   ListDetectedWorktreesArgs
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
+import type { PreservedBranchCleanup } from '../../../../shared/preserved-branch-cleanup'
 import {
   beginHugeRepoWarningProbe,
   clearHugeRepoWarningDismissalsForTests,
@@ -132,6 +133,7 @@ const mockApi = {
     remove: vi.fn().mockResolvedValue(undefined),
     forgetLocal: vi.fn().mockResolvedValue({}),
     forceDeletePreservedBranch: vi.fn().mockResolvedValue({ deleted: true }),
+    releasePreservedBranchCleanups: vi.fn().mockResolvedValue({ released: 0 }),
     resolvePrBase: vi.fn(),
     resolveMrBase: vi.fn(),
     updateMeta: vi.fn().mockResolvedValue(undefined),
@@ -167,9 +169,11 @@ import {
   WORKTREE_REFRESH_CONCURRENCY,
   acquireDirectSshDetectedWorktreeRefresh,
   createWorktreeSlice,
+  getPreservedBranchRuntimeTargetCountForTests,
   getHostedReviewLinkMutationGenerationForTests,
   getHostedReviewLinkWorktreeAliasCountForTests,
   resetAuthoritativelyRemovedWorktreeMemoryForTests,
+  resetPreservedBranchRuntimeTargetsForTests,
   resetHostedReviewLinkMutationGenerationForTests
 } from './worktrees'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
@@ -197,6 +201,8 @@ function resetRemoteRuntimeMocks() {
 // earlier describe would silently suppress a row here. Reset for every case, not just the fetch suites.
 beforeEach(() => {
   resetAuthoritativelyRemovedWorktreeMemoryForTests()
+  resetPreservedBranchRuntimeTargetsForTests()
+  mockApi.worktrees.releasePreservedBranchCleanups.mockReset().mockResolvedValue({ released: 0 })
 })
 
 function createTestStore() {
@@ -6291,12 +6297,12 @@ describe('worktree remote runtime mutations', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: {
+      preservedBranch: expect.objectContaining({
         branchName: 'feature/nested',
         head: 'saved-head',
         hostId: 'ssh:hub-private-target',
         runtimeEnvironmentId: 'owner-hub'
-      }
+      })
     })
     expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(1, {
       selector: 'owner-hub',
@@ -6308,7 +6314,8 @@ describe('worktree remote runtime mutations', () => {
         allowUnverifiedPtyStop: false,
         runHooks: true
       },
-      timeoutMs: 60_000
+      timeoutMs: 60_000,
+      expectedEnvironmentPairingRevision: undefined
     })
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
     expect(store.getState().worktreesByRepo['repo-ssh']).toEqual([])
@@ -6401,6 +6408,181 @@ describe('worktree remote runtime mutations', () => {
         }
       })
     )
+  })
+
+  it('releases renderer routes when preserved-branch reviews are dismissed', async () => {
+    const store = createTestStore()
+    const cleanups: PreservedBranchCleanup[] = Array.from({ length: 8 }, (_, index) => ({
+      worktreeId: `repo-cleanup::/path/wt-${index}`,
+      branchName: `feature/${index}`,
+      expectedHead: `head-${index}`,
+      hostId: LOCAL_EXECUTION_HOST_ID
+    }))
+
+    for (const cleanup of cleanups) {
+      const worktree = makeWorktree({
+        id: cleanup.worktreeId,
+        repoId: 'repo-cleanup',
+        path: cleanup.worktreeId.split('::')[1]
+      })
+      mockApi.worktrees.remove.mockResolvedValueOnce({
+        preservedBranch: { branchName: cleanup.branchName, head: cleanup.expectedHead }
+      })
+      store.setState({ worktreesByRepo: { 'repo-cleanup': [worktree] } } as Partial<AppState>)
+      await store.getState().removeWorktree(worktree.id)
+    }
+
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(8)
+    await store.getState().releasePreservedBranchCleanups(cleanups.slice(0, -1))
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(1)
+    await store.getState().releasePreservedBranchCleanups(cleanups.slice(-1))
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(0)
+    const releasedCleanups = mockApi.worktrees.releasePreservedBranchCleanups.mock.calls.map(
+      ([args]) => args.cleanups.map(({ cleanupId: _cleanupId, ...cleanup }) => cleanup)
+    )
+    expect(releasedCleanups).toEqual([cleanups.slice(0, -1), cleanups.slice(-1)])
+  })
+
+  it('drops renderer routing after a best-effort cleanup release', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-cleanup::/path/offline',
+      repoId: 'repo-cleanup',
+      path: '/path/offline'
+    })
+    mockApi.worktrees.remove.mockResolvedValueOnce({
+      preservedBranch: { branchName: 'feature/offline', head: 'offline-head' }
+    })
+    mockApi.worktrees.releasePreservedBranchCleanups.mockRejectedValue(
+      new Error('transport unavailable')
+    )
+    store.setState({ worktreesByRepo: { 'repo-cleanup': [wt] } } as Partial<AppState>)
+    const result = await store.getState().removeWorktree(wt.id)
+
+    await store.getState().releasePreservedBranchCleanups([
+      {
+        cleanupId: result.ok ? result.preservedBranch?.cleanupId : undefined,
+        worktreeId: wt.id,
+        branchName: 'feature/offline',
+        expectedHead: 'offline-head',
+        hostId: LOCAL_EXECUTION_HOST_ID
+      }
+    ])
+
+    expect(mockApi.worktrees.releasePreservedBranchCleanups).toHaveBeenCalledOnce()
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(0)
+  })
+
+  it('does not let an old same-value review release a recreated cleanup', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo-cleanup::/path/recreated'
+    const cleanups: PreservedBranchCleanup[] = []
+    for (let index = 0; index < 2; index += 1) {
+      const wt = makeWorktree({ id: worktreeId, repoId: 'repo-cleanup', path: '/path/recreated' })
+      mockApi.worktrees.remove.mockResolvedValueOnce({
+        preservedBranch: { branchName: 'feature/same', head: 'same-head' }
+      })
+      store.setState({ worktreesByRepo: { 'repo-cleanup': [wt] } } as Partial<AppState>)
+      const result = await store.getState().removeWorktree(worktreeId)
+      if (result.ok && result.preservedBranch) {
+        cleanups.push({
+          cleanupId: result.preservedBranch.cleanupId,
+          worktreeId,
+          branchName: result.preservedBranch.branchName,
+          expectedHead: result.preservedBranch.head,
+          hostId: result.preservedBranch.hostId,
+          runtimeEnvironmentId: result.preservedBranch.runtimeEnvironmentId
+        })
+      }
+    }
+
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(1)
+    await store.getState().releasePreservedBranchCleanups([cleanups[0]!])
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(1)
+    expect(mockApi.worktrees.releasePreservedBranchCleanups).not.toHaveBeenCalled()
+    await expect(
+      store.getState().forceDeletePreservedBranch(worktreeId, 'feature/same', 'same-head', {
+        cleanupId: cleanups[0]!.cleanupId,
+        hostId: LOCAL_EXECUTION_HOST_ID
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: 'No preserved branch cleanup is pending for "feature/same".'
+    })
+    expect(mockApi.worktrees.forceDeletePreservedBranch).not.toHaveBeenCalled()
+    await store.getState().releasePreservedBranchCleanups([cleanups[1]!])
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(0)
+    expect(mockApi.worktrees.releasePreservedBranchCleanups).toHaveBeenCalledOnce()
+  })
+
+  it('releases renderer authority when an older paired runtime lacks the release method', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-remote::/srv/old-runtime-wt',
+      repoId: 'repo-remote',
+      path: '/srv/old-runtime-wt',
+      hostId: 'ssh:old-runtime-target',
+      runtimeOwnerEnvironmentId: 'old-runtime'
+    })
+    runtimeEnvironmentCall
+      .mockResolvedValueOnce({
+        id: 'rpc-rm-old-runtime',
+        ok: true,
+        result: {
+          preservedBranch: { branchName: 'feature/old-runtime', head: 'saved-head' }
+        },
+        _meta: { runtimeId: 'runtime-old' }
+      })
+      .mockResolvedValueOnce({
+        id: 'rpc-release-old-runtime',
+        ok: false,
+        error: {
+          code: 'method_not_found',
+          message: 'Unknown method: worktree.releasePreservedBranchCleanups'
+        },
+        _meta: { runtimeId: 'runtime-old' }
+      })
+    store.setState({ worktreesByRepo: { 'repo-remote': [wt] } } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree(wt.id)
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(1)
+    await store.getState().releasePreservedBranchCleanups([
+      {
+        worktreeId: wt.id,
+        branchName: 'feature/old-runtime',
+        expectedHead: 'saved-head',
+        hostId: 'ssh:old-runtime-target',
+        runtimeEnvironmentId: 'old-runtime'
+      }
+    ])
+
+    expect(result).toEqual({
+      ok: true,
+      preservedBranch: expect.objectContaining({
+        branchName: 'feature/old-runtime',
+        head: 'saved-head',
+        hostId: 'ssh:old-runtime-target',
+        runtimeEnvironmentId: 'old-runtime'
+      })
+    })
+    expect(getPreservedBranchRuntimeTargetCountForTests()).toBe(0)
+    expect(runtimeEnvironmentCall).toHaveBeenNthCalledWith(2, {
+      selector: 'old-runtime',
+      method: 'worktree.releasePreservedBranchCleanups',
+      params: {
+        cleanups: [
+          {
+            worktree: `id:${wt.id}`,
+            cleanupId: expect.any(String),
+            branchName: 'feature/old-runtime',
+            expectedHead: 'saved-head',
+            hostId: 'ssh:old-runtime-target'
+          }
+        ]
+      },
+      timeoutMs: 15_000,
+      expectedEnvironmentPairingRevision: undefined
+    })
   })
 
   it('fails HUB-owned SSH removal closed when the exact id has two HUB owners', async () => {

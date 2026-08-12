@@ -20,7 +20,8 @@ const mocks = vi.hoisted(() => {
     repos: [],
     closeModal: vi.fn(),
     openModal: vi.fn(),
-    forceDeletePreservedBranch: vi.fn()
+    forceDeletePreservedBranch: vi.fn(),
+    releasePreservedBranchCleanups: vi.fn()
   }
   return { state }
 })
@@ -56,7 +57,18 @@ function renderToastBody(): HTMLElement {
   return container
 }
 
-function renderReviewModal(branches: readonly PreservedBranchCleanup[]): void {
+function renderErrorToastBody(): HTMLElement {
+  const description = vi.mocked(toast.error).mock.calls.at(-1)?.[1]
+    ?.description as React.ReactElement
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  const root = createRoot(container)
+  mountedRoots.push(root)
+  act(() => root.render(description))
+  return container
+}
+
+function renderReviewModal(branches: readonly PreservedBranchCleanup[]): Root {
   mocks.state.activeModal = 'preserved-branch-review'
   mocks.state.modalData = { branches }
   const container = document.createElement('div')
@@ -64,6 +76,7 @@ function renderReviewModal(branches: readonly PreservedBranchCleanup[]): void {
   const root = createRoot(container)
   mountedRoots.push(root)
   act(() => root.render(<PreservedBranchBatchReviewModal />))
+  return root
 }
 
 async function clickButton(container: HTMLElement, label: string): Promise<void> {
@@ -96,6 +109,7 @@ beforeEach(() => {
   mocks.state.closeModal.mockReset()
   mocks.state.openModal.mockReset()
   mocks.state.forceDeletePreservedBranch.mockReset().mockResolvedValue({ ok: true, deleted: true })
+  mocks.state.releasePreservedBranchCleanups.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -107,7 +121,12 @@ afterEach(() => {
 describe('showPreservedBranchBatchToast', () => {
   it('explains disk cleanup and opens one review dialog for the batch', async () => {
     const branches = [
-      { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
+      {
+        cleanupId: 'batch-one',
+        worktreeId: 'repo-a::one',
+        branchName: 'feature/one',
+        expectedHead: 'head-one'
+      },
       { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
     ]
     showPreservedBranchBatchToast(12, branches)
@@ -123,14 +142,46 @@ describe('showPreservedBranchBatchToast', () => {
     await clickButton(body, 'Review 2 Branches')
 
     expect(mocks.state.openModal).toHaveBeenCalledWith('preserved-branch-review', { branches })
-    expect(toast.dismiss).toHaveBeenCalledWith('preserved-branch-batch:repo-a::one:2')
+    expect(toast.dismiss).toHaveBeenCalledWith('preserved-branch-batch:batch-one')
     expect(mocks.state.forceDeletePreservedBranch).not.toHaveBeenCalled()
+    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]
+    options?.onDismiss?.({ id: 'preserved-branch-batch:repo-a::one:2' } as never)
+    expect(mocks.state.releasePreservedBranchCleanups).not.toHaveBeenCalled()
+  })
+
+  it('releases the batch when its toast is dismissed', () => {
+    const branches = [
+      {
+        cleanupId: 'batch-dismiss',
+        worktreeId: 'repo-a::one',
+        branchName: 'feature/one',
+        expectedHead: 'head-one'
+      }
+    ]
+    showPreservedBranchBatchToast(1, branches)
+
+    const options = vi.mocked(toast.warning).mock.calls.at(-1)?.[1]
+    options?.onDismiss?.({ id: 'preserved-branch-batch:repo-a::one:1' } as never)
+    options?.onAutoClose?.({ id: 'preserved-branch-batch:repo-a::one:1' } as never)
+
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledOnce()
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith(branches)
   })
 
   it('force-deletes only the branches selected in review', async () => {
     renderReviewModal([
-      { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' },
-      { worktreeId: 'repo-b::two', branchName: 'feature/two', expectedHead: 'head-two' }
+      {
+        cleanupId: 'batch-one',
+        worktreeId: 'repo-a::one',
+        branchName: 'feature/one',
+        expectedHead: 'head-one'
+      },
+      {
+        cleanupId: 'batch-two',
+        worktreeId: 'repo-b::two',
+        branchName: 'feature/two',
+        expectedHead: 'head-two'
+      }
     ])
 
     expect(document.body.textContent).toContain('Review kept branches')
@@ -148,11 +199,92 @@ describe('showPreservedBranchBatchToast', () => {
       'repo-a::one',
       'feature/one',
       'head-one',
-      { suppressToast: true }
+      { cleanupId: 'batch-one', suppressToast: true }
     )
     expect(toast.success).toHaveBeenCalledWith('Local branches deleted: 1', {
-      id: 'force-delete-branch-batch:repo-a::one:1'
+      id: 'force-delete-branch-batch:batch-one'
     })
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith([
+      {
+        cleanupId: 'batch-two',
+        worktreeId: 'repo-b::two',
+        branchName: 'feature/two',
+        expectedHead: 'head-two'
+      }
+    ])
+  })
+
+  it('releases the batch when review is cancelled', async () => {
+    const branches = [
+      { worktreeId: 'repo-a::one', branchName: 'feature/one', expectedHead: 'head-one' }
+    ]
+    renderReviewModal(branches)
+
+    await clickButton(document.body, 'Cancel')
+
+    expect(mocks.state.closeModal).toHaveBeenCalledOnce()
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith(branches)
+  })
+
+  it('releases the batch when another modal replaces its review', async () => {
+    const branches = [
+      { cleanupId: 'replaced', worktreeId: 'repo-a::one', branchName: 'feature/one' }
+    ]
+    const root = renderReviewModal(branches)
+    mocks.state.activeModal = 'none'
+    mocks.state.modalData = {}
+
+    await act(async () => {
+      root.render(<PreservedBranchBatchReviewModal />)
+      await Promise.resolve()
+    })
+
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith(branches)
+  })
+
+  it('releases the prior batch when another review replaces it', async () => {
+    const previous = [
+      { cleanupId: 'previous', worktreeId: 'repo-a::one', branchName: 'feature/one' }
+    ]
+    const replacement = [
+      { cleanupId: 'replacement', worktreeId: 'repo-b::two', branchName: 'feature/two' }
+    ]
+    const root = renderReviewModal(previous)
+    mocks.state.modalData = { branches: replacement }
+
+    await act(async () => {
+      root.render(<PreservedBranchBatchReviewModal />)
+      await Promise.resolve()
+    })
+
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith(previous)
+  })
+
+  it('selects a batch that opens after the controller mounts closed', async () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    mountedRoots.push(root)
+    act(() => root.render(<PreservedBranchBatchReviewModal />))
+    mocks.state.activeModal = 'preserved-branch-review'
+    mocks.state.modalData = {
+      branches: [
+        {
+          cleanupId: 'opened-later',
+          worktreeId: 'repo-a::one',
+          branchName: 'feature/one',
+          expectedHead: 'head-one'
+        }
+      ]
+    }
+
+    await act(async () => {
+      root.render(<PreservedBranchBatchReviewModal />)
+      await Promise.resolve()
+    })
+
+    expect(document.body.textContent).toContain('1 of 1 selected')
+    expect(document.body.textContent).toContain('Force Delete 1 Branch')
   })
 
   it('keeps older-server branches visible without offering an unsafe delete', () => {
@@ -204,5 +336,73 @@ describe('showPreservedBranchBatchToast', () => {
       'head-one',
       { suppressToast: true }
     )
+  })
+
+  it('releases failed branches when the retry toast is dismissed', async () => {
+    const failedBranch = {
+      worktreeId: 'repo-a::one',
+      branchName: 'feature/one',
+      expectedHead: 'head-one'
+    }
+    mocks.state.forceDeletePreservedBranch.mockResolvedValueOnce({ ok: false, error: 'busy' })
+
+    await forceDeletePreservedBranchBatch([failedBranch])
+    const options = vi.mocked(toast.error).mock.calls.at(-1)?.[1]
+    options?.onDismiss?.({ id: 'force-delete-branch-batch:repo-a::one:1' } as never)
+    options?.onAutoClose?.({ id: 'force-delete-branch-batch:repo-a::one:1' } as never)
+
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledOnce()
+    expect(mocks.state.releasePreservedBranchCleanups).toHaveBeenCalledWith([failedBranch])
+  })
+
+  it('starts only one retry when its button is clicked twice', async () => {
+    const failedBranch = {
+      worktreeId: 'repo-a::one',
+      branchName: 'feature/one',
+      expectedHead: 'head-one'
+    }
+    mocks.state.forceDeletePreservedBranch
+      .mockResolvedValueOnce({ ok: false, error: 'busy' })
+      .mockImplementation(() => new Promise(() => {}))
+
+    await forceDeletePreservedBranchBatch([failedBranch])
+    const body = renderErrorToastBody()
+    const button = body.querySelector('button')
+    if (!button) {
+      throw new Error('retry button not found')
+    }
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(mocks.state.forceDeletePreservedBranch).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps concurrent failed batches on distinct retry toasts', async () => {
+    mocks.state.forceDeletePreservedBranch.mockResolvedValue({ ok: false, error: 'busy' })
+    await forceDeletePreservedBranchBatch([
+      {
+        cleanupId: 'failed-one',
+        worktreeId: 'repo-a::one',
+        branchName: 'feature/one',
+        expectedHead: 'head-one'
+      }
+    ])
+    await forceDeletePreservedBranchBatch([
+      {
+        cleanupId: 'failed-two',
+        worktreeId: 'repo-a::one',
+        branchName: 'feature/one',
+        expectedHead: 'head-one'
+      }
+    ])
+
+    expect(
+      vi
+        .mocked(toast.error)
+        .mock.calls.slice(-2)
+        .map(([, options]) => options?.id)
+    ).toEqual(['force-delete-branch-batch:failed-one', 'force-delete-branch-batch:failed-two'])
   })
 })

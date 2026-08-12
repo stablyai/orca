@@ -96,7 +96,12 @@ describe('workspace cleanup removal and protection', () => {
     )
     const removeWorktree = vi.fn().mockResolvedValue({
       ok: true,
-      preservedBranch: { branchName: 'feature/cleanup', head: 'saved-head' }
+      preservedBranch: {
+        branchName: 'feature/cleanup',
+        head: 'saved-head',
+        hostId: 'ssh:cleanup-target',
+        runtimeEnvironmentId: 'cleanup-hub'
+      }
     })
     const store = createCleanupTestStore(removeWorktree)
     store.setState({
@@ -112,7 +117,9 @@ describe('workspace cleanup removal and protection', () => {
         {
           worktreeId: candidate.worktreeId,
           branchName: 'feature/cleanup',
-          expectedHead: 'saved-head'
+          expectedHead: 'saved-head',
+          hostId: 'ssh:cleanup-target',
+          runtimeEnvironmentId: 'cleanup-hub'
         }
       ]
     })

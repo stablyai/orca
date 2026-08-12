@@ -6,6 +6,7 @@ import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { Button } from '../ui/button'
 import type { PreservedBranchCleanup } from '@/lib/preserved-branch-cleanup'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const BRANCH_REPO_DELETE_CONCURRENCY = 4
 
@@ -55,7 +56,7 @@ export function showPreservedBranchBatchToast(
     return
   }
   const actionableCount = branches.filter((branch) => branch.expectedHead).length
-  const toastId = `preserved-branch-batch:${branches[0].worktreeId}:${branches.length}`
+  const toastId = `preserved-branch-batch:${branches[0].cleanupId ?? createBrowserUuid()}`
   const removedWorkspaces = translate(
     'auto.components.sidebar.preserved.branch.batch.toast.cea24c2b7d',
     '{{count}} workspaces removed',
@@ -66,7 +67,16 @@ export function showPreservedBranchBatchToast(
     '{{count}} branches kept',
     { count: branches.length }
   )
+  let reviewStarted = false
+  let reviewCompleted = false
+  const release = (): void => {
+    if (!reviewStarted && !reviewCompleted) {
+      reviewCompleted = true
+      void useAppStore.getState().releasePreservedBranchCleanups(branches)
+    }
+  }
   const onReview = (): void => {
+    reviewStarted = true
     useAppStore.getState().openModal('preserved-branch-review', { branches })
     toast.dismiss(toastId)
   }
@@ -81,6 +91,8 @@ export function showPreservedBranchBatchToast(
       id: toastId,
       description: <PreservedBranchBatchToastBody branches={branches} onReview={onReview} />,
       dismissible: true,
+      onDismiss: release,
+      onAutoClose: release,
       ...(actionableCount > 0 ? { duration: Infinity } : {})
     }
   )
@@ -92,7 +104,7 @@ export async function forceDeletePreservedBranchBatch(
   if (branches.length === 0) {
     return
   }
-  const progressToastId = `force-delete-branch-batch:${branches[0].worktreeId}:${branches.length}`
+  const progressToastId = `force-delete-branch-batch:${branches[0].cleanupId ?? createBrowserUuid()}`
   toast.loading(
     translate(
       'auto.components.sidebar.preserved.branch.batch.toast.e61d78054f',
@@ -123,6 +135,7 @@ export async function forceDeletePreservedBranchBatch(
             .getState()
             .forceDeletePreservedBranch(branch.worktreeId, branch.branchName, branch.expectedHead, {
               suppressToast: true,
+              ...(branch.cleanupId ? { cleanupId: branch.cleanupId } : {}),
               ...(branch.hostId ? { hostId: branch.hostId } : {}),
               ...(branch.runtimeEnvironmentId
                 ? { runtimeEnvironmentId: branch.runtimeEnvironmentId }
@@ -152,6 +165,14 @@ export async function forceDeletePreservedBranchBatch(
     .filter(Boolean)
     .join('; ')
   const failedBranches = failures.map(({ branch }) => branch)
+  let retryStarted = false
+  let retryReviewCompleted = false
+  const releaseFailures = (): void => {
+    if (!retryStarted && !retryReviewCompleted) {
+      retryReviewCompleted = true
+      void useAppStore.getState().releasePreservedBranchCleanups(failedBranches)
+    }
+  }
   toast.error(
     translate(
       'auto.components.sidebar.preserved.branch.batch.toast.43d9395605',
@@ -171,6 +192,10 @@ export async function forceDeletePreservedBranchBatch(
             size="sm"
             className="w-full"
             onClick={() => {
+              if (retryStarted) {
+                return
+              }
+              retryStarted = true
               void forceDeletePreservedBranchBatch(failedBranches)
             }}
           >
@@ -184,7 +209,9 @@ export async function forceDeletePreservedBranchBatch(
         </div>
       ),
       duration: Infinity,
-      dismissible: true
+      dismissible: true,
+      onDismiss: releaseFailures,
+      onAutoClose: releaseFailures
     }
   )
 }

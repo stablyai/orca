@@ -30,6 +30,7 @@ import type {
   SshExecutionHostId
 } from '../../../../shared/detected-worktree-provider-contract'
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
+import type { PreservedBranchCleanup } from '../../../../shared/preserved-branch-cleanup'
 import type {
   PendingWorktreeCreation,
   WorktreeCreationPhase
@@ -49,6 +50,7 @@ export type WorktreeDeleteState = {
 
 type RendererRemoveWorktreeResult = Omit<RemoveWorktreeResult, 'preservedBranch'> & {
   preservedBranch?: NonNullable<RemoveWorktreeResult['preservedBranch']> & {
+    cleanupId?: string
     hostId?: ExecutionHostId
     runtimeEnvironmentId?: string
   }
@@ -256,8 +258,10 @@ export type WorktreeSlice = {
       suppressToast?: boolean
       hostId?: ExecutionHostId
       runtimeEnvironmentId?: string
+      cleanupId?: string
     }
   ) => Promise<({ ok: true } & ForceDeleteWorktreeBranchResult) | { ok: false; error: string }>
+  releasePreservedBranchCleanups: (cleanups: readonly PreservedBranchCleanup[]) => Promise<void>
   clearWorktreeDeleteState: (worktreeId: string) => void
   /** Never rejects — most callers fire-and-forget. Callers that own a surface
    *  the user is waiting on should read the result and say what went wrong. */

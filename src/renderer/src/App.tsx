@@ -2699,16 +2699,14 @@ function App(): React.JSX.Element {
                   <DeleteWorktreeDialog />
                 </RecoverableRenderErrorBoundary>
               ) : null}
-              {activeModal === 'preserved-branch-review' ? (
-                <RecoverableRenderErrorBoundary
-                  boundaryId="modal.preserved-branch-review"
-                  surface="modal"
-                  resetKey
-                  compact
-                >
-                  <PreservedBranchBatchReviewModal />
-                </RecoverableRenderErrorBoundary>
-              ) : null}
+              <RecoverableRenderErrorBoundary
+                boundaryId="modal.preserved-branch-review"
+                surface="modal"
+                resetKey
+                compact
+              >
+                <PreservedBranchBatchReviewModal />
+              </RecoverableRenderErrorBoundary>
             </Suspense>
             {hasSshCredentialRequest ? (
               <Suspense fallback={null}>

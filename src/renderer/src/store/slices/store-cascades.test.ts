@@ -218,13 +218,19 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
+      preservedBranch: expect.objectContaining({
+        branchName: 'feature/test',
+        head: 'def456',
+        hostId: 'local'
+      })
     })
     expect(toast.warning).toHaveBeenCalledWith('Worktree deleted, branch kept', {
-      id: 'preserved-branch:feature/test:def456',
+      id: expect.stringMatching(/^preserved-branch:/),
       description: expect.anything(),
       dismissible: true,
-      duration: Infinity
+      duration: Infinity,
+      onDismiss: expect.any(Function),
+      onAutoClose: expect.any(Function)
     })
   })
 
@@ -254,7 +260,11 @@ describe('removeWorktree cascade', () => {
 
     expect(result).toEqual({
       ok: true,
-      preservedBranch: { branchName: 'feature/test', head: 'def456', hostId: 'local' }
+      preservedBranch: expect.objectContaining({
+        branchName: 'feature/test',
+        head: 'def456',
+        hostId: 'local'
+      })
     })
     expect(toast.warning).not.toHaveBeenCalled()
   })

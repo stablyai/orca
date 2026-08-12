@@ -1,6 +1,7 @@
 import type { ExecutionHostId } from './execution-host'
 
 export type PreservedBranchCleanup = {
+  cleanupId?: string
   worktreeId: string
   branchName: string
   expectedHead?: string
@@ -17,6 +18,7 @@ export function preservedBranchCleanupScopeKey(
 export function preservedBranchCleanupKey(cleanup: PreservedBranchCleanup): string {
   return [
     preservedBranchCleanupScopeKey(cleanup),
+    cleanup.cleanupId ?? '',
     cleanup.branchName,
     cleanup.expectedHead ?? ''
   ].join('\0')

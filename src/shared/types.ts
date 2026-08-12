@@ -2380,6 +2380,7 @@ export type WorktreeCreateBaseFallback = {
 }
 
 export type PreservedWorktreeBranch = {
+  cleanupId?: string
   branchName: string
   head?: string
 }

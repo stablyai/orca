@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import type { RemoveWorktreeResult, Worktree } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type PreservedBranchWorktree = Pick<Worktree, 'displayName' | 'isMainWorktree'>
 
@@ -10,10 +11,6 @@ type PreservedBranchToastBodyProps = {
   description: string
   forceDeleteLabel: string | undefined
   onForceDelete: (() => void) | undefined
-}
-
-function preservedBranchToastId(branchName: string, expectedHead: string | undefined): string {
-  return `preserved-branch:${branchName}:${expectedHead ?? 'unknown'}`
 }
 
 function getPreservedBranchTitle(isWorkspace: boolean): string {
@@ -80,7 +77,9 @@ function PreservedBranchToastBody({
 export function showPreservedBranchToast(
   result: RemoveWorktreeResult | undefined,
   worktree: PreservedBranchWorktree | undefined,
-  onForceDelete: (branchName: string, expectedHead: string) => void
+  onForceDelete: (branchName: string, expectedHead: string) => Promise<boolean>,
+  onRelease: () => void = () => {},
+  cleanupId = createBrowserUuid()
 ): void {
   const preservedBranch = result?.preservedBranch
   const branch = preservedBranch?.branchName
@@ -91,17 +90,39 @@ export function showPreservedBranchToast(
   const isWorkspace = worktree?.isMainWorktree === true
   const targetName = worktree?.displayName?.trim()
   const expectedHead = preservedBranch.head
-  const toastId = preservedBranchToastId(branch, expectedHead)
+  const toastId = `preserved-branch:${cleanupId}`
   const forceDeleteLabel = expectedHead
     ? translate('auto.store.slices.worktrees.e50495aae6', 'Force Delete Branch')
     : undefined
   const description = getPreservedBranchDescription(branch, targetName, isWorkspace)
+  let reviewCompleted = false
+  let forceDeleteStarted = false
   const forceDelete = expectedHead
     ? (): void => {
-        onForceDelete(branch, expectedHead)
-        toast.dismiss(toastId)
+        if (forceDeleteStarted) {
+          return
+        }
+        forceDeleteStarted = true
+        void onForceDelete(branch, expectedHead).then(
+          (deleted) => {
+            forceDeleteStarted = false
+            if (deleted) {
+              reviewCompleted = true
+              toast.dismiss(toastId)
+            }
+          },
+          () => {
+            forceDeleteStarted = false
+          }
+        )
       }
     : undefined
+  const release = (): void => {
+    if (!reviewCompleted) {
+      reviewCompleted = true
+      onRelease()
+    }
+  }
 
   toast.warning(getPreservedBranchTitle(isWorkspace), {
     id: toastId,
@@ -113,6 +134,8 @@ export function showPreservedBranchToast(
       />
     ),
     dismissible: true,
+    onDismiss: release,
+    onAutoClose: release,
     ...(expectedHead ? { duration: Infinity } : {})
   })
 }

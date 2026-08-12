@@ -142,7 +142,10 @@ import {
   registerSshProviderRequestAbort
 } from '../ssh/ssh-provider-authority'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
-import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
+import {
+  preservedBranchCleanupScopeKey,
+  type PreservedBranchCleanup
+} from '../../shared/preserved-branch-cleanup'
 
 type CreateWorktreeArgsWithSystemProvenance = CreateWorktreeArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -523,6 +526,7 @@ type WorktreeRemovalInFlight = {
 }
 
 type PreservedBranchCleanupTarget = {
+  cleanupId?: string
   worktreeId: string
   hostId: ExecutionHostId
   branchName: string
@@ -532,6 +536,14 @@ type PreservedBranchCleanupTarget = {
 
 const preservedBranchCleanupByScope = new Map<string, PreservedBranchCleanupTarget>()
 
+export function getPreservedBranchCleanupTargetCountForTests(): number {
+  return preservedBranchCleanupByScope.size
+}
+
+export function resetPreservedBranchCleanupTargetsForTests(): void {
+  preservedBranchCleanupByScope.clear()
+}
+
 function rememberPreservedBranchCleanupTarget(
   worktreeId: string,
   hostId: ExecutionHostId,
@@ -540,6 +552,8 @@ function rememberPreservedBranchCleanupTarget(
   pushTarget: GitPushTarget | undefined
 ): void {
   if (result?.preservedBranch) {
+    const cleanupId = randomUUID()
+    result.preservedBranch.cleanupId = cleanupId
     const head = result.preservedBranch.head ?? fallbackHead
     if (!head) {
       throw new Error(
@@ -547,6 +561,7 @@ function rememberPreservedBranchCleanupTarget(
       )
     }
     preservedBranchCleanupByScope.set(preservedBranchCleanupScopeKey({ worktreeId, hostId }), {
+      ...(cleanupId ? { cleanupId } : {}),
       worktreeId,
       hostId,
       branchName: result.preservedBranch.branchName,
@@ -578,7 +593,8 @@ function getPreservedBranchCleanupTarget(
   worktreeId: string,
   branchName: string,
   expectedHead: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  cleanupId?: string
 ): PreservedBranchCleanupTarget {
   const exactTarget = hostId
     ? preservedBranchCleanupByScope.get(preservedBranchCleanupScopeKey({ worktreeId, hostId }))
@@ -592,10 +608,40 @@ function getPreservedBranchCleanupTarget(
           target.head === expectedHead
       )
   const target = exactTarget ?? (legacyMatches.length === 1 ? legacyMatches[0] : undefined)
-  if (!target || target.branchName !== branchName || target.head !== expectedHead) {
+  if (
+    !target ||
+    target.branchName !== branchName ||
+    target.head !== expectedHead ||
+    (cleanupId && target.cleanupId !== cleanupId)
+  ) {
     throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
   }
   return target
+}
+
+function releasePreservedBranchCleanupTargets(cleanups: readonly PreservedBranchCleanup[]): number {
+  let released = 0
+  for (const cleanup of cleanups) {
+    if (!cleanup.expectedHead) {
+      continue
+    }
+    try {
+      const target = getPreservedBranchCleanupTarget(
+        cleanup.worktreeId,
+        cleanup.branchName,
+        cleanup.expectedHead,
+        cleanup.hostId,
+        cleanup.cleanupId
+      )
+      preservedBranchCleanupByScope.delete(
+        preservedBranchCleanupScopeKey({ worktreeId: target.worktreeId, hostId: target.hostId })
+      )
+      released += 1
+    } catch {
+      // Stale dismissal must not release newer cleanup authority.
+    }
+  }
+  return released
 }
 
 const loggedUnavailableSshGitProviders = new Set<string>()
@@ -1822,6 +1868,7 @@ export function registerWorktreeHandlers(
   ipcMain.removeHandler('worktrees:remove')
   ipcMain.removeHandler('worktrees:forgetLocal')
   ipcMain.removeHandler('worktrees:forceDeletePreservedBranch')
+  ipcMain.removeHandler('worktrees:releasePreservedBranchCleanups')
   ipcMain.removeHandler('worktrees:updateMeta')
   ipcMain.removeHandler('worktrees:listLineage')
   ipcMain.removeHandler('worktrees:listLineageForHost')
@@ -3085,6 +3132,7 @@ export function registerWorktreeHandlers(
     async (
       _event,
       args: {
+        cleanupId?: string
         worktreeId: string
         branchName: string
         expectedHead: string
@@ -3096,7 +3144,8 @@ export function registerWorktreeHandlers(
         args.worktreeId,
         args.branchName,
         args.expectedHead,
-        args.hostId
+        args.hostId,
+        args.cleanupId
       )
       const repo = getRepoForWorktreeRemoval(store, repoId, cleanupTarget.hostId)
       if (!repo) {
@@ -3149,6 +3198,15 @@ export function registerWorktreeHandlers(
       )
       return { deleted: true }
     }
+  )
+
+  ipcMain.handle(
+    'worktrees:releasePreservedBranchCleanups',
+    (_event, args: { cleanups?: readonly PreservedBranchCleanup[] }) => ({
+      released: releasePreservedBranchCleanupTargets(
+        Array.isArray(args?.cleanups) ? args.cleanups : []
+      )
+    })
   )
 
   ipcMain.handle(

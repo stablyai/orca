@@ -3019,6 +3019,57 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it('treats preserved-cleanup release as optional on an older paired runtime', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: 'release-cleanup',
+            ok: false,
+            error: { code: 'method_not_found', message: 'Unknown method' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(
+      globals.window.api.worktrees.releasePreservedBranchCleanups({
+        cleanups: [
+          {
+            worktreeId: 'repo-1::/workspace/kept',
+            branchName: 'feature/kept',
+            expectedHead: 'abc123',
+            hostId: 'local'
+          }
+        ]
+      })
+    ).resolves.toEqual({ released: 0 })
+    expect(runtimeCalls).toEqual([
+      {
+        method: 'worktree.releasePreservedBranchCleanups',
+        params: {
+          cleanups: [
+            {
+              worktree: 'id:repo-1::/workspace/kept',
+              branchName: 'feature/kept',
+              expectedHead: 'abc123',
+              hostId: 'local'
+            }
+          ]
+        }
+      }
+    ])
+  })
+
   it.each(['web-server-a', 'web-server-b'])(
     'attributes server-local worktrees to their own paired runtime %s',
     async (environmentId) => {
