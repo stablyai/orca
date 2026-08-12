@@ -70,14 +70,14 @@ describe('resolveNativeChatSshOwner', () => {
     ).toEqual({ connectionId: 'dev-box', transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl' })
   })
 
-  it('prefers an exact path match over an earlier row that only matches by id', () => {
+  it('prefers an exact path match over an earlier same-session row that only matches by id', () => {
     getStatusSnapshot.mockReturnValue([
       hookRow({ connectionId: 'other-box', providerSession: { key: 'session_id', id: 'shared' } }),
       hookRow({
         connectionId: 'dev-box',
         providerSession: {
           key: 'session_id',
-          id: 'hook-session-id',
+          id: 'shared',
           transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl'
         }
       })
@@ -88,7 +88,54 @@ describe('resolveNativeChatSshOwner', () => {
         sessionId: 'shared',
         transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl'
       })
-    ).toMatchObject({ connectionId: 'dev-box' })
+    ).toEqual({
+      connectionId: 'dev-box',
+      transcriptPath: '/home/dev/.claude/projects/repo/file.jsonl'
+    })
+  })
+
+  it('does not route session A to another session via a client-supplied path', () => {
+    getStatusSnapshot.mockReturnValue([
+      hookRow({
+        connectionId: 'box-a',
+        providerSession: { key: 'session_id', id: 'session-a' }
+      }),
+      hookRow({
+        connectionId: 'box-b',
+        providerSession: {
+          key: 'session_id',
+          id: 'session-b',
+          transcriptPath: '/home/dev/.claude/projects/repo/session-b.jsonl'
+        }
+      })
+    ])
+
+    expect(
+      resolveNativeChatSshOwner({
+        sessionId: 'session-a',
+        transcriptPath: '/home/dev/.claude/projects/repo/session-b.jsonl'
+      })
+    ).toEqual({ connectionId: 'box-a' })
+  })
+
+  it('ignores a path-only match when the session id is for a different remote row', () => {
+    getStatusSnapshot.mockReturnValue([
+      hookRow({
+        connectionId: 'box-b',
+        providerSession: {
+          key: 'session_id',
+          id: 'session-b',
+          transcriptPath: '/home/dev/.claude/projects/repo/session-b.jsonl'
+        }
+      })
+    ])
+
+    expect(
+      resolveNativeChatSshOwner({
+        sessionId: 'session-a',
+        transcriptPath: '/home/dev/.claude/projects/repo/session-b.jsonl'
+      })
+    ).toBeNull()
   })
 
   it('treats a WSL guest as local, because the host can open it through the UNC twin', () => {
@@ -133,23 +180,38 @@ describe('resolveNativeChatSshOwner', () => {
     })
   })
 
-  it('picks the freshest row when two hosts report the same transcript path', () => {
+  it('picks the freshest same-session row when two hosts report the same transcript path', () => {
     getStatusSnapshot.mockReturnValue([
       hookRow({
         connectionId: 'stale-box',
         receivedAt: 100,
-        providerSession: { key: 'session_id', id: 'a', transcriptPath: '/home/dev/t.jsonl' }
+        providerSession: { key: 'session_id', id: 'abc', transcriptPath: '/home/dev/t.jsonl' }
       }),
       hookRow({
         connectionId: 'live-box',
         receivedAt: 900,
-        providerSession: { key: 'session_id', id: 'b', transcriptPath: '/home/dev/t.jsonl' }
+        providerSession: { key: 'session_id', id: 'abc', transcriptPath: '/home/dev/t.jsonl' }
       })
     ])
 
     expect(
-      resolveNativeChatSshOwner({ sessionId: 'zzz', transcriptPath: '/home/dev/t.jsonl' })
-    ).toMatchObject({ connectionId: 'live-box' })
+      resolveNativeChatSshOwner({ sessionId: 'abc', transcriptPath: '/home/dev/t.jsonl' })
+    ).toEqual({ connectionId: 'live-box', transcriptPath: '/home/dev/t.jsonl' })
+  })
+
+  it('returns null without a session id even when a path matches a hook row', () => {
+    getStatusSnapshot.mockReturnValue([
+      hookRow({
+        connectionId: 'dev-box',
+        providerSession: {
+          key: 'session_id',
+          id: 'abc',
+          transcriptPath: '/home/dev/t.jsonl'
+        }
+      })
+    ])
+
+    expect(resolveNativeChatSshOwner({ sessionId: '', transcriptPath: '/home/dev/t.jsonl' })).toBeNull()
   })
 
   it('does not claim a session no hook row knows about', () => {

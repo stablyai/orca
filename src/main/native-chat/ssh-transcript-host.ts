@@ -39,9 +39,11 @@ export type NativeChatSshOwner = {
  * Why: the native chat wire contract carries no host, so the only authority for
  * "which machine is this agent writing on" is the hook row the agent already
  * published: `ingestRemote` stamps it with the connection it arrived on
- * (docs/design/agent-status-over-ssh.md §5). A path match wins over an id match,
- * because recent Claude Code names the transcript file with a UUID that differs
- * from the hook session id, so the id is the weaker signal of the two.
+ * (docs/design/agent-status-over-ssh.md §5). Among rows for the same session
+ * id, a path match wins over an id-only match (Claude may name the file with a
+ * UUID that differs from the id). Path never selects a host without that
+ * session id: a client-supplied path alone must not cross into another
+ * session's remote transcript.
  *
  * WSL rows carry a `wsl:<distro>` connection id and are NOT a relay target: the
  * guest transcript is reachable from the Windows host through the UNC twin
@@ -53,13 +55,13 @@ export function resolveNativeChatSshOwner(args: {
 }): NativeChatSshOwner | null {
   const sessionId = args.sessionId.trim()
   const transcriptPath = args.transcriptPath?.trim()
-  if (!sessionId && !transcriptPath) {
+  if (!sessionId) {
     return null
   }
-  // Why: two connections can report the same provider session id or the same
-  // absolute transcript path (a resumed session, a stale row from a dropped
-  // target, two hosts with the same home layout). Snapshot order carries no
-  // meaning, so the most recent hook event wins deterministically on both keys.
+  // Why: two connections can report the same provider session id (a resumed
+  // session, a stale row from a dropped target). Snapshot order carries no
+  // meaning, so the most recent hook event wins deterministically. Path is only
+  // a disambiguator among rows that already match sessionId.
   let pathMatch: NativeChatSshOwner | null = null
   let pathMatchReceivedAt = Number.NEGATIVE_INFINITY
   let idMatch: NativeChatSshOwner | null = null
@@ -70,7 +72,7 @@ export function resolveNativeChatSshOwner(args: {
       continue
     }
     const providerSession = status.providerSession
-    if (!providerSession) {
+    if (!providerSession || providerSession.id !== sessionId) {
       continue
     }
     const hookPath = providerSession.transcriptPath
@@ -81,13 +83,13 @@ export function resolveNativeChatSshOwner(args: {
       }
       continue
     }
-    if (sessionId && providerSession.id === sessionId && status.receivedAt > idMatchReceivedAt) {
+    if (status.receivedAt > idMatchReceivedAt) {
       idMatch = { connectionId, ...(hookPath ? { transcriptPath: hookPath } : {}) }
       idMatchReceivedAt = status.receivedAt
     }
   }
-  // A path match is the stronger key: recent Claude Code names the transcript
-  // file with a UUID that differs from the hook session id.
+  // Same-session path match wins: disambiguates which row owns the file when
+  // several hosts share the session id.
   return pathMatch ?? idMatch
 }
 
