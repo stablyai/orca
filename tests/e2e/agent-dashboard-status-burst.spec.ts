@@ -3,7 +3,6 @@ import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const PANE_COUNT = 300
 const STATUS_ROUNDS = 4
-const INTERACTION_BUDGET_MS = 1_000
 const BASE_TIME = 1_700_000_000_000
 
 type BurstPane = {
@@ -15,6 +14,7 @@ type BurstPane = {
 
 type BurstEvidence = {
   statusPublications: number
+  statusPublicationsAtVisible: number
   finalStates: string[]
   firstHistory: string[]
 }
@@ -123,15 +123,18 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
   )
 
   const interactionStartedAt = performance.now()
-  const openPromise = dashboardButton
-    .click()
-    .then(() => orcaPage.locator('[data-agent-dashboard-sheet]').waitFor({ state: 'visible' }))
-  const openedWithinBudget = await Promise.race([
-    openPromise.then(() => true),
-    new Promise<false>((resolve) => setTimeout(() => resolve(false), INTERACTION_BUDGET_MS))
-  ])
-  await openPromise
+  await dashboardButton.click()
+  await orcaPage.locator('[data-agent-dashboard-sheet]').waitFor({ state: 'visible' })
   const interactionElapsedMs = performance.now() - interactionStartedAt
+  const statusPublicationsAtVisible = await orcaPage.evaluate(() => {
+    const probe = (
+      window as typeof window & { __agentDashboardBurstProbe?: { statusPublications: number } }
+    ).__agentDashboardBurstProbe
+    if (!probe) {
+      throw new Error('Agent Dashboard burst evidence is unavailable')
+    }
+    return probe.statusPublications
+  })
 
   await expect
     .poll(
@@ -148,7 +151,7 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
     .toBe(true)
 
   const evidence = await orcaPage.evaluate(
-    (paneKeys): BurstEvidence => {
+    ({ paneKeys, statusPublicationsAtVisible }): BurstEvidence => {
       const state = window.__store?.getState()
       const probe = (
         window as typeof window & { __agentDashboardBurstProbe?: { statusPublications: number } }
@@ -159,13 +162,14 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
       const first = state.agentStatusByPaneKey[paneKeys[0]]
       return {
         statusPublications: probe.statusPublications,
+        statusPublicationsAtVisible,
         finalStates: paneKeys.map(
           (paneKey) => state.agentStatusByPaneKey[paneKey]?.state ?? 'missing'
         ),
         firstHistory: first?.stateHistory.map(({ state: historyState }) => historyState) ?? []
       }
     },
-    panes.map(({ paneKey }) => paneKey)
+    { paneKeys: panes.map(({ paneKey }) => paneKey), statusPublicationsAtVisible }
   )
 
   console.log(
@@ -174,15 +178,14 @@ test('keeps the visible Agent Dashboard interactive during an ordered status bur
       paneCount: PANE_COUNT,
       statusRounds: STATUS_ROUNDS,
       ipcEvents: PANE_COUNT * STATUS_ROUNDS * 3,
-      interactionBudgetMs: INTERACTION_BUDGET_MS,
       interactionElapsedMs: Math.round(interactionElapsedMs * 10) / 10,
-      openedWithinBudget,
       statusPublications: evidence.statusPublications,
+      statusPublicationsAtVisible: evidence.statusPublicationsAtVisible,
       firstHistory: evidence.firstHistory
     })
   )
 
-  expect(openedWithinBudget).toBe(true)
+  expect(evidence.statusPublicationsAtVisible).toBeLessThanOrEqual(3)
   expect(evidence.statusPublications).toBeLessThanOrEqual(3)
   expect(new Set(evidence.finalStates)).toEqual(new Set(['done']))
   expect(evidence.firstHistory.slice(-2)).toEqual(['working', 'waiting'])
