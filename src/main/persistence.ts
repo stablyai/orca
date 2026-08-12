@@ -3909,6 +3909,7 @@ export class Store {
   // Why 1s trailing + 5s max-wait (was 300ms unbounded): coalesce mutation bursts; max-wait bounds crash staleness at 5s.
   private static SAVE_DEBOUNCE_MS = 1_000
   private static SAVE_MAX_WAIT_MS = 5_000
+  private static OPEN_WITH_RECENT_APPLICATIONS_LIMIT = 5
 
   private scheduleSave(): void {
     // Why: once the quit flush has snapshotted, a newly debounced write would fire during
@@ -4222,6 +4223,27 @@ export class Store {
       this.state.codexResetCreditAttemptLedger = previous
       throw error
     }
+  }
+
+  getOpenWithRecentApplicationIds(extension: string): string[] {
+    const key = extension.trim().toLowerCase()
+    if (!key) {
+      return []
+    }
+    return this.state.openWithRecentApplicationsByExtension?.[key] ?? []
+  }
+
+  recordOpenWithApplicationLaunch(extension: string, applicationId: string): void {
+    const key = extension.trim().toLowerCase()
+    if (!key || !applicationId || this.writesFrozen) {
+      return
+    }
+    const byExtension = (this.state.openWithRecentApplicationsByExtension ??= {})
+    byExtension[key] = [
+      applicationId,
+      ...(byExtension[key] ?? []).filter((id) => id !== applicationId)
+    ].slice(0, Store.OPEN_WITH_RECENT_APPLICATIONS_LIMIT)
+    this.scheduleSave()
   }
 
   // ── Repos ──────────────────────────────────────────────────────────

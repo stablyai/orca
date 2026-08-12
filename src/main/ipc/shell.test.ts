@@ -104,9 +104,13 @@ function createSshTarget(overrides: Partial<SshTarget> = {}): SshTarget {
 describe('registerShellHandlers', () => {
   const settings = { activeRuntimeEnvironmentId: null as string | null }
   const sshTargets = new Map<string, SshTarget>()
+  const getOpenWithRecentApplicationIdsMock = vi.fn()
+  const recordOpenWithApplicationLaunchMock = vi.fn()
   const store = {
     getSettings: () => settings,
-    getSshTarget: (id: string) => sshTargets.get(id)
+    getSshTarget: (id: string) => sshTargets.get(id),
+    getOpenWithRecentApplicationIds: getOpenWithRecentApplicationIdsMock,
+    recordOpenWithApplicationLaunch: recordOpenWithApplicationLaunchMock
   }
 
   beforeEach(() => {
@@ -130,6 +134,9 @@ describe('registerShellHandlers', () => {
     statMock.mockResolvedValue({ isDirectory: () => true })
     launchOpenWithApplicationMock.mockReset()
     listOpenWithApplicationsMock.mockReset()
+    getOpenWithRecentApplicationIdsMock.mockReset()
+    getOpenWithRecentApplicationIdsMock.mockReturnValue([])
+    recordOpenWithApplicationLaunchMock.mockReset()
   })
 
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
@@ -292,6 +299,7 @@ describe('registerShellHandlers', () => {
 
     it('returns the discovered applications for existing files', async () => {
       const filePath = resolve('notes.md')
+      getOpenWithRecentApplicationIdsMock.mockReturnValue(['windows:c:\\recent.exe'])
       listOpenWithApplicationsMock.mockResolvedValue({
         applications: [{ id: 'windows:c:\\app.exe', name: 'App', isDefault: true }],
         supportsChooserDialog: true
@@ -303,7 +311,10 @@ describe('registerShellHandlers', () => {
         applications: [{ id: 'windows:c:\\app.exe', name: 'App', isDefault: true }],
         supportsChooserDialog: true
       })
-      expect(listOpenWithApplicationsMock).toHaveBeenCalledWith(normalize(filePath))
+      expect(getOpenWithRecentApplicationIdsMock).toHaveBeenCalledWith('.md')
+      expect(listOpenWithApplicationsMock).toHaveBeenCalledWith(normalize(filePath), {
+        recentApplicationIds: ['windows:c:\\recent.exe']
+      })
     })
   })
 
@@ -327,7 +338,7 @@ describe('registerShellHandlers', () => {
       ).resolves.toEqual({ ok: false, reason: 'launch-failed' })
     })
 
-    it('launches the selected application for existing files', async () => {
+    it('launches the selected application and records the recency choice', async () => {
       const filePath = resolve('notes.md')
       launchOpenWithApplicationMock.mockResolvedValue(true)
       const handler = getHandler('shell:openPathWithApplication')
@@ -339,6 +350,22 @@ describe('registerShellHandlers', () => {
         'windows:c:\\app.exe',
         normalize(filePath)
       )
+      expect(recordOpenWithApplicationLaunchMock).toHaveBeenCalledWith('.md', 'windows:c:\\app.exe')
+    })
+
+    it('does not record recency for failed launches or the chooser dialog', async () => {
+      const filePath = resolve('notes.md')
+      const handler = getHandler('shell:openPathWithApplication')
+
+      launchOpenWithApplicationMock.mockResolvedValue(false)
+      await handler({}, { path: filePath, applicationId: 'windows:c:\\app.exe' })
+      expect(recordOpenWithApplicationLaunchMock).not.toHaveBeenCalled()
+
+      launchOpenWithApplicationMock.mockResolvedValue(true)
+      await expect(
+        handler({}, { path: filePath, applicationId: 'system:open-with-chooser' })
+      ).resolves.toEqual({ ok: true })
+      expect(recordOpenWithApplicationLaunchMock).not.toHaveBeenCalled()
     })
   })
 

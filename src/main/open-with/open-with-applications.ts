@@ -33,7 +33,7 @@ const launchSpecsByApplicationId = new Map<string, OpenWithLaunchSpec>()
 
 export async function listOpenWithApplications(
   filePath: string,
-  options: { platform?: NodeJS.Platform } = {}
+  options: { platform?: NodeJS.Platform; recentApplicationIds?: string[] } = {}
 ): Promise<OpenWithApplicationListing> {
   const platform = options.platform ?? process.platform
   const candidates = await listCachedCandidates(filePath, platform)
@@ -41,8 +41,8 @@ export async function listOpenWithApplications(
     launchSpecsByApplicationId.set(candidate.id, candidate.launch)
   }
   return {
-    applications: sortApplications(candidates).map(({ id, name, isDefault }) =>
-      isDefault ? { id, name, isDefault } : { id, name }
+    applications: sortOpenWithApplications(candidates, options.recentApplicationIds ?? []).map(
+      ({ id, name, isDefault }) => (isDefault ? { id, name, isDefault } : { id, name })
     ),
     supportsChooserDialog: platform === 'win32'
   }
@@ -181,10 +181,19 @@ function resolveLaunchInvocation(
   return { spawnCmd: 'gio', spawnArgs: ['launch', launch.desktopFilePath, filePath] }
 }
 
-function sortApplications(
-  candidates: OpenWithApplicationCandidate[]
-): OpenWithApplicationCandidate[] {
+export function sortOpenWithApplications<T extends ShellOpenWithApplication>(
+  candidates: T[],
+  recentApplicationIds: string[]
+): T[] {
+  // Why: recently launched apps outrank the OS default — the user's own last
+  // choice is the strongest signal for what they want next time.
+  const recencyRank = new Map(recentApplicationIds.map((id, index) => [id, index]))
   return [...candidates].sort((a, b) => {
+    const aRecency = recencyRank.get(a.id) ?? Number.POSITIVE_INFINITY
+    const bRecency = recencyRank.get(b.id) ?? Number.POSITIVE_INFINITY
+    if (aRecency !== bRecency) {
+      return aRecency - bRecency
+    }
     if (Boolean(a.isDefault) !== Boolean(b.isDefault)) {
       return a.isDefault ? -1 : 1
     }
