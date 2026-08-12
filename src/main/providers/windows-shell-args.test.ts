@@ -103,6 +103,9 @@ describe('resolveWindowsShellLaunchArgs', () => {
       '$env:OPENCODE_CONFIG_DIR = $env:ORCA_OPENCODE_CONFIG_DIR'
     )
     const mimocodeRestoreIndex = command.indexOf('$env:MIMOCODE_HOME = $env:ORCA_MIMOCODE_HOME')
+    const kiloRestoreIndex = command.indexOf(
+      '$env:KILO_CONFIG_DIR = $env:ORCA_KILO_CONFIG_DIR'
+    )
     const duplicateStateGuardIndex = command.indexOf('Test-Path variable:global:__OrcaOsc133State')
     const languageModeGuardIndex = command.indexOf('LanguageMode -eq "FullLanguage"')
     const ompWrapperIndex = command.indexOf('function Global:omp')
@@ -117,7 +120,12 @@ describe('resolveWindowsShellLaunchArgs', () => {
     expect(command).not.toContain('ORCA_PI_CODING_AGENT_DIR')
     expect(command).not.toContain('ORCA_OMP_CODING_AGENT_DIR')
     expect(command).not.toContain('$env:PI_CODING_AGENT_DIR = $env:ORCA_OMP_SOURCE_AGENT_DIR')
-    for (const restoreIndex of [opencodeRestoreIndex, mimocodeRestoreIndex, codexRestoreIndex]) {
+    for (const restoreIndex of [
+      opencodeRestoreIndex,
+      mimocodeRestoreIndex,
+      kiloRestoreIndex,
+      codexRestoreIndex
+    ]) {
       expect(restoreIndex).toBeGreaterThanOrEqual(0)
       expect(restoreIndex).toBeLessThan(duplicateStateGuardIndex)
       expect(restoreIndex).toBeLessThan(languageModeGuardIndex)

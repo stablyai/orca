@@ -52,6 +52,7 @@ import {
 import { applyTerminalGitCredentialPromptGuard } from './terminal-git-credential-guard'
 import { openCodeHookService } from '../opencode/hook-service'
 import { mimoCodeHookService } from '../mimo/hook-service'
+import { kiloHookService } from '../kilo/hook-service'
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
@@ -1645,6 +1646,13 @@ function isMimoLaunchCommand(launchCommand: string | undefined): boolean {
   return binary === 'mimo'
 }
 
+function isKiloLaunchCommand(launchCommand: string | undefined): boolean {
+  const binary = getCommandTokenPathBasename(getFirstCommandToken(launchCommand ?? ''))
+    .toLowerCase()
+    .replace(/\.(?:cmd|exe|sh)$/, '')
+  return binary === 'kilo'
+}
+
 function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | undefined {
   const sourceHome = baseEnv.ORCA_MIMOCODE_SOURCE_HOME ?? process.env.ORCA_MIMOCODE_SOURCE_HOME
   if (sourceHome) {
@@ -1656,6 +1664,20 @@ function resolveMimocodeSourceHome(baseEnv: Record<string, string>): string | un
     return undefined
   }
   return configHome
+}
+
+function resolveKiloSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
+  const sourceDir = baseEnv.ORCA_KILO_SOURCE_CONFIG_DIR ?? process.env.ORCA_KILO_SOURCE_CONFIG_DIR
+  if (sourceDir) {
+    return sourceDir
+  }
+  const configDir = baseEnv.KILO_CONFIG_DIR ?? process.env.KILO_CONFIG_DIR
+  const orcaConfigDir = baseEnv.ORCA_KILO_CONFIG_DIR ?? process.env.ORCA_KILO_CONFIG_DIR
+  // Why: an inherited Orca overlay must not be treated as the user's source config or nested Orcas mirror overlays.
+  if (configDir && orcaConfigDir && configDir === orcaConfigDir) {
+    return undefined
+  }
+  return configDir
 }
 
 function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string | undefined {
@@ -1745,6 +1767,19 @@ export function buildPtyHostEnv(
         }
       }
     }
+    if (isKiloLaunchCommand(launchCommandHint) || opts.launchAgent === 'kilo') {
+      const preexistingKiloConfigDir = resolveKiloSourceConfigDir(baseEnv)
+      Object.assign(baseEnv, kiloHookService.buildPtyEnv(id, preexistingKiloConfigDir))
+      if (baseEnv.KILO_CONFIG_DIR) {
+        // Why: shell rc files can re-export the user's KILO_CONFIG_DIR after spawn; restore this PTY-scoped overlay.
+        baseEnv.ORCA_KILO_CONFIG_DIR = baseEnv.KILO_CONFIG_DIR
+        if (preexistingKiloConfigDir) {
+          baseEnv.ORCA_KILO_SOURCE_CONFIG_DIR = preexistingKiloConfigDir
+        } else {
+          delete baseEnv.ORCA_KILO_SOURCE_CONFIG_DIR
+        }
+      }
+    }
   } else {
     restoreOrStripOverlayEnv(baseEnv, {
       primary: 'OPENCODE_CONFIG_DIR',
@@ -1755,6 +1790,11 @@ export function buildPtyHostEnv(
       primary: 'MIMOCODE_HOME',
       overlay: 'ORCA_MIMOCODE_HOME',
       source: 'ORCA_MIMOCODE_SOURCE_HOME'
+    })
+    restoreOrStripOverlayEnv(baseEnv, {
+      primary: 'KILO_CONFIG_DIR',
+      overlay: 'ORCA_KILO_CONFIG_DIR',
+      source: 'ORCA_KILO_SOURCE_CONFIG_DIR'
     })
   }
 
@@ -2045,6 +2085,7 @@ export function clearProviderPtyState(
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
+  kiloHookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)

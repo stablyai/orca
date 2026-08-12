@@ -52,6 +52,8 @@ const {
   openCodeBuildPtyEnvMock,
   openCodeClearPtyMock,
   mimoCodeBuildPtyEnvMock,
+  kiloBuildPtyEnvMock,
+  kiloClearPtyMock,
   buildAgentHookEnvMock,
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
@@ -88,6 +90,8 @@ const {
   spawnMock: vi.fn(),
   openCodeBuildPtyEnvMock: vi.fn(),
   mimoCodeBuildPtyEnvMock: vi.fn(),
+  kiloBuildPtyEnvMock: vi.fn(),
+  kiloClearPtyMock: vi.fn(),
   isPwshAvailableMock: vi.fn(),
   wslUncDirectoryExistsAsyncMock: vi.fn(),
   openCodeClearPtyMock: vi.fn(),
@@ -165,6 +169,13 @@ vi.mock('../opencode/hook-service', () => ({
 vi.mock('../mimo/hook-service', () => ({
   mimoCodeHookService: {
     buildPtyEnv: mimoCodeBuildPtyEnvMock
+  }
+}))
+
+vi.mock('../kilo/hook-service', () => ({
+  kiloHookService: {
+    buildPtyEnv: kiloBuildPtyEnvMock,
+    clearPty: kiloClearPtyMock
   }
 }))
 
@@ -393,6 +404,8 @@ describe('registerPtyHandlers', () => {
     spawnMock.mockReset()
     openCodeBuildPtyEnvMock.mockReset()
     mimoCodeBuildPtyEnvMock.mockReset()
+    kiloBuildPtyEnvMock.mockReset()
+    kiloClearPtyMock.mockReset()
     openCodeClearPtyMock.mockReset()
     buildAgentHookEnvMock.mockReset()
     clearAgentHookPaneStateMock.mockReset()
@@ -458,6 +471,9 @@ describe('registerPtyHandlers', () => {
     }))
     mimoCodeBuildPtyEnvMock.mockImplementation((_ptyId: string, existingHome?: string) => ({
       MIMOCODE_HOME: existingHome ? '/tmp/orca-mimocode-overlay' : '/tmp/orca-mimocode-shared'
+    }))
+    kiloBuildPtyEnvMock.mockImplementation((_ptyId: string, existingConfigDir?: string) => ({
+      KILO_CONFIG_DIR: existingConfigDir ? '/tmp/orca-kilo-overlay' : '/tmp/orca-kilo-shared'
     }))
     buildAgentHookEnvMock.mockReturnValue({
       ORCA_AGENT_HOOK_PORT: '5678',
@@ -2782,6 +2798,55 @@ describe('registerPtyHandlers', () => {
       await spawnAndGetEnv()
 
       expect(mimoCodeBuildPtyEnvMock).not.toHaveBeenCalled()
+    })
+
+    it('injects Kilo overlay env only when launch command is kilo', async () => {
+      const env = await spawnAndGetEnv(undefined, undefined, undefined, undefined, 'kilo')
+
+      expect(kiloBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(env.KILO_CONFIG_DIR).toBe('/tmp/orca-kilo-shared')
+      expect(env.ORCA_KILO_CONFIG_DIR).toBe('/tmp/orca-kilo-shared')
+      expect(env.ORCA_KILO_SOURCE_CONFIG_DIR).toBeUndefined()
+    })
+
+    it('injects Kilo overlay env when launchAgent is kilo', async () => {
+      const env = await spawnAndGetEnv(
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        'kilo'
+      )
+
+      expect(kiloBuildPtyEnvMock).toHaveBeenCalledTimes(1)
+      expect(env.KILO_CONFIG_DIR).toBe('/tmp/orca-kilo-shared')
+      expect(env.ORCA_KILO_CONFIG_DIR).toBe('/tmp/orca-kilo-shared')
+    })
+
+    it('does not inject Kilo overlay for non-kilo launches', async () => {
+      await spawnAndGetEnv()
+
+      expect(kiloBuildPtyEnvMock).not.toHaveBeenCalled()
+    })
+
+    it('restores user Kilo config dir when agent status hooks are disabled in a nested Orca shell', async () => {
+      const env = await spawnAndGetEnv(
+        {
+          KILO_CONFIG_DIR: '/tmp/parent-orca-kilo-overlay',
+          ORCA_KILO_CONFIG_DIR: '/tmp/parent-orca-kilo-overlay',
+          ORCA_KILO_SOURCE_CONFIG_DIR: '/tmp/user-kilo-config'
+        },
+        undefined,
+        undefined,
+        () => ({ agentStatusHooksEnabled: false }),
+        'kilo'
+      )
+
+      expect(kiloBuildPtyEnvMock).not.toHaveBeenCalled()
+      expect(env.KILO_CONFIG_DIR).toBe('/tmp/user-kilo-config')
+      expect(env.ORCA_KILO_CONFIG_DIR).toBeUndefined()
+      expect(env.ORCA_KILO_SOURCE_CONFIG_DIR).toBeUndefined()
     })
 
     it('restores user MiMo home when agent status hooks are disabled in a nested Orca shell', async () => {

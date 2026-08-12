@@ -42,6 +42,7 @@ const AGENT_HOOK_SOURCES = [
   'amp',
   'opencode',
   'mimo-code',
+  'kilo',
   'cursor',
   'pi',
   'omp',

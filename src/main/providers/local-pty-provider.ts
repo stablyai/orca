@@ -785,6 +785,7 @@ export class LocalPtyProvider implements IPtyProvider {
         finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
         finalEnv.ORCA_MIMOCODE_HOME ||
+        finalEnv.ORCA_KILO_CONFIG_DIR ||
         finalEnv.ORCA_OMP_STATUS_EXTENSION ||
         finalEnv.ORCA_CODEX_HOME ||
         finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
