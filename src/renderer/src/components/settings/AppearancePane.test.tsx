@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => ({
     setUsagePercentageDisplay: vi.fn(),
     recordFeatureInteraction: vi.fn(),
     setWorktreeCardMode: vi.fn(),
-    appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'window' | null,
+    appearanceAccordionDeepLink: null as 'interface' | 'terminal' | 'codeEditor' | 'window' | null,
     clearAppearanceAccordionDeepLink: vi.fn()
   }
 }))
@@ -44,6 +44,10 @@ vi.mock('../status-bar/use-available-status-bar-toggles', () => ({
 
 vi.mock('./TerminalAppearanceSection', () => ({
   TerminalAppearanceSection: () => null
+}))
+
+vi.mock('./CodeEditorAppearanceSection', () => ({
+  CodeEditorAppearanceSection: () => null
 }))
 
 vi.mock('../ui/select', async () => {
@@ -196,7 +200,7 @@ async function rerenderAppearancePane(
 
 function appearanceSectionToggle(
   container: HTMLElement,
-  sectionId: 'interface' | 'terminal' | 'window'
+  sectionId: 'interface' | 'terminal' | 'codeEditor' | 'window'
 ): HTMLButtonElement | undefined {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')).find(
     (button) => button.getAttribute('aria-controls') === `appearance-section-${sectionId}`
@@ -392,16 +396,14 @@ describe('AppearancePane', () => {
     expect(mocks.state.setWorktreeCardMode).toHaveBeenCalledWith('Compact')
   })
 
-  it('renders the three top-level section rows and no Code & Markdown row when not searching', async () => {
+  it('renders the four top-level section rows including Code Editor when not searching', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.textContent).toContain('Interface')
     expect(container.textContent).toContain('Terminal')
+    expect(container.textContent).toContain('Code Editor')
     expect(container.textContent).toContain('Window & Sidebar')
-    // Code & Markdown is intentionally omitted — Orca has no Appearance-level
-    // code/markdown settings, so the row would be empty.
-    expect(container.textContent).not.toContain('Code & Markdown')
   })
 
   it('requests installed font suggestions only after the IDE font picker is used', async () => {
@@ -575,7 +577,7 @@ describe('AppearancePane', () => {
     expect(mocks.state.toggleStatusBarItem).toHaveBeenCalledWith('antigravity')
   })
 
-  it('expands Interface, Terminal, and Window & Sidebar by default', async () => {
+  it('expands Interface, Terminal, Code Editor, and Window & Sidebar by default', async () => {
     mocks.state.settingsSearchQuery = ''
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
@@ -583,9 +585,10 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(expanded).toHaveLength(3)
+    expect(expanded).toHaveLength(4)
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Interface')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Terminal')
+    expect(expanded.map((button) => button.textContent).join(' ')).toContain('Code Editor')
     expect(expanded.map((button) => button.textContent).join(' ')).toContain('Window & Sidebar')
   })
 
@@ -607,8 +610,9 @@ describe('AppearancePane', () => {
       container.querySelectorAll<HTMLButtonElement>('button[aria-expanded="true"]')
     ).filter((button) => button.getAttribute('aria-controls')?.startsWith('appearance-section-'))
 
-    expect(stillExpanded).toHaveLength(2)
+    expect(stillExpanded).toHaveLength(3)
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain('Interface')
+    expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain('Code Editor')
     expect(stillExpanded.map((button) => button.textContent).join(' ')).toContain(
       'Window & Sidebar'
     )

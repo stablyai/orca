@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { TerminalThemeOption } from '@/lib/terminal-theme'
+import type { EditorColorThemeOption, EditorColorThemeValue } from '@/lib/editor-theme'
 import {
   FONT_SUGGESTION_RENDER_LIMIT,
   SETTINGS_FORM_OPTION_QUERY_MAX_BYTES,
+  filterEditorColorThemeOptions,
   filterFontSuggestions,
   filterTerminalThemeOptions,
   getRenderedFontSuggestions,
   isSettingsFormOptionQueryTooLarge
 } from './settings-form-option-filter'
+
+function createEditorColorThemeOption(
+  label: string,
+  value: EditorColorThemeValue,
+  group: EditorColorThemeOption['group'] = 'catalog'
+): EditorColorThemeOption {
+  return { value, label, group }
+}
 
 function createThemeOption(
   label: string,
@@ -33,6 +43,17 @@ describe('settings-form-option-filter', () => {
 
     expect(filterTerminalThemeOptions(themes, 'ghostty')).toEqual([themes[1]])
     expect(filterTerminalThemeOptions(themes, ' dark ')).toEqual([themes[0]])
+  })
+
+  it('filters editor color themes by label only', () => {
+    const themes = [
+      createEditorColorThemeOption('Monokai', 'monokai'),
+      createEditorColorThemeOption('Solarized Dark', 'solarized-dark'),
+      createEditorColorThemeOption('Dracula', 'dracula')
+    ]
+
+    expect(filterEditorColorThemeOptions(themes, 'dark')).toEqual([themes[1]])
+    expect(filterEditorColorThemeOptions(themes, '')).toEqual(themes)
   })
 
   it('orders font suggestions by prefix matches before substring matches', () => {

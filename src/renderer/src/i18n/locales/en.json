@@ -5749,6 +5749,8 @@
           "terminalDefaultFont": "Default font",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
+          "codeEditorTitle": "Code Editor",
+          "codeEditorDefault": "Default",
           "windowSidebarTitle": "Window & Sidebar",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
           "statusBarCount": "{{value0}} indicators visible.",
@@ -8087,6 +8089,17 @@
             "262fe1d24f": "dark",
             "0709c794f7": "Choose how Orca looks in the app window.",
             "71e06350b4": "Theme",
+            "codeEditorTheme": {
+              "title": "Editor Color Theme",
+              "description": "Syntax highlighting theme used by file editors and diff views.",
+              "editor": "editor",
+              "code": "code",
+              "syntax": "syntax highlighting",
+              "monokai": "monokai",
+              "dracula": "dracula",
+              "oneDark": "one dark",
+              "solarized": "solarized"
+            },
             "dc02c8759d": "workspace",
             "43cfba3b95": "server",
             "46d21eef62": "localhost",
@@ -10088,13 +10101,27 @@
           "description": "Font used by file editors and diff views. Leave empty to follow the terminal font.",
           "placeholder": "Same as terminal font"
         },
-        "EditorColorThemeSetting": {
-          "title": "Editor Color Theme",
-          "description": "Syntax highlighting theme used by file editors and diff views. \"Follow app theme\" switches between the default light and dark themes.",
-          "auto": "Follow app theme",
-          "vs": "Light",
-          "vsDark": "Dark",
-          "monokai": "Monokai"
+        "CodeEditorAppearanceSection": {
+          "catalogTitle": "Code Editor Themes",
+          "pickerTitle": "Editor Color Theme",
+          "pickerDescription": "Syntax highlighting theme used by file editors and diff views. \"Follow App Theme\" switches between the default light and dark themes.",
+          "previewTitle": "Preview",
+          "previewDescription": "Shows the effective code editor theme."
+        },
+        "EditorColorThemePicker": {
+          "group_auto": "App Theme",
+          "group_builtin": "Built-in",
+          "group_catalog": "Themes",
+          "search_placeholder": "Search editor themes",
+          "selected": "Selected:",
+          "showing": "Showing",
+          "matching": " matching \"{{value0}}\"",
+          "ofTotal": " of {{value0}}",
+          "current": "Current",
+          "no_results": "No themes found."
+        },
+        "EditorColorThemePreview": {
+          "loading": "Loading preview…"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

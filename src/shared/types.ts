@@ -2814,8 +2814,17 @@ export type GlobalSettings = {
   editorWordWrap?: boolean
   /** Monaco color theme for file/diff editors. 'auto' follows `theme` (light/dark); any
    *  other value is an explicit override, same relationship as terminalThemeDark/Light
-   *  have to `theme` for the terminal. */
-  editorColorTheme?: 'auto' | 'vs' | 'vs-dark' | 'monokai'
+   *  have to `theme` for the terminal. Values other than 'auto'/'vs'/'vs-dark' are ids
+   *  from the editor theme catalog (lib/editor-themes/catalog.ts). */
+  editorColorTheme?:
+    | 'auto'
+    | 'vs'
+    | 'vs-dark'
+    | 'monokai'
+    | 'dracula'
+    | 'one-dark'
+    | 'solarized-dark'
+    | 'solarized-light'
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

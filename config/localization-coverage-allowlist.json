@@ -68,5 +68,61 @@
     "text": "ghostty",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-theme.ts",
+    "kind": "object-property:label",
+    "text": "Follow App Theme",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-theme.ts",
+    "kind": "object-property:label",
+    "text": "Light (Default)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-theme.ts",
+    "kind": "object-property:label",
+    "text": "Dark (Default)",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "kind": "object-property:label",
+    "text": "Monokai",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "kind": "object-property:label",
+    "text": "Dracula",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "kind": "object-property:label",
+    "text": "One Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "kind": "object-property:label",
+    "text": "Solarized Dark",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "src/renderer/src/lib/editor-themes/catalog.ts",
+    "kind": "object-property:label",
+    "text": "Solarized Light",
+    "dynamic": false,
+    "count": 1
   }
 ]

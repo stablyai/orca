@@ -31,6 +31,51 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const getCodeEditorAppearanceSearchEntries = createLocalizedCatalog(
+  (): SettingsSearchEntry[] => [
+    {
+      title: translate(
+        'auto.components.settings.appearance.search.codeEditorTheme.title',
+        'Editor Color Theme'
+      ),
+      description: translate(
+        'auto.components.settings.appearance.search.codeEditorTheme.description',
+        'Syntax highlighting theme used by file editors and diff views.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.editor',
+          'editor'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.code',
+          'code'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.syntax',
+          'syntax highlighting'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.monokai',
+          'monokai'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.dracula',
+          'dracula'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.oneDark',
+          'one dark'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.appearance.search.codeEditorTheme.solarized',
+          'solarized'
+        )
+      ]
+    }
+  ]
+)
+
 export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('settings.appearance.language.title', 'Language'),
