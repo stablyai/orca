@@ -6,12 +6,14 @@ import type {
 } from '../../shared/native-chat-types'
 import { clearNativeChatTranscriptCache } from '../native-chat/transcript-read-cache'
 import type { ReadTranscriptResult } from '../native-chat/transcript-reader'
-import {
-  subscribeNativeChatTranscript,
-  readNativeChatTranscriptTail,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
+import {
+  readRoutedNativeChatTranscriptTail,
+  subscribeRoutedNativeChatTranscript
+} from '../native-chat/transcript-source-routing'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -36,7 +38,7 @@ async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscr
   const { agent, sessionId } = args
   // Clamp to a positive window; default to the desktop window for the first page.
   const limit = args.limit && args.limit > 0 ? Math.floor(args.limit) : DESKTOP_READ_WINDOW
-  return readNativeChatTranscriptTail({
+  return readRoutedNativeChatTranscriptTail({
     agent,
     sessionId,
     transcriptPath: args.transcriptPath,
@@ -230,7 +232,10 @@ async function handleSubscribe(event: IpcMainEvent, args: NativeChatSubscribeArg
   }
   let subscription: NativeChatTranscriptSubscription
   try {
-    subscription = await subscribeNativeChatTranscript(subscribeArgs, pending.controller.signal)
+    subscription = await subscribeRoutedNativeChatTranscript(
+      subscribeArgs,
+      pending.controller.signal
+    )
   } catch {
     takePendingSubscription(sender.id, subscriptionId, pending)
     return

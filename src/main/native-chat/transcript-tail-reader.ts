@@ -53,6 +53,11 @@ export async function readNativeChatTranscriptTailFile(
   messages: NativeChatMessage[]
   lifecycle?: NativeChatTurnLifecycle
   consumedTo: number
+  /** Offset just past the last COMPLETE record inside the range this read
+   *  covered. The only cursor safe to resume an incremental read from: it can
+   *  never sit mid-record, and it can never pass a record this read did not
+   *  return, however much the file grew in the meantime. */
+  completedTo: number
   hasMore: boolean
   beforeOffset: number
   malformedRecordCount?: number
@@ -62,7 +67,7 @@ export async function readNativeChatTranscriptTailFile(
   const end = Math.min((await stat(filePath)).size, endOffset ?? Number.MAX_SAFE_INTEGER)
   signal?.throwIfAborted()
   if (end === 0) {
-    return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+    return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
   }
   const handle = await open(filePath, 'r')
   const lineParts: Buffer[] = []
@@ -74,18 +79,39 @@ export async function readNativeChatTranscriptTailFile(
   let ignoreNextMalformedRecord = false
   try {
     signal?.throwIfAborted()
+    // Why: the path can rotate or truncate between the opening `stat` and this
+    // `open`. Cap `end` to the handle's live size so we never seek past EOF and
+    // invent a cursor from an unchecked short read.
+    const liveEnd = Math.min(end, (await handle.stat()).size)
+    if (liveEnd === 0) {
+      return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
+    }
     const consumedTo = includeTrailingLine
-      ? end
-      : await findLastCompleteLineEnd(handle, end, signal)
+      ? liveEnd
+      : await findLastCompleteLineEnd(handle, liveEnd, signal)
     if (consumedTo === 0) {
-      return { messages: [], consumedTo: 0, hasMore: false, beforeOffset: 0 }
+      return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
     }
     const newestFirst: { message: NativeChatMessage; offset: number }[] = []
     const finalByte = Buffer.allocUnsafe(1)
-    await handle.read(finalByte, 0, 1, consumedTo - 1)
+    const { bytesRead: finalByteRead } = await handle.read(finalByte, 0, 1, consumedTo - 1)
     signal?.throwIfAborted()
-    ignoreNextMalformedRecord = finalByte[0] !== 0x0a
-    let cursor = consumedTo - (finalByte[0] === 0x0a ? 1 : 0)
+    // Why: allocUnsafe leaves the buffer uninitialized. A short read (file
+    // rotated/shrunk under us after the opening stat) must not invent a
+    // newline from heap garbage and mint a cursor past the live file.
+    if (finalByteRead !== 1) {
+      return { messages: [], consumedTo: 0, completedTo: 0, hasMore: false, beforeOffset: 0 }
+    }
+    const endsWithNewline = finalByte[0] === 0x0a
+    ignoreNextMalformedRecord = !endsWithNewline
+    // Why: a range ending on a newline is already a record boundary, so the
+    // common case costs no extra I/O. Only a half-written trailing record needs
+    // the back-scan, and only when this read kept it (`includeTrailingLine`).
+    const completedTo =
+      !includeTrailingLine || endsWithNewline
+        ? consumedTo
+        : await findLastCompleteLineEnd(handle, liveEnd, signal)
+    let cursor = consumedTo - (endsWithNewline ? 1 : 0)
     while (cursor > 0 && newestFirst.length <= limit) {
       signal?.throwIfAborted()
       const start = Math.max(0, cursor - TAIL_CHUNK_BYTES)
@@ -112,7 +138,8 @@ export async function readNativeChatTranscriptTailFile(
     if (cursor === 0 && lineParts.length > 0 && newestFirst.length <= limit) {
       decodeLine(0, newestFirst)
     }
-    const chronological = newestFirst.toReversed()
+    // oxlint-disable-next-line unicorn/no-array-reverse -- `.toReversed()` is Node 20+, and this reader now also runs inside the SSH relay, whose Node-18 baseline src/relay/subprocess.test.ts enforces. The copy keeps the non-mutating semantics the rule is after.
+    const chronological = [...newestFirst].reverse()
     // Why: slice(-0) returns the whole array, so a non-positive limit must
     // window to nothing explicitly rather than leak every buffered record.
     const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
@@ -120,8 +147,9 @@ export async function readNativeChatTranscriptTailFile(
       messages: selected.map((entry) => entry.message),
       ...(lifecycle ? { lifecycle } : {}),
       consumedTo,
+      completedTo,
       hasMore: limit > 0 && chronological.length > limit,
-      beforeOffset: selected[0]?.offset ?? end,
+      beforeOffset: selected[0]?.offset ?? liveEnd,
       ...(malformedRecordCount > 0 ? { malformedRecordCount } : {}),
       ...(oversizedRecordCount > 0 ? { oversizedRecordCount } : {})
     }
@@ -153,7 +181,8 @@ export async function readNativeChatTranscriptTailFile(
     lineOffset: number,
     messages: { message: NativeChatMessage; offset: number }[]
   ): void {
-    let line = Buffer.concat([...lineParts].toReversed()).toString('utf8')
+    // oxlint-disable-next-line unicorn/no-array-reverse -- see the Node-18 note above; the spread already copies.
+    let line = Buffer.concat([...lineParts].reverse()).toString('utf8')
     if (line.endsWith('\r')) {
       line = line.slice(0, -1)
     }
@@ -190,9 +219,12 @@ async function findLastCompleteLineEnd(
 ): Promise<number> {
   signal?.throwIfAborted()
   const lastByte = Buffer.allocUnsafe(1)
-  await handle.read(lastByte, 0, 1, end - 1)
+  const { bytesRead: lastByteRead } = await handle.read(lastByte, 0, 1, end - 1)
   signal?.throwIfAborted()
-  if (lastByte[0] === 0x0a) {
+  // Why: allocUnsafe leaves the buffer uninitialized, so a short read past EOF
+  // would compare heap garbage against a newline and report a cursor beyond the
+  // file. Treat "nothing there" as "no complete line here" and scan back.
+  if (lastByteRead === 1 && lastByte[0] === 0x0a) {
     return end
   }
   let cursor = end
@@ -227,6 +259,8 @@ export async function readNativeChatTranscriptTail(
       lifecycle?: NativeChatTurnLifecycle
       hasMore: boolean
       beforeOffset: number
+      /** See `readNativeChatTranscriptTailFile`: the resume cursor for this read. */
+      completedTo: number
     }
   | { error: string; notFound?: true }
 > {
@@ -270,7 +304,8 @@ export async function readNativeChatTranscriptTail(
         ? { lifecycle: result.lifecycle }
         : {}),
       hasMore: result.hasMore,
-      beforeOffset: result.beforeOffset
+      beforeOffset: result.beforeOffset,
+      completedTo: result.completedTo
     }
   } catch (error) {
     signal?.throwIfAborted()

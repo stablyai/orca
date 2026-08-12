@@ -42,7 +42,11 @@ describe('native chat transcript tail cancellation', () => {
       })
     })
     fsMocks.stat.mockResolvedValue({ size: 8 * 64 * 1024 + 1 })
-    fsMocks.open.mockResolvedValue({ close, read })
+    fsMocks.open.mockResolvedValue({
+      close,
+      read,
+      stat: vi.fn(async () => ({ size: 8 * 64 * 1024 + 1 }))
+    })
     const controller = new AbortController()
     const canceled = new Error('request canceled')
     const pending = readNativeChatTranscriptTail(
@@ -73,7 +77,7 @@ describe('native chat transcript tail cancellation', () => {
     fsMocks.open.mockImplementation(
       () =>
         new Promise((resolve) => {
-          finishOpen = () => resolve({ close, read })
+          finishOpen = () => resolve({ close, read, stat: vi.fn(async () => ({ size: 1 })) })
         })
     )
     const controller = new AbortController()

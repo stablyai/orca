@@ -1,0 +1,262 @@
+import { stat } from 'node:fs/promises'
+import type { AgentType, NativeChatTurnLifecycle } from '../shared/native-chat-types'
+import {
+  SSH_NATIVE_CHAT_GENERATION_MAX_LENGTH,
+  SSH_NATIVE_CHAT_READ_LIMIT_MAX,
+  SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD,
+  SSH_NATIVE_CHAT_TRANSCRIPT_PATH_MAX_LENGTH,
+  sshNativeChatFileIdentity,
+  type SshNativeChatRelayReadParams,
+  type SshNativeChatRelayReadResult
+} from '../shared/ssh-native-chat-relay'
+import {
+  resolveSessionFilePath,
+  type ResolveSessionFileOptions
+} from '../main/native-chat/session-file-resolver'
+import { readIncrementalTranscriptMessages } from '../main/native-chat/transcript-incremental-reader'
+import {
+  nativeChatLineDecoderForAgent,
+  readNativeChatTranscriptTail
+} from '../main/native-chat/transcript-tail-reader'
+import { nativeChatTurnLifecycleDecoderForAgent } from '../main/native-chat/transcript-turn-lifecycle'
+import type { RelayDispatcher } from './dispatcher'
+
+// Why: an SSH worktree's agent writes its transcript on THIS machine, so the
+// desktop's own `~/.claude/projects` can never hold it. Resolving, reading and
+// decoding here is the same split the AI Vault relay handler already uses: only
+// decoded messages cross the mux, never the JSONL.
+export class NativeChatHandler {
+  constructor(dispatcher: RelayDispatcher) {
+    dispatcher.onRequest(SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD, (params, context) =>
+      readRelayNativeChatTranscript(normalizeSshNativeChatRelayReadParams(params), {
+        signal: context.signal
+      })
+    )
+  }
+}
+
+type TranscriptStamp = { size: number; identity: string; generation: string }
+
+export async function readRelayNativeChatTranscript(
+  params: SshNativeChatRelayReadParams,
+  /** `resolveOptions` isolates a test from this machine's real agent homes; the
+   *  relay itself always resolves against its own runtime home.
+   *  `generationRetry` is an internal budget when the file rotates under a read. */
+  options: {
+    signal?: AbortSignal
+    resolveOptions?: ResolveSessionFileOptions
+    generationRetry?: number
+  } = {}
+): Promise<SshNativeChatRelayReadResult> {
+  const { signal, generationRetry = 0 } = options
+  const agent = params.agent as AgentType
+  const filePath = await resolveSessionFilePath(
+    agent,
+    params.sessionId,
+    { ...options.resolveOptions, transcriptPath: params.transcriptPath },
+    signal
+  )
+  if (!filePath) {
+    return { error: 'Transcript unavailable', notFound: true }
+  }
+  const stamp = await transcriptStamp(filePath)
+  if (!stamp) {
+    return { error: 'Transcript unavailable', notFound: true }
+  }
+  // A cursor read is the live tail. A pagination read (`beforeOffset`) walks
+  // backwards through a file whose size does not move, so it always re-reads a
+  // window instead.
+  if (params.knownFileSize !== undefined && params.beforeOffset === undefined) {
+    const tail = await liveTailAnswer(filePath, agent, params, stamp, signal)
+    if (tail) {
+      return tail
+    }
+    // Anything else (a shrunk file, a same-length rewrite, a rotated inode)
+    // falls through and re-windows, which is what the local watcher does on the
+    // same signal.
+  }
+  const result = await readNativeChatTranscriptTail(
+    {
+      agent,
+      sessionId: params.sessionId,
+      filePath,
+      limit: params.limit,
+      ...(params.beforeOffset === undefined ? {} : { beforeOffset: params.beforeOffset })
+    },
+    signal
+  )
+  if (!('messages' in result)) {
+    return result
+  }
+  // Why: the cursor is the reader's OWN completed-record boundary, never a size
+  // from a separate stat. A stat taken before the read can sit mid-record; one
+  // taken after can sit past a record the read never returned, and either way
+  // the next incremental read would skip it. `completedTo` is the one offset
+  // that describes exactly what these messages cover.
+  const { completedTo, ...window } = result
+  // The generation still comes from a post-read stat: it describes file
+  // identity, not content boundaries, and stamping it before the read made a
+  // plain append look like a same-size replacement on the next poll.
+  const after = (await transcriptStamp(filePath)) ?? stamp
+  // Why: if the file was replaced while we read, `window` describes the old
+  // inode and `after.generation` the new one. Publishing that mix lets a
+  // same-length replacement answer `unchanged` forever and never deliver the
+  // new transcript. One retry against the live file; a second flip falls back
+  // to a miss so the poller keeps trying instead of locking on a mixed stamp.
+  if (after.generation !== stamp.generation) {
+    if (generationRetry >= 1) {
+      return { error: 'Transcript unavailable', notFound: true }
+    }
+    return readRelayNativeChatTranscript(params, {
+      ...options,
+      generationRetry: generationRetry + 1
+    })
+  }
+  // `filePath` lets a live poller name the file it already resolved, so the next
+  // tick costs one access() instead of another walk of the remote agent home.
+  return { ...window, fileSize: completedTo, filePath, generation: after.generation }
+}
+
+/** Answers a live poll without re-windowing, or null when the file moved in a
+ *  way only a full window can describe. */
+async function liveTailAnswer(
+  filePath: string,
+  agent: AgentType,
+  params: SshNativeChatRelayReadParams,
+  stamp: TranscriptStamp,
+  signal?: AbortSignal
+): Promise<SshNativeChatRelayReadResult | null> {
+  const knownIdentity = sshNativeChatFileIdentity(params.generation)
+  if (knownIdentity && knownIdentity !== stamp.identity) {
+    // A different inode behind the same path: the transcript was rotated or
+    // replaced, so its size says nothing about what the caller holds.
+    return null
+  }
+  if (params.knownFileSize === stamp.size) {
+    // Same length can still mean different content (a truncate-and-rewrite), so
+    // an unchanged answer needs the mtime half of the stamp to agree too. A host
+    // that sends no generation keeps the older size-only behavior.
+    if (params.generation !== undefined && params.generation !== stamp.generation) {
+      return null
+    }
+    return { unchanged: true, fileSize: stamp.size, generation: stamp.generation }
+  }
+  if (params.knownFileSize !== undefined && params.knownFileSize < stamp.size) {
+    const delta = await readAppendedRecords(filePath, agent, params.knownFileSize, signal)
+    if (delta) {
+      // Stamp after the read for the same reason the window path does.
+      const after = (await transcriptStamp(filePath)) ?? stamp
+      // Why: an identity flip mid-append means the bytes we decoded are from a
+      // file the caller must not keep a cursor into. Force a full re-window.
+      // A same-size generation flip is the truncate-and-rewrite case: the
+      // append delta is stale against the replacement, so fall through too.
+      if (
+        after.identity !== stamp.identity ||
+        (after.generation !== stamp.generation && after.size === stamp.size)
+      ) {
+        return null
+      }
+      return { ...delta, filePath, generation: after.generation }
+    }
+  }
+  return null
+}
+
+/** Reads only what was written past the caller's cursor, so a live session ships
+ *  new turns instead of its whole window every tick (the local watcher's
+ *  `onAppend` path). Null when the agent has no decoder. */
+async function readAppendedRecords(
+  filePath: string,
+  agent: AgentType,
+  fromOffset: number,
+  signal?: AbortSignal
+): Promise<{
+  appended: Awaited<ReturnType<typeof readIncrementalTranscriptMessages>>
+  fileSize: number
+  lifecycle?: NativeChatTurnLifecycle
+} | null> {
+  const decode = nativeChatLineDecoderForAgent(agent)
+  if (!decode) {
+    return null
+  }
+  signal?.throwIfAborted()
+  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(agent)
+  const state = {
+    offset: fromOffset,
+    pendingChunks: [] as Buffer[],
+    pendingStart: fromOffset,
+    pendingBytes: 0,
+    droppingOversizedRecord: false
+  }
+  let lifecycle: NativeChatTurnLifecycle | undefined
+  const appended = await readIncrementalTranscriptMessages(
+    filePath,
+    state,
+    decode,
+    undefined,
+    decodeLifecycle ?? undefined,
+    (next) => {
+      lifecycle = next
+    }
+  )
+  return {
+    appended,
+    // Why: this reader is stateless per request, so the pending partial line it
+    // buffered is dropped when the call returns. Report the offset where that
+    // line STARTS (not the bytes consumed), so the next tick re-reads it whole
+    // instead of skipping a record the agent was still writing.
+    fileSize: state.pendingStart,
+    ...(lifecycle ? { lifecycle } : {})
+  }
+}
+
+async function transcriptStamp(filePath: string): Promise<TranscriptStamp | null> {
+  try {
+    const stats = await stat(filePath)
+    const identity = `${stats.dev}:${stats.ino}`
+    return { size: stats.size, identity, generation: `${identity}:${stats.mtimeMs}` }
+  } catch {
+    // The file resolved a moment ago and is gone (rotated/removed): report it as
+    // a retry-worthy miss so the caller keeps polling rather than settling.
+    return null
+  }
+}
+
+export function normalizeSshNativeChatRelayReadParams(
+  params: Record<string, unknown>
+): SshNativeChatRelayReadParams {
+  const agent = typeof params.agent === 'string' ? params.agent.trim() : ''
+  const sessionId = typeof params.sessionId === 'string' ? params.sessionId.trim() : ''
+  const rawLimit = params.limit
+  const limit =
+    typeof rawLimit === 'number' && Number.isFinite(rawLimit) && rawLimit > 0
+      ? Math.min(Math.floor(rawLimit), SSH_NATIVE_CHAT_READ_LIMIT_MAX)
+      : 1
+  const transcriptPath = boundedString(
+    params.transcriptPath,
+    SSH_NATIVE_CHAT_TRANSCRIPT_PATH_MAX_LENGTH
+  )
+  const generation = boundedString(params.generation, SSH_NATIVE_CHAT_GENERATION_MAX_LENGTH)
+  const beforeOffset = nonNegativeInteger(params.beforeOffset)
+  const knownFileSize = nonNegativeInteger(params.knownFileSize)
+  return {
+    agent,
+    sessionId,
+    limit,
+    ...(transcriptPath === undefined ? {} : { transcriptPath }),
+    ...(beforeOffset === undefined ? {} : { beforeOffset }),
+    ...(knownFileSize === undefined ? {} : { knownFileSize }),
+    ...(generation === undefined ? {} : { generation })
+  }
+}
+
+function boundedString(value: unknown, maxLength: number): string | undefined {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  return trimmed && trimmed.length <= maxLength ? trimmed : undefined
+}
+
+function nonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : undefined
+}

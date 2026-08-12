@@ -61,6 +61,10 @@ import {
   getSshFilesystemProvider
 } from '../providers/ssh-filesystem-dispatch'
 import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/ssh-git-dispatch'
+import {
+  registerSshNativeChatTranscriptReader,
+  unregisterSshNativeChatTranscriptReader
+} from '../native-chat/ssh-transcript-dispatch'
 import { notifyRemoteWorkspaceHandlers } from '../ipc/remote-workspace-events'
 import { PortScanner } from './ssh-port-scanner'
 import { isMainWindowVisible, onMainWindowBecameVisible } from '../window/main-window-visibility'
@@ -103,6 +107,11 @@ import {
   type SshAiVaultRelayListParams,
   type SshAiVaultRelayTitleParams
 } from '../../shared/ssh-ai-vault-relay'
+import {
+  SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD,
+  SSH_NATIVE_CHAT_READ_TRANSCRIPT_TIMEOUT_MS,
+  type SshNativeChatRelayReadParams
+} from '../../shared/ssh-native-chat-relay'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import {
@@ -316,6 +325,7 @@ export class SshRelaySession {
   private remoteCliBridgeEnv: RemoteCliBridgeEnv | null = null
   private aiVaultListMethodSupported: boolean | null = null
   private aiVaultTitleMethodSupported: boolean | null = null
+  private nativeChatReadMethodSupported: boolean | null = null
   private pendingPtyReattaches = new Map<string, PendingPtyReattach>()
   private readonly ptyRecoveryRetention = new SshPtyRecoveryRetentionBudget()
   private activePtyProviderGeneration: number | null = null
@@ -489,6 +499,38 @@ export class SshRelaySession {
     }
   }
 
+  /** Reads a native chat transcript that lives on this SSH host. Resolves null
+   *  when the deployed relay predates the method, so the caller can fall back to
+   *  the desktop-local reader instead of failing the chat view.
+   *  Typed as `unknown` (not `unknown | null`): null is a normal unknown value,
+   *  and the redundant union is rejected by type-aware lint. */
+  async requestNativeChatTranscript(
+    params: SshNativeChatRelayReadParams,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {}
+  ): Promise<unknown> {
+    if (this.nativeChatReadMethodSupported === false) {
+      return null
+    }
+    const mux = this.mux
+    if (!mux || mux.isDisposed() || this._state !== 'ready') {
+      throw new Error('SSH relay is not ready')
+    }
+    try {
+      const result = await mux.request(SSH_NATIVE_CHAT_READ_TRANSCRIPT_METHOD, params, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? SSH_NATIVE_CHAT_READ_TRANSCRIPT_TIMEOUT_MS
+      })
+      this.nativeChatReadMethodSupported = true
+      return result
+    } catch (error) {
+      if (isMethodNotFoundError(error)) {
+        this.nativeChatReadMethodSupported = false
+        return null
+      }
+      throw error
+    }
+  }
+
   getPortScanner(): PortScanner | null {
     return this.portScanner
   }
@@ -509,6 +551,7 @@ export class SshRelaySession {
     this._state = 'deploying'
     this.aiVaultListMethodSupported = null
     this.aiVaultTitleMethodSupported = null
+    this.nativeChatReadMethodSupported = null
     this.currentConnection = conn
 
     try {
@@ -649,6 +692,7 @@ export class SshRelaySession {
     this._state = 'reconnecting'
     this.aiVaultListMethodSupported = null
     this.aiVaultTitleMethodSupported = null
+    this.nativeChatReadMethodSupported = null
     this.currentConnection = conn
 
     // Why: stop scanning before teardownProviders so the poll timer can't fire against a disposed multiplexer.
@@ -1107,6 +1151,11 @@ export class SshRelaySession {
       hostPlatform
     )
     registerSshFilesystemProvider(this.targetId, fsProvider)
+    // Native chat reads an SSH session's transcript through the relay, because
+    // the agent writes that JSONL on the remote host and never on this one.
+    registerSshNativeChatTranscriptReader(this.targetId, (params, options) =>
+      this.requestNativeChatTranscript(params, options)
+    )
 
     const gitProvider = new SshGitProvider(
       this.targetId,
@@ -1623,6 +1672,7 @@ export class SshRelaySession {
 
     unregisterSshPtyProvider(this.targetId)
     unregisterSshFilesystemProvider(this.targetId)
+    unregisterSshNativeChatTranscriptReader(this.targetId)
     unregisterSshGitProvider(this.targetId)
     this.sourceIdentityByRelayPtyId.clear()
     this.retiredSourceDeliveries.clear()

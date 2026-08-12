@@ -1,0 +1,172 @@
+import { z } from 'zod'
+import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import {
+  NATIVE_CHAT_ROLES,
+  NATIVE_CHAT_SOURCES,
+  NATIVE_CHAT_TURN_LIFECYCLE_STATES
+} from '../../shared/native-chat-types'
+import {
+  SSH_NATIVE_CHAT_READ_TRANSCRIPT_TIMEOUT_MS,
+  type SshNativeChatRelayReadParams,
+  type SshNativeChatRelayReadResult
+} from '../../shared/ssh-native-chat-relay'
+import { isWslHookRelayConnectionId } from '../../shared/wsl-hook-relay-contract'
+import { agentHookServer } from '../agent-hooks/server'
+import { getSshNativeChatTranscriptReader } from './ssh-transcript-dispatch'
+
+export type SshNativeChatReadArgs = {
+  agent: AgentType
+  sessionId: string
+  transcriptPath?: string
+  limit: number
+  beforeOffset?: number
+  knownFileSize?: number
+  generation?: string
+}
+
+export type NativeChatSshOwner = {
+  connectionId: string
+  /** The hook's own transcript path for this session, when it reported one.
+   *  Only this path is ever forwarded to a relay: a client-supplied path would
+   *  let any paired client name a file on the remote host. */
+  transcriptPath?: string
+}
+
+/**
+ * The SSH connection that owns an agent session's transcript, or null when the
+ * session's transcript is readable by this process.
+ *
+ * Why: the native chat wire contract carries no host, so the only authority for
+ * "which machine is this agent writing on" is the hook row the agent already
+ * published: `ingestRemote` stamps it with the connection it arrived on
+ * (docs/design/agent-status-over-ssh.md §5). Among rows for the same session
+ * id, a path match wins over an id-only match (Claude may name the file with a
+ * UUID that differs from the id). Path never selects a host without that
+ * session id: a client-supplied path alone must not cross into another
+ * session's remote transcript.
+ *
+ * WSL rows carry a `wsl:<distro>` connection id and are NOT a relay target: the
+ * guest transcript is reachable from the Windows host through the UNC twin
+ * (`host-readable-transcript-path.ts`), so those stay on the local reader.
+ */
+export function resolveNativeChatSshOwner(args: {
+  sessionId: string
+  transcriptPath?: string
+}): NativeChatSshOwner | null {
+  const sessionId = args.sessionId.trim()
+  const transcriptPath = args.transcriptPath?.trim()
+  if (!sessionId) {
+    return null
+  }
+  // Why: two connections can report the same provider session id (a resumed
+  // session, a stale row from a dropped target). Snapshot order carries no
+  // meaning, so the most recent hook event wins deterministically. Path is only
+  // a disambiguator among rows that already match sessionId.
+  let pathMatch: NativeChatSshOwner | null = null
+  let pathMatchReceivedAt = Number.NEGATIVE_INFINITY
+  let idMatch: NativeChatSshOwner | null = null
+  let idMatchReceivedAt = Number.NEGATIVE_INFINITY
+  for (const status of agentHookServer.getStatusSnapshot()) {
+    const connectionId = status.connectionId
+    if (!connectionId || isWslHookRelayConnectionId(connectionId)) {
+      continue
+    }
+    const providerSession = status.providerSession
+    if (!providerSession || providerSession.id !== sessionId) {
+      continue
+    }
+    const hookPath = providerSession.transcriptPath
+    if (transcriptPath && hookPath === transcriptPath) {
+      if (status.receivedAt > pathMatchReceivedAt) {
+        pathMatch = { connectionId, transcriptPath: hookPath }
+        pathMatchReceivedAt = status.receivedAt
+      }
+      continue
+    }
+    if (status.receivedAt > idMatchReceivedAt) {
+      idMatch = { connectionId, ...(hookPath ? { transcriptPath: hookPath } : {}) }
+      idMatchReceivedAt = status.receivedAt
+    }
+  }
+  // Same-session path match wins: disambiguates which row owns the file when
+  // several hosts share the session id.
+  return pathMatch ?? idMatch
+}
+
+/** Reads the transcript on the SSH host. Null means the relay gave no answer:
+ *  the target is not connected yet, or the deployed relay predates the method. */
+export async function readSshNativeChatTranscript(
+  connectionId: string,
+  args: SshNativeChatReadArgs,
+  signal?: AbortSignal
+): Promise<SshNativeChatRelayReadResult | null> {
+  const params: SshNativeChatRelayReadParams = {
+    agent: args.agent,
+    sessionId: args.sessionId,
+    limit: args.limit,
+    ...(args.transcriptPath === undefined ? {} : { transcriptPath: args.transcriptPath }),
+    ...(args.beforeOffset === undefined ? {} : { beforeOffset: args.beforeOffset }),
+    ...(args.knownFileSize === undefined ? {} : { knownFileSize: args.knownFileSize }),
+    ...(args.generation === undefined ? {} : { generation: args.generation })
+  }
+  const reader = getSshNativeChatTranscriptReader(connectionId)
+  if (!reader) {
+    return null
+  }
+  const raw = await reader(params, { signal, timeoutMs: SSH_NATIVE_CHAT_READ_TRANSCRIPT_TIMEOUT_MS })
+  if (raw === null) {
+    return null
+  }
+  const parsed = relayReadResultSchema.safeParse(raw)
+  // Why: a payload this process cannot read is a real failure, NOT the
+  // "agent has not written the transcript yet" case. `notFound` tells the poll
+  // loop to keep waiting silently, so encoding a broken relay as `notFound`
+  // would suppress its unavailable report and spin the view forever.
+  return parsed.success ? parsed.data : { error: 'Transcript unavailable' }
+}
+
+// Why: the relay is deployed by this desktop build, so the payload is our own
+// shape rather than untrusted input. Validate the envelope (the fields this
+// process branches on) and keep the message bodies structural. The runtime RPC
+// layer still windows and sanitizes every message before any client sees it.
+const messageSchema = z
+  .object({
+    id: z.string(),
+    role: z.enum(NATIVE_CHAT_ROLES),
+    blocks: z.array(z.unknown()),
+    timestamp: z.number().nullable(),
+    source: z.enum(NATIVE_CHAT_SOURCES),
+    turnId: z.string().optional()
+  })
+  .transform((message) => message as NativeChatMessage)
+
+const lifecycleSchema = z.object({
+  state: z.enum(NATIVE_CHAT_TURN_LIFECYCLE_STATES),
+  turnId: z.string(),
+  timestamp: z.number().nullable()
+})
+
+const relayReadResultSchema = z.union([
+  z.object({
+    unchanged: z.literal(true),
+    fileSize: z.number().nonnegative(),
+    generation: z.string().optional()
+  }),
+  z.object({
+    appended: z.array(messageSchema),
+    fileSize: z.number().nonnegative(),
+    lifecycle: lifecycleSchema.optional(),
+    filePath: z.string().optional(),
+    generation: z.string().optional()
+  }),
+  z.object({
+    messages: z.array(messageSchema),
+    hasMore: z.boolean(),
+    beforeOffset: z.number().nonnegative(),
+    lifecycle: lifecycleSchema.optional(),
+    fileSize: z.number().nonnegative(),
+    filePath: z.string().optional(),
+    generation: z.string().optional()
+  }),
+  z.object({ error: z.string(), notFound: z.literal(true).optional() })
+])

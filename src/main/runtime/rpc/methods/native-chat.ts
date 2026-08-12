@@ -4,12 +4,14 @@ import type {
   NativeChatMessage,
   AgentType
 } from '../../../../shared/native-chat-types'
-import {
-  readNativeChatTranscriptTail,
-  subscribeNativeChatTranscript,
-  type NativeChatTranscriptSubscription,
-  type SubscribeNativeChatTranscriptArgs
+import type {
+  NativeChatTranscriptSubscription,
+  SubscribeNativeChatTranscriptArgs
 } from '../../../native-chat/transcript-watch'
+import {
+  readRoutedNativeChatTranscriptTail,
+  subscribeRoutedNativeChatTranscript
+} from '../../../native-chat/transcript-source-routing'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
 import { sanitizeNativeChatRpcImageBlock } from './native-chat-rpc-image-block'
 
@@ -206,7 +208,7 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
     params: NativeChatSession,
     handler: async (params, { clientKind, signal }) => {
       const limit = params.limit ?? MOBILE_NATIVE_CHAT_DEFAULT_WINDOW
-      const result = await readNativeChatTranscriptTail(
+      const result = await readRoutedNativeChatTranscriptTail(
         {
           agent: params.agent,
           sessionId: params.sessionId,
@@ -313,7 +315,10 @@ export const NATIVE_CHAT_METHODS: readonly RpcAnyMethod[] = [
       }
       let subscription: NativeChatTranscriptSubscription
       try {
-        subscription = await subscribeNativeChatTranscript(subscribeArgs, setupController.signal)
+        subscription = await subscribeRoutedNativeChatTranscript(
+          subscribeArgs,
+          setupController.signal
+        )
       } catch (error) {
         if (closed || setupController.signal.aborted) {
           return
