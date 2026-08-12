@@ -24,4 +24,15 @@ describe('MobileBrowserPane source invariants', () => {
     expect(mirrorBlock).toContain('zoomRef.current = zoom')
     expect(mirrorBlock).toContain('}, [dialog, frameMetadata, layout, zoom])')
   })
+
+  it('re-subscribes the screencast stream when the transport reconnects', () => {
+    // Why: after a relay migrateTo / direct-socket reconnect the desktop tears down
+    // Page.startScreencast and only restarts it on a fresh browser.screencast
+    // subscribe. The pane must depend on a reconnect signal so its subscribe effect
+    // tears down and re-creates the stream (and resets the double-buffer render
+    // state); otherwise the display freezes on the last frame while input still lands.
+    expect(source).toContain('useBrowserScreencastReconnectSignal')
+    const depArray = sliceBetween('    appActive,', 'worktreeId\n  ])')
+    expect(depArray).toContain('reconnectSignal')
+  })
 })

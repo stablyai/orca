@@ -55,6 +55,7 @@ import {
 } from './browser-touch-geometry'
 import { displayBrowserUrl, normalizeBrowserUrl } from './browser-url'
 import { resolveMobileBrowserAddressSync } from './mobile-browser-address-sync'
+import { useBrowserScreencastReconnectSignal } from './use-browser-screencast-reconnect-signal'
 
 export type MobileBrowserTab = {
   type: 'browser'
@@ -164,6 +165,7 @@ export function MobileBrowserPane({
   const [layout, setLayout] = useState<BrowserTouchLayout | null>(null)
   const [appActive, setAppActive] = useState(AppState.currentState === 'active')
   const streamGenerationRef = useRef(0)
+  const reconnectSignal = useBrowserScreencastReconnectSignal(client)
   const layoutRef = useRef<BrowserTouchLayout | null>(null)
   const frameMetadataRef = useRef<BrowserScreencastFrameMetadata | null>(
     cachedInitialFrame?.metadata ?? null
@@ -541,6 +543,7 @@ export function MobileBrowserPane({
     }
   }, [
     appActive,
+    reconnectSignal,
     applyFrameThrottled,
     clearFrameThrottle,
     client,
