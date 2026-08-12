@@ -7204,6 +7204,9 @@
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
           "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
         },
+        "TerminalAdvancedTypographyControls": {
+          "5ad7218c03": "内置后备字体"
+        },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
           "f27a99978d": "分隔板厚度",

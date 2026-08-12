@@ -101,10 +101,16 @@ describe('buildFontFamily', () => {
     expect(result).toBe(FULL_FALLBACK)
   })
 
-  it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
+  it('keeps a fallback whose name is merely contained in the chosen font', () => {
+    // "My SF Mono Custom" is a distinct CSS family, so "SF Mono" must survive.
     const result = buildFontFamily('My SF Mono Custom')
+    expect(result).toBe(`"My SF Mono Custom", ${FULL_FALLBACK}`)
+  })
+
+  it('deduplicates case-insensitively', () => {
+    const result = buildFontFamily('sf mono')
     expect(result).toBe(
-      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+      '"sf mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
     )
   })
 

@@ -246,6 +246,10 @@ export function TerminalAdvancedTypographyControls({
               suggestions={fontSuggestions}
               onRequestSuggestions={onRequestFontSuggestions}
               onChange={(value) => updateSettings({ terminalCjkFontFamily: value })}
+              placeholder={translate(
+                'auto.components.settings.TerminalAdvancedTypographyControls.5ad7218c03',
+                'Built-in fallback'
+              )}
             />
           }
         />

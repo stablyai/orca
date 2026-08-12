@@ -7229,6 +7229,9 @@
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
           "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
         },
+        "TerminalAdvancedTypographyControls": {
+          "5ad7218c03": "内蔵フォールバック"
+        },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
           "f27a99978d": "ディバイダーの厚さ",

@@ -7194,6 +7194,9 @@
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
           "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
         },
+        "TerminalAdvancedTypographyControls": {
+          "5ad7218c03": "내장 기본 글꼴"
+        },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
           "f27a99978d": "구분선 두께",

@@ -8154,7 +8154,8 @@
         },
         "TerminalAdvancedTypographyControls": {
           "f5fa1a08f1": "Bold Font Weight",
-          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged."
+          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged.",
+          "5ad7218c03": "Built-in fallback"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",

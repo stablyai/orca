@@ -58,9 +58,10 @@ export function buildFontFamily(fontFamily: string, cjkFontFamily: string = ''):
   const primary = fontFamily.trim()
   const cjk = cjkFontFamily.trim()
   const chosen = [primary, cjk].filter(Boolean).map((font) => font.toLowerCase())
-  // Skip a fallback the user already named, so it is not listed twice.
-  const isChosen = (font: string): boolean =>
-    chosen.some((entry) => entry.includes(font.toLowerCase()))
+  // Skip a fallback the user already named, so it is not listed twice. Compare
+  // complete family names: "My SF Mono Custom" is a distinct CSS family from
+  // "SF Mono", so a substring match must not suppress the real fallback.
+  const isChosen = (font: string): boolean => chosen.includes(font.toLowerCase())
 
   const parts = primary ? [quote(primary)] : []
   parts.push(...LATIN_FALLBACK_FONTS.filter((font) => !isChosen(font)).map(quote))
