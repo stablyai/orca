@@ -1695,6 +1695,15 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.11,
+          "summary": "The exact environment, remote page, client workspace, unified browser tab, and requested group materialization contract passed 1/1 on the final rebased candidate."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
           "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
           "result": "passed",
           "durationSeconds": 24.3,
@@ -1801,7 +1810,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical 2ec1dcf1 Electron oracle is red on latest main 346e59c879, green on candidate d05217c40d, and red when only the candidate's side-preview focusOnCreate:false call is disabled. Latest main created two client browser workspaces; the disabled candidate focused the browser before an explicit click. Historical 5806b23f evidence separately proves the owning-runtime routing seam."
+        "evidence": "The byte-identical browser transaction test (SHA-256 b61ce83a1c9dd060a29442ecd797d95f716fa168469f9c32736017b17383b738) fails on latest main ebe5125476 after PR #13909 and on fix-disabled overlay 17a612c819, then passes on candidate ef8d4a6b31; the combined selector/transaction oracle was 3 failed with 69 skipped on both red states and 3 passed with 75 skipped on the candidate. The originating/latest affected main 1136503c6a and its fix-disabled overlay were also red before the provider-gating rebase. The byte-identical 2ec1dcf1 Electron oracle is red on latest main 346e59c879, green on candidate d05217c40d, and red when only the candidate's side-preview focusOnCreate:false call is disabled. Latest main created two client browser workspaces; the disabled candidate focused the browser before an explicit click. Historical 5806b23f evidence separately proves the owning-runtime routing seam."
       },
       "performanceBudget": {
         "required": true,
@@ -3978,7 +3987,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical focused oracle (SHA-256 6de18c140a86801460e58f52287e27a58b97f1576f9f387fa82e1bd4eb378f7b) fails 2/3 on review baseline aa6f945001a5f78a07663c854fabb95c55d8b40b and on the r5-disabled parent e21f4ca58e: local-first lookup returns /local/repo and folder activation has no runtime host. It passes 3/3 on the candidate. Main later advanced to 94cf2f1422f30fc309cb47c5e864a831d516fa8b without changing any of the candidate's 68 files or the focused oracle production boundary; the rebased disabled parent f247d961cab15237bc7fcf0598fe76007f78ec7c has the same stable patch ID as e21f4ca58e. The final paired spec and fixture have SHA-256 bd6d9014d1bed2715397bcd2121d5d7e01792347b13ff14778ccf608bf98789c and d1d78a82f868e2f3152777550825c0ca2d4dc3cba5c6de548e066d2931751fc7. With the final runtime-session owner fix disabled, the focused session test fails 3/43 and the byte-identical hidden paired oracle deterministically creates the host terminal but reports null active client owner while same-ID local/runtime worktrees remain. The integrated candidate passes the same focused test and both headed/hidden paired oracles with exact runtime ownership, server inventory, local exclusion, preserved catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
+        "evidence": "The byte-identical Add Project selector test (SHA-256 f34c3c69c8adba23811c3a3b6a0efb669f787666c5ada086df8a167e785eea20) fails for blocked and unavailable sole paired-web hosts on latest main ebe5125476 after PR #13909 and on fix-disabled overlay 17a612c819, then passes on candidate ef8d4a6b31; the combined selector/transaction oracle was 3 failed with 69 skipped on both red states and 3 passed with 75 skipped on the candidate. The originating/latest affected main 1136503c6a and its fix-disabled overlay were also red before the provider-gating rebase. The byte-identical focused oracle (SHA-256 6de18c140a86801460e58f52287e27a58b97f1576f9f387fa82e1bd4eb378f7b) fails 2/3 on review baseline aa6f945001a5f78a07663c854fabb95c55d8b40b and on the r5-disabled parent e21f4ca58e: local-first lookup returns /local/repo and folder activation has no runtime host. It passes 3/3 on the candidate. Main later advanced to 94cf2f1422f30fc309cb47c5e864a831d516fa8b without changing any of the candidate's 68 files or the focused oracle production boundary; the rebased disabled parent f247d961cab15237bc7fcf0598fe76007f78ec7c has the same stable patch ID as e21f4ca58e. The final paired spec and fixture have SHA-256 bd6d9014d1bed2715397bcd2121d5d7e01792347b13ff14778ccf608bf98789c and d1d78a82f868e2f3152777550825c0ca2d4dc3cba5c6de548e066d2931751fc7. With the final runtime-session owner fix disabled, the focused session test fails 3/43 and the byte-identical hidden paired oracle deterministically creates the host terminal but reports null active client owner while same-ID local/runtime worktrees remain. The integrated candidate passes the same focused test and both headed/hidden paired oracles with exact runtime ownership, server inventory, local exclusion, preserved catalogs, visible rows, and zero direct SSH fallback. Earlier Active Server preference paths retain deterministic coverage but do not yet have a saved intentional-break artifact."
       },
       "performanceBudget": {
         "required": true,
