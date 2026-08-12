@@ -262,9 +262,9 @@ Common Commands:
 
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
-  --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current (local runtime only)
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
-  --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
+  --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current (local runtime only)
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
@@ -289,6 +289,9 @@ Behavior:
   Most commands require a running Orca runtime. If Orca is not open yet, run \`orca open\` first.
   Remote runtime access can also be supplied with ORCA_PAIRING_CODE or ORCA_ENVIRONMENT.
   Use selectors for discovery and handles for repeated live terminal operations.
+  \`active\`/\`current\` resolve against the local working directory, so they are rejected on a
+  remote runtime. With --environment or a pairing code, pass a server-side selector instead:
+  path:<absolute-server-path>, branch:<branch>, name:<displayName>, id:<repo-id>::<path>, or issue:<number>.
 
 Agent Sessions And Worktrees:
   \`worktree create --agent\` creates a new checkout with an agent.
@@ -497,7 +500,7 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--parent-current      Use the current linked issue as parent'
   }
   if (command === 'worktree create' && flag === 'parent-worktree') {
-    return '--parent-worktree <selector> Parent selector such as active/current, id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
+    return '--parent-worktree <selector> Parent selector such as active/current (local runtime only), id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, folder:<id>, or worktree:<worktreeId>'
   }
   if (command === 'orchestration task-create' && flag === 'task-title') {
     return '--task-title <text>  Concise title for the orchestration task'
@@ -564,7 +567,7 @@ export function formatFlagHelp(flag: string): string {
     'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
     pages: '--pages <n>           Number of scroll pages',
     'parent-worktree':
-      '--parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current (local runtime only)',
     path: '--path <path>          Path argument for the command',
     prompt: '--prompt <text>        Prompt text for agent-backed commands',
     query: '--query <text>        Search text for matching refs',
@@ -588,7 +591,7 @@ export function formatFlagHelp(flag: string): string {
     'to-x': '--to-x <x>             Destination window-local x coordinate',
     'to-y': '--to-y <y>             Destination window-local y coordinate',
     worktree:
-      '--worktree <selector>  Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
+      '--worktree <selector>  Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current (local runtime only)',
     workspace: '--workspace <selector> Existing worktree selector for automation runs',
     'workspace-status':
       '--workspace-status <id> Board status id (defaults: todo, in-progress, in-review, completed)',
