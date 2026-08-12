@@ -46,6 +46,25 @@ describe('normalizeBeadsIssue', () => {
     })
   })
 
+  it('maps the design, acceptance_criteria, and notes body slots', () => {
+    const issue = normalizeBeadsIssue({
+      ...RAW_BD_ITEM,
+      design: 'Adapter over the existing provider union',
+      acceptance_criteria: '- [ ] lists render\n- [ ] status writes back',
+      notes: 'Probed against bd 1.1.2'
+    })
+    expect(issue?.design).toBe('Adapter over the existing provider union')
+    expect(issue?.acceptanceCriteria).toBe('- [ ] lists render\n- [ ] status writes back')
+    expect(issue?.notes).toBe('Probed against bd 1.1.2')
+  })
+
+  it('omits empty-string body slots like bd omits absent ones', () => {
+    const issue = normalizeBeadsIssue({ ...RAW_BD_ITEM, design: '', notes: 42 })
+    expect(issue).not.toHaveProperty('design')
+    expect(issue).not.toHaveProperty('acceptanceCriteria')
+    expect(issue).not.toHaveProperty('notes')
+  })
+
   it('never maps owner (the creator) to assignee', () => {
     const issue = normalizeBeadsIssue({ ...RAW_BD_ITEM, assignee: undefined })
     expect(issue?.assignee).toBeUndefined()

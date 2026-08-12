@@ -4,6 +4,11 @@ export type BeadsIssue = {
   id: string
   title: string
   description?: string
+  /** Second markdown body slot: design/approach. bd omits empty body fields. */
+  design?: string
+  acceptanceCriteria?: string
+  /** Work-log slot (`bd update --append-notes`); tends to grow longest. */
+  notes?: string
   status: BeadsIssueStatus
   priority: number
   issueType: string
@@ -95,6 +100,9 @@ export function normalizeBeadsIssue(raw: unknown): BeadsIssue | null {
     return null
   }
   const description = optionalString(item.description)
+  const design = optionalString(item.design)
+  const acceptanceCriteria = optionalString(item.acceptance_criteria)
+  const notes = optionalString(item.notes)
   // Why: `owner` is the creator, never the assignee — only explicit `assignee` counts.
   const assignee = optionalString(item.assignee)
   const createdBy = optionalString(item.created_by)
@@ -103,6 +111,9 @@ export function normalizeBeadsIssue(raw: unknown): BeadsIssue | null {
     id: item.id,
     title: item.title,
     ...(description !== undefined ? { description } : {}),
+    ...(design !== undefined ? { design } : {}),
+    ...(acceptanceCriteria !== undefined ? { acceptanceCriteria } : {}),
+    ...(notes !== undefined ? { notes } : {}),
     status: normalizeBeadsIssueStatus(item.status),
     priority: countOf(item.priority),
     issueType: optionalString(item.issue_type) ?? 'task',

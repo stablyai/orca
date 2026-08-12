@@ -1,15 +1,7 @@
 import React, { useCallback, useMemo } from 'react'
-import {
-  ArrowRight,
-  ChevronDown,
-  ChevronLeft,
-  FolderKanban,
-  LoaderCircle,
-  Plus
-} from 'lucide-react'
+import { ArrowRight, ChevronDown, ChevronLeft, FolderKanban, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import {
@@ -28,6 +20,7 @@ import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
+import { BeadsItemDetailBodySections } from './task-page-beads-detail-body'
 import {
   BeadsItemDetailComments,
   BeadsItemDetailCommentsSkeleton
@@ -128,7 +121,6 @@ export default function BeadsItemDialog({
 
   const statusLabels = getBeadsStatusLabels()
   const StatusIcon = BEADS_STATUS_ICONS[issue.status]
-  const description = issue.description ?? ''
 
   return (
     <div
@@ -317,26 +309,10 @@ export default function BeadsItemDialog({
                         {formatRelativeTime(issue.updatedAt)}
                       </span>
                     </div>
-                    <div className="px-4 py-4 text-[14px] leading-relaxed text-foreground">
-                      {loading && !detailsLoaded ? (
-                        <div className="flex items-center justify-center py-5">
-                          <LoaderCircle className="size-4 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : description.trim() ? (
-                        <CommentMarkdown
-                          content={description}
-                          variant="document"
-                          className="min-w-0 max-w-full overflow-hidden break-words text-[14px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
-                        />
-                      ) : (
-                        <span className="italic text-muted-foreground">
-                          {translate(
-                            'auto.components.GitHubItemDialog.9b9cb55994',
-                            'No description provided.'
-                          )}
-                        </span>
-                      )}
-                    </div>
+                    <BeadsItemDetailBodySections
+                      issue={issue}
+                      pending={loading && !detailsLoaded}
+                    />
                   </div>
                   {sectionsState === 'loaded' && details ? (
                     <div className="mt-4 min-w-0">
