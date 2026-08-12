@@ -11,6 +11,10 @@ export type SyntheticTitleSpinnerTick<TProfile> = {
   frame: number
   profile: TProfile
 }
+/**
+ * Stop a pane spinner for an ordinary pane-scoped clear.
+ * Connection-scoped transient clears intentionally carry no pane key.
+ */
 export function stopSyntheticTitleSpinnerOnStatusClear(
   clear: AgentStatusClearIpcPayload,
   stop: (paneKey: string) => void

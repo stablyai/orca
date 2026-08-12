@@ -30,6 +30,10 @@ export function getPiCompatibleSyntheticAgentLabel(
   }
   return match[1].toLowerCase() === 'omp' ? 'OMP' : 'Pi'
 }
+/**
+ * Classify OMP's native π state-title protocol, including wrapper-prefixed titles.
+ * Whitespace before the delimiter keeps the legacy disabled `π: cwd` title idle.
+ */
 export function getPiCompatibleNativeTitleStatus(
   title: string
 ): PiCompatibleSyntheticAgentStatus | null {
