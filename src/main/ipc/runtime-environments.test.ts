@@ -11,6 +11,8 @@ import {
 } from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
+import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 
 const {
   handleMock,
@@ -933,6 +935,67 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'repo.list'
     ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    [
+      new RemoteRuntimeClientError(
+        'remote_runtime_unavailable',
+        'Transport vanished without legacy classifier wording.'
+      ),
+      'remote_runtime_unavailable',
+      'Transport vanished without legacy classifier wording.'
+    ],
+    [
+      Object.assign(new RuntimeRpcCallQueueOverloadError('selector'), {
+        message: 'Capacity rejected without legacy classifier wording.'
+      }),
+      'runtime_rpc_queue_overloaded',
+      'Capacity rejected without legacy classifier wording.'
+    ]
+  ])(
+    'returns coded transport failure %s so the renderer restores its identity',
+    async (transportError, expectedCode, expectedMessage) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      sendRemoteRuntimeRequestMock.mockRejectedValue(transportError)
+
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      await add(null, { name: 'desk', pairingCode: pairingCode() })
+      const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+        'runtimeEnvironments:call'
+      )
+
+      const response = structuredClone(await call(null, { selector: 'desk', method: 'status.get' }))
+      expect(response).toMatchObject({
+        ok: false,
+        error: { code: expectedCode, message: expectedMessage }
+      })
+      expect(response.ok).toBe(false)
+      if (response.ok === false) {
+        expect(response.error).toEqual({ code: expectedCode, message: expectedMessage })
+      }
+    }
+  )
+
+  it('keeps uncoded call failures on the rejected IPC fallback path', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('shared down'))
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const call = handler<{ selector: string; method: string }, RuntimeRpcResponse<unknown>>(
+      'runtimeEnvironments:call'
+    )
+
+    await expect(call(null, { selector: 'desk', method: 'status.get' })).rejects.toThrow(
+      'shared down'
+    )
   })
 
   it('does not fall back after a shared-control request fails on a supported runtime', async () => {

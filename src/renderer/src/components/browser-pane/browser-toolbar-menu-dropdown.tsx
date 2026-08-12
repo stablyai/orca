@@ -4,6 +4,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -127,6 +128,12 @@ export function BrowserToolbarMenuDropdown({
           </DropdownMenuSubTrigger>
           <DropdownMenuPortal>
             <DropdownMenuSubContent>
+              <DropdownMenuLabel className="font-normal">
+                {translate(
+                  'auto.components.browser.pane.BrowserToolbarMenu.c186b4d890',
+                  'Google requires signing in directly - imports skip it.'
+                )}
+              </DropdownMenuLabel>
               {detectedBrowsers.map((browser) =>
                 browser.profiles.length > 1 ? (
                   <DropdownMenuSub key={browser.family}>

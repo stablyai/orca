@@ -144,7 +144,7 @@ export type LinearSearchResult = {
   issues: LinearSearchIssueSummary[]
   meta: {
     query: string
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
     limitReached: boolean
@@ -178,7 +178,7 @@ export type LinearTeamSummary = {
 export type LinearTeamListResult = {
   teams: LinearTeamSummary[]
   meta: {
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     returned: number
     partial: boolean
     workspaceErrors: {
@@ -211,7 +211,7 @@ export type LinearIssueListResult = {
   issues: LinearSearchIssueSummary[]
   meta: {
     filter: LinearIssueListFilter
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     team?: LinearTeamSummary
     limit: number
     returned: number
@@ -242,7 +242,7 @@ export type LinearProjectListResult = {
   projects: LinearAgentProjectSummary[]
   meta: {
     query?: string
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
     hasMore: boolean

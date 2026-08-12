@@ -4,7 +4,9 @@ import {
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  extractAllOscTitles
+  extractAllOscTitles,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
 } from '../../../../shared/agent-detection'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -43,6 +45,10 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import {
+  registerPtySideEffectPendingGauge,
+  type PtySideEffectGauge
+} from './pty-side-effect-pending-census'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Re-export public API so existing consumers keep working.
@@ -108,27 +114,27 @@ type PendingPtySideEffect = {
   suppressAttentionEvents: boolean
 }
 
-function isIgnoredCursorNativeTitle(title: string): boolean {
-  return title.trim().toLowerCase() === 'cursor agent'
-}
-
-function removeIgnoredCursorNativeTitles(titles: string[]): boolean {
+// Why: mirrors main's applyObservedTitle — the literal survives whenever the title before it
+// is not already Cursor-owned, which is how a pane re-establishes Cursor identity after the
+// shell prompt repaints the title (#10258). Only the redraw repeats are dropped, so they cost
+// neither an allocation nor a drain slot; `processObservedTitles` re-checks and stays
+// authoritative, so this must never drop a title that gate would have emitted.
+function removeSuppressedCursorNativeTitles(
+  titles: string[],
+  precedingTitle: string | null
+): boolean {
   let writeIndex = 0
-  let removed = false
-  for (let readIndex = 0; readIndex < titles.length; readIndex += 1) {
-    const title = titles[readIndex]
-    if (isIgnoredCursorNativeTitle(title)) {
-      removed = true
+  let previousTitle = precedingTitle
+  for (const title of titles) {
+    if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
       continue
     }
-    if (writeIndex !== readIndex) {
-      titles[writeIndex] = title
-    }
+    previousTitle = normalizeTerminalTitle(title)
+    titles[writeIndex] = title
     writeIndex += 1
   }
-  if (removed) {
-    titles.length = writeIndex
-  }
+  const removed = writeIndex < titles.length
+  titles.length = writeIndex
   return removed
 }
 
@@ -153,6 +159,7 @@ export function createPtyOutputProcessor({
   flushPendingSideEffects: () => void
   resetBellDetector: () => void
   resetAgentStatusCarry: () => void
+  disposePendingSideEffectGauge: () => void
 } {
   const bellDetector = createBellDetector()
   // Why let: a model-restore marker drops bytes; recreating the parser stops a partial OSC-9999 carry from swallowing the next chunk's head.
@@ -165,6 +172,16 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  // Why both counts: drained entries survive until compaction, so depth alone understates what the array retains.
+  const pendingSideEffectGauge: PtySideEffectGauge = {
+    pending: () => pendingSideEffects.length - pendingSideEffectIndex,
+    retained: () => pendingSideEffects.length
+  }
+  const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
+  const initialAgentStatusTitle =
+    initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
+      ? initialAgentTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -173,7 +190,7 @@ export function createPtyOutputProcessor({
           },
           onAgentBecameWorking,
           onAgentExited,
-          initialAgentTitle
+          initialAgentStatusTitle
         )
       : null
 
@@ -277,7 +294,13 @@ export function createPtyOutputProcessor({
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
     // Why: Cursor emits this ignored title every redraw; keep one queue fact instead of an allocation and drain slot per frame.
-    const ignoredCursorNativeTitle = removeIgnoredCursorNativeTitles(titles)
+    // Why the drained check: `lastEmittedTitle` only advances on drain, so while facts are
+    // still queued it is not the predecessor the drain will see — leave that call to the gate.
+    const drained = pendingSideEffectIndex >= pendingSideEffects.length
+    const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
+      titles,
+      drained ? lastEmittedTitle : null
+    )
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
@@ -425,6 +448,14 @@ export function createPtyOutputProcessor({
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
+        if (isCursorNativeAgentTitle(title)) {
+          // Why: identity for a hookless Cursor pane (#10258), never activity — the literal's
+          // null status would read as an agent exit, and a repeat must not stomp hook state.
+          if (!shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
+            applyObservedTerminalTitle(title, true)
+          }
+          continue
+        }
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (titleScanEffect === 'ignored-cursor-native') {
@@ -507,7 +538,8 @@ export function createPtyOutputProcessor({
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
       processAgentStatusChunk = createAgentStatusOscProcessor()
-    }
+    },
+    disposePendingSideEffectGauge
   }
 }
 
@@ -545,9 +577,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let ptyId: string | null = null
   // Why: replayed eager-buffer data (often from a prior app session) must not fire fresh bells, unread marks, or notifications on reconnect.
   let suppressAttentionEvents = false
+  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data)
+    write: (id, data) => window.api.pty.write(id, data),
+    // Guard like the registered writeUnavailable handler: a rebind during the async drain
+    // must not tell the new pane that its write failed.
+    onDrainFailure: (id) => {
+      if (ptyId === id) {
+        storedCallbacks.onWriteUnavailable?.()
+      }
+    }
   })
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -561,8 +601,6 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentExited,
     onAgentStatus
   })
-  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
-
   // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<
     string,
@@ -855,6 +893,15 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             snapshot: spawnResult.snapshot,
             snapshotCols: spawnResult.snapshotCols,
             snapshotRows: spawnResult.snapshotRows,
+            ...(spawnResult.snapshotPrefixAnsi !== undefined
+              ? { snapshotPrefixAnsi: spawnResult.snapshotPrefixAnsi }
+              : {}),
+            ...(spawnResult.snapshotFrameAnsi !== undefined
+              ? { snapshotFrameAnsi: spawnResult.snapshotFrameAnsi }
+              : {}),
+            ...(spawnResult.snapshotFrameRestoreAnsi !== undefined
+              ? { snapshotFrameRestoreAnsi: spawnResult.snapshotFrameRestoreAnsi }
+              : {}),
             isAlternateScreen: spawnResult.isAlternateScreen,
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
@@ -989,6 +1036,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     detach(options) {
+      // Why first: the successor transport owns the PTY after detach, and nothing below may
+      // throw its way past the census drop — a stranded gauge outlives the transport.
+      outputProcessor.disposePendingSideEffectGauge()
       clearAccumulatedState()
       inputWriteQueue.clear()
       if (ptyId) {
@@ -1016,7 +1066,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (!connected || !ptyId) {
         return false
       }
-      return inputWriteQueue.enqueue(ptyId, data)
+      return inputWriteQueue.enqueueQueryReply(ptyId, data)
     },
 
     ...(connectionId
@@ -1086,7 +1136,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
     destroy() {
       destroyed = true
-      this.disconnect()
+      // Why finally: disconnect runs pty.kill IPC and consumer onDisconnect callbacks; a throw
+      // there must not strand the gauge in the very path where teardown already went wrong.
+      try {
+        this.disconnect()
+      } finally {
+        outputProcessor.disposePendingSideEffectGauge()
+      }
     }
   }
 }

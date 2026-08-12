@@ -1,5 +1,8 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab, TabGroup, Worktree } from '../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { selectPaletteTypeAliasMatch } from './palette-type-alias-match'
+import { compareBaseSensitivityLocaleText } from './locale-text-collators'
 import { resolveWorktreeDisplayName } from './worktree-default-display-name'
 import type { MatchRange } from './worktree-palette-search'
 
@@ -13,6 +16,8 @@ export type SearchableSimulatorTab = {
 }
 
 export type SimulatorPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   tabId: string
   worktreeId: string
   groupId: string
@@ -24,6 +29,7 @@ export type SimulatorPaletteSearchResult = {
   secondaryRange: MatchRange | null
   repoRange: MatchRange | null
   worktreeRange: MatchRange | null
+  typeAliasMatch?: { text: string; range: MatchRange } | null
   isCurrentTab: boolean
   isCurrentWorktree: boolean
   score: number
@@ -32,6 +38,16 @@ export type SimulatorPaletteSearchResult = {
 type SimulatorPaletteActiveTabType = 'browser' | 'editor' | 'terminal' | 'simulator'
 
 export const SIMULATOR_PALETTE_QUERY_MAX_BYTES = 2 * 1024
+
+// Why search-only: the row icon already says "emulator"; a fixed secondary label
+// crowds Cmd+J the same way "Terminal tab" did. Keep these strings matchable so
+// typing "mobile" / "simulator" still finds emulator tabs.
+const SIMULATOR_TYPE_SEARCH_ALIASES = [
+  'mobile emulator tab',
+  'mobile emulator',
+  'ios simulator',
+  'emulator'
+] as const
 
 export function isSimulatorPaletteQueryTooLarge(
   query: string,
@@ -52,7 +68,7 @@ export type BuildSearchableSimulatorTabsOptions = {
 }
 
 function compareText(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { sensitivity: 'base' })
+  return compareBaseSensitivityLocaleText(a, b)
 }
 
 function findRange(text: string, query: string): MatchRange | null {
@@ -180,10 +196,13 @@ export function searchSimulatorTabs(
 
   for (const entry of entries) {
     const title = entry.tab.label || 'Mobile Emulator'
-    const secondaryText = 'Mobile Emulator tab'
+    // Why: type is already clear from the smartphone icon; a fixed label only
+    // crowds the row (and used to leave a bare "· ·" under width pressure).
+    const secondaryText = ''
     // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
     const worktreeName = resolveWorktreeDisplayName(entry.worktree)
     const baseResult = {
+      executionHostId: entry.worktree.hostId,
       tabId: entry.tab.id,
       worktreeId: entry.worktree.id,
       groupId: entry.tab.groupId,
@@ -226,32 +245,21 @@ export function searchSimulatorTabs(
       continue
     }
 
-    const secondaryRange = findRange(secondaryText, trimmedQuery)
-    if (secondaryRange) {
+    const typeAliasHit = selectPaletteTypeAliasMatch(SIMULATOR_TYPE_SEARCH_ALIASES, trimmedQuery)
+    if (typeAliasHit) {
       results.push({
         ...baseResult,
         titleRange: null,
-        secondaryRange,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreSimulatorTabMatch({
-          fieldWeight: 20,
-          matchIndex: secondaryRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const aliasRange = findRange('ios simulator', trimmedQuery)
-    if (aliasRange) {
-      results.push({
-        ...baseResult,
-        titleRange: null,
+        // Why null: aliases are search keys only — nothing to highlight in the row.
         secondaryRange: null,
         repoRange: null,
         worktreeRange: null,
-        score: scoreSimulatorTabMatch({ fieldWeight: 24, matchIndex: aliasRange.start, entry })
+        typeAliasMatch: typeAliasHit,
+        score: scoreSimulatorTabMatch({
+          fieldWeight: 20,
+          matchIndex: typeAliasHit.range.start,
+          entry
+        })
       })
       continue
     }

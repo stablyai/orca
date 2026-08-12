@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { SkillFreshnessInstallation } from '../../shared/skill-freshness'
 
 const GLOBAL_SKILL_LOCK_SCHEMA_VERSION = 3
 
@@ -19,6 +20,32 @@ function globalSkillLockPath(args: SkillUpdateRegistrationArgs): string {
   return stateHome
     ? join(stateHome, 'skills', '.skill-lock.json')
     : join(args.homeDir ?? homedir(), '.agents', '.skill-lock.json')
+}
+
+/**
+ * Whether a placement holds exactly the bytes the updater recorded installing.
+ *
+ * Either hash may carry it. The lock is the git tree sha of the source folder, so a
+ * folder an agent CLI dropped a sidecar into only matches once that sidecar is scoped
+ * out, while an upstream revision that added a file only matches whole — that file is
+ * in the lock's own tree but in no bundled snapshot. Requiring one specific hash trades
+ * either #12694 or #11220 for the other.
+ *
+ * Not exhaustive, and deliberately so: a folder carrying BOTH a sidecar and an upstream
+ * file no bundle lists matches neither hash and stays unrecognized, exactly as it does
+ * without this pair. Closing that needs the sidecar gone before hashing — an observe-time
+ * exclusion like `isOsMetadataSkillEntryName`, which means naming the foreign paths rather
+ * than tolerating any unlisted one. Editing a listed file still matches neither hash.
+ */
+export function matchesUpdaterLock(
+  installation: SkillFreshnessInstallation,
+  lockHash: string | undefined
+): boolean {
+  return (
+    lockHash !== undefined &&
+    (installation.observedGitTreeSha === lockHash ||
+      installation.observedOfficialGitTreeSha === lockHash)
+  )
 }
 
 export async function readGloballyUpdatableSkillNames(

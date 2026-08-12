@@ -1,6 +1,7 @@
 import { resolve } from 'node:path'
 import type { Store } from '../persistence'
 import { isLinkedIssueNumber } from '../../shared/source-control-ai-action-variables'
+import type { WorktreeMeta } from '../../shared/types'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
 
 export type LinkedIssueLookupArgs = {
@@ -54,11 +55,11 @@ function matchesRequestPath(
  * Meta is keyed by the raw id: the `::workspace:<uuid>` suffix of folder-repo
  * workspace instances is part of the key, while validation uses the stripped path.
  */
-export function resolveSourceControlAiLinkedIssue(
+export function resolveSourceControlAiLinkedIssueMeta(
   store: Store,
   args: LinkedIssueLookupArgs,
   resolvedWorktreePath?: string
-): number | null {
+): WorktreeMeta | null {
   if (typeof args.worktreeId !== 'string' || !args.worktreeId) {
     return null
   }
@@ -77,7 +78,19 @@ export function resolveSourceControlAiLinkedIssue(
   if (!matchesRequestPath(parsed.worktreePath, args, resolvedWorktreePath)) {
     return null
   }
-  const linkedIssue = store.getWorktreeMeta(args.worktreeId)?.linkedIssue
+  return store.getWorktreeMeta(args.worktreeId) ?? null
+}
+
+export function resolveSourceControlAiLinkedIssue(
+  store: Store,
+  args: LinkedIssueLookupArgs,
+  resolvedWorktreePath?: string
+): number | null {
+  const linkedIssue = resolveSourceControlAiLinkedIssueMeta(
+    store,
+    args,
+    resolvedWorktreePath
+  )?.linkedIssue
   // Why: GitHub only in v1 — no `linkedGitLabIssue` dual-read.
   return isLinkedIssueNumber(linkedIssue) ? linkedIssue : null
 }

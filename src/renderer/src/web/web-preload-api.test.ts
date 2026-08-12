@@ -281,6 +281,22 @@ describe('web runtime environment identity', () => {
     await expect(globals.window.api.runtimeEnvironments.list()).resolves.toEqual([])
   })
 
+  it('stores paired device identity from a web access link', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+      name: 'Shared server',
+      pairingCode: encodePairingCode({ pairedDeviceId: 'paired-device-a' })
+    })
+
+    expect(paired.environment.pairedDeviceId).toBe('paired-device-a')
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+    ).toMatchObject({ pairedDeviceId: 'paired-device-a' })
+  })
+
   it('persists an explicit Active Server choice across unrelated web settings writes', async () => {
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
@@ -363,6 +379,21 @@ describe('web runtime environment identity', () => {
     ).rejects.toThrow('Unknown Orca runtime environment: web-server-old')
   })
 
+  it('ignores malformed persisted paired device identity', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const stored = JSON.parse(
+      globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}'
+    ) as Record<string, unknown>
+    stored.pairedDeviceId = { invalid: true }
+    globals.storage.setItem('orca.web.runtimeEnvironment.v1', JSON.stringify(stored))
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    const [environment] = await globals.window.api.runtimeEnvironments.list()
+    expect(environment).not.toHaveProperty('pairedDeviceId')
+  })
+
   it('keeps pairing while manual disconnect fences passive reconnects', async () => {
     const calls: string[] = []
     const close = vi.fn()
@@ -378,7 +409,7 @@ describe('web runtime environment identity', () => {
           return Promise.resolve({
             id: method,
             ok: true,
-            result: { runtimeId: 'runtime-1' },
+            result: { runtimeId: 'runtime-1', pairedDeviceId: 'paired-device-a' },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -431,6 +462,9 @@ describe('web runtime environment identity', () => {
     ).resolves.toMatchObject({ ok: true })
     expect(clientCount).toBe(2)
     expect(calls).toEqual(['status.get', 'status.get'])
+    expect(
+      JSON.parse(globals.storage.getItem('orca.web.runtimeEnvironment.v1') ?? '{}')
+    ).toMatchObject({ pairedDeviceId: 'paired-device-a' })
   })
 
   it('fences a web runtime response that completes after manual disconnect', async () => {
@@ -899,6 +933,26 @@ describe('web settings preload API', () => {
     const settings = await globals.window.api.settings.get()
     expect(settings.terminalCursorStyle).toBe('bar')
     expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('normalizes terminal cursor style before web settings writes return or persist', async () => {
+    const { api, storage } = await installApi('Linux')
+
+    const invalid = await api.settings.set({ terminalCursorStyle: 'beam' as never })
+    const invalidStored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
+      terminalCursorStyle?: string
+      terminalCursorStyleDefaultedToBlock?: boolean
+    }
+    expect(invalid.terminalCursorStyle).toBe('block')
+    expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(invalidStored.terminalCursorStyle).toBe('block')
+    expect(invalidStored.terminalCursorStyleDefaultedToBlock).toBe(true)
+
+    const valid = await api.settings.set({ terminalCursorStyle: 'bar' })
+    expect(valid.terminalCursorStyle).toBe('bar')
+    expect(JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}').terminalCursorStyle).toBe(
+      'bar'
+    )
   })
 
   it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
@@ -2360,6 +2414,49 @@ describe('web UI preload API', () => {
     })
   })
 
+  it('keeps the workspace origin filter browser-local across host UI responses', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result: {
+              ui: {
+                hideWorkspacesFromOtherDevices: false,
+                featureInteractions: {
+                  tasks: { firstInteractedAt: 100, interactionCount: 1 }
+                }
+              }
+            },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.ui.set({ hideWorkspacesFromOtherDevices: true })
+    expect(runtimeCalls[0]).toEqual({ method: 'ui.set', params: {} })
+    await expect(globals.window.api.ui.get()).resolves.toMatchObject({
+      hideWorkspacesFromOtherDevices: true
+    })
+    await expect(globals.window.api.ui.recordFeatureInteraction('tasks')).resolves.toMatchObject({
+      hideWorkspacesFromOtherDevices: true
+    })
+    expect(JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}')).toMatchObject({
+      hideWorkspacesFromOtherDevices: true
+    })
+  })
+
   it('union-merges local contextual tour seen ids when ui.get returns stale host state', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -3616,6 +3713,99 @@ describe('web git preload API', () => {
       { method: 'git.remoteCommitUrl', params: { worktree: 'id:wt-1', sha: TEST_COMMIT_OID } }
     ])
   })
+
+  it('sends the branch line total merge base only when the chip asked for one', async () => {
+    const runtimeCalls: { method: string; params: unknown }[] = []
+    const worktree = {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      path: '/workspace/repo',
+      head: 'abc123',
+      branch: 'refs/heads/main',
+      isBare: false,
+      isMainWorktree: true,
+      displayName: 'repo',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      linkedGitLabMR: null,
+      linkedGitLabIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      workspaceStatus: 'todo'
+    }
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
+          runtimeCalls.push({ method, params })
+          if (method === 'repo.list') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repos: [{ id: 'repo-1' }] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          if (method === 'worktree.detectedList') {
+            return Promise.resolve({
+              id: `call-${runtimeCalls.length}`,
+              ok: true,
+              result: { repoId: 'repo-1', authoritative: true, worktrees: [worktree] },
+              _meta: { runtimeId: 'runtime-1' }
+            })
+          }
+          return Promise.resolve({
+            id: `call-${runtimeCalls.length}`,
+            ok: true,
+            result: { entries: [], conflictOperation: 'unknown' },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.git.status({
+      worktreePath: '/workspace/repo',
+      branchLineTotalMergeBase: TEST_COMMIT_OID
+    })
+    await globals.window.api.git.status({ worktreePath: '/workspace/repo' })
+
+    const statusCalls = runtimeCalls.filter((call) => call.method === 'git.status')
+    // Why: strict — `toEqual` would pass on a forwarded `branchLineTotalMergeBase: undefined`,
+    // which is exactly what the conditional spread must avoid sending.
+    expect(statusCalls).toStrictEqual([
+      {
+        method: 'git.status',
+        params: {
+          worktree: 'id:wt-1',
+          includeIgnored: undefined,
+          bypassEffectiveUpstreamNegativeCache: undefined,
+          reuseLineStats: undefined,
+          branchLineTotalMergeBase: TEST_COMMIT_OID
+        }
+      },
+      {
+        method: 'git.status',
+        params: {
+          worktree: 'id:wt-1',
+          includeIgnored: undefined,
+          bypassEffectiveUpstreamNegativeCache: undefined,
+          reuseLineStats: undefined
+        }
+      }
+    ])
+  })
 })
 
 describe('web GitHub preload API', () => {
@@ -3676,6 +3866,7 @@ describe('web GitHub preload API', () => {
         'resolveProjectRef',
         'resolveReviewThread',
         'setPRAutoMerge',
+        'setPRCommentReaction',
         'setPRFileViewed',
         'starOrca',
         'updateIssue',
@@ -3856,6 +4047,17 @@ describe('web GitHub preload API', () => {
         args: { repoPath, prNumber: 7, noCache: true },
         expectedMethod: 'github.prComments',
         expectedParams: withRepo({ repoPath, prNumber: 7, noCache: true })
+      },
+      {
+        key: 'setPRCommentReaction',
+        args: { repoPath, reactionSubjectId: 'IC_1', content: 'heart', reacted: true },
+        expectedMethod: 'github.setPRCommentReaction',
+        expectedParams: withRepo({
+          repoPath,
+          reactionSubjectId: 'IC_1',
+          content: 'heart',
+          reacted: true
+        })
       },
       {
         key: 'resolveReviewThread',

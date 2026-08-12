@@ -30,6 +30,35 @@ describe('RuntimeHostStatusRow', () => {
     expect(markup).toContain('Connect')
   })
 
+  it('names the closed workspace window while keeping the disconnect action', () => {
+    const markup = renderToStaticMarkup(
+      <RuntimeHostStatusRow
+        label="Dev Box"
+        state="workspace-window-closed"
+        onConnect={async () => {}}
+        onDisconnect={async () => {}}
+      />
+    )
+
+    expect(markup).toContain('Dev Box')
+    expect(markup).toContain('Workspace window closed')
+    expect(markup).toContain('Disconnect')
+    expect(markup).not.toContain('>Connect</button>')
+    // The host is still reachable — the row must not read as a lost connection.
+    expect(markup).not.toContain('Disconnected')
+    // Why: proves the row routes the action to onDisconnect — with only a connect
+    // handler there is nothing to offer, so no button renders.
+    expect(
+      renderToStaticMarkup(
+        <RuntimeHostStatusRow
+          label="Dev Box"
+          state="workspace-window-closed"
+          onConnect={async () => {}}
+        />
+      )
+    ).not.toContain('<button')
+  })
+
   it('renders connected hosts with a disconnect action', () => {
     const markup = renderToStaticMarkup(
       <RuntimeHostStatusRow label="Dev Box" state="connected" onDisconnect={async () => {}} />

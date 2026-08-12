@@ -103,6 +103,34 @@ describe('openHttpLink', () => {
     expect(createBrowserTabMock).not.toHaveBeenCalled()
   })
 
+  it('forceInApp opens a local link in Orca when the setting is off', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      forceInApp: true,
+      sourceOwner: { kind: 'local' }
+    })
+
+    expect(createBrowserTabMock).toHaveBeenCalledWith('wt-1', 'https://example.com/', {
+      activate: true
+    })
+    expect(openUrlMock).not.toHaveBeenCalled()
+  })
+
+  it('does not force a remote link into the Orca browser', () => {
+    storeState.settings = { openLinksInApp: false }
+
+    openHttpLink('https://example.com/', {
+      worktreeId: 'wt-1',
+      forceInApp: true,
+      sourceOwner: { kind: 'ssh', connectionId: 'ssh-1' }
+    })
+
+    expect(openUrlMock).toHaveBeenCalledWith('https://example.com/')
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+  })
+
   it('routes to the system browser when a remote runtime environment is active', () => {
     storeState.settings = { openLinksInApp: true, activeRuntimeEnvironmentId: 'env-1' }
 

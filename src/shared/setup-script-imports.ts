@@ -186,7 +186,7 @@ function resolveSupersetScriptValue(
   }
 
   for (const field in localRecord) {
-    if (!Object.prototype.hasOwnProperty.call(localRecord, field)) {
+    if (!Object.hasOwn(localRecord, field)) {
       continue
     }
     if (field !== 'before' && field !== 'after') {
@@ -283,7 +283,7 @@ function collectUnsupportedCmuxCommandFields(
   const supportedFields = new Set(['name', 'title', 'description', 'keywords', 'command'])
   const unsupportedFields: string[] = []
   for (const field in command) {
-    if (!Object.prototype.hasOwnProperty.call(command, field)) {
+    if (!Object.hasOwn(command, field)) {
       continue
     }
     if (!supportedFields.has(field)) {

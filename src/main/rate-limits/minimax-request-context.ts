@@ -45,7 +45,7 @@ function parseCookiePairs(cookie: string): { name: string; value: string }[] {
     .map((part) => {
       const normalizedPart = part.replace(/^Cookie:\s*/i, '')
       const eq = normalizedPart.indexOf('=')
-      if (eq < 0) {
+      if (eq === -1) {
         return null
       }
       return {

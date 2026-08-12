@@ -9,6 +9,7 @@ import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
+  MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
   MANAGED_AGENT_HOOK_STATUS_READERS,
   type ManagedAgentHookInstaller
 } from './managed-agent-hook-registry'
@@ -31,7 +32,7 @@ type RemoveOptions = {
 }
 
 export function isAgentStatusHooksEnabled(
-  settings: Pick<GlobalSettings, 'agentStatusHooksEnabled'> | null | undefined
+  settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
   return settings?.agentStatusHooksEnabled !== false
 }
@@ -87,10 +88,29 @@ function runInstaller(
   }
 }
 
+// Why (#11549 aftermath): a CLI that falls off PATH keeps its user-wide config invoking
+// Orca's script, but the presence gate below then skips install() forever, freezing the
+// script at whatever Orca generated last. Existing scripts are Orca-owned, so bring them
+// current before any gating; creating new ones remains install()'s presence-gated job.
+async function refreshExistingManagedScripts(options: InstallOptions): Promise<void> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  for (const [agent, refresh] of MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS) {
+    if (allowed !== null && !allowed.has(agent)) {
+      continue
+    }
+    try {
+      await refresh()
+    } catch (error) {
+      console.error(`[agent-hooks] Failed to refresh ${agent} managed script:`, error)
+    }
+  }
+}
+
 export async function installManagedAgentHooks(
   settings: ManagedHookSettings = null,
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
+  await refreshExistingManagedScripts(options)
   const installers = selectedInstallers(options)
   const disabled = new Set(normalizeDisabledTuiAgents(settings?.disabledTuiAgents))
   const enabledInstallers = installers.filter(([agent]) => !disabled.has(agent))

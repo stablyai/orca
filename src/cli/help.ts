@@ -109,7 +109,7 @@ Orchestration:
   orchestration worker-start Start a supervised worker locally or on a connected Orca server
   orchestration worker-show Inspect one supervised worker
   orchestration worker-read Read bounded output from one supervised worker
-  orchestration worker-stop Stop one supervised worker
+  orchestration worker-stop Fence one Dispatch; stop only its supervised worker
   orchestration worker-abandon Fence an uncertain worker without claiming it stopped
   orchestration worker-release Release a settled worker's terminal after archiving its output
   orchestration worker-retain Keep a worker terminal live for debugging
@@ -321,6 +321,7 @@ Browser Options:
   --page <id>               Stable browser page id (preferred for concurrent workflows)
   --profile <id>            Browser profile id
   --show-profile            Include the tab's browser profile in text output
+  --no-ua-spoof             Keep Electron's native user agent for a new profile
   --format <png|jpeg>       Screenshot image format
   --from <ref>              Drag source element ref
   --to <ref>                Drag target element ref
@@ -447,6 +448,9 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   if (command === 'linear list-issues' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
   }
+  if (command === 'artifacts list' && flag === 'cursor') {
+    return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
+  }
   if (command === 'orchestration worker-read' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
   }
@@ -551,6 +555,8 @@ export function formatFlagHelp(flag: string): string {
     local: '--local                Target the current project instead of the global install',
     skill: '--skill <name>         Bundled skill to act on; repeat for several',
     mode: '--mode <mode>          Mode such as edit, diff, or both',
+    model: '--model <id>          Provider model id for a new agent launch',
+    effort: '--effort <level>      Reasoning effort for the selected model',
     'mouse-button': '--mouse-button <btn>   Mouse button: left, right, or middle',
     modifiers: '--modifiers <chord>  Modifier keys held only for this click',
     name: '--name <name>          Name for the new worktree or automation',
@@ -616,6 +622,7 @@ export function formatFlagHelp(flag: string): string {
     page: '--page <id>            Stable browser page id from `orca tab list --json`',
     profile: '--profile <id>        Browser profile id',
     'show-profile': '--show-profile        Include tab profile in text output',
+    'no-ua-spoof': "--no-ua-spoof         Keep Electron's native user agent",
     format: '--format <png|jpeg>    Screenshot image format'
   }
 

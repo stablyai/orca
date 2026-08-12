@@ -2,6 +2,7 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -15,12 +16,14 @@ const mocks = vi.hoisted(() => ({
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
+  openArtifactsPage: vi.fn(),
   openModal: vi.fn(),
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   hasPairedMobileDevice: false,
   agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
+  getAgentBucketCounts: vi.fn(),
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -41,7 +44,10 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
 }))
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => mocks.agentBucketCounts
+  useAgentBucketCounts: () => {
+    mocks.getAgentBucketCounts()
+    return mocks.agentBucketCounts
+  }
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -85,6 +91,7 @@ import SidebarNav, {
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
   shouldShowAutomationsButton,
+  shouldShowArtifactsButton,
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
 } from './SidebarNav'
@@ -126,6 +133,7 @@ function setSidebarState({
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
+    openArtifactsPage: mocks.openArtifactsPage,
     openModal: mocks.openModal,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
@@ -243,6 +251,7 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
+    expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
   it('mounts the Agent Dashboard row after opt-in', async () => {
@@ -254,7 +263,8 @@ describe('SidebarNav', () => {
     })
     const container = await renderSidebarNav()
 
-    expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
+    await waitFor(() => expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull())
+    expect(mocks.getAgentBucketCounts).toHaveBeenCalledTimes(1)
   })
 
   it('uses a question glyph only for the Needs You count', async () => {
@@ -268,6 +278,9 @@ describe('SidebarNav', () => {
     })
     const container = await renderSidebarNav()
 
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Needs You: 2"]')).not.toBeNull()
+    )
     const attention = container.querySelector('[aria-label="Needs You: 2"]')
     const working = container.querySelector('[aria-label="Working: 3"]')
     const done = container.querySelector('[aria-label="Done: 1"]')
@@ -284,6 +297,37 @@ describe('SidebarNav', () => {
   it('shows the Mobile entry by default for older settings', () => {
     expect(shouldShowMobileButton(null)).toBe(true)
     expect(shouldShowMobileButton({})).toBe(true)
+  })
+
+  it('hides the Artifacts entry by default for older settings', () => {
+    expect(shouldShowArtifactsButton(null)).toBe(false)
+    expect(shouldShowArtifactsButton({})).toBe(false)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: true })).toBe(true)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: false })).toBe(false)
+  })
+
+  it('opens Artifacts from the sidebar', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+
+    await clickButton(getButtonByText(container, 'Artifacts'))
+
+    expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
+  })
+
+  it('hides Artifacts from its context menu', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+    const row = getButtonByText(container, 'Artifacts')
+    const menu = row.closest('[data-testid="context-menu"]')
+
+    await clickButton(getHideButton(menu as Element))
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showArtifactsButton: false })
   })
 
   it('hides the Mobile entry when the sidebar setting is off', () => {

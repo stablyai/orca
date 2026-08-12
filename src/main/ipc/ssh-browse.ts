@@ -3,6 +3,7 @@ import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshExecOptions } from '../ssh/ssh-connection-utils'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
 import type { FilesystemPathFlavor } from '../../shared/types'
+import { sortDirEntries } from '../../shared/file-name-sort'
 
 export type RemoteDirEntry = {
   name: string
@@ -220,13 +221,8 @@ async function runBrowseCommand(
         }
       }
 
-      // Sort: directories first, then alphabetical
-      entries.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1
-        }
-        return a.name.localeCompare(b.name)
-      })
+      // Sort: directories first, then natural name order (matches the Explorer)
+      sortDirEntries(entries)
 
       resolveOnce({ entries, resolvedPath, pathFlavor })
     }

@@ -17,6 +17,7 @@ import type {
   PRRefreshErrorType,
   PRRefreshOutcome,
   GitHubCommentResult,
+  GitHubReactionContent,
   IssueInfo,
   PRCheckDetail,
   PRCheckRunDetails,
@@ -73,6 +74,10 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../../shared/task-source-context'
+import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github-pr-for-branch-outcome'
+import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
+import { withGitHubCheckDetailsTimeout } from '@/runtime/github-check-details-timeout'
+import { getGitHubRepoLookupIndex } from './github-repo-lookup-index'
 
 // ─── ProjectV2 cache types ────────────────────────────────────────────
 // Why: separate from CacheEntry<T> — project-view has a single GraphQL source (no issue/PR fallback) and a distinct error union.
@@ -122,7 +127,7 @@ function getRuntimeRepoTarget(
   if (target.kind !== 'environment') {
     return null
   }
-  const repo = state.repos.find((candidate) => candidate.path === repoPath)
+  const repo = getGitHubRepoLookupIndex(state.repos).findByPath(repoPath)
   return repo ? { target, repo } : null
 }
 
@@ -246,9 +251,9 @@ function findRepoForGitHubOwner(
   repoId: string | undefined,
   repoPath: string
 ): Repo | undefined {
-  return (state.repos ?? []).find((candidate) =>
-    repoId ? candidate.id === repoId || candidate.path === repoPath : candidate.path === repoPath
-  )
+  return state.repos
+    ? getGitHubRepoLookupIndex(state.repos).findByIdOrPath(repoId, repoPath)
+    : undefined
 }
 
 function getGitHubFocusedRepoOwnerHostId(
@@ -620,6 +625,8 @@ export type CacheEntry<T> = {
 type FetchOptions = {
   force?: boolean
   noCache?: boolean
+  requireComplete?: boolean
+  allowStaleFallback?: boolean
   sourceContext?: TaskSourceContext | null
 }
 
@@ -680,6 +687,7 @@ type InflightWorkItems = {
   promise: Promise<GitHubWorkItem[]>
   force: boolean
   noCache: boolean
+  requireComplete: boolean
 }
 const inflightWorkItemsRequests = new Map<string, InflightWorkItems>()
 const prRequestGenerations = new Map<string, number>()
@@ -956,13 +964,7 @@ function getPRChecksCacheTtl(entry: CacheEntry<PRCheckDetail[]> | undefined): nu
 }
 
 function findWorktreeById(state: AppState, worktreeId: string): Worktree | null {
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
-    const worktree = worktrees.find((w) => w.id === worktreeId)
-    if (worktree) {
-      return worktree
-    }
-  }
-  return null
+  return getWorktreeLookupIndex(state).byId.get(worktreeId)?.first ?? null
 }
 
 type WorktreeLookupEntry = {
@@ -975,9 +977,12 @@ type WorktreeLookupIndex = {
   repoHostIdsByRepoId: Map<string, Set<string>>
 }
 
+const EMPTY_WORKTREES_BY_REPO: AppState['worktreesByRepo'] = {}
+const EMPTY_WORKTREE_REPOS: AppState['repos'] = []
+
 function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   const byId = new Map<string, WorktreeLookupEntry>()
-  for (const worktrees of Object.values(state.worktreesByRepo)) {
+  for (const worktrees of Object.values(state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO)) {
     for (const worktree of worktrees) {
       const worktreeId = worktree.id
       const existing = byId.get(worktreeId)
@@ -1001,11 +1006,29 @@ function buildWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
   return { byId, repoHostIdsByRepoId }
 }
 
+// Why: worktree/owner updates replace these snapshots, while weak ownership avoids retaining superseded state.
+const worktreeLookupIndexes = new WeakMap<
+  AppState['worktreesByRepo'],
+  { repos: AppState['repos']; index: WorktreeLookupIndex }
+>()
+
+function getWorktreeLookupIndex(state: AppState): WorktreeLookupIndex {
+  const worktreesByRepo = state.worktreesByRepo ?? EMPTY_WORKTREES_BY_REPO
+  const repos = state.repos ?? EMPTY_WORKTREE_REPOS
+  const cached = worktreeLookupIndexes.get(worktreesByRepo)
+  if (cached && cached.repos === repos) {
+    return cached.index
+  }
+  const index = buildWorktreeLookupIndex(state)
+  worktreeLookupIndexes.set(worktreesByRepo, { repos, index })
+  return index
+}
+
 function findUniqueWorktreeById(
   state: AppState,
   worktreeId: string,
   executionHostId?: string,
-  lookupIndex = buildWorktreeLookupIndex(state)
+  lookupIndex = getWorktreeLookupIndex(state)
 ): Worktree | null {
   const match = lookupIndex.byId.get(worktreeId)?.unique ?? null
   // Why: metadata persistence is keyed only by worktree id; an id owned by two hosts is non-unique so destructive clears fail closed.
@@ -1124,9 +1147,10 @@ function shouldApplyBranchMismatchedLinkedPRClear(args: {
 function buildPRRefreshCandidate(
   state: AppState,
   worktree: Worktree,
-  repoPath?: string
+  repoPath?: string,
+  repoOverride?: Repo
 ): GitHubPRRefreshCandidate | null {
-  const repo = state.repos.find((r) => r.id === worktree.repoId)
+  const repo = repoOverride ?? getGitHubRepoLookupIndex(state.repos).findById(worktree.repoId)
   if (!repo) {
     return null
   }
@@ -1886,6 +1910,14 @@ export type GitHubSlice = {
       line?: number
     }
   ) => Promise<GitHubCommentResult>
+  setPRCommentReaction: (
+    repoPath: string,
+    prNumber: number,
+    reactionSubjectId: string,
+    content: GitHubReactionContent,
+    reacted: boolean,
+    options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null }
+  ) => Promise<boolean>
   resolveReviewThread: (
     repoPath: string,
     prNumber: number,
@@ -1957,7 +1989,12 @@ export type GitHubSlice = {
     displayLimit: number,
     query: string,
     options?: FetchOptions
-  ) => Promise<{ items: GitHubWorkItem[]; failedCount: number; githubUnavailable: boolean }>
+  ) => Promise<{
+    items: GitHubWorkItem[]
+    failedCount: number
+    githubUnavailable: boolean
+    requestFailureCount?: number
+  }>
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
     repos: {
@@ -1969,7 +2006,8 @@ export type GitHubSlice = {
     perRepoLimit: number,
     displayLimit: number,
     query: string,
-    page: number
+    page: number,
+    options?: Pick<FetchOptions, 'noCache' | 'requireComplete'>
   ) => Promise<{
     items: GitHubWorkItem[]
     failedCount: number
@@ -2038,18 +2076,6 @@ export type GitHubSlice = {
   ) => Promise<GitHubProjectMutationResult>
   /** Optimistic, IPC-free patcher for a single `projectViewCache` row's `content`; `patchWorkItem` only walks `workItemsCache` and would leave the Project view stale until the next refresh. */
   patchProjectRowContent: (cacheKey: string, rowId: string, patch: ProjectRowContentPatch) => void
-}
-
-/** Normalizes `github.prForBranch` into a {@link PRRefreshOutcome}: preserves a runtime `upstream-error` instead of collapsing to a false "no PR"; a legacy host returning `PRInfo | null` maps to `found`/`no-pr`. */
-function normalizeRuntimePRForBranchOutcome(
-  result: PRRefreshOutcome | PRInfo | null
-): PRRefreshOutcome {
-  if (result && typeof result === 'object' && 'kind' in result) {
-    return result
-  }
-  return result
-    ? { kind: 'found', pr: result, fetchedAt: Date.now() }
-    : { kind: 'no-pr', fetchedAt: Date.now() }
 }
 
 export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (set, get) => ({
@@ -2662,7 +2688,11 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     const existing = inflightWorkItemsRequests.get(inflightKey)
     if (existing) {
       // Why: a forcing/noCache caller must not dedupe to a weaker in-flight fetch (noCache is stricter — it must bypass gh api's cache too).
-      if ((options?.force && !existing.force) || (options?.noCache && !existing.noCache)) {
+      if (
+        (options?.force && !existing.force) ||
+        (options?.noCache && !existing.noCache) ||
+        (options?.requireComplete && !existing.requireComplete)
+      ) {
         await existing.promise.catch(() => {})
       } else {
         return existing.promise
@@ -2679,6 +2709,9 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
         })
         // Why: stamp repoId at the fetch boundary so downstream consumers can rely on it — main doesn't know Orca's Repo.id.
         const items: GitHubWorkItem[] = envelope.items.map((item) => ({ ...item, repoId }))
+        if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
+          throw new Error('GitHub work-item fetch returned a partial result.')
+        }
         // Why: only surface issues-side errors here; PR-side failures predate the issue-source split (#1076) and are out of scope for this banner (design doc §2).
         const issuesError = envelope.errors?.issues
         // Why: errors.issues without sources.issues has no slug for the banner, so it's dropped from the cache; log it so this rare case is visible in devtools.
@@ -2731,7 +2764,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
     inflightWorkItemsRequests.set(inflightKey, {
       promise: request,
       force: Boolean(options?.force),
-      noCache: Boolean(options?.noCache)
+      noCache: Boolean(options?.noCache),
+      requireComplete: Boolean(options?.requireComplete)
     })
     return request
   },
@@ -2756,6 +2790,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           // Why: fall back to any cache entry (stale or not) before declaring this repo failed; only count as failed when it has nothing to contribute.
           // Why: use perRepoLimit (not displayLimit) so the cache key matches what fetchWorkItems wrote.
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            if (options?.requireComplete) {
+              requestFailureCount += 1
+              failedCount += 1
+            }
             skippedSourceCount += 1
             return [] as GitHubWorkItem[]
           }
@@ -2773,7 +2811,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 )
               : getWorkItemsCacheKeyForOwner(get(), r.repoId, perRepoLimit, query, r.path)
           const cached = get().workItemsCache[key]?.data
-          if (cached) {
+          if (cached && options?.allowStaleFallback !== false) {
             console.warn(`[workItems] ${r.repoId} failed, serving cached:`, err)
             return cached
           }
@@ -2789,10 +2827,15 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       requestFailureCount > 0 &&
       requestFailureCount === repos.length - skippedSourceCount &&
       unavailableFailureCount === requestFailureCount
-    return { items: merged, failedCount, githubUnavailable }
+    return {
+      items: merged,
+      failedCount,
+      githubUnavailable,
+      ...(requestFailureCount > 0 ? { requestFailureCount } : {})
+    }
   },
 
-  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page) => {
+  fetchWorkItemsNextPage: async (repos, perRepoLimit, displayLimit, query, page, options) => {
     if (isGitHubWorkItemsQueryTooLarge(query)) {
       return { items: [], failedCount: 0, errorTypes: [] }
     }
@@ -2819,7 +2862,8 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           const envelope = await listGitHubWorkItemsForRepo(requestContext, {
             limit: perRepoLimit,
             query: query || undefined,
-            page
+            page,
+            ...(options?.noCache ? { noCache: true } : {})
           })
           // Why: page-N failures aren't in the per-repo banner (keyed on the initial fetch); log them so pagination failures are observable instead of silently truncating (richer surface deferred, design doc §6).
           if (envelope.errors?.issues) {
@@ -2847,9 +2891,16 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
               envelope.errors.prs
             )
           }
+          if (options?.requireComplete && (envelope.errors?.issues || envelope.errors?.prs)) {
+            failedCount += 1
+            return [] as GitHubWorkItem[]
+          }
           return envelope.items.map((item): GitHubWorkItem => ({ ...item, repoId: r.repoId }))
         } catch (err) {
           if (isGitHubWorkItemsSshRemoteRequiredError(err)) {
+            if (options?.requireComplete) {
+              failedCount += 1
+            }
             return [] as GitHubWorkItem[]
           }
           console.warn(`[workItems] next page ${r.repoId} failed:`, err)
@@ -2956,9 +3007,10 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
   },
 
   fetchPRForBranch: async (repoPath, branch, options): Promise<PRInfo | null> => {
-    const repo = get().repos?.find((candidate) =>
-      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
-    )
+    const repoLookup = getGitHubRepoLookupIndex(get().repos)
+    const repo = options?.repoId
+      ? repoLookup.findById(options.repoId)
+      : repoLookup.findByPath(repoPath)
     const repoId = options?.repoId ?? repo?.id
     const requestSettings = settingsForGitHubRepoOwner(get().settings, repo)
     const cacheKey = prCacheKey(
@@ -3077,7 +3129,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                   : {})
               },
               { timeoutMs: 30_000 }
-            ).then((result) => normalizeRuntimePRForBranchOutcome(result))
+            ).then((result) => normalizeGitHubPRForBranchOutcome(result))
           : await (async () => {
               const candidate: GitHubPRRefreshCandidate = {
                 repoId: repoId ?? '',
@@ -3099,24 +3151,18 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
                 cachedMergeable: cached?.data?.mergeable ?? null,
                 cachedMergeStateStatus: cached?.data?.mergeStateStatus ?? null
               }
-              return window.api.gh.refreshPRNow
+              const response = window.api.gh.refreshPRNow
                 ? await window.api.gh.refreshPRNow({ candidate })
-                : await window.api.gh
-                    .prForBranch({
-                      repoPath,
-                      repoId,
-                      branch,
-                      linkedPRNumber,
-                      fallbackPRNumber,
-                      acceptMergedFallbackPR:
-                        fallbackPRNumber !== null && fallbackPRSource !== null,
-                      currentHeadOid: requestHeadOid
-                    })
-                    .then((pr) =>
-                      pr
-                        ? ({ kind: 'found', pr, fetchedAt: Date.now() } as const)
-                        : ({ kind: 'no-pr', fetchedAt: Date.now() } as const)
-                    )
+                : await window.api.gh.prForBranch({
+                    repoPath,
+                    repoId,
+                    branch,
+                    linkedPRNumber,
+                    fallbackPRNumber,
+                    acceptMergedFallbackPR: fallbackPRNumber !== null && fallbackPRSource !== null,
+                    currentHeadOid: requestHeadOid
+                  })
+              return normalizeGitHubPRForBranchOutcome(response)
             })()
         const pr: PRInfo | null =
           outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
@@ -3547,30 +3593,35 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       repoPath,
       options?.sourceContext
     )
-    return requestContext.target.kind === 'environment'
-      ? await callRuntimeRpc<PRCheckRunDetails | null>(
-          { kind: 'environment', environmentId: requestContext.target.environmentId },
-          'github.prCheckDetails',
-          {
-            repo: requestContext.target.runtimeRepoId,
+    const requestTarget = requestContext.target
+    return requestTarget.kind === 'environment'
+      ? await withGitHubCheckDetailsTimeout((signal) =>
+          callRuntimeRpc<PRCheckRunDetails | null>(
+            { kind: 'environment', environmentId: requestTarget.environmentId },
+            'github.prCheckDetails',
+            {
+              repo: requestTarget.runtimeRepoId,
+              checkRunId: args.checkRunId,
+              workflowRunId: args.workflowRunId,
+              checkName: args.checkName,
+              url: args.url,
+              prRepo: args.prRepo ?? null
+            },
+            { timeoutMs: 30_000, signal }
+          )
+        )
+      : await withGitHubCheckDetailsTimeout(() =>
+          window.api.gh.prCheckDetails({
+            repoPath,
+            repoId,
             checkRunId: args.checkRunId,
             workflowRunId: args.workflowRunId,
             checkName: args.checkName,
             url: args.url,
-            prRepo: args.prRepo ?? null
-          },
-          { timeoutMs: 30_000 }
+            prRepo: args.prRepo ?? null,
+            sourceContext: options?.sourceContext
+          })
         )
-      : ((await window.api.gh.prCheckDetails({
-          repoPath,
-          repoId,
-          checkRunId: args.checkRunId,
-          workflowRunId: args.workflowRunId,
-          checkName: args.checkName,
-          url: args.url,
-          prRepo: args.prRepo ?? null,
-          sourceContext: options?.sourceContext
-        })) as PRCheckRunDetails | null)
   },
 
   fetchPRComments: async (repoPath, prNumber, options): Promise<PRComment[]> => {
@@ -3820,6 +3871,115 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       }
     })
     return { ok: true, comment }
+  },
+
+  setPRCommentReaction: async (
+    repoPath,
+    prNumber,
+    reactionSubjectId,
+    content,
+    reacted,
+    options
+  ) => {
+    const repo = get().repos?.find((candidate) =>
+      options?.repoId ? candidate.id === options.repoId : candidate.path === repoPath
+    )
+    const repoId = options?.repoId ?? repo?.id
+    const requestSettings = getGitHubRepoSourceSettings(
+      get().settings,
+      repo,
+      options?.sourceContext
+    )
+    const cacheKey = sourceScopedRepoCacheKey(
+      repoPath,
+      repoId,
+      prCommentsCacheSuffix(prNumber, options?.prRepo),
+      requestSettings,
+      repo?.connectionId,
+      repo?.executionHostId,
+      options?.sourceContext,
+      repo !== undefined
+    )
+    const previousComment = get().commentsCache[cacheKey]?.data?.find(
+      (comment) => comment.reactionSubjectId === reactionSubjectId
+    )
+    const previousReaction = previousComment?.reactions?.find(
+      (reaction) => reaction.content === content
+    )
+    set((state) => {
+      const entry = state.commentsCache[cacheKey]
+      if (!entry?.data) {
+        return state
+      }
+      return {
+        commentsCache: {
+          ...state.commentsCache,
+          [cacheKey]: {
+            ...entry,
+            data: setReactionOnSubject(entry.data, reactionSubjectId, content, reacted)
+          }
+        }
+      }
+    })
+
+    const requestContext = getGitHubWorkItemRequestContext(
+      get(),
+      requestSettings,
+      repoId ?? repoPath,
+      repoPath,
+      options?.sourceContext
+    )
+    let ok = false
+    try {
+      ok =
+        requestContext.target.kind === 'environment'
+          ? await callRuntimeRpc<boolean>(
+              { kind: 'environment', environmentId: requestContext.target.environmentId },
+              'github.setPRCommentReaction',
+              {
+                repo: requestContext.target.runtimeRepoId,
+                reactionSubjectId,
+                content,
+                reacted,
+                prRepo: options?.prRepo ?? null
+              },
+              { timeoutMs: 30_000 }
+            )
+          : await window.api.gh.setPRCommentReaction({
+              repoPath,
+              repoId,
+              reactionSubjectId,
+              content,
+              reacted,
+              prRepo: options?.prRepo ?? null,
+              sourceContext: options?.sourceContext
+            })
+    } catch (err) {
+      console.error('Failed to update PR comment reaction:', err)
+    }
+    if (!ok && previousComment) {
+      set((state) => {
+        const entry = state.commentsCache[cacheKey]
+        if (!entry?.data) {
+          return state
+        }
+        return {
+          commentsCache: {
+            ...state.commentsCache,
+            [cacheKey]: {
+              ...entry,
+              data: restoreReactionOnSubject(
+                entry.data,
+                reactionSubjectId,
+                content,
+                previousReaction
+              )
+            }
+          }
+        }
+      })
+    }
+    return ok
   },
 
   resolveReviewThread: async (repoPath, prNumber, threadId, resolve, options) => {
@@ -4279,22 +4439,33 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
 
   refreshAllGitHub: () => {
     // Clear comments cache; evict stale entries to bound long-session growth across repos/branches.
-    set((s) => ({
-      commentsCache: {},
-      prCache: evictStaleEntries(s.prCache),
-      issueCache: evictStaleEntries(s.issueCache),
-      checksCache: evictStaleEntries(s.checksCache),
-      workItemsCache: evictStaleEntries(s.workItemsCache),
-      projectViewCache: evictStaleEntries(s.projectViewCache),
-      prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
-    }))
+    set((s) => {
+      const next = {
+        commentsCache: Object.keys(s.commentsCache).length === 0 ? s.commentsCache : {},
+        prCache: evictStaleEntries(s.prCache),
+        issueCache: evictStaleEntries(s.issueCache),
+        checksCache: evictStaleEntries(s.checksCache),
+        workItemsCache: evictStaleEntries(s.workItemsCache),
+        projectViewCache: evictStaleEntries(s.projectViewCache),
+        prRefreshStates: pruneExpiredPRRefreshStates(s.prRefreshStates)
+      }
+      // Why: each eviction helper returns its input untouched when nothing changed, so an
+      // unchanged sweep can return `s` and avoid waking every subscriber on window resume.
+      return next.commentsCache === s.commentsCache &&
+        next.prCache === s.prCache &&
+        next.issueCache === s.issueCache &&
+        next.checksCache === s.checksCache &&
+        next.workItemsCache === s.workItemsCache &&
+        next.projectViewCache === s.projectViewCache &&
+        next.prRefreshStates === s.prRefreshStates
+        ? s
+        : next
+    })
 
     // Why: don't prune prRequestGenerations here — deleting a live generation makes its response look stale.
 
     // Only re-fetch PR/issue entries that are already stale — skip fresh ones
     const state = get()
-    const now = Date.now()
-    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
     const cardProps = state.worktreeCardProperties ?? []
     const rawCardProps = cardProps as readonly string[]
     const shouldRefreshIssues = shouldRefreshIssueDecorations(state)
@@ -4306,10 +4477,17 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
       (state.settings?.experimentalNewWorktreeCardStyle === true
         ? cardProps.includes('status')
         : cardProps.includes('pr') || rawCardProps.includes('ci'))
+    if (!shouldRefreshPRs && !shouldRefreshIssues) {
+      return
+    }
+
+    const now = Date.now()
+    const stalePRCandidates: { candidate: GitHubPRRefreshCandidate; score: number }[] = []
+    const repoLookup = getGitHubRepoLookupIndex(state.repos)
 
     for (const worktrees of Object.values(state.worktreesByRepo)) {
       for (const wt of worktrees) {
-        const repo = state.repos.find((r) => r.id === wt.repoId)
+        const repo = repoLookup.findById(wt.repoId)
         if (!repo) {
           continue
         }
@@ -4327,7 +4505,7 @@ export const createGitHubSlice: StateCreator<AppState, [], [], GitHubSlice> = (s
           )
           const prEntry = state.prCache[prKey]
           if (!prEntry || now - prEntry.fetchedAt >= CACHE_TTL) {
-            const candidate = buildPRRefreshCandidate(state, wt)
+            const candidate = buildPRRefreshCandidate(state, wt, undefined, repo)
             if (candidate) {
               stalePRCandidates.push({
                 candidate,

@@ -91,11 +91,15 @@ export function createPtySlaveEchoProbe(
   // attempt. A successful probe is never cached, because the bit is what changes, and a
   // transient failure is not latched at all (see isPermanentSttyFailure).
   let unavailable = false
+  let inFlight: Promise<SttyProbeResult> | null = null
   return async () => {
     if (unavailable) {
       return 'unknown'
     }
-    const result = await runStty(ptsName, platform)
+    inFlight ??= runStty(ptsName, platform).finally(() => {
+      inFlight = null
+    })
+    const result = await inFlight
     unavailable = result.permanent
     return result.state
   }

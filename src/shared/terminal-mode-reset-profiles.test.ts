@@ -6,6 +6,7 @@ import {
   POST_REPLAY_LIVE_SNAPSHOT_RESET,
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
+  POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   RESET_MOUSE_REPORTING,
   buildPostReplayLiveAgentReattachReset,
   replayPayloadEndsWithCursorHidden
@@ -31,6 +32,17 @@ describe('terminal mode reset profiles', () => {
       '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l'
     )
     expect(POST_REPLAY_REATTACH_RESET).not.toContain('\x1b[?2004l')
+  })
+
+  // Why ?1004l stays: #944 — a hard-killed TUI leaves the daemon emulator on the alternate buffer,
+  // so this profile can reach a plain shell, where armed focus reporting rings BEL on every pane
+  // switch. Dropping it would also make this byte-identical to the live-agent profile.
+  it('pins the live alternate-screen profile, which keeps mouse reporting but not focus', () => {
+    expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).toBe(
+      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?1004l'
+    )
+    expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).not.toContain(RESET_MOUSE_REPORTING)
+    expect(POST_REPLAY_REATTACH_RESET_KEEP_MOUSE).not.toBe(POST_REPLAY_LIVE_AGENT_REATTACH_RESET)
   })
 
   // Why: #12101 — a cold-restored seed re-arms mouse reporting for a dead TUI.

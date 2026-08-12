@@ -29,7 +29,7 @@ export function findRepoForHost<T extends RepoIdentityParts>(
   repos: readonly T[],
   repoId: string,
   options: {
-    hostId?: ExecutionHostId | string | null
+    hostId?: ExecutionHostId | (string & {}) | null
     settings?: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
   } = {}
 ): T | null {

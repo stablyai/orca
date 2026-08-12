@@ -3,7 +3,6 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { isMissingRemoteSessionPathError, statRemoteSessionFile } from './remote-session-file-stat'
-import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 import { mapRemoteScanBatches } from './remote-session-scan-batching'
@@ -25,9 +24,7 @@ export async function discoverRemoteSourceCandidates(args: {
   const walked = args.source.fixedChildFileSegments
     ? await listRemoteFixedChildFiles(args.source, args.context, args.issues)
     : await walkRemoteSessionFiles(args.source, args.context, args.issues)
-  const partition = args.source.collectSubagentSiblingCounts
-    ? partitionSubagentTranscriptPaths(walked)
-    : null
+  const partition = args.source.partitionSubagentTranscripts?.(walked) ?? null
   const paths = partition ? partition.sessionFilePaths : walked
   const files = await mapRemoteScanBatches(
     paths,

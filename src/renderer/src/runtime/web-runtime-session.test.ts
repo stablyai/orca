@@ -530,6 +530,63 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     await vi.waitFor(() => expect(mocks.applyFreshWebSessionTabsSnapshot).toHaveBeenCalledTimes(1))
     expect(mocks.setRemoteBrowserPageHandle).not.toHaveBeenCalled()
   })
+
+  it('uses renderer-local staged presentation without changing the RPC shape', async () => {
+    const runtimeCall = vi
+      .fn()
+      .mockResolvedValueOnce({
+        id: 'create',
+        ok: true,
+        result: { browserPageId: 'remote-browser-page-1' }
+      })
+      .mockResolvedValueOnce({ id: 'list', ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        url: 'https://example.com/?q=private',
+        selectWorktree: false,
+        stagedTitle: 'Search Google',
+        stagedFocusAddressBar: false
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.createBrowserTab).toHaveBeenCalledWith(
+      WORKTREE_ID,
+      'https://example.com/?q=private',
+      {
+        title: 'Search Google',
+        focusAddressBar: false,
+        browserRuntimeEnvironmentId: ENVIRONMENT_ID
+      }
+    )
+    expect(runtimeCall.mock.calls[0][0].params).not.toHaveProperty('stagedTitle')
+  })
+
+  it('can log remote browser failure without retaining downstream details', async () => {
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: vi.fn().mockRejectedValue(new Error('failed https://example.com/?q=private'))
+        }
+      }
+    })
+
+    await expect(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: WORKTREE_ID,
+        environmentId: ENVIRONMENT_ID,
+        url: 'https://example.com/?q=private',
+        failureLogMode: 'operation-only'
+      })
+    ).resolves.toBe(false)
+
+    expect(consoleWarn).toHaveBeenCalledWith('[web-runtime-session] failed to create browser tab')
+    expect(JSON.stringify(consoleWarn.mock.calls)).not.toContain('private')
+  })
 })
 
 describe('createWebRuntimeSessionTerminal', () => {
@@ -1608,7 +1665,8 @@ describe('web runtime session tab actions', () => {
         worktree: `id:${WORKTREE_ID}`,
         tabId: 'host-browser-unified',
         notifyClients: false,
-        navigation: 'caller'
+        navigation: 'caller',
+        intent: 'user'
       },
       timeoutMs: 15_000
     })

@@ -78,4 +78,30 @@ describe('plugin overlay env source resolution', () => {
       )
     ).toBe('/remote/original-opencode')
   })
+
+  it.skipIf(process.platform === 'win32')('resolves Prime from its independent env keys', () => {
+    writeFileSync(
+      join(homeDir, '.zshrc'),
+      'export PRIME_AGENT_CODING_AGENT_DIR="$HOME/company-prime"\n'
+    )
+
+    expect(
+      resolvePiSourceAgentDir(
+        { HOME: homeDir, PRIME_AGENT_CODING_AGENT_DIR: '/tmp/inherited-prime' },
+        '/bin/zsh',
+        'prime-agent'
+      )
+    ).toBe(join(homeDir, 'company-prime'))
+    expect(
+      resolvePiSourceAgentDir(
+        {
+          HOME: homeDir,
+          ORCA_PRIME_AGENT_SOURCE_AGENT_DIR: '/remote/original-prime',
+          PRIME_AGENT_CODING_AGENT_DIR: '/tmp/inherited-prime'
+        },
+        '/bin/zsh',
+        'prime-agent'
+      )
+    ).toBe('/remote/original-prime')
+  })
 })

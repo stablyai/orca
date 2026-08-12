@@ -115,13 +115,13 @@ export type LinearIssueListRequest = {
   filter?: LinearIssueListFilter
   teamInput?: string
   limit?: number
-  workspaceId?: string | 'all'
+  workspaceId?: (string & {}) | 'all'
 }
 
 export type LinearProjectListRequest = {
   query?: string
   limit?: number
-  workspaceId?: string | 'all'
+  workspaceId?: (string & {}) | 'all'
 }
 
 export type LinearStatusSetRequest = LinearWriteTargetRequest & {

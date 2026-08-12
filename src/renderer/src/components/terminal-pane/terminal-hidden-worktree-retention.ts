@@ -13,8 +13,8 @@ import type { TerminalTab } from '../../../../shared/types'
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
 // not the ~4-5MB per WORKTREE the warm cap assumed — so un-parkable worktrees
-// (pty classes parking can't restore) get a retention budget: at most 12 stay
-// mounted while hidden and none past 45 minutes, evicted least-recently-hidden
+// (pty classes parking can't restore) get a retention budget: at most 4 stay
+// mounted while hidden and none past 15 minutes, evicted least-recently-hidden
 // first via force-park. The TTL is absolute: the last-active exemption bounds
 // the cap, never the clock.
 // NOT covered by this bound: eviction-exempt TABS (isEvictionExemptTerminalPty
@@ -27,8 +27,8 @@ import type { TerminalTab } from '../../../../shared/types'
 // spared worktree (last-active, exempt tabs) can hold full 50k-row scrollback
 // indefinitely. Accepted tradeoff: high-scrollback users rely on unmount
 // eviction, not demotion.
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 12
-export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 45 * 60_000
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
+export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
 
 export function hasPendingRetentionSpawnWork(
   tab: Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>,
@@ -127,7 +127,7 @@ export function selectRetentionForceParkedTerminalWorktrees(
   })
   // Why re-applied here: selectIdsBeyondHotRetain spares the last-active id from
   // its clock too, which is right for the warm cap (instant return after a
-  // meeting) but makes "none past 45 minutes" false for a lone hidden worktree.
+  // meeting) but makes "none past 15 minutes" false for a lone hidden worktree.
   for (const candidate of candidates) {
     if (args.nowMs - candidate.hiddenSinceMs >= retentionTtlMs) {
       forceParkedIds.add(candidate.id)

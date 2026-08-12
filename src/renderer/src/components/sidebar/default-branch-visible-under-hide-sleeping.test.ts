@@ -58,6 +58,8 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
+    pairedDeviceIdsByEnvironment: new Map(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -95,6 +97,7 @@ describe('#8873 default-branch workspace under "Hide sleeping"', () => {
       'hideAutomationGeneratedWorkspaces',
       'hideCliCreatedWorkspaces',
       'hideDetachedHeadWorkspaces',
+      'hideWorkspacesFromOtherDevices',
       'alwaysShowDefaultBranchWorkspace',
       'visibleWorkspaceHostIds',
       'workspaceHostScope'

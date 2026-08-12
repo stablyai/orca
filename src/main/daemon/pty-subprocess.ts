@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- Why: daemon PTY spawning must keep platform launch setup, preflight, and lifecycle guards in one execution path. */
 import * as pty from 'node-pty'
 import { statSync } from 'node:fs'
+import { release } from 'node:os'
 import { delimiter, win32 as pathWin32 } from 'node:path'
 import type { SubprocessHandle } from './session'
 import { DaemonProtocolError } from './types'
@@ -17,6 +18,8 @@ import {
   validateWorkingDirectory
 } from '../providers/local-pty-utils'
 import { wrapShellSpawnForMacosTccAttribution } from '../providers/macos-tcc-login-shell'
+import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { readPtsName } from '../pty/node-pty-pts-name'
 import { resolveWindowsShellLaunchArgs } from '../providers/windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
@@ -126,6 +129,7 @@ export type PtySubprocessOptions = {
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
 }
 
 function deleteRequestedDaemonEnvKeys(
@@ -243,16 +247,25 @@ function removeInheritedElectronRunAsNode(env: Record<string, string>): void {
   delete env.ELECTRON_RUN_AS_NODE
 }
 
+function daemonEnvironmentDiagSuffix(): string {
+  const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+  const systemVersion =
+    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
+    release()
+  const platform = `${process.platform} ${systemVersion}`
+  return ` (orca: ${orca}, arch: ${process.arch}, platform: ${platform})`
+}
+
 /**
  * Formats a daemon preflight failure with the same ENOENT details node-pty exposes.
  */
 function formatMissingDaemonPathError(kind: 'helper' | 'cwd', path: string): DaemonProtocolError {
   const detailName = kind === 'helper' ? 'helper' : 'cwd'
   const step = kind === 'helper' ? 'posix_spawn' : 'daemon_cwd'
+  const missingTarget = kind === 'helper' ? 'node-pty install' : 'working directory'
+  const diag = daemonEnvironmentDiagSuffix()
   return new DaemonProtocolError(
-    `Daemon's ${kind === 'helper' ? 'node-pty install' : 'working directory'} is gone ` +
-      `(worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT ` +
-      `(errno 2, No such file or directory) - ${detailName}='${path}'`
+    `Daemon's ${missingTarget} is gone (worktree deleted?). Restart Orca. node-pty: ${step} failed: ENOENT (errno 2, No such file or directory) - ${detailName}='${path}'${diag}`
   )
 }
 
@@ -396,8 +409,9 @@ function preflightPosixPtySpawnEnvironment(validationCwd: string): void {
  */
 function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: string): Error {
   const message = err instanceof Error ? err.message : String(err)
+  const diag = daemonEnvironmentDiagSuffix()
   const formatted = new DaemonProtocolError(
-    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}`
+    `Daemon failed to spawn shell "${shellPath}" with cwd "${spawnCwd}": ${message}${diag}`
   )
   if (err instanceof Error && err.stack) {
     formatted.stack = err.stack
@@ -543,6 +557,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   cols: number
   rows: number
   windowsFallbackAttempts: WindowsShellSpawnAttempt[]
+  onMacosTccSpawnStrategy?: PtySubprocessOptions['onMacosTccSpawnStrategy']
 }): {
   process: pty.IPty
   shellPath: string
@@ -551,7 +566,7 @@ function spawnDaemonPtyWithWindowsFallback(args: {
 } {
   const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
-    return pty.spawn(wrapped.file, wrapped.args, {
+    const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
       rows: args.rows,
@@ -560,6 +575,8 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
+    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
+    return proc
   }
 
   try {
@@ -837,7 +854,8 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       env,
       cols: size.cols,
       rows: size.rows,
-      windowsFallbackAttempts
+      windowsFallbackAttempts,
+      onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
     })
     proc = spawned.process
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
@@ -1234,11 +1252,22 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       if (dead) {
         return
       }
-      try {
-        process.kill(proc.pid, sig)
-      } catch {
-        // Process may already be dead
+      const signalRootPid = (): void => {
+        try {
+          process.kill(proc.pid, sig)
+        } catch {
+          // Process may already be dead
+        }
       }
+      // Why only SIGWINCH: the kernel delivers a real resize to the tty's foreground
+      // group, and proc.pid is never in it (the shell setpgid's away, and on macOS
+      // proc.pid is login(1), which drops SIGWINCH). Destructive signals keep the
+      // narrower root-pid target.
+      if (sig === 'SIGWINCH') {
+        signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), sig, signalRootPid)
+        return
+      }
+      signalRootPid()
     },
     onData: (cb) => {
       onDataCb = cb

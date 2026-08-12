@@ -44,7 +44,7 @@ function createFakeDocument(options?: FakeDocOptions) {
     removeEventListener: vi.fn((type: string, listener: (event: unknown) => void) => {
       if (type === 'copy') {
         const index = listeners.indexOf(listener)
-        if (index >= 0) {
+        if (index !== -1) {
           listeners.splice(index, 1)
         }
       }

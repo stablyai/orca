@@ -37,6 +37,8 @@ export type MRInfo = {
   pipelineStatus: CheckStatus
   updatedAt: string
   mergeable: MRMergeableState
+  /** GitLab `detailed_merge_status` (or a short alias) for UI that needs more than MERGEABLE/CONFLICTING/UNKNOWN. */
+  mergeStateStatus?: string | null
   /** Full markdown description. Optional — list endpoints omit it; populated on single-MR fetch (`getMR`). */
   description?: string
   /** Author username (GitLab `username`). Optional for the same reason. */
@@ -213,7 +215,7 @@ export type GitLabTodo = {
   id: number
   /** Free-form GitLab action name, e.g. 'assigned', 'mentioned', 'build_failed', 'review_requested'. */
   actionName: string
-  targetType: GitLabTodoTargetType | string
+  targetType: GitLabTodoTargetType | (string & {})
   /** iid for MR/Issue targets; absent for Commit/Note targets where the identifier is a SHA or note ID. */
   targetIid: number | null
   targetTitle: string

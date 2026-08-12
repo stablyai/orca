@@ -1,5 +1,9 @@
 import type { ChildProcess } from 'node:child_process'
-import { gitSpawn } from '../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../git/runner'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting
+} from '../git/wsl-linked-worktree-git-routing'
 import {
   buildGitLsFilesArgsForQuickOpen,
   shouldExcludeQuickOpenRelPath,
@@ -28,12 +32,26 @@ async function isInsideGitWorkTree(
   if (signal?.aborted) {
     throw fileListingCancellationError(signal)
   }
+  if (isWslLinkedWorktreeGitRoutingCandidate(rootPath, localGitOptions.wslDistro)) {
+    try {
+      await prepareWslLinkedWorktreeGitRouting(rootPath, localGitOptions.wslDistro, { signal })
+    } catch (error) {
+      if (signal?.aborted) {
+        throw fileListingCancellationError(signal)
+      }
+      throw error
+    }
+  }
+  if (signal?.aborted) {
+    throw fileListingCancellationError(signal)
+  }
+  const child = await gitSpawnAfterWindowsEnvironmentReady(['rev-parse', '--is-inside-work-tree'], {
+    cwd: rootPath,
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    ...(signal ? { signal } : {}),
+    stdio: ['ignore', 'ignore', 'ignore']
+  })
   return new Promise((resolve, reject) => {
-    const child = gitSpawn(['rev-parse', '--is-inside-work-tree'], {
-      cwd: rootPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      stdio: ['ignore', 'ignore', 'ignore']
-    })
     let done = false
     let timer: ReturnType<typeof setTimeout>
     const cleanup = (): void => {
@@ -71,6 +89,9 @@ async function isInsideGitWorkTree(
       child.kill()
       finish(false)
     }, 10_000)
+    if (signal?.aborted) {
+      cancel()
+    }
   })
 }
 
@@ -104,8 +125,17 @@ export async function listFilesWithGit(
     reject: (error: Error) => void
     resolve: () => void
   }[] = []
+  const scanController = new AbortController()
 
-  const runGitLsFiles = (args: string[]): Promise<void> => {
+  const runGitLsFiles = async (args: string[]): Promise<void> => {
+    // Why: git ls-files outputs paths relative to cwd, so we set cwd to
+    // rootPath and use the output directly — no prefix stripping needed.
+    const child = await gitSpawnAfterWindowsEnvironmentReady(['ls-files', ...args], {
+      cwd: rootPath,
+      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+      signal: scanController.signal,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
     return new Promise((resolve, reject) => {
       let buf = ''
       let done = false
@@ -138,13 +168,6 @@ export async function listFilesWithGit(
         return maxResults !== undefined && directFileCandidates.size >= maxResults
       }
 
-      // Why: git ls-files outputs paths relative to cwd, so we set cwd to
-      // rootPath and use the output directly — no prefix stripping needed.
-      const child = gitSpawn(['ls-files', ...args], {
-        cwd: rootPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
       let timer: ReturnType<typeof setTimeout>
       const cleanup = (): void => {
         clearTimeout(timer)
@@ -229,6 +252,10 @@ export async function listFilesWithGit(
         child.kill()
         rejectPass(new Error('git ls-files timed out'))
       }, 10000)
+      if (scanController.signal.aborted) {
+        child.kill()
+        rejectPass(fileListingCancellationError(scanController.signal))
+      }
     })
   }
 
@@ -258,14 +285,17 @@ export async function listFilesWithGit(
     }
   }
 
-  const onAbort = (): void => killSurvivors('git ls-files cancelled')
+  const onAbort = (): void => {
+    scanController.abort(signal?.reason)
+    killSurvivors('git ls-files cancelled')
+  }
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
     const runIgnoredPass = () =>
       // Why: ignored files are supplementary — a failed or timed-out ignored
       // pass must not discard the primary listing the user actually needs.
       runGitLsFiles(ignoredPass).catch((err: Error) => {
-        if (!signal?.aborted) {
+        if (!scanController.signal.aborted) {
           console.warn('[quick-open] git ignored-file pass failed; keeping primary results:', err)
         }
       })
@@ -280,6 +310,7 @@ export async function listFilesWithGit(
       }
     }
   } catch (err) {
+    scanController.abort(err)
     killSurvivors()
     if (signal?.aborted) {
       throw fileListingCancellationError(signal)

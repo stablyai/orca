@@ -175,14 +175,25 @@ describe('startParkedTerminalByteWatcher', () => {
     dispose()
   })
 
-  it('drops the bare cursor-agent native title before it reaches the store', async () => {
+  // Why: a hookless Cursor pane has no other identity, so the literal reaches the store
+  // once (#10258); its redraw repeats must not stomp a synthesized Cursor title.
+  it('stores the bare cursor-agent native title once, then keeps the synthetic title', async () => {
     const { dispose } = await startWatcher()
 
     emit('\x1b]0;Cursor Agent\x07')
+    emit('\x1b]0;Cursor Agent\x07')
+    emit('\x1b]0;⠋ Cursor Agent\x07')
+    emit('\x1b]0;Cursor Agent\x07')
     flushSideEffects()
 
-    expect(mockStoreState.setRuntimePaneTitle).not.toHaveBeenCalled()
-    expect(mockStoreState.updateTabTitle).not.toHaveBeenCalled()
+    expect(mockStoreState.setRuntimePaneTitle.mock.calls).toEqual([
+      [TAB_ID, PANE_ID, 'Cursor Agent'],
+      [TAB_ID, PANE_ID, '⠋ Cursor Agent']
+    ])
+    expect(mockStoreState.updateTabTitle.mock.calls).toEqual([
+      [TAB_ID, 'Cursor Agent'],
+      [TAB_ID, '⠋ Cursor Agent']
+    ])
     dispose()
   })
 
@@ -540,6 +551,19 @@ describe('startParkedTerminalByteWatcher', () => {
 
     // Idempotent: a second dispose must not throw or clobber another watcher.
     dispose()
+  })
+
+  // Why: retained gauges would inflate every later high-water profile.
+  it('dispose drops the processor from the pty side-effect census', async () => {
+    await import('./pty-side-effect-pending-census')
+    const { collectRendererMemoryProfileCounts } = await import('@/lib/renderer-memory-profile')
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
+
+    const { dispose } = await startWatcher()
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(1)
+
+    dispose()
+    expect(collectRendererMemoryProfileCounts()['ptySideEffects.processors']).toBe(0)
   })
 
   it('disposes the previous watcher when a new one starts for the same PTY', async () => {

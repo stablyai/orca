@@ -1006,9 +1006,7 @@ export function buildRows(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   projectOrderBy: ProjectOrderBy = 'manual',
   lineageById: Record<string, WorktreeLineage> = {},
-  worktreeMap: Map<string, Worktree> = new Map(
-    worktrees.map((worktree) => [worktree.id, worktree])
-  ),
+  worktreeMap = new Map<string, Worktree>(worktrees.map((worktree) => [worktree.id, worktree])),
   nestLineage = false,
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],

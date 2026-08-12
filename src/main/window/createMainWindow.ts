@@ -19,6 +19,7 @@ import { translateMain } from '../i18n/main-i18n'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { isCrashReportReason } from '../../shared/crash-reporting'
+import { markSystemSessionEnding } from '../crash-reporting/expected-teardown-state'
 import {
   DEFAULT_RENDERER_RECOVERY_MAX_RECOVERIES,
   DEFAULT_RENDERER_RECOVERY_WINDOW_MS,
@@ -42,7 +43,15 @@ import {
   type KeybindingOverrides
 } from '../../shared/keybindings'
 import { getMainE2EConfig } from '../e2e-config'
-import { buildEditableContextMenuTemplate } from './editable-context-menu'
+import {
+  buildEditableContextMenuTemplate,
+  matchingRichMarkdownContextMenuTableTarget,
+  parseRichMarkdownContextMenuTableTarget
+} from './editable-context-menu'
+import {
+  richMarkdownContextMenuTargetChannel,
+  type RichMarkdownContextMenuTableTarget
+} from '../../shared/rich-markdown-context-menu'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { resolveWindowCloseAction } from './window-close-decision'
 import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
@@ -50,6 +59,7 @@ import { closeDashboardPopout } from './dashboard-popout-window'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { isMacosTahoeOrNewer } from './macos-tahoe-release'
 import { registerPluginPanelNavigationGuard } from '../plugins/plugin-panel-navigation-guard'
+import { installWindowsPathRegistryChangeListener } from '../pty/windows-path-registry-change'
 
 // Why: show/restore/resume can overlap before the size nudge resets; never capture the temporary width as the next baseline.
 const activeRepaintJiggles = new WeakSet<BrowserWindow>()
@@ -197,6 +207,8 @@ type CreateMainWindowOptions = {
   }) => void
   /** Defer renderer load until IPC handlers are registered, or eager renderer calls race into missing channels. */
   deferLoad?: boolean
+  /** Reveal after load instead of first paint when startup must show the shell before slower renderer work. */
+  revealOnDidFinishLoad?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void
@@ -293,8 +305,14 @@ export function createMainWindow(
     }
   })
   const rendererWebContentsId = mainWindow.webContents.id
+  installWindowsPathRegistryChangeListener(mainWindow)
   // Why: native paste fallback is privileged IPC; only the top-level renderer may request it.
   setTrustedUIRendererWebContentsId(rendererWebContentsId)
+
+  // Unlike query-session-end, session-end cannot be canceled before this signal is recorded.
+  if (process.platform === 'win32') {
+    mainWindow.on('session-end', markSystemSessionEnding)
+  }
 
   if (process.platform === 'darwin') {
     // Why: preserve hidden-window power savings; stable native sizing and frame-only invalidation
@@ -318,7 +336,7 @@ export function createMainWindow(
     mainWindow.webContents.setZoomLevel(level)
     // Why: native traffic lights don't scale with CSS zoom; reposition on startup to stay aligned with the zoomed titlebar.
     if (process.platform === 'darwin') {
-      syncTrafficLightPosition(mainWindow, Math.pow(1.2, level))
+      syncTrafficLightPosition(mainWindow, 1.2 ** level)
     }
   })
 
@@ -363,6 +381,9 @@ export function createMainWindow(
     mainWindow.show()
   }
   mainWindow.on('ready-to-show', revealInitialWindow)
+  if (opts?.revealOnDidFinishLoad === true) {
+    mainWindow.webContents.on('did-finish-load', revealInitialWindow)
+  }
 
   // Why: persist window bounds to restore last position/size; debounce to avoid hammering persistence during resize drags.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
@@ -527,9 +548,24 @@ export function createMainWindow(
   }
   ipcMain.on(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
 
+  let pendingRichMarkdownContextMenuTableTarget: RichMarkdownContextMenuTableTarget | null = null
+  const onRichMarkdownContextMenuTarget = (event: Electron.IpcMainEvent, value: unknown): void => {
+    if (event.sender !== mainWindow.webContents) {
+      return
+    }
+    pendingRichMarkdownContextMenuTableTarget = parseRichMarkdownContextMenuTableTarget(value)
+  }
+  ipcMain.on(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
   const onMainContextMenu = (_event: Electron.Event, params: Electron.ContextMenuParams): void => {
-    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents)
-    if (template.length === 0) {
+    const tableTarget = matchingRichMarkdownContextMenuTableTarget(
+      params,
+      pendingRichMarkdownContextMenuTableTarget
+    )
+    pendingRichMarkdownContextMenuTableTarget = null
+    const template = buildEditableContextMenuTemplate(params, mainWindow.webContents, {
+      tableTarget
+    })
+    if (template.length === 0 || mainWindow.isDestroyed()) {
       return
     }
     // Why: the context-menu event can precede our focus-mirror update; trust Electron's editable params, not markdownEditorFocused.
@@ -540,6 +576,7 @@ export function createMainWindow(
   // Why: a dead renderer can't clear its focus mirror; default-deny carve-outs so it can't disable app shortcuts in a later lifecycle.
   const resetMarkdownEditorFocus = (): void => {
     markdownEditorFocused = false
+    pendingRichMarkdownContextMenuTableTarget = null
   }
   const resetTerminalInputFocus = (): void => {
     terminalInputFocused = false
@@ -716,17 +753,17 @@ export function createMainWindow(
       return false
     }
 
+    const isIndexJump = action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex'
+    if (isIndexJump && isAutoRepeat) {
+      // Contain held-key repeats in main — every renderer index path skips e.repeat, so yielding a
+      // repeat would leak a raw key to xterm/DOM, and re-firing the jump is never what a hold means.
+      event.preventDefault()
+      return true
+    }
+
     // While the floating panel owns the keyboard, yield indexed switch chords to the renderer
     // so L2 selects a floating tab instead of switching the main workspace behind the panel.
-    if (
-      floatingPanelFocused &&
-      (action.type === 'jumpToWorktreeIndex' || action.type === 'jumpToTabIndex')
-    ) {
-      if (isAutoRepeat) {
-        // Contain held-key repeats in main — both renderer index paths skip e.repeat, so yielding a repeat would leak a raw key to xterm/DOM.
-        event.preventDefault()
-        return true
-      }
+    if (floatingPanelFocused && isIndexJump) {
       return false
     }
 
@@ -1121,6 +1158,7 @@ export function createMainWindow(
     ipcMain.removeListener(terminalInputFocusChannel, onTerminalInputFocused)
     ipcMain.removeListener(floatingFocusChannel, onFloatingFocus)
     ipcMain.removeListener(shortcutRecorderFocusChannel, onShortcutRecorderFocused)
+    ipcMain.removeListener(richMarkdownContextMenuTargetChannel, onRichMarkdownContextMenuTarget)
     // Why: powerMonitor is app-global; without this the resume relay leaks and fires against a destroyed webContents.
     powerMonitor.removeListener('resume', onSystemResume)
     clearTrustedUIRendererWebContentsId(rendererWebContentsId)

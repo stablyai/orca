@@ -22,6 +22,7 @@ const {
   getPRChecksMock,
   getPRCheckDetailsMock,
   getPRCommentsMock,
+  setPRCommentReactionMock,
   resolveReviewThreadMock,
   setPRFileViewedMock,
   addPRReviewCommentMock,
@@ -64,6 +65,7 @@ const {
   getPRChecksMock: vi.fn(),
   getPRCheckDetailsMock: vi.fn(),
   getPRCommentsMock: vi.fn(),
+  setPRCommentReactionMock: vi.fn(),
   resolveReviewThreadMock: vi.fn(),
   setPRFileViewedMock: vi.fn(),
   addPRReviewCommentMock: vi.fn(),
@@ -123,6 +125,7 @@ vi.mock('../github/client', () => ({
   getPRChecks: getPRChecksMock,
   getPRCheckDetails: getPRCheckDetailsMock,
   getPRComments: getPRCommentsMock,
+  setPRCommentReaction: setPRCommentReactionMock,
   resolveReviewThread: resolveReviewThreadMock,
   setPRFileViewed: setPRFileViewedMock,
   addPRReviewComment: addPRReviewCommentMock,
@@ -212,6 +215,7 @@ describe('registerGitHubHandlers', () => {
     getPRChecksMock.mockReset()
     getPRCheckDetailsMock.mockReset()
     getPRCommentsMock.mockReset()
+    setPRCommentReactionMock.mockReset()
     resolveReviewThreadMock.mockReset()
     setPRFileViewedMock.mockReset()
     addPRReviewCommentMock.mockReset()
@@ -907,6 +911,7 @@ describe('registerGitHubHandlers', () => {
     getPRChecksMock.mockResolvedValue([])
     getPRCheckDetailsMock.mockResolvedValue(null)
     getPRCommentsMock.mockResolvedValue([])
+    setPRCommentReactionMock.mockResolvedValue(true)
     resolveReviewThreadMock.mockResolvedValue(true)
     setPRFileViewedMock.mockResolvedValue(true)
     addPRReviewCommentReplyMock.mockResolvedValue({ ok: true })
@@ -963,6 +968,13 @@ describe('registerGitHubHandlers', () => {
       prNumber: 42,
       prRepo,
       noCache: true
+    })
+    await handlers['gh:setPRCommentReaction'](null, {
+      repoPath: '/workspace/repo',
+      reactionSubjectId: ' IC_1 ',
+      content: '+1',
+      reacted: true,
+      prRepo
     })
     await handlers['gh:resolveReviewThread'](null, {
       repoPath: '/workspace/repo',
@@ -1122,6 +1134,15 @@ describe('registerGitHubHandlers', () => {
       42,
       { noCache: true, prRepo },
       null,
+      localGitOptions
+    )
+    expect(setPRCommentReactionMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'IC_1',
+      '+1',
+      true,
+      null,
+      prRepo,
       localGitOptions
     )
     expect(resolveReviewThreadMock).toHaveBeenCalledWith(

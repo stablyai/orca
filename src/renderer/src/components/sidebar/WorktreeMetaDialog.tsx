@@ -30,6 +30,7 @@ import {
   parseIssueLinkInput,
   type IssueLinkProvider
 } from '../../../../shared/issue-link-input'
+import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 
 function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
   textarea.style.height = 'auto'
@@ -93,6 +94,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [snapshot, setSnapshot] = useState<WorktreeMetaSnapshot>(EMPTY_SNAPSHOT)
+  const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const { canOpenIssue, openingIssue, openIssueFailed, handleOpenIssue, resetOpeningIssue } =
     useWorktreeIssueLink({
       worktreeId,
@@ -282,6 +284,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogContent
+        ref={setDialogElement}
         className="max-w-md"
         onOpenAutoFocus={(e) => {
           e.preventDefault()
@@ -312,28 +315,14 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="space-y-1">
-            <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.sidebar.WorktreeMetaDialog.ad5e4e514f', 'Display Name')}
-            </label>
-            <Input
-              ref={displayNameInputRef}
-              value={displayNameInput}
-              onChange={(e) => setDisplayNameInput(e.target.value)}
-              onKeyDown={handleIssueKeyDown}
-              placeholder={translate(
-                'auto.components.sidebar.WorktreeMetaDialog.7f21e0464f',
-                'Custom display name...'
-              )}
-              className="h-8 text-xs"
-            />
-            <p className="text-[10px] text-muted-foreground">
-              {translate(
-                'auto.components.sidebar.WorktreeMetaDialog.459ad7f650',
-                'Only changes the name shown in the sidebar — the folder on disk stays the same. Leave blank to use the branch or folder name.'
-              )}
-            </p>
-          </div>
+          <WorktreeDisplayNameField
+            disabled={saving}
+            inputRef={displayNameInputRef}
+            onEnter={handleSave}
+            onValueChange={setDisplayNameInput}
+            portalContainer={dialogElement}
+            value={displayNameInput}
+          />
 
           <WorktreeIssueLinkField
             inputRef={issueInputRef}
