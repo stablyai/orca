@@ -209,6 +209,27 @@ describe('openWorkspaceBrowserTab', () => {
     )
   })
 
+  it('does not fall back locally when the runtime create outcome is unknown', async () => {
+    const createBrowserTab = vi.fn()
+    mocks.state = {
+      ...ownerState(toRuntimeExecutionHostId('hub-a')),
+      createBrowserTab,
+      defaultBrowserSessionProfileId: 'client-profile',
+      defaultBrowserSessionProfileIdByHostId: {}
+    }
+    mocks.createRemote.mockRejectedValue(new Error('create outcome unknown'))
+
+    await expect(
+      openWorkspaceBrowserTab({
+        workspaceId: WORKSPACE_ID,
+        url: 'https://example.com/',
+        intent: { kind: 'url' }
+      })
+    ).rejects.toThrow('Unable to open URL.')
+
+    expect(createBrowserTab).not.toHaveBeenCalled()
+  })
+
   it('fails closed for invalid targets and unresolved owners, then falls back locally', async () => {
     const secretUrl = 'https://example.com/?q=secret-value'
     const request = {

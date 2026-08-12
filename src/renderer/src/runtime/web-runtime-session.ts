@@ -29,7 +29,7 @@ import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import { createBrowserUuid } from '../lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -97,6 +97,22 @@ export function isWebRuntimeSessionActive(
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
   | { status: 'failed'; message: string }
+
+const DEFINITIVE_BROWSER_CREATE_FAILURE_CODES = [
+  'browser_error',
+  'capability_unsupported',
+  'invalid_argument',
+  'invalid_params',
+  'method_not_found',
+  'runtime_rpc_queue_overloaded',
+  'selector_ambiguous',
+  'selector_not_found',
+  'unauthorized'
+] as const
+
+function isDefinitiveBrowserCreateFailure(error: unknown): boolean {
+  return DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
+}
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
 const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
@@ -598,6 +614,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   } catch (error) {
     unsubscribeFocusGuard()
     let recoveryError: unknown = null
+    const createOutcomeUnknown = !createdPageId && !isDefinitiveBrowserCreateFailure(error)
     forgetWebSessionBrowserPlacement({
       environmentId,
       worktreeId: args.worktreeId,
@@ -665,6 +682,11 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     if (recoveryError) {
       throw new Error('The paired runtime could not recover the failed browser creation.', {
         cause: recoveryError
+      })
+    }
+    if (createOutcomeUnknown) {
+      throw new Error('The paired runtime did not confirm whether the browser tab was created.', {
+        cause: error
       })
     }
     return false

@@ -616,21 +616,45 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     }
   )
 
-  it('does not retry a failed browser create', async () => {
+  it.each([
+    'remote_runtime_unavailable',
+    'runtime_timeout',
+    'invalid_runtime_response',
+    'runtime_error'
+  ])('reports a browser-create %s as ambiguous without retrying', async (code) => {
     const runtimeCall = vi.fn().mockResolvedValue({
       id: 'create-lost',
       ok: false,
-      error: { code: 'remote_runtime_unavailable', message: 'response lost' }
+      error: { code, message: 'response lost' }
     })
     vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
 
     await expect(
       createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, url: 'https://example.com/' })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(runtimeCall).toHaveBeenCalledOnce()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
+
+  it.each(['browser_error', 'invalid_argument', 'method_not_found'])(
+    'reports a definitive browser-create %s as a soft failure',
+    async (code) => {
+      const runtimeCall = vi.fn().mockResolvedValue({
+        id: 'create-rejected',
+        ok: false,
+        error: { code, message: 'host rejected before creation' }
+      })
+      vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+      await expect(
+        createWebRuntimeSessionBrowserTab({ worktreeId: WORKTREE_ID, url: 'https://example.com/' })
+      ).resolves.toBe(false)
+
+      expect(runtimeCall).toHaveBeenCalledOnce()
+      expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    }
+  )
 
   it('creates an unfocused browser while preserving its requested split', async () => {
     mocks.getState.mockReturnValue({
@@ -706,7 +730,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
   })
 
-  it('releases and removes a newly-created split when host creation fails', async () => {
+  it('releases and removes a newly-created split when host creation is ambiguous', async () => {
     vi.stubGlobal('window', {
       api: {
         runtimeEnvironments: {
@@ -722,7 +746,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         clientTargetGroupId: 'client-preview-group',
         clientTargetGroupCreated: true
       })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
     expect(
@@ -1150,7 +1174,7 @@ describe('createWebRuntimeSessionBrowserTab', () => {
         url: 'https://example.com/?q=private',
         failureLogMode: 'operation-only'
       })
-    ).resolves.toBe(false)
+    ).rejects.toThrow('did not confirm whether the browser tab was created')
 
     expect(consoleWarn).toHaveBeenCalledWith('[web-runtime-session] failed to create browser tab')
     expect(JSON.stringify(consoleWarn.mock.calls)).not.toContain('private')
