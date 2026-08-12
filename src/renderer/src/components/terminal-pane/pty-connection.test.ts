@@ -7985,11 +7985,13 @@ describe('connectPanePty', () => {
     // grid rewraps rows, so inline TUIs (Cursor CLI) anchor their block cursor
     // below the input box. Adoption must replay at capture dims, then fit back.
     const eagerPtyId = 'auto-eager-pty'
+    const eagerFrame = 'Cursor Agent\r\n→ prompt text'
+    const flush = vi.fn(() => eagerFrame)
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
       ptyId === eagerPtyId
         ? {
-            peek: () => '',
-            flush: () => '',
+            peek: () => eagerFrame,
+            flush,
             dispose: () => {},
             captureDims: { cols: 120, rows: 40 }
           }
@@ -7997,6 +7999,17 @@ describe('connectPanePty', () => {
     )
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
+    // Why: real LocalPtyTransport.attach flushes the eager buffer into onReplayData;
+    // the connection mock must drain the same way or adopt tests never exercise replay.
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        const buffered = getEagerPtyBufferHandle(existingPtyId)?.flush() ?? ''
+        if (buffered) {
+          callbacks?.onReplayData?.(buffered, { clearBeforeReplay: true })
+        }
+      }
+    )
     transportFactoryQueue.push(transport)
     mockStoreState = {
       ...mockStoreState,
@@ -8028,15 +8041,21 @@ describe('connectPanePty', () => {
       pane.terminal.cols = 80
       pane.terminal.rows = 24
     })
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks()
+    for (let step = 0; step < 40; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
 
     // Why: defer PTY cols/rows until after capture-dim replay finishes.
     expect(transport.attach).toHaveBeenCalledWith(
       expect.objectContaining({ existingPtyId: eagerPtyId })
     )
     expect(transport.attach.mock.calls[0]?.[0]).not.toHaveProperty('cols')
+    expect(flush).toHaveBeenCalled()
+    expect(writes).toContain(eagerFrame)
     expect(pane.terminal.resize).toHaveBeenCalledWith(120, 40)
     const resizeToCaptureCall = pane.terminal.resize.mock.invocationCallOrder.find(
       (_order, index) => {
@@ -8060,11 +8079,12 @@ describe('connectPanePty', () => {
     // footer (dual cursor) while the painted caret stays in the input.
     const eagerPtyId = 'auto-eager-pty'
     const parkedAgentFrame = 'Cursor Agent\r\n→ prompt text\x1b[?25l'
+    const flush = vi.fn(() => parkedAgentFrame)
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
       ptyId === eagerPtyId
         ? {
             peek: () => parkedAgentFrame,
-            flush: () => parkedAgentFrame,
+            flush,
             dispose: () => {},
             captureDims: { cols: 120, rows: 40 }
           }
@@ -8072,6 +8092,15 @@ describe('connectPanePty', () => {
     )
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        const buffered = getEagerPtyBufferHandle(existingPtyId)?.flush() ?? ''
+        if (buffered) {
+          callbacks?.onReplayData?.(buffered, { clearBeforeReplay: true })
+        }
+      }
+    )
     transportFactoryQueue.push(transport)
     mockStoreState = {
       ...mockStoreState,
@@ -8099,18 +8128,19 @@ describe('connectPanePty', () => {
       pane.terminal.cols = 80
       pane.terminal.rows = 24
     })
+    const { writes, parseCallbacks } = captureCallbackTerminalWrites(pane)
 
     connectPanePty(pane as never, createManager(1) as never, deps as never)
-    await flushAsyncTicks(20)
+    for (let step = 0; step < 40; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
 
-    expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?25l', expect.any(Function))
-    const hideOrders = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.invocationCallOrder
-    const hideCallOrder = (pane.terminal.write as ReturnType<typeof vi.fn>).mock.calls.findIndex(
-      ([data]) => data === '\x1b[?25l'
-    )
-    expect(hideCallOrder).toBeGreaterThanOrEqual(0)
-    const attachOrder = transport.attach.mock.invocationCallOrder[0]
-    expect(hideOrders[hideCallOrder]).toBeGreaterThan(attachOrder)
+    expect(flush).toHaveBeenCalled()
+    const frameIndex = writes.indexOf(parkedAgentFrame)
+    const hideIndex = writes.indexOf('\x1b[?25l')
+    expect(frameIndex).toBeGreaterThanOrEqual(0)
+    expect(hideIndex).toBeGreaterThan(frameIndex)
     expect(transport.resize).toHaveBeenCalled()
   })
 
@@ -8118,9 +8148,7 @@ describe('connectPanePty', () => {
     // Why: restored leaf bindings can outlive tab ownership; a global eager buffer proves the PTY is alive, ptyIdsByTabId proves this tab owns it.
     const otherTabPtyId = 'other-tab-eager-pty'
     vi.mocked(getEagerPtyBufferHandle).mockImplementation((ptyId: string) =>
-      ptyId === otherTabPtyId
-        ? { peek: () => '', flush: () => '', dispose: () => {} }
-        : undefined
+      ptyId === otherTabPtyId ? { peek: () => '', flush: () => '', dispose: () => {} } : undefined
     )
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()
