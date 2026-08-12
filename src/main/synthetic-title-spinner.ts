@@ -1,3 +1,5 @@
+import type { AgentStatusClearIpcPayload } from '../shared/agent-status-types'
+
 export type SyntheticTitleSpinnerEntry<TProfile> = {
   frame: number
   profile: TProfile
@@ -8,6 +10,16 @@ export type SyntheticTitleSpinnerTick<TProfile> = {
   ptyId: string
   frame: number
   profile: TProfile
+}
+export function stopSyntheticTitleSpinnerOnStatusClear(
+  clear: AgentStatusClearIpcPayload,
+  stop: (paneKey: string) => void
+): boolean {
+  if (!('paneKey' in clear)) {
+    return false
+  }
+  stop(clear.paneKey)
+  return true
 }
 
 export function advanceSyntheticTitleSpinnerEntries<TProfile>(args: {

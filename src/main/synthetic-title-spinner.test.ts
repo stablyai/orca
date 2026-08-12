@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   advanceSyntheticTitleSpinnerEntries,
+  stopSyntheticTitleSpinnerOnStatusClear,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 
@@ -42,5 +43,24 @@ describe('advanceSyntheticTitleSpinnerEntries', () => {
     ])
     expect(entries.has('live-pane')).toBe(true)
     expect(entries.has('stale-pane')).toBe(false)
+  })
+
+  it('stops the pane spinner when its ordinary status is cleared', () => {
+    const stop = vi.fn()
+
+    expect(stopSyntheticTitleSpinnerOnStatusClear({ paneKey: 'pane-a' }, stop)).toBe(true)
+    expect(stop).toHaveBeenCalledExactlyOnceWith('pane-a')
+  })
+
+  it('keeps pane spinners on connection-scoped transient clears', () => {
+    const stop = vi.fn()
+
+    expect(
+      stopSyntheticTitleSpinnerOnStatusClear(
+        { transient: true, connectionId: 'ssh-a', clearedAt: 42 },
+        stop
+      )
+    ).toBe(false)
+    expect(stop).not.toHaveBeenCalled()
   })
 })

@@ -319,6 +319,7 @@ import { recordProcessGoneCrash as recordProcessGoneCrashEvent } from './crash-r
 import { resolveExpectedTeardownScope } from './crash-reporting/expected-teardown-state'
 import {
   advanceSyntheticTitleSpinnerEntries,
+  stopSyntheticTitleSpinnerOnStatusClear,
   type SyntheticTitleSpinnerEntry
 } from './synthetic-title-spinner'
 import { shouldSendSyntheticTitleFrame } from './synthetic-title-visibility'
@@ -1594,6 +1595,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
     }
   )
   agentHookServer.setPaneStatusClearListener((clear) => {
+    stopSyntheticTitleSpinnerOnStatusClear(clear, stopSyntheticTitleSpinner)
     if (mainWindow?.isDestroyed()) {
       return
     }
