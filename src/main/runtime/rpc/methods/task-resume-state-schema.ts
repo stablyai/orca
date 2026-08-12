@@ -29,7 +29,9 @@ export const TaskResumeState = z
       .strict()
       .optional(),
     jiraPreset: z.enum(['assigned', 'reported', 'all', 'done']).optional(),
-    jiraQuery: z.string().optional()
+    jiraQuery: z.string().optional(),
+    beadsPreset: z.enum(['open', 'assigned', 'ready']).optional(),
+    beadsQuery: z.string().optional()
   })
   .strict()
 

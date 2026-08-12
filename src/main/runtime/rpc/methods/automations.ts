@@ -60,7 +60,7 @@ const TaskProviderIdentity = z
       value !== null &&
       typeof value === 'object' &&
       'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira'].includes(String(value.provider))
+      ['github', 'gitlab', 'linear', 'jira', 'beads'].includes(String(value.provider))
   )
   .optional()
   .nullable()
@@ -68,7 +68,7 @@ const TaskProviderIdentity = z
 const TaskSourceContext = z
   .object({
     kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
+    provider: z.enum(['github', 'gitlab', 'linear', 'jira', 'beads']),
     projectId: requiredString('Missing source project id'),
     hostId: ExecutionHostId,
     projectHostSetupId: OptionalNullablePlainString,
