@@ -5058,7 +5058,10 @@ export function connectPanePty(
           ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
           : {}),
         platform: resumeTarget.platform,
-        shell: resumeTarget.shell
+        shell: resumeTarget.shell,
+        repoId: worktree?.repoId ?? null,
+        connectionId,
+        executionHostId
       })
       if (!startupPlan) {
         return null

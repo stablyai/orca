@@ -23,6 +23,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveAiVaultResumeAgentSessionRulesContext } from '@/lib/ai-vault-resume-agent-session-rules-context'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import {
   getAiVaultResumeWorkspacePath,
@@ -175,7 +176,8 @@ function buildAiVaultResumeForWorktree(
       agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
-        : {})
+        : {}),
+      ...resolveAiVaultResumeAgentSessionRulesContext(args)
     })
     if (startupPlan) {
       return {
