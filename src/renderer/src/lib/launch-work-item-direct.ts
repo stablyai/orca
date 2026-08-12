@@ -36,6 +36,7 @@ import {
   getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -283,7 +284,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
           isNativeChatTranscriptLocalReadable(launchConnectionId),
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
-        isRemote: typeof launchConnectionId === 'string'
+        isRemote: typeof launchConnectionId === 'string',
+        repoId,
+        connectionId: repo.connectionId,
+        executionHostId: getRepoExecutionHostId(repo)
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {

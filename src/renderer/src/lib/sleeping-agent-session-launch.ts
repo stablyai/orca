@@ -28,18 +28,29 @@ export type ResumeSleepingAgentSessionsOptions = {
   onSessionLaunched?: (tabId: string) => void
 }
 
-function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget {
+function getResumeLaunchTarget(worktreeId: string): AgentResumeLaunchTarget & {
+  repoId: string | null
+  connectionId: string | null
+  executionHostId: ReturnType<typeof getExecutionHostIdForWorktree>
+} {
   const state = useAppStore.getState()
   const worktree = state.getKnownWorktreeById(worktreeId)
   const repo = worktree ? state.repos.find((entry) => entry.id === worktree.repoId) : null
+  const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
   // The resume tab is created without a shell override, so the global Windows shell wins.
-  return resolveAgentResumeLaunchTarget({
+  const target = resolveAgentResumeLaunchTarget({
     projectRuntime: getLocalProjectExecutionRuntimeContext(state, worktreeId),
     connectionId: repo?.connectionId,
-    executionHostId: getExecutionHostIdForWorktree(state, worktreeId),
+    executionHostId,
     worktreePath: worktree?.path,
     terminalWindowsShell: state.settings?.terminalWindowsShell
   })
+  return {
+    ...target,
+    repoId: worktree?.repoId ?? null,
+    connectionId: repo?.connectionId ?? null,
+    executionHostId
+  }
 }
 
 function appendTabToWorktreeOrder(worktreeId: string, tabId: string): void {
@@ -86,7 +97,10 @@ export function launchSleepingAgentSession(
       ? { ompResumeFilePath: launchConfig.ompResumeFilePath }
       : {}),
     platform: resumeTarget.platform,
-    shell: resumeTarget.shell
+    shell: resumeTarget.shell,
+    repoId: resumeTarget.repoId,
+    connectionId: resumeTarget.connectionId,
+    executionHostId: resumeTarget.executionHostId
   })
   if (!startupPlan) {
     toast.error(
@@ -108,6 +122,7 @@ export function launchSleepingAgentSession(
     launchConfig: startupPlan.launchConfig,
     resumeProviderSession: record.providerSession,
     launchAgent: record.agent,
+    ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
     ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }

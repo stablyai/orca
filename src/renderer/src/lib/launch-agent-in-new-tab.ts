@@ -21,6 +21,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
@@ -130,7 +131,10 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv,
-    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
+    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions),
+    repoId: worktree?.repoId ?? null,
+    connectionId: repo?.connectionId ?? null,
+    executionHostId: repo ? getRepoExecutionHostId(repo) : null
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
     base: startupPlanBase,
