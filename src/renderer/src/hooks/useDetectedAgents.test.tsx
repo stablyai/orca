@@ -14,7 +14,9 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
+const detectLocalAgents = vi.fn()
 const detectRemoteAgents = vi.fn()
 const refreshLocalAgents = vi.fn()
 const runtimeEnvironmentCall = vi.fn()
@@ -22,8 +24,15 @@ const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 let latestHookResult: UseDetectedAgentsResult | null = null
 
-function HookProbe({ target }: { target: AgentDetectionTarget | undefined }): null {
+function HookProbe({
+  target,
+  onResult
+}: {
+  target: AgentDetectionTarget | undefined
+  onResult?: (result: UseDetectedAgentsResult) => void
+}): null {
   latestHookResult = useDetectedAgents(target)
+  onResult?.(latestHookResult)
   return null
 }
 
@@ -34,13 +43,16 @@ async function flushEffects(): Promise<void> {
   })
 }
 
-async function renderProbe(target: AgentDetectionTarget | undefined): Promise<Root> {
+async function renderProbe(
+  target: AgentDetectionTarget | undefined,
+  onResult?: (result: UseDetectedAgentsResult) => void
+): Promise<Root> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(HookProbe, { target }))
+    root.render(createElement(HookProbe, { target, onResult }))
   })
   await flushEffects()
   return root
@@ -51,6 +63,11 @@ beforeEach(() => {
   useAppStore.setState(initialAppState, true)
   latestHookResult = null
   detectRemoteAgents.mockReset().mockResolvedValue([])
+  detectLocalAgents
+    .mockReset()
+    .mockImplementation((context) =>
+      Promise.resolve(context?.projectRuntime?.runtime.kind === 'wsl' ? ['claude'] : ['codex'])
+    )
   refreshLocalAgents.mockReset().mockResolvedValue({
     agents: [],
     addedPathSegments: [],
@@ -80,9 +97,68 @@ beforeEach(() => {
     })
   })
   globalThis.window.api = {
-    preflight: { detectRemoteAgents, refreshAgents: refreshLocalAgents },
-    runtimeEnvironments: { call: runtimeEnvironmentCall }
+    preflight: {
+      detectAgents: detectLocalAgents,
+      detectRemoteAgents,
+      refreshAgents: refreshLocalAgents
+    },
+    runtimeEnvironments: { call: runtimeEnvironmentCall },
+    platform: { get: () => ({ platform: 'win32' }) }
   } as unknown as Window['api']
+})
+
+describe('Floating Workspace authority', () => {
+  it('advertises native Windows agents beside an active WSL project', async () => {
+    let activeResult: UseDetectedAgentsResult | null = null
+    let floatingResult: UseDetectedAgentsResult | null = null
+    useAppStore.getState().clearLocalDetectedAgents()
+    useAppStore.setState({
+      activeRepoId: 'repo-wsl',
+      activeWorktreeId: 'worktree-wsl',
+      projects: [
+        {
+          id: 'repo-wsl',
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        }
+      ],
+      repos: [
+        {
+          id: 'repo-wsl',
+          path: 'C:\\repo',
+          displayName: 'WSL project',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: {
+        'repo-wsl': [
+          {
+            id: 'worktree-wsl',
+            repoId: 'repo-wsl',
+            path: 'C:\\repo',
+            displayName: 'main'
+          }
+        ]
+      }
+    } as never)
+
+    await renderProbe(
+      { kind: 'local', worktreeId: 'worktree-wsl' } as AgentDetectionTarget,
+      (result) => {
+        activeResult = result
+      }
+    )
+    await renderProbe(
+      { kind: 'local', worktreeId: FLOATING_TERMINAL_WORKTREE_ID } as AgentDetectionTarget,
+      (result) => {
+        floatingResult = result
+      }
+    )
+
+    expect(activeResult?.detectedIds).toEqual(['claude'])
+    expect(floatingResult?.detectedIds).toEqual(['codex'])
+    expect(detectLocalAgents).toHaveBeenLastCalledWith(undefined)
+  })
 })
 
 afterEach(async () => {
