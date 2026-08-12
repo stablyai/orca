@@ -26,9 +26,7 @@ export const AGENT_NAMES = [
   'openclaw',
   'aider',
   'grok',
-  'devin',
-  // Why: bare OSC title "Cline" needs the token so status detection treats the pane as an agent.
-  'cline'
+  'devin'
 ]
 
 // Why: Windows agent titles can surface launcher process names such as

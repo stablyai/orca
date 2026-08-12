@@ -18,6 +18,7 @@ import {
   containsAny,
   containsLegacyAgentName,
   isClaudeManagementTitle,
+  isClineAgentTitle,
   isGeminiTerminalTitle,
   isPiAgentTitle,
   isPiTerminalTitle
@@ -191,7 +192,15 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)
   const hasLegacyAgentName = containsLegacyAgentName(title)
-  if (!hasLegacyAgentName && !hasDroidAgentName && !hasHermesAgentName && !hasAgyAgentName) {
+  // Why: Cline uses a closed identity frame — bare "cline" in task text is not agent status.
+  const hasClineIdentity = isClineAgentTitle(title)
+  if (
+    !hasLegacyAgentName &&
+    !hasDroidAgentName &&
+    !hasHermesAgentName &&
+    !hasAgyAgentName &&
+    !hasClineIdentity
+  ) {
     return null
   }
   if (containsAny(title, ['action required', 'permission', 'waiting'])) {
@@ -213,7 +222,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   // Why: Droid hook events are authoritative; native name-only titles should
   // not turn a still-sleeping execute tool into completion.
-  if (hasDroidAgentName && !hasLegacyAgentName) {
+  if (hasDroidAgentName && !hasLegacyAgentName && !hasClineIdentity) {
     return null
   }
 
