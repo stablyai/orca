@@ -1,6 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import {
-  resolveCodexApprovalReviewer,
+  resolveAuthoritativeCodexApprovalReviewer,
   type ExplicitCodexApprovalReviewer
 } from '../../shared/codex-approval-reviewer'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
@@ -15,31 +15,48 @@ export type AgentStatusRuntimeEnrichment = Pick<
 
 const MAX_AGENT_STATUS_DROP_TAB_ID_LENGTH = 160
 
+function resolveLaunchBoundCodexApprovalReviewer(
+  data: Pick<
+    AgentStatusIpcPayload,
+    'paneKey' | 'agentType' | 'state' | 'hookEventName' | 'launchToken'
+  >,
+  runtime: AgentStatusRuntimeEnrichment | undefined
+): ExplicitCodexApprovalReviewer | undefined {
+  if (
+    data.agentType !== 'codex' ||
+    (data.state !== 'waiting' && data.state !== 'blocked') ||
+    data.hookEventName !== 'PermissionRequest'
+  ) {
+    return undefined
+  }
+  // Why: only launchToken-scoped agentArgs may prove auto_review; wire stamps are untrusted.
+  const launchConfig = runtime?.getAgentStatusLaunchConfigForPaneKey?.(data.paneKey, {
+    launchToken: data.launchToken
+  })
+  const reviewer = resolveAuthoritativeCodexApprovalReviewer({
+    agentArgs: launchConfig?.agentArgs
+  })
+  return reviewer === 'unknown' ? undefined : reviewer
+}
+
 export function enrichAgentStatusIpcPayload(
   data: AgentStatusIpcPayload,
   runtime: AgentStatusRuntimeEnrichment | undefined
 ): AgentStatusIpcPayload {
   if (!runtime) {
-    return data
+    // Why: without runtime launch lookup, drop wire reviewer so consumers fail open.
+    const { codexApprovalReviewer: _wire, ...rest } = data
+    void _wire
+    return rest
   }
   const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
   const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
-  let codexApprovalReviewer: ExplicitCodexApprovalReviewer | undefined = data.codexApprovalReviewer
-  if (
-    data.agentType === 'codex' &&
-    (data.state === 'waiting' || data.state === 'blocked') &&
-    data.hookEventName === 'PermissionRequest'
-  ) {
-    if (!codexApprovalReviewer) {
-      const launchConfig = runtime.getAgentStatusLaunchConfigForPaneKey?.(data.paneKey, {
-        launchToken: data.launchToken
-      })
-      const reviewer = resolveCodexApprovalReviewer(launchConfig?.agentArgs)
-      codexApprovalReviewer = reviewer === 'unknown' ? undefined : reviewer
-    }
-  }
+  const codexApprovalReviewer = resolveLaunchBoundCodexApprovalReviewer(data, runtime)
+  // Why: never re-emit an unverified wire stamp; only launch-bound ownership crosses IPC.
+  const { codexApprovalReviewer: _wire, ...rest } = data
+  void _wire
   return {
-    ...data,
+    ...rest,
     ...(terminalHandle ? { terminalHandle } : {}),
     ...(orchestration ? { orchestration } : {}),
     ...(codexApprovalReviewer ? { codexApprovalReviewer } : {})
@@ -56,9 +73,7 @@ export function buildAgentStatusIpcPayload(
       ...event.payload,
       paneKey: event.paneKey,
       ...(event.launchToken ? { launchToken: event.launchToken } : {}),
-      ...(event.codexApprovalReviewer
-        ? { codexApprovalReviewer: event.codexApprovalReviewer }
-        : {}),
+      // Why: wire stamp is intentionally not forwarded; enrich re-binds from launchToken.
       ...(event.hookEventName ? { hookEventName: event.hookEventName } : {}),
       ...(event.tabId ? { tabId: event.tabId } : {}),
       ...(event.worktreeId ? { worktreeId: event.worktreeId } : {}),

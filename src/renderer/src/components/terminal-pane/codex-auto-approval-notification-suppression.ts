@@ -1,7 +1,7 @@
 import { isAskUserQuestionTool } from '../../../../shared/agent-question-answered-intent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
-import { resolveCodexApprovalReviewer } from '../../../../shared/codex-approval-reviewer'
+import { resolveAuthoritativeCodexApprovalReviewer } from '../../../../shared/codex-approval-reviewer'
 import {
   isCodexPermissionAttentionState,
   shouldSuppressCodexAutoReviewPermissionAttention
@@ -53,8 +53,11 @@ export function shouldSuppressCodexAutoApprovalStatus(
     return false
   }
   const launchConfig = getCodexLaunchConfig(context)
-  const reviewer =
-    payload.codexApprovalReviewer ?? resolveCodexApprovalReviewer(launchConfig?.agentArgs)
+  // Why: launchToken-owned agentArgs only; payload.codexApprovalReviewer is never authoritative alone.
+  const reviewer = resolveAuthoritativeCodexApprovalReviewer({
+    agentArgs: launchConfig?.agentArgs,
+    wireReviewer: payload.codexApprovalReviewer
+  })
   if (
     shouldSuppressCodexAutoReviewPermissionAttention({
       agentType: payload.agentType,

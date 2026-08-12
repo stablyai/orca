@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildAgentStatusIpcPayload } from './agent-status-ipc-boundary'
+import { buildAgentStatusIpcPayload, enrichAgentStatusIpcPayload } from './agent-status-ipc-boundary'
 
 describe('agent status IPC boundary', () => {
   it('preserves live hook identity and adds launch-token-verified reviewer attribution', () => {
@@ -73,7 +73,7 @@ describe('agent status IPC boundary', () => {
     expect(result.codexApprovalReviewer).toBeUndefined()
   })
 
-  it('preserves hook-stamped reviewer ownership after runtime launch metadata is gone', () => {
+  it('drops hook-stamped auto_review when launch metadata is gone (fail closed)', () => {
     const getAgentStatusLaunchConfigForPaneKey = vi.fn()
     const result = buildAgentStatusIpcPayload(
       {
@@ -98,8 +98,83 @@ describe('agent status IPC boundary', () => {
       }
     )
 
-    expect(result.codexApprovalReviewer).toBe('auto_review')
-    expect(getAgentStatusLaunchConfigForPaneKey).not.toHaveBeenCalled()
+    expect(result.codexApprovalReviewer).toBeUndefined()
+    expect(getAgentStatusLaunchConfigForPaneKey).toHaveBeenCalledWith('tab-1:leaf-1', {
+      launchToken: 'launch-1'
+    })
+  })
+
+  it('prefers launchToken-owned agentArgs over a conflicting wire auto_review stamp', () => {
+    const getAgentStatusLaunchConfigForPaneKey = vi.fn(() => ({
+      agentArgs: `-c 'approvals_reviewer="user"'`,
+      agentEnv: {}
+    }))
+    const result = enrichAgentStatusIpcPayload(
+      {
+        paneKey: 'tab-1:leaf-1',
+        launchToken: 'launch-1',
+        connectionId: null,
+        hookEventName: 'PermissionRequest',
+        codexApprovalReviewer: 'auto_review',
+        state: 'waiting',
+        prompt: 'run build',
+        agentType: 'codex',
+        toolName: 'exec_command',
+        receivedAt: 100,
+        stateStartedAt: 90
+      },
+      {
+        getAgentStatusTerminalHandleForPaneKey: () => undefined,
+        getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+        getAgentStatusLaunchConfigForPaneKey
+      }
+    )
+
+    expect(result.codexApprovalReviewer).toBe('user')
+    expect(getAgentStatusLaunchConfigForPaneKey).toHaveBeenCalledWith('tab-1:leaf-1', {
+      launchToken: 'launch-1'
+    })
+  })
+
+  it('ignores a spoofed wire auto_review when launch config is missing', () => {
+    const result = enrichAgentStatusIpcPayload(
+      {
+        paneKey: 'tab-1:leaf-1',
+        launchToken: 'stale-token',
+        connectionId: null,
+        hookEventName: 'PermissionRequest',
+        codexApprovalReviewer: 'auto_review',
+        state: 'waiting',
+        prompt: '',
+        agentType: 'codex',
+        receivedAt: 100,
+        stateStartedAt: 90
+      },
+      {
+        getAgentStatusTerminalHandleForPaneKey: () => undefined,
+        getAgentStatusOrchestrationContextForPaneKey: () => undefined,
+        getAgentStatusLaunchConfigForPaneKey: () => undefined
+      }
+    )
+    expect(result.codexApprovalReviewer).toBeUndefined()
+  })
+
+  it('strips wire reviewer when runtime enrichment is unavailable', () => {
+    const result = enrichAgentStatusIpcPayload(
+      {
+        paneKey: 'tab-1:leaf-1',
+        connectionId: null,
+        hookEventName: 'PermissionRequest',
+        codexApprovalReviewer: 'auto_review',
+        state: 'waiting',
+        prompt: '',
+        agentType: 'codex',
+        receivedAt: 100,
+        stateStartedAt: 90
+      },
+      undefined
+    )
+    expect(result.codexApprovalReviewer).toBeUndefined()
   })
 
   it('preserves resume-only restoration metadata', () => {
