@@ -142,7 +142,9 @@ function localizePendingRowsForHost(
   const localized: Extract<Row, { type: 'header' }>[] = []
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
-      localized.push(row)
+      // Why: pass-through headers repeat in every host section; without the
+      // host stamp their render keys collide across sections.
+      localized.push(row.hostId === hostId ? row : { ...row, hostId })
       continue
     }
     const count = row.hostWorktreeCounts.get(hostId)

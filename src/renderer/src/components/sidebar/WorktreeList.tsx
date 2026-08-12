@@ -2433,6 +2433,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     rows: renderRows,
     rangeStartIndex: stickyRangeStartIndexRef.current,
     scrollOffset: virtualizer.scrollOffset ?? scrollOffsetRef.current,
+    // Why: after a viewport remount the virtualizer holds the previous view's
+    // offset until a scroll event fires; short (all-collapsed) content never
+    // fires one, so an unclamped stale offset pins the wrong host card.
+    maxScrollOffset: Math.max(0, totalSize - (virtualizer.scrollRect?.height ?? 0)),
     stickyHeaderIndexes,
     virtualItems
   })

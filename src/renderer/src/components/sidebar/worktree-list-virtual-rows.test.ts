@@ -135,6 +135,39 @@ describe('getActiveStickyIndexesForScroll', () => {
     expect(after).toEqual({ hostIndex: 4, groupIndex: 5 })
   })
 
+  it('clamps a stale scroll offset so the first host card pins when content fits the viewport', () => {
+    // Why: after a viewport remount the virtualizer reports the previous
+    // view's offset until a scroll event fires; all-collapsed content fits the
+    // viewport so no event ever fires. Unclamped, the LAST host card pins
+    // in-flow at the top and paints over the first one.
+    const collapsedRows: RenderRow[] = [hostRow('ssh:a'), hostRow('ssh:b')]
+    const collapsedSticky = getStickyHeaderIndexes(collapsedRows)
+    const collapsedItems = [virtualItem(0, 0), virtualItem(1, 38)]
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows: collapsedRows,
+        rangeStartIndex: 1,
+        scrollOffset: 500,
+        maxScrollOffset: 0,
+        stickyHeaderIndexes: collapsedSticky,
+        virtualItems: collapsedItems
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: null })
+  })
+
+  it('leaves in-range offsets untouched when a max offset is provided', () => {
+    expect(
+      getActiveStickyIndexesForScroll({
+        rows,
+        rangeStartIndex: 2,
+        scrollOffset: 250,
+        maxScrollOffset: 600,
+        stickyHeaderIndexes,
+        virtualItems
+      })
+    ).toEqual({ hostIndex: 0, groupIndex: 1 })
+  })
+
   it('degrades to single-tier rules when no host sections exist', () => {
     const flatRows: RenderRow[] = [
       groupRow('g1'),

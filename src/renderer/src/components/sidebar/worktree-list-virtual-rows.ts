@@ -189,6 +189,10 @@ function getHostStickyIndexes(rows: readonly RenderRow[], sticky: readonly numbe
   return sticky.filter((index) => rows[index]?.type === 'host-header')
 }
 
+function getVirtualRowIndexAtOffset(items: readonly VirtualItem[], offset: number): number | null {
+  return (items.findLast((item) => item.start <= offset) ?? items[0])?.index ?? null
+}
+
 /** Two-tier sticky resolution: the host card is the outer hierarchy level so
  *  it stays pinned for the whole section while group headers hand off beneath
  *  it. Without host sections this degrades to the original single-tier rules. */
@@ -198,7 +202,19 @@ export function getActiveStickyIndexesForScroll(args: {
   scrollOffset: number
   stickyHeaderIndexes: readonly number[]
   virtualItems: readonly VirtualItem[]
+  /** Largest offset the scroll element can actually reach (totalSize - viewport). */
+  maxScrollOffset?: number
 }): ActiveStickyIndexes {
+  // Why: a remounted viewport keeps reporting the previous view's offset until
+  // a scroll event fires, and content that fits the viewport never fires one.
+  // Unclamped, the stale offset pins the last host card in-flow over the first
+  // one whenever every host section is collapsed.
+  let scrollOffset = args.scrollOffset
+  let rangeStartIndex = args.rangeStartIndex
+  if (args.maxScrollOffset !== undefined && scrollOffset > args.maxScrollOffset) {
+    scrollOffset = Math.max(0, args.maxScrollOffset)
+    rangeStartIndex = getVirtualRowIndexAtOffset(args.virtualItems, scrollOffset) ?? 0
+  }
   const hostIndexes = getHostStickyIndexes(args.rows, args.stickyHeaderIndexes)
 
   const resolveWithHandoff = (
@@ -206,7 +222,7 @@ export function getActiveStickyIndexesForScroll(args: {
     pinnedOffset: number,
     fallbackToCandidate: boolean
   ): number | null => {
-    const candidateIndex = getActiveStickyHeaderIndex(candidates, args.rangeStartIndex)
+    const candidateIndex = getActiveStickyHeaderIndex(candidates, rangeStartIndex)
     if (candidateIndex === null) {
       return null
     }
@@ -227,7 +243,7 @@ export function getActiveStickyIndexesForScroll(args: {
     }
     // Why: hand off the moment the incoming header reaches its pinned slot
     // (top of the viewport, or the bottom edge of the pinned host card).
-    if (args.scrollOffset + pinnedOffset >= candidate.start) {
+    if (scrollOffset + pinnedOffset >= candidate.start) {
       return candidateIndex
     }
     const previous = getPreviousStickyHeaderIndex(candidates, candidateIndex)
