@@ -27,6 +27,44 @@ export type AgentCatalogEntry = {
   faviconDomain?: string
   /** Homepage/install docs URL, sourced from the README agent badge list. */
   homepageUrl: string
+  /**
+   * Official one-line install command for the current platform, when the agent publishes one that
+   * is unambiguous. Absent for agents installed through a downloader, an account flow, or a
+   * platform-specific package manager — those keep pointing at `homepageUrl` instead.
+   */
+  installCommand?: string
+}
+
+/**
+ * Per-platform install commands, taken from each agent's own published docs.
+ *
+ * Deliberately partial. An entry only belongs here when the vendor documents a single command that
+ * works on a stock machine; anything needing a package manager choice, an account step, or a
+ * platform we cannot verify is left out so onboarding never prints a command that fails.
+ */
+const AGENT_INSTALL_COMMANDS: Partial<Record<TuiAgent, Partial<Record<NodeJS.Platform, string>>>> =
+  {
+    claude: {
+      darwin: 'npm install -g @anthropic-ai/claude-code',
+      linux: 'npm install -g @anthropic-ai/claude-code',
+      win32: 'npm install -g @anthropic-ai/claude-code'
+    },
+    antigravity: {
+      darwin: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      linux: 'curl -fsSL https://antigravity.google/cli/install.sh | bash',
+      // Why a different shape on Windows: Antigravity ships a PowerShell installer rather than the
+      // POSIX script, so reusing the curl line here would simply fail.
+      win32: 'irm https://antigravity.google/cli/install.ps1 | iex'
+    },
+    opencode: {
+      darwin: 'npm install -g opencode-ai',
+      linux: 'npm install -g opencode-ai',
+      win32: 'npm install -g opencode-ai'
+    }
+  }
+
+function getAgentInstallCommand(agent: TuiAgent): string | undefined {
+  return AGENT_INSTALL_COMMANDS[agent]?.[getCatalogPlatform()]
 }
 
 function getCatalogPlatform(): NodeJS.Platform {
@@ -48,7 +86,8 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'claude',
     label: translate('auto.lib.agent.catalog.0708ed89f1', 'Claude'),
     cmd: 'claude',
-    homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code'
+    homepageUrl: 'https://docs.anthropic.com/claude/docs/claude-code',
+    installCommand: getAgentInstallCommand('claude')
   },
   {
     id: 'claude-agent-teams',
@@ -88,7 +127,8 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
-    homepageUrl: 'https://opencode.ai/docs/cli/'
+    homepageUrl: 'https://opencode.ai/docs/cli/',
+    installCommand: getAgentInstallCommand('opencode')
   },
   {
     id: 'mimo-code',
@@ -146,7 +186,8 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     label: translate('auto.lib.agent.catalog.691dd11789', 'Antigravity'),
     cmd: 'agy',
     faviconDomain: 'antigravity.google',
-    homepageUrl: 'https://antigravity.google/docs/cli-overview'
+    homepageUrl: 'https://antigravity.google/docs/cli-overview',
+    installCommand: getAgentInstallCommand('antigravity')
   },
   {
     id: 'aider',

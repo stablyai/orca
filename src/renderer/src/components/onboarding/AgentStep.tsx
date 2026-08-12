@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, ExternalLink, Info } from 'lucide-react'
+import { Check, ExternalLink, Info, Terminal } from 'lucide-react'
 import { getAgentCatalog, AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { TuiAgent } from '../../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { OnboardingInlineCommandTerminal } from './OnboardingInlineCommandTerminal'
 
 const AGENT_GRID_MAX_ROWS = 4
 
@@ -103,6 +104,9 @@ export function AgentStep({
           value0: fallbackRest.length
         }
       )
+  // Why a single id rather than a boolean: each open installer spawns a real PTY, so only one runs
+  // at a time and switching agents tears the previous one down.
+  const [installTerminalAgent, setInstallTerminalAgent] = useState<TuiAgent | null>(null)
   const agentGridScrollRef = useRef<HTMLDivElement>(null)
   const agentGridScrollMaxHeight = useAgentGridScrollMaxHeight(
     agentGridScrollRef,
@@ -128,15 +132,49 @@ export function AgentStep({
               "isn't on your PATH yet. Orca will set it as your default and you can install it any time."
             )}
           </span>
-          <button
-            type="button"
-            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
-            onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
-          >
-            {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
-            <ExternalLink className="size-3" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {selectedEntry.installCommand && (
+              <button
+                type="button"
+                className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
+                onClick={() =>
+                  setInstallTerminalAgent((current) =>
+                    current === selectedEntry.id ? null : selectedEntry.id
+                  )
+                }
+              >
+                {installTerminalAgent === selectedEntry.id
+                  ? translate('auto.components.onboarding.AgentStep.hideInstall', 'Hide installer')
+                  : translate('auto.components.onboarding.AgentStep.installNow', 'Install')}
+                <Terminal className="size-3" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="inline-flex shrink-0 items-center gap-1 rounded-md border border-amber-400/40 bg-amber-400/10 px-2 py-1 font-medium text-amber-800 hover:bg-amber-400/20 dark:text-amber-100"
+              onClick={() => void window.api.shell.openUrl(selectedEntry.homepageUrl)}
+            >
+              {translate('auto.components.onboarding.AgentStep.9c163bb0e0', 'Install instructions')}
+              <ExternalLink className="size-3" />
+            </button>
+          </div>
         </div>
+      )}
+      {selectedEntry?.installCommand && installTerminalAgent === selectedEntry.id && (
+        <OnboardingInlineCommandTerminal
+          command={selectedEntry.installCommand}
+          worktreeId={`onboarding-agent-install-${selectedEntry.id}`}
+          title={selectedEntry.label}
+          description={translate(
+            'auto.components.onboarding.AgentStep.installTerminalDescription',
+            'Running the published install command for this agent. It is detected again automatically once it lands on your PATH.'
+          )}
+          ariaLabel={translate(
+            'auto.components.onboarding.AgentStep.installTerminalAria',
+            'Agent install terminal'
+          )}
+          terminalHeightPx={220}
+        />
       )}
       <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
         <SectionHeader

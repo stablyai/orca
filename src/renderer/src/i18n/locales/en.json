@@ -12170,7 +12170,11 @@
           "showMoreAgents": "Show {{value0}} more agents→",
           "yoloPermissionsLabel": "Yolo / Dangerously skip permissions",
           "yoloPermissionsInfo": "Agent permission info",
-          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions"
+          "yoloPermissionsTooltip": "Skip permission checks for agents for less interruptions",
+          "hideInstall": "Hide installer",
+          "installNow": "Install",
+          "installTerminalDescription": "Running the published install command for this agent. It is detected again automatically once it lands on your PATH.",
+          "installTerminalAria": "Agent install terminal"
         },
         "FeatureSetupInlineTerminal": {
           "789b59936e": "Press Enter to run the command and confirm npx if asked. You can also set this up later in Settings.",
