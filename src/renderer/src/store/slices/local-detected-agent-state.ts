@@ -10,7 +10,7 @@ import {
   getLocalAgentContextEviction,
   removeLocalAgentContextEntry
 } from './local-agent-context-eviction'
-import { getLocalAgentLegacyLoadingPatch } from './local-agent-legacy-loading'
+import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
 import {
   createEmptyLocalDetectedAgentState,
   type LocalDetectedAgentState
@@ -59,11 +59,7 @@ export const createLocalDetectedAgentState: StateCreator<
           return
         }
         const state = get()
-        const patch = getLocalAgentLegacyLoadingPatch(
-          state,
-          detectedContextKey === contextKey,
-          'detect'
-        )
+        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect')
         if (patch) {
           set(patch)
         }
@@ -79,8 +75,7 @@ export const createLocalDetectedAgentState: StateCreator<
       set((state) => ({
         ...(isFloating
           ? {}
-          : (getLocalAgentLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect') ??
-            {})),
+          : (getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect') ?? {})),
         localDetectedAgentIdsByContext: {
           ...state.localDetectedAgentIdsByContext,
           [contextKey]: existing ?? null
@@ -164,11 +159,7 @@ export const createLocalDetectedAgentState: StateCreator<
           return
         }
         const state = get()
-        const patch = getLocalAgentLegacyLoadingPatch(
-          state,
-          detectedContextKey === contextKey,
-          'refresh'
-        )
+        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh')
         if (patch) {
           set(patch)
         }
@@ -181,11 +172,16 @@ export const createLocalDetectedAgentState: StateCreator<
       if (!isFloating) {
         legacyRefreshContextKey = contextKey
       }
+      const supersedesDetect = detectPromises.delete(contextKey)
+      const clearsLegacyDetect = legacyDetectContextKey === contextKey
+      if (clearsLegacyDetect) {
+        legacyDetectContextKey = null
+      }
       set((state) => ({
         ...(isFloating
           ? {}
-          : (getLocalAgentLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh') ??
-            {})),
+          : (getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh') ?? {})),
+        ...getSupersededDetectPatch(state, contextKey, supersedesDetect, clearsLegacyDetect),
         isRefreshingLocalAgentsByContext: {
           ...state.isRefreshingLocalAgentsByContext,
           [contextKey]: true

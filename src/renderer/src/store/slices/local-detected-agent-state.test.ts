@@ -6,10 +6,11 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { createDetectedAgentsSlice } from './detected-agents'
 
 const detectAgents = vi.fn()
+const refreshAgents = vi.fn()
 
 globalThis.window = {
   api: {
-    preflight: { detectAgents },
+    preflight: { detectAgents, refreshAgents },
     platform: { get: () => ({ platform: 'win32' }) }
   } as unknown as Window['api']
 } as Window & typeof globalThis
@@ -41,6 +42,11 @@ function createTestStore(repos: Repo[]) {
 describe('local detected agent context lifecycle', () => {
   beforeEach(() => {
     detectAgents.mockReset().mockResolvedValue(['claude'])
+    refreshAgents.mockReset().mockResolvedValue({
+      agents: ['codex'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
   })
 
   it('deduplicates Floating-first callers without cached or settlement broadcast fanout', async () => {
@@ -120,5 +126,45 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().localDetectedAgentIdsByContext).toEqual({})
     expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
     expect(store.getState().detectedAgentIds).toBeNull()
+  })
+
+  it('does not let an older detect overwrite a successful refresh', async () => {
+    let resolveDetection: (agents: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveDetection = resolve
+      })
+    )
+    const store = createTestStore([])
+
+    const detect = store.getState().ensureDetectedAgents()
+    await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['codex'])
+    resolveDetection(['claude'])
+    await expect(detect).resolves.toEqual(['claude'])
+
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['codex'])
+    expect(store.getState().isDetectingAgents).toBe(false)
+    expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
+  })
+
+  it('does not let an older failed detect erase a successful refresh', async () => {
+    let rejectDetection: (error: Error) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((_resolve, reject) => {
+        rejectDetection = reject
+      })
+    )
+    const store = createTestStore([])
+
+    const detect = store.getState().ensureDetectedAgents()
+    await expect(store.getState().refreshDetectedAgents()).resolves.toEqual(['codex'])
+    rejectDetection(new Error('older detect failed'))
+    await expect(detect).resolves.toEqual([])
+
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['codex'])
+    await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['codex'])
+    expect(detectAgents).toHaveBeenCalledTimes(1)
   })
 })
