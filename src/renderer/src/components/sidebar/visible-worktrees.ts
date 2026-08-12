@@ -1,4 +1,12 @@
-import type { Worktree, Repo, TerminalTab, WorktreeLineage } from '../../../../shared/types'
+import type {
+  Worktree,
+  Repo,
+  TerminalTab,
+  WorktreeLineage,
+  WorkspaceStatus,
+  WorkspaceStatusDefinition
+} from '../../../../shared/types'
+import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -102,6 +110,8 @@ export type SidebarFilterState = {
   hideWorkspacesFromOtherDevices: boolean
   /** Keeps each project's main workspace out of the "Hide sleeping" sweep; absent means on. */
   alwaysShowDefaultBranchWorkspace?: boolean
+  /** Workspace statuses the user unchecked; absent/empty means every status shows. */
+  hiddenWorkspaceStatusIds?: readonly WorkspaceStatus[]
   visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
   workspaceHostScope?: ExecutionHostScope
 }
@@ -127,6 +137,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
     // Why: turning this off is the only way to narrow the list below the
     // default, so Clear Filters must be able to undo it like any other filter.
     state.alwaysShowDefaultBranchWorkspace === false ||
+    (state.hiddenWorkspaceStatusIds?.length ?? 0) > 0 ||
     state.visibleWorkspaceHostIds != null ||
     (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
   )
@@ -143,6 +154,7 @@ export type ClearFilterActions = {
   resetHideDetachedHeadWorkspaces: boolean
   resetHideWorkspacesFromOtherDevices: boolean
   resetAlwaysShowDefaultBranchWorkspace: boolean
+  resetHiddenWorkspaceStatusIds: boolean
   resetVisibleWorkspaceHostIds: boolean
 }
 
@@ -166,6 +178,7 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
     resetHideDetachedHeadWorkspaces: state.hideDetachedHeadWorkspaces,
     resetHideWorkspacesFromOtherDevices: state.hideWorkspacesFromOtherDevices,
     resetAlwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace === false,
+    resetHiddenWorkspaceStatusIds: (state.hiddenWorkspaceStatusIds?.length ?? 0) > 0,
     resetVisibleWorkspaceHostIds:
       state.visibleWorkspaceHostIds != null ||
       (state.workspaceHostScope != null && state.workspaceHostScope !== ALL_EXECUTION_HOSTS_SCOPE)
@@ -209,6 +222,10 @@ export function computeVisibleWorktreeIds(
     // instead of silently re-hiding the project's entry point, which is the
     // exact regression #8873 reports.
     alwaysShowDefaultBranchWorkspace?: boolean
+    // Why optional, fail-open like the flag above: a caller that forgets these
+    // shows every status instead of silently sweeping rows out of its list.
+    hiddenWorkspaceStatusIds?: readonly WorkspaceStatus[]
+    workspaceStatuses?: readonly WorkspaceStatusDefinition[]
     repoMap: Map<string, Repo>
     workspaceHostScope: ExecutionHostScope
     visibleWorkspaceHostIds?: readonly ExecutionHostId[] | null
@@ -247,6 +264,12 @@ export function computeVisibleWorktreeIds(
 
   if (opts.hideDetachedHeadWorkspaces) {
     all = all.filter((w) => !isDetachedHeadWorkspace(w))
+  }
+
+  if (opts.hiddenWorkspaceStatusIds && opts.hiddenWorkspaceStatusIds.length > 0) {
+    const hiddenStatusIds = new Set(opts.hiddenWorkspaceStatusIds)
+    const statuses = opts.workspaceStatuses ?? []
+    all = all.filter((w) => !hiddenStatusIds.has(getWorkspaceStatus(w, statuses)))
   }
 
   const visibleHostIds =
@@ -441,6 +464,8 @@ export function getVisibleWorktreeIds(): string[] {
         )
       : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
     alwaysShowDefaultBranchWorkspace: state.alwaysShowDefaultBranchWorkspace,
+    hiddenWorkspaceStatusIds: state.hiddenWorkspaceStatusIds,
+    workspaceStatuses: state.workspaceStatuses,
     repoMap,
     workspaceHostScope: state.workspaceHostScope,
     visibleWorkspaceHostIds: state.visibleWorkspaceHostIds,

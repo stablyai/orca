@@ -5397,6 +5397,11 @@
           "a0f9863597_one": "Force Delete {{count}} Branch",
           "a0f9863597_other": "Force Delete {{count}} Branches"
         },
+"SidebarWorkspaceStatusFilterSection": {
+          "allStatuses": "All statuses",
+          "visibleStatusesCount": "{{value0}} statuses",
+          "status": "Status"
+        },
         "WorktreeListScrollToTopButton": {
           "jumpToTop": "Jump to top"
         }

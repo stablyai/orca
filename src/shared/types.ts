@@ -3471,6 +3471,8 @@ export type PersistedUIState = {
   hideWorkspacesFromOtherDevices?: boolean
   /** Keep each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
+  /** Workspace statuses hidden from the sidebar. Stored as a hide-list so statuses added later stay visible. */
+  hiddenWorkspaceStatusIds?: WorkspaceStatus[]
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]

@@ -3,6 +3,7 @@ import { computeVisibleWorktreeIds } from './visible-worktrees'
 import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
 import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
   return {
@@ -231,6 +232,24 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([manual.id])
+  })
+
+  it('hides workspaces whose status the user unchecked', () => {
+    const inProgress = { ...makeWorktree('in-progress'), workspaceStatus: 'in-progress' }
+    const done = { ...makeWorktree('done'), workspaceStatus: 'completed' }
+    // No stored status falls back to the default (in-progress), so it stays.
+    const unset = makeWorktree('unset')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [inProgress, done, unset] },
+      [inProgress.id, done.id, unset.id],
+      visibleOptions({
+        hiddenWorkspaceStatusIds: ['completed'],
+        workspaceStatuses: [...DEFAULT_WORKSPACE_STATUSES]
+      })
+    )
+
+    expect(result).toEqual([inProgress.id, unset.id])
   })
 
   it('keeps CLI-created workspaces visible while the CLI filter is off', () => {

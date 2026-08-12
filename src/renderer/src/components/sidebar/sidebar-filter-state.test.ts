@@ -148,6 +148,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -165,6 +166,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -181,6 +183,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -195,6 +198,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -209,6 +213,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: true,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -236,6 +241,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: true
     })
   })
@@ -252,6 +258,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: true,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -276,6 +283,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetHiddenWorkspaceStatusIds: false,
       resetVisibleWorkspaceHostIds: true
     })
   })
