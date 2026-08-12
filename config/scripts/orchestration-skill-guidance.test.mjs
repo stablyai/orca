@@ -97,6 +97,40 @@ describe('orchestration skill guidance', () => {
     )
   })
 
+  it('documents runtime outage delivery and timeout boundaries', () => {
+    const runtimeOutages = getSection(readSkill(), 'Runtime Outages')
+
+    expect(runtimeOutages).toContain(
+      '`orca orchestration send` and `orca orchestration ask` call the running Orca runtime directly'
+    )
+    expect(runtimeOutages).toContain(
+      'does not durably queue these calls or automatically retry them after runtime transport loss'
+    )
+    expect(runtimeOutages).toContain('shared CLI error formatter reports `runtime_unavailable`')
+    expect(runtimeOutages).toContain(
+      'distinct from a reachable runtime returning a normal `ask` result with `timedOut: true`'
+    )
+    expect(runtimeOutages).toContain('must not treat a failed lifecycle send as delivered')
+    expect(runtimeOutages).toContain(
+      'If `worker_done` or `heartbeat` returns `runtime_unavailable`'
+    )
+    expect(runtimeOutages).toContain('do not retry the same `ask` command blindly')
+    expect(runtimeOutages).toContain('exact non-consuming recovery check printed by the runtime')
+    expect(runtimeOutages).toContain('original message ID')
+    expect(runtimeOutages).toContain(
+      'Only end the worker turn after `worker_done` returns successfully'
+    )
+    expect(runtimeOutages).toContain(
+      'A successful `check --wait` timeout means the runtime was reachable'
+    )
+    expect(runtimeOutages).toContain(
+      'an `ok:false` `runtime_unavailable` response means the wait did not observe orchestration state'
+    )
+    expect(runtimeOutages).toContain(
+      'inspect `task-list`, `dispatch-show`, and, when needed, `worker-read`'
+    )
+  })
+
   it('keeps full handoffs out of dispatch lifecycle and off the active branch base', () => {
     const skill = readSkill()
     const fullHandoffs = getSection(skill, 'Full Handoffs')
