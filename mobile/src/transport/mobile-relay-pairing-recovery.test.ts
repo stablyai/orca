@@ -244,18 +244,25 @@ describe('mobile relay pairing recovery', () => {
   // no recoverable reason — the credentials will never become valid again.
   it('abandons a journal immediately when every credential is permanently rejected', async () => {
     const saved = journal()
-    const rejected = () =>
-      client(async () => {
+    const seenCredentials: (string | undefined)[] = []
+    const connectRelay = vi.fn((args: { credential?: string }) => {
+      seenCredentials.push(args.credential)
+      return client(async () => {
         throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
       })
+    })
     const deps = {
-      ...dependencies({ journal: saved, connectRelay: vi.fn(() => rejected()) }),
+      ...dependencies({ journal: saved, connectRelay }),
       // Why: pin now inside the invite lifetime so the time-based abandon branch
       // cannot be the reason recovery returns 'abandoned'.
       now: () => now
     }
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
+    // Why: prove both the pending-resume and valid-invite candidates were tried;
+    // without this the test would still pass if recoveryCredentials silently
+    // dropped one and only one permanent rejection was counted.
+    expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
@@ -263,21 +270,27 @@ describe('mobile relay pairing recovery', () => {
   // launch; only all-permanent is enough to abandon.
   it('keeps the journal when at least one credential had a transient failure', async () => {
     const saved = journal()
-    const connectRelay = vi.fn((args: { credential?: string }) =>
-      args.credential
+    const seenCredentials: (string | undefined)[] = []
+    const connectRelay = vi.fn((args: { credential?: string }) => {
+      seenCredentials.push(args.credential)
+      return args.credential
         ? client(async () => {
             throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
           })
         : client(async () => {
             throw new Error('relay unreachable')
           })
-    )
+    })
     const deps = {
       ...dependencies({ journal: saved, connectRelay }),
       now: () => now
     }
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    // Why: prove the resume candidate rejected permanently while the invite
+    // candidate produced a transient error; otherwise the test would pass even
+    // if only one path was exercised.
+    expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
 
