@@ -4,7 +4,7 @@ export type OpenWithLaunchSpec =
   | { kind: 'windows-command'; command: string }
   | { kind: 'windows-chooser' }
   | { kind: 'macos-application'; applicationPath: string }
-  | { kind: 'linux-desktop-entry'; desktopFilePath: string }
+  | { kind: 'linux-desktop-entry'; execTokens: string[] }
 
 export type OpenWithApplicationCandidate = ShellOpenWithApplication & {
   launch: OpenWithLaunchSpec

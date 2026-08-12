@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { sortOpenWithApplications } from './open-with-applications'
+import { OPEN_WITH_CHOOSER_APPLICATION_ID } from '../../shared/shell-open-types'
+import { launchOpenWithApplication, sortOpenWithApplications } from './open-with-applications'
 
 const APPS = [
   { id: 'windows:c:\\code.exe', name: 'Visual Studio Code' },
@@ -40,5 +41,19 @@ describe('sortOpenWithApplications', () => {
     const input = [...APPS]
     sortOpenWithApplications(input, ['windows:c:\\cursor.exe'])
     expect(input).toEqual(APPS)
+  })
+})
+
+describe('launchOpenWithApplication', () => {
+  // Why: the renderer only echoes ids; anything discovery never produced must
+  // resolve to no launch spec and spawn nothing.
+  it('refuses ids that were never produced by discovery', async () => {
+    await expect(launchOpenWithApplication('linux:forged.desktop', '/tmp/x')).resolves.toBe(false)
+  })
+
+  it('refuses the chooser id on non-Windows platforms', async () => {
+    await expect(
+      launchOpenWithApplication(OPEN_WITH_CHOOSER_APPLICATION_ID, '/tmp/x', { platform: 'linux' })
+    ).resolves.toBe(false)
   })
 })

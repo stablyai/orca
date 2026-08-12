@@ -63,6 +63,16 @@ describe('buildWindowsLaunchInvocation', () => {
     })
   })
 
+  // Why: pins the injection guarantee — a hostile filename stays one argv
+  // element and never reaches a shell.
+  it('keeps a filename full of shell metacharacters as a single argv element', () => {
+    const hostile = 'D:\\docs\\a & calc.exe %TEMP% $(x) "q".txt'
+    expect(buildWindowsLaunchInvocation('"C:\\App\\app.exe" "%1"', hostile, () => false)).toEqual({
+      spawnCmd: 'C:\\App\\app.exe',
+      spawnArgs: [hostile]
+    })
+  })
+
   it('fills Office-style %u placeholders with the file path', () => {
     expect(
       buildWindowsLaunchInvocation(

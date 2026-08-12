@@ -70,18 +70,22 @@ export function FileExplorerOpenWithSubmenu({ filePath }: { filePath: string }):
 
   const handleOpenWithApplication = useCallback(
     (applicationId: string) => {
+      const showOpenFailedToast = (): void => {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.FileExplorerOpenWithSubmenu.openFailed',
+            'Could not open the file with the selected application.'
+          )
+        )
+      }
       void window.api.shell
         .openPathWithApplication({ path: filePath, applicationId })
         .then((result) => {
           if (!result.ok) {
-            toast.error(
-              translate(
-                'auto.components.right.sidebar.FileExplorerOpenWithSubmenu.openFailed',
-                'Could not open the file with the selected application.'
-              )
-            )
+            showOpenFailedToast()
           }
         })
+        .catch(showOpenFailedToast)
     },
     [filePath]
   )

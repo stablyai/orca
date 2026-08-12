@@ -14,7 +14,14 @@ export function readOpenWithCommandOutput(
     const child = execFile(
       command,
       args,
-      { encoding: 'utf8', maxBuffer: OPEN_WITH_COMMAND_MAX_BUFFER, windowsHide: true },
+      {
+        encoding: 'utf8',
+        maxBuffer: OPEN_WITH_COMMAND_MAX_BUFFER,
+        windowsHide: true,
+        // Why: gio/xdg-mime localize their output and the parsers key on the
+        // English text; force the C locale (inert for the other commands).
+        env: { ...process.env, LC_ALL: 'C' }
+      },
       (error, stdout) => {
         if (settled) {
           return

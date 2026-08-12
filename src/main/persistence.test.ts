@@ -12590,3 +12590,49 @@ describe('Store native-chat tab viewMode persistence', () => {
     expect(legacyTab?.viewMode).toBeUndefined()
   })
 })
+
+describe('open-with recent applications', () => {
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('records launches most-recent-first, dedupes to front, caps at 5, lowercases the key', async () => {
+    const store = await createStore()
+
+    store.recordOpenWithApplicationLaunch('.MD', 'app-a')
+    store.recordOpenWithApplicationLaunch('.md', 'app-b')
+    store.recordOpenWithApplicationLaunch('.md', 'app-a')
+    expect(store.getOpenWithRecentApplicationIds('.md')).toEqual(['app-a', 'app-b'])
+
+    for (const id of ['app-c', 'app-d', 'app-e', 'app-f']) {
+      store.recordOpenWithApplicationLaunch('.md', id)
+    }
+    expect(store.getOpenWithRecentApplicationIds('.MD')).toEqual([
+      'app-f',
+      'app-e',
+      'app-d',
+      'app-c',
+      'app-a'
+    ])
+
+    store.flush()
+    expect(
+      (readDataFile() as PersistedState).openWithRecentApplicationsByExtension
+    ).toEqual({ '.md': ['app-f', 'app-e', 'app-d', 'app-c', 'app-a'] })
+  })
+
+  it('ignores empty extensions and records nothing after writes freeze', async () => {
+    const store = await createStore()
+
+    store.recordOpenWithApplicationLaunch('  ', 'app-a')
+    expect(store.getOpenWithRecentApplicationIds('')).toEqual([])
+
+    store.freezeWrites()
+    store.recordOpenWithApplicationLaunch('.md', 'app-a')
+    expect(store.getOpenWithRecentApplicationIds('.md')).toEqual([])
+  })
+})

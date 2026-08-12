@@ -6,7 +6,10 @@ import {
 } from '../../shared/shell-open-types'
 import { launchExternalEditor } from '../external-editor-launch'
 import type { OpenWithApplicationCandidate, OpenWithLaunchSpec } from './open-with-candidate'
-import { listLinuxOpenWithApplications } from './linux-open-with-applications'
+import {
+  buildLinuxLaunchInvocation,
+  listLinuxOpenWithApplications
+} from './linux-open-with-applications'
 import { listMacOpenWithApplications } from './macos-open-with-applications'
 import {
   buildWindowsLaunchInvocation,
@@ -178,7 +181,7 @@ function resolveLaunchInvocation(
   if (launch.kind === 'macos-application') {
     return { spawnCmd: 'open', spawnArgs: ['-a', launch.applicationPath, filePath] }
   }
-  return { spawnCmd: 'gio', spawnArgs: ['launch', launch.desktopFilePath, filePath] }
+  return buildLinuxLaunchInvocation(launch.execTokens, filePath)
 }
 
 export function sortOpenWithApplications<T extends ShellOpenWithApplication>(
