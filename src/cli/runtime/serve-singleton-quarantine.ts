@@ -1,4 +1,4 @@
-import { lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
+import { link, lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 
 export const SINGLETON_ARTIFACT_NAMES = [
@@ -101,11 +101,9 @@ async function restoreMovedLock(
   target: string,
   movedLockTarget: string | null
 ): Promise<void> {
-  if (!movedLockTarget) {
-    return
-  }
   try {
-    await symlink(movedLockTarget, source)
+    // Hard-linking restores an unreadable entry without overwriting a concurrent owner.
+    await (movedLockTarget ? symlink(movedLockTarget, source) : link(target, source))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
       return

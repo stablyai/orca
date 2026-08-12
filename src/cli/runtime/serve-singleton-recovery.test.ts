@@ -1,4 +1,4 @@
-import { symlinkSync, unlinkSync } from 'node:fs'
+import { readFileSync, symlinkSync, unlinkSync, writeFileSync } from 'node:fs'
 import { lstat, mkdir, mkdtemp, readlink, rm, symlink } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -109,6 +109,33 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
 
     expect(result).toEqual({ state: 'not-recoverable', reason: 'owner_changed' })
     expect(await readlink(lockPath)).toBe(replacementTarget)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+  })
+
+  it('restores a moved replacement lock when its target cannot be read', async () => {
+    const root = await createProfile(987_654)
+    const lockPath = join(root, 'SingletonLock')
+    let livenessChecks = 0
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => {
+        livenessChecks += 1
+        if (livenessChecks === 2) {
+          unlinkSync(lockPath)
+          writeFileSync(lockPath, 'replacement-owner')
+        }
+        return false
+      },
+      wait: async () => undefined,
+      quarantineSuffix: 'must-not-exist'
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason: 'owner_changed' })
+    expect(readFileSync(lockPath, 'utf8')).toBe('replacement-owner')
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
     expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
     expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
   })
