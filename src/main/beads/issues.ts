@@ -52,7 +52,7 @@ function truncateBdOutput(output: string): string {
 }
 
 /** Empty stdout is an empty list; anything else must parse as a JSON array or the load failed. */
-function parseBdIssueArray(stdout: string): BeadsIssue[] {
+export function parseBdJsonArray(stdout: string): unknown[] {
   const trimmed = stdout.trim()
   if (trimmed === '') {
     return []
@@ -73,16 +73,20 @@ function parseBdIssueArray(stdout: string): BeadsIssue[] {
     )
   }
   return parsed
+}
+
+function parseBdIssueArray(stdout: string): BeadsIssue[] {
+  return parseBdJsonArray(stdout)
     .map((raw) => normalizeBeadsIssue(raw))
     .filter((issue): issue is BeadsIssue => issue !== null)
 }
 
-function bdFailureOutput(result: BdExecResult): string {
+export function bdFailureOutput(result: BdExecResult): string {
   return `${result.stderr}\n${result.stdout}`
 }
 
 // bd 1.1.2 emits 'no issue found matching …' on stderr and '{"error":"no issues found matching …"}' on stdout.
-function isBdIssueNotFoundOutput(output: string): boolean {
+export function isBdIssueNotFoundOutput(output: string): boolean {
   return /no issues? found matching/i.test(output)
 }
 

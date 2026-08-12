@@ -2052,6 +2052,12 @@ const api = {
     getIssue: (args: { repoId: string; id: string }): Promise<unknown> =>
       ipcRenderer.invoke('beads:getIssue', args),
 
+    getIssueDetails: (args: { repoId: string; id: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:getIssueDetails', args),
+
+    addComment: (args: { repoId: string; id: string; text: string }): Promise<unknown> =>
+      ipcRenderer.invoke('beads:addComment', args),
+
     updateIssue: (args: {
       repoId: string
       id: string

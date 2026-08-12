@@ -936,6 +936,11 @@ import {
   type BeadsListStatusScope,
   type BeadsUpdateIssueResult
 } from '../beads/issues'
+import {
+  addBeadsIssueComment,
+  getBeadsIssueDetails,
+  type BeadsIssueDetailsResult
+} from '../beads/issue-details'
 import type {
   BeadsIssuePreset,
   BeadsIssueStatus,
@@ -36682,6 +36687,20 @@ export class OrcaRuntimeService {
   ): Promise<BeadsUpdateIssueResult> {
     const repo = await this.resolveRepoSelector(repoSelector)
     return updateBeadsIssueStatus(this.beadsTargetForRepo(repo), id, status)
+  }
+
+  async beadsGetIssueDetails(repoSelector: string, id: string): Promise<BeadsIssueDetailsResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return getBeadsIssueDetails(this.beadsTargetForRepo(repo), id)
+  }
+
+  async beadsAddComment(
+    repoSelector: string,
+    id: string,
+    text: string
+  ): Promise<BeadsIssueDetailsResult> {
+    const repo = await this.resolveRepoSelector(repoSelector)
+    return addBeadsIssueComment(this.beadsTargetForRepo(repo), id, text)
   }
 
   // ── Browser automation ──

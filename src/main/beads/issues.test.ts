@@ -37,6 +37,7 @@ import {
   resolveBeadsListPlan,
   updateBeadsIssueStatus
 } from './issues'
+import { addBeadsIssueComment, getBeadsIssueDetails } from './issue-details'
 
 const LOCAL_TARGET = { repoPath: '/repo', connectionId: null }
 
@@ -467,6 +468,286 @@ describe('getBeadsIssue', () => {
     const result = await getBeadsIssue(LOCAL_TARGET, '--all')
 
     expect(result.issue).toBeNull()
+    expect(commandExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+})
+
+// Shapes probed live on bd 1.1.2 (`bd show --include-dependents --include-comments --json`).
+const RAW_DETAILS = {
+  ...RAW_ISSUE,
+  parent: 'probe-q3j',
+  dependencies: [
+    {
+      id: 'probe-q3j',
+      title: 'Parent epic',
+      status: 'open',
+      priority: 2,
+      issue_type: 'epic',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      dependency_type: 'parent-child'
+    },
+    {
+      id: 'probe-ac4',
+      title: 'Blocker bug',
+      status: 'open',
+      priority: 2,
+      issue_type: 'bug',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+      dependency_type: 'blocks'
+    }
+  ],
+  comments: [
+    {
+      id: '019ff503-3b1c-749b-a815-fc16b80fc380',
+      issue_id: 'probe-a1',
+      author: 'ajchemist',
+      text: 'first comment',
+      created_at: '2026-01-02T00:00:00Z'
+    }
+  ]
+}
+
+describe('getBeadsIssueDetails', () => {
+  it('runs bd show with both include flags and parses relations + comments', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([RAW_DETAILS]),
+      stderr: ''
+    })
+
+    const result = await getBeadsIssueDetails(LOCAL_TARGET, 'probe-a1')
+
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'bd',
+      ['show', 'probe-a1', '--include-dependents', '--include-comments', '--json'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(result.details?.issue.id).toBe('probe-a1')
+    expect(result.details?.parent).toBe('probe-q3j')
+    expect(result.details?.dependencies.map((d) => [d.id, d.dependencyType])).toEqual([
+      ['probe-q3j', 'parent-child'],
+      ['probe-ac4', 'blocks']
+    ])
+    expect(result.details?.dependents).toEqual([])
+    expect(result.details?.comments).toEqual([
+      {
+        id: '019ff503-3b1c-749b-a815-fc16b80fc380',
+        author: 'ajchemist',
+        text: 'first comment',
+        createdAt: '2026-01-02T00:00:00Z'
+      }
+    ])
+  })
+
+  it('parses dependents entries, which carry zeroed timestamps on bd 1.1.2', async () => {
+    queueVersionOk()
+    const raw = {
+      ...RAW_ISSUE,
+      dependents: [
+        {
+          id: 'probe-child',
+          title: 'Child task',
+          status: 'open',
+          priority: 2,
+          issue_type: 'task',
+          created_at: '0001-01-01T00:00:00Z',
+          updated_at: '0001-01-01T00:00:00Z',
+          dependency_type: 'parent-child'
+        }
+      ]
+    }
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify([raw]), stderr: '' })
+
+    const result = await getBeadsIssueDetails(LOCAL_TARGET, 'probe-a1')
+
+    expect(result.details?.dependents.map((d) => [d.id, d.dependencyType])).toEqual([
+      ['probe-child', 'parent-child']
+    ])
+    // bd omits the arrays entirely when empty — they normalize to [].
+    expect(result.details?.dependencies).toEqual([])
+    expect(result.details?.comments).toEqual([])
+    expect(result.details?.parent).toBeNull()
+  })
+
+  it('returns null when a missing id exits 1 (bd 1.1.2 behavior)', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: 'Error fetching nope-1: no issue found matching nope-1\n',
+      stdout: JSON.stringify({ error: 'no issues found matching the provided IDs' })
+    })
+
+    const result = await getBeadsIssueDetails(LOCAL_TARGET, 'nope-1')
+
+    expect(result.details).toBeNull()
+  })
+
+  it('returns null on an uninitialized workspace instead of throwing', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: 'Error: no beads database found\n',
+      stdout: ''
+    })
+
+    await expect(getBeadsIssueDetails(LOCAL_TARGET, 'probe-a1')).resolves.toEqual({
+      details: null
+    })
+  })
+
+  it('still throws on genuinely unexpected bd show failures', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: 'panic: database corrupted\n',
+      stdout: ''
+    })
+
+    await expect(getBeadsIssueDetails(LOCAL_TARGET, 'probe-a1')).rejects.toThrow('bd show failed')
+  })
+
+  it('rejects ids bd would parse as flags without spawning', async () => {
+    const result = await getBeadsIssueDetails(LOCAL_TARGET, '--all')
+
+    expect(result.details).toBeNull()
+    expect(commandExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('addBeadsIssueComment', () => {
+  it('posts via argv with a -- terminator then re-fetches the details', async () => {
+    queueVersionOk()
+    // bd comment --json prints just the new comment object.
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ id: 'c-1', issue_id: 'probe-a1', text: 'hello' }),
+      stderr: ''
+    })
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify([RAW_DETAILS]),
+      stderr: ''
+    })
+
+    const result = await addBeadsIssueComment(LOCAL_TARGET, 'probe-a1', '  hello world \n')
+
+    // `--` stops flag parsing so leading-dash text posts verbatim; text is trimmed.
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'bd',
+      ['comment', 'probe-a1', '--json', '--', 'hello world'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      3,
+      'bd',
+      ['show', 'probe-a1', '--include-dependents', '--include-comments', '--json'],
+      expect.anything()
+    )
+    expect(result.details?.comments).toHaveLength(1)
+  })
+
+  it('rejects empty or whitespace-only comment text without spawning', async () => {
+    await expect(addBeadsIssueComment(LOCAL_TARGET, 'probe-a1', '   \n')).rejects.toThrow(
+      'comment text is empty'
+    )
+    expect(commandExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects ids bd would parse as flags without spawning', async () => {
+    await expect(addBeadsIssueComment(LOCAL_TARGET, '--all', 'hello')).rejects.toThrow(
+      'implausible issue id'
+    )
+    expect(commandExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('throws loudly on an unknown id — a mutation must never no-op', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: '',
+      stdout: JSON.stringify({ error: 'resolving nope-1: no issue found matching "nope-1"' })
+    })
+
+    await expect(addBeadsIssueComment(LOCAL_TARGET, 'nope-1', 'hello')).rejects.toThrow(
+      'bd comment failed'
+    )
+  })
+
+  it('maps an uninitialized workspace to details:null instead of throwing', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: 'Error: no beads database found\n',
+      stdout: ''
+    })
+
+    await expect(addBeadsIssueComment(LOCAL_TARGET, 'probe-a1', 'hello')).resolves.toEqual({
+      details: null
+    })
+  })
+
+  it('maps a missing bd binary to details:null without attempting the mutation', async () => {
+    commandExecFileAsyncMock.mockRejectedValueOnce({ code: 'ENOENT', message: 'spawn bd ENOENT' })
+
+    await expect(addBeadsIssueComment(LOCAL_TARGET, 'probe-a1', 'hello')).resolves.toEqual({
+      details: null
+    })
+    expect(commandExecFileAsyncMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws when the comment posts but the read-back fails', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ id: 'c-1', issue_id: 'probe-a1', text: 'hello' }),
+      stderr: ''
+    })
+    commandExecFileAsyncMock.mockRejectedValueOnce({
+      code: 1,
+      stderr: 'panic: database corrupted\n',
+      stdout: ''
+    })
+
+    await expect(addBeadsIssueComment(LOCAL_TARGET, 'probe-a1', 'hello')).rejects.toThrow(
+      'could not be read back'
+    )
+  })
+
+  it('runs the mutation on the SSH host for connection-backed repos', async () => {
+    const execNonInteractive = vi
+      .fn()
+      .mockResolvedValueOnce({
+        stdout: 'bd version 1.1.2\n',
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+      .mockResolvedValueOnce({ stdout: '{}', stderr: '', exitCode: 0, timedOut: false })
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([RAW_DETAILS]),
+        stderr: '',
+        exitCode: 0,
+        timedOut: false
+      })
+    getSshGitProviderMock.mockReturnValue({
+      execNonInteractive,
+      getHostPlatform: () => null
+    })
+
+    const result = await addBeadsIssueComment(
+      { repoPath: '/remote/repo', connectionId: 'ssh-1' },
+      'probe-a1',
+      'hello'
+    )
+
+    expect(execNonInteractive).toHaveBeenCalledWith(
+      'bd',
+      ['comment', 'probe-a1', '--json', '--', 'hello'],
+      '/remote/repo',
+      15_000
+    )
+    expect(result.details?.issue.id).toBe('probe-a1')
     expect(commandExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

@@ -18,6 +18,27 @@ export type BeadsIssue = {
   commentCount: number
 }
 
+/** Related issue summary plus the edge type ('blocks' | 'parent-child' on bd 1.1.2; unknown types pass through). */
+export type BeadsIssueRelation = BeadsIssue & { dependencyType: string }
+
+export type BeadsIssueComment = {
+  id: string
+  author: string
+  text: string
+  createdAt: string
+}
+
+export type BeadsIssueDetails = {
+  issue: BeadsIssue
+  /** Parent issue id from the parent-child edge, if any. */
+  parent: string | null
+  /** Issues this one depends on (also includes the parent-child edge on bd 1.1.2). */
+  dependencies: BeadsIssueRelation[]
+  /** Issues depending on this one; bd emits them only with --include-dependents. */
+  dependents: BeadsIssueRelation[]
+  comments: BeadsIssueComment[]
+}
+
 export type BeadsWorkspaceStatus = {
   bdInstalled: boolean
   bdVersion: string | null
@@ -96,5 +117,56 @@ export function normalizeBeadsIssue(raw: unknown): BeadsIssue | null {
     dependencyCount: countOf(item.dependency_count),
     dependentCount: countOf(item.dependent_count),
     commentCount: countOf(item.comment_count)
+  }
+}
+
+/** Relation entries reuse the issue normalizer; dependents carry zeroed-but-present timestamps on bd 1.1.2. */
+export function normalizeBeadsIssueRelation(raw: unknown): BeadsIssueRelation | null {
+  const issue = normalizeBeadsIssue(raw)
+  if (!issue) {
+    return null
+  }
+  const dependencyType = optionalString((raw as Record<string, unknown>).dependency_type)
+  return { ...issue, dependencyType: dependencyType ?? 'blocks' }
+}
+
+export function normalizeBeadsIssueComment(raw: unknown): BeadsIssueComment | null {
+  if (!raw || typeof raw !== 'object') {
+    return null
+  }
+  const item = raw as Record<string, unknown>
+  const id = optionalString(item.id) ?? (typeof item.id === 'number' ? String(item.id) : undefined)
+  const createdAt = optionalString(item.created_at)
+  if (id === undefined || typeof item.text !== 'string' || !createdAt) {
+    return null
+  }
+  return { id, author: optionalString(item.author) ?? '', text: item.text, createdAt }
+}
+
+function normalizeBeadsRelationArray(value: unknown): BeadsIssueRelation[] {
+  return Array.isArray(value)
+    ? value
+        .map((raw) => normalizeBeadsIssueRelation(raw))
+        .filter((relation): relation is BeadsIssueRelation => relation !== null)
+    : []
+}
+
+/** Parses one raw `bd show --json` item; bd omits the arrays when empty or not requested (comments_omitted). */
+export function normalizeBeadsIssueDetails(raw: unknown): BeadsIssueDetails | null {
+  const issue = normalizeBeadsIssue(raw)
+  if (!issue) {
+    return null
+  }
+  const item = raw as Record<string, unknown>
+  return {
+    issue,
+    parent: optionalString(item.parent) ?? null,
+    dependencies: normalizeBeadsRelationArray(item.dependencies),
+    dependents: normalizeBeadsRelationArray(item.dependents),
+    comments: Array.isArray(item.comments)
+      ? item.comments
+          .map((entry) => normalizeBeadsIssueComment(entry))
+          .filter((comment): comment is BeadsIssueComment => comment !== null)
+      : []
   }
 }

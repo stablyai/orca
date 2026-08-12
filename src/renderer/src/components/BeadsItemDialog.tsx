@@ -1,10 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import {
   ArrowRight,
-  Check,
   ChevronDown,
   ChevronLeft,
-  Copy,
   FolderKanban,
   LoaderCircle,
   Plus
@@ -20,7 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
 import { translate } from '@/i18n/i18n'
 import {
@@ -29,12 +26,21 @@ import {
 } from '@/lib/beads-issue-workspace-attachment'
 import { cn } from '@/lib/utils'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { beadsGetIssue, isBeadsTaskSourceUnsupportedError } from '@/runtime/runtime-beads-client'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
-import type { BeadsIssue } from '../../../shared/beads-types'
+import {
+  BeadsItemDetailComments,
+  BeadsItemDetailCommentsSkeleton
+} from './task-page-beads-detail-comments'
+import { BeadsIssueIdCopyButton } from './task-page-beads-detail-copy-id'
 import { BeadsItemDetailMeta } from './task-page-beads-detail-meta'
+import { useBeadsIssueDetailNavigation } from './task-page-beads-detail-navigation'
+import {
+  BeadsItemDetailRelations,
+  BeadsItemDetailRelationsSkeleton
+} from './task-page-beads-detail-relations'
 import type { TaskPageBeadsIssueRow } from './task-page-beads-issues'
+import { groupBeadsIssueRelations } from './task-page-beads-relation-groups'
 import {
   BEADS_STATUS_ICONS,
   getBeadsStatusDetailTone,
@@ -50,13 +56,6 @@ type BeadsItemDialogProps = {
   onClose: () => void
 }
 
-function getBeadsDetailLoadFailedMessage(): string {
-  return translate(
-    'auto.components.TaskPage.beadsDetailLoadFailed',
-    'Unable to load details for this Beads issue.'
-  )
-}
-
 /** Full-surface beads issue detail mirroring GitHubItemDialog's issue-page layout. */
 export default function BeadsItemDialog({
   row,
@@ -65,62 +64,33 @@ export default function BeadsItemDialog({
   onUse,
   onClose
 }: BeadsItemDialogProps): React.JSX.Element {
-  // Why: the list row is the synchronous shell; `bd show` replaces it with the enriched issue (description, counts).
-  const [issue, setIssue] = useState<BeadsIssue>(row.issue)
-  const [detailsLoaded, setDetailsLoaded] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [idCopied, setIdCopied] = useState(false)
-  const idCopiedResetTimerRef = useRef<number | null>(null)
   const { sourceContext } = row
   const repoId = sourceContext.repoId ?? null
-  const issueId = row.issue.id
+  const {
+    issue,
+    setIssue,
+    details,
+    sectionsState,
+    loading,
+    detailsLoaded,
+    error,
+    previousIssue,
+    navigateToIssue,
+    navigateBack,
+    applyDetails
+  } = useBeadsIssueDetailNavigation(sourceContext, row.issue)
+  const issueId = issue.id
 
-  useEffect(() => {
-    if (!repoId) {
-      setLoading(false)
-      setError(getBeadsDetailLoadFailedMessage())
-      return
-    }
-    let cancelled = false
-    beadsGetIssue(sourceContext, { repoId, id: issueId })
-      .then((result) => {
-        if (cancelled) {
-          return
-        }
-        if (result.issue) {
-          setIssue(result.issue)
-          setDetailsLoaded(true)
-        } else {
-          // Why: null means bd is missing/outdated/uninitialized here, not an empty issue.
-          setError(getBeadsDetailLoadFailedMessage())
-        }
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(
-            isBeadsTaskSourceUnsupportedError(err) ? err.message : getBeadsDetailLoadFailedMessage()
-          )
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setLoading(false)
-        }
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [sourceContext, repoId, issueId])
-
-  useEffect(
-    () => () => {
-      if (idCopiedResetTimerRef.current !== null) {
-        window.clearTimeout(idCopiedResetTimerRef.current)
-      }
-    },
-    []
+  const relationGroups = useMemo(
+    () => (details ? groupBeadsIssueRelations(details) : []),
+    [details]
   )
+
+  const handleBack = useCallback((): void => {
+    if (!navigateBack()) {
+      onClose()
+    }
+  }, [navigateBack, onClose])
 
   const allWorktrees = useAllWorktrees()
   const attachedWorkspace = useMemo(
@@ -156,32 +126,6 @@ export default function BeadsItemDialog({
     }
   }, [handleUse, issueId, repoId])
 
-  const handleCopyIssueId = useCallback(async (): Promise<void> => {
-    const idLabel = translate('auto.components.TaskPage.eb10c32872', 'ID')
-    try {
-      await window.api.ui.writeClipboardText(issueId)
-      if (idCopiedResetTimerRef.current !== null) {
-        window.clearTimeout(idCopiedResetTimerRef.current)
-      }
-      setIdCopied(true)
-      idCopiedResetTimerRef.current = window.setTimeout(() => {
-        idCopiedResetTimerRef.current = null
-        setIdCopied(false)
-      }, 1500)
-      toast.success(
-        translate('auto.components.TaskPage.beadsCopySuccess', '{{value0}} copied', {
-          value0: idLabel
-        })
-      )
-    } catch {
-      toast.error(
-        translate('auto.components.TaskPage.beadsCopyFailure', 'Failed to copy {{value0}}', {
-          value0: idLabel.toLowerCase()
-        })
-      )
-    }
-  }, [issueId])
-
   const statusLabels = getBeadsStatusLabels()
   const StatusIcon = BEADS_STATUS_ICONS[issue.status]
   const description = issue.description ?? ''
@@ -199,12 +143,13 @@ export default function BeadsItemDialog({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={onClose}
+              onClick={handleBack}
               className="-ml-2 h-7 gap-1 px-2 text-muted-foreground hover:text-foreground"
-              aria-label={backLabel}
+              aria-label={previousIssue ? previousIssue.id : backLabel}
             >
               <ChevronLeft className="size-4" />
-              {backLabel}
+              {/* Why: mid-navigation the breadcrumb points at the previous issue, not the list. */}
+              {previousIssue ? <span className="font-mono">{previousIssue.id}</span> : backLabel}
             </Button>
             <span className="text-border">·</span>
             {repoName ? (
@@ -215,28 +160,7 @@ export default function BeadsItemDialog({
             ) : null}
             <span className="font-mono text-muted-foreground">{issue.id}</span>
             <div className="ml-auto flex items-center gap-1">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => void handleCopyIssueId()}
-                    aria-label={translate('auto.components.TaskPage.beadsCopyId', 'Copy ID')}
-                  >
-                    {idCopied ? (
-                      <Check className="size-4 text-emerald-500" />
-                    ) : (
-                      <Copy className="size-4" />
-                    )}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {idCopied
-                    ? translate('auto.components.GitHubItemDialog.038b3d39b1', 'Copied')
-                    : translate('auto.components.TaskPage.beadsCopyId', 'Copy ID')}
-                </TooltipContent>
-              </Tooltip>
+              <BeadsIssueIdCopyButton issueId={issueId} />
             </div>
           </div>
         </div>
@@ -367,6 +291,19 @@ export default function BeadsItemDialog({
                     onIssueChange={setIssue}
                   />
                 </div>
+                {sectionsState === 'loaded' && relationGroups.length > 0 ? (
+                  <div className="mb-5 border-b border-border/60 px-4 pb-5">
+                    <BeadsItemDetailRelations
+                      groups={relationGroups}
+                      onNavigate={navigateToIssue}
+                    />
+                  </div>
+                ) : sectionsState === 'loading' &&
+                  issue.dependencyCount + issue.dependentCount > 0 ? (
+                  <div className="mb-5 border-b border-border/60 px-4 pb-5">
+                    <BeadsItemDetailRelationsSkeleton />
+                  </div>
+                ) : null}
                 <div className="min-w-0 px-4">
                   <div className="rounded-lg border border-border/50 bg-card/50 shadow-xs">
                     <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2 text-[12px] text-muted-foreground">
@@ -401,6 +338,18 @@ export default function BeadsItemDialog({
                       )}
                     </div>
                   </div>
+                  {sectionsState === 'loaded' && details ? (
+                    <div className="mt-4 min-w-0">
+                      <BeadsItemDetailComments
+                        sourceContext={sourceContext}
+                        issueId={issueId}
+                        details={details}
+                        onDetailsChange={applyDetails}
+                      />
+                    </div>
+                  ) : sectionsState === 'loading' ? (
+                    <BeadsItemDetailCommentsSkeleton />
+                  ) : null}
                 </div>
               </div>
             </div>

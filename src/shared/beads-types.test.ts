@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeBeadsIssue } from './beads-types'
+import {
+  normalizeBeadsIssue,
+  normalizeBeadsIssueComment,
+  normalizeBeadsIssueDetails,
+  normalizeBeadsIssueRelation
+} from './beads-types'
 
 // Real `bd list --json` item shape probed with bd 1.1.2.
 const RAW_BD_ITEM = {
@@ -139,5 +144,83 @@ describe('normalizeBeadsIssue', () => {
     expect(issue).not.toHaveProperty('owner')
     expect(issue).not.toHaveProperty('created_by')
     expect(issue).not.toHaveProperty('started_at')
+  })
+})
+
+describe('normalizeBeadsIssueDetails', () => {
+  it('maps relations, comments, and parent from the probed bd show shape', () => {
+    const details = normalizeBeadsIssueDetails({
+      ...RAW_BD_ITEM,
+      parent: 'beads-probe-parent',
+      dependencies: [
+        { ...RAW_BD_ITEM, id: 'beads-probe-parent', dependency_type: 'parent-child' },
+        { ...RAW_BD_ITEM, id: 'beads-probe-blocker', dependency_type: 'blocks' }
+      ],
+      dependents: [{ ...RAW_BD_ITEM, id: 'beads-probe-child', dependency_type: 'parent-child' }],
+      comments: [
+        {
+          id: '019ff503-3b1c-749b-a815-fc16b80fc380',
+          issue_id: 'beads-probe-ay8',
+          author: 'ada',
+          text: 'first comment',
+          created_at: '2026-08-11T00:00:00Z'
+        }
+      ]
+    })
+    expect(details?.issue.id).toBe('beads-probe-ay8')
+    expect(details?.parent).toBe('beads-probe-parent')
+    expect(details?.dependencies.map((d) => d.dependencyType)).toEqual(['parent-child', 'blocks'])
+    expect(details?.dependents.map((d) => d.id)).toEqual(['beads-probe-child'])
+    expect(details?.comments).toEqual([
+      {
+        id: '019ff503-3b1c-749b-a815-fc16b80fc380',
+        author: 'ada',
+        text: 'first comment',
+        createdAt: '2026-08-11T00:00:00Z'
+      }
+    ])
+  })
+
+  it('tolerates absent arrays and parent (bd omits them when empty or comments_omitted)', () => {
+    expect(normalizeBeadsIssueDetails(RAW_BD_ITEM)).toEqual({
+      issue: normalizeBeadsIssue(RAW_BD_ITEM),
+      parent: null,
+      dependencies: [],
+      dependents: [],
+      comments: []
+    })
+  })
+
+  it('drops garbage relation and comment entries instead of failing', () => {
+    const details = normalizeBeadsIssueDetails({
+      ...RAW_BD_ITEM,
+      dependencies: [null, 'junk', { id: 'no-title-or-dates' }],
+      comments: [null, { id: 'c-1', text: 7, created_at: 'x' }, { author: 'ada' }]
+    })
+    expect(details?.dependencies).toEqual([])
+    expect(details?.comments).toEqual([])
+  })
+
+  it('returns null when the issue itself is garbage', () => {
+    expect(normalizeBeadsIssueDetails(null)).toBeNull()
+    expect(normalizeBeadsIssueDetails({ comments: [] })).toBeNull()
+  })
+})
+
+describe('normalizeBeadsIssueRelation', () => {
+  it('passes unknown dependency types through and defaults absent ones to blocks', () => {
+    expect(
+      normalizeBeadsIssueRelation({ ...RAW_BD_ITEM, dependency_type: 'future-type' })
+        ?.dependencyType
+    ).toBe('future-type')
+    expect(normalizeBeadsIssueRelation(RAW_BD_ITEM)?.dependencyType).toBe('blocks')
+  })
+})
+
+describe('normalizeBeadsIssueComment', () => {
+  it('stringifies numeric ids and defaults a missing author', () => {
+    expect(
+      normalizeBeadsIssueComment({ id: 7, text: 'hi', created_at: '2026-08-11T00:00:00Z' })
+    ).toEqual({ id: '7', author: '', text: 'hi', createdAt: '2026-08-11T00:00:00Z' })
   })
 })

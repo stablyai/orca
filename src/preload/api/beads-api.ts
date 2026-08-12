@@ -1,5 +1,6 @@
 import type {
   BeadsIssue,
+  BeadsIssueDetails,
   BeadsIssuePreset,
   BeadsIssueStatus,
   BeadsWorkspaceStatus
@@ -17,6 +18,17 @@ export type BeadsApi = {
     assignee?: string
   }) => Promise<{ issues: BeadsIssue[]; status: BeadsWorkspaceStatus }>
   getIssue: (args: { repoId: string; id: string }) => Promise<{ issue: BeadsIssue | null }>
+  /** Relations + comments; details:null when bd/workspace/issue is unavailable. */
+  getIssueDetails: (args: {
+    repoId: string
+    id: string
+  }) => Promise<{ details: BeadsIssueDetails | null }>
+  /** Posts a comment, then resolves with the re-fetched details. */
+  addComment: (args: {
+    repoId: string
+    id: string
+    text: string
+  }) => Promise<{ details: BeadsIssueDetails | null }>
   updateIssue: (args: {
     repoId: string
     id: string

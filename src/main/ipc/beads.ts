@@ -10,6 +10,7 @@ import {
   updateBeadsIssueStatus,
   type BeadsListStatusScope
 } from '../beads/issues'
+import { addBeadsIssueComment, getBeadsIssueDetails } from '../beads/issue-details'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import type { Store } from '../persistence'
 
@@ -88,6 +89,28 @@ export function registerBeadsHandlers(store: Store): void {
     }
     return getBeadsIssue(target, args.id.trim())
   })
+
+  ipcMain.handle('beads:getIssueDetails', async (_event, args: { repoId: string; id: string }) => {
+    const target = resolveBeadsTarget(store, args?.repoId)
+    if (typeof args?.id !== 'string' || !args.id.trim()) {
+      return { details: null }
+    }
+    return getBeadsIssueDetails(target, args.id.trim())
+  })
+
+  ipcMain.handle(
+    'beads:addComment',
+    async (_event, args: { repoId: string; id: string; text: string }) => {
+      const target = resolveBeadsTarget(store, args?.repoId)
+      if (typeof args?.id !== 'string' || !args.id.trim()) {
+        throw new Error('Issue id is required')
+      }
+      if (typeof args?.text !== 'string' || !args.text.trim()) {
+        throw new Error('Comment text is required')
+      }
+      return addBeadsIssueComment(target, args.id.trim(), args.text)
+    }
+  )
 
   ipcMain.handle(
     'beads:updateIssue',

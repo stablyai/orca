@@ -2089,7 +2089,15 @@
         "beadsStatusUpdateFailed": "Failed to update status",
         "beadsDetailLoadFailed": "Unable to load details for this Beads issue.",
         "beadsDetailOpenedUpdated": "opened {{value0}} · updated {{value1}}",
-        "beadsStatusInProgressShort": "In Prog."
+        "beadsStatusInProgressShort": "In Prog.",
+        "beadsTypeScopeAdrs": "ADRs",
+        "beadsCommentAuthorUnknown": "unknown",
+        "beadsCommentsUnavailable": "Comments could not be loaded.",
+        "beadsRelationParent": "Parent",
+        "beadsRelationSubIssues": "Sub-issues",
+        "beadsRelationBlockedBy": "Blocked by",
+        "beadsRelationBlocks": "Blocks",
+        "beadsRelationRelated": "Related"
       },
       "Terminal": {
         "73768427cf": "Close",

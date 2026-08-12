@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { BeadsIssue, BeadsWorkspaceStatus } from '../../../../shared/beads-types'
+import type {
+  BeadsIssue,
+  BeadsIssueDetails,
+  BeadsWorkspaceStatus
+} from '../../../../shared/beads-types'
 import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
 import type { BeadsIssueFetchPlan } from '../../../../shared/beads-task-query'
-import { beadsIssueListCacheKey, createBeadsSlice } from './beads'
+import { beadsIssueDetailsCacheKey, beadsIssueListCacheKey, createBeadsSlice } from './beads'
 
 const OPEN_PLAN: BeadsIssueFetchPlan = { statusScope: 'open', assignee: null, legacyPreset: 'open' }
 const READY_PLAN: BeadsIssueFetchPlan = {
@@ -14,14 +18,28 @@ const READY_PLAN: BeadsIssueFetchPlan = {
 }
 
 // Why: vi.mock factories run during hoisted imports, before module-body class initialization.
-const { beadsListIssues, beadsUpdateIssue, MockBeadsUnsupportedError } = vi.hoisted(() => {
+const {
+  beadsListIssues,
+  beadsUpdateIssue,
+  beadsGetIssueDetails,
+  beadsAddComment,
+  MockBeadsUnsupportedError
+} = vi.hoisted(() => {
   class MockBeadsUnsupportedError extends Error {}
-  return { beadsListIssues: vi.fn(), beadsUpdateIssue: vi.fn(), MockBeadsUnsupportedError }
+  return {
+    beadsListIssues: vi.fn(),
+    beadsUpdateIssue: vi.fn(),
+    beadsGetIssueDetails: vi.fn(),
+    beadsAddComment: vi.fn(),
+    MockBeadsUnsupportedError
+  }
 })
 
 vi.mock('@/runtime/runtime-beads-client', () => ({
   beadsListIssues: (...args: unknown[]) => beadsListIssues(...args),
   beadsUpdateIssue: (...args: unknown[]) => beadsUpdateIssue(...args),
+  beadsGetIssueDetails: (...args: unknown[]) => beadsGetIssueDetails(...args),
+  beadsAddComment: (...args: unknown[]) => beadsAddComment(...args),
   BeadsTaskSourceUnsupportedError: MockBeadsUnsupportedError,
   isBeadsTaskSourceUnsupportedError: (error: unknown) => error instanceof MockBeadsUnsupportedError
 }))
@@ -75,6 +93,8 @@ describe('beads slice', () => {
     store.getState().invalidateBeadsIssues()
     beadsListIssues.mockReset()
     beadsUpdateIssue.mockReset()
+    beadsGetIssueDetails.mockReset()
+    beadsAddComment.mockReset()
   })
 
   it('caches per scope+plan and dedupes reads within the TTL', async () => {
@@ -327,6 +347,182 @@ describe('beads slice', () => {
         store.getState().updateBeadsIssueStatus(context, 'orca-a1', 'closed')
       ).rejects.toThrow(/repoId/)
       expect(beadsUpdateIssue).not.toHaveBeenCalled()
+    })
+  })
+
+  function makeDetails(
+    id: string,
+    comments: BeadsIssueDetails['comments'] = []
+  ): BeadsIssueDetails {
+    return { issue: makeIssue(id), parent: null, dependencies: [], dependents: [], comments }
+  }
+
+  describe('fetchBeadsIssueDetails', () => {
+    it('caches per issue and dedupes reads within the TTL', async () => {
+      const context = makeContext()
+      const details = makeDetails('orca-a1')
+      beadsGetIssueDetails.mockResolvedValue({ details })
+
+      await expect(store.getState().fetchBeadsIssueDetails(context, 'orca-a1')).resolves.toEqual(
+        details
+      )
+      expect(beadsGetIssueDetails).toHaveBeenCalledWith(context, {
+        repoId: 'repo-1',
+        id: 'orca-a1'
+      })
+
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(1)
+
+      // A different issue id is its own cache entry.
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-b2')
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(2)
+
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1', { force: true })
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(3)
+    })
+
+    it('caches details:null (unknown id / bd unavailable) without erroring', async () => {
+      const context = makeContext()
+      beadsGetIssueDetails.mockResolvedValue({ details: null })
+
+      await expect(store.getState().fetchBeadsIssueDetails(context, 'nope-1')).resolves.toBeNull()
+      await store.getState().fetchBeadsIssueDetails(context, 'nope-1')
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(1)
+    })
+
+    it('rethrows the typed unsupported error so the dialog can degrade', async () => {
+      const context = makeContext()
+      beadsGetIssueDetails.mockRejectedValue(new MockBeadsUnsupportedError('old host'))
+
+      await expect(
+        store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      ).rejects.toBeInstanceOf(MockBeadsUnsupportedError)
+      // Failures are not cached — the next call retries.
+      beadsGetIssueDetails.mockResolvedValue({ details: makeDetails('orca-a1') })
+      await expect(
+        store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      ).resolves.not.toBeNull()
+    })
+
+    it('is invalidated by a status mutation (generation bump)', async () => {
+      const context = makeContext()
+      beadsListIssues.mockResolvedValue({ issues: [makeIssue('orca-a1')], status: READY_STATUS })
+      await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
+      beadsGetIssueDetails.mockResolvedValue({ details: makeDetails('orca-a1') })
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+
+      beadsUpdateIssue.mockResolvedValue({
+        issue: { ...makeIssue('orca-a1'), status: 'closed' },
+        status: READY_STATUS
+      })
+      await store.getState().updateBeadsIssueStatus(context, 'orca-a1', 'closed')
+
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(2)
+    })
+
+    it('is cleared by invalidateBeadsIssues', async () => {
+      const context = makeContext()
+      beadsGetIssueDetails.mockResolvedValue({ details: makeDetails('orca-a1') })
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+
+      store.getState().invalidateBeadsIssues(context)
+      expect(store.getState().beadsIssueDetailsCache).toEqual({})
+
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      expect(beadsGetIssueDetails).toHaveBeenCalledTimes(2)
+    })
+
+    it('rejects a context without a repoId', async () => {
+      const context = { ...makeContext(), repoId: null }
+      await expect(store.getState().fetchBeadsIssueDetails(context, 'orca-a1')).rejects.toThrow(
+        /repoId/
+      )
+      expect(beadsGetIssueDetails).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('addBeadsIssueComment', () => {
+    const COMMENT = { id: 'c-1', author: 'me', text: 'hello', createdAt: '2026-08-12T00:00:00Z' }
+
+    it('posts then swaps the refreshed details into the cache — no optimistic insert', async () => {
+      const context = makeContext()
+      const refreshed = {
+        ...makeDetails('orca-a1', [COMMENT]),
+        issue: { ...makeIssue('orca-a1'), commentCount: 1 }
+      }
+      let resolvePost!: (value: unknown) => void
+      beadsAddComment.mockReturnValue(
+        new Promise((resolve) => {
+          resolvePost = resolve
+        })
+      )
+
+      const pending = store.getState().addBeadsIssueComment(context, 'orca-a1', 'hello')
+      const detailsKey = beadsIssueDetailsCacheKey(context, 'orca-a1')
+      expect(store.getState().beadsIssueDetailsCache[detailsKey]).toBeUndefined()
+
+      resolvePost({ details: refreshed })
+      await expect(pending).resolves.toEqual(refreshed)
+      expect(beadsAddComment).toHaveBeenCalledWith(context, {
+        repoId: 'repo-1',
+        id: 'orca-a1',
+        text: 'hello'
+      })
+      expect(store.getState().beadsIssueDetailsCache[detailsKey]?.details).toEqual(refreshed)
+
+      // The fresh entry satisfies the next details read without an RPC.
+      await store.getState().fetchBeadsIssueDetails(context, 'orca-a1')
+      expect(beadsGetIssueDetails).not.toHaveBeenCalled()
+    })
+
+    it('reconciles the issue into cached lists and marks them stale for refetch', async () => {
+      const context = makeContext()
+      const cacheKey = beadsIssueListCacheKey(context, OPEN_PLAN)
+      beadsListIssues.mockResolvedValueOnce({
+        issues: [makeIssue('orca-a1')],
+        status: READY_STATUS
+      })
+      await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
+      const refreshed = {
+        ...makeDetails('orca-a1', [COMMENT]),
+        issue: { ...makeIssue('orca-a1'), commentCount: 1 }
+      }
+      beadsAddComment.mockResolvedValue({ details: refreshed })
+
+      await store.getState().addBeadsIssueComment(context, 'orca-a1', 'hello')
+
+      const entry = store.getState().beadsListCache[cacheKey]
+      expect(entry?.data?.issues[0]?.commentCount).toBe(1)
+      expect(entry?.fetchedAt).toBe(0)
+    })
+
+    it('rethrows post failures for the UI toast without touching the caches', async () => {
+      const context = makeContext()
+      beadsAddComment.mockRejectedValue(new MockBeadsUnsupportedError('host does not support this'))
+
+      await expect(
+        store.getState().addBeadsIssueComment(context, 'orca-a1', 'hello')
+      ).rejects.toBeInstanceOf(MockBeadsUnsupportedError)
+      expect(store.getState().beadsIssueDetailsCache).toEqual({})
+    })
+
+    it('treats null refreshed details (bd unavailable) as a failure', async () => {
+      const context = makeContext()
+      beadsAddComment.mockResolvedValue({ details: null })
+
+      await expect(
+        store.getState().addBeadsIssueComment(context, 'orca-a1', 'hello')
+      ).rejects.toThrow(/unavailable|not initialized/)
+    })
+
+    it('rejects a context without a repoId before calling through', async () => {
+      const context = { ...makeContext(), repoId: null }
+      await expect(store.getState().addBeadsIssueComment(context, 'orca-a1', 'hi')).rejects.toThrow(
+        /repoId/
+      )
+      expect(beadsAddComment).not.toHaveBeenCalled()
     })
   })
 })

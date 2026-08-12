@@ -12,27 +12,35 @@ import {
   isBeadsTaskSourceUnsupportedError,
   type BeadsListIssuesResult
 } from '@/runtime/runtime-beads-client'
+import {
+  BEADS_CACHE_TTL,
+  beadsIssueDetailsCacheKey,
+  beadsIssueListCacheKey,
+  bumpBeadsReadGeneration,
+  currentBeadsReadGeneration,
+  dropBeadsScopeEntries,
+  evictOldestBeadsEntries,
+  MAX_BEADS_LIST_CACHE_ENTRIES,
+  requireBeadsRepoId,
+  type BeadsIssueDetailsCacheEntry,
+  type BeadsListCacheEntry,
+  type BeadsListErrorKind
+} from './beads-issue-cache'
+import {
+  clearInflightBeadsDetailsReads,
+  createBeadsIssueDetailsActions,
+  type BeadsIssueDetailsActions
+} from './beads-issue-details'
 
-const CACHE_TTL = 60_000
-const MAX_CACHE_ENTRIES = 100
+export {
+  beadsIssueDetailsCacheKey,
+  beadsIssueListCacheKey,
+  type BeadsIssueDetailsCacheEntry,
+  type BeadsListCacheEntry,
+  type BeadsListErrorKind
+}
+
 export const BEADS_ISSUE_FETCH_LIMIT = 200
-
-export type BeadsListErrorKind = 'missing-task-source-capability' | 'load-failed'
-
-export type BeadsListCacheEntry = {
-  /** Last good list+status; kept through refresh failures so the list doesn't blank. */
-  data: BeadsListIssuesResult | null
-  fetchedAt: number
-  error?: BeadsListErrorKind
-}
-
-/** Cache/subscription key for one repo-scoped beads list; TaskPage selects `beadsListCache[key]`. */
-export function beadsIssueListCacheKey(
-  sourceContext: TaskSourceContext,
-  plan: BeadsIssueFetchPlan
-): string {
-  return `${getTaskSourceCacheScope(sourceContext)}::${plan.statusScope}:a=${plan.assignee ?? ''}`
-}
 
 type InflightBeadsListRequest = {
   promise: Promise<BeadsListIssuesResult>
@@ -40,26 +48,16 @@ type InflightBeadsListRequest = {
 }
 
 const inflightListRequests = new Map<string, InflightBeadsListRequest>()
-// Why: invalidation token — bumping it strands in-flight reads so their late results can't repopulate a cleared cache.
-let beadsReadGeneration = 0
 
-function evictStaleBeadsEntries(
-  cache: Record<string, BeadsListCacheEntry>
-): Record<string, BeadsListCacheEntry> {
-  const keys = Object.keys(cache)
-  if (keys.length <= MAX_CACHE_ENTRIES) {
-    return cache
-  }
-  const sorted = keys.sort((a, b) => (cache[a]?.fetchedAt ?? 0) - (cache[b]?.fetchedAt ?? 0))
-  const pruned: Record<string, BeadsListCacheEntry> = {}
-  for (const key of sorted.slice(sorted.length - MAX_CACHE_ENTRIES)) {
-    pruned[key] = cache[key]
-  }
-  return pruned
+function strandInflightBeadsReads(): void {
+  bumpBeadsReadGeneration()
+  inflightListRequests.clear()
+  clearInflightBeadsDetailsReads()
 }
 
 export type BeadsSlice = {
   beadsListCache: Record<string, BeadsListCacheEntry>
+  beadsIssueDetailsCache: Record<string, BeadsIssueDetailsCacheEntry>
   fetchBeadsIssues: (
     sourceContext: TaskSourceContext,
     plan: BeadsIssueFetchPlan,
@@ -73,31 +71,30 @@ export type BeadsSlice = {
     id: string,
     status: BeadsIssueStatus
   ) => Promise<BeadsIssue>
-}
+} & BeadsIssueDetailsActions
 
 export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set, get) => ({
   beadsListCache: {},
+  beadsIssueDetailsCache: {},
+  ...createBeadsIssueDetailsActions(set, get),
 
   fetchBeadsIssues: async (sourceContext, plan, options) => {
-    const repoId = sourceContext.repoId
-    if (!repoId) {
-      throw new Error('Beads is repo-backed; the task source context must carry a repoId.')
-    }
+    const repoId = requireBeadsRepoId(sourceContext)
     const cacheKey = beadsIssueListCacheKey(sourceContext, plan)
     const cached = get().beadsListCache[cacheKey]
     // Error entries still carry the last-good data, so consecutive failures must not drop it.
     const goodData = cached?.data ?? null
     // Why: an errored entry never satisfies the cache — the refresh must retry.
     const reusable = options?.force || cached?.error !== undefined ? null : goodData
-    if (reusable && Date.now() - (cached?.fetchedAt ?? 0) < CACHE_TTL) {
+    if (reusable && Date.now() - (cached?.fetchedAt ?? 0) < BEADS_CACHE_TTL) {
       return reusable
     }
     const inflight = inflightListRequests.get(cacheKey)
-    if (!options?.force && inflight && inflight.generation === beadsReadGeneration) {
+    if (!options?.force && inflight && inflight.generation === currentBeadsReadGeneration()) {
       // SWR: hand back stale data now; the running refresh will update the cache.
       return reusable ?? inflight.promise
     }
-    const generation = beadsReadGeneration
+    const generation = currentBeadsReadGeneration()
     let requestEntry: InflightBeadsListRequest
     // Why: the legacy preset rides along so pre-query-filter hosts (which strip
     // statusScope/assignee) still run the closest supported bd view.
@@ -111,13 +108,13 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
       .then((result) => {
         if (
           inflightListRequests.get(cacheKey) === requestEntry &&
-          generation === beadsReadGeneration
+          generation === currentBeadsReadGeneration()
         ) {
           set((s) => ({
-            beadsListCache: evictStaleBeadsEntries({
-              ...s.beadsListCache,
-              [cacheKey]: { data: result, fetchedAt: Date.now() }
-            })
+            beadsListCache: evictOldestBeadsEntries(
+              { ...s.beadsListCache, [cacheKey]: { data: result, fetchedAt: Date.now() } },
+              MAX_BEADS_LIST_CACHE_ENTRIES
+            )
           }))
         }
         return result
@@ -131,13 +128,16 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
         }
         if (
           inflightListRequests.get(cacheKey) === requestEntry &&
-          generation === beadsReadGeneration
+          generation === currentBeadsReadGeneration()
         ) {
           set((s) => ({
-            beadsListCache: evictStaleBeadsEntries({
-              ...s.beadsListCache,
-              [cacheKey]: { data: goodData, fetchedAt: Date.now(), error: kind }
-            })
+            beadsListCache: evictOldestBeadsEntries(
+              {
+                ...s.beadsListCache,
+                [cacheKey]: { data: goodData, fetchedAt: Date.now(), error: kind }
+              },
+              MAX_BEADS_LIST_CACHE_ENTRIES
+            )
           }))
         }
         throw error
@@ -164,10 +164,7 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
   },
 
   updateBeadsIssueStatus: async (sourceContext, id, status) => {
-    const repoId = sourceContext.repoId
-    if (!repoId) {
-      throw new Error('Beads is repo-backed; the task source context must carry a repoId.')
-    }
+    const repoId = requireBeadsRepoId(sourceContext)
     const prefix = `${getTaskSourceCacheScope(sourceContext)}::`
     const snapshot: Record<string, BeadsListCacheEntry> = {}
     const patchScopeIssues = (
@@ -206,8 +203,7 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
         throw new Error('Beads issue update failed: bd is unavailable or not initialized here.')
       }
       // Strand pre-mutation in-flight reads, then let SWR refetch every preset in the scope.
-      beadsReadGeneration += 1
-      inflightListRequests.clear()
+      strandInflightBeadsReads()
       set((s) => ({
         beadsListCache: patchScopeIssues(s.beadsListCache, (entry) => ({
           ...entry,
@@ -232,21 +228,10 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
   },
 
   invalidateBeadsIssues: (sourceContext) => {
-    beadsReadGeneration += 1
-    inflightListRequests.clear()
-    if (!sourceContext) {
-      set({ beadsListCache: {} })
-      return
-    }
-    const prefix = `${getTaskSourceCacheScope(sourceContext)}::`
-    set((s) => {
-      const beadsListCache: Record<string, BeadsListCacheEntry> = {}
-      for (const [key, entry] of Object.entries(s.beadsListCache)) {
-        if (!key.startsWith(prefix)) {
-          beadsListCache[key] = entry
-        }
-      }
-      return { beadsListCache }
-    })
+    strandInflightBeadsReads()
+    set((s) => ({
+      beadsListCache: dropBeadsScopeEntries(s.beadsListCache, sourceContext),
+      beadsIssueDetailsCache: dropBeadsScopeEntries(s.beadsIssueDetailsCache, sourceContext)
+    }))
   }
 })

@@ -1,5 +1,6 @@
 import type {
   BeadsIssue,
+  BeadsIssueDetails,
   BeadsIssuePreset,
   BeadsIssueStatus,
   BeadsWorkspaceStatus
@@ -30,6 +31,7 @@ export type BeadsStatusResult = { status: BeadsWorkspaceStatus }
 export type BeadsListIssuesResult = { issues: BeadsIssue[]; status: BeadsWorkspaceStatus }
 export type BeadsIssueResult = { issue: BeadsIssue | null }
 export type BeadsUpdateIssueResult = { issue: BeadsIssue | null; status: BeadsWorkspaceStatus }
+export type BeadsIssueDetailsResult = { details: BeadsIssueDetails | null }
 
 // Why: pre-beads remote hosts silently lack the 'beads.*' methods; a typed
 // rejection lets the UI show 'missing-task-source-capability' instead of an
@@ -75,6 +77,12 @@ type BeadsPreloadNamespace = {
     id: string
     status: BeadsIssueStatus
   }) => Promise<BeadsUpdateIssueResult>
+  getIssueDetails?: (args: { repoId: string; id: string }) => Promise<BeadsIssueDetailsResult>
+  addComment?: (args: {
+    repoId: string
+    id: string
+    text: string
+  }) => Promise<BeadsIssueDetailsResult>
 }
 
 // Why: like Jira, the browser build's preload replacement omits beads; local
@@ -187,6 +195,89 @@ export async function beadsGetIssue(
   }
   const beads = getBeadsPreloadNamespace()
   return beads ? beads.getIssue(args) : { issue: null }
+}
+
+const DETAILS_UNSUPPORTED_MESSAGE =
+  'This remote runtime must be updated to read Beads issue relationships and comments.'
+const COMMENT_UNSUPPORTED_MESSAGE =
+  'This remote runtime must be updated to comment on Beads issues.'
+
+function normalizeBeadsIssueDetailsResult(value: unknown): BeadsIssueDetailsResult {
+  const details = (value as Partial<BeadsIssueDetailsResult> | null | undefined)?.details
+  if (
+    !details ||
+    typeof details !== 'object' ||
+    !details.issue ||
+    typeof details.issue !== 'object'
+  ) {
+    return { details: null }
+  }
+  // Wire defensiveness: hosts are versioned independently, so absent arrays become empty.
+  return {
+    details: {
+      issue: details.issue,
+      parent: typeof details.parent === 'string' ? details.parent : null,
+      dependencies: Array.isArray(details.dependencies) ? details.dependencies : [],
+      dependents: Array.isArray(details.dependents) ? details.dependents : [],
+      comments: Array.isArray(details.comments) ? details.comments : []
+    }
+  }
+}
+
+export async function beadsGetIssueDetails(
+  settings: RuntimeBeadsSettings,
+  args: { repoId: string; id: string }
+): Promise<BeadsIssueDetailsResult> {
+  const target = getBeadsRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    await assertBeadsRuntimeCapability(target.environmentId)
+    try {
+      return normalizeBeadsIssueDetailsResult(
+        await callRuntimeRpc<unknown>(target, 'beads.getIssueDetails', args, {
+          timeoutMs: 30_000
+        })
+      )
+    } catch (error) {
+      // Why: read-only-era hosts advertise the beads capability yet lack this
+      // method; the typed error lets the dialog degrade to plain-issue rendering.
+      if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+        throw new BeadsTaskSourceUnsupportedError(DETAILS_UNSUPPORTED_MESSAGE)
+      }
+      throw error
+    }
+  }
+  const beads = getBeadsPreloadNamespace()
+  return typeof beads?.getIssueDetails === 'function'
+    ? normalizeBeadsIssueDetailsResult(await beads.getIssueDetails(args))
+    : { details: null }
+}
+
+export async function beadsAddComment(
+  settings: RuntimeBeadsSettings,
+  args: { repoId: string; id: string; text: string }
+): Promise<BeadsIssueDetailsResult> {
+  const target = getBeadsRuntimeTarget(settings)
+  if (target.kind === 'environment') {
+    await assertBeadsRuntimeCapability(target.environmentId)
+    try {
+      return normalizeBeadsIssueDetailsResult(
+        await callRuntimeRpc<unknown>(target, 'beads.addComment', args, { timeoutMs: 30_000 })
+      )
+    } catch (error) {
+      // Why: a comment posted to a read-only-era host would vanish silently; the
+      // typed error surfaces "host does not support this" instead.
+      if (hasRuntimeRpcErrorCode(error, 'method_not_found')) {
+        throw new BeadsTaskSourceUnsupportedError(COMMENT_UNSUPPORTED_MESSAGE)
+      }
+      throw error
+    }
+  }
+  const beads = getBeadsPreloadNamespace()
+  if (typeof beads?.addComment !== 'function') {
+    // Mutations never degrade to a silent no-op like the read paths do.
+    throw new BeadsTaskSourceUnsupportedError(COMMENT_UNSUPPORTED_MESSAGE)
+  }
+  return normalizeBeadsIssueDetailsResult(await beads.addComment(args))
 }
 
 const UPDATE_UNSUPPORTED_MESSAGE = 'This remote runtime must be updated to change Beads issues.'
