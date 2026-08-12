@@ -357,6 +357,11 @@ const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'all',
   'done'
 ])
+const VALID_BEADS_PRESETS = new Set<NonNullable<TaskResumeState['beadsPreset']>>([
+  'open',
+  'assigned',
+  'ready'
+])
 
 function resolvePaneKeyWorktreeIdFromTabs(state: AppState, paneKey: string): string | null {
   const parsed = parsePaneKey(paneKey)
@@ -614,6 +619,16 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   }
   if (typeof input.jiraQuery === 'string') {
     next.jiraQuery = input.jiraQuery
+  }
+  // Why: without these the beads query bar re-seeds to its default on every relaunch.
+  if (
+    typeof input.beadsPreset === 'string' &&
+    VALID_BEADS_PRESETS.has(input.beadsPreset as NonNullable<TaskResumeState['beadsPreset']>)
+  ) {
+    next.beadsPreset = input.beadsPreset as NonNullable<TaskResumeState['beadsPreset']>
+  }
+  if (typeof input.beadsQuery === 'string') {
+    next.beadsQuery = input.beadsQuery
   }
 
   return Object.keys(next).length > 0 ? next : undefined

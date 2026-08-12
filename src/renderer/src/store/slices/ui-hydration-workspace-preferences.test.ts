@@ -386,7 +386,9 @@ describe('createUISlice hydratePersistedUI', () => {
           linearPreset: 'completed',
           linearQuery: 'label:bug',
           jiraPreset: 'reported',
-          jiraQuery: 99
+          jiraQuery: 99,
+          beadsPreset: 'invalid',
+          beadsQuery: 'is:ready'
         } as unknown as PersistedUIState['taskResumeState']
       })
     )
@@ -395,7 +397,27 @@ describe('createUISlice hydratePersistedUI', () => {
       githubMode: 'project',
       linearPreset: 'completed',
       linearQuery: 'label:bug',
-      jiraPreset: 'reported'
+      jiraPreset: 'reported',
+      beadsQuery: 'is:ready'
+    })
+  })
+
+  // Why: dropping beads keys re-seeds the query bar on relaunch.
+  it('keeps valid beads resume keys during hydration', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        taskResumeState: {
+          beadsPreset: 'ready',
+          beadsQuery: 'is:ready'
+        } as unknown as PersistedUIState['taskResumeState']
+      })
+    )
+
+    expect(store.getState().taskResumeState).toEqual({
+      beadsPreset: 'ready',
+      beadsQuery: 'is:ready'
     })
   })
 

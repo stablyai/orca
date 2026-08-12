@@ -1,15 +1,18 @@
 import { describe, expect, it } from 'vitest'
 import type { BeadsIssue } from './beads-types'
 import {
+  BEADS_QUERY_ISSUE_TYPES,
   getBeadsFetchPlan,
   getBeadsPresetForQuery,
   getBeadsPresetQuery,
+  getBeadsTypeScopeForQuery,
   hasBeadsFacetQualifiers,
   isBeadsTaskQueryFiltering,
   matchesBeadsTaskQuery,
   parseBeadsTaskQuery,
   serializeBeadsTaskQuery,
-  withBeadsQualifier
+  withBeadsQualifier,
+  withBeadsTypeScope
 } from './beads-task-query'
 
 function makeIssue(overrides: Partial<BeadsIssue> = {}): BeadsIssue {
@@ -45,6 +48,23 @@ describe('parseBeadsTaskQuery', () => {
     const q = parseBeadsTaskQuery('is:decision is:bug')
     expect(q.types).toEqual(['decision', 'bug'])
     expect(q.statuses).toEqual([])
+  })
+
+  it('parses every bd built-in type, including milestone/spike/story', () => {
+    for (const type of BEADS_QUERY_ISSUE_TYPES) {
+      expect(parseBeadsTaskQuery(`is:${type}`).types).toEqual([type])
+    }
+    expect(BEADS_QUERY_ISSUE_TYPES).toEqual([
+      'task',
+      'bug',
+      'feature',
+      'chore',
+      'epic',
+      'milestone',
+      'decision',
+      'spike',
+      'story'
+    ])
   })
 
   it('treats is:issue as a GitHub-parity no-op', () => {
@@ -93,7 +113,8 @@ describe('parseBeadsTaskQuery', () => {
       'is:ready',
       'is:decision priority:p1 assignee:@me',
       'is:closed label:infra label:"needs review" no:assignee',
-      'is:bug "flux capacitor" milestone:v2'
+      'is:bug "flux capacitor" milestone:v2',
+      'is:open is:milestone is:spike is:story'
     ]) {
       const parsed = parseBeadsTaskQuery(raw)
       expect(parseBeadsTaskQuery(serializeBeadsTaskQuery(parsed))).toEqual(parsed)
@@ -150,6 +171,30 @@ describe('preset queries', () => {
     expect(getBeadsPresetForQuery('is:open label:infra')).toBeNull()
     expect(getBeadsPresetForQuery('is:closed')).toBeNull()
     expect(getBeadsPresetForQuery('')).toBeNull()
+  })
+})
+
+describe('type-scope tabs', () => {
+  it('lights Issues when the query has no type qualifiers', () => {
+    expect(getBeadsTypeScopeForQuery('')).toBe('issues')
+    expect(getBeadsTypeScopeForQuery('is:open')).toBe('issues')
+    expect(getBeadsTypeScopeForQuery('is:ready assignee:@me')).toBe('issues')
+  })
+
+  it('lights ADRs only when the type set is exactly {decision}', () => {
+    expect(getBeadsTypeScopeForQuery('is:decision')).toBe('adrs')
+    expect(getBeadsTypeScopeForQuery('is:open is:decision label:infra')).toBe('adrs')
+    expect(getBeadsTypeScopeForQuery('is:epic')).toBeNull()
+    expect(getBeadsTypeScopeForQuery('is:decision is:bug')).toBeNull()
+  })
+
+  it('withBeadsTypeScope rewrites only the type qualifiers', () => {
+    expect(withBeadsTypeScope('is:open flux', 'adrs')).toBe('is:open is:decision flux')
+    expect(withBeadsTypeScope('is:open is:epic is:story flux', 'adrs')).toBe(
+      'is:open is:decision flux'
+    )
+    expect(withBeadsTypeScope('is:open is:decision flux', 'issues')).toBe('is:open flux')
+    expect(withBeadsTypeScope('is:ready', 'adrs')).toBe('is:ready is:decision')
   })
 })
 

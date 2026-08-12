@@ -216,8 +216,10 @@ import {
   getBeadsFetchPlan,
   getBeadsPresetForQuery,
   getBeadsPresetQuery,
+  getBeadsTypeScopeForQuery,
   isBeadsTaskQueryFiltering,
-  parseBeadsTaskQuery
+  parseBeadsTaskQuery,
+  withBeadsTypeScope
 } from '../../../shared/beads-task-query'
 import { deriveTaskPageBeadsRepoNotices } from '@/components/task-page-beads-list-notices'
 import {
@@ -464,6 +466,7 @@ import {
   getLinearViewOptions,
   getSourceOptions,
   getBeadsPresets,
+  getBeadsTypeScopeTabs,
   type GitHubTaskKind,
   type GitLabIssueFilter,
   type GitLabTaskFilter,
@@ -3415,6 +3418,10 @@ export default function TaskPage(): React.JSX.Element {
   const [beadsRefreshNonce, setBeadsRefreshNonce] = useState(0)
   const activeBeadsPreset = useMemo(
     () => getBeadsPresetForQuery(beadsSearchInput),
+    [beadsSearchInput]
+  )
+  const activeBeadsTypeScope = useMemo(
+    () => getBeadsTypeScopeForQuery(beadsSearchInput),
     [beadsSearchInput]
   )
   const parsedBeadsQuery = useMemo(
@@ -10188,6 +10195,32 @@ export default function TaskPage(): React.JSX.Element {
                 ) : taskSource === 'beads' ? (
                   <>
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      {/* Why: beads twin of the GitHub Issues/PRs mode buttons — same placement (left of the repo picker) and visual treatment. */}
+                      <div className="flex items-center gap-1 text-xs">
+                        {getBeadsTypeScopeTabs().map((tab) => {
+                          const active = activeBeadsTypeScope === tab.id
+                          return (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => {
+                                const query = withBeadsTypeScope(beadsSearchInput, tab.id)
+                                setBeadsSearchInput(query)
+                                setAppliedBeadsSearch(query)
+                                setTaskResumeState({ beadsQuery: query })
+                              }}
+                              className={cn(
+                                'rounded-md border px-2.5 py-1 text-xs font-medium transition',
+                                active
+                                  ? 'border-border/50 bg-foreground/90 text-background shadow-xs'
+                                  : 'border-border/60 bg-muted/50 text-foreground shadow-xs hover:bg-muted/70'
+                              )}
+                            >
+                              {tab.label}
+                            </button>
+                          )
+                        })}
+                      </div>
                       <div className="min-w-0 w-full sm:w-[200px]">
                         <TaskProjectSourceCombobox
                           groups={taskPickerGroups}

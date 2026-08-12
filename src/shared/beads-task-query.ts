@@ -43,15 +43,21 @@ const BEADS_QUERY_STATUS_ORDER: readonly BeadsIssueStatus[] = [
   'closed'
 ]
 
-/** bd's built-in issue types, addressable as `is:<type>`. */
+/** bd's built-in issue types, addressable as `is:<type>`; order is the Filters facet order. */
 export const BEADS_QUERY_ISSUE_TYPES: readonly string[] = [
+  'task',
   'bug',
   'feature',
-  'task',
-  'epic',
   'chore',
-  'decision'
+  'epic',
+  'milestone',
+  'decision',
+  'spike',
+  'story'
 ]
+
+/** Core work types shown when a query has no type qualifiers; the rest are opt-in. */
+export const BEADS_CORE_ISSUE_TYPES: readonly string[] = ['task', 'bug', 'feature', 'chore']
 
 function parseBeadsPriorityValue(value: string): number | null {
   const match = /^p?([0-4])$/i.exec(value)
@@ -299,6 +305,27 @@ export function getBeadsPresetForQuery(rawQuery: string): BeadsIssuePreset | nul
     }
   }
   return null
+}
+
+/** Issues = core work types; ADRs = `is:decision` (Architecture Decision Records). */
+export type BeadsTypeScope = 'issues' | 'adrs'
+
+/**
+ * The type-scope tab a query lights, mirroring how GitHub's Issues/PRs tabs
+ * bind to is:issue/is:pr: no type qualifiers -> 'issues', exactly {decision}
+ * -> 'adrs', any other explicit type set -> null.
+ */
+export function getBeadsTypeScopeForQuery(rawQuery: string): BeadsTypeScope | null {
+  const { types } = parseBeadsTaskQuery(rawQuery)
+  if (types.length === 0) {
+    return 'issues'
+  }
+  return types.length === 1 && types[0] === 'decision' ? 'adrs' : null
+}
+
+/** Rewrite the query's type qualifiers for a tab: 'adrs' -> is:decision, 'issues' -> none. */
+export function withBeadsTypeScope(rawQuery: string, scope: BeadsTypeScope): string {
+  return withBeadsQualifier(rawQuery, 'types', scope === 'adrs' ? ['decision'] : [])
 }
 
 export type BeadsIssueFetchScope = 'open' | 'all' | 'ready'
