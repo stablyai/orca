@@ -973,10 +973,18 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   }
 
   // Why: TCC login wrappers make the PTY root login(1); shell exit can leave login holding the PTY with no onExit (#13764).
+  // Auto-reap signals only the proven root after a fresh empty/ownership proof — never a pgroup sweep.
   if (process.platform === 'darwin' && macosTccSpawnStrategy === 'wrapped' && proc.pid) {
+    const watchedRootPid = proc.pid
     loginWrapperDeathWatch = new MacosLoginWrapperDeathWatch({
-      rootPid: proc.pid,
-      forceKillRoot: forceKillOwnedRoot,
+      rootPid: watchedRootPid,
+      ownerPid: process.pid,
+      signalRoot: (rootPid) => {
+        if (dead || rootPid !== watchedRootPid || rootPid !== proc.pid) {
+          throw new Error('login wrapper root no longer owned by this handle')
+        }
+        process.kill(rootPid, 'SIGKILL')
+      },
       log: opts.log
     })
     loginWrapperDeathWatch.start()

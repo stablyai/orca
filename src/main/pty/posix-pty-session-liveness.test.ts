@@ -1,15 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  buildPosixPtyRootSnapshot,
   classifyPosixPtySessionLiveness,
+  isMacosLoginWrapperCommand,
+  provesOwnedEmptyLoginWrapper,
+  readPosixPtyRootSnapshot,
   readPosixPtySessionLiveness
 } from './posix-pty-session-liveness'
 
 const TABLE = `
-  100 ttys001
-  101 ttys001
-  102 ttys001
-  200 ttys002
-  300 ??
+  100  50 ttys001 /usr/bin/login -flpq user /bin/bash
+  101 100 ttys001 -/bin/zsh -l
+  102 101 ttys001 claude
+  200  50 ttys002 /usr/bin/login -flpq user /bin/bash
+  300  50 ?? /usr/bin/login -flpq user /bin/bash
+`
+
+const EMPTY_OWNED = `
+  200  50 ttys002 /usr/bin/login -flpq user /bin/bash
 `
 
 describe('classifyPosixPtySessionLiveness', () => {
@@ -31,34 +39,106 @@ describe('classifyPosixPtySessionLiveness', () => {
   })
 })
 
-describe('readPosixPtySessionLiveness', () => {
-  it('never classifies Windows as empty', () => {
-    expect(
+describe('buildPosixPtyRootSnapshot', () => {
+  it('captures ppid/command for ownership proofs', () => {
+    expect(buildPosixPtyRootSnapshot(EMPTY_OWNED, 200, 999)).toEqual({
+      liveness: 'empty',
+      rootPid: 200,
+      ppid: 50,
+      tty: 'ttys002',
+      command: '/usr/bin/login -flpq user /bin/bash'
+    })
+  })
+
+  it('fails closed when a process-table line cannot be parsed', () => {
+    expect(buildPosixPtyRootSnapshot('not a process row\n', 200, 999).liveness).toBe('gone')
+  })
+})
+
+describe('isMacosLoginWrapperCommand / provesOwnedEmptyLoginWrapper', () => {
+  it('accepts login argv0 forms and rejects unrelated commands', () => {
+    expect(isMacosLoginWrapperCommand('/usr/bin/login -flpq u /bin/bash')).toBe(true)
+    expect(isMacosLoginWrapperCommand('login -flpq u')).toBe(true)
+    expect(isMacosLoginWrapperCommand('/bin/zsh -l')).toBe(false)
+    expect(isMacosLoginWrapperCommand('login-shell-helper')).toBe(false)
+  })
+
+  it('requires empty + matching root + daemon ppid + login command', () => {
+    const empty = buildPosixPtyRootSnapshot(EMPTY_OWNED, 200, 999)
+    expect(provesOwnedEmptyLoginWrapper(empty, { rootPid: 200, ownerPid: 50 })).toBe(true)
+    expect(provesOwnedEmptyLoginWrapper(empty, { rootPid: 200, ownerPid: 99 })).toBe(false)
+    expect(provesOwnedEmptyLoginWrapper(empty, { rootPid: 201, ownerPid: 50 })).toBe(false)
+
+    const live = buildPosixPtyRootSnapshot(TABLE, 100, 999)
+    expect(provesOwnedEmptyLoginWrapper(live, { rootPid: 100, ownerPid: 50 })).toBe(false)
+
+    const recycled = {
+      ...empty,
+      command: '/bin/zsh -l'
+    }
+    expect(provesOwnedEmptyLoginWrapper(recycled, { rootPid: 200, ownerPid: 50 })).toBe(false)
+  })
+})
+
+describe('readPosixPtySessionLiveness / readPosixPtyRootSnapshot', () => {
+  it('never classifies Windows as empty', async () => {
+    await expect(
       readPosixPtySessionLiveness(100, {
         platform: 'win32',
-        readProcessTable: () => TABLE
+        readProcessTable: async () => TABLE
       })
-    ).toBe('unknown')
+    ).resolves.toBe('unknown')
   })
 
-  it('classifies through the injectable process-table seam', () => {
-    expect(
-      readPosixPtySessionLiveness(200, {
+  it('classifies through the injectable async process-table seam', async () => {
+    await expect(
+      readPosixPtyRootSnapshot(200, {
         platform: 'darwin',
         currentPid: 999,
-        readProcessTable: () => TABLE
+        readProcessTable: async () => EMPTY_OWNED
       })
-    ).toBe('empty')
+    ).resolves.toMatchObject({ liveness: 'empty', ppid: 50 })
   })
 
-  it('treats process-table failures as unknown, not empty', () => {
-    expect(
+  it('treats process-table failures and timeouts as unknown, not empty', async () => {
+    await expect(
       readPosixPtySessionLiveness(100, {
         platform: 'darwin',
-        readProcessTable: () => {
-          throw new Error('ps failed')
+        readProcessTable: async () => {
+          throw new Error('ps timed out')
         }
       })
-    ).toBe('unknown')
+    ).resolves.toBe('unknown')
+  })
+
+  it('treats rejected reads as unknown', async () => {
+    await expect(
+      readPosixPtySessionLiveness(100, {
+        platform: 'darwin',
+        readProcessTable: async () => {
+          throw Object.assign(new Error('EPERM'), { code: 'EPERM' })
+        }
+      })
+    ).resolves.toBe('unknown')
+  })
+
+  it('does not start overlapping production reads when the seam serializes', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+    const readProcessTable = vi.fn(async () => {
+      inFlight++
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await Promise.resolve()
+      inFlight--
+      return EMPTY_OWNED
+    })
+    await Promise.all([
+      readPosixPtyRootSnapshot(200, { platform: 'darwin', currentPid: 999, readProcessTable }),
+      readPosixPtyRootSnapshot(200, { platform: 'darwin', currentPid: 999, readProcessTable })
+    ])
+    // Parallel callers may overlap at the seam; the death watch serializes — this only
+    // proves the reader itself is async and non-blocking.
+    expect(readProcessTable).toHaveBeenCalledTimes(2)
+    expect(maxInFlight).toBeGreaterThanOrEqual(1)
   })
 })

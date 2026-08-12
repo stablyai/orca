@@ -3,8 +3,9 @@ import {
   type LoginSessionWatchClock
 } from './login-session-watch-clock'
 import {
-  readPosixPtySessionLiveness,
-  type PosixPtySessionLiveness,
+  provesOwnedEmptyLoginWrapper,
+  readPosixPtyRootSnapshot,
+  type PosixPtyRootSnapshot,
   type PosixPtySessionLivenessDeps
 } from '../pty/posix-pty-session-liveness'
 import type { DaemonFileLog } from './daemon-file-log'
@@ -13,7 +14,7 @@ import type { DaemonFileLog } from './daemon-file-log'
 export const MACOS_LOGIN_WRAPPER_STARTUP_GRACE_MS = 15_000
 /** Idle poll while the session looks healthy. */
 export const MACOS_LOGIN_WRAPPER_POLL_MS = 30_000
-/** Recheck after first empty observation before authorizing a root kill. */
+/** Recheck after first empty observation before a final ownership proof. */
 export const MACOS_LOGIN_WRAPPER_EMPTY_RECHECK_MS = 5_000
 const REQUIRED_CONSECUTIVE_EMPTY = 2
 
@@ -25,52 +26,60 @@ export type MacosLoginWrapperDeathWatchTiming = {
 
 export type MacosLoginWrapperDeathWatchOptions = {
   rootPid: number
-  /** Force-kill only the already-owned PTY root via existing process-group seams. */
-  forceKillRoot: () => void
+  /** Daemon PID that must still parent the login wrapper (ownership proof). */
+  ownerPid: number
+  /**
+   * Signal only the proven wrapper PID (not a pgroup sweep).
+   * Why: a peer can appear between the empty poll and kill; pgroup kill would take it too.
+   */
+  signalRoot: (rootPid: number) => void
   log?: DaemonFileLog
   clock?: LoginSessionWatchClock
   timing?: Partial<MacosLoginWrapperDeathWatchTiming>
-  readLiveness?: (rootPid: number) => PosixPtySessionLiveness
+  /** Async probe seam; production uses bounded `ps`. */
+  probe?: (rootPid: number) => Promise<PosixPtyRootSnapshot>
   livenessDeps?: PosixPtySessionLivenessDeps
 }
 
 /**
- * Detects macOS TCC `login(1)` wrappers whose inner shell has exited while the
- * login session leader still holds the PTY (#13764).
- *
- * The daemon's `onExit` is wired to the PTY process, which is `login` when the
- * TCC wrapper is active — so a shell exit that leaves `login` alive never
- * reaps the session. This watch only force-kills after sustained `empty`
- * observations (root alive, no other processes on its TTY); `unknown` never
- * authorizes a kill.
+ * Detects macOS TCC `login(1)` wrappers whose inner shell exited while login
+ * still holds the PTY (#13764). Probes are async, non-overlapping, and fail
+ * closed; a stop/exit mid-probe suppresses kill and log side effects.
  */
 export class MacosLoginWrapperDeathWatch {
   private readonly rootPid: number
-  private readonly forceKillRoot: () => void
+  private readonly ownerPid: number
+  private readonly signalRoot: (rootPid: number) => void
   private readonly log: DaemonFileLog | undefined
   private readonly clock: LoginSessionWatchClock
   private readonly startupGraceMs: number
   private readonly pollMs: number
   private readonly emptyRecheckMs: number
-  private readonly readLiveness: (rootPid: number) => PosixPtySessionLiveness
+  private readonly probe: (rootPid: number) => Promise<PosixPtyRootSnapshot>
   private readonly startedAtMs: number
 
   private timer: unknown = null
   private stopped = false
   private reaped = false
+  private probeInFlight = false
   private consecutiveEmpty = 0
 
   constructor(opts: MacosLoginWrapperDeathWatchOptions) {
     this.rootPid = opts.rootPid
-    this.forceKillRoot = opts.forceKillRoot
+    this.ownerPid = opts.ownerPid
+    this.signalRoot = opts.signalRoot
     this.log = opts.log
     this.clock = opts.clock ?? createLoginSessionWatchClock()
     this.startupGraceMs = opts.timing?.startupGraceMs ?? MACOS_LOGIN_WRAPPER_STARTUP_GRACE_MS
     this.pollMs = opts.timing?.pollMs ?? MACOS_LOGIN_WRAPPER_POLL_MS
     this.emptyRecheckMs = opts.timing?.emptyRecheckMs ?? MACOS_LOGIN_WRAPPER_EMPTY_RECHECK_MS
-    this.readLiveness =
-      opts.readLiveness ??
-      ((rootPid) => readPosixPtySessionLiveness(rootPid, opts.livenessDeps))
+    this.probe =
+      opts.probe ??
+      ((rootPid) =>
+        readPosixPtyRootSnapshot(rootPid, {
+          ...opts.livenessDeps,
+          currentPid: opts.livenessDeps?.currentPid ?? opts.ownerPid
+        }))
     this.startedAtMs = this.clock.now()
   }
 
@@ -100,39 +109,45 @@ export class MacosLoginWrapperDeathWatch {
     }
     this.timer = this.clock.setTimeout(() => {
       this.timer = null
-      this.tick()
+      void this.tick()
     }, delayMs)
   }
 
-  private tick(): void {
-    if (this.stopped || this.reaped) {
+  private async tick(): Promise<void> {
+    if (this.stopped || this.reaped || this.probeInFlight) {
       return
     }
-    // Why: the trampoline window can look empty before the shell attaches to the TTY.
     if (this.clock.now() - this.startedAtMs < this.startupGraceMs) {
       this.schedule(this.startupGraceMs - (this.clock.now() - this.startedAtMs))
       return
     }
 
-    let liveness: PosixPtySessionLiveness
+    this.probeInFlight = true
+    let snapshot: PosixPtyRootSnapshot
     try {
-      liveness = this.readLiveness(this.rootPid)
+      snapshot = await this.probe(this.rootPid)
     } catch {
-      liveness = 'unknown'
+      snapshot = {
+        liveness: 'unknown',
+        rootPid: this.rootPid,
+        ppid: null,
+        tty: null,
+        command: null
+      }
+    } finally {
+      this.probeInFlight = false
     }
 
-    if (liveness === 'gone') {
-      // Root already reaped through the normal onExit path.
+    // Why: stop/onExit during the await must not kill or log after the session is gone.
+    if (this.stopped || this.reaped) {
+      return
+    }
+
+    if (snapshot.liveness === 'gone') {
       this.stop()
       return
     }
-    if (liveness === 'live') {
-      this.consecutiveEmpty = 0
-      this.schedule(this.pollMs)
-      return
-    }
-    if (liveness === 'unknown') {
-      // Why: never collapse "can't tell" into empty — same rule as endpoint ownership.
+    if (snapshot.liveness === 'live' || snapshot.liveness === 'unknown') {
       this.consecutiveEmpty = 0
       this.schedule(this.pollMs)
       return
@@ -148,19 +163,67 @@ export class MacosLoginWrapperDeathWatch {
       return
     }
 
+    await this.attemptReap()
+  }
+
+  private async attemptReap(): Promise<void> {
+    if (this.stopped || this.reaped || this.probeInFlight) {
+      return
+    }
+
+    // Why: re-sample immediately before signal; the second empty poll is already stale.
+    this.probeInFlight = true
+    let finalSnapshot: PosixPtyRootSnapshot
+    try {
+      finalSnapshot = await this.probe(this.rootPid)
+    } catch {
+      finalSnapshot = {
+        liveness: 'unknown',
+        rootPid: this.rootPid,
+        ppid: null,
+        tty: null,
+        command: null
+      }
+    } finally {
+      this.probeInFlight = false
+    }
+
+    if (this.stopped || this.reaped) {
+      return
+    }
+
+    if (finalSnapshot.liveness === 'gone') {
+      this.stop()
+      return
+    }
+
+    if (
+      !provesOwnedEmptyLoginWrapper(finalSnapshot, {
+        rootPid: this.rootPid,
+        ownerPid: this.ownerPid
+      })
+    ) {
+      // Work reappeared, ownership uncertain, or PID reused — never signal.
+      this.consecutiveEmpty = 0
+      this.schedule(this.pollMs)
+      return
+    }
+
+    try {
+      this.signalRoot(this.rootPid)
+    } catch {
+      this.consecutiveEmpty = 0
+      this.log?.log('macos-login-wrapper-empty-reap-failed', { rootPid: this.rootPid })
+      this.schedule(this.pollMs)
+      return
+    }
+
+    // Why: reaped is proof of a successful signal, not of intent to kill.
+    this.reaped = true
+    this.clearTimer()
     this.log?.log('macos-login-wrapper-empty-reaped', {
       rootPid: this.rootPid,
       observations: this.consecutiveEmpty
     })
-    try {
-      this.forceKillRoot()
-      this.reaped = true
-      this.clearTimer()
-    } catch {
-      // Why: a rejected kill must not crash the daemon; keep observing so a later empty window can retry.
-      this.consecutiveEmpty = 0
-      this.log?.log('macos-login-wrapper-empty-reap-failed', { rootPid: this.rootPid })
-      this.schedule(this.pollMs)
-    }
   }
 }
