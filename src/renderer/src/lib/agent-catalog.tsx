@@ -306,6 +306,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'zcode',
+    label: translate('auto.lib.agent.catalog.a7c0de2012', 'ZCode'),
+    cmd: 'zcode',
+    faviconDomain: 'z.ai',
+    homepageUrl: 'https://zcode.z.ai/en/docs/install'
   }
 ])
 

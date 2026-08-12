@@ -24,6 +24,24 @@ export function normalizeKimiEvent(
   paneKey: string,
   hookPayload: Record<string, unknown>
 ): ParsedAgentStatusPayload | null {
+  return normalizeClaudeCompatibleAgentEvent(
+    state,
+    'kimi',
+    eventName,
+    promptText,
+    paneKey,
+    hookPayload
+  )
+}
+
+export function normalizeClaudeCompatibleAgentEvent(
+  state: HookListenerState,
+  source: 'kimi' | 'zcode',
+  eventName: unknown,
+  promptText: string,
+  paneKey: string,
+  hookPayload: Record<string, unknown>
+): ParsedAgentStatusPayload | null {
   if (shouldIgnoreCompactContinuationUserPromptSubmit(eventName, promptText)) {
     return null
   }
@@ -52,8 +70,8 @@ export function normalizeKimiEvent(
   const snapshot = resolveToolState(
     state,
     paneKey,
-    extractToolFields('kimi', eventName, hookPayload),
-    { resetOnNewTurn: isNewTurnEvent('kimi', eventName) }
+    extractToolFields(source, eventName, hookPayload),
+    { resetOnNewTurn: isNewTurnEvent(source, eventName) }
   )
 
   const interrupted =
@@ -62,9 +80,9 @@ export function normalizeKimiEvent(
   return normalizeAgentStatusPayload({
     state: stateName,
     prompt: resolvePrompt(state, paneKey, promptText, {
-      resetOnNewTurn: isNewTurnEvent('kimi', eventName)
+      resetOnNewTurn: isNewTurnEvent(source, eventName)
     }),
-    agentType: 'kimi',
+    agentType: source,
     toolName: snapshot.toolName,
     toolInput: snapshot.toolInput,
     lastAssistantMessage: snapshot.lastAssistantMessage,

@@ -22,6 +22,7 @@ import { CopilotHookService, copilotHookService } from '../copilot/hook-service'
 import { HermesHookService, hermesHookService } from '../hermes/hook-service'
 import { DevinHookService, devinHookService } from '../devin/hook-service'
 import { KimiHookService, kimiHookService } from '../kimi/hook-service'
+import { ZcodeHookService, zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-controls'
 import {
@@ -189,6 +190,10 @@ describe('remote hook service installers', () => {
         {
           path: '/home/dev/.orca/agent-hooks/droid-hook.sh',
           install: (sftp: SFTPWrapper) => new DroidHookService().installRemote(sftp, '/home/dev')
+        },
+        {
+          path: '/home/dev/.orca/agent-hooks/zcode-hook.sh',
+          install: (sftp: SFTPWrapper) => new ZcodeHookService().installRemote(sftp, '/home/dev')
         }
       ]
 
@@ -515,6 +520,34 @@ describe('remote hook service installers', () => {
     expect(fs.files.get('/home/dev/.orca/agent-hooks/kimi-hook.sh')).toContain('/hook/kimi')
   })
 
+  it('installs remote ZCode hooks with the documented nested JSON schema', async () => {
+    const { sftp, fs } = createFakeSftp({
+      '/home/dev/.zcode/cli/config.json': `${JSON.stringify({ theme: 'dark' })}\n`
+    })
+
+    const status = await new ZcodeHookService().installRemote(sftp, '/home/dev')
+    expect(status.state).toBe('installed')
+
+    const config = JSON.parse(fs.files.get('/home/dev/.zcode/cli/config.json')!) as {
+      theme?: string
+      hooks?: { enabled?: boolean; events?: Record<string, unknown[]> }
+    }
+    expect(config.theme).toBe('dark')
+    expect(config.hooks?.enabled).toBe(true)
+    for (const eventName of [
+      'SessionStart',
+      'UserPromptSubmit',
+      'PreToolUse',
+      'PostToolUse',
+      'PostToolUseFailure',
+      'PermissionRequest',
+      'Stop'
+    ]) {
+      expect(config.hooks?.events?.[eventName]).toBeDefined()
+    }
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/zcode-hook.sh')).toContain('/hook/zcode')
+  })
+
   it('does not overwrite malformed remote Devin JSONC', async () => {
     const original = '{"hooks": }'
     const { sftp, fs } = createFakeSftp({
@@ -708,7 +741,8 @@ describe('remote hook service installers', () => {
       ['copilot', copilotHookService],
       ['hermes', hermesHookService],
       ['devin', devinHookService],
-      ['kimi', kimiHookService]
+      ['kimi', kimiHookService],
+      ['zcode', zcodeHookService]
     ])
 
     // Guard against a service silently missing from the map above as new agents land.
