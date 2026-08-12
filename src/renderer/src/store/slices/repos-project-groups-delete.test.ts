@@ -131,6 +131,63 @@ describe('project group deletion store routing', () => {
     expect(projectGroupsDelete).not.toHaveBeenCalled()
   })
 
+  it('deletes a remote-owned group even when the focused runtime is local (#14007)', async () => {
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-delete-remote-group',
+      ok: true,
+      result: { deleted: true },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    const remoteOwnedGroup: ProjectGroup = {
+      ...projectGroup,
+      id: 'folder-scan-root',
+      name: 'platform',
+      parentPath: '/home/user/platform',
+      createdFrom: 'folder-scan',
+      executionHostId: 'runtime:env-remote'
+    }
+    const store = createTestStore()
+    store.setState({
+      // Why: multi-host sidebar can show a remote folder-scan group while focus is local.
+      settings: { activeRuntimeEnvironmentId: null } as never,
+      projectGroups: [remoteOwnedGroup],
+      repos: []
+    })
+
+    await expect(store.getState().deleteProjectGroup(remoteOwnedGroup.id)).resolves.toBe(true)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-remote',
+      method: 'projectGroup.delete',
+      params: { groupId: remoteOwnedGroup.id },
+      timeoutMs: 15_000
+    })
+    expect(projectGroupsDelete).not.toHaveBeenCalled()
+    expect(store.getState().projectGroups).toEqual([])
+  })
+
+  it('keeps local delete when a local group is selected under a focused remote runtime', async () => {
+    projectGroupsDelete.mockResolvedValue(true)
+    const localGroup: ProjectGroup = {
+      ...projectGroup,
+      executionHostId: 'local'
+    }
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      projectGroups: [localGroup],
+      repos: []
+    })
+
+    await expect(store.getState().deleteProjectGroup(localGroup.id)).resolves.toBe(true)
+
+    expect(projectGroupsDelete).toHaveBeenCalledWith({ groupId: localGroup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'projectGroup.delete' })
+    )
+    expect(store.getState().projectGroups).toEqual([])
+  })
+
   it('deletes only the group when contained project removal is not requested', async () => {
     projectGroupsDelete.mockResolvedValue(true)
     const groupedRepo = { ...remoteRepo, id: 'direct', projectGroupId: projectGroup.id }
