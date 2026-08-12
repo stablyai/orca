@@ -48,8 +48,13 @@ import {
 } from '../../../../shared/status-bar-usage-mode'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import {
+  normalizeTaskSourceContext,
+  type TaskSourceContext
+} from '../../../../shared/task-source-context'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
@@ -70,6 +75,7 @@ import {
 import { PER_REPO_FETCH_LIMIT } from '../../../../shared/work-items'
 import {
   normalizeVisibleTaskProviders,
+  resolveBeadsTaskProviderAvailability,
   restoreAvailableDefaultTaskProvider,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
@@ -89,6 +95,7 @@ import {
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import {
+  getRepoExecutionHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -115,6 +122,7 @@ import {
   sanitizeSetupScriptPromptDismissals
 } from '../../lib/setup-script-prompt'
 import { DEFAULT_PET_ID, isBundledPetId } from '../../components/pet/pet-models'
+import { getTaskEligibleRepos } from '../../components/task-page-default-repo-selection'
 import { revokeCustomPetBlobUrl } from '../../components/pet/pet-blob-cache'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
@@ -300,6 +308,22 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 // Why: right-sidebar resize is window-relative, so widths can far exceed 500px on wide displays; this ceiling is only a corruption safety net.
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 const LINEAR_TASK_PREFETCH_LIMIT = 36
+
+// Why: must mint the same cache scope as TaskPage's repo-backed beads context
+// (identity prefix unknown pre-fetch → cache part ''), or the warm fetch misses.
+function buildBeadsRepoPrefetchContext(repo: Repo): TaskSourceContext | null {
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const setup = projection.setups[0]
+  const project = projection.projects[0]
+  return normalizeTaskSourceContext({
+    provider: 'beads',
+    projectId: setup?.projectId ?? project?.id ?? repo.id,
+    hostId: setup?.hostId ?? getRepoExecutionHostId(repo),
+    projectHostSetupId: setup?.id,
+    repoId: repo.id,
+    providerIdentity: null
+  })
+}
 // Why: bound disk growth across hard quits (crash paths leave acks pinned); mirrors HYDRATE_MAX_AGE_MS in agent-hooks/server.ts.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -715,7 +739,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'beads'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
@@ -723,6 +747,7 @@ export type UISlice = {
       linearIdentifier?: string
       linearBranchName?: string
       jiraIdentifier?: string
+      beadsIdentifier?: string
       repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
@@ -1354,7 +1379,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       preferredVisibleTaskProviders,
       {
         gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-        linearConnected: state.linearStatus?.connected === true
+        linearConnected: state.linearStatus?.connected === true,
+        bdInstalled: resolveBeadsTaskProviderAvailability({
+          localBdInstalled: state.preflightStatus?.bd?.installed === true,
+          repoHostIds: state.repos.map((repo) => getRepoExecutionHostId(repo))
+        })
       },
       state.settings?.defaultTaskSource
     )
@@ -1418,6 +1447,33 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           },
           { sourceContext }
         )
+      }
+    }
+    if (resolvedSource === 'beads' && typeof state.prefetchBeadsIssues === 'function') {
+      const preset = state.taskResumeState?.beadsPreset ?? 'open'
+      // Why: must match TaskPage's repo-picker eligibility, or the warm entries cover repos the page never fetches.
+      const eligibleRepos = getTaskEligibleRepos(state.repos)
+      const selectedRepos = (() => {
+        const preferred = data.preselectedRepoId
+        if (preferred) {
+          const repo = eligibleRepos.find((r) => r.id === preferred)
+          return repo ? [repo] : []
+        }
+        const persisted = state.settings?.defaultRepoSelection
+        if (Array.isArray(persisted)) {
+          const selected = eligibleRepos.filter((repo) => persisted.includes(repo.id))
+          if (selected.length > 0) {
+            return selected
+          }
+        }
+        return eligibleRepos
+      })()
+      // Why: beads search filters client-side, so the warmed list serves any resume query.
+      for (const repo of selectedRepos) {
+        const context = buildBeadsRepoPrefetchContext(repo)
+        if (context) {
+          state.prefetchBeadsIssues(context, preset)
+        }
       }
     }
   },

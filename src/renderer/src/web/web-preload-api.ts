@@ -126,6 +126,7 @@ import {
   updateStoredEnvironmentRuntimeId,
   type StoredWebRuntimeEnvironment
 } from './web-runtime-environment'
+import { gateTaskResumeStateForHost } from './web-task-resume-beads-gate'
 import { parseWebPairingInput } from './web-pairing'
 import { copyClipboardTextViaExecCommand } from './web-clipboard-copy-fallback'
 import { WebRuntimeClient } from './web-runtime-client'
@@ -2732,7 +2733,13 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         updates
       void _clientLocalWorkspaceFilter
       try {
-        await callRuntimeResult('ui.set', hostUpdates, 15_000)
+        // Why: a pre-beads host rejects or drops the whole taskResumeState over one beads key (see web-task-resume-beads-gate).
+        const gatedUpdates = await gateTaskResumeStateForHost({
+          updates: hostUpdates,
+          environmentId: requireActiveEnvironmentOrNull()?.id ?? null,
+          getStatus: getRemoteRuntimeStatus
+        })
+        await callRuntimeResult('ui.set', gatedUpdates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
