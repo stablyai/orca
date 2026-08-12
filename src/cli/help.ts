@@ -268,7 +268,7 @@ Selectors:
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
-  --text <text>             Text to send to the terminal
+  --text <text>             Raw bytes to write to the terminal (control bytes are supported)
   --enter                   Append Enter after sending text
   --interrupt               Send as an interrupt-style input when supported
 
