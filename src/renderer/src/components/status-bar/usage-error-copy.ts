@@ -87,7 +87,7 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
   if (p.provider === 'clinepass' && isUsageAuthError(p.error)) {
-    return translate('auto.components.status.bar.tooltip.clinePassApiKeyError', 'Check API key')
+    return translate('auto.components.status.bar.usage.error.copy.3a5a07c3c3', 'Check API key')
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
@@ -146,7 +146,7 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   }
   if (p.provider === 'clinepass' && isUsageAuthError(p.error)) {
     return translate(
-      'auto.components.status.bar.tooltip.clinePassApiKeyRecovery',
+      'auto.components.status.bar.usage.error.copy.edeabb5cc7',
       'ClinePass usage could not be refreshed. Update the API key in Settings, then retry.'
     )
   }

@@ -2481,10 +2481,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
             }}
           >
             <AgentIcon agent="cline" size={14} />
-            {translate(
-              'auto.components.status.bar.StatusBar.clinePassUsageMenu',
-              'ClinePass Usage'
-            )}
+            {translate('auto.components.status.bar.StatusBar.029230c95c', 'ClinePass Usage')}
           </DropdownMenuCheckboxItem>
           {isStatusBarItemAvailable('codex', detectedAgentIds) && (
             <DropdownMenuCheckboxItem

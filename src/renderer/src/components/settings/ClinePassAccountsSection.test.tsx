@@ -217,6 +217,12 @@ describe('ClinePassAccountsSection', () => {
     render(<ClinePassAccountsSection />)
 
     expect(await screen.findByText('Credential status unavailable')).toBeInTheDocument()
+    expect(
+      screen.getByText('Orca could not check whether a Cline API key is configured. Try again.')
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Add a Cline API key to read your ClinePass subscription quota.')
+    ).not.toBeInTheDocument()
     expect(mocks.toastError).toHaveBeenCalledWith(
       'ClinePass credential status could not be loaded.'
     )

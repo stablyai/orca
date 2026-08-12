@@ -3493,7 +3493,7 @@
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
             "codexSignInError": "Codex sign-in failed. Please try again.",
-            "clinePassUsageMenu": "ClinePass Usage"
+            "029230c95c": "ClinePass Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3672,9 +3672,7 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
-            "clinePassApiKeyError": "Check API key",
-            "clinePassApiKeyRecovery": "ClinePass usage could not be refreshed. Update the API key in Settings, then retry."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -3749,6 +3747,14 @@
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
+          },
+          "usage": {
+            "error": {
+              "copy": {
+                "3a5a07c3c3": "Check API key",
+                "edeabb5cc7": "ClinePass usage could not be refreshed. Update the API key in Settings, then retry."
+              }
+            }
           }
         }
       },
@@ -11296,6 +11302,9 @@
           "3fc8e072dc": "Save",
           "535a2c9a19": "Forget API key",
           "a11dc5b121": "Create an API key in your Cline account, then paste it here. Orca never displays a saved key."
+        },
+        "ClinePassCredentialStatus": {
+          "4df8f88808": "Orca could not check whether a Cline API key is configured. Try again."
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
