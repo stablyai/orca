@@ -1588,6 +1588,13 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       ) {
         driveSyntheticTitleFromHook(paneKey, payload.state, profile)
       }
+      // Why: headless --serve has no renderer graph sync, so without this republish remote/
+      // mobile clients never receive HTTP-hook-only agent status (e.g. OpenCode) until unrelated
+      // PTY/title churn happens. Mirrors the OSC 9999 / synthetic-title push paths (#7970).
+      const agentHookPtyId = getPtyIdForPaneKey(paneKey)
+      if (agentHookPtyId) {
+        runtime?.touchMobileSessionSnapshotsForPty(agentHookPtyId)
+      }
     }
   )
   agentHookServer.setPaneStatusClearListener((clear) => {

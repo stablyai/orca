@@ -6588,10 +6588,11 @@ export class OrcaRuntimeService {
     }
   }
 
-  private touchMobileSessionSnapshotsForPty(
-    ptyId: string,
-    options: { immediate?: boolean } = {}
-  ): void {
+  /** Bump and coalesce-republish mobile session snapshots for worktrees whose
+   *  tabs back `ptyId`. Called from the PTY/title/OSC paths, and from the
+   *  agent-hook listener so HTTP-hook-only agents (OpenCode) republish to
+   *  remote/mobile clients on status change — mirroring the OSC 9999 path. */
+  touchMobileSessionSnapshotsForPty(ptyId: string, options: { immediate?: boolean } = {}): void {
     for (const [worktreeId, snapshot] of this.mobileSessionTabsByWorktree) {
       const hasPtyBackedTab = snapshot.tabs.some(
         (tab) =>
@@ -31140,7 +31141,7 @@ export class OrcaRuntimeService {
     }
   }
 
-  /** Retained OSC 9999 hook row for this mobile tab if still fresh; looked up by pane identity, then PTY ownership (legacy `pane:N` ids can drift). */
+  /** Retained OSC 9999 hook row for this mobile tab if still fresh; looked up by pane identity, then PTY ownership (legacy `pane:N` ids can drift). Falls back to the agent-hook cache so headless hook-only agents (e.g. OpenCode) still publish status without a renderer graph sync. */
   private getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
@@ -31160,10 +31161,68 @@ export class OrcaRuntimeService {
         }
       }
     }
+    // Why: headless --serve has no renderer graph sync, so for most agents OSC 9999
+    // (latestAgentStatusByPaneKey) is the only runtime-side retained row. But OpenCode and
+    // other HTTP-hook-only agents never emit OSC 9999 — their status lives only in the
+    // agent-hook cache (getAgentStatusSnapshotFn). Mirror the retained lookup against that
+    // cache so remote/mobile clients see their working/idle state on a headless server.
+    if (!retained) {
+      retained = this.getFreshHookAgentStatusForMobileTab(paneKey)
+    }
     if (!retained || Date.now() - retained.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
       return null
     }
     return retained
+  }
+
+  private getFreshHookAgentStatusForMobileTab(paneKey: string): RuntimeAgentRowSnapshot | null {
+    const entries = this.getAgentStatusSnapshotFn?.() ?? []
+    let best: AgentStatusIpcPayload | null = null
+    for (const entry of entries) {
+      if (entry.paneKey !== paneKey || entry.providerSessionOnly) {
+        continue
+      }
+      if (!best || entry.receivedAt > best.receivedAt) {
+        best = entry
+      }
+    }
+    if (!best) {
+      return null
+    }
+    const {
+      state,
+      prompt,
+      agentType,
+      model,
+      toolName,
+      toolInput,
+      interactivePrompt,
+      lastAssistantMessage,
+      interrupted,
+      subagents
+    } = best
+    const payload: ParsedAgentStatusPayload = {
+      state,
+      prompt,
+      ...(agentType ? { agentType } : {}),
+      ...(model ? { model } : {}),
+      ...(toolName ? { toolName } : {}),
+      ...(toolInput ? { toolInput } : {}),
+      ...(interactivePrompt ? { interactivePrompt } : {}),
+      ...(lastAssistantMessage ? { lastAssistantMessage } : {}),
+      ...(interrupted ? { interrupted } : {}),
+      ...(subagents ? { subagents } : {})
+    }
+    return {
+      paneKey,
+      // Why: hook cache rows aren't pty-keyed; buildPtyMobileAgentStatus reads payload/timings, not ptyId.
+      ptyId: '',
+      ...(best.worktreeId ? { worktreeId: best.worktreeId } : {}),
+      ...(best.tabId ? { tabId: best.tabId } : {}),
+      payload,
+      stateStartedAt: best.stateStartedAt,
+      updatedAt: best.receivedAt
+    }
   }
 
   private findPtyForMobileTerminalTab(
@@ -37576,7 +37635,12 @@ function classifyAgentTitle(title: string | null): 'agent' | 'management' | 'neu
   if (isClaudeManagementTitle(title)) {
     return 'management'
   }
-  return detectAgentStatusFromTitle(title) !== null ? 'agent' : 'neutral'
+  // Why: OpenCode's native `OC | <task>` session title carries identity, not a status glyph,
+  // so detectAgentStatusFromTitle misses it and would classify the pane as a reclaimed shell,
+  // suppressing hook-derived working status for an agent that still owns the pane.
+  return detectAgentStatusFromTitle(title) !== null || isOpenCodeNativeTitle(title)
+    ? 'agent'
+    : 'neutral'
 }
 
 function terminalTitleBlocksExplicitAgentStatus(title: string | null): boolean {
