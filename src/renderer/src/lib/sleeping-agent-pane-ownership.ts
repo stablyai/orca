@@ -1,5 +1,9 @@
 import type { useAppStore } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
+import {
+  getSleepingAgentSessionExecutionHostId,
+  type SleepingAgentSessionRecord
+} from '../../../shared/agent-session-resume'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -10,8 +14,13 @@ import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
+// Why: two provider sessions with the same id can exist on different execution
+// hosts (e.g. a re-parented SSH target vs. a runtime environment); folding the
+// execution host into the claim key keeps a hibernation wake / generic resume
+// on one host from ever claiming — or double-resuming — another host's record.
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
+  const executionHostId = getSleepingAgentSessionExecutionHostId(record) ?? LOCAL_EXECUTION_HOST_ID
+  const base = `${executionHostId}\0${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
   return record.agent === 'pi' || record.agent === 'prime-agent'
     ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
     : base

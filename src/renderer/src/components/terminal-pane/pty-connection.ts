@@ -18,7 +18,11 @@ import { isEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal-kitty-keyboard-flags'
-import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  isRuntimeOwnedSshTargetId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 import { createTerminalZeroDimensionsMessage } from '../../../../shared/terminal-zero-dimensions-diagnostic'
 import { isWorktreeRemovalFenceError } from '../../../../shared/worktree-removal-fence-error'
 import { parseTerminalOscColorQuery } from '../../../../shared/terminal-osc-color-reply'
@@ -295,6 +299,7 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import {
   agentProviderSessionsEqual,
+  getSleepingAgentSessionExecutionHostId,
   isResumableTuiAgent,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata,
@@ -1082,6 +1087,24 @@ function isSetupSplitGeometryReady(
   )
 }
 
+// Why: a cold-restore candidate (live agent-status entry or sleeping record) that
+// declares a DIFFERENT execution host than this pane's own resolved host must never
+// be adopted for resume — reusing its `--resume`/reattach identity would splice
+// another host's provider session into this pane's PTY (cross-host session
+// hijack). A candidate with no declared host predates host attribution and is
+// treated as this pane's own, matching every already-established local/legacy
+// sleeping-record shape.
+function coldRestoreCandidateOwnedByExecutionHost(
+  candidate: { executionHostId?: ExecutionHostId; connectionId?: string | null } | null | undefined,
+  executionHostId: ExecutionHostId
+): boolean {
+  if (!candidate) {
+    return false
+  }
+  const candidateExecutionHostId = getSleepingAgentSessionExecutionHostId(candidate)
+  return candidateExecutionHostId === null || candidateExecutionHostId === executionHostId
+}
+
 /**
  * Establishes a binding between a terminal pane and its corresponding PTY stream,
  * managing input, output, title synchronization, and agent status tracking.
@@ -1263,6 +1286,10 @@ export function connectPanePty(
         paneKey !== consumed.paneKey &&
         record.worktreeId === consumed.record.worktreeId &&
         record.agent === consumed.record.agent &&
+        // Why: never fold another execution host's sleeping row into this
+        // pane's cleanup — same worktree/agent/provider-session id can exist
+        // independently on two hosts (#cross-host-cold-resume).
+        coldRestoreCandidateOwnedByExecutionHost(record, executionHostId) &&
         agentProviderSessionsEqual(
           record.agent,
           record.providerSession,
@@ -5004,8 +5031,24 @@ export function connectPanePty(
         return null
       }
       const state = useAppStore.getState()
-      const entry = state.agentStatusByPaneKey[cacheKey]
-      const sleepingRecordEntry = getSleepingRecordForPane(state)
+      const candidateEntry = state.agentStatusByPaneKey[cacheKey]
+      // Why: a live status row or sleeping record for this exact pane key can
+      // still belong to a DIFFERENT execution host (e.g. a stale row left by a
+      // worktree that moved hosts) — never resume it as if it were owned by
+      // this pane's own host (#cross-host-cold-resume).
+      const entry =
+        candidateEntry && coldRestoreCandidateOwnedByExecutionHost(candidateEntry, executionHostId)
+          ? candidateEntry
+          : undefined
+      const candidateSleepingRecordEntry = getSleepingRecordForPane(state)
+      const sleepingRecordEntry =
+        candidateSleepingRecordEntry &&
+        coldRestoreCandidateOwnedByExecutionHost(
+          candidateSleepingRecordEntry.record,
+          executionHostId
+        )
+          ? candidateSleepingRecordEntry
+          : null
       const sleepingRecord = sleepingRecordEntry?.record
       if (isLegacyWorkerAutomaticResumeBlocked()) {
         return null
