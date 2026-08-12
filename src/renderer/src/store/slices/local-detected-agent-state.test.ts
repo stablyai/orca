@@ -195,4 +195,28 @@ describe('local detected agent context lifecycle', () => {
     expect(store.getState().detectedAgentIds).toEqual(['codex'])
     expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['codex'])
   })
+
+  it('retries after an authoritative refresh fails without a usable cache', async () => {
+    let resolveDetection: (agents: string[]) => void = () => {}
+    detectAgents.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveDetection = resolve
+      })
+    )
+    refreshAgents.mockRejectedValueOnce(new Error('transient refresh failure'))
+    const store = createTestStore([])
+
+    const supersededDetect = store.getState().ensureDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    await expect(
+      store.getState().refreshDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    ).resolves.toEqual([])
+    resolveDetection(['stale'])
+    await expect(supersededDetect).resolves.toEqual(['stale'])
+
+    await expect(
+      store.getState().ensureDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    ).resolves.toEqual(['claude'])
+    expect(detectAgents).toHaveBeenCalledTimes(2)
+    expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['claude'])
+  })
 })

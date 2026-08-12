@@ -1,10 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/types'
-import {
-  createLocalDetectedAgentState,
-  type LocalDetectedAgentState
-} from './local-detected-agent-state'
+import { createLocalDetectedAgentState } from './local-detected-agent-state'
+import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
 export type DetectedAgentsSlice = LocalDetectedAgentState & {
   // Why: remote worktrees need per-connection agent detection. The local

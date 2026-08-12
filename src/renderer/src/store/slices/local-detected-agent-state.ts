@@ -6,24 +6,14 @@ import {
   getLocalAgentPreflightContext,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
-import {
-  getLocalAgentContextEviction,
-  removeLocalAgentContextEntry
-} from './local-agent-context-eviction'
+import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
-import {
-  createEmptyLocalDetectedAgentState,
-  type LocalDetectedAgentState
-} from './local-detected-agent-store-state'
+import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
+import type { LocalDetectedAgentState } from './local-detected-agent-store-state'
 
-export type { LocalDetectedAgentState } from './local-detected-agent-store-state'
+type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
-export const createLocalDetectedAgentState: StateCreator<
-  AppState,
-  [],
-  [],
-  LocalDetectedAgentState
-> = (set, get) => {
+export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
   const detectPromises = new Map<string, Promise<TuiAgent[]>>()
   const refreshPromises = new Map<string, Promise<TuiAgent[]>>()
   const failedDetectContextKeys = new Set<string>()
@@ -112,7 +102,7 @@ export const createLocalDetectedAgentState: StateCreator<
                 ...state.localDetectedAgentIdsByContext,
                 [contextKey]: typed
               },
-              isDetectingLocalAgentsByContext: removeLocalAgentContextEntry(
+              isDetectingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isDetectingLocalAgentsByContext,
                 contextKey
               )
@@ -136,7 +126,7 @@ export const createLocalDetectedAgentState: StateCreator<
                 ...state.localDetectedAgentIdsByContext,
                 [contextKey]: []
               },
-              isDetectingLocalAgentsByContext: removeLocalAgentContextEntry(
+              isDetectingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isDetectingLocalAgentsByContext,
                 contextKey
               )
@@ -157,6 +147,8 @@ export const createLocalDetectedAgentState: StateCreator<
       const isFloating = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
       const contextKey = localPreflightContextKey(context)
+      const cached = get().localDetectedAgentIdsByContext[contextKey]
+      const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
       const requestGeneration = localDetectionGeneration
       const exposeInflightToLegacy = (): void => {
         if (!isFloating) {
@@ -221,7 +213,7 @@ export const createLocalDetectedAgentState: StateCreator<
                 ...state.localDetectedAgentIdsByContext,
                 [contextKey]: typed
               },
-              isRefreshingLocalAgentsByContext: removeLocalAgentContextEntry(
+              isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isRefreshingLocalAgentsByContext,
                 contextKey
               )
@@ -239,6 +231,9 @@ export const createLocalDetectedAgentState: StateCreator<
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
           ) {
+            if (!hadUsableCache) {
+              failedDetectContextKeys.add(contextKey)
+            }
             const exposeToLegacy = legacyRefreshContextKey === contextKey
             if (exposeToLegacy) {
               legacyRefreshContextKey = null
@@ -249,7 +244,7 @@ export const createLocalDetectedAgentState: StateCreator<
                 ...state.localDetectedAgentIdsByContext,
                 [contextKey]: fallback
               },
-              isRefreshingLocalAgentsByContext: removeLocalAgentContextEntry(
+              isRefreshingLocalAgentsByContext: contextEviction.removeLocalAgentContextEntry(
                 state.isRefreshingLocalAgentsByContext,
                 contextKey
               )
@@ -267,7 +262,7 @@ export const createLocalDetectedAgentState: StateCreator<
     },
 
     clearLocalDetectedAgentContextsForProjects: (projectIds) => {
-      const eviction = getLocalAgentContextEviction({
+      const eviction = contextEviction.getLocalAgentContextEviction({
         projectIds,
         state: get(),
         internalContextKeys: [
