@@ -444,9 +444,7 @@ export async function listMergeRequests(
         }
       }
     }
-    // Why: keep cwd inference for unresolved-but-valid self-hosted local repos
-    // (#6263). Migrated remotes that hard-fail (GITLAB_HOST mismatch) classify
-    // as not_found so multi-project aggregates soft-skip (#13817).
+    // Why: cwd inference for unresolved self-hosted local repos (#6263); GITLAB_HOST mismatch soft-classifies as not_found (#13817).
     const stateFlag = mrListStateFlags(state)
     const searchFlag = query?.trim() ? ['--search', query.trim()] : []
     await acquire()

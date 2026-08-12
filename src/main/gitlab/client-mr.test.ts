@@ -858,13 +858,37 @@ describe('gitlab client — MR operations', () => {
       await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
       const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      // Why (#6263): the cwd-inferred fallback must honor the typed query too.
       const searchIdx = callArgs.indexOf('--search')
       expect(searchIdx).toBeGreaterThanOrEqual(0)
       expect(callArgs[searchIdx + 1]).toBe('fix login')
     })
 
+    it('omits --search from the cwd fallback for a whitespace-only query', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, '   ')
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      expect(callArgs).not.toContain('--search')
+    })
+
+    it('classifies fallback errors into the result envelope', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.error?.type).toBe('permission_denied')
+      expect(result.items).toEqual([])
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    })
+
     it('soft-classifies GITLAB_HOST remote mismatch from the cwd fallback as not_found', async () => {
-      // Why (#13817): migrated remotes must not replace multi-project views with raw glab stderr.
+      // Why (#13817): soft-skip migrated remotes in multi-project aggregates.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
@@ -920,6 +944,17 @@ describe('gitlab client — MR operations', () => {
       expect(result.items).toEqual([])
       expect(result.error?.type).toBe('unknown')
       expect(result.error?.message).toContain('fix network timeout')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    it('reports the body instead of ".map is not a function" when the cwd fallback returns a non-array', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: [], total: 0 })
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.message).toContain('{"data":[],"total":0}')
       expect(result.error?.message).not.toContain('is not a function')
     })
 

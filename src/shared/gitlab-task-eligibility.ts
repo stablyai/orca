@@ -18,9 +18,7 @@ function hostnameOf(host: string): string {
 }
 
 /** Host from a settled remote identity (`host/group/project` key or remote URL). */
-export function extractGitRemoteHost(
-  repo: Pick<Repo, 'gitRemoteIdentity'>
-): string | null {
+export function extractGitRemoteHost(repo: Pick<Repo, 'gitRemoteIdentity'>): string | null {
   const remoteUrl = repo.gitRemoteIdentity?.remoteUrl?.trim() ?? ''
   if (remoteUrl) {
     if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(remoteUrl)) {
@@ -56,14 +54,13 @@ function knownHostMatches(urlHost: string, knownHost: string): boolean {
   if (urlHost === knownHost) {
     return true
   }
-  // Bare known entry matches any port on the same hostname.
   if (hostnameOf(knownHost) === knownHost) {
     return hostnameOf(urlHost) === knownHost
   }
   return false
 }
 
-/** True when host matches glab knownHosts or a conventional GitLab hostname. */
+/** True when host matches knownHosts or a conventional GitLab hostname. */
 export function isGitLabTaskHost(
   host: string,
   knownHosts: readonly string[] = DEFAULT_GITLAB_TASK_HOSTS
@@ -84,20 +81,15 @@ export function isGitLabTaskHost(
 }
 
 /**
- * Whether a repo belongs in the GitLab task source.
- *
- * Without `knownHosts`, only authoritative non-GitLab evidence excludes a
- * settled project (GitHub-backed). Arbitrary hosts stay eligible so self-hosted
- * GitLab (git.company.com, IP) is not dropped before glab auth hosts are known.
- * With `knownHosts` from glab, settled remotes that match neither those hosts
- * nor a conventional GitLab name are excluded (migrated-off-GitLab).
+ * Baseline GitLab task eligibility without host allowlists.
+ * Why: only authoritative non-GitLab (GitHub-backed) is excluded; arbitrary
+ * self-hosted/IP remotes stay until a per-repo backend not_found proves otherwise.
  */
 export function isGitLabTaskEligibleRepo(
   repo: Pick<
     Repo,
     'id' | 'kind' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity' | 'connectionId'
-  >,
-  knownHosts?: readonly string[] | null
+  >
 ): boolean {
   if (!isGitRepoKind(repo)) {
     return false
@@ -108,22 +100,9 @@ export function isGitLabTaskEligibleRepo(
   if (!hasProjectRemoteIdentity(repo)) {
     return false
   }
-  if (isGitHubBackedRepo(repo)) {
-    return false
-  }
-  if (knownHosts == null) {
-    return true
-  }
-  const host = extractGitRemoteHost(repo)
-  if (!host) {
-    return true
-  }
-  return isGitLabTaskHost(host, knownHosts)
+  return !isGitHubBackedRepo(repo)
 }
 
-export function getGitLabTaskEligibleRepos<T extends Repo>(
-  repos: readonly T[],
-  knownHosts?: readonly string[] | null
-): T[] {
-  return repos.filter((repo) => isGitLabTaskEligibleRepo(repo, knownHosts))
+export function getGitLabTaskEligibleRepos<T extends Repo>(repos: readonly T[]): T[] {
+  return repos.filter((repo) => isGitLabTaskEligibleRepo(repo))
 }
