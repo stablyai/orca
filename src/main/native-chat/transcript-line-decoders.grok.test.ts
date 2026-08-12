@@ -126,6 +126,39 @@ describe('decodeGrokTranscriptLine', () => {
     })
   })
 
+  it('keeps orca-paste handling when a parent directory is named orca-file-…', () => {
+    // The ambiguity guard is branch-free, so a directory name must not
+    // suppress a clipboard-paste split.
+    const imagePath = '/tmp/orca-file-cache/orca-paste-1755000000000-abc.png'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${imagePath}what does it show?</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-paste-dir')).toMatchObject({
+      role: 'user',
+      blocks: [
+        { type: 'image-ref', path: imagePath },
+        { type: 'text', text: 'what does it show?' }
+      ]
+    })
+  })
+
+  it('rejects a separator continuation after an orca-paste name the same way', () => {
+    // Paste names are fully generated (`orca-paste-<ts>-<uuid>.png`), so a
+    // `.backup`-style remainder means the real filename continued past .png.
+    const text = '/tmp/orca-file-cache/orca-paste-report.png.backup summarize'
+    const line = JSON.stringify({
+      type: 'user',
+      content: [{ type: 'text', text: `<user_query>${text}</user_query>` }]
+    })
+
+    expect(decodeGrokTranscriptLine(line, 'fb-paste-sep')).toMatchObject({
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    })
+  })
+
   it('rejects an attachment-only ambiguous name the same way', () => {
     const text = '/tmp/orca-file-1784234906335-f54c579b-819c-4c33-8bd1-2d34ebf871ab-photo.jpg.tmp'
     const line = JSON.stringify({

@@ -240,11 +240,10 @@ function splitGrokPastedImageQuery(text: string): { path: string; query: string 
     return null
   }
   const query = match[2] ?? ''
-  // Why: for mobile names the tail is user-controlled, so a remainder that
-  // continues with separator+name characters (`.tmp summarize`) more plausibly
-  // extends a non-image filename than starts a prompt. The delimiter-free
-  // format cannot distinguish — fail safe to plain text rather than mis-split.
-  if (/orca-file-/i.test(match[1]) && /^[._-][\p{L}\p{N}\p{M}]/u.test(query)) {
+  // Why: generated names never continue past their extension, so a remainder
+  // resuming with separator+name characters (`.tmp summarize`) more plausibly
+  // extends a non-image filename than starts a prompt — fail safe to plain text.
+  if (/^[._-][\p{L}\p{N}\p{M}]/u.test(query)) {
     return null
   }
   return { path: match[1], query: query.trim() }
