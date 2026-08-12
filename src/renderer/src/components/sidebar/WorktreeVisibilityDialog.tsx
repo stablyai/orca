@@ -18,6 +18,8 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../shared/worktree-ownership'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
@@ -28,9 +30,21 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const detectedWorktreesByRepo = useAppStore((s) => s.detectedWorktreesByRepo)
+  const settings = useAppStore((s) => s.settings)
 
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
-  const repo = repos.find((candidate) => candidate.id === repoId) ?? null
+  // Why: a repo id can exist on several hosts, so read and write the row the caller meant
+  // rather than whichever one matches the id first.
+  const hostId =
+    normalizeExecutionHostId(typeof modalData.hostId === 'string' ? modalData.hostId : null) ??
+    undefined
+  // Why: findRepoForHost deliberately returns null when a bare id is ambiguous across hosts.
+  // Fall back to the previous first-match so a host-less caller still opens the dialog rather
+  // than silently rendering nothing.
+  const repo =
+    findRepoForHost(repos, repoId, { hostId, settings }) ??
+    repos.find((candidate) => candidate.id === repoId) ??
+    null
   const detected = repoId ? detectedWorktreesByRepo[repoId] : undefined
   const showOther = repo
     ? effectiveExternalWorktreeVisibility(repo, isLegacyRepoForExternalWorktreeVisibility(repo)) ===
@@ -45,17 +59,21 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
     if (!repoId) {
       return
     }
-    await updateRepo(repoId, {
-      externalWorktreeVisibility: showOther ? 'hide' : 'show',
-      // Why: showing hidden externals again should re-enable the inbox if the
-      // user previously opted out of discovery prompts for this repo.
-      // Why: null is the transport sentinel for clearing on remote runtime paths
-      // where `undefined` is stripped before persistence.
-      ...(!showOther ? { externalWorktreeDiscoverySuppressedAt: null } : {})
-    })
+    await updateRepo(
+      repoId,
+      {
+        externalWorktreeVisibility: showOther ? 'hide' : 'show',
+        // Why: showing hidden externals again should re-enable the inbox if the
+        // user previously opted out of discovery prompts for this repo.
+        // Why: null is the transport sentinel for clearing on remote runtime paths
+        // where `undefined` is stripped before persistence.
+        ...(!showOther ? { externalWorktreeDiscoverySuppressedAt: null } : {})
+      },
+      hostId ? { hostId } : undefined
+    )
     await fetchWorktrees(repoId)
     closeModal()
-  }, [closeModal, fetchWorktrees, repoId, showOther, updateRepo])
+  }, [closeModal, fetchWorktrees, hostId, repoId, showOther, updateRepo])
 
   if (activeModal !== 'worktree-visibility' || !repo || !isGitRepoKind(repo)) {
     return null

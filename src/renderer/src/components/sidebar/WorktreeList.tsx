@@ -662,7 +662,7 @@ type VirtualizedWorktreeViewportProps = {
   collapsedGroups: Set<string>
   handleCreateForRepo: (projectId: string) => void
   handleOpenRepoSettings: (projectId: string, sectionId?: string) => void
-  handleOpenWorktreeVisibility: (projectId: string) => void
+  handleOpenWorktreeVisibility: (projectId: string, hostId?: ExecutionHostId) => void
   handleShowImportedWorktrees: (projectId: string) => void
   handleKeepImportedWorktreesHidden: (projectId: string) => void
   importedWorktreeCardActionState: ReadonlyMap<string, ImportedWorktreeCardActionState>
@@ -4630,7 +4630,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                               <DropdownMenuItem
                                 onSelect={() => {
                                   if (row.repo) {
-                                    handleOpenWorktreeVisibility(row.repo.id)
+                                    handleOpenWorktreeVisibility(
+                                      row.repo.id,
+                                      getRepoExecutionHostId(row.repo)
+                                    )
                                   }
                                 }}
                               >
@@ -6051,8 +6054,10 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const handleOpenWorktreeVisibility = useCallback(
-    (projectId: string) => {
-      openModal('worktree-visibility', { repoId: projectId })
+    (projectId: string, hostId?: ExecutionHostId) => {
+      // Why: the id can exist on several hosts, so carry the row's own host when the caller
+      // knows it — otherwise the dialog reads and writes whichever row resolves first.
+      openModal('worktree-visibility', { repoId: projectId, ...(hostId ? { hostId } : {}) })
     },
     [openModal]
   )
