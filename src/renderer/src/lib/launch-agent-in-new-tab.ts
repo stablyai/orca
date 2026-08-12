@@ -12,7 +12,10 @@ import {
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  getExecutionHostIdForWorktree,
+  getRuntimeEnvironmentIdForWorktree
+} from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
@@ -87,6 +90,15 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const store = useAppStore.getState()
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
+  // Why: an explicitly host-pinned worktree (SSH/runtime) must be backed by a repo whose
+  // own connection actually reaches that host. A stale or mismatched pairing must fail
+  // closed here rather than silently launching the agent against the wrong machine.
+  if (worktree?.hostId && repo) {
+    const claimedExecutionHostId = getExecutionHostIdForWorktree(store, worktreeId)
+    if (claimedExecutionHostId !== getRepoExecutionHostId(repo)) {
+      return null
+    }
+  }
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo
