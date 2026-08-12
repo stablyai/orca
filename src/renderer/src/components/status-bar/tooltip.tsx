@@ -75,6 +75,9 @@ export function formatResetCreditExpiry(
 // ---------------------------------------------------------------------------
 
 export function ProviderIcon({ provider }: { provider: string }): React.JSX.Element {
+  if (provider === 'clinepass') {
+    return <AgentIcon agent="cline" size={13} />
+  }
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }

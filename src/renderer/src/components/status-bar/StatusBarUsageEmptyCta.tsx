@@ -100,6 +100,7 @@ export function StatusBarUsageEmptyCta(): React.JSX.Element {
               )}
             </span>
             <ClaudeIcon size={13} />
+            <AgentIcon agent="cline" size={13} />
             <OpenAIIcon size={13} />
             <GeminiIcon size={13} />
             <OpenCodeGoIcon size={13} />

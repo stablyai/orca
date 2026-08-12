@@ -47,6 +47,7 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
 
 const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'claude',
+  'clinepass',
   'codex',
   'gemini',
   'antigravity',
@@ -94,6 +95,18 @@ describe('provider usage error copy', () => {
     expect(getProviderUsageStatusLabel(p)).toBe('Refresh failed')
     expect(getProviderUsageErrorMessage(p)).toBe(
       'Claude usage could not be refreshed. Agent sessions may still be signed in.'
+    )
+  })
+
+  it('routes ClinePass API key failures to Settings without implying Cline CLI sign-in', () => {
+    const clinePass = provider({
+      provider: 'clinepass',
+      error: 'Unauthorized API key'
+    })
+
+    expect(getProviderUsageStatusLabel(clinePass)).toBe('Check API key')
+    expect(getProviderUsageErrorMessage(clinePass)).toBe(
+      'ClinePass usage could not be refreshed. Update the API key in Settings, then retry.'
     )
   })
 
@@ -342,6 +355,34 @@ describe('getWindowSections', () => {
     ])
   })
 
+  it('returns the complete ClinePass subscription quota roster', () => {
+    const p: ProviderRateLimits = {
+      provider: 'clinepass',
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: {
+        usedPercent: 20,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      monthly: {
+        usedPercent: 30,
+        windowMinutes: 43200,
+        resetsAt: null,
+        resetDescription: null
+      },
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p)).toEqual([
+      { label: 'Session', window: p.session },
+      { label: 'Weekly', window: p.weekly },
+      { label: 'Monthly', window: p.monthly }
+    ])
+  })
+
   it('returns a separate Fable section when Claude reports Fable weekly usage', () => {
     const p: ProviderRateLimits = {
       provider: 'claude',
@@ -580,6 +621,11 @@ describe('ProviderIcon', () => {
   it('renders the Antigravity agent icon for the antigravity provider', () => {
     const markup = renderToStaticMarkup(ProviderIcon({ provider: 'antigravity' }))
     expect(markup).toContain('data-agent-icon="antigravity"')
+  })
+
+  it('reuses the Cline agent icon for the ClinePass provider', () => {
+    const markup = renderToStaticMarkup(ProviderIcon({ provider: 'clinepass' }))
+    expect(markup).toContain('data-agent-icon="cline"')
   })
 
   it('renders the official MiniMax icon asset for the minimax provider', () => {

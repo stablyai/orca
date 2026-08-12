@@ -1148,6 +1148,8 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
       return 'C'
+    case 'clinepass':
+      return 'P'
     case 'gemini':
       return 'G'
     case 'opencode-go':
@@ -2106,7 +2108,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const { claude, clinePass, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } =
+    rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2119,9 +2122,11 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     ...settings,
     antigravityUsageConfigured,
     minimaxCookieConfigured: rateLimits.minimaxCookieConfigured,
+    clinePassApiKeyConfigured: rateLimits.clinePassApiKeyConfigured,
     grokAuthConfigured: rateLimits.grokAuthConfigured
   }
   const visibleClaude = getVisibleUsageProvider('claude', claude, usageSettings)
+  const visibleClinePass = getVisibleUsageProvider('clinepass', clinePass, usageSettings)
   const visibleCodex = getVisibleUsageProvider('codex', codex, usageSettings)
   const visibleGemini = getVisibleUsageProvider('gemini', gemini, usageSettings)
   const visibleKimi = getVisibleUsageProvider('kimi', kimi, usageSettings)
@@ -2132,6 +2137,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     visibleClaude !== null &&
     statusBarItems.includes('claude') &&
     isStatusBarItemAvailable('claude', detectedAgentIds)
+  // Why: ClinePass uses an API key, not Cline CLI authentication or PATH detection.
+  const showClinePass = visibleClinePass !== null && statusBarItems.includes('clinepass')
   const showCodex =
     visibleCodex !== null &&
     statusBarItems.includes('codex') &&
@@ -2165,6 +2172,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // Why: meter-only children (excludes resource-usage) so the % display callout anchors to a real meter cluster.
   const hasVisibleUsageMeters =
     showClaude ||
+    showClinePass ||
     showCodex ||
     showGemini ||
     showOpencodeGo ||
@@ -2175,13 +2183,14 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
   const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+    { claude, clinePass, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
     usageSettings
   )
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
     claude?.status === 'fetching' ||
+    clinePass?.status === 'fetching' ||
     codex?.status === 'fetching' ||
     gemini?.status === 'fetching' ||
     opencodeGo?.status === 'fetching' ||
@@ -2201,6 +2210,7 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
   // otherwise an empty trigger would bypass those visibility controls.
   const rosterProviders = [
     showClaude ? visibleClaude : null,
+    showClinePass ? visibleClinePass : null,
     showCodex ? visibleCodex : null,
     showGemini ? visibleGemini : null,
     showAntigravity ? visibleAntigravity : null,
@@ -2463,6 +2473,19 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
               {translate('auto.components.status.bar.StatusBar.3885eb74d8', 'Claude Usage')}
             </DropdownMenuCheckboxItem>
           )}
+          <DropdownMenuCheckboxItem
+            checked={statusBarItems.includes('clinepass')}
+            onCheckedChange={() => {
+              recordFeatureInteraction('usage-tracking')
+              toggleStatusBarItem('clinepass')
+            }}
+          >
+            <AgentIcon agent="cline" size={14} />
+            {translate(
+              'auto.components.status.bar.StatusBar.clinePassUsageMenu',
+              'ClinePass Usage'
+            )}
+          </DropdownMenuCheckboxItem>
           {isStatusBarItemAvailable('codex', detectedAgentIds) && (
             <DropdownMenuCheckboxItem
               checked={statusBarItems.includes('codex')}

@@ -60,7 +60,8 @@
         "resourceUsageToggleDescription": "Show the Resource Manager. Click it for CPU, memory, sessions, daemon controls, and workspace disk scans.",
         "portsToggleDescription": "Show live workspace ports. Click it for workspace-scoped ports and external listeners.",
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
-        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI."
+        "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
+        "clinePassToggleDescription": "Show ClinePass 5-hour, weekly, and monthly subscription quota."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",
@@ -3491,7 +3492,8 @@
             "grokUsageMenu": "Grok Usage",
             "floatingTerminalNewActivity": "{{label}}, new activity",
             "codexSignInSuccess": "Signed in to Codex",
-            "codexSignInError": "Codex sign-in failed. Please try again."
+            "codexSignInError": "Codex sign-in failed. Please try again.",
+            "clinePassUsageMenu": "ClinePass Usage"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "Connect an account",
@@ -3670,7 +3672,9 @@
             "e2c6a4f917": "Run Grok to refresh",
             "d1b7f509ac": "Run grok in a terminal on the computer running Orca and wait for it to start. If prompted, complete sign-in, then retry usage. You do not need to send a chat message.",
             "f90b3d7a16": "Run Kimi to refresh",
-            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage."
+            "a37e8c15d4": "Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.",
+            "clinePassApiKeyError": "Check API key",
+            "clinePassApiKeyRecovery": "ClinePass usage could not be refreshed. Update the API key in Settings, then retry."
           },
           "SshTargetStatusRow": {
             "sshHost": "SSH Host"
@@ -8480,7 +8484,9 @@
             "d2c6a0e8f1": "grok",
             "c1b5f9d7e0": "xai",
             "b0a4e8c6d9": "oauth",
-            "a9f3d7b5c8": "login"
+            "a9f3d7b5c8": "login",
+            "cfe73344d1": "ClinePass Subscription Quota",
+            "7a55b8bad9": "Add a Cline API key to track ClinePass 5-hour, weekly, and monthly subscription quota."
           }
         },
         "advanced": {
@@ -8707,7 +8713,9 @@
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
-            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining."
+            "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
+            "6c82e7d14f": "ClinePass Usage",
+            "df7ae25c91": "Show ClinePass subscription quota in the status bar."
           }
         },
         "auto": {
@@ -11258,6 +11266,36 @@
           "cancel": "Keep cleaning",
           "stopping": "Stopping…",
           "confirm": "Stop cleanup"
+        },
+        "ClinePassAccountsSection": {
+          "3f06b1e71d": "ClinePass credential status could not be loaded.",
+          "f036f412e9": "ClinePass API key is required.",
+          "738e1fe094": "ClinePass API key saved.",
+          "d8358b48f6": "ClinePass API key could not be saved. Check the key and try again.",
+          "902abdf7f8": "Stored ClinePass API key forgotten.",
+          "8c8eb65703": "Stored ClinePass API key could not be forgotten. Try again.",
+          "02498819c4": "ClinePass",
+          "71c914cff5": "Track included ClinePass subscription quota across 5-hour, weekly, and monthly windows.",
+          "7b9e5f6452": "API key docs",
+          "f0fcb3c84e": "Checking API key…",
+          "139c527c90": "Credential status unavailable",
+          "a59efe5917": "API key saved in Orca",
+          "76d85f70af": "Configured by CLINE_API_KEY",
+          "d6d08ab7ba": "API key not configured",
+          "20e3fe7fe6": "Stored locally and sent only to api.cline.bot to read your ClinePass subscription quota.",
+          "933597b6ca": "CLINE_API_KEY configures Orca and cannot be cleared here. Save a key below to override it.",
+          "0571590443": "Add a Cline API key to read your ClinePass subscription quota.",
+          "fac44d3a91": "Saved",
+          "b1866729fa": "Environment",
+          "d9ea8a4643": "Not saved",
+          "c89556fc40": "ClinePass API key",
+          "3d738f9c5f": "Authenticate quota refreshes with an official Cline API key.",
+          "7e87f4df2a": "A saved key overrides the environment",
+          "ce12d5e9c6": "Paste a Cline API key",
+          "61a2148925": "Replace",
+          "3fc8e072dc": "Save",
+          "535a2c9a19": "Forget API key",
+          "a11dc5b121": "Create an API key in your Cline account, then paste it here. Orca never displays a saved key."
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."

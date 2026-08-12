@@ -1,6 +1,7 @@
 import type { ElectronAPI } from '@electron-toolkit/preload'
 import type {
   ClaudeAccountsApi,
+  ClinePassCredentialsApi,
   CodexAccountsApi,
   CodexConfigSyncApi,
   GrokAccountsApi,
@@ -138,6 +139,7 @@ export type PreloadApi = {
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
+  clinePassCredentials: ClinePassCredentialsApi
   minimaxCredentials: MinimaxCredentialsApi
   grokAccounts: GrokAccountsApi
   ssh: SshApi

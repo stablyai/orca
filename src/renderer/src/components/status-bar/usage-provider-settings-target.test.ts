@@ -4,6 +4,7 @@ import { getUsageProviderAccountsSectionId } from './usage-provider-settings-tar
 describe('getUsageProviderAccountsSectionId', () => {
   it('routes providers only to settings sections that exist', () => {
     expect(getUsageProviderAccountsSectionId('claude')).toBe('accounts-claude')
+    expect(getUsageProviderAccountsSectionId('clinepass')).toBe('accounts-clinepass')
     expect(getUsageProviderAccountsSectionId('codex')).toBe('accounts-codex')
     expect(getUsageProviderAccountsSectionId('gemini')).toBe('accounts-gemini')
     expect(getUsageProviderAccountsSectionId('antigravity')).toBe('accounts-gemini')

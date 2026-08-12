@@ -338,6 +338,7 @@ import {
   prepareAndInvokeUpdaterInstall,
   registerRendererRestartIpcRelays
 } from './renderer-restart-wiring'
+import type { ClinePassCredentialsStatus } from '../shared/clinepass-credentials'
 
 // Why: the sync checkpoint only stages; this joins its durable write so a
 // navigating path can abort instead of losing the staged session.
@@ -4652,6 +4653,15 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
     clearCookie: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
+  },
+
+  clinePassCredentials: {
+    getStatus: (): Promise<ClinePassCredentialsStatus> =>
+      ipcRenderer.invoke('clinePassCredentials:getStatus'),
+    saveApiKey: (apiKey: string): Promise<ClinePassCredentialsStatus> =>
+      ipcRenderer.invoke('clinePassCredentials:saveApiKey', apiKey),
+    clearApiKey: (): Promise<ClinePassCredentialsStatus> =>
+      ipcRenderer.invoke('clinePassCredentials:clearApiKey')
   },
 
   grokAccounts: {

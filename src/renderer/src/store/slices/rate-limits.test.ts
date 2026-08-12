@@ -16,4 +16,11 @@ describe('createRateLimitSlice', () => {
 
     expect(store.getState().rateLimits.antigravity).toBeNull()
   })
+
+  it('initializes ClinePass as an unconfigured optional provider', () => {
+    const store = createRateLimitStore()
+
+    expect(store.getState().rateLimits.clinePass).toBeNull()
+    expect(store.getState().rateLimits.clinePassApiKeyConfigured).toBe(false)
+  })
 })

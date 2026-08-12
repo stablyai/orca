@@ -26,6 +26,8 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { hasClinePassApiKey, readClinePassApiKey } from '../clinepass/clinepass-api-key-store'
+import { fetchClinePassRateLimits } from './clinepass-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -58,6 +60,11 @@ type MiniMaxRateLimitConfig = {
 
 type MiniMaxResolvedConfig = {
   config: MiniMaxRateLimitConfig
+  error: string | null
+}
+
+type ClinePassResolvedApiKey = {
+  apiKey: string | null
   error: string | null
 }
 
@@ -109,6 +116,7 @@ type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  clinePass: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -175,7 +183,8 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    clinePass: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
@@ -190,7 +199,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    clinepass: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -201,7 +211,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    clinepass: 0
   }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -218,8 +229,10 @@ export class RateLimitService {
   private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
   private minimaxFetchGeneration = 0
+  private clinePassFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
+  private lastClinePassApiKeyFingerprint = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -388,6 +401,7 @@ export class RateLimitService {
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
+      clinePassApiKeyConfigured: hasClinePassApiKey(),
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -425,6 +439,15 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       minimax: this.withFetchingStatus(null, 'minimax')
+    })
+  }
+
+  invalidateClinePassCredentialState(): void {
+    this.clinePassFetchGeneration += 1
+    // Why: save/clear races an in-flight usage fetch; drop the visible snapshot before any old-key result returns.
+    this.updateState({
+      ...this.state,
+      clinePass: this.withFetchingStatus(null, 'clinepass')
     })
   }
 
@@ -871,7 +894,8 @@ export class RateLimitService {
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      clinepass: this.state.clinePass
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
@@ -1438,6 +1462,27 @@ export class RateLimitService {
     }
   }
 
+  private resolveClinePassApiKey(): ClinePassResolvedApiKey {
+    try {
+      return { apiKey: readClinePassApiKey(), error: null }
+    } catch (error) {
+      // Why: a decrypt/keychain failure must not abort every provider's refresh.
+      return { apiKey: null, error: toErrorMessage(error) }
+    }
+  }
+
+  private getClinePassCredentialError(message: string): ProviderRateLimits {
+    return {
+      provider: 'clinepass',
+      session: null,
+      weekly: null,
+      updatedAt: Date.now(),
+      error: message,
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
   // Why: hitting a usage endpoint before its Retry-After expires burns the budget for nothing and keeps the 429 window alive.
   private isRetryAfterActive(limits: ProviderRateLimits | null): boolean {
     return Boolean(
@@ -1578,6 +1623,7 @@ export class RateLimitService {
       | 'minimax'
       | 'grok'
       | 'antigravity'
+      | 'clinepass'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1632,6 +1678,8 @@ export class RateLimitService {
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
+    const clinePassResolved = this.resolveClinePassApiKey()
+    const clinePassApiKey = clinePassResolved.apiKey ?? ''
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
@@ -1654,6 +1702,15 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const currentClinePassApiKeyFingerprint = `${clinePassApiKey}|${clinePassResolved.error ?? ''}`
+    const clinePassConfigChanged =
+      currentClinePassApiKeyFingerprint !== this.lastClinePassApiKeyFingerprint
+    if (clinePassConfigChanged) {
+      this.lastClinePassApiKeyFingerprint = currentClinePassApiKeyFingerprint
+      this.clinePassFetchGeneration += 1
+    }
+    const clinePassGeneration = this.clinePassFetchGeneration
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -1671,7 +1728,10 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      clinePass: clinePassConfigChanged
+        ? this.withFetchingStatus(null, 'clinepass')
+        : this.withFetchingStatus(previousState.clinePass, 'clinepass')
     })
 
     const missingWslCodexHome =
@@ -1688,40 +1748,50 @@ export class RateLimitService {
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      clinePassResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      clinePassResolved.error
+        ? Promise.resolve(this.getClinePassCredentialError(clinePassResolved.error))
+        : fetchClinePassRateLimits(clinePassApiKey, { signal })
+    ])
 
     if (signal.aborted) {
       return
@@ -1815,6 +1885,21 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
+    const clinePass =
+      clinePassResult.status === 'fulfilled'
+        ? clinePassResult.value
+        : ({
+            provider: 'clinepass',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              clinePassResult.reason instanceof Error
+                ? clinePassResult.reason.message
+                : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+
     const latestCodexHome = this.resolveCodexHome(codexTarget)
     const latestClaudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
     if (signal.aborted) {
@@ -1838,6 +1923,7 @@ export class RateLimitService {
       this.isSameClaudeTarget(claudeTarget, this.claudeFetchTarget)
     const shouldApplyOpencode = opencodeGeneration === this.opencodeFetchGeneration
     const shouldApplyMiniMax = miniMaxGeneration === this.minimaxFetchGeneration
+    const shouldApplyClinePass = clinePassGeneration === this.clinePassFetchGeneration
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
@@ -1853,6 +1939,9 @@ export class RateLimitService {
     this.trackActiveFailureStreak('kimi', kimi)
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
+    }
+    if (shouldApplyClinePass) {
+      this.trackActiveFailureStreak('clinepass', clinePass)
     }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
@@ -1878,7 +1967,12 @@ export class RateLimitService {
         ? miniMaxConfigChanged
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
-        : this.state.minimax
+        : this.state.minimax,
+      clinePass: shouldApplyClinePass
+        ? clinePassConfigChanged
+          ? clinePass
+          : this.applyStalePolicy(clinePass, previousState.clinePass)
+        : this.state.clinePass
     })
 
     const grokResult = await grokResultPromise

@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    clinePassApiKeyConfigured: false,
     ...overrides
   }
 }
@@ -128,6 +129,7 @@ describe('hasUsageProviderSettings', () => {
     )
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
+    expect(hasUsageProviderSettings(usageSettings({ clinePassApiKeyConfigured: true }))).toBe(true)
   })
 
   it('does not treat empty or unloaded settings as configured', () => {
@@ -203,6 +205,17 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
     expect(hasUsageProviderSettingsForProvider('grok', null)).toBe(false)
   })
+
+  it('treats the ClinePass API key flag as the durable ClinePass signal', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'clinepass',
+        usageSettings({ clinePassApiKeyConfigured: true })
+      )
+    ).toBe(true)
+    expect(hasUsageProviderSettingsForProvider('clinepass', usageSettings())).toBe(false)
+    expect(hasUsageProviderSettingsForProvider('clinepass', null)).toBe(false)
+  })
 })
 
 describe('getVisibleUsageProvider', () => {
@@ -263,12 +276,50 @@ describe('getVisibleUsageProvider', () => {
     expect(getVisibleUsageProvider('codex', null, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('grok', undefined, usageSettings())).toBe(null)
     expect(getVisibleUsageProvider('gemini', provider('fetching'), usageSettings())).toBe(null)
+    expect(getVisibleUsageProvider('clinepass', undefined, usageSettings())).toBe(null)
   })
 
   it('creates a pending snapshot when an older main process omits a configured provider', () => {
     expect(
       getVisibleUsageProvider('grok', undefined, usageSettings({ grokAuthConfigured: true }))
     ).toMatchObject({ provider: 'grok', status: 'fetching' })
+  })
+
+  it('keeps configured ClinePass visible with a complete pending quota shape', () => {
+    expect(
+      getVisibleUsageProvider(
+        'clinepass',
+        undefined,
+        usageSettings({ clinePassApiKeyConfigured: true })
+      )
+    ).toMatchObject({
+      provider: 'clinepass',
+      status: 'fetching',
+      session: null,
+      weekly: null,
+      monthly: null
+    })
+  })
+
+  it('keeps live ClinePass quota windows distinct from Cline CLI usage', () => {
+    const live = provider('ok', {
+      provider: 'clinepass',
+      session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: {
+        usedPercent: 20,
+        windowMinutes: 10080,
+        resetsAt: null,
+        resetDescription: null
+      },
+      monthly: {
+        usedPercent: 30,
+        windowMinutes: 43200,
+        resetsAt: null,
+        resetDescription: null
+      }
+    })
+
+    expect(getVisibleUsageProvider('clinepass', live, usageSettings())).toBe(live)
   })
 
   it('keeps MiniMax visible while the snapshot is pending when a cookie is configured', () => {

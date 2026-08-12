@@ -191,6 +191,41 @@ export const getAccountsMiniMaxSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsClinePassSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.cfe73344d1',
+      'ClinePass Subscription Quota'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.7a55b8bad9',
+      'Add a Cline API key to track ClinePass 5-hour, weekly, and monthly subscription quota.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.308f59fef5', 'clinepass'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.cbd82de6ed', 'cline'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.bb02af14f0',
+        'subscription'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c759741d77', 'quota'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.6820f493db', 'api key'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.7fdd7b176f',
+        'CLINE_API_KEY'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c0fb8c7458', '5-hour'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.fc6394b24b', 'weekly'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.777e4e05e8', 'monthly'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.accounts.search.f4a8c2e1b7', 'Grok (xAI) Usage'),
@@ -219,5 +254,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
+  ...getAccountsClinePassSearchEntries(),
   ...getAccountsGrokSearchEntries()
 ])

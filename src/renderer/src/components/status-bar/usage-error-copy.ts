@@ -5,6 +5,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'claude') {
     return 'Claude'
   }
+  if (provider === 'clinepass') {
+    return 'ClinePass'
+  }
   if (provider === 'codex') {
     return 'Codex'
   }
@@ -83,6 +86,9 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (delegatedCliProvider === 'kimi') {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
+  if (p.provider === 'clinepass' && isUsageAuthError(p.error)) {
+    return translate('auto.components.status.bar.tooltip.clinePassApiKeyError', 'Check API key')
+  }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
@@ -136,6 +142,12 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     return translate(
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
+    )
+  }
+  if (p.provider === 'clinepass' && isUsageAuthError(p.error)) {
+    return translate(
+      'auto.components.status.bar.tooltip.clinePassApiKeyRecovery',
+      'ClinePass usage could not be refreshed. Update the API key in Settings, then retry.'
     )
   }
   if (p.provider === 'claude') {

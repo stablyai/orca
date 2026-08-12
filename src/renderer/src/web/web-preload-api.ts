@@ -900,6 +900,7 @@ function createWebPreloadApi(): Partial<PreloadApi> {
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
+    clinePassCredentials: createClinePassCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),
     codexAccounts: createAccountsApi(),
     claudeAccounts: createAccountsApi(),
@@ -3186,6 +3187,7 @@ function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notification
 function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
   const empty: RateLimitState = {
     claude: null,
+    clinePass: null,
     codex: null,
     gemini: null,
     opencodeGo: null,
@@ -3193,6 +3195,7 @@ function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimits']> {
     antigravity: null,
     minimax: null,
     grok: null,
+    clinePassApiKeyConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
     claudeTarget: { runtime: 'host', wslDistro: null },
@@ -3223,6 +3226,18 @@ function createMiniMaxCredentialsApi(): NonNullable<Partial<PreloadApi>['minimax
     getStatus: () => Promise.resolve(notConfigured),
     saveCookie: () => Promise.reject(unsupportedError),
     clearCookie: () => Promise.resolve(notConfigured)
+  }
+}
+
+function createClinePassCredentialsApi(): NonNullable<Partial<PreloadApi>['clinePassCredentials']> {
+  const notConfigured = { configured: false, source: 'none' as const }
+  const unsupportedError = new Error(
+    'ClinePass API key storage is only available in the desktop app.'
+  )
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () => Promise.reject(unsupportedError),
+    clearApiKey: () => Promise.reject(unsupportedError)
   }
 }
 
