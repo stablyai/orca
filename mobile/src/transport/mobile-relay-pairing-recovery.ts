@@ -106,11 +106,7 @@ async function runRecovery(
   // of an authoritatively committed install must not look like "nothing to
   // reconcile" — that journal is the only record left to retry the write from.
   let observedCommitted = false
-  // Why: BAD_OUTER_CREDENTIAL is the cell's authoritative "this credential will
-  // never validate" signal (desktop revoked the device, invite was minted for a
-  // different host, etc.). Track it per-credential so we can abandon the journal
-  // once every path is provably dead instead of stranding the user on
-  // "recovery pending" until the invite TTL + grace window elapses.
+  // Why: BAD_OUTER_CREDENTIAL is permanent — count per-credential so all-rejected abandons without waiting on the TTL.
   let permanentFailures = 0
   for (const credential of credentials) {
     let client: PairingCandidateClient | null = null
@@ -162,11 +158,7 @@ async function runRecovery(
       client?.close()
     }
   }
-  // Why: when every credential was authoritatively rejected there is no future
-  // launch that could possibly reconcile — the desktop has moved on and the
-  // relay will keep rejecting these tokens forever. Drop the journal now so a
-  // fresh scan can proceed; the time-based branch below stays as the fallback
-  // for transient outages that never produced a permanent signal.
+  // Why: all-permanent means no future launch can reconcile; abandon now and let the TTL branch below handle transient-only outages.
   if (!observedCommitted && permanentFailures === credentials.length) {
     await dependencies.clearJournal(journal.metadata.journalId).catch(() => {})
     return 'abandoned'

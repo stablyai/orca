@@ -238,10 +238,7 @@ describe('mobile relay pairing recovery', () => {
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: when the desktop has revoked the device behind the journal (e.g. the
-  // user rotated the QR), every recovery credential comes back BAD_OUTER_CREDENTIAL.
-  // Waiting out the invite TTL + grace strand the user on "recovery pending" for
-  // no recoverable reason — the credentials will never become valid again.
+  // Why: desktop-revoked journal → every credential returns 4401; abandon must not wait on the TTL.
   it('abandons a journal immediately when every credential is permanently rejected', async () => {
     const saved = journal()
     const seenCredentials: (string | undefined)[] = []
@@ -253,21 +250,17 @@ describe('mobile relay pairing recovery', () => {
     })
     const deps = {
       ...dependencies({ journal: saved, connectRelay }),
-      // Why: pin now inside the invite lifetime so the time-based abandon branch
-      // cannot be the reason recovery returns 'abandoned'.
+      // Why: pin now inside invite lifetime so the TTL-based abandon branch cannot be the cause.
       now: () => now
     }
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
-    // Why: prove both the pending-resume and valid-invite candidates were tried;
-    // without this the test would still pass if recoveryCredentials silently
-    // dropped one and only one permanent rejection was counted.
+    // Why: lock in recoveryCredentials' order/contents, not just the final result.
     expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
     expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
   })
 
-  // Why: one transient failure leaves the door open to reconciling on the next
-  // launch; only all-permanent is enough to abandon.
+  // Why: any transient credential keeps the journal retryable on a later launch.
   it('keeps the journal when at least one credential had a transient failure', async () => {
     const saved = journal()
     const seenCredentials: (string | undefined)[] = []
@@ -287,9 +280,7 @@ describe('mobile relay pairing recovery', () => {
     }
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
-    // Why: prove the resume candidate rejected permanently while the invite
-    // candidate produced a transient error; otherwise the test would pass even
-    // if only one path was exercised.
+    // Why: lock in resume-permanent + invite-transient, not just the final result.
     expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, undefined])
     expect(deps.clearJournal).not.toHaveBeenCalled()
   })
