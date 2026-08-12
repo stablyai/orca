@@ -41,6 +41,10 @@ vi.mock('../../../shared/cross-platform-path', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
+import {
+  getOpenFilesForExternalFileChange,
+  notifyEditorExternalFileChange
+} from '@/components/editor/editor-autosave'
 import { createExternalWatchEventHandler } from './useEditorExternalWatch'
 
 const EVENT_COUNT = 5_000
@@ -48,6 +52,7 @@ const OPEN_FILE_COUNT = 100
 
 describe('external watcher path matching complexity', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     vi.clearAllMocks()
     pathOperationCounts.aliasComparisons = 0
     pathOperationCounts.normalizations = 0
@@ -57,6 +62,7 @@ describe('external watcher path matching complexity', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 
@@ -91,6 +97,10 @@ describe('external watcher path matching complexity', () => {
     const startedAt = process.hrtime.bigint()
     handleFsChanged(payload)
     const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000
+    vi.advanceTimersByTime(100)
+    for (const [notification] of vi.mocked(notifyEditorExternalFileChange).mock.calls) {
+      getOpenFilesForExternalFileChange(openFiles as never, notification)
+    }
     const pathOperations =
       pathOperationCounts.aliasComparisons +
       pathOperationCounts.normalizations +
