@@ -7,6 +7,12 @@ import {
 } from './file-preview'
 
 const mocks = vi.hoisted(() => ({
+  browserAvailability: {
+    state: 'enabled' as const,
+    provider: 'local-client' as 'local-client' | 'paired-runtime'
+  } as
+    | { state: 'enabled'; provider: 'local-client' | 'paired-runtime' }
+    | { state: 'hidden'; reason: string },
   closeEmptyGroup: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(() => 'group-2'),
@@ -17,6 +23,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
+
+vi.mock('@/lib/client-creation-action-policy', () => ({
+  getClientCreationActionPolicy: () => ({ 'managed-browser': mocks.browserAvailability })
+}))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: () => mocks.environmentId
@@ -45,6 +55,7 @@ vi.mock('@/store', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.createWebRuntimeSessionBrowserTab.mockResolvedValue(true)
+  mocks.browserAvailability = { state: 'enabled', provider: 'local-client' }
   mocks.environmentId = null
   mocks.connectionId = null
 })
@@ -64,6 +75,7 @@ describe('openFileInBrowserTab', () => {
 
   it('creates paired-runtime file browsers at the owning host', () => {
     mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
 
     openFileInBrowserTab({ filePath: '/srv/repo/example.html', worktreeId: 'wt-1' })
 
@@ -79,6 +91,7 @@ describe('openFileInBrowserTab', () => {
 
   it('creates paired-runtime side previews in the requested split', () => {
     mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
 
     openFilePreviewToSide({
       language: 'html',
@@ -102,6 +115,7 @@ describe('openFileInBrowserTab', () => {
 
   it('reports a paired-runtime recovery failure without an unhandled rejection', async () => {
     mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
     mocks.createWebRuntimeSessionBrowserTab.mockRejectedValue(new Error('cleanup unknown'))
 
     openFilePreviewToSide({
@@ -115,6 +129,39 @@ describe('openFileInBrowserTab', () => {
       expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
     )
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-2')
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not send a runtime-owned file path to the Electron browser provider', () => {
+    mocks.environmentId = 'runtime-1'
+
+    openFilePreviewToSide({
+      language: 'html',
+      filePath: '/srv/repo/example.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
+    expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('rejects unavailable paired-web previews before creating a split', () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'hidden', reason: 'streaming unavailable' }
+
+    openFilePreviewToSide({
+      language: 'html',
+      filePath: '/srv/repo/example.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith('streaming unavailable')
+    expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
+    expect(mocks.createWebRuntimeSessionBrowserTab).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })
 

@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
@@ -68,8 +69,19 @@ export function openFileInBrowserTab(params: {
   }
 
   const state = useAppStore.getState()
+  const browserAvailability = getClientCreationActionPolicy(state, params.worktreeId)[
+    'managed-browser'
+  ]
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return target
+  }
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, params.worktreeId)
   if (environmentId) {
+    if (browserAvailability.provider !== 'paired-runtime') {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      return target
+    }
     reportRemoteFileBrowserOpen(
       createWebRuntimeSessionBrowserTab({
         worktreeId: params.worktreeId,
@@ -117,6 +129,16 @@ export function openFilePreviewToSide(params: {
     toast.error(target.message)
     return
   }
+  const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (environmentId && browserAvailability.provider !== 'paired-runtime') {
+    toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+    return
+  }
 
   // Resolve the group this action originated from. Prefer the caller-supplied
   // id (the tab's own group under split-pane layouts), fall back to the
@@ -143,7 +165,6 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (environmentId) {
     reportRemoteFileBrowserOpen(
       createWebRuntimeSessionBrowserTab({
