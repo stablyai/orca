@@ -107,6 +107,20 @@ describe('launchAgentInNewTab initial cwd', () => {
     expect(store.createTab).not.toHaveBeenCalled()
   })
 
+  it('fails closed for a host-pinned worktree whose repo no longer exists', async () => {
+    executionHostId = 'ssh:ssh-a'
+    store.allWorktrees.mockReturnValue([
+      { id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:ssh-a' } as never
+    ])
+    store.repos = []
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+  })
+
   it('forwards the original cwd to a paired web runtime', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')

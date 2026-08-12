@@ -91,11 +91,12 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
   const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
   const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
   // Why: an explicitly host-pinned worktree (SSH/runtime) must be backed by a repo whose
-  // own connection actually reaches that host. A stale or mismatched pairing must fail
-  // closed here rather than silently launching the agent against the wrong machine.
-  if (worktree?.hostId && repo) {
+  // own connection actually reaches that host. A stale or mismatched pairing — including
+  // an orphaned worktree whose repoId no longer resolves to any repo — must fail closed
+  // here rather than silently launching the agent against the wrong machine.
+  if (worktree?.hostId) {
     const claimedExecutionHostId = getExecutionHostIdForWorktree(store, worktreeId)
-    if (claimedExecutionHostId !== getRepoExecutionHostId(repo)) {
+    if (!repo || claimedExecutionHostId !== getRepoExecutionHostId(repo)) {
       return null
     }
   }
