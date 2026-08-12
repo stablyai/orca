@@ -7,13 +7,15 @@ import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repo-types'
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'beads'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
+  // Why: beads issues have no web URL, so url is '' for them — link consumers must guard.
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  beadsIdentifier?: string
   repoId?: string
 }
 

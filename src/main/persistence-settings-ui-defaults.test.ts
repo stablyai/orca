@@ -92,7 +92,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
-    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira', 'beads'])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
     ])

@@ -18,6 +18,7 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
+    (a.beadsIdentifier ?? null) === (b.beadsIdentifier ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -31,7 +32,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'beads'
   ) {
     return null
   }
@@ -44,7 +46,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     typeof raw.title !== 'string' ||
     raw.title.trim().length === 0 ||
     typeof raw.url !== 'string' ||
-    raw.url.trim().length === 0
+    // Why: beads issues have no web URL, so an empty url is valid only for them.
+    (raw.url.trim().length === 0 && raw.provider !== 'beads')
   ) {
     return null
   }
@@ -59,6 +62,9 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.beadsIdentifier === 'string' && raw.beadsIdentifier.trim().length > 0
+      ? { beadsIdentifier: raw.beadsIdentifier.trim() }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }

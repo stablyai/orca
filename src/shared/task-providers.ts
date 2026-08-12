@@ -1,6 +1,14 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+import { parseExecutionHostId } from './execution-host'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'beads'
+
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'beads'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -55,6 +63,27 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  bdInstalled: boolean
+}
+
+// Why: bd runs on the host that owns the repo checkout (unlike gh/glab, which run
+// on the client), so repos on ssh/runtime hosts keep Beads available without a
+// local bd — the Tasks page surfaces per-host bd state once fetches settle.
+// Mirrors canUseGitLabSmartSource's remote-host escape hatch.
+export function resolveBeadsTaskProviderAvailability(args: {
+  localBdInstalled: boolean
+  repoHostIds: Iterable<string | null | undefined>
+}): boolean {
+  if (args.localBdInstalled) {
+    return true
+  }
+  for (const hostId of args.repoHostIds) {
+    const kind = parseExecutionHostId(hostId)?.kind
+    if (kind === 'ssh' || kind === 'runtime') {
+      return true
+    }
+  }
+  return false
 }
 
 export function filterAvailableTaskProviders(
@@ -90,6 +119,18 @@ export function restoreAvailableDefaultTaskProvider(
   return available
 }
 
+// Why: the picker can render providers resurrected beyond the stored list (see
+// restoreAvailableDefaultTaskProvider); persisting the union keeps what the user
+// sees from silently dropping out of settings when the default moves elsewhere.
+export function mergeRenderedVisibleTaskProviders(
+  storedVisible: readonly TaskProvider[],
+  rendered: readonly TaskProvider[]
+): TaskProvider[] {
+  return TASK_PROVIDERS.filter(
+    (provider) => storedVisible.includes(provider) || rendered.includes(provider)
+  )
+}
+
 function isTaskProviderAvailable(
   provider: TaskProvider,
   availability: TaskProviderAvailability
@@ -104,6 +145,9 @@ function isTaskProviderAvailable(
   // when disconnected would remove the entry point for first-time setup.
   if (provider === 'jira') {
     return true
+  }
+  if (provider === 'beads') {
+    return availability.bdInstalled
   }
   return availability.linearConnected
 }
