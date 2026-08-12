@@ -99,7 +99,12 @@ export function getMergedWorktreeAutoCloseStructuralSkipReason(
   }
   // Why the `graceMs > 0` guard: with no grace at all a workspace whose
   // recorded creation time sits slightly ahead of the clock must still close.
-  if (graceMs > 0 && worktree.createdAt !== undefined && now - worktree.createdAt < graceMs) {
+  //
+  // Why an unknown creation time counts as inside the window: a workspace found
+  // on disk gets metadata without `createdAt`, and reading that absence as "old
+  // enough" deleted a merged, clean checkout on the very first sweep after it
+  // was discovered. Unknown age means the window cannot be proven expired.
+  if (graceMs > 0 && (worktree.createdAt === undefined || now - worktree.createdAt < graceMs)) {
     return 'recently-created'
   }
   return null

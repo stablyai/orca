@@ -38,7 +38,10 @@ vi.mock('../git/worktree-branch-merge-state', () => ({
   hasWorktreeBranchUpstreamConfigured: hasWorktreeBranchUpstreamConfiguredMock
 }))
 
-import { scanMergedWorktreeAutoCloseCandidates } from './merged-worktree-auto-close-scan'
+import {
+  MERGED_WORKTREE_AUTO_CLOSE_GIT_TIMEOUT_MS,
+  scanMergedWorktreeAutoCloseCandidates
+} from './merged-worktree-auto-close-scan'
 
 const NOW = 1_800_000_000_000
 const CREATED_AT = NOW - DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS - 1
@@ -70,6 +73,14 @@ function createStore(
   return {
     getWorktreeMeta: () => ({ createdAt, ...meta }),
     getSettings: () => settings as GlobalSettings
+  } as unknown as Store
+}
+
+/** A workspace found on disk gets metadata with no recorded creation time. */
+function createStoreWithUnknownCreationTime(): Store {
+  return {
+    getWorktreeMeta: () => ({}),
+    getSettings: () => ({}) as GlobalSettings
   } as unknown as Store
 }
 
@@ -188,6 +199,35 @@ describe('scanMergedWorktreeAutoCloseCandidates', () => {
     await expect(
       scanMergedWorktreeAutoCloseCandidates(createStore(), REPO, { now: NOW })
     ).resolves.toEqual([])
+  })
+
+  it('keeps a workspace whose creation time the metadata never recorded', async () => {
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(
+      createStoreWithUnknownCreationTime(),
+      REPO,
+      { now: NOW }
+    )
+
+    expect(decisions[0]).toMatchObject({ action: 'skip', reason: 'recently-created' })
+    expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('gives up on a status read that never settles', async () => {
+    // Why: an unbounded read holds the repo's in-flight sweep slot forever, which
+    // blocks every later sweep for that repo.
+    vi.useFakeTimers()
+    try {
+      getStatusMock.mockReturnValue(new Promise(() => {}))
+
+      const pending = scanMergedWorktreeAutoCloseCandidates(createStore(), REPO, { now: NOW })
+      await vi.advanceTimersByTimeAsync(MERGED_WORKTREE_AUTO_CLOSE_GIT_TIMEOUT_MS)
+
+      await expect(pending).resolves.toMatchObject([
+        { action: 'skip', reason: 'status-check-failed' }
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps a just-created workspace when the profile configured no grace window', async () => {

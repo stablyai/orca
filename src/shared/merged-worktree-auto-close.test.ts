@@ -155,6 +155,24 @@ describe('decideMergedWorktreeAutoClose', () => {
     expect(decision).toMatchObject({ action: 'skip', reason: 'recently-created' })
   })
 
+  it('keeps a workspace whose creation time was never recorded', () => {
+    // Why: a workspace discovered on disk gets metadata without `createdAt`, and
+    // an unprovable age must not read as old enough to delete.
+    const { createdAt: _createdAt, ...withoutCreatedAt } = worktree()
+
+    expect(
+      decideMergedWorktreeAutoClose(withoutCreatedAt, LOCAL_GIT_REPO, LANDED, NOW)
+    ).toMatchObject({ action: 'skip', reason: 'recently-created' })
+  })
+
+  it('closes a workspace of unknown age once the grace window is zero', () => {
+    const { createdAt: _createdAt, ...withoutCreatedAt } = worktree()
+
+    expect(
+      decideMergedWorktreeAutoClose(withoutCreatedAt, LOCAL_GIT_REPO, LANDED, NOW, 0)
+    ).toMatchObject({ action: 'close' })
+  })
+
   it('keeps a branch that was never published, which is how a no-commit workspace reads', () => {
     const decision = decideMergedWorktreeAutoClose(
       worktree(),

@@ -24,6 +24,7 @@ import {
   type MergedWorktreeAutoCloseRepoContext
 } from '../../shared/merged-worktree-auto-close'
 import { mergeWorktree } from './worktree-logic'
+import { withWorkspaceCleanupTimeout } from './workspace-cleanup-scan-primitives'
 
 /** Why bounded: the sweep runs behind a worktree list load and must never keep Git busy for it. */
 export const MERGED_WORKTREE_AUTO_CLOSE_GIT_TIMEOUT_MS = 10_000
@@ -164,10 +165,19 @@ async function readWorktreeCleanliness(
 ): Promise<boolean | null> {
   const sharedLinkPaths = getWorktreeSharedLinkPaths(repo)
   try {
-    const status = await getStatus(worktree.path, {
-      ...(signal ? { signal } : {}),
-      ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
-    })
+    // Why raced and not only aborted: `getStatus` accepts a signal but serves the
+    // read through a shared in-flight lease, so a stall started by another reader
+    // is not this signal's to cancel. Unbounded, that stall holds the repo's
+    // in-flight sweep slot and blocks every later sweep for the repo.
+    const status = await withWorkspaceCleanupTimeout(
+      (timeoutSignal) =>
+        getStatus(worktree.path, {
+          signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
+          ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+        }),
+      MERGED_WORKTREE_AUTO_CLOSE_GIT_TIMEOUT_MS,
+      'Timed out reading git status.'
+    )
     return status.entries.length === 0
   } catch (error) {
     console.warn(
