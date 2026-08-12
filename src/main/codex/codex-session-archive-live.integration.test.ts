@@ -1,6 +1,6 @@
 import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runCodexAppServerSession } from './codex-app-server-session'
 import type { CodexSessionBackfillPaths } from './codex-session-backfill-types'
@@ -37,7 +37,7 @@ describe.skipIf(!runLiveTest)('live Codex archive reconciliation', () => {
     })
     const sessionsRoot = join(systemHome, 'sessions')
     const activePath = findRolloutPath(sessionsRoot, threadId)
-    const fileName = activePath.slice(activePath.lastIndexOf('/') + 1)
+    const fileName = basename(activePath)
     const archivedPath = join(systemHome, 'archived_sessions', fileName)
     const managedPath = join(managedSessionsRoot, relative(sessionsRoot, activePath))
     mkdirSync(dirname(managedPath), { recursive: true })
@@ -67,9 +67,11 @@ describe.skipIf(!runLiveTest)('live Codex archive reconciliation', () => {
       healMarkerPath: join(stateDir, 'index-heal-complete.json')
     }
 
-    await runReconciliationCycle(backfillPaths, healPaths, systemHome)
+    const firstHeal = await runReconciliationCycle(backfillPaths, healPaths, systemHome)
+    expect(firstHeal.pendingThreads).toBe(0)
     vi.resetModules()
-    await runReconciliationCycle(backfillPaths, healPaths, systemHome)
+    const secondHeal = await runReconciliationCycle(backfillPaths, healPaths, systemHome)
+    expect(secondHeal.pendingThreads).toBe(0)
 
     await withCodex(systemHome, async (request) => {
       expect(await taskListContains(request, threadId, false)).toBe(false)
@@ -127,7 +129,7 @@ async function runReconciliationCycle(
   const [{ backfillManagedCodexSessionsIntoSystemHome }, { runCodexSessionIndexHeal }] =
     await Promise.all([import('./codex-session-backfill'), import('./codex-session-index-heal')])
   await backfillManagedCodexSessionsIntoSystemHome(backfillPaths)
-  await runCodexSessionIndexHeal(healPaths, {
+  return runCodexSessionIndexHeal(healPaths, {
     buildInvocation: () => ({
       command: 'codex',
       args: ['app-server'],
