@@ -396,6 +396,19 @@ export function getMergeRequestForBranchOrThrow(
   return getMergeRequestForBranch(repoPath, branch, linkedMRIid, connectionId, options, true)
 }
 
+function mrListStateFlags(state: MRListState): string[] {
+  switch (state) {
+    case 'opened':
+      return []
+    case 'merged':
+      return ['--merged']
+    case 'closed':
+      return ['--closed']
+    case 'all':
+      return ['--all']
+  }
+}
+
 /** List merge requests for a project via glab CLI, which handles self-hosted auth and project selection. */
 export async function listMergeRequests(
   repoPath: string,
@@ -417,21 +430,65 @@ export async function listMergeRequests(
     localGitOptions
   )
   if (!projectRef) {
-    // Why (#13817): never cwd-infer via bare `glab mr list` when the remote is
-    // not a known GitLab host. That path demoted migrated non-GitLab projects
-    // into a hard glab failure (often a GITLAB_HOST/remote mismatch) that then
-    // replaced the multi-project Tasks view. Match listIssues / listWorkItems:
-    // unresolved project → structured not_found so aggregates can soft-skip.
-    return {
-      items: [],
-      page,
-      perPage,
-      totalCount: 0,
-      totalPages: 0,
-      error: {
-        type: 'not_found',
-        message: 'No GitLab project found for this repository.'
+    if (connectionId) {
+      // Why: SSH has no local cwd; bare glab could resolve an unrelated project.
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: {
+          type: 'not_found',
+          message: 'No GitLab project found for this repository.'
+        }
       }
+    }
+    // Why: keep cwd inference for unresolved-but-valid self-hosted local repos
+    // (#6263). Migrated remotes that hard-fail (GITLAB_HOST mismatch) classify
+    // as not_found so multi-project aggregates soft-skip (#13817).
+    const stateFlag = mrListStateFlags(state)
+    const searchFlag = query?.trim() ? ['--search', query.trim()] : []
+    await acquire()
+    try {
+      const { stdout } = await glabExecFileAsync(
+        [
+          'mr',
+          'list',
+          '--output',
+          'json',
+          '--per-page',
+          String(perPage),
+          '--page',
+          String(page),
+          '--order',
+          'updated_at',
+          '--sort',
+          'desc',
+          ...stateFlag,
+          ...searchFlag
+        ],
+        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+      )
+      const data = parseGlabJsonList<Parameters<typeof mapMRToWorkItem>[0]>(stdout)
+      return {
+        items: data.map((d) => mapMRToWorkItem(d, 'unknown')),
+        page,
+        perPage,
+        totalCount: data.length,
+        totalPages: data.length < perPage ? page : page + 1
+      }
+    } catch (err) {
+      return {
+        items: [],
+        page,
+        perPage,
+        totalCount: 0,
+        totalPages: 0,
+        error: classifyListFetchError(err)
+      }
+    } finally {
+      release()
     }
   }
   // Why: GitLab's API uses an absent state param to mean "any"; drop it for 'all'.

@@ -32,10 +32,10 @@ describe('isGitLabTaskHost', () => {
     expect(isGitLabTaskHost('git.company.com:3000', ['git.company.com:8443'])).toBe(false)
   })
 
-  it('rejects non-GitLab hosts', () => {
-    expect(isGitLabTaskHost('github.com')).toBe(false)
-    expect(isGitLabTaskHost('10.0.0.5')).toBe(false)
-    expect(isGitLabTaskHost('git.internal.example')).toBe(false)
+  it('rejects non-GitLab hosts when knownHosts are authoritative', () => {
+    expect(isGitLabTaskHost('github.com', ['gitlab.com'])).toBe(false)
+    expect(isGitLabTaskHost('10.0.0.5', ['gitlab.com', 'gitlab.example.com'])).toBe(false)
+    expect(isGitLabTaskHost('git.internal.example', ['gitlab.com'])).toBe(false)
   })
 })
 
@@ -84,21 +84,57 @@ describe('isGitLabTaskEligibleRepo / STA-3902', () => {
     ).toBe(true)
   })
 
-  it('excludes a project migrated off GitLab to a non-GitLab host', () => {
-    // Why: this is the STA-3902 / #13817 end state — Orca already updated
-    // gitRemoteIdentity, but the GitLab task source used to keep querying it.
+  it('keeps self-hosted and IP remotes eligible when knownHosts are unknown', () => {
+    // Why: without glab knownHosts, host heuristics must not drop valid self-hosted GitLab.
     expect(
       isGitLabTaskEligibleRepo(
         repo({
-          id: 'migrated-off-gitlab',
+          id: 'self-hosted',
           gitRemoteIdentity: {
-            canonicalKey: '10.0.0.5/core/migrated',
+            canonicalKey: 'git.company.com/team/app',
             remoteName: 'origin',
-            remoteUrl: 'git@10.0.0.5:core/migrated.git'
+            remoteUrl: 'git@git.company.com:team/app.git'
           }
         })
       )
-    ).toBe(false)
+    ).toBe(true)
+    expect(
+      isGitLabTaskEligibleRepo(
+        repo({
+          id: 'ip-hosted',
+          gitRemoteIdentity: {
+            canonicalKey: '10.0.0.5/core/app',
+            remoteName: 'origin',
+            remoteUrl: 'git@10.0.0.5:core/app.git'
+          }
+        })
+      )
+    ).toBe(true)
+  })
+
+  it('excludes a migrated non-GitLab host only with authoritative knownHosts', () => {
+    const migrated = repo({
+      id: 'migrated-off-gitlab',
+      gitRemoteIdentity: {
+        canonicalKey: '10.0.0.5/core/migrated',
+        remoteName: 'origin',
+        remoteUrl: 'git@10.0.0.5:core/migrated.git'
+      }
+    })
+    expect(isGitLabTaskEligibleRepo(migrated)).toBe(true)
+    expect(isGitLabTaskEligibleRepo(migrated, ['gitlab.com', 'gitlab.example.com'])).toBe(false)
+  })
+
+  it('keeps authenticated self-hosted hosts when listed in knownHosts', () => {
+    const selfHosted = repo({
+      id: 'self-hosted',
+      gitRemoteIdentity: {
+        canonicalKey: 'git.company.com/team/app',
+        remoteName: 'origin',
+        remoteUrl: 'git@git.company.com:team/app.git'
+      }
+    })
+    expect(isGitLabTaskEligibleRepo(selfHosted, ['gitlab.com', 'git.company.com'])).toBe(true)
   })
 
   it('excludes GitHub-backed projects from the GitLab task source', () => {
@@ -118,42 +154,40 @@ describe('isGitLabTaskEligibleRepo / STA-3902', () => {
     )
   })
 
-  it('admits a non-heuristic self-hosted host only when listed in knownHosts', () => {
-    const selfHosted = repo({
-      id: 'self-hosted',
-      gitRemoteIdentity: {
-        canonicalKey: 'git.company.com/team/app',
-        remoteName: 'origin',
-        remoteUrl: 'git@git.company.com:team/app.git'
-      }
-    })
-    expect(isGitLabTaskEligibleRepo(selfHosted)).toBe(false)
-    expect(isGitLabTaskEligibleRepo(selfHosted, ['git.company.com'])).toBe(true)
-  })
-
-  it('filters a multi-repo selection down to GitLab-backed projects only', () => {
-    const eligible = getGitLabTaskEligibleRepos([
-      repo({
-        id: 'still-gitlab',
-        gitRemoteIdentity: {
-          canonicalKey: 'gitlab.example.com/team/alive',
-          remoteName: 'origin',
-          remoteUrl: 'git@gitlab.example.com:team/alive.git'
-        }
-      }),
-      repo({
-        id: 'migrated-off-gitlab',
-        gitRemoteIdentity: {
-          canonicalKey: '10.0.0.5/core/migrated',
-          remoteName: 'origin',
-          remoteUrl: 'git@10.0.0.5:core/migrated.git'
-        }
-      }),
-      repo({
-        id: 'github',
-        upstream: { owner: 'acme', repo: 'widgets' }
-      })
-    ])
-    expect(eligible.map((r) => r.id)).toEqual(['still-gitlab'])
+  it('filters multi-repo selection with knownHosts without dropping self-hosted GitLab', () => {
+    const eligible = getGitLabTaskEligibleRepos(
+      [
+        repo({
+          id: 'still-gitlab',
+          gitRemoteIdentity: {
+            canonicalKey: 'gitlab.example.com/team/alive',
+            remoteName: 'origin',
+            remoteUrl: 'git@gitlab.example.com:team/alive.git'
+          }
+        }),
+        repo({
+          id: 'self-hosted',
+          gitRemoteIdentity: {
+            canonicalKey: 'git.company.com/team/app',
+            remoteName: 'origin',
+            remoteUrl: 'git@git.company.com:team/app.git'
+          }
+        }),
+        repo({
+          id: 'migrated-off-gitlab',
+          gitRemoteIdentity: {
+            canonicalKey: '10.0.0.5/core/migrated',
+            remoteName: 'origin',
+            remoteUrl: 'git@10.0.0.5:core/migrated.git'
+          }
+        }),
+        repo({
+          id: 'github',
+          upstream: { owner: 'acme', repo: 'widgets' }
+        })
+      ],
+      ['gitlab.com', 'gitlab.example.com', 'git.company.com']
+    )
+    expect(eligible.map((r) => r.id).sort()).toEqual(['self-hosted', 'still-gitlab'])
   })
 })

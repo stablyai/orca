@@ -319,7 +319,10 @@ import {
   getTaskProjectPickerGroups,
   normalizeTaskRepoSelection
 } from '@/components/task-page-default-repo-selection'
-import { getGitLabTaskEligibleRepos } from '../../../shared/gitlab-task-eligibility'
+import {
+  DEFAULT_GITLAB_TASK_HOSTS,
+  getGitLabTaskEligibleRepos
+} from '../../../shared/gitlab-task-eligibility'
 import {
   aggregateGitLabMultiProjectResults,
   toGitLabProjectFetchResult,
@@ -362,6 +365,7 @@ import type {
   GitHubPRMergeMethod,
   GitHubIssueUpdate,
   GitHubWorkItem,
+  GitLabAuthDiagnostic,
   GitLabTodo,
   GitLabWorkItem,
   JiraCreateField,
@@ -3064,6 +3068,8 @@ export default function TaskPage(): React.JSX.Element {
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
+  // Why: null = glab hosts unknown (permissive); array = drop migrated remotes from GitLab UI.
+  const [glabKnownHosts, setGlabKnownHosts] = useState<readonly string[] | null>(null)
 
   // Why: initial selection precedence — explicit preselection > persisted defaultRepoSelection > all eligible; preselection wins so "open tasks for this repo" lands single-repo.
   const resolvedInitialSelection = useMemo<ReadonlySet<string>>(() => {
@@ -3083,63 +3089,7 @@ export default function TaskPage(): React.JSX.Element {
   }, [eligibleRepos, pageData.preselectedRepoId, settings?.defaultRepoSelection])
 
   const [repoSelection, setRepoSelection] = useState<ReadonlySet<string>>(resolvedInitialSelection)
-  const taskPickerGroups = useMemo(
-    () => getTaskProjectPickerGroups(eligibleRepos, repoSelection),
-    [eligibleRepos, repoSelection]
-  )
-  const taskPickerRepos = useMemo(
-    () => taskPickerGroups.map((group) => group.repo),
-    [taskPickerGroups]
-  )
 
-  // Why: prune removed repos and preserve sticky-all (selection == all projects stays == all), without recreating the Set each time and churning the fetch effect.
-  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
-  useEffect(() => {
-    const prevCount = prevTaskPickerCountRef.current
-    prevTaskPickerCountRef.current = taskPickerRepos.length
-    const eligibleIds = new Set(eligibleRepos.map((r) => r.id))
-    const wasAll = repoSelection.size === prevCount && prevCount > 0
-    const pruned = new Set<string>()
-    for (const id of repoSelection) {
-      if (eligibleIds.has(id)) {
-        pruned.add(id)
-      }
-    }
-    if (wasAll) {
-      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
-      if (!areStringSetsEqual(allNow, repoSelection)) {
-        setRepoSelection(allNow)
-      }
-      return
-    }
-    if (pruned.size === 0 && eligibleIds.size === 0) {
-      return
-    }
-    const normalized = normalizeTaskRepoSelection(eligibleRepos, pruned)
-    if (!areStringSetsEqual(normalized, repoSelection)) {
-      setRepoSelection(normalized)
-    }
-  }, [eligibleRepos, repoSelection, taskPickerRepos])
-
-  const selectedRepos = useMemo(
-    () => eligibleRepos.filter((r) => repoSelection.has(r.id)),
-    [eligibleRepos, repoSelection]
-  )
-
-  // Why: see buildSelectedReposKey — array-identity deps re-fire on every
-  // repos:changed even when the selection is unchanged. The context part is
-  // resolved as GitHub, but every provider-independent field (projectId,
-  // hostId, projectHostSetupId, repoId) is identical across providers, so the
-  // GitLab effect can key off this too — it passes no gitlabProjectRef, so its
-  // context carries no providerIdentity of its own. Thread a projectRef into
-  // that call and this key needs a GitLab-scoped part.
-  const selectedReposKey = useMemo(
-    () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
-    [selectedRepos]
-  )
-
-  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
-  const primaryRepo = selectedRepos[0] ?? null
   const linearWorkspaces = linearStatus.workspaces ?? []
   const selectedLinearWorkspaceId =
     linearStatus.selectedWorkspaceId ??
@@ -3229,6 +3179,101 @@ export default function TaskPage(): React.JSX.Element {
   const [taskSource, setTaskSource] = useState<TaskProvider>(
     resolveVisibleTaskProvider(preferredTaskSource, visibleTaskProviders)
   )
+
+  // Why: GitLab picker/header/selection must not claim non-GitLab remotes once glab hosts are known (#13817).
+  const taskPickerSourceRepos = useMemo(() => {
+    if (taskSource !== 'gitlab') {
+      return eligibleRepos
+    }
+    return getGitLabTaskEligibleRepos(eligibleRepos, glabKnownHosts)
+  }, [taskSource, eligibleRepos, glabKnownHosts])
+
+  const taskPickerGroups = useMemo(
+    () => getTaskProjectPickerGroups(taskPickerSourceRepos, repoSelection),
+    [taskPickerSourceRepos, repoSelection]
+  )
+  const taskPickerRepos = useMemo(
+    () => taskPickerGroups.map((group) => group.repo),
+    [taskPickerGroups]
+  )
+
+  // Why: prune removed/ineligible repos and preserve sticky-all without churning the fetch effect.
+  const prevTaskPickerCountRef = useRef(taskPickerRepos.length)
+  useEffect(() => {
+    const prevCount = prevTaskPickerCountRef.current
+    prevTaskPickerCountRef.current = taskPickerRepos.length
+    const eligibleIds = new Set(taskPickerSourceRepos.map((r) => r.id))
+    const wasAll = repoSelection.size === prevCount && prevCount > 0
+    const pruned = new Set<string>()
+    for (const id of repoSelection) {
+      if (eligibleIds.has(id)) {
+        pruned.add(id)
+      }
+    }
+    if (wasAll) {
+      const allNow = new Set(taskPickerRepos.map((repo) => repo.id))
+      if (!areStringSetsEqual(allNow, repoSelection)) {
+        setRepoSelection(allNow)
+      }
+      return
+    }
+    if (pruned.size === 0 && eligibleIds.size === 0) {
+      return
+    }
+    const normalized = normalizeTaskRepoSelection(taskPickerSourceRepos, pruned)
+    if (!areStringSetsEqual(normalized, repoSelection)) {
+      setRepoSelection(normalized)
+    }
+  }, [taskPickerSourceRepos, repoSelection, taskPickerRepos])
+
+  const selectedRepos = useMemo(
+    () => taskPickerSourceRepos.filter((r) => repoSelection.has(r.id)),
+    [taskPickerSourceRepos, repoSelection]
+  )
+
+  // Why: see buildSelectedReposKey — array-identity deps re-fire on every
+  // repos:changed even when the selection is unchanged. The context part is
+  // resolved as GitHub, but every provider-independent field (projectId,
+  // hostId, projectHostSetupId, repoId) is identical across providers, so the
+  // GitLab effect can key off this too — it passes no gitlabProjectRef, so its
+  // context carries no providerIdentity of its own. Thread a projectRef into
+  // that call and this key needs a GitLab-scoped part.
+  const selectedReposKey = useMemo(
+    () => buildSelectedReposKey(selectedRepos, (r) => getTaskPageRepoSourceContext(r, 'github')),
+    [selectedRepos]
+  )
+
+  // Why: many affordances need *a* repo; use the first selected as default, while cross-repo dialogs still let the user override per-action.
+  const primaryRepo = selectedRepos[0] ?? null
+
+  useEffect(() => {
+    if (taskSource !== 'gitlab') {
+      return
+    }
+    let cancelled = false
+    void window.api.gl
+      .diagnoseAuth()
+      .then((raw) => {
+        if (cancelled) {
+          return
+        }
+        const diagnostic = raw as GitLabAuthDiagnostic
+        // Why: same surface as main getGlabKnownHosts — default host plus authenticated hosts.
+        setGlabKnownHosts(
+          Array.from(new Set([...DEFAULT_GITLAB_TASK_HOSTS, ...diagnostic.hosts]))
+        )
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // Stay permissive when the probe fails rather than dropping self-hosted hosts.
+          setGlabKnownHosts(null)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [taskSource])
+
   const runtimePreflightMountedRef = useRef(true)
   const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
   const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
@@ -4941,10 +4986,8 @@ export default function TaskPage(): React.JSX.Element {
     ) {
       return
     }
-    // Why (#13817): drop settled non-GitLab remotes before querying so a
-    // migrated-off-GitLab project is not part of the GitLab task fan-out.
-    // Pending identity stays; main soft-returns not_found for residual misses.
-    const gitlabEligibleRepos = getGitLabTaskEligibleRepos(selectedRepos)
+    // Why: selectedRepos is already GitLab-scoped via taskPickerSourceRepos + knownHosts.
+    const gitlabEligibleRepos = selectedRepos
     if (gitlabEligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
@@ -9105,7 +9148,10 @@ export default function TaskPage(): React.JSX.Element {
                         selected={repoSelection}
                         getRepoHostLabel={getTaskPickerRepoHostLabel}
                         onChange={(next) => {
-                          const normalized = normalizeTaskRepoSelection(eligibleRepos, next)
+                          const normalized = normalizeTaskRepoSelection(
+                            taskPickerSourceRepos,
+                            next
+                          )
                           setRepoSelection(normalized)
                           void updateSettings({ defaultRepoSelection: [...normalized] }).catch(
                             () => {

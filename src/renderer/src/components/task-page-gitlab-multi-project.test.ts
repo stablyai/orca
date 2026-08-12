@@ -5,25 +5,27 @@ import {
   type GitLabProjectFetchResult
 } from './task-page-gitlab-multi-project'
 
-function item(overrides: Partial<GitLabWorkItem> & Pick<GitLabWorkItem, 'number' | 'title'>): GitLabWorkItem {
+function item(
+  overrides: Partial<GitLabWorkItem> & Pick<GitLabWorkItem, 'number' | 'title'>
+): GitLabWorkItem {
+  const { number, title, ...rest } = overrides
   return {
-    id: overrides.number,
-    repoId: overrides.repoId ?? 'repo',
+    id: `mr-${number}`,
+    repoId: 'repo',
     type: 'mr',
-    number: overrides.number,
-    title: overrides.title,
+    number,
+    title,
     state: 'opened',
-    url: `https://gitlab.example.com/team/app/-/merge_requests/${overrides.number}`,
+    url: `https://gitlab.example.com/team/app/-/merge_requests/${number}`,
     author: 'dev',
-    updatedAt: overrides.updatedAt ?? '2026-05-08T00:00:00Z',
-    ...overrides
+    labels: [],
+    updatedAt: '2026-05-08T00:00:00Z',
+    ...rest
   }
 }
 
 describe('aggregateGitLabMultiProjectResults / STA-3902', () => {
   it('keeps healthy project rows when a migrated peer is not_found', () => {
-    // Why: "All projects" with one still-GitLab repo and one migrated-off-GitLab
-    // repo must show the healthy project's MRs instead of the soft miss.
     const results: GitLabProjectFetchResult[] = [
       {
         repoId: 'still-gitlab',
@@ -48,9 +50,6 @@ describe('aggregateGitLabMultiProjectResults / STA-3902', () => {
   })
 
   it('does not replace the multi-project view with a soft not_found when every peer is empty', () => {
-    // Why: pre-fix, a cwd-fallback glab failure classified as `unknown` with
-    // raw stderr replaced the whole view even when peers only returned empty
-    // lists. Soft not_found must yield the empty state, not a banner.
     const results: GitLabProjectFetchResult[] = [
       { repoId: 'still-gitlab', items: [] },
       {
@@ -111,9 +110,6 @@ describe('aggregateGitLabMultiProjectResults / STA-3902', () => {
   })
 
   it('does not let a raw glab host-mismatch unknown error blank a healthy peer', () => {
-    // Why: the original #13817 banner text came from classifyListIssuesError
-    // fallthrough to `unknown` with the full glab stderr. Even if that still
-    // reaches aggregation, a peer with items must win.
     const glabStderr =
       'Command failed: glab mr list --output json\n' +
       'ERROR None of the git remotes configured for this repository correspond to the GITLAB_HOST environment variable.\n' +

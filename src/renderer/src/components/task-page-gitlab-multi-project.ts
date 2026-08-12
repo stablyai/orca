@@ -7,11 +7,21 @@ export type GitLabProjectFetchResult = {
   error?: Pick<ClassifiedError, 'type' | 'message'>
 }
 
+const CLASSIFIED_ERROR_TYPES: ReadonlySet<ClassifiedError['type']> = new Set([
+  'permission_denied',
+  'not_found',
+  'issues_disabled',
+  'validation_error',
+  'rate_limited',
+  'network_error',
+  'unknown'
+])
+
 export function toGitLabProjectFetchResult(
   repoId: string,
   result: {
     items: GitLabWorkItem[]
-    error?: { type?: ClassifiedError['type'] | string; message: string }
+    error?: { type?: ClassifiedError['type']; message: string }
   }
 ): GitLabProjectFetchResult {
   if (!result.error) {
@@ -19,15 +29,7 @@ export function toGitLabProjectFetchResult(
   }
   const type = result.error.type
   const normalizedType: ClassifiedError['type'] =
-    type === 'permission_denied' ||
-    type === 'not_found' ||
-    type === 'issues_disabled' ||
-    type === 'validation_error' ||
-    type === 'rate_limited' ||
-    type === 'network_error' ||
-    type === 'unknown'
-      ? type
-      : 'unknown'
+    type && CLASSIFIED_ERROR_TYPES.has(type) ? type : 'unknown'
   return {
     repoId,
     items: result.items,
@@ -37,29 +39,15 @@ export function toGitLabProjectFetchResult(
 
 export type GitLabMultiProjectAggregate = {
   items: GitLabWorkItem[]
-  /** Hard errors that should surface to the user (not soft not_found skips). */
   hardErrors: string[]
-  /** Projects skipped because they are not a resolvable GitLab project. */
   skippedNotFoundCount: number
-  /** Projects that returned a hard error. */
   failedCount: number
-  /** Projects that produced items or a soft empty success. */
   successCount: number
-  /**
-   * Banner copy when every queried project hard-failed and nothing rendered.
-   * Soft not_found-only selections yield null so the empty state can show.
-   */
+  /** Banner only when every project hard-failed and nothing rendered. */
   bannerError: string | null
 }
 
-/**
- * Aggregate per-project GitLab list results for the Tasks "All projects" view.
- *
- * Why: a single non-GitLab/migrated project used to replace the whole multi-project
- * list with raw glab stderr (#13817). Soft not_found is expected in mixed
- * selections and must not own the banner; hard errors only banner when nothing
- * else rendered.
- */
+/** Soft-skip not_found so one migrated peer cannot replace the multi-project view (#13817). */
 export function aggregateGitLabMultiProjectResults(
   results: readonly GitLabProjectFetchResult[]
 ): GitLabMultiProjectAggregate {
@@ -78,8 +66,6 @@ export function aggregateGitLabMultiProjectResults(
       successCount += 1
       continue
     }
-    // Why: not_found means "this selection entry is not a GitLab project" —
-    // expected after a migration or mixed picker selection, not a load failure.
     if (error.type === 'not_found') {
       skippedNotFoundCount += 1
       continue

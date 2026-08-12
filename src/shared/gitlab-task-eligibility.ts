@@ -6,7 +6,7 @@ import {
 import { isGitRepoKind } from './repo-kind'
 import type { Repo } from './types'
 
-/** Hosts always treated as GitLab when the UI has no glab known-hosts list yet. */
+/** Baseline host always treated as GitLab (matches main-process DEFAULT_GITLAB_HOSTS). */
 export const DEFAULT_GITLAB_TASK_HOSTS = ['gitlab.com'] as const
 
 function normalizeHost(host: string): string {
@@ -17,10 +17,7 @@ function hostnameOf(host: string): string {
   return host.replace(/:\d+$/, '')
 }
 
-/**
- * Extract the forge host from a settled git remote identity.
- * Canonical keys are `host/group/project` (no scheme); remote URLs keep the scheme.
- */
+/** Host from a settled remote identity (`host/group/project` key or remote URL). */
 export function extractGitRemoteHost(
   repo: Pick<Repo, 'gitRemoteIdentity'>
 ): string | null {
@@ -66,7 +63,7 @@ function knownHostMatches(urlHost: string, knownHost: string): boolean {
   return false
 }
 
-/** True when the host is gitlab.com, a known glab host, or a common self-hosted GitLab name. */
+/** True when host matches glab knownHosts or a conventional GitLab hostname. */
 export function isGitLabTaskHost(
   host: string,
   knownHosts: readonly string[] = DEFAULT_GITLAB_TASK_HOSTS
@@ -75,8 +72,7 @@ export function isGitLabTaskHost(
   if (!normalized) {
     return false
   }
-  const known = knownHosts.map(normalizeHost)
-  if (known.some((entry) => knownHostMatches(normalized, entry))) {
+  if (knownHosts.map(normalizeHost).some((entry) => knownHostMatches(normalized, entry))) {
     return true
   }
   const hostname = hostnameOf(normalized)
@@ -88,20 +84,20 @@ export function isGitLabTaskHost(
 }
 
 /**
- * Whether a repo should be queried by the GitLab task source.
+ * Whether a repo belongs in the GitLab task source.
  *
- * Settled GitHub-backed projects are out. Settled remotes whose host is not a
- * GitLab host (and not still pending probe) are out — that is the migrated-off
- * GitLab case in #13817. Pending identity stays in so offline SSH probes are
- * not silently dropped. Optional `knownHosts` admits self-hosted instances that
- * do not carry "gitlab" in the hostname once glab has authenticated them.
+ * Without `knownHosts`, only authoritative non-GitLab evidence excludes a
+ * settled project (GitHub-backed). Arbitrary hosts stay eligible so self-hosted
+ * GitLab (git.company.com, IP) is not dropped before glab auth hosts are known.
+ * With `knownHosts` from glab, settled remotes that match neither those hosts
+ * nor a conventional GitLab name are excluded (migrated-off-GitLab).
  */
 export function isGitLabTaskEligibleRepo(
   repo: Pick<
     Repo,
     'id' | 'kind' | 'upstream' | 'repoIcon' | 'gitRemoteIdentity' | 'connectionId'
   >,
-  knownHosts: readonly string[] = DEFAULT_GITLAB_TASK_HOSTS
+  knownHosts?: readonly string[] | null
 ): boolean {
   if (!isGitRepoKind(repo)) {
     return false
@@ -115,10 +111,10 @@ export function isGitLabTaskEligibleRepo(
   if (isGitHubBackedRepo(repo)) {
     return false
   }
+  if (knownHosts == null) {
+    return true
+  }
   const host = extractGitRemoteHost(repo)
-  // Upstream/icon-only GitHub identity already excluded above. A non-GitHub
-  // identity with no parseable host is still unknown — keep it for main-process
-  // resolution rather than hide a valid self-hosted checkout.
   if (!host) {
     return true
   }
@@ -127,7 +123,7 @@ export function isGitLabTaskEligibleRepo(
 
 export function getGitLabTaskEligibleRepos<T extends Repo>(
   repos: readonly T[],
-  knownHosts: readonly string[] = DEFAULT_GITLAB_TASK_HOSTS
+  knownHosts?: readonly string[] | null
 ): T[] {
   return repos.filter((repo) => isGitLabTaskEligibleRepo(repo, knownHosts))
 }

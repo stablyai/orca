@@ -805,22 +805,84 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
-    it('returns not_found without spawning glab when project ref is unresolved (local)', async () => {
-      // Why (#13817): cwd-inferred `glab mr list` turned migrated non-GitLab
-      // remotes into hard GITLAB_HOST mismatches that replaced multi-project views.
+    it('falls back to glab mr list when local project ref is unresolved', async () => {
+      // Why (#6263): cwd inference still serves valid self-hosted repos whose
+      // host is not yet in knownHosts; only SSH skips this path.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
       })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            id: 300,
+            iid: 3,
+            title: 'fallback mr',
+            state: 'opened',
+            web_url: 'https://gitlab.com/-/merge_requests/3',
+            updated_at: '2026-05-05',
+            source_project_id: 5,
+            target_project_id: 5
+          }
+        ])
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toHaveLength(1)
+      expect(result.items[0].title).toBe('fallback mr')
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
+        [
+          'mr',
+          'list',
+          '--output',
+          'json',
+          '--per-page',
+          '20',
+          '--page',
+          '1',
+          '--order',
+          'updated_at',
+          '--sort',
+          'desc'
+        ],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('threads --search into the cwd fallback when a query is supplied', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+      await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      const searchIdx = callArgs.indexOf('--search')
+      expect(searchIdx).toBeGreaterThanOrEqual(0)
+      expect(callArgs[searchIdx + 1]).toBe('fix login')
+    })
+
+    it('soft-classifies GITLAB_HOST remote mismatch from the cwd fallback as not_found', async () => {
+      // Why (#13817): migrated remotes must not replace multi-project views with raw glab stderr.
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      glabExecFileAsyncMock.mockRejectedValueOnce(
+        new Error(
+          'ERROR None of the git remotes configured for this repository correspond to the GITLAB_HOST environment variable.\n' +
+            'GITLAB_HOST is currently set to gitlab.example.com\n' +
+            'Configured remotes: 10.0.0.5.'
+        )
+      )
       const result = await listMergeRequests('/migrated-repo', 'opened')
       expect(result.error?.type).toBe('not_found')
-      expect(result.error?.message).toMatch(/No GitLab project found/i)
       expect(result.items).toEqual([])
-      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })
 
-    it('returns not_found without spawning glab when project ref is unresolved (SSH)', async () => {
+    it('does not run the cwd fallback for unresolved SSH repos', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
@@ -836,17 +898,6 @@ describe('gitlab client — MR operations', () => {
       )
       expect(result.error?.type).toBe('not_found')
       expect(result.items).toEqual([])
-      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
-      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
-    })
-
-    it('does not cwd-infer even when a search query is supplied on an unresolved project', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({
-        source: null,
-        fellBack: false
-      })
-      const result = await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
-      expect(result.error?.type).toBe('not_found')
       expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })

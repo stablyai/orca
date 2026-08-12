@@ -14,10 +14,7 @@ export function classifyGlabError(stderr: string): ClassifiedError {
   if (
     s.includes('http 404') ||
     s.includes('project not found') ||
-    // Why: glab reports this when remotes no longer match its effective host
-    // (config host or GITLAB_HOST) — common after a repo migrates off GitLab.
-    // Treat as not_found so multi-project aggregates soft-skip instead of
-    // dumping raw CLI stderr into the Tasks banner (#13817).
+    // Why (#13817): migrated remotes mismatch glab's host; soft-skip in aggregates.
     s.includes('none of the git remotes configured for this repository correspond to the gitlab_host') ||
     s.includes('none of the git remotes configured for this repository correspond to the gitlab host')
   ) {
