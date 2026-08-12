@@ -5,9 +5,12 @@
 
 ## ⚠ 이 레포 전체는 서드파티 포크(§0 카브아웃)
 
-`stablyai/orca`의 포크. `src/`·`native/`·`build-plugins/`·`Casks/`·`tests/`·`resources/`·`.husky/` 등
-업스트림 코드 구조는 **건드리지 않는다**(merge-base가 origin/main과 거의 붙어있어 사실상 upstream
-동기화 상태 — docs/notes/tools의 조사문서만 이 사용자가 직접 추가한 것).
+`stablyai/orca`의 포크. 이 fork는 origin/main보다 커밋 다수 뒤처져 있다(정확한 수치·판정 기준은
+아래 "미해결" 참조) — merge-base가 origin/main과 붙어있는 "사실상 동기화" 상태가 아니다.
+`src/`·`native/`·`build-plugins/`·`Casks/`·`tests/`·`resources/`·`.husky/` 등 업스트림 코드
+구조 자체를 재작성하지는 않지만, 완전 무편집도 아니다: `feat/gajae-code-agent` 브랜치가 기존
+에이전트 카탈로그/설정 테이블에 소규모 additive 변경(13개 파일, 40줄)을 냈다. docs/notes/tools의
+조사문서 외에 이 신규 기능 추가가 있었다는 뜻이다.
 
 ## 문서 슬롯 (레포 자체 정책, .gitignore로 강제)
 
@@ -54,8 +57,9 @@ README가 스스로를 "throwaway probe"라 부르고 `spike-<topic>` 어휘 순
 - ⚠ **업스트림 저작 파일을 재배치했다.** 2026-08-08에 `docs/*.md` 41개를 `docs/reference/`로 옮기면서
   "업스트림 `origin/main`엔 없으니 fork 고유 콘텐츠"라고 판정했는데 **판정 방법이 틀렸다**. 그 파일들은
   `merge-base`(057a8149)에 존재하므로 업스트림 저작이고, 현재 origin/main에 없는 이유는 업스트림이
-  그 사이 **삭제**했기 때문이다. 이 fork는 origin/main보다 1,367커밋 뒤에 있어 향후 병합 시
-  rename/delete 충돌이 예약돼 있다.
+  그 사이 **삭제**했기 때문이다. 이 fork는 origin/main보다 1,498커밋 이상 뒤에 있고(로컬 캐시
+  origin/main 기준 2026-08-10, 이후로도 계속 벌어지는 중) 향후 병합 시 rename/delete 충돌이
+  예약돼 있다.
   → 판정 기준: `git cat-file -e <merge-base>:<path>`로 저작 출처를 가른다. "현재 업스트림에 없다"는
      "우리가 만들었다"와 다르다.
   → 되돌릴지(업스트림 삭제를 그대로 적용) 유지할지(레포 자체 durable 정책 우선)는 소유자 판단 대기.
