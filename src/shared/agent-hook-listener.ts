@@ -2056,9 +2056,11 @@ function extractPiToolFields(
     const toolName = readString(hookPayload, 'tool_name')
     const rawToolInput = hookPayload.tool_input
     const toolInput = deriveToolInputPreview(toolName, rawToolInput)
-    // Why: OMP shares this extractor; only derive interactivePrompt for Pi so OMP ask_user_question metadata stays unchanged.
+    // Why: omp's `ask` parks on the user's answer exactly like Pi's ask_user_question;
+    // both need the pending-question envelope so the sidebar can render the live card.
     const interactivePrompt =
-      agentKind === 'pi' && (eventName === 'tool_call' || eventName === 'tool_execution_start')
+      (agentKind === 'pi' || agentKind === 'omp') &&
+      (eventName === 'tool_call' || eventName === 'tool_execution_start')
         ? deriveInteractivePrompt(toolName, rawToolInput, eventName)
         : undefined
     return toolUpdate(
@@ -3849,7 +3851,7 @@ function normalizePiCompatibleEvent(
 
   // Why: gate on the event's own tool_name (not a merged snapshot) so a stale cached ask_user_question can't re-enter blocked.
   const isPiAskUserQuestion =
-    agentType === 'pi' &&
+    (agentType === 'pi' || agentType === 'omp') &&
     isAskUserQuestionTool(readString(hookPayload, 'tool_name')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
 

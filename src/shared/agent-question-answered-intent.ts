@@ -12,13 +12,16 @@ export type AgentQuestionAnsweredInferenceRequest = {
 }
 
 /** True for the ask-the-user-a-question tool across agents: Claude's
- *  `AskUserQuestion`, grok/Pi's `ask_user_question`, and Codex ≥0.145's
- *  `request_user_input` (same questions/options input shape).
+ *  `AskUserQuestion`, grok/Pi's `ask_user_question`, Codex ≥0.145's
+ *  `request_user_input` (same questions/options input shape), and omp's
+ *  `ask` (option-picker questions envelope).
  *  Why: this is the structured "pick an option" prompt whose full input the
  *  clients render as a live card. */
 export function isAskUserQuestionTool(toolName: string | undefined): boolean {
   const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
-  return normalized === 'askuserquestion' || normalized === 'requestuserinput'
+  return (
+    normalized === 'askuserquestion' || normalized === 'requestuserinput' || normalized === 'ask'
+  )
 }
 
 const QUESTION_ANSWER_ENTER_INPUTS: ReadonlySet<string> = new Set([

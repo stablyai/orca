@@ -801,7 +801,15 @@ describe('shared agent-hook-listener', () => {
     expect(tool?.payload.interactivePrompt).toBeUndefined()
   })
 
-  it('keeps OMP ask_user_question behavior on Pi-compatible events', () => {
+  it('maps OMP ask_user_question tool_call to blocked with interactivePrompt', () => {
+    const questions = {
+      questions: [
+        {
+          question: 'Choose',
+          options: ['x', 'y']
+        }
+      ]
+    }
     const tool = normalizeHookPayload(
       state,
       'omp',
@@ -814,24 +822,55 @@ describe('shared agent-hook-listener', () => {
         payload: {
           hook_event_name: 'tool_call',
           tool_name: 'ask_user_question',
-          tool_input: {
-            questions: [
-              {
-                question: 'Choose',
-                options: ['x', 'y']
-              }
-            ]
-          }
+          tool_input: questions
         }
       },
       'production'
     )
     expect(tool?.payload).toMatchObject({
-      state: 'working',
+      state: 'blocked',
       agentType: 'omp',
       toolName: 'ask_user_question'
     })
-    expect(tool?.payload.interactivePrompt).toBeUndefined()
+    expect(tool?.payload.interactivePrompt).toBe(JSON.stringify(questions))
+  })
+
+  it('maps OMP ask tool_execution_start to blocked with interactivePrompt', () => {
+    // Why: omp's question tool is named `ask` (not ask_user_question) and its
+    // options are { label } objects; orca-agent-status emits tool_execution_start
+    // while the agent is parked on the user's answer, so the pane must go blocked.
+    const questions = {
+      questions: [
+        {
+          id: 'route',
+          question: 'How to proceed?',
+          options: [{ label: 'Open a PR' }, { label: 'File an issue' }]
+        }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'omp',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask',
+          tool_input: questions
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'omp',
+      toolName: 'ask'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
 
   it('captures Pi session ids on Pi-compatible status events', () => {
