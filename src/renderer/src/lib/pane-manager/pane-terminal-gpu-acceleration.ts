@@ -23,8 +23,10 @@ export function applyTerminalGpuAcceleration(
     pane.terminalGpuAcceleration = nextMode
     if (modeChanged) {
       // Why: an explicit setting change is user intent to re-evaluate the
-      // renderer; context-loss latches from the old mode should not pin DOM.
+      // renderer; context-loss and attach-failure latches from the old mode
+      // should not pin DOM.
       pane.webglDisabledAfterContextLoss = false
+      pane.webglAttachFailedSinceRecovery = false
     }
     if (!shouldUseTerminalWebgl(pane)) {
       disposeWebgl(pane, { refreshDimensions: true })

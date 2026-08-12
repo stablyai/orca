@@ -1,10 +1,8 @@
 import { useAppStore } from '@/store'
 import { reconcileTabOrder } from '@/components/tab-bar/reconcile-order'
-import { translate } from '@/i18n/i18n'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
-  createWebRuntimeAgentSessionTerminal,
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
@@ -25,7 +23,6 @@ export function launchAiVaultSessionInNewTab(args: {
   worktreeId: string
   command: string
   cwd?: string
-  draftPrompt?: string
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
@@ -37,11 +34,11 @@ export function launchAiVaultSessionInNewTab(args: {
   let targetGroupId = args.targetGroupId
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, args.worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    const runtimeSessionArgs = {
+    const runtimeLaunch = createWebRuntimeSessionTerminal({
       worktreeId: args.worktreeId,
       environmentId: runtimeEnvironmentId,
       ...(targetGroupId ? { targetGroupId } : {}),
-      agentSessionKind: 'resume' as const,
+      agentSessionKind: 'resume',
       launchAgent: args.agent,
       command: args.command,
       ...(args.cwd ? { cwd: args.cwd } : {}),
@@ -51,29 +48,7 @@ export function launchAiVaultSessionInNewTab(args: {
       ...(args.providerSession ? { providerSession: args.providerSession } : {}),
       ...(args.launchConfig ? { agentArgs: args.launchConfig.agentArgs } : {}),
       activate: true
-    }
-    const runtimeLaunch = args.draftPrompt
-      ? createWebRuntimeAgentSessionTerminal({
-          ...runtimeSessionArgs,
-          promptDelivery: 'draft',
-          promptDeliveryOwner: 'client',
-          agent: args.agent,
-          promptAfterReady: args.draftPrompt,
-          submitPrompt: false,
-          forcePromptPaste: false
-        }).then((result) =>
-          result.outcome.status === 'failed' || result.promptDelivered
-            ? result.outcome
-            : {
-                status: 'failed' as const,
-                message: translate(
-                  'auto.lib.launch.agent.in.new.tab.a5a1f7033f',
-                  "Your {{value0}} wasn't sent — paste it once the agent is ready.",
-                  { value0: 'draft' }
-                )
-              }
-        )
-      : createWebRuntimeSessionTerminal(runtimeSessionArgs)
+    })
     const observedRuntimeLaunch = runtimeLaunch.then((outcome) => {
       if (outcome.status === 'created') {
         useAppStore.getState().setActiveTabType('terminal')
@@ -98,7 +73,6 @@ export function launchAiVaultSessionInNewTab(args: {
     : store.createTab(args.worktreeId, targetGroupId)
   store.queueTabStartupCommand(tab.id, {
     command: args.command,
-    ...(args.draftPrompt ? { draftPrompt: args.draftPrompt } : {}),
     ...(args.env ? { env: args.env } : {}),
     ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
     ...(args.launchConfig ? { launchConfig: args.launchConfig, launchAgent: args.agent } : {}),

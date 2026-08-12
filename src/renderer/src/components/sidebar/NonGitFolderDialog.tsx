@@ -88,12 +88,7 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               useAppStore.getState().settings,
               onboarding,
               hadProjectBeforeAdd,
-              {
-                repoId: repo.id,
-                connectionId,
-                nativeChatTranscriptIsLocalReadable:
-                  isNativeChatTranscriptLocalReadable(connectionId)
-              }
+              isNativeChatTranscriptLocalReadable(connectionId)
             )
             activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',

@@ -15,28 +15,19 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
-import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import {
-  clearEnvCommand,
-  commandSeparator,
-  resolveStartupShell
-} from '../../../shared/tui-agent-startup-shell'
+import { clearEnvCommand, commandSeparator } from '../../../shared/tui-agent-startup-shell'
 import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import {
   getAiVaultResumeWorkspacePath,
-  resolveAiVaultResumeRepoOwner
-} from '@/lib/ai-vault-resume-workspace-resolution'
-import {
-  type ExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID,
-  parseExecutionHostId
-} from '../../../shared/execution-host'
+  resolveAiVaultResumeStartupShell
+} from '@/lib/ai-vault-resume-shell'
 
 type AiVaultResumeCommandSession = Pick<
   AiVaultSession,
@@ -49,7 +40,6 @@ type AiVaultResumeCommandSession = Pick<
 export type AiVaultResumeStartup = {
   command: string
   cwd?: string
-  draftPrompt?: string
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
@@ -134,12 +124,6 @@ function buildAiVaultResumeForWorktree(
   embedCwd: boolean
 ): AiVaultResumeStartup {
   const providerSession = getAiVaultAgentProviderSession(args.session)
-  const requestedExecutionHostId = parseExecutionHostId(args.session.executionHostId)?.id
-  const resumeRepo = resolveAiVaultResumeRepoOwner(
-    args.state,
-    args.worktreeId,
-    requestedExecutionHostId
-  )
   if (
     args.session.executionHostId &&
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
@@ -159,7 +143,7 @@ function buildAiVaultResumeForWorktree(
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
-      : getAiVaultResumePlatform(args.state, args.worktreeId, requestedExecutionHostId)
+      : getAiVaultResumePlatform(args.state, args.worktreeId)
   const codexHome = getAiVaultResumeCodexHome(args.session.codexHome, platform)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
@@ -169,7 +153,7 @@ function buildAiVaultResumeForWorktree(
   const liveShell: AgentStartupShell | undefined =
     platform === 'win32'
       ? isLocalSession
-        ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
+        ? resolveAiVaultResumeShell(args)
         : 'powershell'
       : undefined
   const cwd = embedCwd ? args.session.cwd : null
@@ -191,11 +175,7 @@ function buildAiVaultResumeForWorktree(
       agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.state.settings?.agentDefaultEnv),
       ...(args.session.agent === 'omp' && resumeFilePath
         ? { ompResumeFilePath: resumeFilePath }
-        : {}),
-      repoId: resumeRepo?.id ?? null,
-      connectionId: resumeRepo?.connectionId ?? null,
-      executionHostId:
-        requestedExecutionHostId ?? getExecutionHostIdForWorktree(args.state, args.worktreeId)
+        : {})
     })
     if (startupPlan) {
       return {
@@ -219,7 +199,6 @@ function buildAiVaultResumeForWorktree(
                 shell: liveShell
               }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
-        ...(startupPlan.draftPrompt ? { draftPrompt: startupPlan.draftPrompt } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
         ...startupCwd,
         launchConfig: startupPlan.launchConfig,
@@ -255,18 +234,37 @@ function resolveAiVaultResumeShell(args: AiVaultResumeWorktreeArgs): AgentStartu
     args.session.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
     args.session.executionHostPlatform
       ? args.session.executionHostPlatform
-      : getAiVaultResumePlatform(
-          args.state,
-          args.worktreeId,
-          parseExecutionHostId(args.session.executionHostId)?.id
-        )
+      : getAiVaultResumePlatform(args.state, args.worktreeId)
   const isLocalSession =
     !args.session.executionHostId || args.session.executionHostId === LOCAL_EXECUTION_HOST_ID
-  const shell =
-    platform === 'win32' && isLocalSession
-      ? resolveWindowsShellStartupFamily(args.state.settings?.terminalWindowsShell)
-      : undefined
-  return resolveStartupShell(platform, shell)
+  return resolveAiVaultResumeStartupShell({
+    state: args.state,
+    worktreeId: args.worktreeId,
+    platform,
+    isLocalSession,
+    parsedByClientLoginShell: isLocalSession && runsOnClientLoginShell(args, platform)
+  })
+}
+
+/**
+ * Whether the resume line is handed to THIS machine's login shell.
+ *
+ * Why not `isLocalSession`: that only says the session file was scanned locally
+ * (no executionHostId), which is still true when the worktree lives on an SSH
+ * or runtime host — the command then goes to that host's shell. The WSL case is
+ * caught by the platform mismatch (a WSL worktree resolves to 'linux' on win32).
+ */
+function runsOnClientLoginShell(
+  args: AiVaultResumeWorktreeArgs,
+  platform: NodeJS.Platform
+): boolean {
+  const executionHost = parseExecutionHostId(
+    getExecutionHostIdForWorktree(args.state, args.worktreeId ?? args.state.activeWorktreeId)
+  )
+  if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
+    return false
+  }
+  return platform === CLIENT_PLATFORM
 }
 
 export function getAiVaultAgentProviderSession(
@@ -299,14 +297,21 @@ function getAiVaultResumeCodexHome(
 }
 
 export function getAiVaultResumePlatform(
-  state: AiVaultResumeWorktreeArgs['state'],
-  worktreeId?: string | null,
-  expectedExecutionHostId?: ExecutionHostId
+  state: Pick<
+    AppState,
+    | 'activeRepoId'
+    | 'activeWorktreeId'
+    | 'folderWorkspaces'
+    | 'projectGroups'
+    | 'projects'
+    | 'repos'
+    | 'settings'
+    | 'worktreesByRepo'
+  >,
+  worktreeId?: string | null
 ): NodeJS.Platform {
   const targetWorktreeId = worktreeId ?? state.activeWorktreeId
-  const executionHost = parseExecutionHostId(
-    expectedExecutionHostId ?? getExecutionHostIdForWorktree(state, targetWorktreeId)
-  )
+  const executionHost = parseExecutionHostId(getExecutionHostIdForWorktree(state, targetWorktreeId))
   if (executionHost?.kind === 'ssh' || executionHost?.kind === 'runtime') {
     return 'linux'
   }
@@ -319,10 +324,6 @@ export function getAiVaultResumePlatform(
     return 'linux'
   }
 
-  const workspacePath = getAiVaultResumeWorkspacePath(
-    state,
-    targetWorktreeId,
-    expectedExecutionHostId
-  )
+  const workspacePath = getAiVaultResumeWorkspacePath(state, targetWorktreeId)
   return workspacePath && parseWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }

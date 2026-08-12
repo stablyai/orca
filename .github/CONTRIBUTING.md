@@ -56,17 +56,15 @@ CI enforces this for `src/preload/` and `src/shared/` — see `docs/preload-type
 
 ## Pull Requests
 
-Each pull request should:
+Each pull request should follow [`.github/pull_request_template.md`](./pull_request_template.md). In particular:
 
-- explain the user-visible change
-- stay focused on a single topic when possible
-- include screenshots or screen recordings for new UI or behavior changes
+- open with an ELI5 of the change (plain language paragraph; the PR title is the one-liner)
+- explain what changed and why, and stay focused on a single topic when possible
+- for any UI or interaction change, attach **before and after** screenshots (or short videos); if there is no visual change, say `No visual change` and why
 - include high-quality tests when behavior changes or bug fixes warrant them
 - include a brief code review summary from your AI coding agent that explicitly checks cross-platform compatibility, SSH/remote/local compatibility, supported agent and integration compatibility, performance risk, UI quality when applicable, and basic security risk
 - mention any platform-specific, remote/SSH-specific, agent-specific, integration-specific, or git-provider-specific behavior and testing notes
-- **Include your X (Twitter) handle!** We love giving shoutouts to our contributors when we merge features on [@orca_build](https://x.com/orca_build).
-
-If there is no visual change, say that explicitly in the PR description.
+- **Include your X (Twitter) handle** in the PR template Author section — we shout out contributors when we merge features on [@orca_build](https://x.com/orca_build).
 
 ## Release Process
 

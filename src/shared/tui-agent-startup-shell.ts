@@ -1,32 +1,95 @@
-import { tokenizeCustomCommandTemplate } from './commit-message-prompt'
-import type { TuiAgentConfig } from './tui-agent-config'
-import type { SessionOptionValue } from './native-chat-session-options'
+import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
 
-export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
+// Why: fish shares POSIX word splitting, quoting and `;` chaining, so it is a
+// separate dialect only where its grammar actually diverges (env clearing).
+export type AgentStartupShell = 'posix' | 'fish' | 'powershell' | 'cmd'
 
-export const MAX_INLINE_SESSION_RULES_LENGTH = 8_000
+type WindowsStartupShell = Extract<AgentStartupShell, 'powershell' | 'cmd'>
 
-export type StartupCommandTokens = { ok: true; tokens: string[] } | { ok: false; error: string }
+/** True for shells parsed with POSIX quoting/word rules (sh family + fish). */
+export function isPosixStartupShell(shell: AgentStartupShell): boolean {
+  return shell === 'posix' || shell === 'fish'
+}
+
+function isWindowsStartupShell(shell: AgentStartupShell): shell is WindowsStartupShell {
+  return shell === 'powershell' || shell === 'cmd'
+}
+
+/** Maps a POSIX login-shell path (`$SHELL`) to the dialect that parses queued commands. */
+export function resolveLoginShellStartupDialect(
+  loginShell: string | null | undefined
+): AgentStartupShell {
+  const basename = loginShell?.trim().replaceAll('\\', '/').split('/').pop()?.toLowerCase() ?? ''
+  return basename === 'fish' ? 'fish' : 'posix'
+}
+
+export type StartupCommandTokens =
+  | { ok: true; tokens: string[]; spans: CommandTokenSpan[] }
+  | { ok: false; error: string }
+
+/** True when an odd run of backslashes precedes this quote, which makes it a
+ * literal byte to the child's CommandLineToArgvW parser rather than a
+ * delimiter — so cmd's word boundaries stop matching this tokenizer's. */
+function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
+  let backslashes = 0
+  while (value[quoteIndex - 1 - backslashes] === '\\') {
+    backslashes += 1
+  }
+  return backslashes % 2 === 1
+}
 
 function tokenizeWindowsStartupCommand(
   value: string,
-  shell: Exclude<AgentStartupShell, 'posix'>
+  shell: WindowsStartupShell
 ): StartupCommandTokens {
   const tokens: string[] = []
+  const spans: CommandTokenSpan[] = []
   let token = ''
+  let tokenStart = 0
+  let divergesFromShell = false
   let quote: "'" | '"' | null = null
   let tokenStarted = false
   for (let index = 0; index < value.length; index += 1) {
     const char = value[index]
     const escape = shell === 'cmd' ? '^' : '`'
     if (char === escape && index + 1 < value.length) {
+      // Why: cmd strips `^` and hands the bare byte to the child's parser,
+      // which re-splits on whitespace and reopens a quote, and keeps the caret
+      // literal inside double quotes — either way the token stops matching
+      // argv. PowerShell folds the backtick into the token except for LF line
+      // continuations, verbatim single quotes, escape sequences, and a
+      // token-leading backtick before whitespace, which it drops entirely.
+      // A bare CR is treated as unmodelable rather than folded: pwsh 7 keeps
+      // it in the token, Windows PowerShell 5.1 is unverified, and failing
+      // open there costs nothing.
+      divergesFromShell ||=
+        (shell === 'cmd' ? /[\s"]/.test(value[index + 1]) : /[\n\r]/.test(value[index + 1])) ||
+        (shell === 'cmd' && quote === '"') ||
+        (shell === 'powershell' && quote === "'") ||
+        // A token-leading backtick before whitespace is dropped with the
+        // whitespace, emitting no token at all rather than the one built here.
+        (shell === 'powershell' && !tokenStarted && /\s/.test(value[index + 1])) ||
+        // PowerShell expands these escape sequences in quoted AND bare
+        // arguments, so the token value this branch builds is not argv's.
+        (shell === 'powershell' && '0abefnrtuv'.includes(value[index + 1]))
       token += value[index + 1]
+      if (!tokenStarted) {
+        tokenStart = index
+      }
       tokenStarted = true
       index += 1
       continue
     }
     if (quote) {
+      // Why: see the posix tokenizer — a `"` inside $(…) re-opens a nested
+      // quoting context that this tokenizer does not model.
+      divergesFromShell ||=
+        shell === 'powershell' &&
+        quote === '"' &&
+        char === '$' &&
+        (value[index + 1] === '(' || value[index + 1] === '{')
       if (char === quote) {
+        divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
         if (shell === 'powershell' && quote === "'" && value[index + 1] === "'") {
           token += "'"
           index += 1
@@ -40,15 +103,39 @@ function tokenizeWindowsStartupCommand(
       continue
     }
     if (char === "'" || char === '"') {
+      divergesFromShell ||= shell === 'cmd' && char === '"' && hasOddBackslashRun(value, index)
       quote = char
+      // Why: cmd.exe has no single-quote syntax, so this tokenizer's grouping
+      // of a single-quoted region diverges from what cmd actually parses;
+      // flag the token so consumers treat it as unmodelable.
+      divergesFromShell ||= shell === 'cmd' && char === "'"
+      if (!tokenStarted) {
+        tokenStart = index
+      }
       tokenStarted = true
     } else if (/\s/.test(char)) {
       if (tokenStarted) {
         tokens.push(token)
+        spans.push({ start: tokenStart, end: index, divergesFromShell })
         token = ''
         tokenStarted = false
+        divergesFromShell = false
       }
     } else {
+      if (!tokenStarted) {
+        tokenStart = index
+      }
+      // Why: see the posix tokenizer — a trailing unpaired escape would
+      // swallow the separator before anything appended to the base.
+      divergesFromShell ||= char === escape && index + 1 >= value.length
+      divergesFromShell ||=
+        ';&|<>'.includes(char) ||
+        (shell === 'powershell' &&
+          // Why: bare (…) is evaluated and {…} is a script block in argument
+          // position, so both are live syntax the span splice cannot model.
+          ('(){}'.includes(char) ||
+            (char === '#' && !tokenStarted) ||
+            (char === '$' && (value[index + 1] === '(' || value[index + 1] === '{'))))
       token += char
       tokenStarted = true
     }
@@ -58,17 +145,18 @@ function tokenizeWindowsStartupCommand(
   }
   if (tokenStarted) {
     tokens.push(token)
+    spans.push({ start: tokenStart, end: value.length, divergesFromShell })
   }
-  return { ok: true, tokens }
+  return { ok: true, tokens, spans }
 }
 
 export function tokenizeStartupCommand(
   value: string,
   shell: AgentStartupShell
 ): StartupCommandTokens {
-  return shell === 'posix'
-    ? tokenizeCustomCommandTemplate(value)
-    : tokenizeWindowsStartupCommand(value, shell)
+  return isWindowsStartupShell(shell)
+    ? tokenizeWindowsStartupCommand(value, shell)
+    : tokenizeCustomCommandTemplate(value)
 }
 
 export function resolveStartupShell(
@@ -78,143 +166,14 @@ export function resolveStartupShell(
   return shell ?? (platform === 'win32' ? 'powershell' : 'posix')
 }
 
-export function resolveSessionRulesDeliveryShell(args: {
-  platform: NodeJS.Platform
-  shell?: AgentStartupShell
-  isRemote?: boolean
-}): AgentStartupShell {
-  // Why: the SSH relay may apply a per-tab cmd.exe override that the planner cannot observe.
-  if (args.platform === 'win32' && args.isRemote && args.shell === undefined) {
-    return 'cmd'
-  }
-  return resolveStartupShell(args.platform, args.shell)
-}
-
 export function quoteStartupArg(value: string, shell: AgentStartupShell): string {
   if (shell === 'powershell') {
     return `'${value.replace(/'/g, "''")}'`
   }
   if (shell === 'cmd') {
-    // Why: cmd treats CR/LF as command boundaries even inside quoted startup arguments.
-    const singleLine = value.replace(/\r\n?|\n/g, ' ')
-    return `"${singleLine.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
   }
   return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-export function appliedSessionOptionProps(values: Record<string, SessionOptionValue>) {
-  return Object.keys(values).length > 0 ? { sessionOptions: { ...values } } : {}
-}
-
-export function hasNativeSessionRulesInjection(
-  config: TuiAgentConfig,
-  filePath: string | null | undefined,
-  rulesText: string | null | undefined,
-  shell?: AgentStartupShell
-): boolean {
-  const trimmedRules = rulesText?.trim()
-  const canInlineRules =
-    Boolean(trimmedRules) &&
-    shell !== 'cmd' &&
-    (trimmedRules?.length ?? 0) <= MAX_INLINE_SESSION_RULES_LENGTH
-  return Boolean(
-    (config.sessionRulesFileFlag && filePath) ||
-    ((config.sessionRulesTextFlag || config.sessionRulesConfigKey) && canInlineRules)
-  )
-}
-
-export function sessionRulesTextRequiresPostReadyDelivery(
-  rulesText: string | null | undefined,
-  shell: AgentStartupShell
-): boolean {
-  const trimmedRules = rulesText?.trim()
-  return Boolean(
-    trimmedRules && (shell === 'cmd' || trimmedRules.length > MAX_INLINE_SESSION_RULES_LENGTH)
-  )
-}
-
-function appendOptionBeforeTerminator(
-  command: string,
-  option: string,
-  shell: AgentStartupShell
-): string {
-  const marker = ` ${quoteStartupArg('--', shell)}`
-  const terminator = command.indexOf(marker)
-  if (terminator === -1) {
-    return `${command} ${option}`
-  }
-  return `${command.slice(0, terminator)} ${option}${command.slice(terminator)}`
-}
-
-// Why: applied only to this launch command; wake/resume re-resolves the current rules.
-export function appendSessionRulesFlag(
-  command: string,
-  config: TuiAgentConfig,
-  filePath: string | null | undefined,
-  rulesText: string | null | undefined,
-  shell: AgentStartupShell
-): string {
-  if (config.sessionRulesFileFlag && filePath) {
-    return appendOptionBeforeTerminator(
-      command,
-      `${config.sessionRulesFileFlag} ${quoteStartupArg(filePath, shell)}`,
-      shell
-    )
-  }
-  const trimmedRules = rulesText?.trim()
-  if (!trimmedRules || sessionRulesTextRequiresPostReadyDelivery(trimmedRules, shell)) {
-    return command
-  }
-  if (config.sessionRulesTextFlag) {
-    return appendOptionBeforeTerminator(
-      command,
-      `${config.sessionRulesTextFlag} ${quoteStartupArg(trimmedRules, shell)}`,
-      shell
-    )
-  }
-  if (config.sessionRulesConfigKey) {
-    const configOverride = `${config.sessionRulesConfigKey}=${JSON.stringify(trimmedRules)}`
-    return appendOptionBeforeTerminator(
-      command,
-      `-c ${quoteStartupArg(configOverride, shell)}`,
-      shell
-    )
-  }
-  return command
-}
-
-export function appendSessionRulesFileCleanup(
-  command: string,
-  filePath: string | null | undefined,
-  shell: AgentStartupShell
-): string {
-  if (!filePath) {
-    return command
-  }
-  const quotedPath = quoteStartupArg(filePath, shell)
-  if (shell === 'posix') {
-    return `${command}; _orca_agent_status=$?; rm -f -- ${quotedPath}; (exit "$_orca_agent_status")`
-  }
-  if (shell === 'powershell') {
-    return `${command}; $_orcaAgentStatus=$LASTEXITCODE; Remove-Item -LiteralPath ${quotedPath} -Force -ErrorAction SilentlyContinue; $global:LASTEXITCODE=$_orcaAgentStatus`
-  }
-  return `${command} & del /f /q ${quotedPath} >nul 2>&1`
-}
-
-export function prependSessionRulesToPrompt(prompt: string, rulesText: string): string {
-  return `## Agent session rules\n\n${rulesText.trim()}\n\n## User request\n\n${prompt}`
-}
-
-export function buildAgentSessionRulesOnlyDraft(
-  config: TuiAgentConfig,
-  filePath: string | null | undefined,
-  rulesText: string | null | undefined,
-  shell: AgentStartupShell
-): string | null {
-  if (!rulesText?.trim() || hasNativeSessionRulesInjection(config, filePath, rulesText, shell)) {
-    return null
-  }
-  return prependSessionRulesToPrompt('', rulesText)
 }
 
 export function buildShellCommandFromArgv(
@@ -234,6 +193,11 @@ export function clearEnvCommand(name: string, shell: AgentStartupShell): string 
   }
   if (shell === 'cmd') {
     return `set "${name}="`
+  }
+  // Why: fish has no `unset`; the sh spelling errors out and silently leaves
+  // the variable exported (e.g. an account-routed CODEX_HOME survives).
+  if (shell === 'fish') {
+    return `set -e ${name}`
   }
   return `unset ${name}`
 }

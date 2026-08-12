@@ -22,9 +22,11 @@ import {
   nextRepoSlugFailureRetryDelay,
   readRepoSlugCache,
   rememberRepoSlug,
+  repoUpstreamIdentityKey,
   settingsForRepoOwner,
   slugByRepoId,
   slugCacheKey,
+  type RepoSlugMatches,
   type SlugIndex
 } from './repo-slug-cache'
 import { githubRepoIdentityKey } from '../../../shared/github-repository-identity-key'
@@ -124,9 +126,9 @@ async function resolveRepoSlug(
 }
 
 async function buildIndex(
-  repos: Repo[],
+  repos: readonly Repo[],
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
-): Promise<{ index: SlugIndex; retryDelayMs: number | null }> {
+): Promise<{ index: SlugIndex; upstreamIndex: SlugIndex; retryDelayMs: number | null }> {
   // Why: evict cached entries for repos that no longer exist in state so
   // the cache cannot grow unbounded across long sessions where users add
   // and remove repos. Without this, every removed repo's id (and its
@@ -139,6 +141,7 @@ async function buildIndex(
     }
   }
   const next: SlugIndex = new Map()
+  const upstreamNext: SlugIndex = new Map()
   const results = await Promise.all(
     repos.map(async (r) => ({
       repo: r,
@@ -151,12 +154,26 @@ async function buildIndex(
     if (slug) {
       next.set(slug, [...(next.get(slug) ?? []), repo])
     }
+    // Why: a Project card references the upstream repo, but a contributor's
+    // clone has their personal fork as `origin`, so the origin-only index
+    // dropped every row (#12647). `repo.upstream` is already resolved when the
+    // repo is added, so this costs no extra IPC.
+    const upstreamKey = repoUpstreamIdentityKey(repo, slug)
+    if (upstreamKey && upstreamKey !== slug) {
+      upstreamNext.set(upstreamKey, [...(upstreamNext.get(upstreamKey) ?? []), repo])
+    }
   }
-  return { index: next, retryDelayMs: nextRepoSlugFailureRetryDelay(liveKeys) }
+  return {
+    index: next,
+    upstreamIndex: upstreamNext,
+    retryDelayMs: nextRepoSlugFailureRetryDelay(liveKeys)
+  }
 }
 
 export type RepoSlugIndexState = {
+  /** Best available matches: origin when anything owns the slug, else forks. */
   lookupSlug: (slug: string | null | undefined, host?: string) => Repo[]
+  lookupSlugMatches: (slug: string | null | undefined, host?: string) => RepoSlugMatches
   ready: boolean
 }
 
@@ -167,45 +184,67 @@ export function useRepoSlugIndex(): RepoSlugIndexState {
   const repos = useAppStore((s) => s.repos)
   const settings = useAppStore((s) => s.settings)
   const [index, setIndex] = useState<SlugIndex>(() => new Map())
+  const [upstreamIndex, setUpstreamIndex] = useState<SlugIndex>(() => new Map())
   const [ready, setReady] = useState(false)
   const [retryGeneration, setRetryGeneration] = useState(0)
+  // Why: schedule retry in a dedicated effect so setTimeout cleanup is owned
+  // synchronously (react-doctor effect-needs-cleanup); async .then assignment
+  // was not statically owned by the buildIndex effect cleanup.
+  const [retryDelayMs, setRetryDelayMs] = useState<number | null>(null)
   // Why: track the current repos snapshot so the effect can ignore stale
   // resolutions when repos change mid-flight.
   const generationRef = useRef(0)
 
   useEffect(() => {
     const gen = ++generationRef.current
-    let retryTimer: ReturnType<typeof setTimeout> | undefined
     setReady(false)
-    void buildIndex(repos, settings).then(({ index: next, retryDelayMs }) => {
-      if (gen !== generationRef.current) {
-        return
+    setRetryDelayMs(null)
+    void buildIndex(repos, settings).then(
+      ({ index: next, upstreamIndex: nextUpstream, retryDelayMs: nextRetryDelayMs }) => {
+        if (gen !== generationRef.current) {
+          return
+        }
+        setIndex(next)
+        setUpstreamIndex(nextUpstream)
+        setReady(true)
+        setRetryDelayMs(nextRetryDelayMs)
       }
-      setIndex(next)
-      setReady(true)
-      if (retryDelayMs !== null) {
-        retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
-      }
-    })
+    )
     return () => {
       generationRef.current += 1
-      if (retryTimer) {
-        clearTimeout(retryTimer)
-      }
     }
   }, [repos, retryGeneration, settings])
 
-  return useMemo(
-    () => ({
+  useEffect(() => {
+    if (retryDelayMs === null) {
+      return
+    }
+    const retryTimer = setTimeout(() => setRetryGeneration((value) => value + 1), retryDelayMs)
+    return () => {
+      clearTimeout(retryTimer)
+    }
+  }, [retryDelayMs])
+
+  return useMemo(() => {
+    const lookupSlugMatches = (slug: string | null | undefined, host?: string): RepoSlugMatches => {
+      const [owner, repo] = slug?.split('/') ?? []
+      if (!owner || !repo) {
+        return { origin: [], upstream: [] }
+      }
+      const key = githubRepoIdentityKey({ owner, repo, host })
+      return { origin: index.get(key) ?? [], upstream: upstreamIndex.get(key) ?? [] }
+    }
+    return {
+      lookupSlugMatches,
+      // Why: origin wins — when the upstream repo itself is open, a row must
+      // resolve to that clone rather than becoming ambiguous with someone's
+      // fork of it. Callers that also filter by selection use
+      // `lookupSlugMatches` so an unselected clone cannot hide a selected fork.
       lookupSlug: (slug: string | null | undefined, host?: string): Repo[] => {
-        const [owner, repo] = slug?.split('/') ?? []
-        if (!owner || !repo) {
-          return []
-        }
-        return index.get(githubRepoIdentityKey({ owner, repo, host })) ?? []
+        const { origin, upstream } = lookupSlugMatches(slug, host)
+        return origin.length > 0 ? origin : upstream
       },
       ready
-    }),
-    [index, ready]
-  )
+    }
+  }, [index, upstreamIndex, ready])
 }

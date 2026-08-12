@@ -7,8 +7,8 @@ import {
 } from '@/lib/onboarding-folder-agent-startup'
 
 describe('buildOnboardingFolderAgentStartup', () => {
-  it('queues the persisted default agent with onboarding telemetry', async () => {
-    const startup = await buildOnboardingFolderAgentStartup({
+  it('queues the persisted default agent with onboarding telemetry', () => {
+    const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex'
     })
@@ -31,8 +31,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
   })
 
-  it('respects the blank terminal preference', async () => {
-    const startup = await buildOnboardingFolderAgentStartup({
+  it('respects the blank terminal preference', () => {
+    const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'blank'
     })
@@ -40,8 +40,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup).toBeUndefined()
   })
 
-  it('omits native-chat preferences from terminal-default folder launches', async () => {
-    const startup = await buildOnboardingFolderAgentStartup({
+  it('omits native-chat preferences from terminal-default folder launches', () => {
+    const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex',
       experimentalNativeChat: true,
@@ -58,8 +58,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     expect(startup?.sessionOptions).toBeUndefined()
   })
 
-  it('applies native-chat preferences to chat-default folder launches', async () => {
-    const startup = await buildOnboardingFolderAgentStartup({
+  it('applies native-chat preferences to chat-default folder launches', () => {
+    const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: 'codex',
       experimentalNativeChat: true,
@@ -79,8 +79,8 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
   })
 
-  it('does not infer an agent from auto mode', async () => {
-    const startup = await buildOnboardingFolderAgentStartup({
+  it('does not infer an agent from auto mode', () => {
+    const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
       defaultTuiAgent: null
     })
@@ -125,9 +125,9 @@ describe('buildOnboardingFolderAgentStartup', () => {
     ).toBe(false)
   })
 
-  it('builds the skipped-onboarding folder startup from the persisted default agent', async () => {
+  it('builds the skipped-onboarding folder startup from the persisted default agent', () => {
     expect(
-      await buildDismissedOnboardingFolderAgentStartup(
+      buildDismissedOnboardingFolderAgentStartup(
         {
           ...getDefaultSettings('/tmp/orca-workspaces'),
           defaultTuiAgent: 'codex',

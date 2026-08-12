@@ -25,6 +25,7 @@ import { useActiveWorktree, useRepoById } from '@/store/selectors'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 import { cn } from '@/lib/utils'
 import { openHttpLink } from '@/lib/http-link-routing'
+import { restoreReactionOnSubject, setReactionOnSubject } from '@/lib/pr-comment-reactions'
 import { Button } from '@/components/ui/button'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import {
@@ -41,6 +42,7 @@ import {
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { githubProjectHost } from '../../../../shared/github-project-identity'
 import HostedReviewActions from './HostedReviewActions'
+import { GitHubPRStackMap, type GitHubPRStackMapNavigationModifiers } from './GitHubPRStackMap'
 import {
   PullRequestIcon,
   prStateColor,
@@ -64,6 +66,7 @@ import type {
   PRCheckDetail,
   PRCheckRunDetails,
   PRComment,
+  GitHubReactionContent,
   PRRefreshErrorType
 } from '../../../../shared/types'
 import { getConnectionId } from '@/lib/connection-context'
@@ -76,17 +79,16 @@ import {
   getBrokenChecks,
   getCheckDetailsPromptKey
 } from '../pr-checks-fix-prompt'
-import {
-  buildPRCommentsResolutionPrompt,
-  isResolvablePRCommentGroup
-} from '../pr-comments-resolution-prompt'
+import { buildPRCommentsResolutionPrompt } from '../pr-comments-resolution-prompt'
 import { buildPRCommentConversationReplyBody } from './pr-comment-fixing-reply-body'
+import { buildSnapshottedThreadResolver } from './pr-comment-snapshotted-thread-resolver'
 import {
   acknowledgePRCommentsAfterAiLaunch,
   attachPRReviewReplyParent,
   canPostPRReviewThreadReply,
   checksPanelReviewStableKey,
   clearPendingPRCommentAiAck,
+  hasPRCommentGroupNeedingReply,
   resolvePRReviewReplyThreadId,
   setPendingPRCommentAiAck,
   takePendingPRCommentAiAck
@@ -97,9 +99,10 @@ import type {
 } from './pr-comments-ai-launch-ack'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github-links'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
-import type {
-  HostedReviewCreationEligibility,
-  HostedReviewProvider
+import {
+  hostedReviewProviderSupportsDraft,
+  type HostedReviewCreationEligibility,
+  type HostedReviewProvider
 } from '../../../../shared/hosted-review'
 import { resolveHostedReviewCreationProvider } from '../../../../shared/hosted-review-creation-providers'
 import { normalizeGlobalWindowsRuntimeDefault } from '../../../../shared/project-execution-runtime'
@@ -185,11 +188,13 @@ import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CreateHostedReviewComposer } from './CreateHostedReviewComposer'
+import { useHostedReviewStackParent } from './useHostedReviewStackParent'
+import { resolveCreatedHostedReviewLink } from './source-control-created-review-link'
 import { formatCreateError } from './create-pull-request-review-copy'
 import { stripBaseRef, useCreatePullRequestDialogFields } from './useCreatePullRequestDialogFields'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
 import { translate } from '@/i18n/i18n'
-import { groupPRComments, type PRCommentGroup } from '@/lib/pr-comment-groups'
+import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   openChecksPanelHostedReviewUrl,
   resolveChecksPanelHostedReviewModifierDestination,
@@ -471,6 +476,7 @@ export default function ChecksPanel(): React.JSX.Element {
     (s) => s.getHostedReviewCreationEligibility
   )
   const createHostedReview = useAppStore((s) => s.createHostedReview)
+  const createStackedHostedReview = useAppStore((s) => s.createStackedHostedReview)
   const enqueueGitHubPRRefresh = useAppStore((s) => s.enqueueGitHubPRRefresh)
   const conflictOperation = useAppStore((s) =>
     activeWorktreeId ? (s.gitConflictOperationByWorktree[activeWorktreeId] ?? 'unknown') : 'unknown'
@@ -496,6 +502,7 @@ export default function ChecksPanel(): React.JSX.Element {
   const fetchPRComments = useAppStore((s) => s.fetchPRComments)
   const addPRConversationComment = useAppStore((s) => s.addPRConversationComment)
   const addPRReviewCommentReply = useAppStore((s) => s.addPRReviewCommentReply)
+  const setPRCommentReaction = useAppStore((s) => s.setPRCommentReaction)
   const resolveReviewThread = useAppStore((s) => s.resolveReviewThread)
   const detectedAgentIds = useAppStore((s) => s.detectedAgentIds)
   const remoteDetectedAgentIds = useAppStore((s) => {
@@ -1314,10 +1321,13 @@ export default function ChecksPanel(): React.JSX.Element {
     setBody: setPrBody,
     draft: prDraft,
     setDraft: setPrDraft,
+    stackedCreationSupported: prStackedCreationSupported,
+    repoDefaultBaseRef: prRepoDefaultBaseRef,
     baseQuery: prBaseQuery,
     setBaseQuery: setPrBaseQuery,
     baseResults: prBaseResults,
     setBaseResults: setPrBaseResults,
+    baseSearchPending: prBaseSearchPending,
     baseSearchError: prBaseSearchError,
     generating: prGenerating,
     generateError: prGenerateError,
@@ -1353,6 +1363,17 @@ export default function ChecksPanel(): React.JSX.Element {
       },
       onCancelGenerate: handleCancelGeneratePullRequestFieldsForActive
     }
+  })
+  const stackParentReview = useHostedReviewStackParent({
+    enabled: hostedReviewCreateProvider === 'github' && prStackedCreationSupported,
+    repoPath: repo?.path ?? '',
+    repoId: repo?.id ?? null,
+    base: prBase,
+    // Why: the repo default, not eligibility's defaultBaseRef — that one resolves to
+    // the worktree's own base, which is exactly the branch a stacked PR targets.
+    repoDefaultBase: prRepoDefaultBaseRef,
+    head: branch,
+    fetchHostedReviewForBranch
   })
   useEffect(() => {
     // Why: PR generation can finish while this composer is hidden by a worktree switch; hydrate once the original composer is visible again.
@@ -2941,6 +2962,50 @@ export default function ChecksPanel(): React.JSX.Element {
     [pr?.prRepo, confirm]
   )
 
+  const handleSetReaction = useCallback(
+    async (
+      comment: PRComment,
+      content: GitHubReactionContent,
+      reacted: boolean
+    ): Promise<boolean> => {
+      const reactionSubjectId = comment.reactionSubjectId
+      if (!repo || !prNumber || !pr?.prRepo || !reactionSubjectId) {
+        return false
+      }
+      const requestKey = checksPanelAsyncResultKey(
+        prCacheKey,
+        branch,
+        prNumber,
+        pr.prRepo,
+        pr.headSha
+      )
+      const previousReaction = comment.reactions?.find((reaction) => reaction.content === content)
+      setComments((current) => setReactionOnSubject(current, reactionSubjectId, content, reacted))
+      const ok = await setPRCommentReaction(
+        repo.path,
+        prNumber,
+        reactionSubjectId,
+        content,
+        reacted,
+        { repoId: repo.id, prRepo: pr.prRepo }
+      )
+      if (!isCurrentAsyncResult(requestKey) || ok) {
+        return ok
+      }
+      setComments((current) =>
+        restoreReactionOnSubject(current, reactionSubjectId, content, previousReaction)
+      )
+      toast.error(
+        translate(
+          'auto.components.right.sidebar.ChecksPanel.updateReactionFailed',
+          'Failed to update reaction.'
+        )
+      )
+      return false
+    },
+    [branch, isCurrentAsyncResult, pr, prCacheKey, prNumber, repo, setPRCommentReaction]
+  )
+
   const handleReplyToComment = useCallback(
     async (comment: PRComment, body: string, options: { notifyOnFailure?: boolean } = {}) => {
       const notifyOnFailure = options.notifyOnFailure !== false
@@ -3060,9 +3125,6 @@ export default function ChecksPanel(): React.JSX.Element {
       if (commentResolutionAckBusyRef.current) {
         return
       }
-      const selectedThreadIds = selectedGroups.flatMap((group) =>
-        group.kind === 'thread' && isResolvablePRCommentGroup(group) ? [group.threadId] : []
-      )
       if (selectedGroups.length === 0) {
         toast.message(
           translate(
@@ -3102,12 +3164,26 @@ export default function ChecksPanel(): React.JSX.Element {
         }
       })()
       const githubTarget = githubTargetFromPr ?? githubTargetFromUrl
+      // Why: resolving needs no prRepo, so a degraded PR entry that only yields a number must
+      // still ack by resolving instead of failing every selected thread.
+      const githubResolveTarget =
+        githubTarget ??
+        (activeReview.provider === 'github' && prNumber
+          ? { repoPath: repo.path, repoId: repo.id, prNumber }
+          : undefined)
+      // Why: the ack resolves against this MR after delivery, so pin the iid now — the panel
+      // may already be showing a different review by then.
+      const gitlabTarget =
+        activeReview.provider === 'gitlab'
+          ? { repoPath: repo.path, repoId: repo.id, iid: activeReview.number }
+          : undefined
       const commentResolution = {
         reviewContextKey: stateRequestKey,
         provider: activeReview.provider,
-        selectedThreadIds,
         selectedGroups,
-        githubTarget
+        githubTarget,
+        githubResolveTarget,
+        gitlabTarget
       }
       claimedCommentResolutionRef.current = null
       commentResolutionLaunchAcceptedRef.current = false
@@ -3119,13 +3195,13 @@ export default function ChecksPanel(): React.JSX.Element {
           { value0: activeReview.provider === 'gitlab' ? 'MR' : 'PR' }
         ),
         // Why: only GitHub with a resolved PR target posts fixing replies; other providers
-        // must not be promised a reply the ack never sends. Review threads get one reply
-        // each, conversation comments share one — so the copy stays deliberately vague.
+        // must not be promised a reply the ack never sends. Resolvable threads are acked by
+        // resolving alone, so the copy leads with that.
         description:
           githubTarget && activeReview.provider === 'github'
             ? translate(
-                'auto.components.right.sidebar.ChecksPanel.ed3f79c031',
-                'Review the prompt before starting an agent. After the prompt is delivered, Orca replies to the selected comments and resolves host threads when possible.'
+                'auto.components.right.sidebar.ChecksPanel.5eb2163b6b',
+                'Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.'
               )
             : translate(
                 'auto.components.right.sidebar.ChecksPanel.abf59262fb',
@@ -3191,25 +3267,42 @@ export default function ChecksPanel(): React.JSX.Element {
         checksPanelReviewStableKey(asyncResultKeyRef.current) === launchStableKey
       const githubTarget = resolution.githubTarget
       const canReplyOnHost = resolution.provider === 'github' && githubTarget != null
-      // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected, not an error.
-      let lastReplyError =
-        resolution.provider === 'github' && githubTarget == null
+      // Why: only GitHub posts fixing replies today; a GitLab MR reaching replied=0 is expected,
+      // and a missing reply target only matters when something in the selection needs a reply.
+      let lastHostError =
+        resolution.provider === 'github' &&
+        githubTarget == null &&
+        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
           ? translate(
               'auto.components.right.sidebar.ChecksPanel.7e4b2a19c0',
               'Could not resolve the GitHub PR to reply on.'
             )
           : undefined
+      const resolveSnapshottedThread = buildSnapshottedThreadResolver({
+        provider: resolution.provider,
+        githubResolveTarget: resolution.githubResolveTarget,
+        gitlabTarget: resolution.gitlabTarget,
+        resolveReviewThread,
+        resolveGitLabDiscussion: (args) =>
+          resolveGitLabMRDiscussionForChecks({ ...args, settings }),
+        isPanelStillOnLaunchReview,
+        onResolvedOptimistically: (threadId) => {
+          setComments((prev) => markPRCommentThreadResolved(prev, threadId, true))
+        },
+        onResolveFailed: ({ threadId, error }) => {
+          lastHostError =
+            error ||
+            translate(
+              'auto.components.right.sidebar.ChecksPanel.430f1a62d4',
+              'Could not resolve the selected thread on the host.'
+            )
+          console.warn('Post-launch thread resolve failed:', threadId, error)
+        }
+      })
       const counts = await acknowledgePRCommentsAfterAiLaunch({
         groups: resolution.selectedGroups,
         deps: {
-          isStillCurrent: isPanelStillOnLaunchReview,
-          isThreadStillResolvable: (threadId) => {
-            const currentGroup = groupPRComments(commentsRef.current).find(
-              (group) => group.kind === 'thread' && group.threadId === threadId
-            )
-            return Boolean(currentGroup && isResolvablePRCommentGroup(currentGroup))
-          },
-          resolveThread: (threadId) => handleResolve(threadId, true, { notifyOnFailure: false }),
+          resolveThread: resolveSnapshottedThread,
           canReply: canReplyOnHost,
           replyInThread: async (comment, body) => {
             if (!githubTarget || !canPostPRReviewThreadReply(comment)) {
@@ -3250,11 +3343,11 @@ export default function ChecksPanel(): React.JSX.Element {
                 }
                 return true
               }
-              lastReplyError = result.error
+              lastHostError = result.error
               console.warn('In-thread fixing reply failed:', result.error)
               return false
             } catch (err) {
-              lastReplyError = err instanceof Error ? err.message : String(err)
+              lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post in-thread fixing reply for review comment:', err)
               return false
             }
@@ -3281,11 +3374,11 @@ export default function ChecksPanel(): React.JSX.Element {
                 }
                 return true
               }
-              lastReplyError = result.error
+              lastHostError = result.error
               console.warn('Conversation fixing reply failed:', result.error)
               return false
             } catch (err) {
-              lastReplyError = err instanceof Error ? err.message : String(err)
+              lastHostError = err instanceof Error ? err.message : String(err)
               console.warn('Failed to post conversation fixing reply for review comment:', err)
               return false
             }
@@ -3298,9 +3391,12 @@ export default function ChecksPanel(): React.JSX.Element {
       }
 
       // Why: surface the underlying API error when replies were possible but none landed.
+      // Resolvable threads are acked by resolving, so replied=0 is correct when nothing needed one.
       const repliedNoneDespiteHostSupport =
-        canReplyOnHost && counts.replied === 0 && resolution.selectedGroups.length > 0
-      if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastReplyError) {
+        canReplyOnHost &&
+        counts.replied === 0 &&
+        hasPRCommentGroupNeedingReply(resolution.selectedGroups)
+      if (counts.failed > 0 || repliedNoneDespiteHostSupport || lastHostError) {
         toast.error(
           translate(
             'auto.components.right.sidebar.ChecksPanel.f273f2271c',
@@ -3310,7 +3406,7 @@ export default function ChecksPanel(): React.JSX.Element {
               value1: counts.replied,
               value2: counts.skipped,
               value3: counts.failed,
-              value4: lastReplyError ? ` ${lastReplyError}` : ''
+              value4: lastHostError ? ` ${lastHostError}` : ''
             }
           )
         )
@@ -3333,8 +3429,9 @@ export default function ChecksPanel(): React.JSX.Element {
       addPRConversationComment,
       addPRReviewCommentReply,
       clearSentCommentSelection,
-      handleResolve,
-      refreshCommentsAfterBulkResolve
+      refreshCommentsAfterBulkResolve,
+      resolveReviewThread,
+      settings
     ]
   )
 
@@ -3687,6 +3784,18 @@ export default function ChecksPanel(): React.JSX.Element {
     [activeReview, activeWorktreeId]
   )
 
+  const handleOpenStackPR = useCallback(
+    (url: string, modifiers: GitHubPRStackMapNavigationModifiers) => {
+      openChecksPanelHostedReviewUrl({
+        url,
+        event: modifiers,
+        isMac: isMacPlatform(),
+        worktreeId: activeWorktreeId
+      })
+    },
+    [activeWorktreeId]
+  )
+
   const handleUnlinkPullRequest = useCallback(() => {
     if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
       return
@@ -3846,26 +3955,18 @@ export default function ChecksPanel(): React.JSX.Element {
       setRightSidebarOpen(true)
       setRightSidebarTab('checks')
       try {
-        if (activeWorktreeId && result.provider === 'github') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedPR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'gitlab') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGitLabMR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'azure-devops') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedAzureDevOpsPR: result.number })
-        }
-        if (activeWorktreeId && result.provider === 'gitea') {
-          await updateWorktreeMeta(activeWorktreeId, { linkedGiteaPR: result.number })
+        const createdLink = resolveCreatedHostedReviewLink(result.provider, result.number)
+        if (activeWorktreeId && result.provider !== 'unsupported') {
+          await updateWorktreeMeta(activeWorktreeId, createdLink.worktree)
         }
         const linkedReviewNumbers = {
-          linkedGitHubPR: result.provider === 'github' ? result.number : linkedPR,
+          linkedGitHubPR: linkedPR,
           fallbackGitHubPR: fallbackGitHubPRNumber,
-          linkedGitLabMR: result.provider === 'gitlab' ? result.number : linkedGitLabMR,
+          linkedGitLabMR,
           linkedBitbucketPR,
-          linkedAzureDevOpsPR:
-            result.provider === 'azure-devops' ? result.number : linkedAzureDevOpsPR,
-          linkedGiteaPR: result.provider === 'gitea' ? result.number : linkedGiteaPR
+          linkedAzureDevOpsPR,
+          linkedGiteaPR,
+          ...createdLink.lookup
         }
         if (result.provider === 'gitlab') {
           const refreshedReview = await refreshHostedReviewCard(fetchHostedReviewForBranch, {
@@ -3916,121 +4017,86 @@ export default function ChecksPanel(): React.JSX.Element {
     ]
   )
 
-  const handleCreatePullRequest = useCallback(async (): Promise<void> => {
-    if (!repo || !branch || !createComposerOpen || prGenerating || createPrInFlightRef.current) {
-      return
-    }
+  const handleCreatePullRequest = useCallback(
+    async (stacked = false): Promise<void> => {
+      if (!repo || !branch || !createComposerOpen || prGenerating || createPrInFlightRef.current) {
+        return
+      }
 
-    const requestContextKey = panelContextKey
-    const isCurrentCreateRequest = (): boolean =>
-      panelContextKeyRef.current === requestContextKey &&
-      createPrInFlightRef.current === requestContextKey
-    const base = stripBaseRef(prBase).trim()
-    const title = prTitle.trim()
-    const worktreePath = activeWorktreePath ?? repo.path
-    if (!title) {
-      setCreatePrError(
-        translate(
-          'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
-          'Enter a {{value0}} title.',
-          {
-            value0: hostedReviewCreateCopy.reviewLabel
+      const requestContextKey = panelContextKey
+      const isCurrentCreateRequest = (): boolean =>
+        panelContextKeyRef.current === requestContextKey &&
+        createPrInFlightRef.current === requestContextKey
+      const base = stripBaseRef(prBase).trim()
+      const title = prTitle.trim()
+      const worktreePath = activeWorktreePath ?? repo.path
+      if (!title) {
+        setCreatePrError(
+          translate(
+            'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
+            'Enter a {{value0}} title.',
+            {
+              value0: hostedReviewCreateCopy.reviewLabel
+            }
+          )
+        )
+        return
+      }
+      if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()) {
+        setCreatePrError(
+          translate(
+            'auto.components.right.sidebar.SourceControl.ae743199cd',
+            'Choose a different base branch before creating a {{value0}}.',
+            { value0: hostedReviewCreateCopy.reviewLabel }
+          )
+        )
+        return
+      }
+
+      createPrInFlightRef.current = requestContextKey
+      setIsCreatingPr(true)
+      setCreatePrError(null)
+      let pushed = false
+      try {
+        const shouldPushBeforeCreate =
+          createPrPushFirst || hostedReviewCreation?.blockedReason === 'needs_push'
+        if (shouldPushBeforeCreate) {
+          const ok = await pushBeforeCreatePullRequest()
+          if (!isCurrentCreateRequest()) {
+            return
           }
-        )
-      )
-      return
-    }
-    if (!base || stripBaseRef(base).toLowerCase() === stripBaseRef(branch).toLowerCase()) {
-      setCreatePrError(
-        translate(
-          'auto.components.right.sidebar.SourceControl.ae743199cd',
-          'Choose a different base branch before creating a {{value0}}.',
-          { value0: hostedReviewCreateCopy.reviewLabel }
-        )
-      )
-      return
-    }
-
-    createPrInFlightRef.current = requestContextKey
-    setIsCreatingPr(true)
-    setCreatePrError(null)
-    let pushed = false
-    try {
-      const shouldPushBeforeCreate =
-        createPrPushFirst || hostedReviewCreation?.blockedReason === 'needs_push'
-      if (shouldPushBeforeCreate) {
-        const ok = await pushBeforeCreatePullRequest()
+          if (!ok) {
+            setCreatePrError('Push failed. Resolve the push error, then try again.')
+            return
+          }
+          pushed = true
+        }
+        const createInput = {
+          repoId: repo.id,
+          provider: hostedReviewCreateProvider,
+          base,
+          head: normalizeHostedReviewHeadRef(branch),
+          title,
+          body: prBody,
+          draft: prDraft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
+          worktreePath,
+          useTemplate: prCreationDefaults.useTemplate
+        }
+        const result = stacked
+          ? await createStackedHostedReview(repo.path, createInput)
+          : await createHostedReview(repo.path, createInput)
         if (!isCurrentCreateRequest()) {
           return
         }
-        if (!ok) {
-          setCreatePrError('Push failed. Resolve the push error, then try again.')
-          return
-        }
-        pushed = true
-      }
-      const result = await createHostedReview(repo.path, {
-        repoId: repo.id,
-        provider: hostedReviewCreateProvider,
-        base,
-        head: normalizeHostedReviewHeadRef(branch),
-        title,
-        body: prBody,
-        draft: prDraft,
-        worktreePath,
-        useTemplate: prCreationDefaults.useTemplate
-      })
-      if (!isCurrentCreateRequest()) {
-        return
-      }
-      if (result.ok) {
-        await handlePullRequestCreated({
-          provider: hostedReviewCreateProvider,
-          number: result.number,
-          url: result.url
-        })
-        if (prCreationDefaults.openAfterCreate) {
-          openHttpLink(result.url, { worktreeId: activeWorktreeId })
-        }
-        if (activePullRequestGenerationKey) {
-          updatePullRequestGenerationRecord(
-            activePullRequestGenerationKey,
-            clearPullRequestGenerationRequiresPushBeforeCreate
-          )
-        }
-        return
-      }
-      if (result.existingReview?.url) {
-        const number = result.existingReview.number
-        toast.success(
-          number
-            ? translate(
-                'auto.components.right.sidebar.ChecksPanel.b6ce28da5b',
-                '{{value0}} #{{value1}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel, value1: number }
-              )
-            : translate(
-                'auto.components.right.sidebar.ChecksPanel.cf9e69f3be',
-                '{{value0}} is already open',
-                { value0: hostedReviewCreateCopy.titleLabel }
-              ),
-          {
-            action: {
-              label: translate(
-                'auto.components.right.sidebar.ChecksPanel.192e686e57',
-                'Open on {{value0}}',
-                { value0: hostedReviewCreateCopy.providerName }
-              ),
-              onClick: () => window.api.shell.openUrl(result.existingReview!.url)
-            }
-          }
-        )
-        if (number) {
+        if (result.ok) {
           await handlePullRequestCreated({
             provider: hostedReviewCreateProvider,
-            number,
-            url: result.existingReview.url
+            number: result.number,
+            url: result.url
           })
+          if (prCreationDefaults.openAfterCreate) {
+            openHttpLink(result.url, { worktreeId: activeWorktreeId })
+          }
           if (activePullRequestGenerationKey) {
             updatePullRequestGenerationRecord(
               activePullRequestGenerationKey,
@@ -4039,55 +4105,110 @@ export default function ChecksPanel(): React.JSX.Element {
           }
           return
         }
+        if ('existingReview' in result && result.existingReview?.url) {
+          const number = result.existingReview.number
+          toast.success(
+            number
+              ? translate(
+                  'auto.components.right.sidebar.ChecksPanel.b6ce28da5b',
+                  '{{value0}} #{{value1}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel, value1: number }
+                )
+              : translate(
+                  'auto.components.right.sidebar.ChecksPanel.cf9e69f3be',
+                  '{{value0}} is already open',
+                  { value0: hostedReviewCreateCopy.titleLabel }
+                ),
+            {
+              action: {
+                label: translate(
+                  'auto.components.right.sidebar.ChecksPanel.192e686e57',
+                  'Open on {{value0}}',
+                  { value0: hostedReviewCreateCopy.providerName }
+                ),
+                onClick: () => window.api.shell.openUrl(result.existingReview!.url)
+              }
+            }
+          )
+          if (number) {
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url: result.existingReview.url
+            })
+            if (activePullRequestGenerationKey) {
+              updatePullRequestGenerationRecord(
+                activePullRequestGenerationKey,
+                clearPullRequestGenerationRequiresPushBeforeCreate
+              )
+            }
+            return
+          }
+        }
+        // Why: stacked creation can create the pull request and still fail to register
+        // the stack. Link the review that exists before surfacing the stack failure, or
+        // the workspace stays unaware of a PR the user can already see on GitHub.
+        if ('createdReview' in result && result.createdReview?.url) {
+          const { number, url } = result.createdReview
+          if (number) {
+            await handlePullRequestCreated({
+              provider: hostedReviewCreateProvider,
+              number,
+              url
+            })
+          }
+        }
+        setCreatePrError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
+      } catch (error) {
+        if (!isCurrentCreateRequest()) {
+          return
+        }
+        setCreatePrError(
+          error instanceof Error
+            ? error.message
+            : translate(
+                'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
+                'Failed to create {{value0}}',
+                { value0: hostedReviewCreateCopy.reviewLabel }
+              )
+        )
+      } finally {
+        if (createPrInFlightRef.current === requestContextKey) {
+          createPrInFlightRef.current = null
+          setIsCreatingPr(false)
+          setGitStatusRefreshNonce((value) => value + 1)
+        }
       }
-      setCreatePrError(formatCreateError(result, pushed, hostedReviewCreateCopy.shortLabel))
-    } catch (error) {
-      if (!isCurrentCreateRequest()) {
-        return
-      }
-      setCreatePrError(
-        error instanceof Error
-          ? error.message
-          : translate(
-              'auto.components.right.sidebar.SourceControl.e2b7a1c0d9f4',
-              'Failed to create {{value0}}',
-              { value0: hostedReviewCreateCopy.reviewLabel }
-            )
-      )
-    } finally {
-      if (createPrInFlightRef.current === requestContextKey) {
-        createPrInFlightRef.current = null
-        setIsCreatingPr(false)
-        setGitStatusRefreshNonce((value) => value + 1)
-      }
-    }
-  }, [
-    activeWorktreePath,
-    activeWorktreeId,
-    activePullRequestGenerationKey,
-    branch,
-    createComposerOpen,
-    createHostedReview,
-    createPrPushFirst,
-    handlePullRequestCreated,
-    hostedReviewCreateCopy.providerName,
-    hostedReviewCreateCopy.reviewLabel,
-    hostedReviewCreateCopy.shortLabel,
-    hostedReviewCreateCopy.titleLabel,
-    hostedReviewCreateProvider,
-    hostedReviewCreation?.blockedReason,
-    panelContextKey,
-    prBase,
-    prBody,
-    prCreationDefaults.openAfterCreate,
-    prCreationDefaults.useTemplate,
-    prDraft,
-    prGenerating,
-    prTitle,
-    pushBeforeCreatePullRequest,
-    repo,
-    updatePullRequestGenerationRecord
-  ])
+    },
+    [
+      activeWorktreePath,
+      activeWorktreeId,
+      activePullRequestGenerationKey,
+      branch,
+      createComposerOpen,
+      createHostedReview,
+      createStackedHostedReview,
+      createPrPushFirst,
+      handlePullRequestCreated,
+      hostedReviewCreateCopy.providerName,
+      hostedReviewCreateCopy.reviewLabel,
+      hostedReviewCreateCopy.shortLabel,
+      hostedReviewCreateCopy.titleLabel,
+      hostedReviewCreateProvider,
+      hostedReviewCreation?.blockedReason,
+      panelContextKey,
+      prBase,
+      prBody,
+      prCreationDefaults.openAfterCreate,
+      prCreationDefaults.useTemplate,
+      prDraft,
+      prGenerating,
+      prTitle,
+      pushBeforeCreatePullRequest,
+      repo,
+      updatePullRequestGenerationRecord
+    ]
+  )
 
   // ── Empty state ──
   if (!activeWorktree) {
@@ -4229,10 +4350,12 @@ export default function ChecksPanel(): React.JSX.Element {
         {!operationInProgress && createComposerOpen ? (
           <div className="mt-4 border-t border-border pt-3">
             <CreateHostedReviewComposer
+              key={panelContextKey}
               className="p-0"
               provider={hostedReviewCreateProvider}
               branch={branch}
               base={prBase}
+              repoDefaultBase={prRepoDefaultBaseRef}
               setBase={handlePrBaseChange}
               title={prTitle}
               setTitle={handlePrTitleChange}
@@ -4240,10 +4363,13 @@ export default function ChecksPanel(): React.JSX.Element {
               setBody={setPrBody}
               draft={prDraft}
               setDraft={setPrDraft}
+              stackedCreationSupported={prStackedCreationSupported}
+              stackParentReview={stackParentReview}
               baseQuery={prBaseQuery}
               setBaseQuery={setPrBaseQuery}
               baseResults={prBaseResults}
               setBaseResults={setPrBaseResults}
+              baseSearchPending={prBaseSearchPending}
               baseSearchError={prBaseSearchError}
               aiGenerationEnabled={sourceControlAiActionsVisible && prAiGenerationEnabled}
               generating={prGenerating}
@@ -4269,7 +4395,7 @@ export default function ChecksPanel(): React.JSX.Element {
               }}
               onGenerate={() => void handleGeneratePullRequestFields()}
               onCancelGenerate={handleCancelGeneratePullRequestFields}
-              onPrimaryAction={() => void handleCreatePullRequest()}
+              onPrimaryAction={(stacked) => void handleCreatePullRequest(stacked)}
             />
           </div>
         ) : null}
@@ -4390,6 +4516,14 @@ export default function ChecksPanel(): React.JSX.Element {
 
         {detachedHeadDisplay && <DetachedHeadBadge display={detachedHeadDisplay} side="bottom" />}
 
+        {activeReview.provider === 'github' && pr?.stack ? (
+          <GitHubPRStackMap
+            stack={pr.stack}
+            currentPRNumber={pr.number}
+            onOpenPullRequest={handleOpenStackPR}
+          />
+        ) : null}
+
         {/* Review title */}
         {editingTitle ? (
           <div className="flex items-center gap-1">
@@ -4485,6 +4619,7 @@ export default function ChecksPanel(): React.JSX.Element {
           checksLoading={checksLoading}
           checkDetailsContextKey={stateRequestKey}
           onLoadCheckDetails={handleLoadCheckDetails}
+          githubRepository={pr?.prRepo ?? null}
           getGitLabProjectRef={getGitLabProjectRef}
         />
       )}
@@ -4506,6 +4641,7 @@ export default function ChecksPanel(): React.JSX.Element {
         onResolve={pr || activeGitLabReview ? handleResolve : undefined}
         onEditComment={pr ? handleEditComment : undefined}
         onDeleteComment={pr ? handleDeleteComment : undefined}
+        onSetReaction={canTargetPRComments ? handleSetReaction : undefined}
       />
       <SourceControlAgentActionDialog
         open={sourceControlAiActionsVisible && agentComposerState !== null}

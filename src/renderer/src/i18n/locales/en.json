@@ -644,6 +644,14 @@
               "64555d0014": "No base branch found"
             }
           }
+        },
+        "browser": {
+          "tab": {
+            "open": {
+              "urlFailed": "Unable to open URL.",
+              "searchFailed": "Unable to search with {{value0}}."
+            }
+          }
         }
       },
       "worktree": {
@@ -898,8 +906,6 @@
         "pluginsTitle": "Plugins",
         "pluginsDescription": "Install and manage experimental Orca plugins.",
         "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
-        "agentSessionRulesTitle": "Agent Session Rules",
-        "agentSessionRulesDescription": "Custom rules applied to supported agent launches. Native system instructions are used where available; other agents receive rules with Orca-delivered startup prompts.",
         "artifactsTitle": "Artifacts",
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
@@ -2839,7 +2845,8 @@
             "a7e2fd2699": "file an issue",
             "5c8ce20be6": "If this persists, please",
             "cc6d997c65": "Restart the terminal daemon from here to clear stale daemon state.",
-            "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry."
+            "7ee11bc0db": "Orca couldn't confirm whether this terminal's previous session is still running, so it left the session untouched. Reopen this pane to retry.",
+            "e16012e31e": "The terminal daemon that owned this session exited, so the session and its scrollback could not be recovered. Open a new terminal to continue."
           },
           "TerminalPane": {
             "ac112e9036": "Remove title",
@@ -2858,7 +2865,11 @@
             "openTaskTerminal": "Open task terminal",
             "systemBrowser": "System Browser",
             "orcaBrowser": "Orca Browser",
-            "terminalLinkSettings": "Terminal link settings"
+            "terminalLinkSettings": "Terminal link settings",
+            "copyLink": "Copy link",
+            "copied": "Copied",
+            "copiedLink": "Copied link",
+            "copyLinkFailed": "Failed to copy link"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -3124,7 +3135,9 @@
             "2c38630a01": "Workspace no longer exists",
             "4f0d9a71c2": "Tab no longer exists",
             "d7d496a451": "Browser page no longer exists",
-            "7726ce9970": "Mobile emulator tab no longer exists"
+            "7726ce9970": "Mobile emulator tab no longer exists",
+            "chooseAction": "Choose an action.",
+            "searchProvider": "Search {{value0}}"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "Command",
@@ -5383,6 +5396,9 @@
           "a0f9863597": "Force Delete {{count}} Branches",
           "a0f9863597_one": "Force Delete {{count}} Branch",
           "a0f9863597_other": "Force Delete {{count}} Branches"
+        },
+        "WorktreeListScrollToTopButton": {
+          "jumpToTop": "Jump to top"
         }
       },
       "shared": {
@@ -5841,7 +5857,8 @@
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
           "c5a273a809": "From {{value0}}",
-          "b5c0479e21": "Unmodified user agent"
+          "b5c0479e21": "Unmodified user agent",
+          "654a0c2073": "Google requires signing in directly - imports skip it."
         },
         "BrowserUseComputerUseNotice": {
           "15b5e680ba": "Open Computer Use",
@@ -6764,6 +6781,12 @@
           "8bfdd23a88": "Help us figure out what to build next. Orca sends anonymous counts of which features you use and where things break.",
           "afec8b03be": "ci"
         },
+        "QuickCommandsList": {
+          "noSearchMatches": "No commands match this search."
+        },
+        "QuickCommandsToolbar": {
+          "searchLabel": "Search commands"
+        },
         "QuickCommandsPane": {
           "8764c6e9e4": "Remove {{value0}}",
           "7d90fd5299": "Edit {{value0}}",
@@ -7272,9 +7295,7 @@
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
-          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
-          "agentSessionRulesTitle": "Agent Session Rules",
-          "agentSessionRulesDescription": "Custom rules applied to supported agent launches. Native system instructions are used where available; other agents receive rules with Orca-delivered startup prompts."
+          "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks."
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -8737,7 +8758,9 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
-            "f16e41cc72": "GitHub Integration"
+            "f16e41cc72": "GitHub Integration",
+            "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
+            "af5ae87847": "access token"
           }
         },
         "jira": {
@@ -9114,9 +9137,7 @@
             "keepForkUpToDate": "Keep Fork Up to Date",
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
             "projectRuntime": "Project Runtime",
-            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
-            "agentSessionRules": "Agent Session Rules",
-            "agentSessionRulesDescription": "Project-specific overrides for the rules injected into agent sessions."
+            "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL."
           }
         },
         "runtime": {
@@ -9689,8 +9710,6 @@
           "workspaceDirectory": "The client default is inherited until a host needs its own worktree directory.",
           "providerHost": "Provider host",
           "providerAccounts": "Credentials and account checks belong to the local client or selected remote server that owns the provider integration.",
-          "agentSessionRulesDefaults": "Rules are applied to supported agent launches from this client, unless a project overrides them.",
-          "repositoryAgentSessionRules": "These overrides apply to this project setup and inherit the client Agent Session Rules until customized.",
           "hostCollectionProjectScopes": "Host collection + project scopes",
           "terminalQuickCommandHostCollections": "Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces."
         },
@@ -10519,39 +10538,6 @@
           "openManageSessions": "Open Manage Sessions",
           "title": "macOS permission grants aren’t reaching terminals"
         },
-        "AgentSessionRuleRow": {
-          "ruleLabelPlaceholder": "Rule name",
-          "builtinBadge": "Built-in",
-          "deleteRule": "Delete rule",
-          "toggleRuleEnabled": "Enable {{value0}}",
-          "ruleContentPlaceholder": "Rule text, injected verbatim into every agent session.",
-          "discard": "Discard",
-          "save": "Save"
-        },
-        "AgentSessionRulesPane": {
-          "newRuleLabel": "New rule",
-          "addRule": "Add custom rule",
-          "noSecrets": "Do not include secrets; some agents receive rules through startup command arguments."
-        },
-        "RepositoryAgentSessionRulesSection": {
-          "newRuleLabel": "New rule",
-          "title": "Agent Session Rules",
-          "enabledLabel": "Inject rules into sessions",
-          "enabledHelper": "Global default is {{value0}}.",
-          "on": "On",
-          "off": "Off",
-          "useGlobal": "Use global",
-          "globalRulesLabel": "Global rules applied here",
-          "disabledGlobally": "disabled globally",
-          "extraRulesLabel": "Rules only for this project",
-          "addExtraRule": "Add project-only rule"
-        },
-        "agentSessionRules": {
-          "search": {
-            "title": "Agent Session Rules",
-            "description": "Custom rules for supported agent launches, plus per-repo overrides."
-          }
-        },
         "artifacts": {
           "enable": "Enable Artifacts",
           "enableDescription": "Add Artifacts to the sidebar so you can open and delete shared files.",
@@ -10627,6 +10613,51 @@
           "on": "On",
           "auto": "Agent",
           "off": "Off"
+        },
+        "bitbucket": {
+          "credentials": {
+            "dialog": {
+              "connectFailed": "Connection failed",
+              "title": "Connect Bitbucket",
+              "description": "Use a Bitbucket Cloud credential to browse pull requests and build statuses. Orca verifies it before saving.",
+              "remoteRuntime": "Bitbucket credentials saved here are stored on this local machine only. Set ORCA_BITBUCKET_* environment variables on the remote runtime instead.",
+              "environmentManaged": "Bitbucket is already configured through ORCA_BITBUCKET_* environment variables, which take precedence. Unset them to save a credential in Orca.",
+              "authModeLabel": "Bitbucket authentication method",
+              "modeBasic": "Email & API token",
+              "modeToken": "Access token",
+              "accessToken": "Access token",
+              "accessTokenPlaceholder": "Repository, project, or workspace access token",
+              "email": "Atlassian account email",
+              "emailPlaceholder": "you@example.com",
+              "apiToken": "API token",
+              "apiTokenPlaceholder": "Atlassian API token",
+              "baseUrl": "API base URL (optional)",
+              "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
+              "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
+              "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
+              "docsLink": "Bitbucket API token docs",
+              "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
+              "cancel": "Cancel",
+              "verifying": "Verifying...",
+              "connect": "Connect"
+            }
+          },
+          "integration": {
+            "card": {
+              "description": "Pull requests and build statuses for Bitbucket Cloud.",
+              "edit": "Edit credentials",
+              "connect": "Connect",
+              "accountUnknown": "Bitbucket Cloud",
+              "authModeToken": "Access token",
+              "authModeBasic": "Email & API token",
+              "disconnect": "Disconnect Bitbucket",
+              "envManaged": "Configured via environment variables. Unset the ORCA_BITBUCKET_* variables to manage this credential in Orca.",
+              "storedAuthFailed": "The saved Bitbucket credential could not authenticate. Edit it, or check that the token still has pull request access.",
+              "storedCredential": "Saved in Orca on this machine. ORCA_BITBUCKET_* environment variables take precedence when set.",
+              "notConfigured": "Connect a Bitbucket Cloud account with an Atlassian API token or an access token. ORCA_BITBUCKET_* environment variables work too and take precedence.",
+              "disconnectFailed": "Could not remove the saved Bitbucket credential."
+            }
+          }
         }
       },
       "right": {
@@ -10670,7 +10701,7 @@
             "653c105ecc": "More PR actions",
             "f316a8ca2b": "No unresolved comments selected.",
             "d00ebdc402": "Resolve {{value0}} Comments With AI",
-            "ed3f79c031": "Review the prompt before starting an agent. After the prompt is delivered, Orca replies to the selected comments and resolves host threads when possible.",
+            "5eb2163b6b": "Review the prompt before starting an agent. After the prompt is delivered, Orca resolves the selected host threads and replies to comments it cannot resolve.",
             "f273f2271c": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.{{value4}}",
             "aa95b81a3a": "Started the agent. Marked {{value0}} resolved, replied to {{value1}}, skipped {{value2}}, failed {{value3}}.",
             "495b2f8c4b": "Started the agent, but could not resolve or reply on the selected comments.",
@@ -10685,6 +10716,7 @@
               "branch": "Sync Branch"
             },
             "7e4b2a19c0": "Could not resolve the GitHub PR to reply on.",
+            "430f1a62d4": "Could not resolve the selected thread on the host.",
             "updateReactionFailed": "Failed to update reaction."
           },
           "CreatePullRequestDialog": {
@@ -10761,7 +10793,8 @@
             "f9d7ca753d": "Copy Paths",
             "3161c4e425": "folder",
             "e887fa4b2e": "Open in Terminal",
-            "1d8e182c32": "View File"
+            "1d8e182c32": "View File",
+            "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -11723,6 +11756,17 @@
                   }
                 }
               }
+            },
+            "hosted": {
+              "review": {
+                "button": {
+                  "label": {
+                    "96ae7358e0": "Push & Create PR in stack",
+                    "8e8149a0bf": "Create draft PR in stack",
+                    "8df1a05952": "Create PR in stack"
+                  }
+                }
+              }
             }
           },
           "AiVaultPanel": {
@@ -12040,6 +12084,17 @@
             "e3ee2daa32": "Stack #{{value0}}",
             "cb440931b7": "{{value0}} of {{value1}} · {{value2}}",
             "525259fa17": "Stack details are temporarily unavailable."
+          },
+          "CreateHostedReviewBasePicker": {
+            "205ef284fa": "Base branch",
+            "bb4b41d563": "from {{value0}}",
+            "5a9315b61a": "No branches match “{{value0}}”. Press Enter to use it anyway.",
+            "da4d57c9c2": "Leave empty to use {{value0}}."
+          },
+          "CreateHostedReviewComposerFields": {
+            "90cabf6cfc": "Stack this PR above #{{value0}}",
+            "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
+            "29732f2fb0": "new PR"
           }
         }
       },
@@ -14158,7 +14213,8 @@
             "bf648471c5": "Creating…",
             "53bbe3dab4": "Imported {{value0}} cookies from file.",
             "c5f0e4d3b2a1": "Imported {{value0}} cookies from {{value1}} ({{value2}}).",
-            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}."
+            "d6a1f5e4c3b2": "Imported {{value0}} cookies from {{value1}}.",
+            "c186b4d890": "Google requires signing in directly - imports skip it."
           },
           "GrabConfirmationSheet": {
             "314a0aaa5b": "Attach to AI",

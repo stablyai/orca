@@ -62,6 +62,7 @@ export function AgentDashboardMapView({
 }: AgentDashboardMapViewProps): React.JSX.Element {
   const { agentStates, toggleAgentState, resetAgentStates } = useAgentMapStateFilter()
   const [showAgentlessWorkspaces, setShowAgentlessWorkspaces] = useState(false)
+  const [showOrchestrationLinks, setShowOrchestrationLinks] = useState(true)
   const agentlessWorkspaces = useMemo(
     () =>
       selectAgentlessMapWorkspaces({
@@ -94,6 +95,8 @@ export function AgentDashboardMapView({
         showAgentlessWorkspaces={showAgentlessWorkspaces}
         agentlessWorkspaceCount={agentlessWorkspaces.length}
         onShowAgentlessWorkspacesChange={setShowAgentlessWorkspaces}
+        showOrchestrationLinks={showOrchestrationLinks}
+        onShowOrchestrationLinksChange={setShowOrchestrationLinks}
         searchInputRef={searchInputRef}
       />
       <div className={cn('flex min-h-0 flex-1', dialogCard && 'flex-row-reverse')}>
@@ -107,6 +110,7 @@ export function AgentDashboardMapView({
             compact={dialogCard !== null}
             selectedPaneKey={dialogCard?.paneKey}
             enabledStates={agentStates}
+            showOrchestrationLinks={showOrchestrationLinks}
             launchableAgentsByWorktreeId={snapshot.launchableAgentsByWorktreeId}
             workspaceContextMenusEnabled={workspaceContextMenusEnabled}
             onWorkspaceContextMenuOpenChange={onWorkspaceContextMenuOpenChange}

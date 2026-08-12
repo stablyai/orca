@@ -38,7 +38,6 @@ const SETTINGS_NAV_TARGETS = [
   'plugins',
   'agents',
   'orchestration',
-  'agentSessionRules',
   'artifacts',
   'automations',
   'orca-account',

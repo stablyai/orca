@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { buildAgentSessionRulesPrompt, planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
+import { planAgentCliArgsSuffix } from '@/lib/tui-agent-startup'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -14,11 +14,10 @@ import {
 } from '@/lib/launch-work-item-direct-messages'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
-
 import { getConnectionId } from '@/lib/connection-context'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import type { GitPushTarget, SetupDecision, TuiAgent } from '../../../shared/types'
 import { getLinearIssueWorkspaceName } from '../../../shared/workspace-name'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
 import {
   buildDirectWorkItemAgentStartupPlan,
@@ -280,12 +279,11 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
         promptDelivery,
         settings,
         launchPlatform,
+        nativeChatTranscriptIsLocalReadable:
+          isNativeChatTranscriptLocalReadable(launchConnectionId),
         // Why: SSH hosts run the plain `orca` shim, so the Linux-only `orca-ide`
         // rename must not be applied for remote launches.
-        isRemote: typeof launchConnectionId === 'string',
-        repoId,
-        connectionId: repo.connectionId,
-        executionHostId: getRepoExecutionHostId(repo)
+        isRemote: typeof launchConnectionId === 'string'
       }))
 
     const activation = activateAndRevealWorktree(worktreeId, {
@@ -347,15 +345,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   void pasteDirectWorkItemDraftWhenAgentReady({
     primaryTabId,
     startupPlan,
-    content: effectiveAgent
-      ? buildAgentSessionRulesPrompt({
-          agent: effectiveAgent,
-          prompt: draftContent,
-          repoId,
-          connectionId: repo.connectionId,
-          executionHostId: getRepoExecutionHostId(repo)
-        })
-      : draftContent,
+    content: draftContent,
     submit: promptDelivery === 'submit-after-ready',
     forcePaste: promptDelivery === 'submit-after-ready'
   })

@@ -1,6 +1,8 @@
 import React from 'react'
-import { Plus } from 'lucide-react'
+import { Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import type {
   Automation,
   AutomationRun,
@@ -20,6 +22,11 @@ import { getAutomationTemplates, type AutomationTemplate } from './automation-te
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import { AutomationListLocalRows } from './AutomationListLocalRows'
 import { AutomationListExternalRows } from './AutomationListExternalRows'
+import {
+  AUTOMATIONS_TABLE_CONTAINER_CLASS,
+  AUTOMATIONS_TABLE_GRID_CLASS,
+  AUTOMATIONS_TABLE_HEADER_CLASS
+} from './automations-table-layout'
 import { translate } from '@/i18n/i18n'
 
 type AutomationsListPanelProps = {
@@ -31,8 +38,10 @@ type AutomationsListPanelProps = {
   onListSearchQueryChange: (query: string) => void
   filteredAutomations: readonly Automation[]
   filteredExternalAutomationEntries: readonly ExternalAutomationListEntry[]
-  selected: Automation | null
-  selectedExternal: ExternalAutomationListEntry | null
+  // Why: use explicit ids, not resolved detail selection (which falls back to the
+  // first row) — list highlight should only mark a user-chosen row.
+  selectedId: string | null
+  selectedExternalKey: string | null
   runs: readonly AutomationRun[]
   relativeNow: number
   repoMap: ReadonlyMap<string, Repo>
@@ -45,6 +54,7 @@ type AutomationsListPanelProps = {
   >
   automationHostTarget: AutomationHostTarget | null
   automationSourceHostAvailabilityById: ReadonlyMap<string, TaskSourceHostAvailability[]>
+  hostLabelById: ReadonlyMap<string, string>
   externalActionKey: string | null
   selectAutomationId: (automationId: string | null) => void
   selectExternalKey: (externalKey: string | null) => void
@@ -60,6 +70,9 @@ type AutomationsListPanelProps = {
   ) => void
   openEditExternalDialog: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
   openCreateDialog: (template?: AutomationTemplate) => void
+  onOpenDetail: () => void
+  onRefresh: () => void
+  isRefreshing: boolean
 }
 
 export function AutomationsListPanel({
@@ -71,8 +84,8 @@ export function AutomationsListPanel({
   onListSearchQueryChange,
   filteredAutomations,
   filteredExternalAutomationEntries,
-  selected,
-  selectedExternal,
+  selectedId,
+  selectedExternalKey,
   runs,
   relativeNow,
   repoMap,
@@ -82,6 +95,7 @@ export function AutomationsListPanel({
   runtimeStatusByEnvironmentId,
   automationHostTarget,
   automationSourceHostAvailabilityById,
+  hostLabelById,
   externalActionKey,
   selectAutomationId,
   selectExternalKey,
@@ -92,81 +106,19 @@ export function AutomationsListPanel({
   requestDeleteAutomation,
   requestExternalAction,
   openEditExternalDialog,
-  openCreateDialog
+  openCreateDialog,
+  onOpenDetail,
+  onRefresh,
+  isRefreshing
 }: AutomationsListPanelProps): React.JSX.Element {
   return (
     <section
-      className="flex min-h-0 flex-col border-r border-border/50 bg-muted/20"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 pb-4 md:px-5"
       data-contextual-tour-target="automations-list"
     >
-      {hasListItems ? (
-        <div className="shrink-0 border-b border-border/40 px-2 py-2">
-          <AutomationListSearchField
-            query={listSearchQuery}
-            isTooLarge={isListSearchQueryTooLarge}
-            onQueryChange={(query) =>
-              onListSearchQueryChange(clampAutomationListSearchQueryInput(query))
-            }
-            onClear={() => onListSearchQueryChange('')}
-          />
-        </div>
-      ) : null}
-      <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto p-2">
-        {hasFilteredListItems ? (
-          <div className="grid grid-cols-[1fr_auto] gap-2 px-2 pb-2 text-[11px] font-medium uppercase text-muted-foreground">
-            <span>
-              {translate('auto.components.automations.AutomationsPage.761a35834d', 'Automation')}
-            </span>
-            <span>
-              {translate('auto.components.automations.AutomationsPage.587a4b205c', 'Next')}
-            </span>
-          </div>
-        ) : null}
-        <AutomationListLocalRows
-          automations={filteredAutomations}
-          selectedId={selected?.id}
-          isSelectedLocal={selectedExternal === null}
-          runs={runs}
-          relativeNow={relativeNow}
-          repoMap={repoMap}
-          worktreeMap={worktreeMap}
-          projectHostSetups={projectHostSetups}
-          sshConnectionStates={sshConnectionStates}
-          runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
-          automationHostTarget={automationHostTarget}
-          automationSourceHostAvailabilityById={automationSourceHostAvailabilityById}
-          onSelect={(automationId) => {
-            selectExternalKey(null)
-            selectAutomationId(automationId)
-          }}
-          onRunNow={runNow}
-          onEdit={openEditDialog}
-          onToggle={toggleAutomation}
-          onDelete={requestDeleteAutomation}
-        />
-        <AutomationListExternalRows
-          entries={filteredExternalAutomationEntries}
-          selectedExternalKey={selectedExternal?.key}
-          relativeNow={relativeNow}
-          sshConnectionStates={sshConnectionStates}
-          externalActionKey={externalActionKey}
-          onSelect={(entryKey) => {
-            selectExternalKey(entryKey)
-            setActivePaneTab('overview')
-          }}
-          onRequestAction={requestExternalAction}
-          onEdit={openEditExternalDialog}
-        />
-        {hasListItems && isListSearchActive && !hasFilteredListItems ? (
-          <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-            {translate(
-              'auto.components.automations.AutomationsPage.noSearchMatches',
-              'No automations match your search.'
-            )}
-          </div>
-        ) : null}
-        {!hasListItems ? (
-          <div className="grid gap-2 p-2">
+      {!hasListItems ? (
+        <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto">
+          <div className="mx-auto grid max-w-2xl gap-2 p-2 pt-6">
             <div className="px-1 pb-1 text-sm font-medium">
               {translate(
                 'auto.components.automations.AutomationsPage.d207ab4c25',
@@ -199,8 +151,157 @@ export function AutomationsListPanel({
               {translate('auto.components.automations.AutomationsPage.25060635c6', 'Add new')}
             </Button>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div className="flex min-h-0 flex-1 flex-col gap-4">
+          <div className="flex shrink-0 items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <AutomationListSearchField
+                query={listSearchQuery}
+                isTooLarge={isListSearchQueryTooLarge}
+                className="w-full max-w-xs"
+                onQueryChange={(query) =>
+                  onListSearchQueryChange(clampAutomationListSearchQueryInput(query))
+                }
+                onClear={() => onListSearchQueryChange('')}
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={translate(
+                      'auto.components.automations.AutomationsPage.19a6e30eae',
+                      'Refresh automations'
+                    )}
+                    onClick={onRefresh}
+                    disabled={isRefreshing}
+                    className="shrink-0 border border-border bg-background shadow-none hover:bg-muted/50"
+                  >
+                    <RefreshCw className={cn('size-4', isRefreshing && 'animate-spin')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" sideOffset={6}>
+                  {translate(
+                    'auto.components.automations.AutomationsPage.19a6e30eae',
+                    'Refresh automations'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </div>
+            <Button
+              type="button"
+              variant="default"
+              size="sm"
+              className="shrink-0"
+              onClick={() => openCreateDialog()}
+              data-contextual-tour-target="automations-create"
+            >
+              <Plus className="size-4" />
+              {translate(
+                'auto.components.automations.AutomationsPage.newAutomation',
+                'New Automation'
+              )}
+            </Button>
+          </div>
+
+          <div
+            className={cn(
+              'scrollbar-sleek min-h-0 flex-1 overflow-auto',
+              AUTOMATIONS_TABLE_CONTAINER_CLASS
+            )}
+          >
+            {hasFilteredListItems ? (
+              <>
+                <div className={cn(AUTOMATIONS_TABLE_GRID_CLASS, AUTOMATIONS_TABLE_HEADER_CLASS)}>
+                  <span>
+                    {translate('auto.components.automations.AutomationsPage.tableName', 'Name')}
+                  </span>
+                  <span>
+                    {translate(
+                      'auto.components.automations.AutomationDetail.18763ded26',
+                      'Schedule'
+                    )}
+                  </span>
+                  <span>
+                    {translate(
+                      'auto.components.automations.AutomationsPage.tableProject',
+                      'Project'
+                    )}
+                  </span>
+                  <span>
+                    {translate(
+                      'auto.components.automations.AutomationDetail.578ff46987',
+                      'Next run'
+                    )}
+                  </span>
+                  <span>
+                    {translate('auto.components.automations.AutomationsPage.tableStatus', 'Status')}
+                  </span>
+                  <span className="text-center">
+                    {translate('auto.components.automations.AutomationDetail.2df8970cd5', 'Agent')}
+                  </span>
+                  <span className="sr-only">
+                    {translate(
+                      'auto.components.automations.AutomationsPage.tableActions',
+                      'Actions'
+                    )}
+                  </span>
+                </div>
+                <div className="divide-y divide-border/50">
+                  <AutomationListLocalRows
+                    automations={filteredAutomations}
+                    selectedId={selectedId}
+                    isSelectedLocal={selectedExternalKey === null}
+                    runs={runs}
+                    relativeNow={relativeNow}
+                    repoMap={repoMap}
+                    worktreeMap={worktreeMap}
+                    projectHostSetups={projectHostSetups}
+                    sshConnectionStates={sshConnectionStates}
+                    runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
+                    automationHostTarget={automationHostTarget}
+                    automationSourceHostAvailabilityById={automationSourceHostAvailabilityById}
+                    hostLabelById={hostLabelById}
+                    onSelect={(automationId) => {
+                      selectExternalKey(null)
+                      selectAutomationId(automationId)
+                      onOpenDetail()
+                    }}
+                    onRunNow={runNow}
+                    onEdit={openEditDialog}
+                    onToggle={toggleAutomation}
+                    onDelete={requestDeleteAutomation}
+                  />
+                  <AutomationListExternalRows
+                    entries={filteredExternalAutomationEntries}
+                    selectedExternalKey={selectedExternalKey}
+                    relativeNow={relativeNow}
+                    sshConnectionStates={sshConnectionStates}
+                    externalActionKey={externalActionKey}
+                    onSelect={(entryKey) => {
+                      selectAutomationId(null)
+                      selectExternalKey(entryKey)
+                      setActivePaneTab('overview')
+                      onOpenDetail()
+                    }}
+                    onRequestAction={requestExternalAction}
+                    onEdit={openEditExternalDialog}
+                  />
+                </div>
+              </>
+            ) : isListSearchActive ? (
+              <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+                {translate(
+                  'auto.components.automations.AutomationsPage.noSearchMatches',
+                  'No automations match your search.'
+                )}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
     </section>
   )
 }

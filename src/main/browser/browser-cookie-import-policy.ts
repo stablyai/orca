@@ -1,5 +1,6 @@
 import type { Cookie, Cookies } from 'electron'
 import { parse as parseDomain } from 'psl'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -53,6 +54,36 @@ export function normalizeCookieImportDomain(domain: string): string | null {
   return normalized
 }
 
+// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
+// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
+// it is copied. Signing in directly inside Orca is the only path that produces a working
+// session, so an import must never write these cookies and never remove them either — the
+// live session is always more valuable than anything an import could put in its place.
+// Adding a site is one entry here.
+// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
+// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
+// users actually asked for.
+const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+const COOKIE_CLEAR_CONCURRENCY = 8
+
+export function isNonTransplantableCookieDomain(domain: string): boolean {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return false
+  }
+  return NON_TRANSPLANTABLE_DOMAINS.some(
+    (root) => normalized === root || normalized.endsWith(`.${root}`)
+  )
+}
+
+// Why: Chromium stores host_key lowercase as 'google.com', '.google.com' or 'sub.google.com';
+// the LIKE pattern covers the leading-dot row and cannot match lookalikes ('withgoogle.com').
+export const NON_TRANSPLANTABLE_HOST_KEY_SQL = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `host_key = '${root}' OR host_key LIKE '%.${root}'`
+).join(' OR ')
+
+// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
+// rule for rotation-only cookies and applies to any family added without a full exclusion.
 export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
   if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
     return false
@@ -163,6 +194,55 @@ export async function restoreImportedDomainCookies(
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Could not restore replaced cookies')
   }
+}
+
+// Why: clearStorageData wipes the whole jar, including the non-transplantable families an
+// import is never allowed to remove; this is the clear step that can leave them in place.
+export async function removeAllCookiesExcept(
+  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+  isExcluded: (cookie: Cookie) => boolean
+): Promise<void> {
+  const existingCookies = await store.get({})
+  const removableGroups = new Map<string, { cookie: Cookie; url: string }[]>()
+  for (const cookie of existingCookies) {
+    if (isExcluded(cookie)) {
+      continue
+    }
+    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+    const url = domain ? cookieRemovalUrl(cookie, domain) : null
+    if (!url) {
+      continue
+    }
+    const key = JSON.stringify([url, cookie.name])
+    const group = removableGroups.get(key) ?? []
+    group.push({ cookie, url })
+    removableGroups.set(key, group)
+  }
+
+  const removedCookies: Cookie[] = []
+  const results = await mapSettledWithConcurrency(
+    [...removableGroups.values()],
+    COOKIE_CLEAR_CONCURRENCY,
+    async (group) => {
+      // Why: identical remove keys must stay ordered so duplicate scoped cookies are not raced.
+      for (const { cookie, url } of group) {
+        await store.remove(url, cookie.name)
+        removedCookies.push(cookie)
+      }
+    }
+  )
+  const failures = results.flatMap((result) =>
+    result.status === 'rejected' ? [result.reason] : []
+  )
+  if (failures.length === 0) {
+    return
+  }
+  try {
+    await restoreImportedDomainCookies(store, removedCookies)
+  } catch (restoreError) {
+    throw new AggregateError([...failures, restoreError], 'Cookie clearing and rollback failed')
+  }
+  throw new AggregateError(failures, 'Could not clear existing cookies')
 }
 
 export async function replaceCookiesForImportedDomains(

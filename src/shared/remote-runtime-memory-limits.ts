@@ -3,13 +3,9 @@ import {
   stringifyJsonWithinByteLimit
 } from './node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
-export const REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES = 1024 * 1024
-// TweetNaCl box.after prepends a 24-byte nonce and adds a 16-byte authenticator.
-export const REMOTE_RUNTIME_E2EE_FRAME_OVERHEAD_BYTES = 24 + 16
-export const REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES =
-  REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES - REMOTE_RUNTIME_E2EE_FRAME_OVERHEAD_BYTES
 export const REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES = 8 * 1024 * 1024 + 64
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTIONS = 256
 export const REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES = 1024 * 1024
@@ -68,30 +64,19 @@ export function serializeRemoteRuntimeRpcRequest(args: {
   deviceToken: string
   method: string
   params: unknown
+  envelope?: RuntimeOrchestrationEnvelope
 }): string {
-  try {
-    return stringifyJsonWithinByteLimit(
-      {
-        id: args.requestId,
-        deviceToken: args.deviceToken,
-        method: args.method,
-        params: args.params
-      },
-      REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES
-    ).serialized
-  } catch (error) {
-    if (error instanceof JsonStringifyByteLimitError) {
-      throw new RemoteRuntimeClientError(
-        'invalid_argument',
-        `Remote runtime RPC request exceeds ${REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES} bytes.`
-      )
-    }
-    const message = error instanceof Error ? error.message : String(error)
-    throw new RemoteRuntimeClientError(
-      'invalid_argument',
-      `Remote runtime RPC request could not be serialized: ${message}`
-    )
-  }
+  return serializeRemoteRuntimePayload({
+    id: args.requestId,
+    deviceToken: args.deviceToken,
+    method: args.method,
+    params: args.params,
+    orchestrationCapability: args.envelope?.orchestrationCapability,
+    orchestrationContractVersion: args.envelope?.orchestrationContractVersion,
+    orchestrationRequestId: args.envelope?.orchestrationRequestId,
+    compatibilityInvocationId: args.envelope?.compatibilityInvocationId,
+    orchestrationCompatibilityEvidence: args.envelope?.orchestrationCompatibilityEvidence
+  })
 }
 
 export function retainedRemoteRuntimeJsonStringBytes(value: string): number {

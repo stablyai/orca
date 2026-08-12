@@ -9,13 +9,12 @@ export type DiscardAllArea = 'staged' | 'unstaged' | 'untracked'
  */
 export function getDiscardAllPaths(
   entries: readonly GitStatusEntry[],
-  area: DiscardAllArea | readonly DiscardAllArea[]
+  area: DiscardAllArea
 ): string[] {
-  const areas = Array.isArray(area) ? area : [area]
   return entries
     .filter(
       (entry) =>
-        areas.includes(entry.area) &&
+        entry.area === area &&
         entry.conflictStatus !== 'unresolved' &&
         entry.conflictStatus !== 'resolved_locally'
     )

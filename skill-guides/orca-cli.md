@@ -2,12 +2,13 @@
 name: orca-cli
 description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, worktree comments, and the browser embedded
-  inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
+  terminals, repos, automations, artifacts, worktree comments, and the browser
+  embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
   "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", or
-  "control the browser inside Orca". Prefer this over raw `git worktree`, ad hoc
+  "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
+  "share HTML/Markdown", "public artifact link", or "control the browser inside
+  Orca". Prefer this over raw `git worktree`, ad hoc
   PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
   Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
   embedded browser.
@@ -225,6 +226,52 @@ Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or RRULE
 
 Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` for an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive. Use `--reuse-session` only for existing-workspace automations; if the previous terminal is gone, Orca falls back to a fresh session. Prefer `--disabled` while testing setup.
 
+## Artifacts
+
+Artifacts publish HTML or Markdown files through the signed-in Orca account. The public
+share URL is viewable without signing in; creating, listing, updating, and deleting
+artifacts require the active Orca profile to be signed in.
+
+**Publishing is off by default and only a human can turn it on.** `share` and `update` are
+gated by a device-wide capability that the user grants in the Orca desktop app under
+Settings → Artifacts ("Allow publishing public artifact links"). The gate applies to every
+caller on the device, agent or human. There is no CLI or RPC way to grant it — do not try.
+`list`, `unshare`, and `delete` are never gated, so old links stay auditable and revocable.
+
+`share` and `update` check the capability before reading the file, so a denial costs one
+small round trip rather than an upload-sized payload.
+
+When a share is denied, the CLI fails with code `artifact_sharing_disabled` and prints the
+recovery steps. Do not retry — the answer will not change until a human acts. Tell the user
+to open Settings → Artifacts in the Orca desktop app on this device, turn on "Allow
+publishing public artifact links", and then re-run the command. If they do not want to grant
+it, deliver the file locally instead.
+
+```text
+ORCA artifacts share <file> --json
+ORCA artifacts update <file> --json
+ORCA artifacts unshare <file> --json
+ORCA artifacts list [--cursor <cursor>] --json
+ORCA artifacts delete <id> --json
+```
+
+- `share`, `update`, and `unshare` accept `.html`, `.htm`, `.md`, and `.markdown` files.
+- `share` saves the returned edit token in the active Orca profile and never includes it
+  in CLI output. `update` and `unshare` look up that record by the resolved local file
+  path, so use the same path and Orca profile that originally shared the file.
+- `list` returns one page of artifacts owned by the signed-in account. If JSON output has
+  `nextCursor`, pass it back with `--cursor <cursor>`. `delete <id>` deletes an account-owned
+  artifact by the id returned from `list`; it does not need the original local file or its
+  edit-token record.
+- Relative HTML assets are not uploaded. Share a self-contained HTML file or use absolute
+  asset URLs.
+- If an upload exceeds the CLI transport limit, use the browser upload page as directed
+  by the error.
+- For local or staging development, `--api-url <url>` overrides the artifact service;
+  `ORCA_ARTIFACTS_API_URL` provides the same override for the session.
+- `ORCA_CLOUD_AUTH_TOKEN` is a development-only authentication override. Prefer the active
+  Orca profile's normal PropelAuth session and never expose the token in logs or agent output.
+
 ## Built-In Browser
 
 The built-in browser is Orca's embedded browser tab surface, scoped to Orca worktrees; it is not Chrome/Safari or desktop app UI.
@@ -296,7 +343,7 @@ Common recoveries:
 
 ## Next Action
 
-Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, or built-in browser `snapshot`.
+Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, `artifacts list/share`, or built-in browser `snapshot`.
 
 ## Mobile Emulator (iOS Simulator via serve-sim)
 

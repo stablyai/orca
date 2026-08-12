@@ -149,7 +149,7 @@ export function TabBarQuickCommandsButton({
   }
 
   const handleRun = (entry: HostedTerminalQuickCommand): void => {
-    void runQuickCommandInNewTab({
+    runQuickCommandInNewTab({
       command: entry.command,
       worktreeId,
       groupId,

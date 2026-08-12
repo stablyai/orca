@@ -1,4 +1,5 @@
 import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './types'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
@@ -52,9 +53,6 @@ const NODE_PACKAGE_SCRIPT_ENTRYPOINTS: Record<string, readonly string[]> = {
   codex: ['node_modules/@openai/codex/'],
   gemini: ['node_modules/@google/gemini-cli/']
 }
-const CURSOR_AGENT_NODE_ENTRYPOINT_RE = /(?:^|\/)cursor-agent\/versions\/[^/]+\/index\.js$/
-const PI_AGENT_NODE_ENTRYPOINT_RE =
-  /(?:^|\/)node_modules\/@(?:earendil-works|mariozechner)\/pi-coding-agent\/dist\/cli\.js$/
 const PYTHON_SCRIPT_ENTRYPOINT_DIRECTORIES = ['/bin/', '/scripts/', '/site-packages/']
 
 const PROCESS_TO_AGENT = new Map<string, TuiAgent>()
@@ -206,14 +204,10 @@ function comparablePath(token: string): string {
 
 function recognizeNodeScriptEntrypoint(token: string): RecognizedAgentProcess | null {
   const path = comparablePath(token)
-  // Why: Cursor's native Windows launcher runs a generic versioned index.js,
-  // so its install path is the only stable identity that avoids ordinary Node apps.
-  if (CURSOR_AGENT_NODE_ENTRYPOINT_RE.test(path)) {
-    return { agent: 'cursor', processName: 'cursor-agent' }
-  }
-  // Why: Pi's npm shim launches a generic cli.js; only the exact package path is authoritative.
-  if (PI_AGENT_NODE_ENTRYPOINT_RE.test(path)) {
-    return { agent: 'pi', processName: 'pi' }
+  for (const identity of EXACT_NODE_ENTRYPOINT_IDENTITIES) {
+    if (identity.pattern.test(path)) {
+      return { agent: identity.agent, processName: identity.processName }
+    }
   }
   const normalized = normalizeProcessName(token, { stripInterpreterScriptExtension: true })
   const markers = NODE_PACKAGE_SCRIPT_ENTRYPOINTS[normalized]

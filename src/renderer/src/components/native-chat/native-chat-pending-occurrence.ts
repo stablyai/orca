@@ -191,7 +191,7 @@ export function selectPendingIndicesRepresentedByUserTexts(
       }
       represented.add(entry.index)
       const at = remaining.findIndex((candidate) => candidate.index === entry.index)
-      if (at >= 0) {
+      if (at !== -1) {
         remaining.splice(at, 1)
       }
     }

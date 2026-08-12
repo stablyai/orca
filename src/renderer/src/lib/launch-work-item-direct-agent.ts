@@ -17,7 +17,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import type { PersistedNativeChatSessionOptions } from '../../../shared/native-chat-session-options'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 
@@ -31,11 +31,14 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         agentCmdOverrides?: Partial<Record<TuiAgent, string>>
         agentDefaultArgs?: Partial<Record<TuiAgent, string>>
         agentDefaultEnv?: Partial<Record<TuiAgent, Record<string, string>>>
+        experimentalNativeChat?: boolean
+        openAgentTabsInChatByDefault?: boolean
         nativeChatSessionOptions?: PersistedNativeChatSessionOptions
       }
     | null
     | undefined
   launchPlatform: NodeJS.Platform
+  nativeChatTranscriptIsLocalReadable?: boolean
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
@@ -56,10 +59,13 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
       ? resolveTuiAgentLaunchArgs(args.agent, args.settings?.agentDefaultArgs)
       : args.agentArgs
   const effectiveAgentEnv = resolveTuiAgentLaunchEnv(args.agent, args.settings?.agentDefaultEnv)
-  const sessionOptions = resolveNativeChatSessionOptionDefaults(
-    args.settings?.nativeChatSessionOptions,
-    args.agent
-  )
+  const sessionOptions = resolveInitialNativeChatSessionOptions(args.settings, {
+    agent: args.agent,
+    ...(args.promptDelivery === 'draft'
+      ? { promptDelivery: 'draft' as const, launchDraftText: args.draftContent }
+      : {}),
+    nativeChatTranscriptIsLocalReadable: args.nativeChatTranscriptIsLocalReadable
+  })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null

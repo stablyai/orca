@@ -279,6 +279,7 @@ describe('dashboard payload validation', () => {
       localWindowsConpty: true,
       osRelease: '10.0.22631',
       windowsShiftEnterEncoding: 'alt-enter',
+      ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
     expect(
@@ -292,6 +293,7 @@ describe('dashboard payload validation', () => {
       { ...terminalInput, localWindowsConpty: 'true' },
       { ...terminalInput, osRelease: 'x'.repeat(1_025) },
       { ...terminalInput, windowsShiftEnterEncoding: 'enter' },
+      { ...terminalInput, ctrlEnterCsiU: 'true' },
       { ...terminalInput, kittyKeyboardAdvertised: 1 }
     ]) {
       expect(
@@ -314,6 +316,7 @@ describe('dashboard payload validation', () => {
         hostPlatform: 'plan9',
         localWindowsConpty: false,
         windowsShiftEnterEncoding: 'csi-u',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: true
       }
     }

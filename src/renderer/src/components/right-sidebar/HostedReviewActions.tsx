@@ -28,6 +28,11 @@ import {
   RIGHT_SIDEBAR_SPLIT_ACTION_ROW_CLASS
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
+import {
+  getGitHubPRStackMergeBlocker,
+  getGitHubPRStackMergeScope,
+  isGitHubPRStackMergeQueueRequired
+} from './github-pr-stack-merge'
 
 export default function HostedReviewActions({
   review,
@@ -48,11 +53,33 @@ export default function HostedReviewActions({
   const isGitLab = review.provider === 'gitlab'
   const shortLabel = isGitLab ? 'MR' : 'PR'
   const reviewLabel = isGitLab ? 'merge request' : 'pull request'
+  const stackMergeScope = useMemo(
+    () => (githubPR?.stack ? getGitHubPRStackMergeScope(githubPR.stack, review.number) : null),
+    [githubPR?.stack, review.number]
+  )
+  const stackUsesMergeQueue = isGitHubPRStackMergeQueueRequired(
+    review.mergeQueueRequired,
+    githubPR?.mergeQueueRequired
+  )
+  const stackMergeLabel =
+    stackMergeScope && stackUsesMergeQueue
+      ? stackMergeScope.count === 1
+        ? translate(
+            'auto.components.right.sidebar.HostedReviewActions.9a41a687b7',
+            'Queue through #{{pr}} · {{count}} PR',
+            { pr: review.number, count: stackMergeScope.count }
+          )
+        : translate(
+            'auto.components.right.sidebar.HostedReviewActions.38a1bccb14',
+            'Queue through #{{pr}} · {{count}} PRs',
+            { pr: review.number, count: stackMergeScope.count }
+          )
+      : stackMergeScope?.label
   const mergePresentation = useMemo(() => {
     if (isGitLab) {
       return { ...presentGitLabMRMergeState(review), autoMergeAction: null }
     }
-    return presentGitHubPRMergeState({
+    const presentation = presentGitHubPRMergeState({
       ...githubPR,
       state: review.state,
       mergeable: review.mergeable,
@@ -63,7 +90,30 @@ export default function HostedReviewActions({
       autoMergeAllowed: review.autoMergeAllowed,
       mergeQueueRequired: review.mergeQueueRequired
     })
-  }, [githubPR, isGitLab, review])
+    if (!githubPR?.stack || !stackMergeScope) {
+      return presentation
+    }
+    const stackBlocker = getGitHubPRStackMergeBlocker(stackMergeScope)
+    return {
+      ...presentation,
+      label: stackMergeLabel ?? stackMergeScope.label,
+      tooltip:
+        stackBlocker ??
+        (stackUsesMergeQueue
+          ? translate(
+              'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
+              'GitHub will add this pull request and every pull request below it to the merge queue.'
+            )
+          : translate(
+              'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
+              'GitHub will merge this pull request and every pull request below it in the stack.'
+            )),
+      directMergeAvailable:
+        !stackBlocker &&
+        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
+      autoMergeAction: null
+    }
+  }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
     [githubPR?.mergeMethodSettings, isGitLab]
@@ -140,12 +190,22 @@ export default function HostedReviewActions({
                     )}
                     <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
                       {merging
-                        ? translate(
-                            'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
-                            'Working...'
-                          )
+                        ? stackMergeScope
+                          ? stackUsesMergeQueue
+                            ? translate(
+                                'auto.components.right.sidebar.HostedReviewActions.73e0e1819d',
+                                'Queueing stack...'
+                              )
+                            : translate(
+                                'auto.components.right.sidebar.HostedReviewActions.e555a41d32',
+                                'Merging stack...'
+                              )
+                          : translate(
+                              'auto.components.right.sidebar.HostedReviewActions.d2ca293f3d',
+                              'Working...'
+                            )
                         : mergePresentation.directMergeAvailable
-                          ? mergeMethods.defaultLabel
+                          ? (stackMergeLabel ?? mergeMethods.defaultLabel)
                           : (mergePresentation.autoMergeAction?.label ?? mergePresentation.label)}
                     </span>
                   </Button>
@@ -198,16 +258,17 @@ export default function HostedReviewActions({
                     <DropdownMenuSeparator />
                   </>
                 )}
-                {mergeMethods.methods.map(({ method, label }) => (
-                  <DropdownMenuItem
-                    key={method}
-                    disabled={directMergeDisabled}
-                    onSelect={() => void handleMerge(method)}
-                  >
-                    <GitMerge className="size-3.5" />
-                    {label}
-                  </DropdownMenuItem>
-                ))}
+                {(!stackMergeScope || !stackUsesMergeQueue) &&
+                  mergeMethods.methods.map(({ method, label }) => (
+                    <DropdownMenuItem
+                      key={method}
+                      disabled={directMergeDisabled}
+                      onSelect={() => void handleMerge(method)}
+                    >
+                      <GitMerge className="size-3.5" />
+                      {label}
+                    </DropdownMenuItem>
+                  ))}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   variant="destructive"

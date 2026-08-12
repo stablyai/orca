@@ -25,6 +25,7 @@ import {
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
 import type { TuiAgent } from '../../../shared/types'
+import type * as CmdJRowIndexJump from '@/lib/cmd-j-row-index-jump'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { YOLO_TUI_AGENT_ARGS } from '../../../shared/tui-agent-permissions'
 import {
@@ -104,6 +105,45 @@ describe('getRuntimeProjectRefreshEnvironmentIds', () => {
         nextReachable: ['env-a']
       })
     ).toEqual(['env-a'])
+  })
+})
+
+describe('browser navigation updates', () => {
+  it('commits CDP navigation URLs to the render-time cache before updating the store', async () => {
+    let liveUrlDuringStoreWrite: string | null = null
+    let readLiveUrl = (_browserPageId: string): string | null => null
+    const setBrowserPageUrl = vi.fn((browserPageId: string) => {
+      liveUrlDuringStoreWrite = readLiveUrl(browserPageId)
+    })
+    const updateBrowserPageState = vi.fn()
+    const storeState = createHarnessStoreState({
+      tabsByWorktree: {},
+      setBrowserPageUrl,
+      updateBrowserPageState
+    })
+    const harness = await loadIpcEventsHarness(storeState)
+    const { clearLiveBrowserUrl, getLiveBrowserUrl } =
+      await import('@/components/browser-pane/browser-runtime')
+    readLiveUrl = getLiveBrowserUrl
+    harness.useIpcEvents()
+
+    harness.navigationUpdate({
+      browserPageId: 'page-1',
+      url: 'https://kagi.com/search?token=secret&q=next',
+      title: 'Next'
+    })
+
+    expect(liveUrlDuringStoreWrite).toBe('https://kagi.com/search?q=next')
+    expect(getLiveBrowserUrl('page-1')).toBe('https://kagi.com/search?q=next')
+    expect(setBrowserPageUrl).toHaveBeenCalledWith(
+      'page-1',
+      'https://kagi.com/search?token=secret&q=next'
+    )
+    expect(updateBrowserPageState).toHaveBeenCalledWith('page-1', {
+      title: 'Next',
+      loading: false
+    })
+    clearLiveBrowserUrl('page-1')
   })
 })
 
@@ -4931,7 +4971,8 @@ describe('useIpcEvents CLI-created worktree activation', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(fetchWorktrees).toHaveBeenCalledWith('repo-1', {
-      executionHostId: 'runtime:env-1'
+      executionHostId: 'runtime:env-1',
+      suppressRemoteLineageRefresh: true
     })
     expect(fetchWorktreeLineage).toHaveBeenCalledWith({
       executionHostId: 'runtime:env-1'
@@ -9308,5 +9349,77 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
       launchAgent: 'opencode',
       draftPrompt: 'Query the execution host graph first.'
     })
+  })
+})
+
+type CmdJRowIndexJumpModule = typeof CmdJRowIndexJump
+
+describe('useIpcEvents digit-chord routing while Cmd+J is open', () => {
+  function createPaletteState(activeModal: string | null): HarnessStoreState {
+    return createHarnessStoreState({
+      tabsByWorktree: {},
+      activeModal,
+      activeView: 'terminal'
+    })
+  }
+
+  // Why imported after the harness: it resets the module registry, so the bus the hook publishes on
+  // is only the same instance when it's loaded on the far side of that reset.
+  async function loadRowJumpBus(): Promise<CmdJRowIndexJumpModule> {
+    return import('@/lib/cmd-j-row-index-jump')
+  }
+
+  it('routes the workspace digit chord to the palette instead of switching workspaces', async () => {
+    const harness = await loadIpcEventsHarness(createPaletteState('worktree-palette'))
+    harness.useIpcEvents()
+    const rowJumps: number[] = []
+    const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
+      rowJumps.push(index)
+    )
+
+    harness.jumpToWorktreeIndex(2)
+    unsubscribe()
+
+    expect(rowJumps).toEqual([2])
+  })
+
+  it('leaves the workspace jump alone when the palette is closed', async () => {
+    const harness = await loadIpcEventsHarness(createPaletteState(null), {
+      visibleWorktreeIds: ['wt-a', 'wt-b', 'wt-c']
+    })
+    harness.useIpcEvents()
+    const rowJumps: number[] = []
+    const unsubscribe = (await loadRowJumpBus()).subscribeCmdJRowIndexJump((index) =>
+      rowJumps.push(index)
+    )
+
+    harness.jumpToWorktreeIndex(2)
+    unsubscribe()
+
+    expect(rowJumps).toEqual([])
+    // Why assert the activation and not just the silent bus: a premature return would also emit nothing.
+    expect(harness.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-c')
+  })
+
+  it('drops the tab digit chord rather than switching tabs behind the overlay', async () => {
+    const storeState = createPaletteState('worktree-palette')
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    harness.jumpToTabIndex(1)
+
+    expect(storeState.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('stops delivering row jumps after unsubscribe', async () => {
+    const { emitCmdJRowIndexJump, subscribeCmdJRowIndexJump } = await loadRowJumpBus()
+    const seen: number[] = []
+    const unsubscribe = subscribeCmdJRowIndexJump((index) => seen.push(index))
+
+    emitCmdJRowIndexJump(0)
+    unsubscribe()
+    emitCmdJRowIndexJump(1)
+
+    expect(seen).toEqual([0])
   })
 })

@@ -44,21 +44,6 @@ export type TuiAgentConfig = {
   windowsShiftEnterEncoding?: 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
-  /** CLI flag that loads a file of extra system-prompt text. */
-  sessionRulesFileFlag?: string
-  /** CLI flag that appends inline system-prompt text for this launch. */
-  sessionRulesTextFlag?: string
-  /** CLI config key that accepts inline developer instructions for this launch. */
-  sessionRulesConfigKey?: string
-}
-
-function createStdinAfterStartAgentConfig(agent: string): TuiAgentConfig {
-  return {
-    detectCmd: agent,
-    launchCmd: agent,
-    expectedProcess: agent,
-    promptInjectionMode: 'stdin-after-start'
-  }
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -68,9 +53,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'claude',
     promptInjectionMode: 'argv',
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
-    draftPromptFlag: '--prefill',
-    sessionRulesFileFlag: '--append-system-prompt-file',
-    sessionRulesTextFlag: '--append-system-prompt'
+    draftPromptFlag: '--prefill'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
@@ -93,19 +76,22 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'openclaude',
     expectedProcess: 'openclaude',
     promptInjectionMode: 'argv',
-    draftPromptFlag: '--prefill',
-    sessionRulesTextFlag: '--append-system-prompt'
+    draftPromptFlag: '--prefill'
   },
   codex: {
     detectCmd: 'codex',
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
-    sessionRulesConfigKey: 'developer_instructions',
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt'
   },
-  autohand: createStdinAfterStartAgentConfig('autohand'),
+  autohand: {
+    detectCmd: 'autohand',
+    launchCmd: 'autohand',
+    expectedProcess: 'autohand',
+    promptInjectionMode: 'stdin-after-start'
+  },
   ante: {
     detectCmd: 'ante',
     launchCmd: 'ante',
@@ -146,7 +132,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'pi',
     expectedProcess: 'pi',
     promptInjectionMode: 'argv',
-    sessionRulesTextFlag: '--append-system-prompt',
     // Why: pi has no `--prefill` and paste-after-ready races its long startup; the orca-prefill extension seeds this env var instead.
     draftPromptEnvVar: 'ORCA_PI_PREFILL',
     // Why: Pi decodes CSI-u; Esc+CR submits after tool subprocesses reset live KKP state (#9703).
@@ -157,7 +142,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'omp',
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
-    sessionRulesTextFlag: '--append-system-prompt',
     draftPromptEnvVar: 'ORCA_OMP_PREFILL'
   },
   'prime-agent': {
@@ -184,10 +168,30 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'agy',
     promptInjectionMode: 'flag-prompt-interactive'
   },
-  aider: createStdinAfterStartAgentConfig('aider'),
-  goose: createStdinAfterStartAgentConfig('goose'),
-  amp: createStdinAfterStartAgentConfig('amp'),
-  kilo: createStdinAfterStartAgentConfig('kilo'),
+  aider: {
+    detectCmd: 'aider',
+    launchCmd: 'aider',
+    expectedProcess: 'aider',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  goose: {
+    detectCmd: 'goose',
+    launchCmd: 'goose',
+    expectedProcess: 'goose',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  amp: {
+    detectCmd: 'amp',
+    launchCmd: 'amp',
+    expectedProcess: 'amp',
+    promptInjectionMode: 'stdin-after-start'
+  },
+  kilo: {
+    detectCmd: 'kilo',
+    launchCmd: 'kilo',
+    expectedProcess: 'kilo',
+    promptInjectionMode: 'stdin-after-start'
+  },
   kiro: {
     // Why: the Kiro installer (https://cli.kiro.dev/install) ships `kiro-cli`, not `kiro`; keep id 'kiro' for stored prefs.
     detectCmd: 'kiro-cli',
@@ -196,14 +200,18 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'kiro-cli',
     promptInjectionMode: 'stdin-after-start'
   },
-  crush: createStdinAfterStartAgentConfig('crush'),
+  crush: {
+    detectCmd: 'crush',
+    launchCmd: 'crush',
+    expectedProcess: 'crush',
+    promptInjectionMode: 'stdin-after-start'
+  },
   aug: {
     // Why: @augmentcode/auggie installs a binary named `auggie`, not `aug`; keep id 'aug' for stored prefs.
     detectCmd: 'auggie',
     launchCmd: 'auggie',
     expectedProcess: 'auggie',
-    promptInjectionMode: 'stdin-after-start',
-    sessionRulesFileFlag: '--rules'
+    promptInjectionMode: 'stdin-after-start'
   },
   cline: {
     detectCmd: 'cline',
@@ -245,7 +253,6 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'droid',
     expectedProcess: 'droid',
     promptInjectionMode: 'argv',
-    sessionRulesTextFlag: '--append-system-prompt',
     // Why: Droid decodes CSI-u on Windows; the legacy Esc+CR fallback reads as Enter and submits instead of newline.
     windowsShiftEnterEncoding: 'csi-u',
     ctrlEnterEncoding: 'csi-u'
@@ -324,7 +331,7 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
 }
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
-  return typeof value === 'string' && Object.prototype.hasOwnProperty.call(TUI_AGENT_CONFIG, value)
+  return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {

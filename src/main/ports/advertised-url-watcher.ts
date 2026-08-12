@@ -66,9 +66,13 @@ class PtyBuffer {
   /** Append a chunk; return cleaned text up to the last newline. The tail stays buffered so a URL or ANSI sequence split across chunks survives. */
   ingest(chunk: string): string {
     const chunkHasLineBreak = chunk.includes('\n') || chunk.includes('\r')
-    this.raw += chunk
-    if (this.raw.length > PER_PTY_BUFFER_LIMIT) {
-      this.raw = this.raw.slice(-PER_PTY_BUFFER_LIMIT)
+    // Keep the suffix directly so oversized chunks never materialize a throwaway full concatenation.
+    if (chunk.length >= PER_PTY_BUFFER_LIMIT) {
+      this.raw = chunk.slice(-PER_PTY_BUFFER_LIMIT)
+    } else if (this.raw.length + chunk.length > PER_PTY_BUFFER_LIMIT) {
+      this.raw = `${this.raw.slice(-(PER_PTY_BUFFER_LIMIT - chunk.length))}${chunk}`
+    } else {
+      this.raw += chunk
     }
     if (!chunkHasLineBreak) {
       return ''
@@ -79,8 +83,19 @@ class PtyBuffer {
     }
     const finalized = this.raw.slice(0, lastNewline + 1)
     this.raw = this.raw.slice(lastNewline + 1)
-    return stripTerminalControls(finalized)
+    return mayContainHttpUrl(finalized) ? stripTerminalControls(finalized) : ''
   }
+}
+
+function mayContainHttpUrl(text: string): boolean {
+  // Control stripping cannot create any character required by an HTTP scheme.
+  return (
+    (text.includes('h') || text.includes('H')) &&
+    (text.includes('t') || text.includes('T')) &&
+    (text.includes('p') || text.includes('P')) &&
+    text.includes(':') &&
+    text.includes('/')
+  )
 }
 
 function lastLineBreak(text: string): number {

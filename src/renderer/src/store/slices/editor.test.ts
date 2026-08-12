@@ -713,6 +713,136 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
   })
 
+  it('reuses a restored local WSL alias without folding the Linux path tail', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    const store = createEditorStore()
+    const restoredPath = '//wsl.localhost/Ubuntu/home/Alice/repo/file.ts'
+    store.setState({
+      openFiles: [
+        {
+          id: restoredPath,
+          filePath: restoredPath,
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    })
+
+    expect(
+      store.getState().openFile(
+        {
+          filePath: '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { suppressActiveRuntimeFallback: true }
+      )
+    ).toBe(restoredPath)
+    expect(store.getState().openFiles).toHaveLength(1)
+
+    store.getState().openFile(
+      {
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    expect(store.getState().openFiles).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps local WSL-looking aliases distinct on POSIX clients', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const store = createEditorStore()
+    store.setState({
+      openFiles: [
+        {
+          id: 'forward',
+          filePath: '//wsl.localhost/Ubuntu/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    })
+
+    store.getState().openFile(
+      {
+        filePath: '\\\\wsl.localhost\\Ubuntu\\repo\\file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not reuse WSL aliases for SSH-owned tabs', () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-1' }]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ]),
+      openFiles: [
+        {
+          id: 'ssh-forward',
+          filePath: '//wsl.localhost/Ubuntu/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          externalSshTargetId: 'ssh-1',
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as never)
+
+    store.getState().openFile({
+      filePath: '\\\\wsl.localhost\\Ubuntu\\repo\\file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: null,
+      externalSshTargetId: 'ssh-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toHaveLength(2)
+  })
+
   it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
     const store = createEditorStore()
     const file = {
@@ -3080,18 +3210,24 @@ describe('createEditorSlice conflict status reconciliation', () => {
       url: null,
       checkRunId: 42
     }
+    const githubRepository = { owner: 'upstream', repo: 'project' }
 
     store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
       details: null,
       loading: false,
-      error: null
+      error: null,
+      githubRepository
     })
 
     await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
 
     expect(fetchPRCheckDetails).toHaveBeenCalledWith(
       '/repo',
-      expect.objectContaining({ checkRunId: 42, checkName: 'verify' }),
+      expect.objectContaining({
+        checkRunId: 42,
+        checkName: 'verify',
+        prRepo: githubRepository
+      }),
       { repoId: 'repo-1' }
     )
     expect(store.getState().openFiles).toContainEqual(
@@ -3100,6 +3236,43 @@ describe('createEditorSlice conflict status reconciliation', () => {
         checkRunDetails: expect.objectContaining({
           loading: false,
           details: expect.objectContaining({ title: 'Build passed', conclusion: 'success' })
+        })
+      })
+    )
+  })
+
+  it('stops loading when an open check-details tab loses its repository', async () => {
+    const fetchPRCheckDetails = vi.fn()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = createStore<any>()((...args: any[]) => ({
+      activeWorktreeId: 'wt-1',
+      repos: [],
+      worktreesByRepo: {},
+      fetchPRCheckDetails,
+      ...createEditorSlice(...(args as Parameters<typeof createEditorSlice>))
+    })) as unknown as StoreApi<AppState>
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    await store.getState().reloadOpenCheckRunDetailsTab('wt-1::check-details::check-run:42')
+
+    expect(fetchPRCheckDetails).not.toHaveBeenCalled()
+    expect(store.getState().openFiles).toContainEqual(
+      expect.objectContaining({
+        id: 'wt-1::check-details::check-run:42',
+        checkRunDetails: expect.objectContaining({
+          loading: false,
+          error: 'Repository details are unavailable for this check.'
         })
       })
     )
@@ -3302,6 +3475,112 @@ describe('createEditorSlice conflict status reconciliation', () => {
         })
       })
     )
+  })
+
+  it('ignores a stale check-details request after the tab context changes', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:new', check, {
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:old', check, {
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(
+      expect.objectContaining({ contextKey: 'repo:new', details: null, loading: true, error: null })
+    )
+  })
+
+  it('ignores an older check-details request in the same context', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: true,
+      error: null
+    })
+    store.getState().patchOpenCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale request failed'
+    })
+
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, details: null, loading: true, error: null }))
+  })
+
+  it('does not reopen a check-details tab with an older sidebar snapshot', () => {
+    const store = createEditorTabsStore()
+    const check = {
+      name: 'verify',
+      status: 'completed' as const,
+      conclusion: 'failure' as const,
+      url: null,
+      checkRunId: 42
+    }
+
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 2,
+      details: null,
+      loading: false,
+      error: 'newer result'
+    })
+    store.getState().openFile({
+      filePath: '/repo/other.ts',
+      relativePath: 'other.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+    store.getState().openCheckRunDetails('wt-1', 'repo:99', check, {
+      requestId: 1,
+      details: null,
+      loading: false,
+      error: 'stale result'
+    })
+
+    expect(store.getState().activeFileId).toBe('wt-1::check-details::check-run:42')
+    expect(
+      store.getState().openFiles.find((file) => file.id === 'wt-1::check-details::check-run:42')
+        ?.checkRunDetails
+    ).toEqual(expect.objectContaining({ requestId: 2, error: 'newer result' }))
   })
 
   it('opens check full details as a center-pane editor tab', () => {

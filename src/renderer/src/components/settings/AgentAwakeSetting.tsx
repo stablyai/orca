@@ -6,6 +6,13 @@ import {
   getAgentAwakeTitle
 } from './agent-awake-copy'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSegmentedControl } from './SettingsFormControls'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode,
+  type ComputerAwakeMode
+} from '../../../../shared/computer-awake-mode'
+import { translate } from '@/i18n/i18n'
 
 type AgentAwakeSettingProps = {
   settings: GlobalSettings
@@ -18,6 +25,13 @@ export function AgentAwakeSetting({
 }: AgentAwakeSettingProps): React.JSX.Element {
   const title = getAgentAwakeTitle()
   const description = getAgentAwakeDescription()
+  const mode = normalizeComputerAwakeMode(
+    settings.computerAwakeMode,
+    settings.keepComputerAwakeWhileAgentsRun
+  )
+  const setMode = (nextMode: ComputerAwakeMode): void => {
+    updateSettings(computerAwakeSettingsForMode(nextMode))
+  }
 
   return (
     <section className="space-y-3">
@@ -31,29 +45,26 @@ export function AgentAwakeSetting({
             <Label>{title}</Label>
             <p className="text-xs text-muted-foreground">{description}</p>
           </div>
-          {/* Why: this button is read directly from the React element tree by tests
-              that walk props (without rendering), so the role/aria attributes
-              must remain on a literal <button>, not behind a component wrapper. */}
-          <button
-            type="button"
-            role="switch"
-            aria-label={title}
-            aria-checked={settings.keepComputerAwakeWhileAgentsRun}
-            onClick={() =>
-              updateSettings({
-                keepComputerAwakeWhileAgentsRun: !settings.keepComputerAwakeWhileAgentsRun
-              })
-            }
-            className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.keepComputerAwakeWhileAgentsRun ? 'bg-foreground' : 'bg-muted-foreground/30'
-            } outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50`}
-          >
-            <span
-              className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.keepComputerAwakeWhileAgentsRun ? 'translate-x-4' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
+          <SettingsSegmentedControl
+            value={mode}
+            onChange={setMode}
+            ariaLabel={title}
+            size="sm"
+            options={[
+              {
+                value: 'on',
+                label: translate('auto.components.settings.AgentAwakeSetting.on', 'On')
+              },
+              {
+                value: 'auto',
+                label: translate('auto.components.settings.AgentAwakeSetting.auto', 'Agent')
+              },
+              {
+                value: 'off',
+                label: translate('auto.components.settings.AgentAwakeSetting.off', 'Off')
+              }
+            ]}
+          />
         </div>
       </SearchableSetting>
     </section>

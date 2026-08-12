@@ -71,6 +71,7 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
+import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
@@ -136,7 +137,6 @@ export type RepoUpdate = Partial<
   >
 > & {
   sourceControlAi?: Repo['sourceControlAi'] | null
-  agentSessionRules?: Repo['agentSessionRules'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
 }
 
@@ -888,9 +888,7 @@ function areCatalogEntriesEqual(a: unknown, b: unknown): boolean {
   if (keys.length !== Object.keys(b).length) {
     return false
   }
-  return keys.every(
-    (key) => Object.prototype.hasOwnProperty.call(b, key) && areCatalogEntriesEqual(a[key], b[key])
-  )
+  return keys.every((key) => Object.hasOwn(b, key) && areCatalogEntriesEqual(a[key], b[key]))
 }
 
 // Why: returning `base` unchanged keeps referential-equality selectors quiet, so a
@@ -3351,21 +3349,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
       if (folderWorktree) {
         const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
-        const { buildDismissedOnboardingFolderAgentStartup } =
-          await import('@/lib/onboarding-folder-agent-startup')
         const onboarding = await window.api.onboarding.get().catch(() => null)
         // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
         const startup = buildDismissedOnboardingFolderAgentStartup(
           get().settings,
           onboarding,
           hadProjectBeforeAdd,
-          {
-            repoId: repo.id,
-            connectionId: repo.connectionId,
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              repo.connectionId
-            )
-          }
+          isNativeChatTranscriptLocalReadable(repo.connectionId)
         )
         activateAndRevealWorktree(folderWorktree.id, {
           sidebarRevealBehavior: 'auto',
@@ -3668,7 +3658,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
             let mergedRepo: Repo = r
             const {
               sourceControlAi,
-              agentSessionRules,
               externalWorktreeDiscoverySuppressedAt,
               ...updatesWithoutClearSentinels
             } = sanitizedUpdates
@@ -3679,13 +3668,6 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               mergedRepo = repoWithoutSourceControlAi
             } else if (sourceControlAi !== undefined) {
               mergedRepo = { ...mergedRepo, sourceControlAi }
-            }
-            if (agentSessionRules === null) {
-              const { agentSessionRules: _agentSessionRules, ...repoWithoutAgentSessionRules } =
-                mergedRepo
-              mergedRepo = repoWithoutAgentSessionRules
-            } else if (agentSessionRules !== undefined) {
-              mergedRepo = { ...mergedRepo, agentSessionRules }
             }
             if (externalWorktreeDiscoverySuppressedAt === null) {
               const {

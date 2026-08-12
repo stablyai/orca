@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
+import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
 
 describe('scanRemoteAiVaultSessions', () => {
   it('parses remote default and Orca-managed Codex homes with SSH host ids', async () => {
@@ -157,6 +158,34 @@ describe('scanRemoteAiVaultSessions', () => {
       title: 'Summarize the remote branch',
       model: 'claude-opus-4',
       filePath: '/home/ada/.claude/projects/repo/claude-session.jsonl'
+    })
+  })
+
+  it('discovers Prime Agent transcripts under the remote home sessions root', async () => {
+    const provider = new MemoryRemoteProvider()
+    const fixture = primeAgentFixture()
+    provider.addFile(
+      `/home/ada/.prime/agent/sessions/${fixture.fileName}`,
+      [...fixture.seedLines, ...fixture.appendLines].join('\n'),
+      40
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions).toHaveLength(1)
+    expect(result.sessions[0]).toMatchObject({
+      executionHostId: 'ssh:dev-box',
+      executionHostPlatform: 'linux',
+      agent: 'prime-agent',
+      title: 'prime-agent seed question',
+      model: 'inference/big-model',
+      filePath: `/home/ada/.prime/agent/sessions/${fixture.fileName}`
     })
   })
 

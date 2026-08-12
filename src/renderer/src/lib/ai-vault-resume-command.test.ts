@@ -390,7 +390,7 @@ describe('ai vault resume command runtime', () => {
 
   it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'dev-box' }] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(getAiVaultResumePlatform(state, 'repo-1::worktree-1')).toBe('linux')
     expect(
@@ -535,7 +535,7 @@ describe('ai vault resume command runtime', () => {
 
   it('rebuilds remote real-home Codex commands without a stored home assignment', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'dev-box' }] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
       buildAiVaultResumeStartupForWorktree({
@@ -560,7 +560,7 @@ describe('ai vault resume command runtime', () => {
 
   it('rebuilds remote real-home Codex commands when the override is blank', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'dev-box' }] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
       buildQueuedAiVaultResumeCommand({
@@ -581,9 +581,7 @@ describe('ai vault resume command runtime', () => {
 
   it('copies remote real-home Codex commands with explicit environment cleanup', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [
-      { id: 'repo-1', path: '/home/alice/repo', executionHostId: 'runtime:env-1' }
-    ] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     const command = buildAiVaultResumeCopyCommandForWorktree({
       state,
@@ -607,7 +605,7 @@ describe('ai vault resume command runtime', () => {
 
   it('rebuilds the command when a non-blank override is supplied for a remote session', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'dev-box' }] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
       buildQueuedAiVaultResumeCommand({
@@ -631,7 +629,7 @@ describe('ai vault resume command runtime', () => {
       worktreePath: '/home/alice/repo',
       terminalWindowsShell: 'cmd.exe'
     })
-    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'win-box' }] as never
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
       buildQueuedAiVaultResumeCommand({
@@ -654,6 +652,7 @@ describe('ai vault resume command runtime', () => {
 
   it('ignores a stored resume command for local-host sessions', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
     expect(
       buildQueuedAiVaultResumeCommand({
@@ -669,72 +668,5 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toBe("codex 'resume' 'session one'")
-  })
-
-  it('rejects a stored remote command when the target workspace has no matching host owner', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-
-    expect(() =>
-      buildAiVaultResumeStartupForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null,
-          executionHostId: 'ssh:dev-box',
-          resumeCommand: "claude --resume 'session one'"
-        }
-      })
-    ).toThrow('The target workspace host is unavailable or ambiguous.')
-  })
-
-  it('rejects a stored remote command when a canonical worktree key has no matching host owner', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-
-    expect(() =>
-      buildAiVaultResumeStartupForWorktree({
-        state,
-        worktreeId: 'worktree:repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/repo',
-          codexHome: null,
-          executionHostId: 'ssh:dev-box',
-          resumeCommand: "claude --resume 'session one'"
-        }
-      })
-    ).toThrow('The target workspace host is unavailable or ambiguous.')
-  })
-
-  it('rejects a stored remote command when a folder workspace belongs to another host', () => {
-    const state = makeState({ worktreePath: '/home/alice/repo' })
-    state.folderWorkspaces = [
-      {
-        id: 'folder-1',
-        projectGroupId: 'group-1',
-        name: 'Platform',
-        folderPath: '/home/alice/platform',
-        connectionId: 'folder-host'
-      }
-    ] as never
-    state.projectGroups = [{ id: 'group-1', connectionId: null }] as never
-
-    expect(() =>
-      buildAiVaultResumeStartupForWorktree({
-        state,
-        worktreeId: 'folder:folder-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: '/home/alice/platform',
-          codexHome: null,
-          executionHostId: 'ssh:other-host',
-          resumeCommand: "claude --resume 'session one'"
-        }
-      })
-    ).toThrow('The target workspace host is unavailable or ambiguous.')
   })
 })

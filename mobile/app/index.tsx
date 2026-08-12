@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { View, Text, StyleSheet, Pressable, FlatList, Alert } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter, useFocusEffect } from 'expo-router'
-import { QrCode, Settings, ChevronRight, Terminal, Plus, ListTodo } from 'lucide-react-native'
+import { QrCode, Settings, ChevronRight, Terminal, ListTodo } from 'lucide-react-native'
 import { ClaudeIcon, OpenAIIcon } from '../src/components/AgentIcons'
 import {
   type AccountsSnapshot,
@@ -41,6 +41,7 @@ import type { ConnectionState, HostCatalogEntry, HostProfile } from '../src/tran
 import { triggerMediumImpact } from '../src/platform/haptics'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { MobileHostCard } from '../src/components/MobileHostCard'
+import { MobileHomeQuickActions } from '../src/components/MobileHomeQuickActions'
 import { TaskProviderLogo } from '../src/components/TaskProviderLogo'
 import { ActionSheetModal } from '../src/components/ActionSheetModal'
 import { getHostListActionSheetActions } from '../src/host-list-action-sheet-actions'
@@ -71,15 +72,8 @@ import {
   type HomeResumeCard
 } from '../src/worktree/home-resume-card'
 import { hostRouteWithNotice } from '../src/host-route-notice'
-
-function endpointLabel(endpoint: string): string {
-  try {
-    const url = new URL(endpoint)
-    return `${url.hostname}${url.port ? `:${url.port}` : ''}`
-  } catch {
-    return endpoint
-  }
-}
+import { hostNewWorktreeRoute } from '../src/host-route-action-state'
+import { hostEndpointLabel } from '../src/transport/host-endpoint-label'
 
 type HomeTaskSettings = {
   visibleTaskProviders?: unknown
@@ -572,10 +566,11 @@ export default function HomeScreen() {
     return items
   }, [sortedHosts, hostStates, accountsByHost])
 
-  const primaryConnectedHost = useMemo(
-    () => sortedHosts.find((host) => hostStates[host.id] === 'connected') ?? null,
+  const connectedHosts = useMemo(
+    () => sortedHosts.filter((host) => hostStates[host.id] === 'connected'),
     [sortedHosts, hostStates]
   )
+  const primaryConnectedHost = connectedHosts[0] ?? null
   const primaryTaskProviders = primaryConnectedHost
     ? (taskProvidersByHost[primaryConnectedHost.id] ?? ['github'])
     : []
@@ -847,36 +842,11 @@ export default function HomeScreen() {
               {renderTaskHomeCard()}
 
               {/* ─── Quick actions ─── */}
-              <Text style={[styles.sectionHeading, { marginTop: spacing.xl }]}>Quick Actions</Text>
-              <View style={styles.quickActions}>
-                <Pressable
-                  style={({ pressed }) => [styles.quickAction, pressed && styles.hostCardPressed]}
-                  onPress={() => router.push('/pair-scan')}
-                >
-                  <View style={styles.quickActionIcon}>
-                    <QrCode size={16} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>Pair Desktop</Text>
-                </Pressable>
-                <Pressable
-                  disabled={!primaryConnectedHost}
-                  style={({ pressed }) => [
-                    styles.quickAction,
-                    !primaryConnectedHost && styles.cardDisabled,
-                    pressed && styles.hostCardPressed
-                  ]}
-                  onPress={() => {
-                    if (primaryConnectedHost) {
-                      router.push(`/h/${primaryConnectedHost.id}?action=newWorktree`)
-                    }
-                  }}
-                >
-                  <View style={styles.quickActionIcon}>
-                    <Plus size={16} color={colors.textSecondary} />
-                  </View>
-                  <Text style={styles.quickActionLabel}>New Workspace</Text>
-                </Pressable>
-              </View>
+              <MobileHomeQuickActions
+                connectedHosts={connectedHosts}
+                onPairDesktop={() => router.push('/pair-scan')}
+                onCreateWorkspace={(hostId) => router.push(hostNewWorktreeRoute(hostId))}
+              />
 
               {/* ─── Account usage ─── */}
               {accountsHosts.length > 0 ? (
@@ -964,7 +934,7 @@ export default function HomeScreen() {
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
-        message={actionTarget ? endpointLabel(actionTarget.endpoint) : undefined}
+        message={actionTarget ? hostEndpointLabel(actionTarget.endpoint) : undefined}
         actions={getHostListActionSheetActions({
           host: actionTarget,
           state: actionTarget
@@ -1185,6 +1155,9 @@ const styles = StyleSheet.create({
     paddingRight: spacing.md,
     paddingVertical: 12
   },
+  cardDisabled: {
+    opacity: 0.45
+  },
   taskHomeIcon: {
     width: 46,
     height: 46,
@@ -1276,40 +1249,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: spacing.md,
     marginTop: 4
-  },
-
-  /* ─── Quick actions ─── */
-  quickActions: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  quickAction: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    gap: 10
-  },
-  cardDisabled: {
-    opacity: 0.45
-  },
-  quickActionIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  quickActionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.textSecondary
   },
 
   /* ─── Empty state ─── */

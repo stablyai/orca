@@ -2613,6 +2613,8 @@ describe('createPtySubprocess', () => {
     spawnMock.mockImplementation(() => {
       throw new Error('File not found: ')
     })
+    const previousVersion = process.env.ORCA_APP_VERSION
+    process.env.ORCA_APP_VERSION = '1.4.178-test'
 
     try {
       expect(() =>
@@ -2623,9 +2625,14 @@ describe('createPtySubprocess', () => {
           shellOverride: 'not-a-real-shell.exe'
         })
       ).toThrow(
-        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:/
+        /Daemon failed to spawn shell "not-a-real-shell\.exe" with cwd ".+": File not found:.*orca: 1\.4\.178-test/
       )
     } finally {
+      if (previousVersion === undefined) {
+        delete process.env.ORCA_APP_VERSION
+      } else {
+        process.env.ORCA_APP_VERSION = previousVersion
+      }
       if (platform) {
         Object.defineProperty(process, 'platform', platform)
       }
@@ -2958,36 +2965,39 @@ describe('createPtySubprocess', () => {
     expect(spawnCall[2].env.WSLENV ?? '').not.toContain(POWERLEVEL10K_WIZARD_DISABLE_ENV)
   })
 
-  it('keeps daemon WSL split panes in their distro when cwd is already POSIX', () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-    const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+  it.each(['/home/jin/repo/subdir', '/a', '/c'])(
+    'keeps daemon WSL split panes in their distro when cwd is POSIX (%s)',
+    (cwd) => {
+      const proc = mockPtyProcess()
+      spawnMock.mockReturnValue(proc)
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
 
-    Object.defineProperty(process, 'platform', { value: 'win32' })
+      Object.defineProperty(process, 'platform', { value: 'win32' })
 
-    try {
-      createPtySubprocess({
-        sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
-        cols: 80,
-        rows: 24,
-        cwd: '/home/jin/repo/subdir',
-        shellOverride: 'wsl.exe'
-      })
-    } finally {
-      if (platform) {
-        Object.defineProperty(process, 'platform', platform)
+      try {
+        createPtySubprocess({
+          sessionId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo@@deadbeef',
+          cols: 80,
+          rows: 24,
+          cwd,
+          shellOverride: 'wsl.exe'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
       }
-    }
 
-    expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
-      '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo\\subdir'
-    )
-    expect(spawnMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
-      expect.objectContaining({ cwd: expect.any(String) })
-    )
-  })
+      expect(validateWorkingDirectoryMock).toHaveBeenCalledWith(
+        `\\\\wsl.localhost\\Ubuntu${cwd.replaceAll('/', '\\')}`
+      )
+      expect(spawnMock).toHaveBeenCalledWith(
+        'wsl.exe',
+        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining(`cd '${cwd}'`)],
+        expect.objectContaining({ cwd: expect.any(String) })
+      )
+    }
+  )
 
   // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
   // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently

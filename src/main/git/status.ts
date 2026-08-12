@@ -51,7 +51,7 @@ import { resolveWorktreeBaseCommitOid } from './worktree-base-ref-probe'
 import { getLargeDiffRenderLimit } from '../../shared/large-diff-render-limit'
 import { InFlightPromiseDedupe, stableInFlightKey } from '../../shared/in-flight-promise-dedupe'
 import type { GitRuntimeOptions } from './git-runtime-options'
-import { gitOptionsForWorktree } from './git-runtime-options'
+import { gitOptionsForWorktree, gitStatusReadOptionsForWorktree } from './git-runtime-options'
 import { GitStatusReadLeaseOwner } from './git-status-read-lease-owner'
 import { parseGitRevListFirstParentOid } from '../../shared/git-rev-list-output'
 import {
@@ -315,21 +315,32 @@ async function runGetStatus(
   // Why: stream + parse and stop at `limit` so a huge un-ignored folder can't buffer enough to crash the process.
   const parser = new StatusPorcelainParser()
   let didHitLimit = false
+  // Why: attach rejection ownership before awaiting marker I/O, so a fast Git failure cannot become unhandled.
+  const statusSettlementPromise = Promise.allSettled([
+    (async () => {
+      const result = await gitStreamStdout(statusArgs, {
+        cwd: worktreePath,
+        wslDistro: options.wslDistro,
+        preferWslDirectGit: true,
+        // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
+        env: gitOptionalLocksDisabledEnv(),
+        signal: options.signal,
+        onStdout: (chunk) => parser.update(chunk, limit)
+      })
+      if (!result.stoppedEarly) {
+        parser.finish()
+      }
+      return result
+    })()
+  ])
   const conflictOperation = await conflictPromise
 
   try {
-    const { stoppedEarly } = await gitStreamStdout(statusArgs, {
-      cwd: worktreePath,
-      wslDistro: options.wslDistro,
-      // Why: status polling is read-like; disable optional locks to avoid racing terminal Git on index.lock.
-      env: gitOptionalLocksDisabledEnv(),
-      signal: options.signal,
-      onStdout: (chunk) => parser.update(chunk, limit)
-    })
-    if (!stoppedEarly) {
-      parser.finish()
+    const [statusResult] = await statusSettlementPromise
+    if (statusResult.status === 'rejected') {
+      throw statusResult.reason
     }
-    didHitLimit = stoppedEarly
+    didHitLimit = statusResult.value.stoppedEarly
     statusSucceeded = true
   } catch (error) {
     // Why: an aborted scan must reject, not resolve as an empty result.
@@ -467,7 +478,7 @@ function createBranchLineTotalInput(
           .map((entry) => entry.path),
         runDiffNumstat: (args, signal) =>
           gitExecFileAsync(args, {
-            ...gitOptionsForWorktree(worktreePath, options),
+            ...gitStatusReadOptionsForWorktree(worktreePath, options),
             // Why: after the spread, so the shared lease signal wins over this caller's own.
             signal,
             env: gitOptionalLocksDisabledEnv(),
@@ -618,7 +629,10 @@ async function runNumstat(
         '--numstat',
         '-M'
       ],
-      { ...gitOptionsForWorktree(worktreePath, options), env: gitOptionalLocksDisabledEnv() }
+      {
+        ...gitStatusReadOptionsForWorktree(worktreePath, options),
+        env: gitOptionalLocksDisabledEnv()
+      }
     )
     return parseNumstat(stdout)
   } catch (error) {
@@ -852,7 +866,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
   } else if (cached) {
     try {
       const status = await getGitUpstreamStatusForUpstreamName(
-        (args) => gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options)),
+        (args) => gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options)),
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
@@ -889,7 +903,7 @@ async function probeEffectiveUpstreamStatus(
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner((args) =>
-    gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
+    gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options))
   )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {

@@ -13,6 +13,7 @@ import { createCursorSessionResumeState } from './session-scanner-cursor-parser'
 import { countSubagentTranscripts } from './session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from './session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
+import { refreshCachedCodexTitle } from './session-scanner-codex-cached-title'
 
 // Sized past the default recency cap (1000) plus the in-scope cap (2000) so a
 // full steady-state result set stays resident between forced rescans.
@@ -59,7 +60,8 @@ function resumableStateFactoryFor(
       return () => createDroidSessionResumeState(candidate.file)
     case 'openclaw':
     case 'pi':
-    case 'omp': {
+    case 'omp':
+    case 'prime-agent': {
       const agent = candidate.agent
       return () => createMessageGraphSessionResumeState(agent, candidate.file)
     }
@@ -94,6 +96,12 @@ const cache = new Map<string, SessionParseCacheEntry>()
 
 export function resetSessionParseCacheForTests(): void {
   cache.clear()
+}
+
+// Drops one entry after its file is deleted. Cleanliness, not correctness:
+// discovery walks disk first, so a trashed file is never rediscovered anyway.
+export function invalidateSessionParseCacheEntry(path: string): void {
+  cache.delete(path)
 }
 
 // Persisted subset of a cache entry: the non-serializable `resume` parser
@@ -197,6 +205,9 @@ export async function parseAgentSessionFileCached(
       ) {
         entry.session = { ...entry.session, subagentTranscriptCount }
       }
+    }
+    if (entry.session && candidate.agent === 'codex') {
+      entry.session = await refreshCachedCodexTitle(candidate, entry.session)
     }
     storeEntry(file.path, entry)
     return entry.session

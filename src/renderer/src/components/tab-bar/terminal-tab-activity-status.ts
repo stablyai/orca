@@ -169,12 +169,79 @@ export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): bo
   return status === 'working' || status === 'permission'
 }
 
+/**
+ * Glyph-bearing attention states for a terminal tab (tab bar + Cmd+J recent chats).
+ * Quiet active/inactive map to null so identity icons stay clean.
+ */
+export type TerminalTabAttentionBadge = 'working' | 'permission' | 'unread' | 'done'
+
+/**
+ * Single priority ladder shared by the tab strip and Cmd+J recent rows:
+ * in-turn (working / permission) → unread bell → freshly done check.
+ */
+export function resolveTerminalTabAttentionBadge({
+  status,
+  hasUnread
+}: {
+  status: WorktreeStatus | null | undefined
+  hasUnread: boolean
+}): TerminalTabAttentionBadge | null {
+  if (status === 'working') {
+    return 'working'
+  }
+  if (status === 'permission') {
+    return 'permission'
+  }
+  if (hasUnread) {
+    return 'unread'
+  }
+  if (status === 'done') {
+    return 'done'
+  }
+  return null
+}
+
+/** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
+export function terminalTabActivityToAgentDotState(
+  status: TerminalTabActivityStatus
+): 'working' | 'permission' | 'done' | null {
+  switch (status) {
+    case 'working':
+    case 'permission':
+    case 'done':
+      return status
+    case 'active':
+    case 'inactive':
+      return null
+  }
+}
+
+/** Bell or unacked agent completion — same sources the tab strip and floating launcher use. */
+export function terminalTabHasUnreadActivity({
+  terminalTabId,
+  unreadTerminalTabs,
+  unreadAgentCompletionPanes
+}: {
+  terminalTabId: string
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+}): boolean {
+  return (
+    unreadTerminalTabs[terminalTabId] === true ||
+    hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, terminalTabId)
+  )
+}
+
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, true> | undefined,
+  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
-  for (const paneKey of Object.keys(unreadAgentCompletionPanes ?? {})) {
+  for (const [paneKey, unread] of Object.entries(unreadAgentCompletionPanes ?? {})) {
+    // Why entries, not keys: the widened value type lets a cleared marker linger as `false`.
+    if (!unread) {
+      continue
+    }
     // paneKey is `${tabId}:${leafId}` and tab ids never contain ":", so the
     // prefix up to the first ":" is the owning tab id (see
     // selectFloatingWorkspaceHasUnread). Prefix-match to keep legacy keys.

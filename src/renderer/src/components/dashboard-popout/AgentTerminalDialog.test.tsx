@@ -36,6 +36,7 @@ const TERMINAL_INPUT: DashboardCardTerminalInput = {
   localWindowsConpty: true,
   osRelease: '10.0.22631',
   windowsShiftEnterEncoding: 'csi-u',
+  ctrlEnterCsiU: false,
   kittyKeyboardAdvertised: false
 }
 

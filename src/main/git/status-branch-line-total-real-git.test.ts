@@ -40,6 +40,9 @@ function commitAll(repo: string, message: string): string {
   return git(repo, ['rev-parse', 'HEAD'])
 }
 
+// No fixture path here looks like test or generated code, so it is all source.
+const NO_LINES = { added: 0, removed: 0 }
+
 /** What a plain `git diff <mergeBase>` reports, i.e. the number the chip must not disagree with. */
 function rangedDiffTotal(repo: string, mergeBase: string): { added: number; removed: number } {
   let added = 0
@@ -80,7 +83,13 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({ added: 1, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 1,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
     expect(result.entries.map((entry) => [entry.area, entry.added, entry.removed])).toEqual([
       ['staged', 1, 0],
       ['unstaged', 1, 1]
@@ -97,7 +106,13 @@ describe('branch line total against a real repository', () => {
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
-    expect(result.branchLineTotal).toEqual({ added: 0, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 0,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('keeps the total across a commit and updates it on the next status call after an edit', async () => {
@@ -107,15 +122,33 @@ describe('branch line total against a real repository', () => {
     await write(repo, 'f.txt', 'a\nb\nc\n')
 
     const beforeCommit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(beforeCommit.branchLineTotal).toEqual({ added: 2, removed: 0, mergeBase })
+    expect(beforeCommit.branchLineTotal).toEqual({
+      added: 2,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
 
     commitAll(repo, 'commit the edit')
     const afterCommit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(afterCommit.branchLineTotal).toEqual({ added: 2, removed: 0, mergeBase })
+    expect(afterCommit.branchLineTotal).toEqual({
+      added: 2,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
 
     await write(repo, 'f.txt', 'a\nb\nc\nd\n')
     const afterSecondEdit = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-    expect(afterSecondEdit.branchLineTotal).toEqual({ added: 3, removed: 0, mergeBase })
+    expect(afterSecondEdit.branchLineTotal).toEqual({
+      added: 3,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('counts a rename across the commit boundary once, using the post-rename path', async () => {
@@ -129,7 +162,13 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({ added: 1, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 1,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('counts an untracked-only branch from the untracked file contents', async () => {
@@ -141,7 +180,13 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(result.entries.map((entry) => entry.area)).toEqual(['untracked'])
-    expect(result.branchLineTotal).toEqual({ added: 3, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 3,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('excludes a binary-only change, matching numstat reporting it as "-"', async () => {
@@ -153,7 +198,13 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(git(repo, ['diff', '--numstat', mergeBase, '--'])).toMatch(/^-\t-\t/)
-    expect(result.branchLineTotal).toEqual({ added: 0, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 0,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   it('contributes nothing for a pure rename', async () => {
@@ -164,7 +215,33 @@ describe('branch line total against a real repository', () => {
 
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
-    expect(result.branchLineTotal).toEqual({ added: 0, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 0,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
+  })
+
+  it('splits test-path and generated files out of the published total', async () => {
+    const repo = await createFixtureRepo()
+    await write(repo, 'src/a.ts', 'a\n')
+    const mergeBase = commitAll(repo, 'base')
+    await write(repo, 'src/a.ts', 'a\nb\n')
+    await write(repo, 'src/a.test.ts', 't1\nt2\nt3\n')
+    await write(repo, 'pnpm-lock.yaml', 'l1\nl2\nl3\nl4\nl5\n')
+
+    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
+
+    expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
+    expect(result.branchLineTotal).toEqual({
+      added: 9,
+      removed: 0,
+      mergeBase,
+      test: { added: 3, removed: 0 },
+      generated: { added: 5, removed: 0 }
+    })
   })
 
   it('includes untracked additions alongside tracked range changes', async () => {
@@ -178,7 +255,13 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 1, removed: 0 })
-    expect(result.branchLineTotal).toEqual({ added: 5, removed: 0, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 5,
+      removed: 0,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 
   // Documented deviation from a pure `git diff`: the untracked half is added on
@@ -198,6 +281,12 @@ describe('branch line total against a real repository', () => {
       ['untracked', 'gone.txt']
     ])
     expect(rangedDiffTotal(repo, mergeBase)).toEqual({ added: 0, removed: 3 })
-    expect(result.branchLineTotal).toEqual({ added: 2, removed: 3, mergeBase })
+    expect(result.branchLineTotal).toEqual({
+      added: 2,
+      removed: 3,
+      mergeBase,
+      test: NO_LINES,
+      generated: NO_LINES
+    })
   })
 })

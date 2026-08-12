@@ -59,6 +59,28 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
+vi.mock('@/components/workspace-emoji/WorkspaceEmojiSuggestionPopover', () => ({
+  WorkspaceEmojiSuggestionPopover: () => null
+}))
+
+vi.mock('@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput', () => ({
+  useWorkspaceEmojiShortcodeInput: ({
+    onValueChange
+  }: {
+    onValueChange: (value: string) => void
+  }) => ({
+    close: vi.fn(),
+    commandValue: '',
+    handleKeyDown: () => false,
+    handleValueChange: (value: string) => onValueChange(value),
+    onCommandValueChange: vi.fn(),
+    open: false,
+    selectSuggestion: vi.fn(),
+    suggestions: [],
+    syncCursor: vi.fn()
+  })
+}))
+
 type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

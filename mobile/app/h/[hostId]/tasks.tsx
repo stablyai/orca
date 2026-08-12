@@ -80,6 +80,7 @@ import {
 import { shouldResolveHostedReviewStartPoint } from '../../../src/tasks/hosted-review-start-point'
 import { getLinkedWorkItemSuggestedName } from '../../../src/tasks/mobile-workspace-name'
 import {
+  dropFailedGitHubRepoSlugEntries,
   filterGitHubProjectRowsForRepos,
   findRepoForGitHubProjectRepository,
   type GitHubRepoSlugCacheEntry
@@ -114,13 +115,15 @@ import {
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { triggerMediumImpact } from '../../../src/platform/haptics'
 import {
-  type GitHubProjectSortDirection,
-  type GitHubProjectTable as SharedGitHubProjectTable,
   groupRows,
   isIterationCurrent,
   sortRows,
   type ProjectGroup
-} from '../../../src/tasks/mobile-github-project-group-sort'
+} from '../../../../src/shared/github-project-group-sort'
+import type {
+  GitHubProjectSortDirection,
+  GitHubProjectTable as SharedGitHubProjectTable
+} from '../../../../src/shared/github-project-types'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
   isGitHubWorkItemsSshRemoteRequiredError,
@@ -132,6 +135,9 @@ import {
   resolveVisibleTaskProvider,
   type TaskProvider
 } from '../../../src/tasks/mobile-task-providers'
+import { hasSettledHostRepoList } from '../../../src/tasks/host-repo-list'
+import { useHostRepoList } from '../../../src/tasks/use-host-repo-list'
+import { isHostedTaskRepo, reconcileRepoSelection } from '../../../src/tasks/hosted-repo-selection'
 import {
   extractLinearIssueReadItems,
   type LinearMobileIssue
@@ -165,6 +171,8 @@ type RepoSummary = {
   kind?: 'git' | 'folder'
   connectionId?: string | null
   issueSourcePreference?: IssueSourcePreference
+  /** Fork parent resolved by the host; drives upstream Project row matching. */
+  upstream?: { owner: string; repo: string; host?: string } | null
 }
 
 type IssueSourcePreference = 'upstream' | 'origin' | 'auto'
@@ -1114,22 +1122,6 @@ async function mapWithConcurrency<T, R>(
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()))
   return results
-}
-
-function isHostedTaskRepo(repo: RepoSummary): boolean {
-  return repo.kind !== 'folder'
-}
-
-function reconcileRepoSelection(
-  repos: RepoSummary[],
-  persisted: string[] | null | undefined
-): Set<string> {
-  if (!persisted || persisted.length === 0) {
-    return new Set()
-  }
-  const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
-  const selected = persisted.filter((id) => availableIds.has(id))
-  return selected.length === 0 ? new Set() : new Set(selected)
 }
 
 function createLinearTask(issue: LinearIssue): TaskItem {
@@ -2082,10 +2074,22 @@ export default function MobileTasksScreen() {
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
   const clientRef = useRef<RpcClient | null>(null)
-  const reposRef = useRef<RepoSummary[]>([])
   const loadGenerationRef = useRef(0)
   const taskResumeRef = useRef<TaskResumeState>({})
-  const [repos, setRepos] = useState<RepoSummary[]>([])
+  const repoList = useHostRepoList<RepoSummary>(
+    client,
+    client && connState === 'connected'
+      ? async () => {
+          const response = await client.sendRequest('repo.list')
+          if (!isSuccess(response)) {
+            throw new Error(response.error.message)
+          }
+          return (response.result as { repos: RepoSummary[] }).repos
+        }
+      : null
+  )
+  const repos = repoList.state.repos
+  const { ensureLoaded: repoListEnsureLoaded, reload: repoListReload } = repoList
   const [provider, setProvider] = useState<TaskProvider>('github')
   const [visibleProviders, setVisibleProviders] = useState<TaskProvider[]>(() =>
     normalizeVisibleTaskProviders(undefined)
@@ -2376,13 +2380,17 @@ export default function MobileTasksScreen() {
       ) as RepoSummary | null,
     [activeGitHubProjectHost, githubRepoSlugCache, hostedRepos]
   )
+  // Why: `every` is vacuously true on an empty repo list, so readiness has to ask
+  // the resource whether that list is real yet. Otherwise the board renders
+  // "No project items" for a board whose repos simply have not arrived.
   const githubProjectRepoSlugReady = useMemo(
     () =>
+      hasSettledHostRepoList(repoList.state) &&
       hostedRepos.every((repo) => {
         const cached = githubRepoSlugCache[repo.id]
         return cached !== undefined && cached.path === repo.path
       }),
-    [githubRepoSlugCache, hostedRepos]
+    [githubRepoSlugCache, hostedRepos, repoList.state]
   )
   const visibleGitHubProjectRows = useMemo(
     () =>
@@ -2486,13 +2494,10 @@ export default function MobileTasksScreen() {
           throw new Error(response.error.message)
         }
         const result = response.result as GitHubOwnerRepo | null
-        return {
-          repoId: repo.id,
-          path: repo.path,
-          repository: result
-        }
+        return { repoId: repo.id, entry: { path: repo.path, repository: result } }
       } catch {
-        return { repoId: repo.id, path: repo.path, repository: null }
+        // Cached so readiness settles; `failed` marks it for retry on refresh.
+        return { repoId: repo.id, entry: { path: repo.path, repository: null, failed: true } }
       }
     }).then((entries) => {
       if (cancelled) {
@@ -2501,7 +2506,7 @@ export default function MobileTasksScreen() {
       setGithubRepoSlugCache((current) => {
         const next = { ...current }
         for (const entry of entries) {
-          next[entry.repoId] = { path: entry.path, repository: entry.repository }
+          next[entry.repoId] = entry.entry
         }
         return next
       })
@@ -2619,8 +2624,31 @@ export default function MobileTasksScreen() {
 
   // Why: task-loading effects use this as a stale-client guard, so the ref
   // must be current before those passive effects can run after commit.
+  const resetGitHubItemsState = useCallback(() => {
+    setGithubRepoSources({})
+    setGithubPages([])
+    setGithubCurrentPage(0)
+    setGithubTotalCount(null)
+    setGithubSourceErrors([])
+    setGithubSourceFallbacks([])
+  }, [])
+
+  // Why: Expo reuses this screen for the next host, so an effect reset runs a
+  // render too late and the previous host's rows show under the new one. The
+  // repo list resets itself; these are the other client-scoped caches.
+  const [boundClient, setBoundClient] = useState(client)
+  if (boundClient !== client) {
+    setBoundClient(client)
+    setItems([])
+    setGithubRepoSlugCache({})
+    resetGitHubItemsState()
+  }
+
   useLayoutEffect(() => {
     clientRef.current = client
+    // Why: ref writes belong in the commit phase. Doing this during render would
+    // leak out of a concurrent render React later abandons.
+    repoSelectionHydratedRef.current = false
   }, [client])
 
   const persistTaskResumeState = useCallback(
@@ -2875,7 +2903,7 @@ export default function MobileTasksScreen() {
         // pair but must not receive the newer task-specific method calls.
         setTasksSupportState({ kind: 'unsupported', client })
         setItems([])
-        setGithubPages([])
+        resetGitHubItemsState()
         setGithubProjectTable(null)
         setShowLinearWorkspacePicker(false)
         setShowLinearTeamPicker(false)
@@ -3033,32 +3061,26 @@ export default function MobileTasksScreen() {
     setProvider(resolveVisibleTaskProvider(provider, visibleProviders))
   }, [provider, visibleProviders])
 
-  const loadRepos = useCallback(async (): Promise<RepoSummary[]> => {
-    if (!client || connState !== 'connected') {
-      return []
+  // Selection follows the list rather than the fetch, so it reconciles the same
+  // way no matter which caller triggered the load.
+  useEffect(() => {
+    if (repoList.state.status !== 'loaded') {
+      return
     }
-    const response = await client.sendRequest('repo.list')
-    if (!isSuccess(response)) {
-      throw new Error(response.error.message)
-    }
-    const result = response.result as { repos: RepoSummary[] }
-    reposRef.current = result.repos
-    setRepos(result.repos)
     if (!repoSelectionHydratedRef.current) {
       repoSelectionHydratedRef.current = true
-      setSelectedRepoIds(reconcileRepoSelection(result.repos, defaultRepoSelectionRef.current))
-    } else {
-      setSelectedRepoIds((current) => {
-        if (current.size === 0) {
-          return current
-        }
-        const availableIds = new Set(result.repos.filter(isHostedTaskRepo).map((repo) => repo.id))
-        const next = new Set([...current].filter((id) => availableIds.has(id)))
-        return next.size === current.size ? current : next
-      })
+      setSelectedRepoIds(reconcileRepoSelection(repos, defaultRepoSelectionRef.current))
+      return
     }
-    return result.repos
-  }, [client, connState])
+    setSelectedRepoIds((current) => {
+      if (current.size === 0) {
+        return current
+      }
+      const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
+      const next = new Set([...current].filter((id) => availableIds.has(id)))
+      return next.size === current.size ? current : next
+    })
+  }, [repoList.state.status, repos])
 
   const loadLinearContext = useCallback(async (): Promise<void> => {
     if (!client || connState !== 'connected' || !tasksSupported) {
@@ -3249,22 +3271,24 @@ export default function MobileTasksScreen() {
       }
       try {
         if (provider !== 'github' || githubMode !== 'items') {
-          setGithubPages([])
-          setGithubCurrentPage(0)
-          setGithubTotalCount(null)
-          setGithubSourceErrors([])
-          setGithubSourceFallbacks([])
-        }
-        if (provider === 'github' && githubMode === 'project') {
-          setItems([])
-          return
+          resetGitHubItemsState()
         }
         if (provider === 'linear' && !linearConnected) {
           setItems([])
           return
         }
-        const currentRepos = reposRef.current.length > 0 ? reposRef.current : await loadRepos()
+        // Why: Linear issues do not need the repo list, only the composer does, so
+        // start the fetch either way but never make Linear wait on it.
+        const repoListRequest = repoListEnsureLoaded()
+        void repoListRequest.catch(() => {})
+        const currentRepos = provider === 'linear' ? [] : await repoListRequest
         if (!isCurrent()) {
+          return
+        }
+        // Why: project mode fetches no work items, but its rows are matched against
+        // the repo list, so it must not return before loadRepos() has run.
+        if (provider === 'github' && githubMode === 'project') {
+          setItems([])
           return
         }
         if (provider === 'github' || provider === 'gitlab') {
@@ -3278,11 +3302,7 @@ export default function MobileTasksScreen() {
               return
             }
             setItems([])
-            setGithubPages([])
-            setGithubCurrentPage(0)
-            setGithubTotalCount(null)
-            setGithubSourceErrors([])
-            setGithubSourceFallbacks([])
+            resetGitHubItemsState()
             return
           }
           if (provider === 'github') {
@@ -3318,11 +3338,6 @@ export default function MobileTasksScreen() {
             return
           }
           if (provider === 'gitlab' && gitlabView === 'todos') {
-            setGithubPages([])
-            setGithubCurrentPage(0)
-            setGithubTotalCount(null)
-            setGithubSourceErrors([])
-            setGithubSourceFallbacks([])
             const response = await requestClient.sendRequest('gitlab.todos', {
               repo: `id:${queriedRepos[0]!.id}`
             })
@@ -3339,11 +3354,6 @@ export default function MobileTasksScreen() {
             )
             return
           }
-          setGithubPages([])
-          setGithubCurrentPage(0)
-          setGithubTotalCount(null)
-          setGithubSourceErrors([])
-          setGithubSourceFallbacks([])
           const results = await mapWithConcurrency(
             queriedRepos,
             GITHUB_REPO_CONCURRENCY,
@@ -3427,8 +3437,7 @@ export default function MobileTasksScreen() {
           return
         }
         setItems([])
-        setGithubSourceErrors([])
-        setGithubSourceFallbacks([])
+        resetGitHubItemsState()
         setError(err instanceof Error ? err.message : 'Failed to load tasks')
       } finally {
         if (isCurrent()) {
@@ -3449,7 +3458,9 @@ export default function MobileTasksScreen() {
       linearConnected,
       linearFilter,
       linearOrderBy,
-      loadRepos,
+      // resetGitHubItemsState is useCallback([]), so its identity never changes
+      // and listing it here would only cost a line against the max-lines budget.
+      repoListEnsureLoaded,
       provider,
       selectedLinearTeamIds,
       selectedLinearWorkspaceId,
@@ -3887,6 +3898,19 @@ export default function MobileTasksScreen() {
     taskStateHydrated,
     tasksSupported
   ])
+
+  // Why: a refresh must re-read the host, not replay the cached list, or a repo
+  // added since this screen mounted can never appear.
+  const refreshTasks = useCallback(() => {
+    void repoListReload().catch(() => {})
+    void loadTasks({ silent: true })
+  }, [loadTasks, repoListReload])
+
+  const refreshGitHubProject = useCallback(() => {
+    setGithubRepoSlugCache(dropFailedGitHubRepoSlugEntries)
+    refreshTasks()
+    void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
+  }, [appliedGithubProjectSearch, loadGitHubProjectTable, refreshTasks])
 
   useEffect(() => {
     if (!taskStateHydrated) {
@@ -8118,22 +8142,15 @@ export default function MobileTasksScreen() {
         if (!isSuccess(response)) {
           throw new Error(response.error.message)
         }
-        setRepos((current) =>
-          current.map((candidate) =>
-            candidate.id === repo.id
-              ? { ...candidate, issueSourcePreference: preference }
-              : candidate
-          )
-        )
-        reposRef.current = reposRef.current.map((candidate) =>
-          candidate.id === repo.id ? { ...candidate, issueSourcePreference: preference } : candidate
-        )
+        // Why: the host owns issueSourcePreference, so re-read the list instead of
+        // patching the cached copy and hoping the two stay in step.
+        await repoListReload().catch(() => {})
         await loadTasks({ silent: true })
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to update issue source')
       }
     },
-    [client, loadTasks, taskUiReady]
+    [client, loadTasks, repoListReload, taskUiReady]
   )
 
   const renderCommentComposer = (args: {
@@ -8689,10 +8706,10 @@ export default function MobileTasksScreen() {
                 return
               }
               if (provider === 'github' && githubMode === 'project') {
-                void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
+                refreshGitHubProject()
                 return
               }
-              void loadTasks({ silent: true })
+              refreshTasks()
             }}
           >
             <RefreshCw size={16} color={taskUiReady ? colors.textSecondary : colors.textMuted} />
@@ -9276,9 +9293,7 @@ export default function MobileTasksScreen() {
             ItemSeparatorComponent={() => <View style={styles.separator} />}
             contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
             refreshing={githubProjectLoading}
-            onRefresh={() =>
-              void loadGitHubProjectTable({ queryOverride: appliedGithubProjectSearch })
-            }
+            onRefresh={refreshGitHubProject}
             renderItem={({ item: entry }) => {
               if (entry.type === 'group') {
                 return (
@@ -9483,7 +9498,7 @@ export default function MobileTasksScreen() {
             }
             contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
             refreshing={refreshing}
-            onRefresh={() => void loadTasks({ silent: true })}
+            onRefresh={refreshTasks}
             renderItem={({ item: entry }) => {
               if (entry.type === 'section') {
                 return (
@@ -9582,7 +9597,7 @@ export default function MobileTasksScreen() {
           }
           contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
           refreshing={refreshing}
-          onRefresh={() => void loadTasks({ silent: true })}
+          onRefresh={refreshTasks}
           ListFooterComponent={
             provider === 'github' && githubMode === 'items' && githubCanShowPagination ? (
               <View style={styles.paginationFooter}>

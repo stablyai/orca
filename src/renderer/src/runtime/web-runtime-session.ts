@@ -504,6 +504,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   profileId?: string | null
   targetGroupId?: string
   selectWorktree?: boolean
+  stagedTitle?: string
+  stagedFocusAddressBar?: boolean
+  failureLogMode?: 'details' | 'operation-only'
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -547,6 +550,8 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       remotePageId: created.browserPageId,
       url: args.url,
       targetGroupId: args.targetGroupId,
+      title: args.stagedTitle,
+      focusAddressBar: args.stagedFocusAddressBar,
       restoreFocus:
         shouldSelectWorktree &&
         (stagedFromWorktreeId === args.worktreeId ||
@@ -557,10 +562,14 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     })
     return true
   } catch (error) {
-    console.warn(
-      '[web-runtime-session] failed to create browser tab:',
-      error instanceof Error ? error.message : String(error)
-    )
+    if (args.failureLogMode === 'operation-only') {
+      console.warn('[web-runtime-session] failed to create browser tab')
+    } else {
+      console.warn(
+        '[web-runtime-session] failed to create browser tab:',
+        error instanceof Error ? error.message : String(error)
+      )
+    }
     return false
   }
 }
@@ -571,6 +580,8 @@ function stageWebRuntimeBrowserTab(args: {
   remotePageId: string
   url?: string
   targetGroupId?: string
+  title?: string
+  focusAddressBar?: boolean
   restoreFocus?: boolean
 }): void {
   const remotePageId = args.remotePageId.trim()
@@ -599,8 +610,8 @@ function stageWebRuntimeBrowserTab(args: {
   const url = args.url?.trim() || 'about:blank'
   // Why: the snapshot can arrive after React renders a fallback; stage the handle now so the worktree stays selected.
   const browserTab = useAppStore.getState().createBrowserTab(args.worktreeId, url, {
-    title: url === 'about:blank' ? 'New Browser Tab' : url,
-    focusAddressBar: true,
+    title: args.title ?? (url === 'about:blank' ? 'New Browser Tab' : url),
+    focusAddressBar: args.focusAddressBar ?? true,
     browserRuntimeEnvironmentId: args.environmentId,
     targetGroupId: args.targetGroupId
   })

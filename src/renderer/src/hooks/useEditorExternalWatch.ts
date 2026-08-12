@@ -3,7 +3,11 @@ import { useEffect, useRef } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { basename, joinPath } from '@/lib/path'
 import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  areLocalWindowsWslPathAliases,
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../../shared/cross-platform-path'
 import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
@@ -34,6 +38,9 @@ import { markFileChangedOnDisk } from '@/components/editor/editor-changed-on-dis
 import { getDiskBaselineSignature } from '@/components/editor/diff-content-signature'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { parseExecutionHostId } from '../../../shared/execution-host'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 
 // Why: atomic writes burst same-path events; one reload dispatch each fans out into N EditorPanel rebuilds that can wedge the renderer (issue #826), so debounce per (worktreeId+path).
 const EXTERNAL_RELOAD_DEBOUNCE_MS = 75
@@ -71,6 +78,7 @@ type WatchedTarget = {
   worktreePath: string
   connectionId: string | undefined
   runtimeEnvironmentId: string | null
+  allowLocalWindowsWslAliases?: true
 }
 
 type ExternalWatchNotification = {
@@ -78,6 +86,70 @@ type ExternalWatchNotification = {
   worktreePath: string
   relativePath: string
   runtimeEnvironmentId: string | null
+  allowLocalWindowsWslAliases?: true
+}
+
+function localWslAliasOption(
+  target: Pick<WatchedTarget, 'allowLocalWindowsWslAliases'>
+): Pick<ExternalWatchNotification, 'allowLocalWindowsWslAliases'> {
+  return isLocalWindowsDesktopClient() && target.allowLocalWindowsWslAliases === true
+    ? { allowLocalWindowsWslAliases: true }
+    : {}
+}
+
+function findMatchingWatchedPath(
+  watchedPaths: ReadonlyMap<string, string>,
+  filePath: string,
+  allowLocalWslAliases?: true
+): string | undefined {
+  const directMatch = watchedPaths.get(normalizeRuntimePathForComparison(filePath))
+  if (directMatch !== undefined) {
+    return directMatch
+  }
+  if (allowLocalWslAliases !== true || !isLocalWindowsDesktopClient()) {
+    return undefined
+  }
+  for (const watchedPath of watchedPaths.values()) {
+    if (areLocalWindowsWslPathAliases(filePath, watchedPath)) {
+      return watchedPath
+    }
+  }
+  return undefined
+}
+
+function isLocalHostStamp(value: string | null | undefined): boolean {
+  return parseExecutionHostId(value)?.kind === 'local'
+}
+
+function canWatchLocalWindowsWslAliases(args: {
+  worktreePath: string
+  runtimeEnvironmentId: string | null
+  connectionId: string | null | undefined
+  worktree: AppState['worktreesByRepo'][string][number] | undefined
+  repo: AppState['repos'][number] | undefined
+  folderWorkspace: AppState['folderWorkspaces'][number] | undefined
+  projectGroup: AppState['projectGroups'][number] | undefined
+}): boolean {
+  if (
+    args.runtimeEnvironmentId !== null ||
+    args.connectionId !== null ||
+    !isWindowsAbsolutePathLike(args.worktreePath)
+  ) {
+    return false
+  }
+  if (args.worktree) {
+    return (
+      !!args.repo &&
+      !args.worktree.runtimeOwnerEnvironmentId?.trim() &&
+      isLocalHostStamp(args.worktree.hostId) &&
+      isLocalHostStamp(args.repo.executionHostId)
+    )
+  }
+  return (
+    !!args.folderWorkspace &&
+    isLocalHostStamp(args.folderWorkspace.executionHostId) &&
+    isLocalHostStamp(args.projectGroup?.executionHostId)
+  )
 }
 
 type WatchedTargetsSnapshot = {
@@ -117,7 +189,7 @@ let cachedWatchedTargetsSnapshot: WatchedTargetsSnapshot = { targets: [], target
 
 export function getWatchedTargetKey(target: WatchedTarget): string {
   // Why: include connectionId so a local placeholder watch is replaced by the real SSH watch once an SSH worktree's provider metadata hydrates.
-  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}`
+  return `${target.worktreeId}::${target.worktreePath}::${target.connectionId ?? 'local'}::${target.runtimeEnvironmentId ?? 'client'}::${target.allowLocalWindowsWslAliases === true ? 'wsl-aliases' : 'literal'}`
 }
 
 function openFileRuntimeOwner(file: Pick<OpenFile, 'runtimeEnvironmentId'>): string | null {
@@ -160,8 +232,13 @@ export function getEditorExternalWatchTargets(
   const activeWorktree = activeWorktreeId
     ? findWorktreeById(state.worktreesByRepo, activeWorktreeId)
     : undefined
+  const activeWorktreeHost = parseExecutionHostId(activeWorktree?.hostId)
   const activeRepo = activeWorktree
-    ? state.repos.find((repo) => repo.id === activeWorktree.repoId)
+    ? activeWorktreeHost?.kind === 'local'
+      ? (findRepoForHost(state.repos, activeWorktree.repoId, {
+          hostId: activeWorktreeHost.id
+        }) ?? undefined)
+      : state.repos.find((repo) => repo.id === activeWorktree.repoId)
     : undefined
   const sourceControlCanConsumeWatch =
     !!activeWorktreeId &&
@@ -201,10 +278,25 @@ export function getEditorExternalWatchTargets(
     if (!wt && !folderWorkspace) {
       continue
     }
-    const repo = wt ? state.repos.find((r) => r.id === wt.repoId) : undefined
+    const worktreeHost = parseExecutionHostId(wt?.hostId)
+    const repo = wt
+      ? worktreeHost?.kind === 'local'
+        ? (findRepoForHost(state.repos, wt.repoId, { hostId: worktreeHost.id }) ?? undefined)
+        : state.repos.find((r) => r.id === wt.repoId)
+      : undefined
+    const folderHostId = parseExecutionHostId(folderWorkspace?.executionHostId)?.id
+    const projectGroup = folderWorkspace
+      ? state.projectGroups.find(
+          (group) =>
+            group.id === folderWorkspace.projectGroupId &&
+            parseExecutionHostId(group.executionHostId)?.id === folderHostId
+        )
+      : undefined
     const connectionId = folderWorkspace
       ? getFolderWorkspaceConnectionId(state, folderWorkspace.id)
-      : repo?.connectionId
+      : repo
+        ? (repo.connectionId ?? null)
+        : undefined
     if (connectionId === undefined && folderWorkspace) {
       continue
     }
@@ -216,7 +308,18 @@ export function getEditorExternalWatchTargets(
         worktreeId: id,
         worktreePath: wt?.path ?? folderWorkspace!.folderPath,
         connectionId: connectionId ?? undefined,
-        runtimeEnvironmentId: owner
+        runtimeEnvironmentId: owner,
+        ...(canWatchLocalWindowsWslAliases({
+          worktreePath: wt?.path ?? folderWorkspace!.folderPath,
+          runtimeEnvironmentId: owner,
+          connectionId,
+          worktree: wt,
+          repo,
+          folderWorkspace,
+          projectGroup
+        })
+          ? { allowLocalWindowsWslAliases: true as const }
+          : {})
       }
       nextTargets.push(target)
       parts.push(getWatchedTargetKey(target))
@@ -423,16 +526,19 @@ export function createExternalWatchEventHandler(
     }
 
     // Why: collect create/update paths first to cancel any pending same-path delete — this absorbs the macOS atomic-write delete→create split across two payloads.
-    const createOrUpdatePaths = new Set<string>()
+    const createOrUpdatePaths = new Map<string, string>()
     for (const evt of payload.events) {
       if (evt.isDirectory === true) {
         continue
       }
       if (evt.kind === 'create' || evt.kind === 'update') {
-        createOrUpdatePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
+        createOrUpdatePaths.set(
+          normalizeRuntimePathForComparison(evt.absolutePath),
+          evt.absolutePath
+        )
       }
     }
-    for (const createdPath of createOrUpdatePaths) {
+    for (const createdPath of createOrUpdatePaths.keys()) {
       const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, createdPath)
       const existing = pendingDeletes.get(key)
       if (existing) {
@@ -448,7 +554,8 @@ export function createExternalWatchEventHandler(
       payload,
       target.worktreeId,
       target.runtimeEnvironmentId,
-      openFilesAtStart
+      openFilesAtStart,
+      target.allowLocalWindowsWslAliases
     )
     // Only pay the per-id lookup to suppress a move's own source-delete while a move is live; else the batch stays O(deletes).
     const deletedOpenEditorIds = hasActiveEditorPathMoves()
@@ -478,7 +585,8 @@ export function createExternalWatchEventHandler(
           target.worktreeId,
           target.runtimeEnvironmentId,
           deletedOpenEditorIds,
-          openFilesAtStart
+          openFilesAtStart,
+          target.allowLocalWindowsWslAliases
         )
         for (const fileId of deletedOpenEditorIds) {
           const absolutePath = deletePathByFileId.get(fileId)
@@ -514,7 +622,11 @@ export function createExternalWatchEventHandler(
           openFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
-          createOrUpdatePaths.has(normalizeRuntimePathForComparison(file.filePath))
+          findMatchingWatchedPath(
+            createOrUpdatePaths,
+            file.filePath,
+            target.allowLocalWindowsWslAliases
+          ) !== undefined
         ) {
           state.setExternalMutation(file.id, null)
         }
@@ -569,7 +681,8 @@ export function createExternalWatchEventHandler(
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
         relativePath,
-        runtimeEnvironmentId: target.runtimeEnvironmentId
+        runtimeEnvironmentId: target.runtimeEnvironmentId,
+        ...localWslAliasOption(target)
       }
       const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
       const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
@@ -885,7 +998,9 @@ function hasCleanExternalReloadTarget(notification: ExternalWatchNotification): 
 
 export function getOverflowExternalReloadTargets(
   target: Pick<WatchedTarget, 'worktreeId' | 'worktreePath'> & {
+    connectionId?: string
     runtimeEnvironmentId?: string | null
+    allowLocalWindowsWslAliases?: true
   }
 ): ExternalWatchNotification[] {
   const state = useAppStore.getState()
@@ -908,7 +1023,10 @@ export function getOverflowExternalReloadTargets(
       worktreeId: target.worktreeId,
       worktreePath: target.worktreePath,
       relativePath: file.relativePath,
-      runtimeEnvironmentId: target.runtimeEnvironmentId ?? null
+      runtimeEnvironmentId: target.runtimeEnvironmentId ?? null,
+      ...localWslAliasOption({
+        allowLocalWindowsWslAliases: target.allowLocalWindowsWslAliases
+      })
     })
   }
 
@@ -920,12 +1038,13 @@ function buildDeletePathByFileId(
   worktreeId: string,
   runtimeEnvironmentId: string | null,
   deletedOpenEditorIds: string[],
-  openFiles: OpenFile[]
+  openFiles: OpenFile[],
+  allowLocalWindowsWslAliases?: true
 ): Map<string, string> {
-  const deletePaths = new Set<string>()
+  const deletePaths = new Map<string, string>()
   for (const evt of payload.events) {
     if (evt.kind === 'delete') {
-      deletePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
+      deletePaths.set(normalizeRuntimePathForComparison(evt.absolutePath), evt.absolutePath)
     }
   }
   const result = new Map<string, string>()
@@ -941,9 +1060,13 @@ function buildDeletePathByFileId(
     ) {
       continue
     }
-    const normalized = normalizeRuntimePathForComparison(file.filePath)
-    if (deletePaths.has(normalized)) {
-      result.set(file.id, normalized)
+    const deletePath = findMatchingWatchedPath(
+      deletePaths,
+      file.filePath,
+      allowLocalWindowsWslAliases
+    )
+    if (deletePath) {
+      result.set(file.id, normalizeRuntimePathForComparison(deletePath))
     }
   }
   return result
@@ -953,12 +1076,13 @@ function collectDeletedOpenEditorIds(
   payload: FsChangedPayload,
   worktreeId: string,
   runtimeEnvironmentId: string | null,
-  openFiles: OpenFile[]
+  openFiles: OpenFile[],
+  allowLocalWindowsWslAliases?: true
 ): string[] {
-  const deletePaths = new Set<string>()
+  const deletePaths = new Map<string, string>()
   for (const evt of payload.events) {
     if (evt.kind === 'delete') {
-      deletePaths.add(normalizeRuntimePathForComparison(evt.absolutePath))
+      deletePaths.set(normalizeRuntimePathForComparison(evt.absolutePath), evt.absolutePath)
     }
   }
   if (deletePaths.size === 0) {
@@ -973,7 +1097,9 @@ function collectDeletedOpenEditorIds(
     ) {
       continue
     }
-    if (deletePaths.has(normalizeRuntimePathForComparison(file.filePath))) {
+    if (
+      findMatchingWatchedPath(deletePaths, file.filePath, allowLocalWindowsWslAliases) !== undefined
+    ) {
       result.push(file.id)
     }
   }

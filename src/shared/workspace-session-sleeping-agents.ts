@@ -5,15 +5,12 @@ import {
   RESUMABLE_TUI_AGENTS
 } from './agent-session-resume'
 import { isValidTerminalTabId } from './terminal-tab-id'
-import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
+import { salvagingRecord } from './zod-salvage'
 
 const terminalTabIdSchema = z
   .string()
   .min(1)
   .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
-const executionHostIdSchema = z.custom<ExecutionHostId>(
-  (value) => typeof value === 'string' && parseExecutionHostId(value)?.id === value
-)
 
 const agentProviderSessionSchema = z.preprocess(
   (raw) => normalizeAgentProviderSession(raw) ?? undefined,
@@ -90,7 +87,6 @@ const sleepingAgentSessionRecordSchema = z
     paneKey: z.string().refine((value) => value.length > 0),
     tabId: terminalTabIdSchema.optional(),
     worktreeId: z.string().min(1),
-    executionHostId: executionHostIdSchema.optional(),
     agent: z.enum(RESUMABLE_TUI_AGENTS),
     providerSession: agentProviderSessionSchema,
     prompt: z.string(),
@@ -113,21 +109,8 @@ const sleepingAgentSessionRecordSchema = z
     { message: 'provider session is not resumable for this agent', path: ['providerSession'] }
   )
 
-export const sleepingAgentSessionsByPaneKeySchema = z.preprocess((raw) => {
-  if (raw == null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return undefined
-  }
-  const cleaned: Record<string, z.infer<typeof sleepingAgentSessionRecordSchema>> = Object.create(
-    null
-  )
-  for (const [paneKey, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (isUnsafeObjectKey(paneKey)) {
-      continue
-    }
-    const parsed = sleepingAgentSessionRecordSchema.safeParse(value)
-    if (parsed.success && parsed.data.paneKey === paneKey) {
-      cleaned[paneKey] = parsed.data
-    }
-  }
-  return Object.keys(cleaned).length > 0 ? { ...cleaned } : undefined
-}, z.record(z.string(), sleepingAgentSessionRecordSchema).optional())
+export const sleepingAgentSessionsByPaneKeySchema = salvagingRecord(
+  z.string().refine((paneKey) => !isUnsafeObjectKey(paneKey)),
+  sleepingAgentSessionRecordSchema,
+  (paneKey, record) => record.paneKey === paneKey
+).transform((records) => (Object.keys(records).length > 0 ? records : undefined))

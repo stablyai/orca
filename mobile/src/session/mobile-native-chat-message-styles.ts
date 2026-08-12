@@ -49,15 +49,6 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
-  queued: {
-    opacity: 0.55
-  },
-  queuedTag: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 2
-  },
   toolRun: {
     marginTop: spacing.xs
   },

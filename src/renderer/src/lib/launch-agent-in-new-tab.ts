@@ -12,10 +12,7 @@ import {
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import {
-  getExecutionHostIdForWorktree,
-  getRuntimeEnvironmentIdForWorktree
-} from '@/lib/worktree-runtime-owner'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
@@ -30,10 +27,8 @@ import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-
 import type { TuiAgent } from '../../../shared/types'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
-import { resolveNativeChatSessionOptionDefaults } from '../../../shared/native-chat-session-option-defaults'
+import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -89,23 +84,8 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     onPromptDelivered
   } = args
   const store = useAppStore.getState()
-  const executionHostId = getExecutionHostIdForWorktree(store, worktreeId)
-  const worktree =
-    store.getKnownWorktreeById?.(worktreeId, executionHostId) ??
-    store
-      .allWorktrees?.()
-      .find(
-        (entry) => entry.id === worktreeId && (!entry.hostId || entry.hostId === executionHostId)
-      )
-  const repoCandidates = worktree
-    ? store.repos?.filter((candidate) => candidate.id === worktree.repoId)
-    : []
-  const repo =
-    repoCandidates?.find((candidate) => getRepoExecutionHostId(candidate) === executionHostId) ??
-    (!worktree?.hostId && repoCandidates?.length === 1 ? repoCandidates[0] : null)
-  if (worktree && !repo && parseWorkspaceKey(worktreeId)?.type !== 'folder') {
-    return null
-  }
+  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
+  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
   const resolvedLaunchPlatform =
     launchPlatform ??
     (repo
@@ -150,13 +130,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     isRemote,
     agentArgs: effectiveAgentArgs,
     agentEnv,
-    sessionOptions:
-      initialViewModeProps.viewMode === 'chat'
-        ? resolveNativeChatSessionOptionDefaults(store.settings?.nativeChatSessionOptions, agent)
-        : undefined,
-    repoId: repo?.id ?? null,
-    connectionId: repo?.connectionId ?? null,
-    executionHostId
+    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
   }
   const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
     base: startupPlanBase,

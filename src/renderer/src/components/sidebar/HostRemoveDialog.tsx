@@ -11,6 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { SwitchIndicator } from '@/components/ui/switch'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { getAllWorktreesFromState } from '@/store/selectors'
@@ -241,20 +242,7 @@ export function HostRemoveDialog({
                     onClick={() => setDeleteWorkspaces((v) => !v)}
                     className="group mt-0.5 flex shrink-0 cursor-pointer items-center rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                   >
-                    <span
-                      aria-hidden
-                      className={cn(
-                        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent transition-colors',
-                        deleteWorkspaces ? 'bg-foreground' : 'bg-muted-foreground/30'
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform',
-                          deleteWorkspaces ? 'translate-x-4' : 'translate-x-0.5'
-                        )}
-                      />
-                    </span>
+                    <SwitchIndicator checked={deleteWorkspaces} />
                   </button>
                   <span className="min-w-0 flex-1 text-xs leading-snug">
                     <span className="font-medium text-foreground">{deleteOptionLabel}</span>

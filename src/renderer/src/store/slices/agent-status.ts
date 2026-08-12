@@ -26,6 +26,7 @@ import {
   shouldSuppressInheritedTerminalStatus
 } from '../../../../shared/agent-status-identity'
 import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-code-turn-boundary'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
@@ -2081,13 +2082,18 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           !!existing &&
           existing.state === payload.state &&
           entry.stateStartedAt !== existing.stateStartedAt
+        const sameStateDoneAttentionChanged =
+          existing?.state === 'done' &&
+          entry.state === 'done' &&
+          agentEntryCompletionAt(existing) !== agentEntryCompletionAt(entry)
         const sortRelevantChange =
           !existing ||
           existing.state !== payload.state ||
           !wasFresh ||
           attributionChanged ||
           commandCodeNewTurn ||
-          sameStateStateStartedAtChanged
+          sameStateStateStartedAtChanged ||
+          sameStateDoneAttentionChanged
         const doneRetentionFieldsChanged =
           existing?.state === 'done' &&
           entry.state === 'done' &&

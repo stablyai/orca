@@ -1774,6 +1774,14 @@ export function createRemoteRuntimePtyTransport(
               suppressAttentionEvents: true,
               ...(meta?.pendingEscapeTailAnsi
                 ? { pendingEscapeTailAnsi: meta.pendingEscapeTailAnsi }
+                : {}),
+              // Why both or neither: the host's flags describe this image's own
+              // boundary, so an unsequenced snapshot proves nothing.
+              ...(meta?.kittyKeyboardFlags !== undefined && meta.seq !== undefined
+                ? {
+                    kittyKeyboardFlags: meta.kittyKeyboardFlags,
+                    snapshotSeq: meta.seq
+                  }
                 : {})
             })
           }

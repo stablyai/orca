@@ -17,8 +17,7 @@ const {
 vi.mock('./browser-session-registry', () => ({
   browserSessionRegistry: {
     setPendingCookieImport: setPendingCookieImportMock,
-    clearPendingCookieImport: clearPendingCookieImportMock,
-    persistUserAgent: vi.fn()
+    clearPendingCookieImport: clearPendingCookieImportMock
   }
 }))
 vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
@@ -60,10 +59,11 @@ describe('validated cookie replacement', () => {
     return filePath
   }
 
-  it('filters Google source-bound cookies before replacing imported domain scopes', async () => {
+  it('keeps Google out of the replace scope so its cookies are never removed', async () => {
     cookiesGetMock.mockResolvedValue([
       cookie('.google.com', 'old-google'),
       cookie('.accounts.google.com', 'old-accounts', '/signin'),
+      cookie('.example.com', 'old-example'),
       cookie('.unrelated.com', 'keep'),
       cookie('.google.com.evil.example', 'keep-suffix-confusion')
     ])
@@ -77,15 +77,12 @@ describe('validated cookie replacement', () => {
 
     expect(result.ok && result.summary).toMatchObject({
       totalCookies: 3,
-      importedCookies: 2,
-      skippedCookies: 1,
-      domains: ['example.com', 'google.com']
+      importedCookies: 1,
+      skippedCookies: 2,
+      domains: ['example.com']
     })
-    expect(cookiesRemoveMock.mock.calls).toEqual([
-      ['https://google.com/', 'old-google'],
-      ['https://accounts.google.com/signin', 'old-accounts']
-    ])
-    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SAPISID', 'SIDCC'])
+    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'old-example']])
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SIDCC'])
     expect(Math.max(...cookiesRemoveMock.mock.invocationCallOrder)).toBeLessThan(
       Math.min(...cookiesSetMock.mock.invocationCallOrder)
     )
@@ -186,6 +183,7 @@ describe('native Chromium integrity-cookie accounting', () => {
     sessionFromPartitionMock.mockReset().mockReturnValue({
       cookies: {
         flushStore: vi.fn().mockResolvedValue(undefined),
+        get: vi.fn().mockResolvedValue([]),
         remove: vi.fn().mockResolvedValue(undefined),
         set: cookiesSetMock
       },
@@ -197,7 +195,7 @@ describe('native Chromium integrity-cookie accounting', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('includes domain-scoped integrity cookies in skippedCookies', async () => {
+  it('counts every excluded Google cookie in skippedCookies', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
     createChromiumCookieTestDatabase(sourceCookiesPath, [
@@ -215,11 +213,11 @@ describe('native Chromium integrity-cookie accounting', () => {
       )
       expect(result.ok && result.summary).toMatchObject({
         totalCookies: 3,
-        importedCookies: 2,
-        skippedCookies: 1,
-        domains: ['example.com', 'google.com']
+        importedCookies: 1,
+        skippedCookies: 2,
+        domains: ['example.com']
       })
-      expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SAPISID', 'AEC'])
+      expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['AEC'])
     } finally {
       platformSpy.mockRestore()
     }

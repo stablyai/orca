@@ -1,134 +1,16 @@
 // @vitest-environment happy-dom
 
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  DashboardCard,
-  DashboardSleepWorkspaceArgs,
-  DashboardSpawnAgentArgs
-} from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { AgentMap } from './AgentMap'
 import { agentMapAttentionMarkerScale } from './AgentMapWorktreeRingNode'
 import type { AgentMapState } from './agent-map-filter'
 import { AGENT_MAP_AGENT_RADIUS } from './agent-map-layout'
-
-const NOW = 2_000_000_000
-
-function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
-  return {
-    paneKey: 'pane-1',
-    ptyId: 'pty-1',
-    agentType: 'codex',
-    bucket: 'working',
-    dotState: 'working',
-    task: 'Build map',
-    repoId: 'repo-1',
-    worktreeId: 'worktree-1',
-    tabId: 'tab-1',
-    leafId: 'leaf-1',
-    repoName: 'Orca',
-    worktreeName: 'Agent map',
-    conversationName: 'Agent alpha',
-    startedAt: NOW - 10 * 60_000,
-    finishedAt: null,
-    stateChangedAt: NOW - 1_000,
-    unseen: false,
-    hostKind: 'local',
-    workspaceKind: 'worktree',
-    ...overrides
-  }
-}
-
-function renderMap(
-  cards: DashboardCard[],
-  {
-    onOpenTerminal = vi.fn(),
-    selectedPaneKey = null,
-    compact = false,
-    workspaceContextMenusEnabled = false,
-    enabledStates,
-    launchableAgentsByWorktreeId,
-    onSpawnAgent,
-    onSleepWorkspace
-  }: {
-    onOpenTerminal?: (card: DashboardCard) => void
-    selectedPaneKey?: string | null
-    compact?: boolean
-    workspaceContextMenusEnabled?: boolean
-    enabledStates?: ReadonlySet<AgentMapState>
-    launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
-    onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
-    onSleepWorkspace?: (args: DashboardSleepWorkspaceArgs) => void
-  } = {}
-): ReturnType<typeof render> {
-  return render(
-    <AgentMap
-      cards={cards}
-      now={NOW}
-      onOpenTerminal={onOpenTerminal}
-      selectedPaneKey={selectedPaneKey}
-      compact={compact}
-      workspaceContextMenusEnabled={workspaceContextMenusEnabled}
-      enabledStates={enabledStates}
-      launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
-      onSpawnAgent={onSpawnAgent}
-      onSleepWorkspace={onSleepWorkspace}
-    />
-  )
-}
+import { card, installAgentMapEnvironment, NOW, renderMap } from './agent-map-render-test-harness'
 
 describe('AgentMap', () => {
-  const originalUserAgent = navigator.userAgent
-  let boundsSpy: ReturnType<typeof vi.spyOn>
-
-  beforeEach(() => {
-    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Linux' })
-    vi.stubGlobal(
-      'matchMedia',
-      vi.fn(() => ({ matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
-    )
-    boundsSpy = vi
-      .spyOn(Element.prototype, 'getBoundingClientRect')
-      .mockImplementation(function getBounds(this: Element) {
-        if (this.classList.contains('agent-map-canvas') || this instanceof SVGSVGElement) {
-          return {
-            x: 0,
-            y: 0,
-            left: 0,
-            top: 0,
-            right: 400,
-            bottom: 300,
-            width: 400,
-            height: 300,
-            toJSON: () => ({})
-          }
-        }
-        return {
-          x: 0,
-          y: 0,
-          left: 0,
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: 0,
-          height: 0,
-          toJSON: () => ({})
-        }
-      })
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.clearAllMocks()
-    vi.unstubAllGlobals()
-    boundsSpy.mockRestore()
-    Object.defineProperty(navigator, 'userAgent', {
-      configurable: true,
-      value: originalUserAgent
-    })
-  })
+  const environment = installAgentMapEnvironment()
 
   it('renders the amber marker only for unread agents', () => {
     const finished = card({
@@ -189,9 +71,15 @@ describe('AgentMap', () => {
       name: /Open Finished worktree worktree details/
     })
 
-    expect(workingNode.querySelector('[data-agent-map-agent-working-glow]')).toBeInTheDocument()
-    expect(waitingNode.querySelector('[data-agent-map-agent-working-glow]')).not.toBeInTheDocument()
-    expect(doneNode.querySelector('[data-agent-map-agent-working-glow]')).not.toBeInTheDocument()
+    expect(workingNode.querySelector('[data-agent-map-agent-status-glow]')).toHaveAttribute(
+      'data-agent-active-status',
+      'working'
+    )
+    expect(waitingNode.querySelector('[data-agent-map-agent-status-glow]')).toHaveAttribute(
+      'data-agent-active-status',
+      'waiting'
+    )
+    expect(doneNode.querySelector('[data-agent-map-agent-status-glow]')).not.toBeInTheDocument()
     expect(workingRing).toHaveClass('is-waiting')
     expect(workingRing).not.toHaveClass('is-working')
     expect(doneRing).not.toHaveClass('is-working')
@@ -218,7 +106,7 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap(cards, { selectedPaneKey: 'pane-0' })
 
-    expect(container.querySelectorAll('[data-agent-map-agent-working-glow]')).toHaveLength(60)
+    expect(container.querySelectorAll('[data-agent-map-agent-status-glow]')).toHaveLength(60)
     expect(container.querySelectorAll('[data-agent-map-worktree-status-glow]')).toHaveLength(1)
     expect(container.querySelectorAll('filter')).toHaveLength(0)
   })
@@ -350,18 +238,21 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap([parent, child, nested, orphan])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
-    const subagentLink = container.querySelector('[data-child-pane-key="nested"]')
+    const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
 
     expect(screen.getByRole('button', { name: /Coordinator/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Worker/ })).toBeInTheDocument()
     expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(2)
     expect(workerLink).toHaveClass('agent-map-lineage-link')
-    expect(workerLink).not.toHaveClass('is-subagent')
     expect(workerLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
     expect(workerLink).toHaveAttribute('data-parent-pane-key', 'parent')
-    expect(subagentLink).toHaveClass('agent-map-lineage-link', 'is-subagent')
-    expect(subagentLink).toHaveAttribute('data-agent-map-lineage-relation', 'subagent')
-    expect(subagentLink).toHaveAttribute('data-parent-pane-key', 'child')
+    expect(workerLink?.getAttribute('d')?.match(/\bM\b/g)?.length).toBeGreaterThan(1)
+    // Why orchestration, not subagent: `nested` is a card, and in-process subagents
+    // never become cards — so a grandchild dispatch is still an orchestration edge.
+    expect(nestedLink).toHaveClass('agent-map-lineage-link')
+    expect(nestedLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
+    expect(nestedLink).toHaveAttribute('data-parent-pane-key', 'child')
+    expect(nestedLink?.getAttribute('d')?.match(/\bM\b/g)?.length).toBeGreaterThan(1)
   })
 
   it('connects spawned workers across worktree rings', () => {
@@ -387,13 +278,12 @@ describe('AgentMap', () => {
     })
     const { container } = renderMap([parent, child, nested])
     const workerLink = container.querySelector('[data-child-pane-key="child"]')
-    const subagentLink = container.querySelector('[data-child-pane-key="nested"]')
+    const nestedLink = container.querySelector('[data-child-pane-key="nested"]')
 
     expect(workerLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree')
-    expect(workerLink).not.toHaveClass('is-subagent')
     expect(workerLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
-    expect(subagentLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree', 'is-subagent')
-    expect(subagentLink).toHaveAttribute('data-agent-map-lineage-relation', 'subagent')
+    expect(nestedLink).toHaveClass('agent-map-lineage-link', 'is-cross-worktree')
+    expect(nestedLink).toHaveAttribute('data-agent-map-lineage-relation', 'orchestration')
   })
 
   it('keeps lineage styling to one lightweight path per relationship at fleet scale', () => {
@@ -409,11 +299,69 @@ describe('AgentMap', () => {
     expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(239)
     expect(
       container.querySelectorAll('[data-agent-map-lineage-relation="orchestration"]')
-    ).toHaveLength(1)
+    ).toHaveLength(239)
     expect(container.querySelectorAll('[data-agent-map-lineage-relation="subagent"]')).toHaveLength(
-      238
+      0
     )
     expect(container.querySelectorAll('filter, animate, animateTransform')).toHaveLength(0)
+  })
+
+  it('hides orchestration links when the filter turns them off, keeping the agents', () => {
+    const sameWorktree = [
+      card({ paneKey: 'parent', conversationName: 'Coordinator' }),
+      card({ paneKey: 'child', parentPaneKey: 'parent', conversationName: 'Worker' })
+    ]
+    const crossWorktree = [
+      card({ paneKey: 'far-parent', worktreeId: 'wt-a', worktreeName: 'A' }),
+      card({
+        paneKey: 'far-child',
+        worktreeId: 'wt-b',
+        worktreeName: 'B',
+        parentPaneKey: 'far-parent'
+      })
+    ]
+    const cards = [...sameWorktree, ...crossWorktree]
+
+    const shown = renderMap(cards)
+    expect(shown.container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(2)
+    cleanup()
+
+    const hidden = renderMap(cards, { showOrchestrationLinks: false })
+    // Both same-worktree and cross-worktree edges go; the nodes themselves stay.
+    expect(hidden.container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Coordinator/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Worker/ })).toBeInTheDocument()
+  })
+
+  it('draws no lineage edge for an agent that lists itself as its own parent', () => {
+    const { container } = renderMap([
+      card({ paneKey: 'self', parentPaneKey: 'self', conversationName: 'Self parent' }),
+      card({ paneKey: 'other', conversationName: 'Unrelated' })
+    ])
+
+    expect(container.querySelectorAll('[data-agent-map-lineage-link]')).toHaveLength(0)
+    expect(screen.getByRole('button', { name: /Self parent/ })).toBeInTheDocument()
+  })
+
+  it('connects lineage between visible nodes even when the child is not ranked below its parent', () => {
+    // A 2-cycle cannot be ranked consistently, so the bounded layout (>256 agents)
+    // must place one of its edges pointing upward. Both nodes are drawn, so both
+    // edges must be too — the old y-ordering gate silently dropped the upward one.
+    const cards = [
+      card({ paneKey: 'cycle-a', parentPaneKey: 'cycle-b', conversationName: 'Cycle A' }),
+      card({ paneKey: 'cycle-b', parentPaneKey: 'cycle-a', conversationName: 'Cycle B' }),
+      ...Array.from({ length: 255 }, (_, index) =>
+        card({
+          paneKey: `filler-${index}`,
+          parentPaneKey: index === 0 ? undefined : `filler-${index - 1}`,
+          conversationName: `Filler ${index}`
+        })
+      )
+    ]
+    const { container } = renderMap(cards, { selectedPaneKey: 'cycle-a' })
+
+    expect(container.querySelector('[data-child-pane-key="cycle-a"]')).not.toBeNull()
+    expect(container.querySelector('[data-child-pane-key="cycle-b"]')).not.toBeNull()
   })
 
   it('connects visible child worktrees beneath their parent ring', () => {
@@ -545,13 +493,13 @@ describe('AgentMap', () => {
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
 
-    const readsBeforeZoom = boundsSpy.mock.calls.length
+    const readsBeforeZoom = environment.boundsSpy.mock.calls.length
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }))
 
     const zoomedScale = Number(
       labelGroup?.getAttribute('transform')?.match(/scale\(([^)]+)\)/)?.[1]
     )
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeZoom)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeZoom)
     expect(zoomedScale).toBeGreaterThan(initialScale)
   })
 
@@ -570,18 +518,18 @@ describe('AgentMap', () => {
       releasePointerCapture: vi.fn()
     })
 
-    const readsBeforeHover = boundsSpy.mock.calls.length
+    const readsBeforeHover = environment.boundsSpy.mock.calls.length
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 20, clientY: 20 })
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeHover)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeHover)
 
     fireEvent.pointerDown(svg, { pointerId: 1, clientX: 20, clientY: 20 })
     expect(svg.setPointerCapture).toHaveBeenCalledWith(1)
-    const readsAfterPointerDown = boundsSpy.mock.calls.length
+    const readsAfterPointerDown = environment.boundsSpy.mock.calls.length
     const initialViewBox = svg.getAttribute('viewBox')
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 30, clientY: 20 })
     fireEvent.pointerMove(svg, { pointerId: 1, clientX: 40, clientY: 20 })
 
-    expect(boundsSpy).toHaveBeenCalledTimes(readsAfterPointerDown)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsAfterPointerDown)
     expect(requestFrame).toHaveBeenCalledOnce()
     expect(svg).toHaveAttribute('viewBox', initialViewBox)
 
@@ -589,7 +537,7 @@ describe('AgentMap', () => {
     expect(svg.getAttribute('viewBox')).not.toBe(initialViewBox)
 
     requestFrame.mockClear()
-    const readsBeforeWheel = boundsSpy.mock.calls.length
+    const readsBeforeWheel = environment.boundsSpy.mock.calls.length
     const wheel = (): void => {
       const event = new Event('wheel', { bubbles: true, cancelable: true })
       Object.defineProperties(event, {
@@ -602,7 +550,7 @@ describe('AgentMap', () => {
     }
     wheel()
     wheel()
-    expect(boundsSpy).toHaveBeenCalledTimes(readsBeforeWheel + 1)
+    expect(environment.boundsSpy).toHaveBeenCalledTimes(readsBeforeWheel + 1)
     expect(requestFrame).toHaveBeenCalledOnce()
   })
 

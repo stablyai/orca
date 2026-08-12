@@ -54,7 +54,6 @@ import { ExperimentalPane } from './ExperimentalPane'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
-import { AgentSessionRulesPane } from './AgentSessionRulesPane'
 import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
@@ -1313,26 +1312,6 @@ function Settings(): React.JSX.Element {
                     {isSectionMounted('linear') ? <LinearAgentSkillPane /> : null}
                   </SettingsSection>
                 ) : null}
-
-                <SettingsSection
-                  id="agentSessionRules"
-                  title={translate(
-                    'auto.components.settings.Settings.agentSessionRulesTitle',
-                    'Agent Session Rules'
-                  )}
-                  description={translate(
-                    'auto.components.settings.Settings.agentSessionRulesDescription',
-                    'Custom rules applied to supported agent launches. Native system instructions are used where available; other agents receive rules with Orca-delivered startup prompts.'
-                  )}
-                  searchEntries={getSectionSearchEntries('agentSessionRules')}
-                >
-                  {isSectionMounted('agentSessionRules') ? (
-                    <AgentSessionRulesPane
-                      settings={settings}
-                      updateSettings={updateSettingsOrThrow}
-                    />
-                  ) : null}
-                </SettingsSection>
 
                 {showDesktopOnlySettings ? (
                   <>

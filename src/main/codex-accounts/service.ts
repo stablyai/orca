@@ -1311,7 +1311,7 @@ export class CodexAccountService {
 
     const managedRootMarker = '/.local/share/orca/codex-accounts/'
     const markerIndex = wslInfo.linuxPath.indexOf(managedRootMarker)
-    if (markerIndex < 0) {
+    if (markerIndex === -1) {
       return null
     }
     const wslHome = wslInfo.linuxPath.slice(0, markerIndex)

@@ -9,7 +9,7 @@ import {
 type MonacoApi = Parameters<OnMount>[1]
 
 let provider: IDisposable | null = null
-let providerMonaco: MonacoApi | null = null
+let providerMonaco: MonacoApi = null
 const documentsByModel = new Map<string, MarkdownDocument[]>()
 
 export function ensureMarkdownDocCompletionProvider(monaco: MonacoApi): void {

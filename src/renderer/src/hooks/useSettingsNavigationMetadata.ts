@@ -25,7 +25,6 @@ import {
   Palette,
   PanelsTopLeft,
   Play,
-  ScrollText,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -63,7 +62,6 @@ import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchest
 import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts-settings-search'
 import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
-import { getAgentSessionRulesPaneSearchEntries } from '@/components/settings/agent-session-rules-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
 import {
   getRuntimeEnvironmentsSearchEntry,
@@ -216,20 +214,6 @@ export function buildSettingsNavigationMetadata({
           }
         ]
       : []),
-    {
-      id: 'agentSessionRules',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesTitle',
-        'Agent Session Rules'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.agentSessionRulesDescription',
-        'Custom rules applied to supported agent launches. Native system instructions are used where available; other agents receive rules with Orca-delivered startup prompts.'
-      ),
-      icon: ScrollText,
-      searchEntries: getAgentSessionRulesPaneSearchEntries(),
-      group: 'capabilities'
-    },
     ...(showDesktopOnlySettings
       ? [
           {

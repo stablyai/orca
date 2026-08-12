@@ -307,6 +307,7 @@ function isDashboardTerminalInput(value: unknown): boolean {
     isOptionalBoundedString(input.osRelease, MAX_LABEL_LENGTH) &&
     typeof input.windowsShiftEnterEncoding === 'string' &&
     WINDOWS_SHIFT_ENTER_ENCODINGS.has(input.windowsShiftEnterEncoding) &&
+    typeof input.ctrlEnterCsiU === 'boolean' &&
     typeof input.kittyKeyboardAdvertised === 'boolean'
   )
 }

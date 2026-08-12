@@ -467,7 +467,8 @@ describe('repo RPC methods', () => {
     expect(runtime.listFolderWorkspaces).toHaveBeenCalled()
     expect(runtime.createFolderWorkspace).toHaveBeenCalledWith({
       projectGroupId: group.id,
-      name: 'Refund fix'
+      name: 'Refund fix',
+      creatorProvenance: { kind: 'host' }
     })
     expect(runtime.updateFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       comment: 'x'

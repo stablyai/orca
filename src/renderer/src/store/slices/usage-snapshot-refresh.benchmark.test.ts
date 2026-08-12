@@ -7,7 +7,7 @@ import type {
   CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../../../shared/codex-usage-types'
-import { createCodexUsageSlice } from './codex-usage'
+import { createCodexUsageSlice } from './usage-provider-slices'
 
 type Deferred<T> = {
   promise: Promise<T>

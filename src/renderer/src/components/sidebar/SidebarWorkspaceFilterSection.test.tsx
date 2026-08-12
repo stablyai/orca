@@ -33,6 +33,12 @@ function setState(overrides: Record<string, unknown> = {}): void {
     setHideCliCreatedWorkspaces: vi.fn(),
     hideDetachedHeadWorkspaces: false,
     setHideDetachedHeadWorkspaces: vi.fn(),
+    hideWorkspacesFromOtherDevices: false,
+    setHideWorkspacesFromOtherDevices: vi.fn(),
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    runtimeEnvironments: [],
+    runtimeStatusByEnvironmentId: new Map(),
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: vi.fn(),
     ...overrides
@@ -82,5 +88,48 @@ describe('SidebarWorkspaceFilterSection', () => {
     setState({ showSleepingWorkspaces: true, alwaysShowDefaultBranchWorkspace: false })
     render()
     expect(rowLabels()).not.toContain(EXEMPTION_LABEL)
+  })
+
+  it('shows the other-client filter only when it can hide a known workspace', () => {
+    setState({
+      worktreesByRepo: {
+        repo: [
+          {
+            id: 'other',
+            runtimeOwnerEnvironmentId: 'server',
+            creatorProvenance: { kind: 'paired-device', deviceId: 'other-client' }
+          }
+        ]
+      },
+      runtimeEnvironments: [{ id: 'server', pairedDeviceId: 'this-client' }]
+    })
+    render()
+
+    expect(rowLabels()).toContain('Hide other-client workspaces')
+  })
+
+  it('hides the other-client filter when every known workspace belongs to this client', () => {
+    setState({
+      worktreesByRepo: {
+        repo: [
+          {
+            id: 'own',
+            runtimeOwnerEnvironmentId: 'server',
+            creatorProvenance: { kind: 'paired-device', deviceId: 'this-client' }
+          }
+        ]
+      },
+      runtimeEnvironments: [{ id: 'server', pairedDeviceId: 'this-client' }]
+    })
+    render()
+
+    expect(rowLabels()).not.toContain('Hide other-client workspaces')
+  })
+
+  it('keeps an enabled other-client filter available to turn off', () => {
+    setState({ hideWorkspacesFromOtherDevices: true })
+    render()
+
+    expect(rowLabels()).toContain('Hide other-client workspaces')
   })
 })

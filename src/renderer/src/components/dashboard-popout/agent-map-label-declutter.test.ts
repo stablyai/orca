@@ -90,19 +90,6 @@ describe('selectVisibleAgentMapLabels', () => {
     const labels = selectVisibleAgentMapLabels(layoutOf([covered]), 1, 1)
 
     expect(labels.worktreeIds.size).toBe(0)
-    expect(labels.worktreeAgentSafeIds.size).toBe(0)
-  })
-
-  it('keeps a collision-suppressed workspace title safe to reveal away from agents', () => {
-    const layout = layoutOf([
-      worktree({ id: 'busy', x: 0, y: 0, statusCounts: statusCounts({ working: 3 }) }),
-      worktree({ id: 'calm', name: 'beta', x: 0, y: 0, statusCounts: statusCounts({ done: 1 }) })
-    ])
-
-    const labels = selectVisibleAgentMapLabels(layout, 1, 1)
-
-    expect([...labels.worktreeIds]).toEqual(['busy'])
-    expect([...labels.worktreeAgentSafeIds].sort()).toEqual(['busy', 'calm'])
   })
 
   it('lets a blocked workspace outrank a busier neighbour for the surviving label', () => {

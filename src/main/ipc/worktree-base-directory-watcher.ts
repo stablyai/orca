@@ -9,7 +9,7 @@ import {
 import {
   collectLocalWorktreeBaseChanges,
   collectRemoteWorktreeBaseChanges,
-  type WorktreeBaseCollectedChanges
+  hasCollectedWorktreeBaseChanges
 } from './worktree-base-directory-change-collector'
 import {
   clearPendingWorktreeBaseNotifications,
@@ -33,6 +33,7 @@ import {
   updateActiveGitStatusRefBinding,
   type GitStatusRefBindingRequest
 } from './worktree-git-status-ref-watch'
+import { WorktreeWatcherFailureRefreshCooldown } from './worktree-watcher-failure-refresh-cooldown'
 
 type ActiveWatch = WorktreeBaseWatchTarget & {
   mainWindow: BrowserWindow
@@ -43,6 +44,7 @@ type ActiveWatch = WorktreeBaseWatchTarget & {
   pendingHeadIdentityRepoIds: Set<string>
   headIdentityRefresh: WorktreeHeadIdentityRefreshState
   gitStatusRefPaths: Set<string>
+  watcherFailureRefresh: WorktreeWatcherFailureRefreshCooldown
   disposed: boolean
 }
 
@@ -57,12 +59,6 @@ export function setWorktreeGitStatusRefWatch(
   return updateActiveGitStatusRefBinding(args, () => activeWatches.values(), resolveUpstreamRef)
 }
 
-function hasCollectedChanges(changes: WorktreeBaseCollectedChanges): boolean {
-  return [changes.structureRepoIds, changes.gitStatusRepoIds, changes.headIdentityRepoIds].some(
-    (ids) => ids.length > 0
-  )
-}
-
 function handleLocalWatchEvents(
   watch: ActiveWatch,
   error: Error | null,
@@ -74,16 +70,19 @@ function handleLocalWatchEvents(
   if (error) {
     console.warn(`[worktree-base-watcher] watcher failed for ${watch.path}:`, error)
     invalidateActiveGitStatusRefResolution(watch, () => activeWatches.values())
-    scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
+    if (watch.watcherFailureRefresh.consume()) {
+      scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
+    }
     return
   }
+  watch.watcherFailureRefresh.reset()
   invalidateGitStatusRefResolutionForPaths(
     watch,
     events.map((event) => event.path),
     () => activeWatches.values()
   )
   const changes = collectLocalWorktreeBaseChanges(watch, events)
-  if (hasCollectedChanges(changes)) {
+  if (hasCollectedWorktreeBaseChanges(changes)) {
     scheduleWorktreeBaseNotification(watch, changes)
   }
 }
@@ -108,7 +107,7 @@ function handleRemoteWatchEvents(
     scheduleWorktreeBaseNotification(watch, { structureRepoIds: [...watch.repos.keys()] })
     return
   }
-  if (hasCollectedChanges(changes)) {
+  if (hasCollectedWorktreeBaseChanges(changes)) {
     scheduleWorktreeBaseNotification(watch, changes)
   }
 }
@@ -129,6 +128,7 @@ function createActiveWatch(
     pendingHeadIdentityRepoIds: new Set(),
     headIdentityRefresh: createWorktreeHeadIdentityRefreshState(),
     gitStatusRefPaths,
+    watcherFailureRefresh: new WorktreeWatcherFailureRefreshCooldown(),
     disposed: false
   }
 }

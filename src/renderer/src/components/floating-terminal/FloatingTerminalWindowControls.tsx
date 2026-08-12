@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { buildAgentSessionRulesInputDraft, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
@@ -20,7 +20,6 @@ import {
 } from '../../../../shared/tui-agent-launch-defaults'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
-import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/windows-terminal-shell'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -73,11 +72,6 @@ export function FloatingTerminalWindowControls({
       return
     }
     const state = useAppStore.getState()
-    const shell = resolveLocalWindowsAgentStartupShell({
-      platform: CLIENT_PLATFORM,
-      isRemote: false,
-      terminalWindowsShell: state.settings?.terminalWindowsShell
-    })
     const startupPlan = buildAgentStartupPlan({
       agent: defaultAgent,
       prompt: '',
@@ -85,7 +79,6 @@ export function FloatingTerminalWindowControls({
       agentArgs: resolveTuiAgentLaunchArgs(defaultAgent, state.settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(defaultAgent, state.settings?.agentDefaultEnv),
       platform: CLIENT_PLATFORM,
-      shell,
       allowEmptyPromptLaunch: true
     })
     if (!startupPlan) {
@@ -99,10 +92,8 @@ export function FloatingTerminalWindowControls({
       return
     }
     const tab = createTab(FLOATING_TERMINAL_WORKTREE_ID, undefined, undefined, { activate: false })
-    const draftPrompt = buildAgentSessionRulesInputDraft({ agent: defaultAgent, shell })
     state.queueTabStartupCommand(tab.id, {
       command: startupPlan.launchCommand,
-      ...(draftPrompt ? { draftPrompt } : {}),
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       launchAgent: defaultAgent,

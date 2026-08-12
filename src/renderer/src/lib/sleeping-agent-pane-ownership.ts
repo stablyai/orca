@@ -1,8 +1,5 @@
 import type { useAppStore } from '@/store'
-import {
-  getSleepingAgentSessionExecutionHostId,
-  type SleepingAgentSessionRecord
-} from '../../../shared/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
@@ -14,8 +11,7 @@ import { isWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
 export function getProviderSessionClaimKey(record: SleepingAgentSessionRecord): string {
-  const executionHostId = getSleepingAgentSessionExecutionHostId(record) ?? 'local'
-  const base = `${executionHostId}\0${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
+  const base = `${record.worktreeId}\0${record.agent}\0${record.providerSession.key}\0${record.providerSession.id}`
   return record.agent === 'pi' || record.agent === 'prime-agent'
     ? `${base}\0${record.providerSession.transcriptPath ?? ''}`
     : base
