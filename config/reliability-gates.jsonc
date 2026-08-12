@@ -3108,7 +3108,7 @@
       "providers": ["local", "wsl", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "windows"],
       "coveredProviders": ["local", "wsl"],
-      "coverageNotes": "A deterministic Windows-mode renderer oracle keeps an active WSL project and explicit-local Floating Workspace mounted together with disjoint agent inventories, then independently asserts discovery and launch authority. Physical Windows/WSL evidence is required before promotion; SSH and paired-runtime behavior retain their existing contract coverage.",
+      "coverageNotes": "A deterministic Windows-mode renderer oracle keeps an active WSL project and explicit-local Floating Workspace mounted together with disjoint agent inventories, then independently asserts discovery and launch authority. A headed physical Windows 2 journey with real Ubuntu WSL2 independently verified the rendered inventory and native PowerShell launch; SSH and paired-runtime behavior retain their existing contract coverage.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-4027/p1-floating-workspace-agent-detection-still-uses-active-wsl-project",
         "https://github.com/stablyai/orca/pull/13995"
@@ -3173,8 +3173,8 @@
         "scope": "six focused renderer authority, cache, and launch test files"
       },
       "flakeHistory": {
-        "status": "not-started",
-        "evidence": "The deterministic oracle uses mocked provider results and React effect barriers; CI history is not yet available."
+        "status": "soaking",
+        "evidence": "The deterministic oracle uses mocked provider results and React effect barriers. One exact-head PR run passed the full Node 24/26 matrix; a duplicate run's transient shard failures passed on rerun, but long-term soak history is not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
@@ -3186,7 +3186,7 @@
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
-        "Collect physical Windows evidence with a WSL project and native-host Floating Workspace.",
+        "Keep the physical Windows/WSL inventory and launch journey green when authority routing changes.",
         "Keep disjoint provider inventories, refresh isolation, launch authority, and bounded in-flight state green."
       ],
       "knownGaps": [

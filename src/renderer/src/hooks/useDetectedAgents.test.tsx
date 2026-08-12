@@ -164,7 +164,15 @@ describe('Floating Workspace authority', () => {
     expect(activeResult.current?.detectedIds).toEqual(['claude'])
     expect(floatingResult.current?.detectedIds).toEqual(['codex'])
     expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(detectLocalAgents).toHaveBeenLastCalledWith(undefined)
+    const detectedContexts = detectLocalAgents.mock.calls.map(([context]) => context)
+    expect(detectedContexts).toEqual([
+      expect.objectContaining({
+        projectRuntime: expect.objectContaining({
+          runtime: expect.objectContaining({ kind: 'wsl', distro: 'Ubuntu' })
+        })
+      }),
+      undefined
+    ])
 
     refreshLocalAgents.mockResolvedValueOnce({
       agents: ['codex'],
