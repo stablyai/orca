@@ -105,9 +105,11 @@ fi
 # treat each embedded newline as Enter and mangle the prompt into PS2
 # continuation. Modern readline defaults this on; force it for the rest.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
-# Why: preserve bash's normal login-shell contract. Many users already source
-# ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
-# PATH edits, hooks, and prompt init in Orca startup-command shells.
+# Why: source ~/.bashrc so tools configured there (nvm, fnm, asdf, etc.)
+# are available even when .bash_profile does not source it. Many users already
+# source ~/.bashrc from ~/.bash_profile; sourcing it again is harmless (the
+# dedup guard at the end of .bashrc handles repeated includes in practice).
+[[ -f "$HOME/.bashrc" ]] && source "$HOME/.bashrc"
 __orca_restore_attribution_path() {
   [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
