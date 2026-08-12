@@ -1,3 +1,5 @@
+import { mobileMonoFontFamily } from './mobile-mono-font-family'
+
 // Orca mobile design tokens — matches desktop graphite/dark palette.
 // All screen files should import from here instead of using inline hex values.
 
@@ -69,5 +71,5 @@ export const typography = {
   titleSize: 18,
   bodySize: 14,
   metaSize: 12,
-  monoFamily: 'monospace' as const
+  monoFamily: mobileMonoFontFamily
 } as const
