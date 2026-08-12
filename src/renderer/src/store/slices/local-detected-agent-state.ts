@@ -40,6 +40,13 @@ export const createLocalDetectedAgentState: StateCreator<
       const context = getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
       const contextKey = localPreflightContextKey(context)
       const existing = get().localDetectedAgentIdsByContext[contextKey]
+      const inflightRefresh = refreshPromises.get(contextKey)
+      if (inflightRefresh) {
+        if (!isFloating) {
+          legacyRefreshContextKey = contextKey
+        }
+        return inflightRefresh
+      }
       if (existing != null && !failedDetectContextKeys.has(contextKey)) {
         if (!isFloating) {
           detectedContextKey = contextKey

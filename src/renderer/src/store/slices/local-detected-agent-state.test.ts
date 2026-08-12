@@ -167,4 +167,32 @@ describe('local detected agent context lifecycle', () => {
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual(['codex'])
     expect(detectAgents).toHaveBeenCalledTimes(1)
   })
+
+  it('joins an authoritative refresh instead of starting a later detect', async () => {
+    let resolveRefresh: (result: {
+      agents: string[]
+      pathSource: string
+      pathFailureReason: string
+    }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const store = createTestStore([])
+
+    const refresh = store.getState().refreshDetectedAgents()
+    const ensure = store.getState().ensureDetectedAgents()
+    expect(ensure).toBe(refresh)
+    expect(detectAgents).not.toHaveBeenCalled()
+
+    resolveRefresh({
+      agents: ['codex'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    await expect(Promise.all([refresh, ensure])).resolves.toEqual([['codex'], ['codex']])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().localDetectedAgentIdsByContext.host).toEqual(['codex'])
+  })
 })
