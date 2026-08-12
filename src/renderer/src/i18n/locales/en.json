@@ -935,6 +935,12 @@
         "description": "Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.",
         "openSettings": "Open Settings",
         "dismiss": "Don't show again"
+      },
+      "useMacTccAttributionSeveredNotice": {
+        "title": "Terminal permissions may be broken after an Orca update",
+        "description": "The terminal daemon was started by a previous Orca install, so macOS may silently deny Accessibility, Automation, and some file access from terminals. Restart the daemon from Manage Sessions (running terminals will close).",
+        "openManageSessions": "Open Manage Sessions",
+        "dismiss": "Dismiss"
       }
     },
     "components": {

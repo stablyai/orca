@@ -34,6 +34,8 @@ export function useMacTccAttributionSeveredNotice(): void {
     i18n.language === targetLocale &&
     i18n.hasResourceBundle(targetLocale, 'translation')
   const toastedThisSession = useRef(false)
+  // Why: toast was only marked after await; a focus/effect re-run mid-check could dual-toast.
+  const checkInFlight = useRef(false)
 
   useEffect(() => {
     if (!localeReady || typeof window === 'undefined') {
@@ -45,50 +47,53 @@ export function useMacTccAttributionSeveredNotice(): void {
     }
 
     const maybeToast = async (): Promise<void> => {
-      if (toastedThisSession.current) {
+      if (toastedThisSession.current || checkInFlight.current) {
         return
       }
+      checkInFlight.current = true
       try {
         const { health } = await macTccAttribution()
         if (health !== 'severed') {
           return
         }
-      } catch {
-        return
-      }
-      toastedThisSession.current = true
-      toast.warning(
-        translate(
-          'auto.hooks.useMacTccAttributionSeveredNotice.title',
-          'Terminal permissions may be broken after an Orca update'
-        ),
-        {
-          description: translate(
-            'auto.hooks.useMacTccAttributionSeveredNotice.description',
-            'The terminal daemon was started by a previous Orca install, so macOS may silently deny Accessibility, Automation, and some file access from terminals. Restart the daemon from Manage Sessions (running terminals will close).'
+        toastedThisSession.current = true
+        toast.warning(
+          translate(
+            'auto.hooks.useMacTccAttributionSeveredNotice.title',
+            'Terminal permissions may be broken after an Orca update'
           ),
-          duration: Infinity,
-          action: {
-            label: translate(
-              'auto.hooks.useMacTccAttributionSeveredNotice.openManageSessions',
-              'Open Manage Sessions'
+          {
+            description: translate(
+              'auto.hooks.useMacTccAttributionSeveredNotice.description',
+              'The terminal daemon was started by a previous Orca install, so macOS may silently deny Accessibility, Automation, and some file access from terminals. Restart the daemon from Manage Sessions (running terminals will close).'
             ),
-            onClick: () => {
-              setSettingsSearchQuery('')
-              openSettingsTarget({
-                pane: 'terminal',
-                repoId: null,
-                sectionId: MANAGE_SESSIONS_SECTION_ID
-              })
-              openSettingsPage()
+            duration: Infinity,
+            action: {
+              label: translate(
+                'auto.hooks.useMacTccAttributionSeveredNotice.openManageSessions',
+                'Open Manage Sessions'
+              ),
+              onClick: () => {
+                setSettingsSearchQuery('')
+                openSettingsTarget({
+                  pane: 'terminal',
+                  repoId: null,
+                  sectionId: MANAGE_SESSIONS_SECTION_ID
+                })
+                openSettingsPage()
+              }
+            },
+            cancel: {
+              label: translate('auto.hooks.useMacTccAttributionSeveredNotice.dismiss', 'Dismiss'),
+              onClick: () => {}
             }
-          },
-          cancel: {
-            label: translate('auto.hooks.useMacTccAttributionSeveredNotice.dismiss', 'Dismiss'),
-            onClick: () => {}
           }
-        }
-      )
+        )
+      } catch {
+        // Rejection clears the guard so a later focus can retry.
+      } finally {
+        checkInFlight.current = false
+      }
     }
 
     void maybeToast()
@@ -97,10 +102,5 @@ export function useMacTccAttributionSeveredNotice(): void {
     }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
-  }, [
-    localeReady,
-    openSettingsPage,
-    openSettingsTarget,
-    setSettingsSearchQuery
-  ])
+  }, [localeReady, openSettingsPage, openSettingsTarget, setSettingsSearchQuery])
 }

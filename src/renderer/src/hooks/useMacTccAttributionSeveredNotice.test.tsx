@@ -121,4 +121,48 @@ describe('useMacTccAttributionSeveredNotice', () => {
     })
     expect(toast.warning).toHaveBeenCalledTimes(1)
   })
+
+  it('coalesces overlapping mount/focus checks into one IPC call and one toast', async () => {
+    let resolveHealth!: (value: { health: 'severed' }) => void
+    const pending = new Promise<{ health: 'severed' }>((resolve) => {
+      resolveHealth = resolve
+    })
+    macTccAttribution.mockImplementation(() => pending)
+
+    render(<MacosTccPromptNoticeHost />)
+    // Focus while the first check is still in flight — must not start a second IPC.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(macTccAttribution).toHaveBeenCalledTimes(1)
+    expect(toast.warning).not.toHaveBeenCalled()
+
+    await act(async () => {
+      resolveHealth({ health: 'severed' })
+      await pending
+      await Promise.resolve()
+    })
+    expect(macTccAttribution).toHaveBeenCalledTimes(1)
+    expect(toast.warning).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears the in-flight guard on rejection so a later focus can retry', async () => {
+    macTccAttribution
+      .mockRejectedValueOnce(new Error('probe failed'))
+      .mockResolvedValueOnce({ health: 'severed' })
+
+    render(<MacosTccPromptNoticeHost />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(toast.warning).not.toHaveBeenCalled()
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+      await Promise.resolve()
+    })
+    expect(macTccAttribution).toHaveBeenCalledTimes(2)
+    expect(toast.warning).toHaveBeenCalledTimes(1)
+  })
 })
