@@ -49,6 +49,7 @@ import { createExternalWatchEventHandler } from './useEditorExternalWatch'
 
 const EVENT_COUNT = 5_000
 const OPEN_FILE_COUNT = 100
+const payloadWorktreePath = '\\\\wsl.localhost\\Ubuntu\\workspace\\repo'
 
 describe('external watcher path matching complexity', () => {
   beforeEach(() => {
@@ -75,12 +76,24 @@ describe('external watcher path matching complexity', () => {
       mode: 'edit' as const,
       isDirty: false
     }))
+    const initialOpenFiles = [
+      ...openFiles,
+      {
+        id: 'combined-diff',
+        filePath: payloadWorktreePath,
+        relativePath: '',
+        worktreeId: 'wt-wsl',
+        mode: 'diff' as const,
+        diffSource: 'combined-uncommitted' as const,
+        isDirty: false
+      }
+    ]
     vi.mocked(useAppStore.getState).mockReturnValue({
-      openFiles,
+      openFiles: initialOpenFiles,
       setExternalMutation: vi.fn()
     } as never)
     const payload: FsChangedPayload = {
-      worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
+      worktreePath: payloadWorktreePath,
       events: Array.from({ length: EVENT_COUNT }, (_, index) => ({
         kind: 'update' as const,
         absolutePath: `\\\\wsl.localhost\\Ubuntu\\workspace\\repo\\file-${index}.ts`
@@ -98,8 +111,11 @@ describe('external watcher path matching complexity', () => {
     handleFsChanged(payload)
     const elapsedMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000
     vi.advanceTimersByTime(100)
+    expect(notifyEditorExternalFileChange).toHaveBeenCalledTimes(EVENT_COUNT)
+    // Why: a tab/store update during debounce must rebuild the index once, not rescan per event.
+    const currentOpenFiles = initialOpenFiles.map((file) => ({ ...file }))
     for (const [notification] of vi.mocked(notifyEditorExternalFileChange).mock.calls) {
-      getOpenFilesForExternalFileChange(openFiles as never, notification)
+      getOpenFilesForExternalFileChange(currentOpenFiles as never, notification)
     }
     const pathOperations =
       pathOperationCounts.aliasComparisons +
@@ -107,7 +123,7 @@ describe('external watcher path matching complexity', () => {
       pathOperationCounts.identities
 
     console.info('STA-3942 watcher oracle', { ...pathOperationCounts, pathOperations, elapsedMs })
-    expect(pathOperations).toBeLessThanOrEqual(3 * (EVENT_COUNT + OPEN_FILE_COUNT))
+    expect(pathOperations).toBeLessThanOrEqual(3 * (EVENT_COUNT + initialOpenFiles.length))
     dispose()
   })
 })

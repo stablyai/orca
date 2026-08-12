@@ -36,7 +36,10 @@ export type EditorExternalWatchBatchPathIndex = {
   deletedOpenEditors: readonly { file: OpenFile; normalizedDeletePath: string }[]
   hasCombinedDiffConsumer: boolean
   matchesCreateOrUpdate: (file: OpenFile) => boolean
-  matchingOpenFiles: (change: IndexedExternalWatchChange) => OpenFile[]
+  matchingOpenFiles: (
+    change: IndexedExternalWatchChange,
+    currentOpenFiles?: OpenFile[]
+  ) => OpenFile[]
 }
 
 function openFileRuntimeOwner(file: Pick<OpenFile, 'runtimeEnvironmentId'>): string | null {
@@ -101,6 +104,75 @@ function collectMatchingFiles(
   return [...byIndex.entries()].sort(([left], [right]) => left - right).map(([, file]) => file)
 }
 
+class IndexedOpenFileLookup {
+  private readonly directEditors = new Map<string, IndexedOpenFile[]>()
+  private readonly aliasEditors = new Map<string, IndexedOpenFile[]>()
+  private readonly wslAliasEditors = new Map<string, IndexedOpenFile[]>()
+  private readonly diffsByRelativePath = new Map<string, IndexedOpenFile[]>()
+  readonly indexedOpenFiles = new Map<string, IndexedOpenFile>()
+  readonly hasCombinedDiffConsumer: boolean
+
+  constructor(
+    openFiles: OpenFile[],
+    scope: WatchScope,
+    private readonly allowAliases: boolean
+  ) {
+    let hasCombinedDiffConsumer = false
+    for (const [index, file] of openFiles.entries()) {
+      if (
+        file.worktreeId !== scope.worktreeId ||
+        openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
+      ) {
+        continue
+      }
+      if (
+        file.mode === 'diff' &&
+        (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
+      ) {
+        hasCombinedDiffConsumer = true
+        continue
+      }
+      if (file.mode === 'diff') {
+        if (file.diffSource === 'unstaged' || file.diffSource === 'staged') {
+          addToListMap(this.diffsByRelativePath, file.relativePath, {
+            file,
+            index,
+            identity: null
+          })
+        }
+        continue
+      }
+      if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
+        continue
+      }
+      const identity = pathIdentity(file.filePath, allowAliases)
+      const indexedFile = { file, index, identity }
+      this.indexedOpenFiles.set(file.id, indexedFile)
+      addToListMap(this.directEditors, file.filePath, indexedFile)
+      if (allowAliases) {
+        addToListMap(this.aliasEditors, identity.aliasComparisonPath, indexedFile)
+        if (identity.isWslUnc) {
+          addToListMap(this.wslAliasEditors, identity.aliasComparisonPath, indexedFile)
+        }
+      }
+    }
+    this.hasCombinedDiffConsumer = hasCombinedDiffConsumer
+  }
+
+  matchingOpenFiles(change: IndexedExternalWatchChange): OpenFile[] {
+    const aliases = !this.allowAliases
+      ? []
+      : change.identity.isWslUnc
+        ? (this.aliasEditors.get(change.identity.aliasComparisonPath) ?? [])
+        : (this.wslAliasEditors.get(change.identity.aliasComparisonPath) ?? [])
+    return collectMatchingFiles(
+      this.directEditors.get(change.absolutePath) ?? [],
+      aliases,
+      this.diffsByRelativePath.get(change.relativePath) ?? []
+    )
+  }
+}
+
 export function indexEditorExternalWatchBatchPaths(
   payload: FsChangedPayload,
   openFiles: OpenFile[],
@@ -143,63 +215,26 @@ export function indexEditorExternalWatchBatchPaths(
     }
   }
 
-  const directEditors = new Map<string, IndexedOpenFile[]>()
-  const aliasEditors = new Map<string, IndexedOpenFile[]>()
-  const wslAliasEditors = new Map<string, IndexedOpenFile[]>()
-  const diffsByRelativePath = new Map<string, IndexedOpenFile[]>()
-  const indexedOpenFiles = new Map<string, IndexedOpenFile>()
-  let hasCombinedDiffConsumer = false
-
-  for (const [index, file] of openFiles.entries()) {
-    if (
-      file.worktreeId !== scope.worktreeId ||
-      openFileRuntimeOwner(file) !== scope.runtimeEnvironmentId
-    ) {
-      continue
+  const initialOpenFileLookup = new IndexedOpenFileLookup(openFiles, scope, allowAliases)
+  const openFileLookups = new WeakMap<OpenFile[], IndexedOpenFileLookup>()
+  openFileLookups.set(openFiles, initialOpenFileLookup)
+  const getOpenFileLookup = (currentOpenFiles: OpenFile[]): IndexedOpenFileLookup => {
+    const existing = openFileLookups.get(currentOpenFiles)
+    if (existing) {
+      return existing
     }
-    if (
-      file.mode === 'diff' &&
-      (file.diffSource === 'combined-uncommitted' || file.diffSource === 'combined-all')
-    ) {
-      hasCombinedDiffConsumer = true
-      continue
-    }
-    if (file.mode === 'diff') {
-      if (file.diffSource === 'unstaged' || file.diffSource === 'staged') {
-        addToListMap(diffsByRelativePath, file.relativePath, { file, index, identity: null })
-      }
-      continue
-    }
-    if (file.mode !== 'edit' && file.mode !== 'markdown-preview') {
-      continue
-    }
-    const identity = pathIdentity(file.filePath, allowAliases)
-    const indexedFile = { file, index, identity }
-    indexedOpenFiles.set(file.id, indexedFile)
-    addToListMap(directEditors, file.filePath, indexedFile)
-    if (allowAliases) {
-      addToListMap(aliasEditors, identity.aliasComparisonPath, indexedFile)
-      if (identity.isWslUnc) {
-        addToListMap(wslAliasEditors, identity.aliasComparisonPath, indexedFile)
-      }
-    }
-  }
-
-  const aliasMatches = (identity: LocalWindowsWslPathIdentity): readonly IndexedOpenFile[] => {
-    if (!allowAliases) {
-      return []
-    }
-    return identity.isWslUnc
-      ? (aliasEditors.get(identity.aliasComparisonPath) ?? [])
-      : (wslAliasEditors.get(identity.aliasComparisonPath) ?? [])
+    const indexed = new IndexedOpenFileLookup(currentOpenFiles, scope, allowAliases)
+    openFileLookups.set(currentOpenFiles, indexed)
+    return indexed
   }
   const matchesCreateOrUpdate = (file: OpenFile): boolean => {
     const identity =
-      indexedOpenFiles.get(file.id)?.identity ?? pathIdentity(file.filePath, allowAliases)
+      initialOpenFileLookup.indexedOpenFiles.get(file.id)?.identity ??
+      pathIdentity(file.filePath, allowAliases)
     return createOrUpdateLookup.get(identity) !== undefined
   }
   const deletedOpenEditors: { file: OpenFile; normalizedDeletePath: string }[] = []
-  for (const indexedFile of indexedOpenFiles.values()) {
+  for (const indexedFile of initialOpenFileLookup.indexedOpenFiles.values()) {
     const deletedPath = deleteLookup.get(indexedFile.identity!)
     if (deletedPath) {
       deletedOpenEditors.push({
@@ -213,13 +248,9 @@ export function indexEditorExternalWatchBatchPaths(
     createOrUpdatePaths,
     changes: [...changesByRelativePath.values()],
     deletedOpenEditors,
-    hasCombinedDiffConsumer,
+    hasCombinedDiffConsumer: initialOpenFileLookup.hasCombinedDiffConsumer,
     matchesCreateOrUpdate,
-    matchingOpenFiles: (change) =>
-      collectMatchingFiles(
-        directEditors.get(change.absolutePath) ?? [],
-        aliasMatches(change.identity),
-        diffsByRelativePath.get(change.relativePath) ?? []
-      )
+    matchingOpenFiles: (change, currentOpenFiles = openFiles) =>
+      getOpenFileLookup(currentOpenFiles).matchingOpenFiles(change)
   }
 }

@@ -86,8 +86,7 @@ type ExternalWatchNotification = {
   runtimeEnvironmentId: string | null
   allowLocalWindowsWslAliases?: true
   indexedOpenFiles?: {
-    source: OpenFile[]
-    matches: OpenFile[]
+    matches: (openFiles: OpenFile[]) => OpenFile[]
   }
 }
 
@@ -615,7 +614,9 @@ export function createExternalWatchEventHandler(
         ...localWslAliasOption(target)
       }
       Object.defineProperty(notification, 'indexedOpenFiles', {
-        value: { source: openFilesAtStart, matches: matching }
+        value: {
+          matches: (openFiles: OpenFile[]) => batchPaths.matchingOpenFiles(change, openFiles)
+        }
       })
       const absolutePath = change.absolutePath
       if (matching.length === 0) {

@@ -24,8 +24,7 @@ export type EditorPathMutationTarget = {
   runtimeEnvironmentId?: string | null
   allowLocalWindowsWslAliases?: true
   indexedOpenFiles?: {
-    source: OpenFile[]
-    matches: OpenFile[]
+    matches: (openFiles: OpenFile[]) => OpenFile[]
   }
 }
 
@@ -131,8 +130,8 @@ export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
   target: EditorPathMutationTarget
 ): OpenFile[] {
-  if (target.indexedOpenFiles?.source === openFiles) {
-    return target.indexedOpenFiles.matches
+  if (target.indexedOpenFiles) {
+    return target.indexedOpenFiles.matches(openFiles)
   }
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
   const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
