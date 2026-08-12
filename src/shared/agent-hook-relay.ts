@@ -41,6 +41,7 @@ const AGENT_HOOK_SOURCES = [
   'antigravity',
   'amp',
   'opencode',
+  'opencode2',
   'mimo-code',
   'cursor',
   'pi',

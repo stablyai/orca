@@ -802,7 +802,7 @@ export class AgentHookServer {
     }
     // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.
     if (
-      (agentType === 'opencode' || agentType === 'copilot') &&
+      (agentType === 'opencode' || agentType === 'opencode2' || agentType === 'copilot') &&
       request.intent === 'plain-escape' &&
       request.inputCount !== 2
     ) {
@@ -868,8 +868,23 @@ export class AgentHookServer {
       agentType,
       intent: request.intent
     })
+    this.onInterruptInferred?.({
+      paneKey: inferred.paneKey,
+      agentType,
+      providerSession: existing.providerSession
+    })
     return true
   }
+
+  /** Provider-owned callback when an interrupt was inferred (e.g. opencode2's
+   *  service API interrupt, since its daemon sessions outlive the PTY). */
+  onInterruptInferred:
+    | ((args: {
+        paneKey: string
+        agentType: AgentType | undefined
+        providerSession?: AgentProviderSessionMetadata
+      }) => void)
+    | null = null
 
   /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
   inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
@@ -1786,6 +1801,9 @@ export class AgentHookServer {
     worktreeId?: string
     connectionId?: string | null
     payload: ParsedAgentStatusPayload
+    /** Provider-owned resume identity, when the caller knows it (e.g. opencode2
+     *  service sessions). Overrides any preserved identity from the previous row. */
+    providerSession?: AgentProviderSessionMetadata
   }): void {
     const physicalPaneKey = event.paneKey.trim()
     const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
@@ -1854,7 +1872,11 @@ export class AgentHookServer {
       tabId,
       worktreeId,
       connectionId,
-      ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+      ...(event.providerSession
+        ? { providerSession: event.providerSession }
+        : preservedProviderSession
+          ? { providerSession: preservedProviderSession }
+          : {}),
       payload: event.payload
     })
   }

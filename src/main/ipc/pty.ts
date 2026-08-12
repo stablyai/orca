@@ -51,6 +51,7 @@ import {
 } from '../../shared/local-windows-terminal-runtime'
 import { applyTerminalGitCredentialPromptGuard } from './terminal-git-credential-guard'
 import { openCodeHookService } from '../opencode/hook-service'
+import { openCode2HookService } from '../opencode2/hook-service'
 import { mimoCodeHookService } from '../mimo/hook-service'
 import {
   getCommandTokenPathBasename,
@@ -2045,6 +2046,7 @@ export function clearProviderPtyState(
   // node-pty process table. Centralizing provider cleanup avoids drift where a
   // new teardown path forgets to remove one provider's overlay/hook state.
   openCodeHookService.clearPty(id)
+  openCode2HookService.clearPty(id)
   piTitlebarExtensionService.clearPty(id)
   // Why: SSH exit/teardown paths bypass pty.ts's local onExit but still must release Claude account-switch guards.
   markClaudePtyExited(id)
@@ -6893,6 +6895,29 @@ export function registerPtyHandlers(
         const rememberedPaneKey = validatedPaneKey
           ? rememberPaneKeyForPty(result.id, validatedPaneKey)
           : null
+        // Why: opencode2 sessions live in the shared service daemon, so the
+        // status watcher needs each opencode2 terminal's cwd + pane key to
+        // attribute daemon sessions back to the right Orca tab
+        // (docs/adr/0003-opencode2-shared-daemon-launch.md).
+        if (
+          !args.connectionId &&
+          rememberedPaneKey &&
+          args.telemetry &&
+          agentKindSchema.safeParse(args.telemetry.agent_kind).success &&
+          args.telemetry.agent_kind === 'opencode2'
+        ) {
+          const registrationCwd = cwd?.trim()
+          if (registrationCwd) {
+            openCode2HookService.registerTerminal({
+              ptyId: result.id,
+              cwd: registrationCwd,
+              paneKey: rememberedPaneKey,
+              ...(typeof args.worktreeId === 'string' && args.worktreeId.length > 0
+                ? { worktreeId: args.worktreeId }
+                : {})
+            })
+          }
+        }
         if (legacySpawnPaneKey && migrationUnsupportedPaneKey) {
           agentHookServer.registerPaneKeyAlias(
             legacySpawnPaneKey.paneKey,

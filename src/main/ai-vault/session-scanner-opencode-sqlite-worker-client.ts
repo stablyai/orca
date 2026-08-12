@@ -74,6 +74,8 @@ export class OpenCodeSqliteWorkerClient {
    * @param args.dbPaths - Absolute paths to opencode.db files to scan.
    * @param args.limit - Maximum number of sessions to return per database.
    * @param args.issues - Collected scan issues (worker issues are merged in).
+   * @param args.agent - 'opencode2' reads the v2 channel-scoped schema; omitted
+   *   (or 'opencode') reads the v1 schema.
    * @returns Synthetic candidates sorted by effective recency; empty (with a
    *   scan issue) when the worker is unavailable, times out, or crashes.
    */
@@ -81,13 +83,19 @@ export class OpenCodeSqliteWorkerClient {
     dbPaths: readonly string[]
     limit: number
     issues: AiVaultScanIssue[]
+    agent?: 'opencode2'
   }): Promise<SessionFileCandidate[]> {
     if (args.dbPaths.length === 0) {
       return []
     }
     try {
       const value = (await this.dispatch(
-        { kind: 'list', dbPaths: args.dbPaths, limit: args.limit },
+        {
+          kind: 'list',
+          dbPaths: args.dbPaths,
+          limit: args.limit,
+          ...(args.agent === 'opencode2' ? { agent: 'opencode2' as const } : {})
+        },
         LIST_TIMEOUT_MS
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
@@ -95,7 +103,7 @@ export class OpenCodeSqliteWorkerClient {
     } catch (err) {
       if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
         args.issues.push({
-          agent: 'opencode',
+          agent: args.agent ?? 'opencode',
           path: args.dbPaths[0] ?? 'opencode.db',
           message:
             'OpenCode history was skipped because its background scanner could not start; the app remains responsive.'
@@ -105,7 +113,7 @@ export class OpenCodeSqliteWorkerClient {
       // Timeout/crash: this storage dir's SQLite DBs contribute no sessions this
       // scan, surfaced as one scan issue rather than an unbounded stall.
       args.issues.push({
-        agent: 'opencode',
+        agent: args.agent ?? 'opencode',
         path: args.dbPaths[0] ?? 'opencode.db',
         message: `OpenCode history scan did not complete: ${errorMessage(err)}`
       })
@@ -118,6 +126,8 @@ export class OpenCodeSqliteWorkerClient {
    * @param args.dbPath - Absolute path to the opencode.db file.
    * @param args.sessionId - Primary key in the `session` table.
    * @param args.platform - Platform used for resume-command generation.
+   * @param args.agent - 'opencode2' reads the v2 channel-scoped schema; omitted
+   *   (or 'opencode') reads the v1 schema.
    * @returns The parsed session, or `null` when it does not exist; rejects on
    *   worker timeout/crash so the scanner records a per-session scan issue.
    */
@@ -125,10 +135,17 @@ export class OpenCodeSqliteWorkerClient {
     dbPath: string
     sessionId: string
     platform: NodeJS.Platform
+    agent?: 'opencode2'
   }): Promise<AiVaultSession | null> {
     try {
       const value = await this.dispatch(
-        { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
+        {
+          kind: 'parse',
+          dbPath: args.dbPath,
+          sessionId: args.sessionId,
+          platform: args.platform,
+          ...(args.agent === 'opencode2' ? { agent: 'opencode2' as const } : {})
+        },
         PARSE_TIMEOUT_MS
       )
       return value as AiVaultSession | null

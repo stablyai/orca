@@ -30,6 +30,7 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   // call this process makes
   ['main/amp/hook-service.ts', 1],
   ['main/opencode/hook-service.ts', 1],
+  ['main/opencode2/hook-service.ts', 3],
   ['main/pi/agent-status-extension-source.ts', 1],
   // local identifiers named `fetch` (git fetch), not HTTP
   ['main/ipc/worktree-remote.ts', 2],

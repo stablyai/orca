@@ -36,6 +36,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'cursor',
       'kimi',
       'opencode',
+      'opencode2',
       'pi'
     ])
   })
@@ -564,6 +565,50 @@ describe('buildArgs (OpenCode)', () => {
       model: 'opencode/gpt-5.4-mini'
     })
 
+    expect(args).not.toContain('--variant')
+  })
+})
+
+describe('buildArgs (OpenCode 2)', () => {
+  const spec = getCommitMessageAgentSpec('opencode2')!
+
+  it('runs `opencode2 run` with stdin delivery', () => {
+    const prompt = `PROMPT ${'x'.repeat(1024)}`
+    const args = spec.buildArgs({
+      prompt,
+      model: 'opencode/deepseek-v4-flash-free'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/deepseek-v4-flash-free',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
+    expect(args).not.toContain(prompt)
+    expect(args).not.toContain('')
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('inlines the thinking variant as model#variant (v1 --variant is removed in v2)', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'opencode/gpt-5.4-mini',
+      thinkingLevel: 'high'
+    })
+
+    expect(args).toEqual([
+      'run',
+      '--model',
+      'opencode/gpt-5.4-mini#high',
+      '--agent',
+      'build',
+      '--format',
+      'default'
+    ])
     expect(args).not.toContain('--variant')
   })
 })

@@ -2,6 +2,7 @@
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { basename, isAbsolute, join, posix, win32 } from 'node:path'
 import { yieldToEventLoop } from '../../shared/event-loop-yield'
+import { isOpenCodeV2DatabaseName } from '../../shared/opencode-database-name'
 import { areWorktreePathsEqual } from '../ipc/worktree-logic'
 import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
 import Database from '../sqlite/sync-database'
@@ -92,7 +93,15 @@ export async function listOpenCodeDatabases(): Promise<string[]> {
   try {
     const entries = await readdir(dataDirectory, { withFileTypes: true })
     return entries
-      .filter((entry) => entry.isFile() && /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name))
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/.test(entry.name) &&
+          // Why: v2 (opencode-next.db / opencode-local.db) sessions live in a
+          // different, beta-unstable schema; v2 usage tracking is deferred, so
+          // never feed the v2 DB to the v1 usage parser.
+          !isOpenCodeV2DatabaseName(entry.name)
+      )
       .map((entry) => join(dataDirectory, entry.name))
       .sort()
   } catch {

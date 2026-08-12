@@ -85,6 +85,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli'
   },
   {
+    id: 'opencode2',
+    label: translate('auto.lib.agent.catalog.opencode2_label', 'OpenCode 2'),
+    cmd: 'opencode2',
+    homepageUrl: 'https://opencode.ai/v2/docs/'
+  },
+  {
     id: 'opencode',
     label: translate('auto.lib.agent.catalog.e7a4ca5103', 'OpenCode'),
     cmd: 'opencode',
@@ -355,6 +361,9 @@ export function AgentIcon({
     return <CopilotIcon size={size} />
   }
   if (agent === 'opencode') {
+    return <OpenCodeIcon size={size} />
+  }
+  if (agent === 'opencode2') {
     return <OpenCodeIcon size={size} />
   }
   const catalogEntry = getAgentCatalog().find((a) => a.id === agent)
