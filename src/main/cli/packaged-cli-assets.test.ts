@@ -1,5 +1,6 @@
-import { execFile } from 'node:child_process'
-import { copyFile, mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { execFile, spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
@@ -18,6 +19,7 @@ const builderConfig = require('../../../config/electron-builder.config.cjs') as 
   win?: { extraResources?: { from?: string; to?: string }[] }
 }
 const linuxLauncherAsset = new URL('../../../resources/linux/bin/orca-ide', import.meta.url)
+const darwinLauncherAsset = new URL('../../../resources/darwin/bin/orca', import.meta.url)
 
 describe('packaged CLI assets', () => {
   it('ships embedded skill guides with the CLI instead of source Markdown', () => {
@@ -59,6 +61,76 @@ describe('packaged CLI assets', () => {
     const launcherStats = await stat(linuxLauncherAsset)
     expect(launcherStats.mode & 0o111).not.toBe(0)
   })
+
+  itRunsUnixShell('replaces the shell process in packaged Unix launchers', async () => {
+    for (const launcher of [linuxLauncherAsset, darwinLauncherAsset]) {
+      const content = await readFile(launcher, 'utf8')
+      expect(content).toContain('export ELECTRON_RUN_AS_NODE=1')
+      expect(content).toContain('exec "$ELECTRON" "$CLI" "$@"')
+    }
+  })
+
+  itRunsUnixShell(
+    'delivers SIGTERM to the Linux executable and releases its listener',
+    async () => {
+      const root = await mkdtemp(join(tmpdir(), 'orca-linux-cli-signal-'))
+      const appDir = join(root, 'Orca')
+      const resourcesDir = join(appDir, 'resources')
+      const launcherDir = join(resourcesDir, 'bin')
+      const cliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
+      const launcherPath = join(launcherDir, 'orca-ide')
+      const electronPath = join(appDir, 'orca-ide')
+      const statePath = join(root, 'listener-state.json')
+      let executablePid: number | null = null
+      let launcher: ReturnType<typeof spawn> | null = null
+      try {
+        await mkdir(launcherDir, { recursive: true })
+        await mkdir(cliDir, { recursive: true })
+        await copyFile(linuxLauncherAsset, launcherPath)
+        await writeFile(join(cliDir, 'index.js'), '', 'utf8')
+        await writeFile(
+          electronPath,
+          `#!/usr/bin/env node
+const fs = require('node:fs')
+const net = require('node:net')
+const server = net.createServer()
+server.listen(0, '127.0.0.1', () => {
+  fs.writeFileSync(process.env.ORCA_TEST_LISTENER_STATE, JSON.stringify({
+    pid: process.pid,
+    port: server.address().port
+  }))
+})
+const shutdown = () => server.close(() => process.exit(0))
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
+`,
+          { encoding: 'utf8', mode: 0o755 }
+        )
+
+        launcher = spawn(launcherPath, [], {
+          env: { ...process.env, ORCA_TEST_LISTENER_STATE: statePath },
+          stdio: 'ignore'
+        })
+        const state = await waitForListenerState(statePath)
+        executablePid = state.pid
+        const launcherPid = launcher.pid
+        const launcherExit = once(launcher, 'exit')
+        launcher.kill('SIGTERM')
+        await launcherExit
+
+        expect(executablePid).toBe(launcherPid)
+        await expect(waitForPortRelease(state.port)).resolves.toBe(true)
+      } finally {
+        if (launcher?.pid && isProcessAlive(launcher.pid)) {
+          process.kill(launcher.pid, 'SIGTERM')
+        }
+        if (executablePid && isProcessAlive(executablePid)) {
+          process.kill(executablePid, 'SIGTERM')
+        }
+        await rm(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   itRunsUnixShell(
     'runs the Linux launcher from its packaged path and installed symlink',
@@ -182,3 +254,47 @@ exec node "$@"
     }
   })
 })
+
+async function waitForListenerState(path: string): Promise<{ pid: number; port: number }> {
+  const deadline = Date.now() + 5_000
+  while (Date.now() < deadline) {
+    try {
+      return JSON.parse(await readFile(path, 'utf8')) as { pid: number; port: number }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
+  throw new Error('Timed out waiting for launcher listener state')
+}
+
+async function waitForPortRelease(port: number): Promise<boolean> {
+  const { createConnection } = await import('node:net')
+  const deadline = Date.now() + 2_000
+  while (Date.now() < deadline) {
+    const connected = await new Promise<boolean>((resolve) => {
+      const socket = createConnection({ host: '127.0.0.1', port })
+      socket.once('connect', () => {
+        socket.destroy()
+        resolve(true)
+      })
+      socket.once('error', () => resolve(false))
+    })
+    if (!connected) {
+      return true
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+  return false
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}

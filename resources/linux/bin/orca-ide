@@ -38,4 +38,7 @@ export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
-ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
+export ELECTRON_RUN_AS_NODE=1
+# Why: replace the launcher so SIGINT/SIGTERM reach the CLI supervisor, which
+# forwards them to the Electron serve process and releases its listener.
+exec "$ELECTRON" "$CLI" "$@"

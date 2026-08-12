@@ -98,6 +98,7 @@ describe('CliInstaller', () => {
 
       const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
       expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(launcherContent).toContain('exec "$ELECTRON" "$CLI" "$@"')
       expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
       expect(launcherContent).toContain('export ORCA_APP_EXECUTABLE="$ELECTRON"')
       expect(launcherContent).toContain(join(fixture.appPath, 'out', 'cli', 'index.js'))
@@ -131,6 +132,7 @@ describe('CliInstaller', () => {
 
       const launcherContent = await readFile(installed.launcherPath as string, 'utf8')
       expect(launcherContent).toContain('ELECTRON_RUN_AS_NODE=1')
+      expect(launcherContent).toContain('exec "$ELECTRON" "$CLI" "$@"')
       expect(launcherContent).toContain(`export ORCA_USER_DATA_PATH='${fixture.userDataPath}'`)
 
       const removed = await installer.remove()

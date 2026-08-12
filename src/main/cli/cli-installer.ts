@@ -959,7 +959,9 @@ export ORCA_NODE_OPTIONS="\${NODE_OPTIONS-}"
 export ORCA_NODE_REPL_EXTERNAL_MODULE="\${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
-ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"
+export ELECTRON_RUN_AS_NODE=1
+# Why: preserve signal delivery by replacing the generated launcher process.
+exec "$ELECTRON" "$CLI" "$@"
 `
 }
 
