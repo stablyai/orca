@@ -60,26 +60,53 @@ describe('isTransientTerminalPasteCancellation', () => {
 })
 
 describe('isTransientTerminalPasteCancellationMessage', () => {
-  it('matches Paste cancelled lines in aggregated surfaces', () => {
+  it('matches a pure single paste-cancellation line', () => {
     expect(
       isTransientTerminalPasteCancellationMessage(
         'Paste cancelled: terminal focus changed before paste started.'
       )
     ).toBe(true)
+  })
+
+  it('matches multiple pure paste-cancellation lines without stacking classification', () => {
     expect(
       isTransientTerminalPasteCancellationMessage(
-        'Paste failed.\nPaste cancelled: terminal disconnected before paste completed.'
+        [
+          'Paste cancelled: terminal focus changed before paste started.',
+          'Paste cancelled: terminal disconnected before paste completed.',
+          'Paste cancelled: terminal did not accept paste before the safety timeout.'
+        ].join('\n')
       )
     ).toBe(true)
   })
 
-  it('ignores durable paste failures', () => {
+  it('keeps mixed durable+cancel aggregates durable (fail-closed)', () => {
+    expect(
+      isTransientTerminalPasteCancellationMessage(
+        'Paste failed.\nPaste cancelled: terminal disconnected before paste completed.'
+      )
+    ).toBe(false)
+    expect(
+      isTransientTerminalPasteCancellationMessage(
+        'Paste cancelled: terminal focus changed before paste started.\nPaste failed.'
+      )
+    ).toBe(false)
+    expect(
+      isTransientTerminalPasteCancellationMessage(
+        'node-pty: open_slave failed: EMFILE\nPaste cancelled: terminal focus changed before paste started.'
+      )
+    ).toBe(false)
+  })
+
+  it('ignores durable paste failures and empty aggregates', () => {
     expect(isTransientTerminalPasteCancellationMessage('Paste failed.')).toBe(false)
     expect(
       isTransientTerminalPasteCancellationMessage(
         'Paste failed: clipboard text is too large for a safe terminal paste.'
       )
     ).toBe(false)
+    expect(isTransientTerminalPasteCancellationMessage('')).toBe(false)
+    expect(isTransientTerminalPasteCancellationMessage('\n\n')).toBe(false)
   })
 })
 

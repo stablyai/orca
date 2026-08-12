@@ -40,9 +40,14 @@ export function isTransientTerminalPasteCancellation(
   return reason != null && TRANSIENT_PASTE_CANCELLATION_REASONS.has(reason)
 }
 
-/** Defense for any path that still parked a cancel string on the durable error surface. */
+/**
+ * Defense for cancel strings still parked on the durable error surface.
+ * Fail-closed on aggregates: only pure cancel line sets are transient — one
+ * durable line mixed in (via appendTerminalErrorMessage) must keep the banner.
+ */
 export function isTransientTerminalPasteCancellationMessage(message: string): boolean {
-  return message.split('\n').some((line) => line.startsWith(PASTE_CANCELLED_PREFIX))
+  const lines = message.split('\n').filter((line) => line.length > 0)
+  return lines.length > 0 && lines.every((line) => line.startsWith(PASTE_CANCELLED_PREFIX))
 }
 
 /**
