@@ -11,13 +11,7 @@ export function classifyGlabError(stderr: string): ClassifiedError {
       message: "You don't have permission to edit this issue. Check your GitLab token scopes."
     }
   }
-  if (
-    s.includes('http 404') ||
-    s.includes('project not found') ||
-    // Why (#13817): migrated remotes mismatch glab's host; soft-skip in aggregates.
-    s.includes('none of the git remotes configured for this repository correspond to the gitlab_host') ||
-    s.includes('none of the git remotes configured for this repository correspond to the gitlab host')
-  ) {
+  if (s.includes('http 404') || s.includes('project not found')) {
     return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
   }
   if (s.includes('http 422') || s.includes('unprocessable')) {
@@ -42,9 +36,22 @@ export function classifyGlabError(stderr: string): ClassifiedError {
 
 const LIST_READ_FAILURE = 'Failed to load issues'
 
+// Why: list soft-skip only — job-trace not_found means empty log, not host mismatch (#13817).
+export function isGitLabHostRemoteMismatchError(stderr: string): boolean {
+  const s = stderr.toLowerCase()
+  return (
+    s.includes('none of the git remotes configured for this repository correspond to the gitlab_host') ||
+    s.includes('none of the git remotes configured for this repository correspond to the gitlab host')
+  )
+}
+
 // Why: classifyGlabError's copy is phrased for edit/update operations; list
 // issues is a read op, so rewrite messages for read-context banners.
 export function classifyListIssuesError(stderr: string): ClassifiedError {
+  // Why (#13817): migrated remotes mismatch glab's host; soft-skip multi-project lists only.
+  if (isGitLabHostRemoteMismatchError(stderr)) {
+    return { type: 'not_found', message: 'Project not found.' }
+  }
   const c = classifyGlabError(stderr)
   const trimmed = stderr.trim()
   const readMessages: Record<ClassifiedError['type'], string> = {

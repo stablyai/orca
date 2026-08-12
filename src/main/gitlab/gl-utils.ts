@@ -7,6 +7,7 @@ export {
   classifyJobLogError,
   classifyListFetchError,
   classifyListIssuesError,
+  isGitLabHostRemoteMismatchError,
   isMissingJobLogError
 } from './glab-error-classification'
 export {

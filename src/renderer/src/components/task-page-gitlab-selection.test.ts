@@ -102,6 +102,27 @@ describe('collectGitLabNotFoundRepoIds', () => {
     ])
     expect([...afterRecover]).toEqual([])
   })
+
+  it('clears a stale not_found when a later hard empty error proves the repo is still a GitLab target', () => {
+    const previous = new Set(['migrated'])
+    const afterAuthFailure = collectGitLabNotFoundRepoIds(previous, [
+      {
+        repoId: 'migrated',
+        items: [],
+        error: { type: 'permission_denied', message: 'no permission' }
+      }
+    ])
+    expect([...afterAuthFailure]).toEqual([])
+
+    const afterNetwork = collectGitLabNotFoundRepoIds(previous, [
+      {
+        repoId: 'migrated',
+        items: [],
+        error: { type: 'network_error', message: 'network down' }
+      }
+    ])
+    expect([...afterNetwork]).toEqual([])
+  })
 })
 
 describe('mergeProviderScopedPickerSelection', () => {

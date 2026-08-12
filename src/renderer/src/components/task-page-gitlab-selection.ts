@@ -20,7 +20,7 @@ export function mergeProviderScopedPickerSelection(args: {
   return new Set([...preserved, ...args.nextPickerSelection])
 }
 
-// Why: not_found is host-correct proof; success/hard-error means still a GitLab target.
+// Why: not_found hides peers; any other result clears a stale mark so hard errors stay visible.
 export function collectGitLabNotFoundRepoIds(
   previous: ReadonlySet<string>,
   results: readonly GitLabProjectFetchResult[]
@@ -32,9 +32,7 @@ export function collectGitLabNotFoundRepoIds(
     }
     if (result.error?.type === 'not_found') {
       next.add(result.repoId)
-      continue
-    }
-    if (!result.error || result.items.length > 0) {
+    } else {
       next.delete(result.repoId)
     }
   }
