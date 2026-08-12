@@ -550,6 +550,30 @@ describe('deferred metric flush inside safeFit', () => {
     }
   })
 
+  it('ignores a hold with no dimensions instead of pinning xterm at its floor', () => {
+    const resize = vi.fn()
+    const fit = vi.fn()
+    const pane = {
+      terminal: { cols: 80, rows: 24, options: {}, resize },
+      container: {
+        dataset: { ptyId: 'pty-sizeless-hold' },
+        getBoundingClientRect: () => ({ width: 500, height: 300 })
+      },
+      fitAddon: { fit, proposeDimensions: vi.fn(() => ({ cols: 160, rows: 50 })) }
+    } as unknown as ManagedPane
+    // Why: a host that cannot read the pty size emits the hold at 0x0, and xterm
+    // clamps resize(0, 0) up to its 2x1 floor, so the size guard never matches again.
+    setFitOverride('pty-sizeless-hold', 'remote-desktop-fit', 0, 0)
+
+    try {
+      expect(readProposedPaneFitDimensions(pane)).toEqual({ cols: 160, rows: 50 })
+      expect(safeFit(pane)).toBe(true)
+      expect(resize).not.toHaveBeenCalled()
+    } finally {
+      setFitOverride('pty-sizeless-hold', 'desktop-fit', 0, 0)
+    }
+  })
+
   it('flushes deferred metrics before reporting a measurable owner override', () => {
     const pane = createMetricPane()
     pane.container.dataset.ptyId = 'pty-metric-override'

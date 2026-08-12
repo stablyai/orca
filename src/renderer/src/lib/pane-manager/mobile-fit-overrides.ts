@@ -51,7 +51,11 @@ function notifyChange(event: OverrideChangeEvent): void {
 
 export function setFitOverride(ptyId: string, mode: FitHoldMode, cols: number, rows: number): void {
   const prior = overridesByPtyId.get(ptyId) ?? null
-  if (mode === 'mobile-fit' || mode === 'remote-desktop-fit') {
+  // Why: a host that cannot read the pty size holds at 0x0, and xterm clamps
+  // resize(0, 0) up to its 2x1 floor, so the size guard never matches the hold
+  // again and the pane stays pinned there. Fall back to container fitting.
+  const holdsGrid = (mode === 'mobile-fit' || mode === 'remote-desktop-fit') && cols > 0 && rows > 0
+  if (holdsGrid) {
     overridesByPtyId.set(ptyId, { mode, cols, rows })
   } else {
     overridesByPtyId.delete(ptyId)
