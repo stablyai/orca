@@ -24,7 +24,7 @@ import {
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
-import type { GrokHomeResolver } from '../grok/grok-runtime-home'
+import type { GrokHomeResolution, GrokHomeResolver } from '../grok/grok-runtime-home'
 import { getGrokAccountStatus as buildGrokAccountStatus } from '../grok-accounts/status'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
@@ -340,7 +340,12 @@ export class RateLimitService {
     target: LocalAccountRuntimeTarget,
     signal?: AbortSignal
   ): Promise<GrokAuthReadResult> {
-    const resolution = await this.grokHomeResolver?.(target)
+    let resolution: GrokHomeResolution | undefined
+    try {
+      resolution = await this.grokHomeResolver?.(target)
+    } catch {
+      return { status: 'error', error: 'Unable to resolve Grok auth home' }
+    }
     return readGrokAuthSession({ home: resolution?.path, signal })
   }
 

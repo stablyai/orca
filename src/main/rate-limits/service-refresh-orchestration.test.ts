@@ -218,6 +218,27 @@ describe('RateLimitService', () => {
     expect(listener).toHaveBeenCalled()
   })
 
+  it('contains Grok home resolver failures as auth read errors', async () => {
+    const service = new RateLimitService()
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver(async () => {
+      throw new Error('spawn wsl.exe ENOENT')
+    })
+
+    await expect(service.refreshGrok()).resolves.toMatchObject({
+      grok: { status: 'unavailable' }
+    })
+    expect(fetchGrokRateLimits).toHaveBeenCalledWith({
+      authReadResult: {
+        status: 'error',
+        error: 'Unable to resolve Grok auth home'
+      },
+      signal: expect.any(AbortSignal)
+    })
+    expect(readGrokAuthSession).not.toHaveBeenCalled()
+    expect(service.getState().grok?.status).not.toBe('fetching')
+  })
+
   it('retries account status when the Grok runtime changes during resolution', async () => {
     const ubuntuResolution = deferred<{
       runtime: 'wsl'
