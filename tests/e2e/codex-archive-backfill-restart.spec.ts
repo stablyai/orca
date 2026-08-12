@@ -6,6 +6,8 @@ import { expect, test } from './helpers/orca-app'
 import { createRestartSession } from './helpers/orca-restart'
 
 test.describe.configure({ mode: 'serial' })
+// Two launches each wait for the production scheduler's 15-second initial delay.
+test.setTimeout(90_000)
 
 test('an archived Codex rollout stays inactive across two Orca launches', async (// oxlint-disable-next-line no-empty-pattern -- This lifecycle test owns both disposable Electron launches.
 {}, testInfo) => {

@@ -47,11 +47,22 @@ export async function backfillOneManagedSessionFile(
   }
   if (archivedTargetStat) {
     // The Codex-owned archived rollout is the durable tombstone.
-    await removeRedundantActiveCodexSessionHardlink(
-      managedSessionFilePath,
-      systemSessionFilePath,
-      archivedTargetStat
-    )
+    try {
+      await removeRedundantActiveCodexSessionHardlink(
+        managedSessionFilePath,
+        systemSessionFilePath,
+        archivedTargetStat
+      )
+    } catch (error) {
+      await recordSessionBackfillFailure(
+        managedSessionFilePath,
+        systemSessionFilePath,
+        error,
+        summary,
+        auditPass
+      )
+      return
+    }
     summary.skippedExistingFiles += 1
     return
   }

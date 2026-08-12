@@ -37,7 +37,8 @@ const { fsMockState } = vi.hoisted(() => ({
     failAuditWrites: false,
     failMkdirPath: null as string | null,
     failDirectoryPath: null as string | null,
-    failLstatPath: null as string | null
+    failLstatPath: null as string | null,
+    failUnlinkPath: null as string | null
   }
 }))
 
@@ -149,6 +150,14 @@ vi.mock('node:fs/promises', async () => {
         await actual.link(args[0], archivedPath)
       }
     },
+    unlink: async (...args: Parameters<typeof actual.unlink>) => {
+      if (args[0] === fsMockState.failUnlinkPath) {
+        const error = new Error('EACCES: active session removal denied') as NodeJS.ErrnoException
+        error.code = 'EACCES'
+        throw error
+      }
+      return actual.unlink(...args)
+    },
     opendir: (...args: Parameters<typeof actual.opendir>) => {
       if (args[0] === fsMockState.failDirectoryPath) {
         const error = new Error('EACCES: directory unreadable') as NodeJS.ErrnoException
@@ -244,6 +253,7 @@ beforeEach(() => {
   fsMockState.failMkdirPath = null
   fsMockState.failDirectoryPath = null
   fsMockState.failLstatPath = null
+  fsMockState.failUnlinkPath = null
   fakeHomeDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-home-'))
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-backfill-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
@@ -437,6 +447,35 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(existsSync(activePath)).toBe(false)
     expect(lstatSync(managedPath).ino).toBe(lstatSync(archivedPath).ino)
     expect(readAuditActions()).toEqual(['run-summary'])
+  })
+
+  it('isolates an archived active-link removal failure and continues later files', async () => {
+    const archivedRelativePath = join('2026', '05', '26', 'rollout-a.jsonl')
+    const managedPath = writeManagedSession(archivedRelativePath, 'archived contents\n')
+    const activePath = join(getSystemSessionsRoot(), archivedRelativePath)
+    const archivedPath = join(getSystemArchivedSessionsRoot(), 'rollout-a.jsonl')
+    mkdirSync(dirname(activePath), { recursive: true })
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    linkSync(managedPath, activePath)
+    linkSync(managedPath, archivedPath)
+    fsMockState.failUnlinkPath = activePath
+
+    const laterRelativePath = join('2026', '05', '26', 'rollout-b.jsonl')
+    writeManagedSession(laterRelativePath, 'later contents\n')
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({
+      scannedFiles: 2,
+      linkedFiles: 1,
+      skippedExistingFiles: 0,
+      failedFiles: 1
+    })
+    expect(existsSync(activePath)).toBe(true)
+    expect(existsSync(join(getSystemSessionsRoot(), laterRelativePath))).toBe(true)
+    expect(readAuditActions().toSorted()).toEqual(['failed', 'hardlink', 'run-summary'].toSorted())
   })
 
   it('preserves an ambiguous active file when it differs from the archived rollout', async () => {
