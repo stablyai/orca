@@ -8,6 +8,11 @@ import {
 } from '../git/worktree-branch-merge-state'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { isFolderRepo } from '../../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host'
 import type { Repo, Worktree } from '../../shared/types'
 import {
   decideMergedWorktreeAutoClose,
@@ -47,9 +52,12 @@ export async function scanMergedWorktreeAutoCloseCandidates(
 ): Promise<MergedWorktreeAutoCloseDecision[]> {
   const now = options.now ?? Date.now()
   const graceMs = getMergedWorktreeAutoCloseGraceMs(store)
+  // Why the resolver and not `connectionId`: a runtime-owned repo carries
+  // `executionHostId: 'runtime:…'` and no connection, so a connection-only test
+  // reads it as local and lets the sweep probe a checkout this machine does not own.
   const repoContext: MergedWorktreeAutoCloseRepoContext = {
     isFolderRepo: isFolderRepo(repo),
-    isRemoteRepo: Boolean(repo.connectionId)
+    isRemoteRepo: getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID
   }
   if (repoContext.isFolderRepo || repoContext.isRemoteRepo) {
     return []
@@ -77,18 +85,45 @@ export async function scanMergedWorktreeAutoCloseCandidates(
 
   const decisions: MergedWorktreeAutoCloseDecision[] = []
   for (const worktree of worktrees) {
+    const worktreeContext = resolveMergedWorktreeAutoCloseWorktreeContext(
+      repoContext,
+      repo,
+      worktree
+    )
     const structuralSkip = getMergedWorktreeAutoCloseStructuralSkipReason(
       worktree,
-      repoContext,
+      worktreeContext,
       now,
       graceMs
     )
     const evidence = structuralSkip
       ? UNREAD_MERGED_WORKTREE_AUTO_CLOSE_EVIDENCE
       : await readMergedWorktreeAutoCloseEvidence(repo, worktree, gitOptions, options.signal)
-    decisions.push(decideMergedWorktreeAutoClose(worktree, repoContext, evidence, now, graceMs))
+    decisions.push(decideMergedWorktreeAutoClose(worktree, worktreeContext, evidence, now, graceMs))
   }
   return decisions
+}
+
+/**
+ * Narrow the repo's context to one workspace's own execution host.
+ *
+ * Why per workspace: worktree ids are `repoId::path` and repeat across hosts, so
+ * a locally-owned repo can still list a workspace whose persisted `hostId` names
+ * an SSH or runtime host. That workspace has no local merge proof, and a removal
+ * fenced to this machine would not reach it anyway.
+ */
+function resolveMergedWorktreeAutoCloseWorktreeContext(
+  repoContext: MergedWorktreeAutoCloseRepoContext,
+  repo: Repo,
+  worktree: Worktree
+): MergedWorktreeAutoCloseRepoContext {
+  if (repoContext.isRemoteRepo) {
+    return repoContext
+  }
+  return {
+    ...repoContext,
+    isRemoteRepo: getWorktreeExecutionHostId(worktree, repo) !== LOCAL_EXECUTION_HOST_ID
+  }
 }
 
 const UNREAD_MERGED_WORKTREE_AUTO_CLOSE_EVIDENCE: MergedWorktreeAutoCloseEvidence = {

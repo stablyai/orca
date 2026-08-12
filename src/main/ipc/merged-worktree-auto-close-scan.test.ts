@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { GitWorktreeInfo, GlobalSettings, Repo } from '../../shared/types'
+import type { GitWorktreeInfo, GlobalSettings, Repo, WorktreeMeta } from '../../shared/types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId
+} from '../../shared/execution-host'
 import { DEFAULT_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MS } from '../../shared/merged-worktree-auto-close'
 
 const {
@@ -59,10 +64,11 @@ function gitWorktree(overrides: Partial<GitWorktreeInfo> = {}): GitWorktreeInfo 
 
 function createStore(
   settings: Partial<GlobalSettings> = {},
-  createdAt: number = CREATED_AT
+  createdAt: number = CREATED_AT,
+  meta: Partial<WorktreeMeta> = {}
 ): Store {
   return {
-    getWorktreeMeta: () => ({ createdAt }),
+    getWorktreeMeta: () => ({ createdAt, ...meta }),
     getSettings: () => settings as GlobalSettings
   } as unknown as Store
 }
@@ -142,6 +148,38 @@ describe('scanMergedWorktreeAutoCloseCandidates', () => {
 
     expect(decisions).toEqual([])
     expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('skips a runtime-owned repo, which carries no connectionId', async () => {
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(
+      createStore(),
+      { ...REPO, executionHostId: toRuntimeExecutionHostId('env-1') },
+      { now: NOW }
+    )
+
+    expect(decisions).toEqual([])
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps a workspace whose own metadata stamps it to another host', async () => {
+    // Why: `repoId::path` ids repeat across hosts, so a locally-owned repo can
+    // list a workspace an SSH connection owns. Nothing here can prove its merge.
+    const store = createStore({}, CREATED_AT, { hostId: toSshExecutionHostId('target-a') })
+
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(store, REPO, { now: NOW })
+
+    expect(decisions[0]).toMatchObject({ action: 'skip', reason: 'remote-host' })
+    expect(hasWorktreeBranchUpstreamConfiguredMock).not.toHaveBeenCalled()
+    expect(isWorktreeBranchMergedIntoBaseMock).not.toHaveBeenCalled()
+    expect(getStatusMock).not.toHaveBeenCalled()
+  })
+
+  it('closes a workspace whose metadata stamps it to this machine', async () => {
+    const store = createStore({}, CREATED_AT, { hostId: LOCAL_EXECUTION_HOST_ID })
+
+    const decisions = await scanMergedWorktreeAutoCloseCandidates(store, REPO, { now: NOW })
+
+    expect(decisions[0]).toMatchObject({ action: 'close' })
   })
 
   it('returns no decisions when the worktree list fails', async () => {

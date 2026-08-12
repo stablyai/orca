@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { GlobalSettings, Repo } from '../../shared/types'
 import type { MergedWorktreeAutoCloseDecision } from '../../shared/merged-worktree-auto-close'
+import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import {
   MERGED_WORKTREE_AUTO_CLOSE_REPO_COOLDOWN_MS,
   autoCloseMergedWorktreesForRepo,
@@ -68,10 +69,28 @@ describe('autoCloseMergedWorktreesForRepo', () => {
       'id:repo-1::/workspaces/feature',
       false,
       false,
-      false
+      false,
+      LOCAL_EXECUTION_HOST_ID
     )
     expect(result.closed).toEqual(['repo-1::/workspaces/feature'])
     expect(result.failed).toEqual([])
+  })
+
+  it('never scans or removes for a repo another execution host owns', async () => {
+    // Why: `id:repo-1::/workspaces/feature` names a workspace on every host that
+    // has this repo, so an unfenced sweep can tear down the wrong one.
+    const scan = scanReturning([CLOSE_DECISION])
+
+    const result = await autoCloseMergedWorktreesForRepo(
+      createStore(true),
+      runtime,
+      { ...REPO, executionHostId: toRuntimeExecutionHostId('env-1') },
+      { now: NOW, scan }
+    )
+
+    expect(scan).not.toHaveBeenCalled()
+    expect(removeManagedWorktree).not.toHaveBeenCalled()
+    expect(result).toEqual({ closed: [], failed: [], decisions: [] })
   })
 
   it('reports every workspace it swept, including the ones it kept', async () => {

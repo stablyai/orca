@@ -1,6 +1,7 @@
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/types'
 import type { MergedWorktreeAutoCloseDecision } from '../../shared/merged-worktree-auto-close'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { scanMergedWorktreeAutoCloseCandidates } from './merged-worktree-auto-close-scan'
 
 /** Why a cooldown: `worktrees:list` fires on every sidebar refresh, and the sweep shells out to Git per branch. */
@@ -47,6 +48,14 @@ export async function autoCloseMergedWorktreesForRepo(
   repo: Repo,
   options: MergedWorktreeAutoCloseOptions = {}
 ): Promise<MergedWorktreeAutoCloseResult> {
+  // Why fenced up front: the only merge proof this sweep can read is a local one,
+  // and `id:` selectors are `repoId::path` ids that repeat across execution hosts.
+  // A repo owned elsewhere is not swept at all, so no probe and no removal can
+  // land on another host's workspace.
+  const hostId = getRepoExecutionHostId(repo)
+  if (hostId !== LOCAL_EXECUTION_HOST_ID) {
+    return { closed: [], failed: [], decisions: [] }
+  }
   const scan = options.scan ?? scanMergedWorktreeAutoCloseCandidates
   const decisions = await scan(store, repo, {
     ...(options.now !== undefined ? { now: options.now } : {}),
@@ -63,7 +72,9 @@ export async function autoCloseMergedWorktreesForRepo(
     try {
       // Why never force: Git's own non-force removal is the authoritative refusal
       // for a workspace that turned dirty between the scan and this call.
-      await runtime.removeManagedWorktree(`id:${decision.worktreeId}`, false, false, false)
+      // Why the host: it pins the `id:` selector to the owner the sweep proved, so
+      // a same-id workspace on another connection cannot be the one that is torn down.
+      await runtime.removeManagedWorktree(`id:${decision.worktreeId}`, false, false, false, hostId)
       closed.push(decision.worktreeId)
       outcomeByWorktreeId.set(decision.worktreeId, 'closed')
     } catch (error) {

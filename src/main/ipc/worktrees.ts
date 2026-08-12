@@ -1827,7 +1827,11 @@ export function registerWorktreeHandlers(
     if (executionHostId !== undefined && executionHostId !== LOCAL_EXECUTION_HOST_ID) {
       return
     }
-    const repo = findExactRepoOwner(store, repoId)
+    // Why the explicit host: with no host argument a single SSH- or runtime-owned
+    // candidate still resolves as the owner, and the legacy call shape supplies no
+    // host at all — so the guard above would pass and the sweep would run on a repo
+    // this machine does not own.
+    const repo = findExactRepoOwner(store, repoId, LOCAL_EXECUTION_HOST_ID)
     if (repo) {
       void scheduleMergedWorktreeAutoCloseForRepo(store, runtime, repo)
     }
@@ -1971,7 +1975,9 @@ export function registerWorktreeHandlers(
       // through (`worktrees:changed` makes the renderer re-list), so the sweep is
       // event-driven without a timer of its own. It is cooldown-gated and never
       // awaited — a list must not wait on Git merge probes.
-      void scheduleMergedWorktreeAutoCloseForRepo(store, runtime, repo)
+      // Why through the helper: `store.getRepo` returns any owner for the id, so
+      // routing both listing entry points through it keeps one ownership rule.
+      scheduleMergedWorktreeAutoCloseForListedRepo(repo.id, getRepoExecutionHostId(repo))
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)
         .filter((worktree) => worktree.visible)
         .map((worktree) => stampAndMergeVisibleDetectedWorktree(store, repo, worktree))
