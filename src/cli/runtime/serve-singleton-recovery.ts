@@ -1,13 +1,10 @@
-import { lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
+import { readlink, symlink, unlink } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { probeServeRuntimeHealth, type ServeRuntimeHealth } from './serve-runtime-health'
+import { quarantineSingletonArtifacts } from './serve-singleton-quarantine'
 
-export const SINGLETON_ARTIFACT_NAMES = [
-  'SingletonSocket',
-  'SingletonCookie',
-  'SingletonLock'
-] as const
+export { SINGLETON_ARTIFACT_NAMES } from './serve-singleton-quarantine'
 
 const RECOVERY_MUTEX_NAME = 'SingletonRecoveryLock'
 const OWNER_CONFIRMATION_DELAY_MS = 300
@@ -39,9 +36,10 @@ type ServeSingletonRecoveryOptions = {
   wait?: (delayMs: number) => Promise<void>
   quarantineSuffix?: string
   createMutexLink?: (target: string, path: string) => Promise<void>
+  createRecoveryGuardLink?: (target: string, path: string) => Promise<void>
 }
 
-type SingletonOwner = { hostname: string; pid: number }
+type SingletonOwner = { hostname: string; pid: number; lockTarget: string }
 
 export async function recoverStaleServeSingleton(
   userDataPath: string,
@@ -104,11 +102,20 @@ export async function recoverStaleServeSingleton(
     }
 
     const suffix = options.quarantineSuffix ?? `stale-${Date.now()}-${process.pid}`
-    const quarantined = await quarantineSingletonArtifacts(userDataPath, suffix)
-    if (!quarantined) {
+    const quarantine = await quarantineSingletonArtifacts(
+      userDataPath,
+      suffix,
+      confirmedOwner.lockTarget,
+      `${localHostname}-${process.pid}`,
+      options.createRecoveryGuardLink ?? symlink
+    )
+    if (quarantine.state === 'owner_changed') {
+      return { state: 'not-recoverable', reason: 'owner_changed' }
+    }
+    if (quarantine.state === 'failed') {
       return { state: 'not-recoverable', reason: 'quarantine_failed' }
     }
-    return { state: 'recovered', ownerPid: confirmedOwner.pid, quarantined }
+    return { state: 'recovered', ownerPid: confirmedOwner.pid, quarantined: quarantine.paths }
   } finally {
     await mutex.release()
   }
@@ -134,13 +141,13 @@ async function readSingletonOwner(userDataPath: string): Promise<SingletonOwner 
   }
   const separator = target.lastIndexOf('-')
   if (separator <= 0 || separator === target.length - 1) {
-    return { hostname: '', pid: 0 }
+    return { hostname: '', pid: 0, lockTarget: target }
   }
   const pid = Number(target.slice(separator + 1))
   if (!Number.isSafeInteger(pid) || pid <= 0) {
-    return { hostname: '', pid: 0 }
+    return { hostname: '', pid: 0, lockTarget: target }
   }
-  return { hostname: target.slice(0, separator), pid }
+  return { hostname: target.slice(0, separator), pid, lockTarget: target }
 }
 
 function assessOwner(
@@ -161,30 +168,6 @@ function assessOwner(
     return { state: 'not-recoverable', reason: 'owner_process_alive' }
   }
   return null
-}
-
-async function quarantineSingletonArtifacts(
-  userDataPath: string,
-  suffix: string
-): Promise<string[] | null> {
-  const moved: { source: string; target: string; name: string }[] = []
-  try {
-    for (const name of SINGLETON_ARTIFACT_NAMES) {
-      const source = join(userDataPath, name)
-      if (!(await exists(source))) {
-        continue
-      }
-      const target = join(userDataPath, `${name}.${suffix}`)
-      await rename(source, target)
-      moved.push({ source, target, name })
-    }
-    return moved.map(({ name }) => `${name}.${suffix}`)
-  } catch {
-    for (const entry of moved.toReversed()) {
-      await rename(entry.target, entry.source).catch(() => undefined)
-    }
-    return null
-  }
 }
 
 async function acquireRecoveryMutex(
@@ -243,13 +226,6 @@ async function createMutex(
       ? { state: 'exists' }
       : { state: 'failed', ...(errorCode ? { errorCode } : {}) }
   }
-}
-
-async function exists(path: string): Promise<boolean> {
-  return await lstat(path).then(
-    () => true,
-    () => false
-  )
 }
 
 function defaultIsProcessAlive(pid: number): boolean {

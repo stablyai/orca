@@ -1,4 +1,5 @@
-import { lstat, mkdtemp, readlink, rm, symlink } from 'node:fs/promises'
+import { symlinkSync, unlinkSync } from 'node:fs'
+import { lstat, mkdir, mkdtemp, readlink, rm, symlink } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -83,6 +84,77 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
 
     expect(result).toMatchObject({ state: 'not-recoverable', reason: 'owner_process_alive' })
     expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-4101`)
+  })
+
+  it('preserves a replacement owner that appears after confirmation', async () => {
+    const root = await createProfile(987_654)
+    const lockPath = join(root, 'SingletonLock')
+    const replacementTarget = `${hostname()}-123456`
+    let livenessChecks = 0
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => {
+        livenessChecks += 1
+        if (livenessChecks === 2) {
+          unlinkSync(lockPath)
+          symlinkSync(replacementTarget, lockPath)
+        }
+        return false
+      },
+      wait: async () => undefined,
+      quarantineSuffix: 'must-not-exist'
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason: 'owner_changed' })
+    expect(await readlink(lockPath)).toBe(replacementTarget)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+  })
+
+  it('preserves a replacement owner that claims the lock during quarantine', async () => {
+    const root = await createProfile(987_654)
+    const lockPath = join(root, 'SingletonLock')
+    const replacementTarget = `${hostname()}-123456`
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'must-not-exist',
+      createRecoveryGuardLink: async (target, path) => {
+        await symlink(replacementTarget, path)
+        await symlink(target, path)
+      }
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason: 'owner_changed' })
+    expect(await readlink(lockPath)).toBe(replacementTarget)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
+  })
+
+  it('restores the stale owner when companion quarantine fails', async () => {
+    const root = await createProfile(987_654)
+    await mkdir(join(root, 'SingletonSocket.rollback'))
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'rollback'
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason: 'quarantine_failed' })
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
+    expect(await pathExists(join(root, 'SingletonSocket'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonCookie'))).toBe(true)
+    expect(await pathExists(join(root, 'SingletonLock.rollback'))).toBe(false)
+    expect(await pathExists(join(root, 'SingletonRecoveryLock'))).toBe(false)
   })
 
   it.each([
