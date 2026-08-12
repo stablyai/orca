@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -48,16 +48,16 @@ function clamp(value: number, min: number, max: number): number {
  * anchored so the cursor stays visible. Keystrokes pass through to the PTY;
  * DOM renderer so it never grabs a WebGL context.
  */
-export function AgentTerminalPreview({
-  ptyId,
-  terminalInput = null,
-  className
-}: {
+type AgentTerminalPreviewProps = {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
+  onClose?: () => void
   className?: string
-}): React.JSX.Element {
+}
+
+export function AgentTerminalPreview(props: AgentTerminalPreviewProps): React.JSX.Element {
+  const { ptyId, terminalInput = null, onClose, className } = props
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const settings = useAppStore((state) => state.settings)
@@ -68,6 +68,7 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
+  const closePreview = useEffectEvent(() => onClose?.())
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -221,6 +222,7 @@ export function AgentTerminalPreview({
       disposeKeyHandler = installPreviewTerminalKeyHandler({
         terminal,
         claimImeKeyEvent: (event) => imeBridge?.claimKeyEvent(event) ?? false,
+        closePreview,
         pasteClipboardText: (activeElement, source) =>
           void pasteClipboardText(activeElement, source),
         // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.

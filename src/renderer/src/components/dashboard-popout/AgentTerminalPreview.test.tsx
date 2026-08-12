@@ -480,6 +480,29 @@ describe('AgentTerminalPreview', () => {
     expect(input).not.toHaveBeenCalled()
   })
 
+  it('closes the preview on the configured pane-close shortcut', async () => {
+    platformState.value = 'darwin'
+    const onClose = vi.fn()
+    render(<AgentTerminalPreview ptyId="pty-1" onClose={onClose} />)
+    await waitFor(() => expect(terminalHarness.instances).toHaveLength(1))
+    const terminal = terminalHarness.instances[0]!
+    await waitFor(() => expect(terminal.customKeyHandler).not.toBeNull())
+
+    const keydown = new KeyboardEvent('keydown', {
+      key: 'w',
+      code: 'KeyW',
+      metaKey: true,
+      cancelable: true
+    })
+    const handled = terminal.customKeyHandler!(keydown)
+
+    expect(handled).toBe(false)
+    expect(keydown.defaultPrevented).toBe(true)
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(terminal.input).not.toHaveBeenCalled()
+    expect(input).not.toHaveBeenCalled()
+  })
+
   it('keeps a native input-source chord from inserting text into the preview', async () => {
     storeState.keybindings = { 'terminal.switchInputSource': ['Shift+Space'] }
     const view = render(<AgentTerminalPreview ptyId="pty-1" />)
