@@ -3114,14 +3114,18 @@
         "https://github.com/stablyai/orca/pull/13995"
       ],
       "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
-      "oracle": "Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then launch the advertised Floating agent and assert a local Floating tab with no runtime-host path.",
+      "oracle": "Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then independently assert the Floating launch call and PTY transport select local IPC with no WSL project runtime.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose"
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts --reporter=dot"
       ],
       "testFiles": [
         "src/renderer/src/hooks/useDetectedAgents.test.tsx",
         "src/renderer/src/hooks/useAgentDetectionTarget.test.ts",
-        "src/renderer/src/lib/launch-agent-in-new-tab.test.ts"
+        "src/renderer/src/store/slices/detected-agents.test.ts",
+        "src/renderer/src/lib/local-preflight-context.test.ts",
+        "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-connection.test.ts"
       ],
       "assertionRefs": [
         {
@@ -3136,6 +3140,12 @@
           "assertions": [
             "the advertised Floating agent launches in a Floating tab with null runtime ownership and no paired-runtime create call"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal-pane/pty-connection.test.ts",
+          "assertions": [
+            "the Floating agent's actual PTY selects local IPC, carries executionHostId local, and omits the active project's WSL runtime"
+          ]
         }
       ],
       "evidenceRuns": [
@@ -3143,15 +3153,24 @@
           "date": "2026-08-12",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/store/slices/detected-agents.test.ts src/renderer/src/lib/local-preflight-context.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
           "result": "passed",
-          "durationSeconds": 3,
-          "summary": "The Windows-mode authority oracle passed independent WSL/local inventory, refresh isolation, and actual Floating launch assertions."
+          "durationSeconds": 2,
+          "summary": "The Windows-mode authority oracle passed independent WSL/local inventory, refresh isolation, and Floating launch-call assertions."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-connection.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 20,
+          "summary": "The full PTY connection suite passed the independent Floating native-host transport oracle."
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 10,
-        "scope": "three focused renderer authority and launch test files"
+        "p95Seconds": 40,
+        "scope": "six focused renderer authority, cache, and launch test files"
       },
       "flakeHistory": {
         "status": "not-started",

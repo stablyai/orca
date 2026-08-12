@@ -25,6 +25,7 @@ import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { TerminalLayoutSnapshot, TuiAgent } from '../../../../shared/types'
 import { YOLO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../../../shared/setup-agent-sequencing'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   beginAgentStartupDeliveryAttempt,
   resetAgentStartupDelayedDeliveryForTests
@@ -2325,6 +2326,53 @@ describe('connectPanePty', () => {
     connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
     await flushAsyncTicks()
 
+    expect(createdTransportOptions[0]?.projectRuntime).toBeUndefined()
+  })
+
+  it('spawns a Floating agent on native Windows beside an active WSL project', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-1',
+      tabsByWorktree: {
+        ...mockStoreState.tabsByWorktree,
+        [FLOATING_TERMINAL_WORKTREE_ID]: [
+          { id: 'tab-floating-agent', ptyId: null, launchAgent: 'codex' }
+        ]
+      },
+      projects: [{ id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }],
+      settings: {
+        ...mockStoreState.settings,
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+      }
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        tabId: 'tab-floating-agent',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        cwd: 'C:\\Users\\alice',
+        startup: { launchAgent: 'codex' }
+      }) as never
+    )
+    await flushAsyncTicks()
+
+    expect(createIpcPtyTransport).toHaveBeenCalledOnce()
+    expect(createRemoteRuntimePtyTransport).not.toHaveBeenCalled()
+    expect(createdTransportOptions[0]).toMatchObject({
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      executionHostId: 'local',
+      connectionId: null,
+      launchAgent: 'codex'
+    })
     expect(createdTransportOptions[0]?.projectRuntime).toBeUndefined()
   })
 

@@ -151,7 +151,11 @@ describe('Floating Workspace authority', () => {
       }
     )
     await renderProbe(
-      { kind: 'local', worktreeId: FLOATING_TERMINAL_WORKTREE_ID } as AgentDetectionTarget,
+      {
+        kind: 'local',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+        contextKey: 'host'
+      } as AgentDetectionTarget,
       (result) => {
         floatingResult.current = result
       }
