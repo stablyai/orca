@@ -86,16 +86,21 @@ design-docs/
 # Local-only design/planning docs (not checked in), including most of docs/reference/.
 # Durable docs that should be tracked must live in one of the allow-listed
 # locations below (assets, readme, STYLEGUIDE, mobile terminal shortcut bar,
-# and the tracked reference docs linked from AGENTS.md / README.md).
+# the OpenSpec change ledger, and the tracked reference docs linked from
+# AGENTS.md / README.md).
 docs/**
 !docs/
 !docs/assets/
 !docs/assets/**
 !docs/readme/
 !docs/readme/**
+!docs/openspec/
+!docs/openspec/**
 !docs/STYLEGUIDE.md
 !docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/windows-agent-teams-bug-summary.md
+!docs/windows-agent-teams-session-fixes.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md

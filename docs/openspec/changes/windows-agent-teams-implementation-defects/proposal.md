@@ -30,7 +30,7 @@ No change to the tmux dispatcher, the RPC surface, or any non-Windows launch pat
 
 ### Modified Capabilities
 
-<!-- None. openspec/specs/ is empty; this records the capability's full required behavior. -->
+<!-- None. docs/openspec/specs/ is empty; this records the capability's full required behavior. -->
 
 ## Impact
 

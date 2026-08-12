@@ -304,4 +304,4 @@ And once, fixing 13/14, I nearly reproduced defect 7 — reading `process.platfo
 - Defects 13–14: `docs/superpowers/specs/2026-07-27-teammate-command-shell-decomposition.md`
 - Defects 15–16: `docs/superpowers/specs/2026-07-28-powershell-invocation-and-daemon-staleness.md`
 - Original design (superseded in scope): `docs/superpowers/specs/2026-07-27-windows-agent-teams-native-panes-design.md`
-- OpenSpec: three changes under `openspec/changes/`
+- OpenSpec: three changes under `docs/openspec/changes/`

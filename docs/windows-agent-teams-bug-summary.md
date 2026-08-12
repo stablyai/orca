@@ -107,4 +107,4 @@ The mistake is worth keeping: repeated failure to trigger the feature through in
 - Defects 1–12: `docs/superpowers/specs/2026-07-27-windows-agent-teams-implementation-defects.md`
 - Defects 13–14: `docs/superpowers/specs/2026-07-27-teammate-command-shell-decomposition.md`
 - Defects 15–16: `docs/superpowers/specs/2026-07-28-powershell-invocation-and-daemon-staleness.md`
-- OpenSpec: three changes under `openspec/changes/`
+- OpenSpec: three changes under `docs/openspec/changes/`
