@@ -75,58 +75,108 @@ const LEAF_4 = '44444444-4444-4444-8444-444444444444'
 // ---------------------------------------------------------------------------
 // buildFontFamily
 // ---------------------------------------------------------------------------
-const FULL_FALLBACK =
-  '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+// Expected fallback order for the darwin platform: Latin monospace, Nerd Fonts,
+// CJK coding faces, then the native macOS system defaults ahead of the Windows ones.
+const DARWIN_FALLBACK_FONTS = [
+  'SF Mono',
+  'Menlo',
+  'Monaco',
+  'Cascadia Mono',
+  'Consolas',
+  'DejaVu Sans Mono',
+  'Liberation Mono',
+  'Orca Nerd Font Symbols',
+  'Symbols Nerd Font Mono',
+  'MesloLGS Nerd Font',
+  'JetBrainsMono Nerd Font',
+  'Hack Nerd Font',
+  'D2Coding',
+  'NanumGothicCoding',
+  '나눔고딕코딩',
+  'Sarasa Mono K',
+  'Noto Sans Mono CJK KR',
+  'Apple SD Gothic Neo',
+  'Apple SD 산돌고딕 Neo',
+  'Hiragino Sans',
+  'ヒラギノ角ゴシック',
+  'Malgun Gothic',
+  '맑은 고딕',
+  'MS Gothic',
+  'ＭＳ ゴシック'
+]
+const quoteChain = (fonts: string[]): string =>
+  [...fonts.map((font) => `"${font}"`), 'monospace'].join(', ')
+const FULL_FALLBACK = quoteChain(DARWIN_FALLBACK_FONTS)
+const fallbackWithout = (font: string): string =>
+  quoteChain(DARWIN_FALLBACK_FONTS.filter((entry) => entry !== font))
 
 describe('buildFontFamily', () => {
   it('puts custom font first with full cross-platform fallback chain', () => {
-    const result = buildFontFamily('JetBrains Mono')
+    const result = buildFontFamily('JetBrains Mono', 'darwin')
     expect(result).toBe(`"JetBrains Mono", ${FULL_FALLBACK}`)
   })
 
   it('does not duplicate SF Mono when it is the input', () => {
-    const result = buildFontFamily('SF Mono')
-    expect(result).toBe(
-      '"SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
-    )
+    const result = buildFontFamily('SF Mono', 'darwin')
+    expect(result).toBe(`"SF Mono", ${fallbackWithout('SF Mono')}`)
+  })
+
+  it('deduplicates case-insensitively', () => {
+    const result = buildFontFamily('sf mono', 'darwin')
+    expect(result).toBe(`"sf mono", ${fallbackWithout('SF Mono')}`)
   })
 
   it('returns full fallback chain for empty string', () => {
-    const result = buildFontFamily('')
+    const result = buildFontFamily('', 'darwin')
     expect(result).toBe(FULL_FALLBACK)
   })
 
   it('treats whitespace-only string same as empty', () => {
-    const result = buildFontFamily('   ')
+    const result = buildFontFamily('   ', 'darwin')
     expect(result).toBe(FULL_FALLBACK)
   })
 
-  it('does not duplicate when font name contains "sf mono" (case-insensitive)', () => {
-    const result = buildFontFamily('My SF Mono Custom')
-    expect(result).toBe(
-      '"My SF Mono Custom", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
-    )
+  it('keeps a fallback whose name is merely contained in the chosen font', () => {
+    // "My SF Mono Custom" is a distinct CSS family, so "SF Mono" must survive.
+    const result = buildFontFamily('My SF Mono Custom', 'darwin')
+    expect(result).toBe(`"My SF Mono Custom", ${FULL_FALLBACK}`)
   })
 
   it('does not duplicate Consolas when it is the input', () => {
-    const result = buildFontFamily('Consolas')
-    expect(result).toBe(
-      '"Consolas", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
-    )
+    const result = buildFontFamily('Consolas', 'darwin')
+    expect(result).toBe(`"Consolas", ${fallbackWithout('Consolas')}`)
   })
 
   it('does not duplicate MesloLGS Nerd Font when it is the input', () => {
-    const result = buildFontFamily('MesloLGS Nerd Font')
-    expect(result).toBe(
-      '"MesloLGS Nerd Font", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Orca Nerd Font Symbols", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
-    )
+    const result = buildFontFamily('MesloLGS Nerd Font', 'darwin')
+    expect(result).toBe(`"MesloLGS Nerd Font", ${fallbackWithout('MesloLGS Nerd Font')}`)
   })
 
   it('does not duplicate the bundled Nerd Font symbol fallback', () => {
-    const result = buildFontFamily('Orca Nerd Font Symbols')
-    expect(result).toBe(
-      '"Orca Nerd Font Symbols", "SF Mono", "Menlo", "Monaco", "Cascadia Mono", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "Hack Nerd Font", "D2Coding", "NanumGothicCoding", "나눔고딕코딩", "Sarasa Mono K", "Noto Sans Mono CJK KR", "Apple SD Gothic Neo", "Apple SD 산돌고딕 Neo", "Malgun Gothic", "맑은 고딕", "MS Gothic", "ＭＳ ゴシック", "Hiragino Sans", "ヒラギノ角ゴシック", monospace'
+    const result = buildFontFamily('Orca Nerd Font Symbols', 'darwin')
+    expect(result).toBe(`"Orca Nerd Font Symbols", ${fallbackWithout('Orca Nerd Font Symbols')}`)
+  })
+
+  // A CJK system font that merely happens to be installed (e.g. Malgun via Office
+  // on a Mac) must not outrank the one the OS ships, so the native group leads.
+  it('puts macOS system CJK defaults ahead of the Windows ones on darwin', () => {
+    const chain = buildFontFamily('', 'darwin')
+    expect(chain.indexOf('"Apple SD Gothic Neo"')).toBeLessThan(chain.indexOf('"Malgun Gothic"'))
+    expect(chain.indexOf('"Hiragino Sans"')).toBeLessThan(chain.indexOf('"MS Gothic"'))
+  })
+
+  it('puts Windows system CJK defaults ahead of the macOS ones on win32', () => {
+    const chain = buildFontFamily('', 'win32')
+    expect(chain.indexOf('"Malgun Gothic"')).toBeLessThan(chain.indexOf('"Apple SD Gothic Neo"'))
+    expect(chain.indexOf('"MS Gothic"')).toBeLessThan(chain.indexOf('"Hiragino Sans"'))
+  })
+
+  it('keeps the CJK coding faces ahead of every system default on linux', () => {
+    const chain = buildFontFamily('', 'linux')
+    expect(chain.indexOf('"Noto Sans Mono CJK KR"')).toBeLessThan(
+      chain.indexOf('"Apple SD Gothic Neo"')
     )
+    expect(chain.indexOf('"Noto Sans Mono CJK KR"')).toBeLessThan(chain.indexOf('"Malgun Gothic"'))
   })
 
   // Without one of these the browser substitutes a proportional face for Hangul,
