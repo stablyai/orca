@@ -170,12 +170,14 @@ function isSameUsageWindow(
   return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
 }
 
+/** Normalize Grok runtime identity so target comparisons remain stable. */
 function normalizeGrokFetchTarget(target: LocalAccountRuntimeTarget): LocalAccountRuntimeTarget {
   return target.runtime === 'wsl'
     ? { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
     : { runtime: 'host', wslDistro: null }
 }
 
+/** Compare the runtime identity that scopes a Grok credential and quota result. */
 function isSameGrokTarget(
   current: LocalAccountRuntimeTarget,
   next: LocalAccountRuntimeTarget
@@ -321,6 +323,7 @@ export class RateLimitService {
     this.claudeAuthPreparationResolver = resolver
   }
 
+  /** Replace the Grok runtime target and invalidate credentials from the prior target. */
   setGrokFetchTarget(target: LocalAccountRuntimeTarget): void {
     const nextTarget = normalizeGrokFetchTarget(target)
     if (isSameGrokTarget(this.grokFetchTarget, nextTarget)) {
@@ -331,11 +334,13 @@ export class RateLimitService {
     this.grokAuthConfigured = false
   }
 
+  /** Install runtime home resolution and prime Grok's configured-credential state. */
   setGrokHomeResolver(resolver: GrokHomeResolver): void {
     this.grokHomeResolver = resolver
     void this.refreshGrokAuthConfigured()
   }
 
+  /** Resolve and read Grok auth while containing WSL probe failures as account state. */
   private async readResolvedGrokAuthSession(
     target: LocalAccountRuntimeTarget,
     signal?: AbortSignal
@@ -349,10 +354,12 @@ export class RateLimitService {
     return readGrokAuthSession({ home: resolution?.path, signal })
   }
 
+  /** Reject work captured before the current Grok runtime generation. */
   private isCurrentGrokTarget(generation: number, target: LocalAccountRuntimeTarget): boolean {
     return generation === this.grokFetchGeneration && isSameGrokTarget(target, this.grokFetchTarget)
   }
 
+  /** Refresh credential presence without issuing a Grok quota request. */
   private async refreshGrokAuthConfigured(): Promise<void> {
     const generation = this.grokFetchGeneration
     const target = this.grokFetchTarget
@@ -368,6 +375,7 @@ export class RateLimitService {
     this.updateState({ ...this.state })
   }
 
+  /** Read current Grok account metadata, retrying once across a concurrent target switch. */
   async getGrokAccountStatus(): Promise<GrokAccountStatus> {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const generation = this.grokFetchGeneration
@@ -504,6 +512,7 @@ export class RateLimitService {
     return this.getState()
   }
 
+  /** Switch Grok runtime and force an isolated quota refresh for the new target. */
   async refreshGrokForTarget(target: LocalAccountRuntimeTarget): Promise<RateLimitState> {
     const nextTarget = normalizeGrokFetchTarget(target)
     const targetChanged = !isSameGrokTarget(this.grokFetchTarget, nextTarget)

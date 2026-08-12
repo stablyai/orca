@@ -1,6 +1,7 @@
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
 import { isGrokAccessTokenFresh, type GrokAuthReadResult } from '../rate-limits/grok-auth'
 
+/** Convert an auth-file read into renderer-safe Grok account metadata. */
 export function getGrokAccountStatus(readResult: GrokAuthReadResult): GrokAccountStatus {
   if (readResult.status === 'missing') {
     return {

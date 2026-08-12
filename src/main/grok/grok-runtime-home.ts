@@ -51,6 +51,7 @@ export async function resolveGrokHome(
   }
 }
 
+/** Append Grok CLI's data directory without breaking WSL UNC semantics. */
 function joinGrokHome(home: string): string {
   return parseWslUncPath(home) ? pathWin32.join(home, '.grok') : join(home, '.grok')
 }

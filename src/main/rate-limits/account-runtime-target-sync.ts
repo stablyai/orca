@@ -15,6 +15,7 @@ type RuntimeTarget = {
   wslDistro?: string | null
 }
 
+/** Build a settings listener that refreshes providers when their local runtime changes. */
 export function createAccountRuntimeTargetSettingsSync(
   rateLimits: AccountRuntimeRateLimitService,
   initialSettings: GlobalSettings,
@@ -52,6 +53,7 @@ export function createAccountRuntimeTargetSettingsSync(
   }
 }
 
+/** Resolve effective local-account targets for every runtime-aware provider. */
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
@@ -60,6 +62,7 @@ function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform)
   }
 }
 
+/** Detect settings patches that can change an effective local-account target. */
 function containsAccountRuntimeTargetUpdate(updates: Partial<GlobalSettings>): boolean {
   return (
     'localAccountRuntime' in updates ||
@@ -68,6 +71,7 @@ function containsAccountRuntimeTargetUpdate(updates: Partial<GlobalSettings>): b
   )
 }
 
+/** Compare normalized host or WSL target identity. */
 function isSameTarget(current: RuntimeTarget, next: RuntimeTarget): boolean {
   return (
     (current.runtime ?? 'host') === (next.runtime ?? 'host') &&

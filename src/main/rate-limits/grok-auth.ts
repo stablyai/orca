@@ -7,11 +7,12 @@ import {
   type SharedAuthFilesystemOperation
 } from './auth-filesystem-operation'
 
-// Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
+/** Resolve the Grok home exactly as Grok CLI does, including `GROK_HOME`. */
 export function getGrokHome(): string {
   return resolveGrokHomeDir()
 }
 
+/** Locate `auth.json` under an explicit host or WSL Grok home. */
 export function getGrokAuthPath(home: string = getGrokHome()): string {
   return parseWslUncPath(home) ? pathWin32.join(home, 'auth.json') : join(home, 'auth.json')
 }
@@ -50,6 +51,7 @@ type GrokAuthReadOptions = {
   timeoutMs?: number
 }
 
+/** Sanitize auth read failures before they reach renderer-visible account state. */
 function getGrokAuthReadError(err: unknown): string {
   if (err instanceof SyntaxError) {
     return 'Grok auth file is invalid'
@@ -59,6 +61,7 @@ function getGrokAuthReadError(err: unknown): string {
   return 'Unable to read Grok auth file'
 }
 
+/** Validate and narrow one unknown `auth.json` entry that carries an access token. */
 function parseAuthEntry(value: unknown): TokenizedGrokAuthEntry | null {
   if (typeof value !== 'object' || value === null) {
     return null
@@ -70,6 +73,7 @@ function parseAuthEntry(value: unknown): TokenizedGrokAuthEntry | null {
   return entry as TokenizedGrokAuthEntry
 }
 
+/** Parse an optional ISO expiry without letting malformed metadata reject the file. */
 function parseExpiresAtMs(iso: string | undefined): number | null {
   if (!iso) {
     return null
@@ -81,6 +85,7 @@ function parseExpiresAtMs(iso: string | undefined): number | null {
 // Why: stale alternate issuers can precede the default xAI OAuth session in auth.json.
 const PREFERRED_GROK_AUTH_ISSUER = 'https://auth.x.ai'
 
+/** Convert Grok CLI's auth entry shape into Orca's normalized session contract. */
 function sessionFromAuthEntry(authEntry: TokenizedGrokAuthEntry): GrokAuthSession {
   return {
     accessToken: authEntry.key,
@@ -92,10 +97,12 @@ function sessionFromAuthEntry(authEntry: TokenizedGrokAuthEntry): GrokAuthSessio
   }
 }
 
+/** Identify xAI's preferred issuer while accepting its scoped session keys. */
 function isPreferredGrokAuthKey(key: string): boolean {
   return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
+/** Parse Grok CLI auth contents and select the preferred usable session. */
 function parseGrokAuthContents(raw: string): GrokAuthReadResult {
   try {
     const parsed: unknown = JSON.parse(raw)
@@ -133,11 +140,13 @@ function parseGrokAuthContents(raw: string): GrokAuthReadResult {
   }
 }
 
+/** Treat absent files and absent parent directories as a signed-out state. */
 function isMissingPathError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | null)?.code
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 
+/** Share one bounded filesystem read per auth path until the native read settles. */
 function getGrokAuthRead(path: string): SharedAuthFilesystemOperation<GrokAuthReadResult> {
   const existing = authReadByPath.get(path)
   if (existing) {
@@ -163,6 +172,7 @@ function getGrokAuthRead(path: string): SharedAuthFilesystemOperation<GrokAuthRe
   return read
 }
 
+/** Read Grok authentication from a resolved home with timeout and abort support. */
 export async function readGrokAuthSession(
   options: GrokAuthReadOptions = {}
 ): Promise<GrokAuthReadResult> {
@@ -181,6 +191,7 @@ export async function readGrokAuthSession(
 
 const TOKEN_SKEW_MS = 5 * 60 * 1000
 
+/** Report whether a token remains usable beyond the refresh safety margin. */
 export function isGrokAccessTokenFresh(session: GrokAuthSession): boolean {
   if (session.expiresAtMs === null) {
     // Why: auth.json may lack expiry; a bad token still surfaces as billing HTTP 401.
