@@ -3355,7 +3355,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           get().settings,
           onboarding,
           hadProjectBeforeAdd,
-          isNativeChatTranscriptLocalReadable(repo.connectionId)
+          isNativeChatTranscriptLocalReadable(repo.connectionId),
+          repo.id,
+          repo.connectionId,
+          getRepoExecutionHostId(repo)
         )
         activateAndRevealWorktree(folderWorktree.id, {
           sidebarRevealBehavior: 'auto',

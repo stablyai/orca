@@ -11,6 +11,7 @@ import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-re
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../shared/types'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -31,7 +32,10 @@ function getClientPlatform(): NodeJS.Platform {
 
 export function buildOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
-  nativeChatTranscriptIsLocalReadable = true
+  nativeChatTranscriptIsLocalReadable = true,
+  repoId?: string | null,
+  connectionId?: string | null,
+  executionHostId?: ExecutionHostId | null
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
   if (
@@ -54,7 +58,10 @@ export function buildOnboardingFolderAgentStartup(
       nativeChatTranscriptIsLocalReadable
     }),
     platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true
+    allowEmptyPromptLaunch: true,
+    repoId,
+    connectionId,
+    executionHostId
   })
   if (!startupPlan) {
     return undefined
@@ -93,10 +100,19 @@ export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
   hasExistingProject: boolean,
-  nativeChatTranscriptIsLocalReadable = true
+  nativeChatTranscriptIsLocalReadable = true,
+  repoId?: string | null,
+  connectionId?: string | null,
+  executionHostId?: ExecutionHostId | null
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
+  return buildOnboardingFolderAgentStartup(
+    settings,
+    nativeChatTranscriptIsLocalReadable,
+    repoId,
+    connectionId,
+    executionHostId
+  )
 }

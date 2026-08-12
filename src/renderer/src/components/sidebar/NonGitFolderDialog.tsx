@@ -15,6 +15,7 @@ import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-fol
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 
@@ -88,7 +89,10 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               useAppStore.getState().settings,
               onboarding,
               hadProjectBeforeAdd,
-              isNativeChatTranscriptLocalReadable(connectionId)
+              isNativeChatTranscriptLocalReadable(connectionId),
+              repo.id,
+              repo.connectionId,
+              getRepoExecutionHostId(repo)
             )
             activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',
