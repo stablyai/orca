@@ -24,18 +24,18 @@ export function singlePaneLayoutSnapshot(
 }
 
 export function clearTransientTerminalState(tab: TerminalTab, index: number): TerminalTab {
+  const { titleHydrationPending: _titleHydrationPending, ...persistedTab } = tab
+  void _titleHydrationPending
+  const titleWasReset = classifyTitleActivity(tab.title) !== null
+  const launchIdentityNeedsTitleReplay = titleWasReset && tab.launchAgent !== undefined
   return {
-    ...tab,
+    ...persistedTab,
     ptyId: null,
-    title: getResetTitle(tab, index)
+    title: titleWasReset ? getFallbackTitle(tab, index) : tab.title,
+    ...(launchIdentityNeedsTitleReplay ? { titleHydrationPending: true } : {})
   }
 }
 
-function getResetTitle(tab: TerminalTab, index: number): string {
-  const fallbackTitle =
-    tab.customTitle?.trim() || tab.defaultTitle?.trim() || `Terminal ${index + 1}`
-  // Why: reset any recognized agent title on hydration. The prior-session
-  // agent is no longer running after a restart, so showing a stale
-  // "Claude done" or spinner would be misleading.
-  return classifyTitleActivity(tab.title) ? fallbackTitle : tab.title
+function getFallbackTitle(tab: TerminalTab, index: number): string {
+  return tab.customTitle?.trim() || tab.defaultTitle?.trim() || `Terminal ${index + 1}`
 }

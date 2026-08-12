@@ -58,9 +58,7 @@ describe('clearTransientTerminalState', () => {
     expect(result.title).toBe('bash')
   })
 
-  // Why: idle agent titles (e.g. "* Claude done") are reset to the fallback
-  // on hydration — the prior-session agent is no longer running, so showing
-  // its last title would be misleading.
+  // Why: hide the persisted status until the surviving PTY replays its current title.
   it('resets idle agent titles to fallback across hydration', () => {
     const tab = makeTab({ title: '* Claude done', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)
@@ -71,6 +69,19 @@ describe('clearTransientTerminalState', () => {
     const tab = makeTab({ title: '⠋ Claude working', customTitle: null })
     const result = clearTransientTerminalState(tab, 0)
     expect(result.title).toBe('Terminal 1')
+  })
+
+  it('fences launch identity until its neutralized title replays', () => {
+    const tab = makeTab({ title: '⠋ indexing repository', launchAgent: 'codex' })
+    const result = clearTransientTerminalState(tab, 0)
+
+    expect(result).toMatchObject({ title: 'Terminal 1', titleHydrationPending: true })
+  })
+
+  it('does not fence neutralized titles without launch identity', () => {
+    const result = clearTransientTerminalState(makeTab({ title: '⠋ background job' }), 0)
+
+    expect(result.titleHydrationPending).toBeUndefined()
   })
 
   it('uses "Terminal {index+1}" when customTitle is whitespace only', () => {

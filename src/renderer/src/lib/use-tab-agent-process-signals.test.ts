@@ -197,7 +197,12 @@ describe('useTabAgent process signals', () => {
   })
 
   it('clears hookless launch identity on shell-foreground evidence despite a stale title', async () => {
-    const launchedTab = { ...baseTab, launchAgent: 'aider' as const, title: '⠸ aider working' }
+    const launchedTab = {
+      ...baseTab,
+      launchAgent: 'aider' as const,
+      title: '⠸ aider working',
+      titleHydrationPending: true as const
+    }
     const root = await renderHookProbe(launchedTab)
 
     await setPaneForeground({ agent: 'aider', shellForeground: false })
@@ -212,6 +217,7 @@ describe('useTabAgent process signals', () => {
     })
 
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+    expect(latestHookAgent).toBeNull()
   })
 
   it('does not clear launch identity from shell foreground before any agent activity', async () => {

@@ -308,33 +308,36 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
-  it('ignores pendingActivationSpawn-only changes', () => {
-    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
-    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+  it.each(['pendingActivationSpawn', 'titleHydrationPending'] as const)(
+    'ignores %s-only changes',
+    (transientKey) => {
+      const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+      const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
 
-    useAppStore.setState({
-      workspaceSessionReady: true,
-      hydrationSucceeded: true,
-      ...makeTerminalSessionState('bash')
-    })
-    vi.advanceTimersByTime(200)
-    persist.mockClear()
+      useAppStore.setState({
+        workspaceSessionReady: true,
+        hydrationSucceeded: true,
+        ...makeTerminalSessionState('bash')
+      })
+      vi.advanceTimersByTime(200)
+      persist.mockClear()
 
-    useAppStore.setState({
-      tabsByWorktree: {
-        'wt-1': [
-          {
-            ...useAppStore.getState().tabsByWorktree['wt-1'][0],
-            pendingActivationSpawn: true
-          }
-        ]
-      }
-    })
-    vi.advanceTimersByTime(200)
+      useAppStore.setState({
+        tabsByWorktree: {
+          'wt-1': [
+            {
+              ...useAppStore.getState().tabsByWorktree['wt-1'][0],
+              [transientKey]: true
+            }
+          ]
+        }
+      })
+      vi.advanceTimersByTime(200)
 
-    expect(persist).not.toHaveBeenCalled()
-    cleanup()
-  })
+      expect(persist).not.toHaveBeenCalled()
+      cleanup()
+    }
+  )
 
   it('ignores decorative unified terminal label churn', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()

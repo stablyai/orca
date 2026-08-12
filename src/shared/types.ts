@@ -924,6 +924,8 @@ export type TerminalTab = {
    *  hook status overrides this once the agent does anything. Plain terminals
    *  and manually-started agents omit it. */
   launchAgent?: TuiAgent
+  /** True while a neutralized hydration title awaits its first authoritative update; never persisted. */
+  titleHydrationPending?: true
   /** Why: when `setActiveWorktree` bumps generation on all-dead tabs to drive a
    *  TerminalPane remount, the fresh PTY that results is caused by navigation,
    *  not by the user doing work. Without this flag the resulting

@@ -6,10 +6,10 @@ import {
   buildEditorSessionData,
   buildPersistedBrowserPagesByWorkspace,
   buildPersistedBrowserTabsByWorktree,
-  buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
+import { buildSanitizedTabsByWorktree } from './workspace-session-terminal-tabs'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'

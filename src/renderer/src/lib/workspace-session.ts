@@ -13,6 +13,7 @@ import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
+import { buildSanitizedTabsByWorktree } from './workspace-session-terminal-tabs'
 
 export { buildActiveConnectionIdsAtShutdown }
 
@@ -219,22 +220,6 @@ export function buildPersistedBrowserPagesByWorkspace(
     Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
       workspaceId,
       pages.map((page) => ({ ...page, loading: false }))
-    ])
-  )
-}
-
-export function buildSanitizedTabsByWorktree(
-  tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
-): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
-  return Object.fromEntries(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
-        void _unused
-        return rest
-      })
     ])
   )
 }

@@ -181,7 +181,8 @@ describe('buildWorkspaceSessionPatch', () => {
               title: 'shell',
               ptyId: 'pty-1',
               worktreeId: localWorktreeId,
-              pendingActivationSpawn: true
+              pendingActivationSpawn: true,
+              titleHydrationPending: true
             } as never
           ]
         },
@@ -216,6 +217,7 @@ describe('buildWorkspaceSessionPatch', () => {
       ].sort()
     )
     expect('pendingActivationSpawn' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
+    expect('titleHydrationPending' in patch.tabsByWorktree![localWorktreeId][0]).toBe(false)
     expect(patch.terminalLayoutsByTabId?.['tab-local'].buffersByLeafId).toBeUndefined()
     expect(patch.terminalLayoutsByTabId?.['tab-local'].scrollbackRefsByLeafId).toBeUndefined()
   })

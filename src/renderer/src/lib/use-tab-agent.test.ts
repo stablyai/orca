@@ -814,6 +814,53 @@ describe('useTabAgent', () => {
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
   })
 
+  it('waits for authoritative title replay before clearing hydrated launch identity', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: completedAgentStatus(paneKey)
+      }
+    })
+    const hydratedTab = {
+      ...baseTab,
+      title: 'Terminal 1',
+      defaultTitle: 'Terminal 1',
+      titleHydrationPending: true as const
+    }
+
+    const root = await renderHookProbe(hydratedTab)
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+    expect(latestHookAgent).toBe('codex')
+
+    const { titleHydrationPending: _pendingTitle, ...settledTab } = hydratedTab
+    void _pendingTitle
+    await rerenderHookProbe(root, settledTab)
+    expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
+  })
+
+  it('keeps hydrated launch identity when replay confirms a working agent title', async () => {
+    const paneKey = makePaneKey('tab-1', LEAF_ID)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [paneKey]: completedAgentStatus(paneKey)
+      }
+    })
+    const hydratedTab = {
+      ...baseTab,
+      title: 'Terminal 1',
+      defaultTitle: 'Terminal 1',
+      titleHydrationPending: true as const
+    }
+
+    const root = await renderHookProbe(hydratedTab)
+    const { titleHydrationPending: _pendingTitle, ...settledTab } = hydratedTab
+    void _pendingTitle
+    await rerenderHookProbe(root, { ...settledTab, title: '⠋ indexing repository' })
+
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+    expect(latestHookAgent).toBe('codex')
+  })
+
   it('clears hookless launch identity once its own title evidence ends at a shell', async () => {
     const geminiTab = { ...baseTab, launchAgent: 'gemini' as const, title: '✦ Gemini CLI' }
 

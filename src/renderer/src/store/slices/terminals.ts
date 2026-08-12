@@ -2016,46 +2016,56 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
       }
       const nextTitle = title.trim() || getFallbackTabTitle(currentTab)
       const currentUnifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
-      if (isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)) {
-        const unifiedTabsWithCurrentLabel = updateUnifiedTerminalLabel(
-          currentUnifiedTabs,
-          tabId,
-          currentTab.title
-        )
-        return unifiedTabsWithCurrentLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithCurrentLabel
-              }
-            }
-          : s
+      let settledTab: TerminalTab = currentTab
+      if (currentTab.titleHydrationPending) {
+        const { titleHydrationPending: _titleHydrationPending, ...tabWithoutPendingTitle } =
+          currentTab
+        void _titleHydrationPending
+        settledTab = tabWithoutPendingTitle
       }
+      const resolvedTitle = isDecorativeAgentTitleFrameChange(currentTab.title, nextTitle)
+        ? currentTab.title
+        : nextTitle
       const unifiedTabsWithUpdatedLabel = updateUnifiedTerminalLabel(
         currentUnifiedTabs,
         tabId,
-        nextTitle
+        resolvedTitle
       )
-      if (currentTab.title === nextTitle) {
-        return unifiedTabsWithUpdatedLabel
-          ? {
-              unifiedTabsByWorktree: {
-                ...s.unifiedTabsByWorktree,
-                [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+      if (currentTab.title === resolvedTitle) {
+        if (!currentTab.titleHydrationPending) {
+          return unifiedTabsWithUpdatedLabel
+            ? {
+                unifiedTabsByWorktree: {
+                  ...s.unifiedTabsByWorktree,
+                  [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+                }
               }
-            }
-          : s
+            : s
+        }
+        const nextTabs = [...tabs]
+        nextTabs[tabIndex] = settledTab
+        return {
+          tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs },
+          ...(unifiedTabsWithUpdatedLabel
+            ? {
+                unifiedTabsByWorktree: {
+                  ...s.unifiedTabsByWorktree,
+                  [ownerWorktreeId]: unifiedTabsWithUpdatedLabel
+                }
+              }
+            : {})
+        }
       }
       const ownerTabs = tabs.map((tab) =>
         tab.id === tabId
           ? {
-              ...tab,
+              ...settledTab,
               // Why: PTYs can briefly emit an empty title as an agent exits; keep the stable fallback instead of a blank tab.
-              title: nextTitle,
+              title: resolvedTitle,
               defaultTitle:
                 tab.defaultTitle ??
                 (/^Terminal \d+$/.test(tab.title) ? tab.title : undefined) ??
-                (/^Terminal \d+$/.test(nextTitle) ? nextTitle : undefined)
+                (/^Terminal \d+$/.test(resolvedTitle) ? resolvedTitle : undefined)
             }
           : tab
       )

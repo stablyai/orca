@@ -2853,6 +2853,31 @@ describe('setActiveWorktree', () => {
     expect(store.getState().sortEpoch).toBe(sortEpoch)
   })
 
+  it('settles title hydration when the authoritative title matches the fallback', () => {
+    const store = createTestStore()
+    const wt = 'repo1::/path/wt1'
+    seedStore(store, {
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/path/wt1' })]
+      },
+      tabsByWorktree: {
+        [wt]: [
+          makeTab({
+            id: 'tab-1',
+            worktreeId: wt,
+            title: 'Terminal 1',
+            defaultTitle: 'Terminal 1',
+            titleHydrationPending: true
+          })
+        ]
+      }
+    })
+
+    store.getState().updateTabTitle('tab-1', 'Terminal 1')
+
+    expect(store.getState().tabsByWorktree[wt][0]?.titleHydrationPending).toBeUndefined()
+  })
+
   it('repairs a stale unified tab label when a live title repeats', () => {
     const store = createTestStore()
     const wt = 'repo1::/path/wt1'

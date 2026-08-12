@@ -533,29 +533,29 @@ describe('hydrateWorkspaceSession', () => {
 
   it('resets persisted agent titles to the fallback label on hydration', () => {
     const store = createTestStore()
-    const worktreeId = 'repo1::/wt-1'
+    const wt = 'repo1::/wt-1'
     seedStore(store, {
       worktreesByRepo: {
-        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/wt-1' })]
+        repo1: [makeWorktree({ id: wt, repoId: 'repo1', path: '/wt-1' })]
       }
     })
 
     const session: WorkspaceSessionState = {
       activeRepoId: 'repo1',
-      activeWorktreeId: worktreeId,
-      activeTabId: 'tab-1',
+      activeWorktreeId: wt,
+      activeTabId: 't',
       terminalLayoutsByTabId: {},
       tabsByWorktree: {
-        [worktreeId]: [makeTab({ id: 'tab-1', worktreeId, title: '* Claude done', ptyId: '207' })]
+        [wt]: [makeTab({ id: 't', worktreeId: wt, title: '✳ Claude ready', launchAgent: 'claude' })]
       }
     }
 
     store.getState().hydrateWorkspaceSession(session)
 
-    expect(store.getState().tabsByWorktree[worktreeId]).toEqual([
+    expect(store.getState().tabsByWorktree[wt]).toEqual([
       expect.objectContaining({
-        id: 'tab-1',
         title: 'Terminal 1',
+        titleHydrationPending: true,
         ptyId: null
       })
     ])

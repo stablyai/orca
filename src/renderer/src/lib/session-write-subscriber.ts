@@ -11,9 +11,11 @@ type UnifiedTabsByWorktree = AppState['unifiedTabsByWorktree']
 type UnifiedTab = UnifiedTabsByWorktree[string][number]
 
 const TERMINAL_TAB_LIVE_TITLE_KEYS = new Set<keyof TerminalTab>(['title'])
-// Why: this handoff flag is stripped from workspace sessions, so toggling it
-// alone should not rebuild and rewrite the durable session payload.
-const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>(['pendingActivationSpawn'])
+// Why: these handoff flags are stripped from workspace sessions, so toggling them alone must not rewrite the durable payload.
+const TERMINAL_TAB_TRANSIENT_SESSION_KEYS = new Set<keyof TerminalTab>([
+  'pendingActivationSpawn',
+  'titleHydrationPending'
+])
 
 function terminalTabChangedForSession(prev: TerminalTab, next: TerminalTab): boolean {
   if (prev === next) {
