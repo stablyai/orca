@@ -8,7 +8,7 @@ import {
   resolveLoginShellStartupDialect,
   tokenizeStartupCommand
 } from './tui-agent-startup-shell'
-import { buildAgentDraftLaunchPlan } from './tui-agent-startup'
+import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from './tui-agent-startup'
 
 function expectSpansCoverTokens(source: string, shell: 'powershell' | 'cmd'): string[] {
   const result = tokenizeStartupCommand(source, shell)
@@ -110,5 +110,36 @@ describe('fish startup shell dialect', () => {
 
     expect(plan?.launchCommand).toBe('pi; set -e ORCA_PI_PREFILL')
     expect(plan?.env?.ORCA_PI_PREFILL).toBe('hello')
+  })
+})
+
+describe('config-override session rules do not double-deliver', () => {
+  it('embeds Codex session rules via -c developer_instructions= exactly once, not also prepended to the prompt', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'Review this diff',
+      cmdOverrides: {},
+      platform: 'darwin',
+      agentSessionRulesText: 'Always run tests.'
+    })
+
+    expect(plan?.launchCommand).toBe(
+      "codex -c 'developer_instructions=Always run tests.' 'Review this diff'"
+    )
+    expect(plan?.launchCommand.match(/Always run tests\./g)).toHaveLength(1)
+  })
+
+  it('still embeds Codex session rules with no prompt at all', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'darwin',
+      allowEmptyPromptLaunch: true,
+      agentSessionRulesText: 'Always run tests.'
+    })
+
+    expect(plan?.launchCommand).toBe("codex -c 'developer_instructions=Always run tests.'")
+    expect(plan?.launchCommand.match(/Always run tests\./g)).toHaveLength(1)
   })
 })

@@ -78,7 +78,10 @@ const record: SleepingAgentSessionRecord = {
   paneKey: 'tab-1::leaf-1',
   tabId: 'tab-1',
   worktreeId: 'wt-1',
-  agent: 'codex',
+  // Why: opencode has no native session-rules mechanism (no sessionRulesTextFlag/
+  // sessionRulesConfigOverride), unlike claude/codex, so this exercises the
+  // draftPrompt fallback path specifically rather than command-line embedding.
+  agent: 'opencode',
   providerSession: { key: 'session_id', id: SESSION_ID },
   prompt: 'finish the task',
   state: 'done',

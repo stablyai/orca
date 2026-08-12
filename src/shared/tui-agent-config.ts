@@ -58,11 +58,10 @@ export type TuiAgentConfig = {
    * Set this only once a specific agent's real flag is confirmed against its own CLI, not guessed. */
   sessionRulesFileFlag?: string
   /** `-c key=value` config-override flag for agents with no argv system-prompt flag at all (e.g. Codex's
-   * `-c developer_instructions=<text>`). Unlike sessionRulesTextFlag/sessionRulesFileFlag, this is not
-   * read by hasNativeSessionRulesInjection and does not gate or replace the prepend-to-prompt /
-   * paste-after-ready fallbacks: the override applies unconditionally, including a resume launch with no
-   * prompt at all to prepend rules to, so it is delivered as an always-on addition layered alongside
-   * whatever fallback would otherwise apply rather than a replacement for it. */
+   * `-c developer_instructions=<text>`). Like sessionRulesTextFlag/sessionRulesFileFlag, this IS read by
+   * hasNativeSessionRulesInjection and gates the prepend-to-prompt / paste-after-ready fallbacks off —
+   * it applies unconditionally (including a resume launch with no prompt at all to prepend rules to),
+   * so once it fires those fallbacks must not also deliver the same rules text a second time. */
   sessionRulesConfigOverride?: { flag: string; key: string }
 }
 

@@ -112,9 +112,10 @@ export function buildAgentStartupPlan(
 
 // Why: the shared plan already embeds a config-override agent's rules (e.g. Codex's
 // `-c developer_instructions=`) directly into launchCommand, unconditionally, since resume has no
-// prompt to prepend to. hasNativeSessionRulesInjection below only gates the additional draftPrompt
-// fallback used by every other agent (still native-flag or filePath-blind here, since the renderer
-// never resolves a rules file) — it is not consulted by the config-override path at all.
+// prompt to prepend to. hasNativeSessionRulesInjection reports true for that agent too, so the
+// draftPrompt fallback below skips itself rather than pasting the same rules text a second time —
+// it still applies its normal fallback for every agent without a config override or other native
+// mechanism (still native-flag or filePath-blind here, since the renderer never resolves a rules file).
 export function buildAgentResumeStartupPlan(
   args: Parameters<typeof buildAgentResumeStartupPlanShared>[0] & AgentSessionRulesLaunchContext
 ): ReturnType<typeof buildAgentResumeStartupPlanShared> {

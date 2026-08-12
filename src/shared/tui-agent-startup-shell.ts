@@ -248,12 +248,16 @@ export function sessionRulesTextRequiresPostReadyDelivery(
   return shell === 'cmd' && Boolean(text?.trim())
 }
 
-/** True when the agent has a confirmed native flag for session rules (text on argv, or a file path) and
- * there is rules content to deliver, and the current shell can reliably carry it inline. False whenever
- * sessionRulesTextRequiresPostReadyDelivery is true, even if a flag is configured — availability means
- * "safe to use now", not just "a flag name exists". A file path is exempt from that shell check: only a
- * short path is being quoted (not the arbitrary multi-line rules text itself), so it is safe to use
- * inline even on cmd.exe or across a Windows-to-WSL boundary where inline text is not. */
+/** True when the agent has a confirmed native mechanism for session rules (text on argv, a file path,
+ * or a config-override flag) and there is rules content to deliver, and the current shell can reliably
+ * carry it inline. False whenever sessionRulesTextRequiresPostReadyDelivery is true, even if a
+ * mechanism is configured — availability means "safe to use now", not just "a flag name exists". A
+ * file path is exempt from that shell check: only a short path is being quoted (not the arbitrary
+ * multi-line rules text itself), so it is safe to use inline even on cmd.exe or across a
+ * Windows-to-WSL boundary where inline text is not. Every caller of this function treats `true` as
+ * "some mechanism already carries the rules for this launch, so the prepend-to-prompt/paste-after-ready
+ * fallback must NOT also run" — a config-override agent (e.g. Codex) must count here too, or that
+ * fallback fires alongside appendSessionRulesConfigOverride and delivers the same rules text twice. */
 export function hasNativeSessionRulesInjection(
   config: TuiAgentConfig,
   filePath: string | null | undefined,
@@ -266,7 +270,10 @@ export function hasNativeSessionRulesInjection(
   if (shell && sessionRulesTextRequiresPostReadyDelivery(text, shell)) {
     return false
   }
-  return Boolean(config.sessionRulesTextFlag && text?.trim())
+  return Boolean(
+    (config.sessionRulesTextFlag && text?.trim()) ||
+    (config.sessionRulesConfigOverride && text?.trim())
+  )
 }
 
 /** Wrap session rules ahead of a (possibly empty) user section, under matching headers so the two are
@@ -315,9 +322,10 @@ export function appendSessionRulesFlag(
 }
 
 /** Append a Codex-style `-c key=value` config-override flag carrying session rules, when the agent
- * declares one. Unconditional by design (see TuiAgentConfig.sessionRulesConfigOverride): applied
- * whenever there is rules text and the shell can safely carry it inline, on top of whatever
- * prepend-to-prompt/paste-after-ready fallback the caller also applies for this agent. */
+ * declares one. Applied whenever there is rules text and the shell can safely carry it inline — this
+ * is a real native-injection mechanism, so hasNativeSessionRulesInjection reports true for it and
+ * every prepend-to-prompt/paste-after-ready fallback skips itself for this launch, exactly as for the
+ * text-flag/file-flag mechanisms above. */
 export function appendSessionRulesConfigOverride(
   command: string,
   config: TuiAgentConfig,
