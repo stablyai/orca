@@ -259,8 +259,13 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     )
 
     expect(disconnectedOwnerMarkup).toContain('Remote Mac disconnected')
+    // Why: the glyph presence/absence is the contract, not just the tooltip
+    // copy — and the disconnected row must name the owner, never the repo host.
+    expect(disconnectedOwnerMarkup).toContain('lucide-server-off')
+    expect(disconnectedOwnerMarkup).not.toContain('Build Linux')
     expect(connectedMarkup).not.toContain('Project on Build Linux')
     expect(connectedMarkup).not.toContain('disconnected')
+    expect(connectedMarkup).not.toContain('lucide-server-off')
   })
 
   it('reads nested SSH readiness from the owning HUB instead of client-local SSH state', () => {
