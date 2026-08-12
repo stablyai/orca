@@ -9,6 +9,13 @@ import { usePackageScripts, detectPackageManager } from './usePackageScripts'
 import { ScriptRunnerTabs } from './ScriptRunnerTabs'
 import { ScriptRunnerControls } from './ScriptRunnerControls'
 
+/**
+ * Sidebar panel that runs the active worktree's package.json scripts.
+ *
+ * Each run gets its own PTY-backed terminal tab. Switching worktrees tears
+ * every run down, since a running process belongs to the directory it started
+ * in. Renders nothing when there is no worktree or no package.json to read.
+ */
 export default function ScriptRunner(): React.JSX.Element | null {
   const [collapsed, setCollapsed] = useState(false)
   const [packageManager, setPackageManager] = useState<'pnpm' | 'yarn' | 'npm'>('npm')

@@ -153,6 +153,9 @@ export function AppearancePane({
   const zoomOutLabel = isMac ? '⌘-' : 'Ctrl -'
   const statusBarItems = useAppStore((state) => state.statusBarItems)
   const toggleStatusBarItem = useAppStore((state) => state.toggleStatusBarItem)
+  // Why: mirror the sidebar's opt-in fallback so a legacy profile missing this
+  // key renders the switch in the state the sidebar actually acts on.
+  const sidebarScriptRunnerEnabled = settings.sidebarScriptRunnerEnabled ?? false
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, THEME_ENTRIES) ? (
@@ -291,19 +294,19 @@ export function AppearancePane({
           </div>
           <button
             role="switch"
-            aria-checked={settings.sidebarScriptRunnerEnabled}
+            aria-checked={sidebarScriptRunnerEnabled}
             onClick={() =>
               updateSettings({
-                sidebarScriptRunnerEnabled: !settings.sidebarScriptRunnerEnabled
+                sidebarScriptRunnerEnabled: !sidebarScriptRunnerEnabled
               })
             }
             className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-              settings.sidebarScriptRunnerEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
+              sidebarScriptRunnerEnabled ? 'bg-foreground' : 'bg-muted-foreground/30'
             }`}
           >
             <span
               className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-                settings.sidebarScriptRunnerEnabled ? 'translate-x-4' : 'translate-x-0.5'
+                sidebarScriptRunnerEnabled ? 'translate-x-4' : 'translate-x-0.5'
               }`}
             />
           </button>

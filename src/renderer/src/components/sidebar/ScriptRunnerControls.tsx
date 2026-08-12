@@ -22,6 +22,12 @@ type ScriptRunnerControlsProps = {
   onCommandOverride: (scriptName: string, command: string) => void
 }
 
+/**
+ * Script picker, editable command line, and run/stop button for the panel.
+ *
+ * The command input is an override: edits are committed on blur or Enter and
+ * replace the derived `<pm> run <script>` for that script only.
+ */
 export function ScriptRunnerControls({
   scriptNames,
   selectedScript,
@@ -34,6 +40,9 @@ export function ScriptRunnerControls({
   onCommandOverride
 }: ScriptRunnerControlsProps): React.JSX.Element {
   const [editingCommand, setEditingCommand] = useState<string | null>(null)
+  // Why: the command input accepts free text, so a blank or whitespace-only
+  // override would otherwise reach the PTY as an empty command.
+  const canRun = Boolean(selectedScript && currentCommand.trim())
 
   return (
     <div className="flex shrink-0 items-center gap-1.5 px-2 pb-2">
@@ -122,13 +131,13 @@ export function ScriptRunnerControls({
               size="icon-xs"
               className="size-6 shrink-0 text-emerald-500 hover:text-emerald-400 disabled:opacity-30"
               onClick={onRun}
-              disabled={!selectedScript}
+              disabled={!canRun}
             >
               <Play className="size-3 fill-current" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            Run {currentCommand}
+            {canRun ? `Run ${currentCommand}` : 'Enter a command to run'}
           </TooltipContent>
         </Tooltip>
       )}

@@ -96,6 +96,7 @@ function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsPowerShellImplementation: 'powershell.exe',
     enableGitHubAttribution: true,
+    sidebarScriptRunnerEnabled: false,
     ...overrides,
     appFontFamily
   }

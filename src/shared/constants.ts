@@ -217,7 +217,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
       lastViewByProject: {},
       activeProject: null
     },
-    sidebarScriptRunnerEnabled: true
+    sidebarScriptRunnerEnabled: false
   }
 }
 

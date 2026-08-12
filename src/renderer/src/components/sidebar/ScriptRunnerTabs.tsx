@@ -9,6 +9,12 @@ type ScriptRunnerTabsProps = {
   handleCloseTab: (id: number) => void
 }
 
+/**
+ * Tab strip and terminal area for the running scripts.
+ *
+ * Shows a hint instead when nothing has been run yet. Every pane stays mounted
+ * so a background script keeps streaming into its own scrollback.
+ */
 export function ScriptRunnerTabs({
   runningScripts,
   activeTabId,
@@ -61,7 +67,7 @@ export function ScriptRunnerTabs({
               type="button"
               aria-label={`Close ${script.name}`}
               onClick={() => handleCloseTab(script.id)}
-              className="mr-1 rounded-sm p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground"
+              className="mr-1 rounded-sm p-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 hover:bg-accent hover:text-foreground"
             >
               <X className="size-2.5" />
             </button>
@@ -82,6 +88,12 @@ export function ScriptRunnerTabs({
   )
 }
 
+/**
+ * Host element for one script's xterm instance.
+ *
+ * Opens the terminal on first activation and refits it on container resize,
+ * forwarding the new dimensions to the PTY so wrapping stays correct.
+ */
 function ScriptTerminalPane({
   script,
   active

@@ -26,7 +26,10 @@ function Sidebar(): React.JSX.Element {
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
   const repos = useAppStore((s) => s.repos)
   const fetchAllWorktrees = useAppStore((s) => s.fetchAllWorktrees)
-  const scriptRunnerEnabled = useAppStore((s) => s.settings?.sidebarScriptRunnerEnabled ?? true)
+  // Why: the runner is opt-in, so an unhydrated store or a settings profile
+  // saved before this key existed must read as off rather than mounting the
+  // panel and loading package scripts before the user has chosen.
+  const scriptRunnerEnabled = useAppStore((s) => s.settings?.sidebarScriptRunnerEnabled ?? false)
 
   // Fetch worktrees when repos are added/removed
   const repoCount = repos.length
