@@ -1203,7 +1203,7 @@ describe('orca cli worktree awareness', () => {
         worktree: { ...buildWorktree('/tmp/repo/child', 'feature/child'), isPinned }
       })
     )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
       ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', `--${flag}`, '--json'],
@@ -1217,6 +1217,8 @@ describe('orca cli worktree awareness', () => {
         isPinned
       })
     )
+    const receipt = JSON.parse(String(logSpy.mock.calls.at(-1)?.[0]))
+    expect(receipt.result.worktree.isPinned).toBe(isPinned)
   })
 
   it('rejects contradictory pin flags on worktree.set before resolving selectors', async () => {
