@@ -131,7 +131,6 @@ import { createShellReadyMarkerScanState, scanForShellReadyMarker } from './shel
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   INITIAL_MODE_2031_REPLY_SCAN_STATE,
-  mode2031SequenceFor,
   resolveTerminalColorSchemeMode,
   scanMode2031ReplyDecision
 } from '../../../../shared/terminal-color-scheme-protocol'
@@ -529,11 +528,10 @@ const e2eTerminalHiddenSnapshotOverrides = new Map<string, E2eTerminalHiddenSnap
 
 // Why: the per-chunk hidden-skip grammar is deleted (Phase 6) — hidden bytes
 // either never reach the renderer (delivery gate) or ride the background
-// scheduler queue. Only the mode-2031 fact-reply counter still has a producer.
+// scheduler queue.
 type E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: number
   hiddenRendererSkippedChars: number
-  hiddenRendererMode2031ReplyCount: number
 }
 
 type E2eTerminalPtyOutputDebugApi = {
@@ -566,14 +564,12 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
 
 const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
   hiddenRendererSkipCount: 0,
-  hiddenRendererSkippedChars: 0,
-  hiddenRendererMode2031ReplyCount: 0
+  hiddenRendererSkippedChars: 0
 }
 
 function resetE2eTerminalPtyOutputDebug(): void {
   e2eTerminalPtyOutputDebugState.hiddenRendererSkipCount = 0
   e2eTerminalPtyOutputDebugState.hiddenRendererSkippedChars = 0
-  e2eTerminalPtyOutputDebugState.hiddenRendererMode2031ReplyCount = 0
 }
 
 function exposeE2eTerminalPtyOutputDebug(): void {
@@ -594,14 +590,6 @@ function recordHiddenRendererSkip(chars: number): void {
   exposeE2eTerminalPtyOutputDebug()
   e2eTerminalPtyOutputDebugState.hiddenRendererSkipCount += 1
   e2eTerminalPtyOutputDebugState.hiddenRendererSkippedChars += chars
-}
-
-function recordHiddenMode2031Reply(): void {
-  if (!e2eConfig.exposeStore) {
-    return
-  }
-  exposeE2eTerminalPtyOutputDebug()
-  e2eTerminalPtyOutputDebugState.hiddenRendererMode2031ReplyCount += 1
 }
 
 function exposeE2eTerminalPtyDataInjection(): void {
@@ -3721,13 +3709,13 @@ export function connectPanePty(
   })
   // Why: Phase-4 hidden-delivery gate — only meaningful under main authority
   // (renderer byte parsers need bytes otherwise). Decided once at pane
-  // creation: it picks the mode-2031 answer path (fact reply vs byte scan),
-  // which must have exactly one owner.
+  // creation: it picks which path records a mode-2031 subscription (main's
+  // fact vs the byte scan), which must have exactly one owner.
   const hiddenDeliveryGateActive =
     mainSideEffectAuthority && isRendererHiddenPtyDeliveryGateEnabled(state.settings)
   // Why: structural per-PTY gate predicate (authority on + gate on + bytes
   // transit local main, which implies snapshot-backed). Shared by the hidden
-  // mark sync and mode-2031 reply ownership so reply ownership can never
+  // mark sync and mode-2031 subscription recording so the recorder can never
   // disagree with what main may drop — and never depends on the racy hidden
   // mark (a fact can outrun the pty:data task that sets it).
   const isHiddenDeliveryGateManagedPty = (ptyId: string | null): ptyId is string =>
@@ -3878,13 +3866,10 @@ export function connectPanePty(
   // desktop silent while the elected mobile xterm owns query replies.
   const sendDesktopQueryReplyImmediate = (data: string): boolean =>
     canSendDesktopQueryReply() && transport.sendInputImmediate(data)
-  // Why (gate mode only): for gate-managed PTYs this fact is the SOLE 2031
-  // responder — visible, hidden, marked or not. Conditioning the reply on the
-  // hidden mark double-fired (mark set + bytes delivered live via interest →
-  // fact AND xterm both replied) or dropped the reply entirely (fact outran
-  // the pty:data task that set the mark). The xterm-side CSI reply and the
-  // skipped-byte scan are disabled for these panes (same structural
-  // predicate), so exactly one reply goes out.
+  // Why (gate mode only): gate-managed PTYs never see the subscribe bytes, so this fact is
+  // their only cue to record the subscription — without the registry entry a later theme
+  // flip never pushes the CSI 997 update and the TUI keeps a stale theme after reveal.
+  // Record-only: a subscribe is not a query (see observeLiveMode2031Chunk, #9993).
   const handleHiddenMode2031SubscribeFact = (): void => {
     const ptyId = transport.getPtyId()
     if (disposed || (!isHiddenDeliveryGateManagedPty(ptyId) && remoteOutputGatedPtyId !== ptyId)) {
@@ -3894,22 +3879,14 @@ export function connectPanePty(
       useAppStore.getState().settings,
       getSystemPrefersDark()
     )
-    // Why immediate: a mode-2031 query reply must beat the remote input debounce
-    // or it can miss the querying program's read window (#7329).
-    sendDesktopQueryReplyImmediate(mode2031SequenceFor(mode))
-    // Why: register the subscription exactly like the xterm CSI handler
-    // would — without the registry entry, later theme flips never push the
-    // CSI 997 update and the TUI keeps a stale theme after reveal.
     deps.recordPaneMode2031Subscription?.(pane.id, mode)
-    recordHiddenMode2031Reply()
   }
   // Why (gate mode only): the counterpart to the subscribe fact. These panes never
-  // receive the withdrawal bytes — main drops them before delivery — and both the
-  // chunk scanner and the xterm CSI handler are disabled for them, so this fact is
-  // the ONLY observer that can retire the subscription. Without it a TUI that exits
-  // while hidden leaves paneMode2031 set, and the next theme flip pushes CSI 997
-  // into the shell that replaced it (#9993 via maybePushMode2031Flip). No reply is
-  // sent: a withdrawal is not a query.
+  // receive the withdrawal bytes — main drops them before delivery — and the chunk
+  // scanner is disabled for them, so this fact is the ONLY observer that can retire
+  // the subscription. Without it a TUI that exits while hidden leaves paneMode2031
+  // set, and the next theme flip pushes CSI 997 into the shell that replaced it
+  // (#9993 via maybePushMode2031Flip).
   const handleHiddenMode2031UnsubscribeFact = (): void => {
     const ptyId = transport.getPtyId()
     if (disposed || (!isHiddenDeliveryGateManagedPty(ptyId) && remoteOutputGatedPtyId !== ptyId)) {
@@ -6351,14 +6328,14 @@ export function connectPanePty(
       }
     }
 
+    // Why record-only: DECSET 2031 subscribes to future color changes, it is not a query —
+    // the protocol's query is `CSI ?996n`. fish arms 2031 for the ~1ms it paints a prompt, so
+    // any reply lands after the withdrawal and paints `?997;1n` as literal text (#9993).
     // Why here and not in xterm's CSI handler: xterm batches several PTY chunks into one
-    // synchronous parse, so a handler cannot tell where a chunk ended. fish enables and
-    // disables 2031 around every prompt, so answering a subscribe the same chunk withdraws
-    // pushes `?997;1n` into the prompt or a child's stdin as literal text (#9993). One raw
-    // chunk in, one order-aware decision out.
+    // synchronous parse, so a handler cannot tell where a chunk ended. One raw chunk in,
+    // one order-aware final state out.
     function observeLiveMode2031Chunk(data: string): void {
-      // Main's '2031-subscribe' fact is the sole responder for gate-managed PTYs; a second
-      // reply from here would answer one subscribe twice.
+      // Gate-managed PTYs never see these bytes; main's '2031-subscribe' fact records them.
       if (isHiddenDeliveryGateManagedPty(transport.getPtyId())) {
         return
       }
@@ -6372,13 +6349,13 @@ export function connectPanePty(
         return
       }
       const settings = useAppStore.getState().settings
-      const mode = resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
-      // Why immediate: the reply must land inside the program's read window, and hidden
-      // snapshot-backed panes skip xterm.write for PTY bytes entirely.
+      // Why seed the mode: maybePushMode2031Flip only pushes on a change, so an unseeded
+      // subscription would read as a flip on the next unrelated appearance re-apply.
       deps.paneMode2031Ref.current.set(pane.id, true)
-      sendDesktopQueryReplyImmediate(mode2031SequenceFor(mode))
-      deps.paneLastThemeModeRef.current.set(pane.id, mode)
-      recordHiddenMode2031Reply()
+      deps.paneLastThemeModeRef.current.set(
+        pane.id,
+        resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())
+      )
     }
 
     // Why installed here: the handler observes CSI 3 J inside xterm's parse, so a

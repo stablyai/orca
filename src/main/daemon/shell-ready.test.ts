@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as ShellReadyModule from './shell-ready'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
+import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -16,8 +17,8 @@ const hasBash = process.platform !== 'win32' && spawnSync('bash', ['--version'])
 const itWithBash = hasBash ? it : it.skip
 const hasZsh = process.platform !== 'win32' && spawnSync('zsh', ['--version']).status === 0
 const itWithZsh = hasZsh ? it : it.skip
-const hasFish = process.platform !== 'win32' && spawnSync('fish', ['--version']).status === 0
-const itWithFish = hasFish ? it : it.skip
+const FISH = resolveFishBinary()
+const itWithFish = FISH.available ? it : it.skip
 
 const SHELL_READY_MARKER_OUTPUT = '\x1b]777;orca-shell-ready\x07'
 
@@ -166,6 +167,11 @@ function expectFinalZdotdirRestoreContext(content: string) {
 }
 
 describePosix('daemon shell-ready launch config', () => {
+  // Always runs, so the CI lane cannot report green with every live fish test skipped.
+  it('has the fish the live tests need when CI requires one', () => {
+    expect(fishRequirementViolation(FISH)).toBeNull()
+  })
+
   let previousUserDataPath: string | undefined
   let previousOrcaOrigZdotdir: string | undefined
   let userDataPath: string

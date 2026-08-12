@@ -132,7 +132,7 @@ import {
 import { isRemoteAgentHooksEnabled } from '../../shared/agent-hook-relay'
 import { createTerminalSessionStateSaveFailureMessage } from '../../shared/terminal-session-state-save-failure'
 import { RendererTerminalSerializerReadiness } from './renderer-terminal-serializer-readiness'
-import { readShellStartupEnvVar } from '../pty/shell-startup-env'
+import { readSessionShellStartupEnvVar } from '../pty/shell-startup-env'
 import {
   isTerminalLeafId,
   makePaneKey,
@@ -1507,11 +1507,7 @@ function resolvePiAgentSourceDir(
   if (kind === 'prime-agent') {
     return (
       readEnvWithProcessFallback(baseEnv, primaryKey) ??
-      readShellStartupEnvVar(
-        primaryKey,
-        baseEnv.HOME ?? process.env.HOME,
-        baseEnv.SHELL ?? process.env.SHELL
-      )
+      readSessionShellStartupEnvVar(primaryKey, baseEnv)
     )
   }
 
@@ -1526,11 +1522,7 @@ function resolvePiAgentSourceDir(
     return publicDir
   }
 
-  return readShellStartupEnvVar(
-    primaryKey,
-    baseEnv.HOME ?? process.env.HOME,
-    baseEnv.SHELL ?? process.env.SHELL
-  )
+  return readSessionShellStartupEnvVar(primaryKey, baseEnv)
 }
 
 function resolveScopedPiAgentSourceDir(
@@ -1684,14 +1676,7 @@ function resolveOpenCodeSourceConfigDir(baseEnv: Record<string, string>): string
     return undefined
   }
 
-  return (
-    configDir ??
-    readShellStartupEnvVar(
-      'OPENCODE_CONFIG_DIR',
-      baseEnv.HOME ?? process.env.HOME,
-      baseEnv.SHELL ?? process.env.SHELL
-    )
-  )
+  return configDir ?? readSessionShellStartupEnvVar('OPENCODE_CONFIG_DIR', baseEnv)
 }
 
 /**
