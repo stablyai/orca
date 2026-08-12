@@ -51,4 +51,16 @@ describe('issue #8784 GHE avatar fallback (regression)', () => {
     // Why: list chip must not hardcode github.com/{login}.png.
     expect(taskPage).not.toMatch(/github\.com\/\$\{reviewer\.login\}\.png/)
   })
+
+  it('source does not leave bare avatar imgs on the PR page GHE fallback path (#13976)', () => {
+    // Why: private-mode GHE avatar URLs 302 to /login in the renderer session;
+    // only GitHubUserAvatar degrades to initials via onError. Bare <img> stays broken.
+    const prPage = readFileSync(join(__dirname, '../PullRequestPage.tsx'), 'utf8')
+    expect(prPage).not.toMatch(/src=\{comment\.authorAvatarUrl\}/)
+    expect(prPage).not.toMatch(/src=\{reviewer\.avatarUrl\}/)
+    expect(prPage).not.toMatch(/src=\{option\.avatarUrl\}/)
+    expect(prPage).toMatch(/GitHubUserAvatar[\s\S]*login=\{comment\.author\}/)
+    expect(prPage).toMatch(/GitHubUserAvatar[\s\S]*login=\{reviewer\.login\}/)
+    expect(prPage).toMatch(/GitHubUserAvatar[\s\S]*login=\{option\.login\}/)
+  })
 })

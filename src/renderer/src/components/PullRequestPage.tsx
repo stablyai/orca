@@ -882,13 +882,12 @@ function PRReviewersPanel({
         <span className="flex size-4 shrink-0 items-center justify-center text-foreground">
           {selected ? <Check className="size-3.5" /> : null}
         </span>
-        {reviewer.avatarUrl ? (
-          <img src={reviewer.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-        ) : (
-          <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-            {reviewer.login.slice(0, 1).toUpperCase()}
-          </span>
-        )}
+        <GitHubUserAvatar
+          login={reviewer.login}
+          name={reviewer.name}
+          avatarUrl={reviewer.avatarUrl}
+          className="size-5"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate">
             <span className="font-semibold text-foreground">{reviewer.login}</span>
@@ -2391,15 +2390,12 @@ function ConversationTab({
       )}
     >
       <div className="flex min-w-0 items-center gap-2 border-b border-border/40 px-3 py-2">
-        {comment.authorAvatarUrl ? (
-          <img
-            src={comment.authorAvatarUrl}
-            alt={comment.author}
-            className="size-5 shrink-0 rounded-full"
-          />
-        ) : (
-          <div className="size-5 shrink-0 rounded-full bg-muted" />
-        )}
+        <GitHubUserAvatar
+          login={comment.author}
+          avatarUrl={comment.authorAvatarUrl}
+          title={comment.author}
+          className="size-5"
+        />
         <span
           className={cn(
             'min-w-0 truncate text-[13px] font-semibold',
@@ -4294,13 +4290,12 @@ function MentionTextarea({
                 index === activeIndex && 'bg-accent text-accent-foreground'
               )}
             >
-              {option.avatarUrl ? (
-                <img src={option.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-              ) : (
-                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                  {option.login.slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              <GitHubUserAvatar
+                login={option.login}
+                name={option.name}
+                avatarUrl={option.avatarUrl}
+                className="size-5"
+              />
               <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
                 <span className="shrink-0 font-medium">@{option.login}</span>
                 {option.name && (
