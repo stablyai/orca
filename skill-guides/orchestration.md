@@ -48,7 +48,6 @@ Do not use orchestration merely because the user says "hand off", "handoff", "ha
 
 - `orca status --json` should show a running runtime.
 - `orca` must be on PATH (`orca-ide` on Linux).
-- The orchestration experimental feature must be enabled in Settings > Experimental.
 - `orca orchestration` commands are RPC calls to the running Orca runtime.
 
 ## Contract Migration
