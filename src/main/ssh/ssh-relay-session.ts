@@ -501,11 +501,13 @@ export class SshRelaySession {
 
   /** Reads a native chat transcript that lives on this SSH host. Resolves null
    *  when the deployed relay predates the method, so the caller can fall back to
-   *  the desktop-local reader instead of failing the chat view. */
+   *  the desktop-local reader instead of failing the chat view.
+   *  Typed as `unknown` (not `unknown | null`): null is a normal unknown value,
+   *  and the redundant union is rejected by type-aware lint. */
   async requestNativeChatTranscript(
     params: SshNativeChatRelayReadParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (this.nativeChatReadMethodSupported === false) {
       return null
     }

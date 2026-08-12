@@ -4,9 +4,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type * as TailReaderModule from '../main/native-chat/transcript-tail-reader'
 
+// `import type * as M` is a namespace; index it via `typeof M`, not `M[...]` (TS2709).
+type ReadNativeChatTranscriptTail = (typeof TailReaderModule)['readNativeChatTranscriptTail']
+
 const tailMocks = vi.hoisted(() => ({
   readNativeChatTranscriptTail: vi.fn(),
-  realRead: null as null | TailReaderModule['readNativeChatTranscriptTail']
+  realRead: null as null | ReadNativeChatTranscriptTail
 }))
 
 vi.mock('../main/native-chat/transcript-tail-reader', async (importOriginal) => {
@@ -14,9 +17,8 @@ vi.mock('../main/native-chat/transcript-tail-reader', async (importOriginal) => 
   tailMocks.realRead = actual.readNativeChatTranscriptTail
   return {
     ...actual,
-    readNativeChatTranscriptTail: (
-      ...args: Parameters<TailReaderModule['readNativeChatTranscriptTail']>
-    ) => tailMocks.readNativeChatTranscriptTail(...args)
+    readNativeChatTranscriptTail: (...args: Parameters<ReadNativeChatTranscriptTail>) =>
+      tailMocks.readNativeChatTranscriptTail(...args)
   }
 })
 

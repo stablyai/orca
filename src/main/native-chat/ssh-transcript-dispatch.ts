@@ -1,11 +1,13 @@
 import type { SshNativeChatRelayReadParams } from '../../shared/ssh-native-chat-relay'
 
-/** Resolves null when the deployed relay has no native chat method, so the
- *  caller falls back to the local reader instead of failing the chat view. */
+/** Resolves `null` when the deployed relay has no native chat method, so the
+ *  caller falls back to the local reader instead of failing the chat view.
+ *  Return type is `unknown` (not `unknown | null`): null is a normal unknown
+ *  value, and a redundant union is rejected by type-aware lint. */
 export type SshNativeChatTranscriptReader = (
   params: SshNativeChatRelayReadParams,
   options: { signal?: AbortSignal; timeoutMs?: number }
-) => Promise<unknown | null>
+) => Promise<unknown>
 
 // Why: a live SSH relay session registers itself here, exactly like
 // `providers/ssh-filesystem-dispatch.ts`. Native chat must not import the SSH
