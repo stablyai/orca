@@ -1,4 +1,4 @@
-import type { Cookie, Cookies } from 'electron'
+import type { Cookie, Cookies, Session } from 'electron'
 import { parse as parseDomain } from 'psl'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
@@ -53,6 +53,35 @@ export function normalizeCookieImportDomain(domain: string): string | null {
   return normalized
 }
 
+// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
+// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
+// it is copied. Signing in directly inside Orca is the only path that produces a working
+// session, so an import must never write these cookies and never remove them either — the
+// live session is always more valuable than anything an import could put in its place.
+// Adding a site is one entry here.
+// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
+// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
+// users actually asked for.
+const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+
+export function isNonTransplantableCookieDomain(domain: string): boolean {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return false
+  }
+  return NON_TRANSPLANTABLE_DOMAINS.some(
+    (root) => normalized === root || normalized.endsWith(`.${root}`)
+  )
+}
+
+// Why: Chromium stores host_key lowercase as 'google.com', '.google.com' or 'sub.google.com';
+// the LIKE pattern covers the leading-dot row and cannot match lookalikes ('withgoogle.com').
+export const NON_TRANSPLANTABLE_HOST_KEY_SQL = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `host_key = '${root}' OR host_key LIKE '%.${root}'`
+).join(' OR ')
+
+// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
+// rule for rotation-only cookies and applies to any family added without a full exclusion.
 export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
   if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
     return false
@@ -162,6 +191,57 @@ export async function restoreImportedDomainCookies(
   }
   if (failures.length > 0) {
     throw new AggregateError(failures, 'Could not restore replaced cookies')
+  }
+}
+
+type CookieClearSession = {
+  cookies: Pick<Cookies, 'get' | 'set'>
+  clearStorageData: Session['clearStorageData']
+}
+
+async function restoreCookieClearSnapshot(
+  store: Pick<Cookies, 'set'>,
+  snapshot: readonly Cookie[],
+  originalError: unknown,
+  rollbackMessage: string
+): Promise<never> {
+  try {
+    await restoreImportedDomainCookies(store, snapshot)
+  } catch (rollbackError) {
+    throw new AggregateError([originalError, rollbackError], rollbackMessage)
+  }
+  throw originalError
+}
+
+// Why: after a bulk clear starts, Electron cannot reveal whether a rejected operation mutated
+// the jar, so keep the complete snapshot until excluded cookies have been restored.
+export async function bulkClearCookiesExcept(
+  targetSession: CookieClearSession,
+  isExcluded: (cookie: Cookie) => boolean
+): Promise<void> {
+  const snapshot = await targetSession.cookies.get({})
+  const excludedCookies = snapshot.filter(isExcluded)
+
+  try {
+    await targetSession.clearStorageData({ storages: ['cookies'] })
+  } catch (clearError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([clearError], 'Could not clear existing cookies'),
+      'Cookie bulk clear and rollback failed'
+    )
+  }
+
+  try {
+    await restoreImportedDomainCookies(targetSession.cookies, excludedCookies)
+  } catch (preservationError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([preservationError], 'Could not preserve excluded cookies'),
+      'Cookie preservation and rollback failed'
+    )
   }
 }
 

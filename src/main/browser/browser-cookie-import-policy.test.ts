@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DatabaseSync } from 'node:sqlite'
 import type { Cookie } from 'electron'
 import {
+  bulkClearCookiesExcept,
   isGoogleSourceBoundCookie,
+  isNonTransplantableCookieDomain,
+  NON_TRANSPLANTABLE_HOST_KEY_SQL,
   normalizeCookieDomain,
   replaceCookiesForImportedDomains
 } from './browser-cookie-import-policy'
@@ -145,5 +149,145 @@ describe('replaceCookiesForImportedDomains', () => {
       httpOnly: undefined,
       sameSite: 'unspecified'
     })
+  })
+})
+
+describe('isNonTransplantableCookieDomain', () => {
+  it('covers the whole google.com registrable family', () => {
+    expect(isNonTransplantableCookieDomain('google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('.google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('accounts.google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('MAIL.Google.Com')).toBe(true)
+  })
+
+  it('does not match lookalikes or unrelated sites', () => {
+    expect(isNonTransplantableCookieDomain('withgoogle.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('google.com.evil.example')).toBe(false)
+    expect(isNonTransplantableCookieDomain('notgoogle.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('linear.app')).toBe(false)
+    expect(isNonTransplantableCookieDomain('')).toBe(false)
+  })
+
+  // Why: youtube.com re-issues its cookies from a transplanted session, so excluding it would
+  // drop imports users asked for. Locking it in keeps a future "just add it too" edit honest.
+  it('deliberately leaves youtube.com transplantable', () => {
+    expect(isNonTransplantableCookieDomain('.youtube.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('accounts.youtube.com')).toBe(false)
+  })
+})
+
+describe('NON_TRANSPLANTABLE_HOST_KEY_SQL', () => {
+  it('selects the google.com family and nothing that merely looks like it', () => {
+    const db = new DatabaseSync(':memory:')
+    db.exec('CREATE TABLE cookies (host_key TEXT)')
+    for (const hostKey of [
+      'google.com',
+      '.google.com',
+      'accounts.google.com',
+      'withgoogle.com',
+      'google.com.evil.example',
+      '.youtube.com',
+      '.linear.app'
+    ]) {
+      db.prepare('INSERT INTO cookies (host_key) VALUES (?)').run(hostKey)
+    }
+
+    const matched = db
+      .prepare(
+        `SELECT host_key FROM cookies WHERE ${NON_TRANSPLANTABLE_HOST_KEY_SQL} ORDER BY host_key`
+      )
+      .all() as { host_key: string }[]
+    db.close()
+
+    expect(matched.map((row) => row.host_key)).toEqual([
+      '.google.com',
+      'accounts.google.com',
+      'google.com'
+    ])
+  })
+})
+
+describe('bulkClearCookiesExcept', () => {
+  it('bulk clears a large jar once and restores only excluded cookies', async () => {
+    const existing = [
+      cookie('.google.com', 'SID'),
+      cookie('accounts.google.com', 'ACCOUNT'),
+      ...Array.from({ length: 1_000 }, (_, index) =>
+        cookie(`site-${index}.example`, `session-${index}`)
+      )
+    ]
+    const get = vi.fn().mockResolvedValue(existing)
+    const set = vi.fn().mockResolvedValue(undefined)
+    const clearStorageData = vi.fn().mockResolvedValue(undefined)
+
+    await bulkClearCookiesExcept({ cookies: { get, set }, clearStorageData }, (existingCookie) =>
+      isNonTransplantableCookieDomain(existingCookie.domain ?? '')
+    )
+
+    expect(get).toHaveBeenCalledOnce()
+    expect(get).toHaveBeenCalledWith({})
+    expect(clearStorageData).toHaveBeenCalledOnce()
+    expect(clearStorageData).toHaveBeenCalledWith({ storages: ['cookies'] })
+    expect(set.mock.calls.map(([details]) => details.name)).toEqual(['SID', 'ACCOUNT'])
+  })
+
+  it('restores the complete snapshot when the bulk clear rejects', async () => {
+    const existing = [
+      cookie('.google.com', 'SID'),
+      cookie('.example.com', 'first'),
+      cookie('.other.test', 'second')
+    ]
+    const get = vi.fn().mockResolvedValue(existing)
+    const set = vi.fn().mockResolvedValue(undefined)
+    const clearStorageData = vi.fn().mockRejectedValue(new Error('store unavailable'))
+
+    await expect(
+      bulkClearCookiesExcept({ cookies: { get, set }, clearStorageData }, () => true)
+    ).rejects.toThrow('Could not clear existing cookies')
+
+    expect(clearStorageData).toHaveBeenCalledOnce()
+    expect(set.mock.calls.map(([details]) => details.name)).toEqual(['SID', 'first', 'second'])
+  })
+
+  it('rolls back the complete snapshot when excluded-cookie restoration fails', async () => {
+    const existing = [cookie('.google.com', 'SID'), cookie('.example.com', 'session')]
+    const get = vi.fn().mockResolvedValue(existing)
+    let googleAttempts = 0
+    const set = vi.fn().mockImplementation(async ({ name }: { name?: string }) => {
+      if (name === 'SID' && googleAttempts++ === 0) {
+        throw new Error('transient restore failure')
+      }
+    })
+    const clearStorageData = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      bulkClearCookiesExcept(
+        { cookies: { get, set }, clearStorageData },
+        (existingCookie) => existingCookie.domain === '.google.com'
+      )
+    ).rejects.toThrow('Could not preserve excluded cookies')
+
+    expect(clearStorageData).toHaveBeenCalledOnce()
+    expect(set.mock.calls.map(([details]) => details.name)).toEqual(['SID', 'SID', 'session'])
+  })
+
+  it('reports when the complete-snapshot rollback also fails', async () => {
+    const existing = [cookie('.google.com', 'SID'), cookie('.example.com', 'session')]
+    const get = vi.fn().mockResolvedValue(existing)
+    const set = vi.fn().mockImplementation(async ({ name }: { name?: string }) => {
+      if (name === 'SID') {
+        throw new Error('persistent restore failure')
+      }
+    })
+    const clearStorageData = vi.fn().mockResolvedValue(undefined)
+
+    await expect(
+      bulkClearCookiesExcept(
+        { cookies: { get, set }, clearStorageData },
+        (existingCookie) => existingCookie.domain === '.google.com'
+      )
+    ).rejects.toThrow('Cookie preservation and rollback failed')
+
+    expect(set.mock.calls.map(([details]) => details.name)).toEqual(['SID', 'SID', 'session'])
   })
 })

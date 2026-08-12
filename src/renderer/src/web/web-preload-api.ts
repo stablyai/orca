@@ -603,6 +603,8 @@ function createWebPreloadApi(): Partial<PreloadApi> {
       get: () => ({
         platform: getBrowserPlatform(),
         osRelease: '',
+        arch: '',
+        shell: '',
         displayServer: null
       })
     },
@@ -704,6 +706,15 @@ function createWebPreloadApi(): Partial<PreloadApi> {
         }
         if ('autoRenameBranchFromWorkDefaultedOn' in sanitizedUpdates) {
           sanitizedUpdates.autoRenameBranchFromWorkDefaultedOn = true
+        }
+        if ('terminalCursorStyle' in sanitizedUpdates) {
+          Object.assign(
+            sanitizedUpdates,
+            normalizeTerminalCursorStyleDefault(
+              { terminalCursorStyle: sanitizedUpdates.terminalCursorStyle },
+              { preserveExplicitValue: true }
+            )
+          )
         }
         const next = mergeSettings(getStoredSettings(), sanitizedUpdates, {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
@@ -1070,7 +1081,7 @@ function removeConflictingWebOverrides(
     const conflictingOverrides = new Set<KeybindingActionId>()
     for (const conflict of conflicts) {
       for (const actionId of conflict.actionIds) {
-        if (Object.prototype.hasOwnProperty.call(next, actionId)) {
+        if (Object.hasOwn(next, actionId)) {
           conflictingOverrides.add(actionId)
         }
       }
@@ -1483,12 +1494,15 @@ function createRuntimeEnvironmentsApi(): NonNullable<Partial<PreloadApi>['runtim
         client?.close()
       }
       const usesSshTunnel = parsed.value.endpointKind === 'loopback' && allowLoopback === true
-      const nextEnvironment = createStoredWebRuntimeEnvironment({
-        name,
-        offer: parsed.value.pairing,
-        previousEnvironment: activeEnvironment,
-        ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
-      })
+      const nextEnvironment = {
+        ...createStoredWebRuntimeEnvironment({
+          name,
+          offer: parsed.value.pairing,
+          previousEnvironment: activeEnvironment,
+          ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
+        }),
+        ...(runtimeStatus.pairedDeviceId ? { pairedDeviceId: runtimeStatus.pairedDeviceId } : {})
+      }
       // Why: a browser storage failure must leave the currently active host usable.
       try {
         saveStoredWebRuntimeEnvironment(nextEnvironment)
@@ -1831,10 +1845,11 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
         targetBranch,
         isCrossRepository
       }),
-    remove: async ({ worktreeId, force, allowUnverifiedPtyStop, skipArchive }) => {
+    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
       invalidateRuntimeWorktreeCaches()
       return callRuntimeResult<RemoveWorktreeResult>('worktree.rm', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
+        ...(hostId ? { hostId } : {}),
         force,
         // Why (#11960): the web client renders the same Force Delete affordances, so
         // dropping this field here would leave paired clients permanently wedged.
@@ -1846,16 +1861,16 @@ function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees']> {
     forgetLocal: () => {
       throw new Error('Forgetting a workspace is unavailable in paired web clients.')
     },
-    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead }) =>
+    forceDeletePreservedBranch: ({ worktreeId, branchName, expectedHead, hostId }) =>
       callRuntimeResult<ForceDeleteWorktreeBranchResult>('worktree.forceDeleteBranch', {
         worktree: toRuntimeWorktreeSelector(worktreeId),
         branchName,
-        expectedHead
+        expectedHead,
+        ...(hostId ? { hostId } : {})
       }),
     updateMeta: async ({ worktreeId, updates }) => {
       const rpcUpdates =
-        Object.prototype.hasOwnProperty.call(updates, 'pushTarget') &&
-        updates.pushTarget === undefined
+        Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
           : updates
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.set', {
@@ -2642,7 +2657,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -2664,8 +2679,11 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
+      const { hideWorkspacesFromOtherDevices: _clientLocalWorkspaceFilter, ...hostUpdates } =
+        updates
+      void _clientLocalWorkspaceFilter
       try {
-        await callRuntimeResult('ui.set', updates, 15_000)
+        await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
@@ -2692,7 +2710,7 @@ function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         )
         const local = readLocalWebUIState()
         const next = {
-          ...mergeWebUIState(local, result.ui),
+          ...mergeHostWebUIState(local, result.ui),
           osc52ClipboardDefaultOnNoticePending: mergeOsc52ClipboardNoticePending(local, result.ui),
           featureInteractions: mergeFeatureInteractionState(
             local.featureInteractions,
@@ -3692,7 +3710,14 @@ function updateEnvironmentFromResponse(
     return
   }
   const runtimeId = response.ok ? response._meta.runtimeId : (response._meta?.runtimeId ?? null)
-  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId)
+  const pairedDeviceId =
+    response.ok &&
+    typeof response.result === 'object' &&
+    response.result !== null &&
+    typeof (response.result as { pairedDeviceId?: unknown }).pairedDeviceId === 'string'
+      ? (response.result as { pairedDeviceId: string }).pairedDeviceId
+      : undefined
+  activeEnvironment = updateStoredEnvironmentRuntimeId(environment, runtimeId, pairedDeviceId)
 }
 
 function getStoredSettings(): GlobalSettings {
@@ -3999,6 +4024,16 @@ function mergeWebUIState(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
     )
+  }
+}
+
+function mergeHostWebUIState(
+  local: PersistedUIState,
+  incoming: PersistedUIState
+): PersistedUIState {
+  return {
+    ...mergeWebUIState(local, incoming),
+    hideWorkspacesFromOtherDevices: local.hideWorkspacesFromOtherDevices === true
   }
 }
 

@@ -48,8 +48,7 @@ describe('addOrcaWslInteropEnv', () => {
       ORCA_USER_DATA_PATH: 'C:\\Users\\jin\\AppData\\Roaming\\Orca',
       ORCA_CLI_COMMAND: 'orca-ide',
       ORCA_OMP_STATUS_EXTENSION: 'C:\\Users\\jin\\.omp\\agent\\extensions\\orca-agent-status.ts',
-      ORCA_PRIME_AGENT_STATUS_EXTENSION:
-        'C:\\Users\\jin\\AppData\\Roaming\\Orca\\prime-agent-managed-status-extension\\orca-agent-status.ts',
+      ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts',
       ORCA_PANE_KEY: 'tab-1:leaf-1',
       ORCA_TAB_ID: 'tab-1',
       ORCA_WORKTREE_ID: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
@@ -70,7 +69,7 @@ describe('addOrcaWslInteropEnv', () => {
     expect(env.WSLENV).toContain('ORCA_USER_DATA_PATH/p')
     expect(env.WSLENV).toContain('ORCA_CLI_COMMAND/u')
     expect(env.WSLENV).toContain('ORCA_OMP_STATUS_EXTENSION/p')
-    expect(env.WSLENV).toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION/p')
+    expect(env.WSLENV).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
     expect(env.WSLENV).toContain('ORCA_PANE_KEY/u')
     expect(env.WSLENV).toContain('ORCA_TAB_ID/u')
     expect(env.WSLENV).toContain('ORCA_WORKTREE_ID/u')

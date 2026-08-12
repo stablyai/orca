@@ -148,7 +148,7 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
     await expect(
       configHostRow(reopened, hosts.bravo).getByText('In Orca', { exact: true })
     ).toBeVisible()
-    await expect(reopened.getByRole('button', { name: 'All hosts already in Orca' })).toBeDisabled()
+    await expect(reopened.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
   })
 
   // ── P7 ─────────────────────────────────────────────────────────────
@@ -164,13 +164,17 @@ test.describe('SSH config host import (bulk + settings re-adopt)', () => {
     )
 
     const picker = await openSshConfigHostPicker(orcaPage)
-    // Suppressed aliases are omitted from the picker entirely.
-    await expect(configHostRow(picker, hosts.alpha)).toHaveCount(0)
+    // Suppressed aliases stay listed (re-pickable) but never count as new.
+    const alphaRow = configHostRow(picker, hosts.alpha)
+    await expect(alphaRow).toBeVisible()
+    await expect(alphaRow).toBeEnabled()
+    await expect(alphaRow.getByText('Removed from Orca', { exact: true })).toBeVisible()
+    await expect(alphaRow.getByText('In Orca', { exact: true })).toHaveCount(0)
     await expect(configHostRow(picker, hosts.bravo)).toBeVisible()
     await expect(
       configHostRow(picker, hosts.bravo).getByText('In Orca', { exact: true })
     ).toBeVisible()
-    await expect(picker.getByRole('button', { name: 'All hosts already in Orca' })).toBeDisabled()
+    await expect(picker.getByRole('button', { name: 'No new hosts to add' })).toBeDisabled()
     await expect(picker.getByRole('button', { name: /Add all \d+ to Orca/ })).toHaveCount(0)
 
     await returnToAppShell(orcaPage)

@@ -489,7 +489,7 @@ describe('CliInstaller', () => {
     const registryReader = new WindowsUserPathRegistryReader({
       platform: 'win32',
       registryLoader: async () => ({
-        HK: { CU: 0x80000001 },
+        HK: { CU: 0x80000001, LM: 0x80000002 },
         getRegistryKey: () => ({
           Path: { name: 'Path', type: 2, value: registryPath }
         })

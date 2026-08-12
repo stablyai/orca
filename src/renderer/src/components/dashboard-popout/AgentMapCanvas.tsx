@@ -28,6 +28,7 @@ import {
 import type { AgentMapViewport } from './agent-map-viewport-transition'
 import { useAgentMapContextMenus } from './useAgentMapContextMenus'
 import { useAgentMapCanvasSize } from './useAgentMapCanvasSize'
+import { useAgentMapPointerHold } from './useAgentMapPointerHold'
 import { useAgentMapMotionLayout } from './useAgentMapMotionLayout'
 import { useAgentMapSelectedFocus } from './useAgentMapSelectedFocus'
 import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
@@ -86,6 +87,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const pendingViewportRef = useRef<AgentMapViewport | null>(null)
     const interactionBoundsRef = useRef<DOMRect | null>(null)
     const hasShownProjectsRef = useRef(layout.projects.length > 0)
+    const { held, hold, release: releaseHold, clearDrag } = useAgentMapPointerHold(dragRef)
     const clearInteractionBounds = useCallback(() => {
       interactionBoundsRef.current = null
     }, [])
@@ -315,7 +317,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               'Nested project, workspace, and agent map'
             )}
             onPointerDown={(event) => {
-              if (event.button !== 0) {
+              if (event.button !== 0 || dragRef.current) {
                 return
               }
               if (
@@ -337,11 +339,16 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
                 worldPerPixelX: baseWidth / current.zoom / bounds.width,
                 worldPerPixelY: baseHeight / current.zoom / bounds.height
               }
+              hold(event.target as Element)
               event.currentTarget.setPointerCapture(event.pointerId)
             }}
             onPointerMove={(event) => {
               const drag = dragRef.current
-              if (!drag || drag.pointerId !== event.pointerId) {
+              if (!drag) {
+                releaseHold()
+                return
+              }
+              if (drag.pointerId !== event.pointerId) {
                 return
               }
               scheduleViewport({
@@ -353,14 +360,19 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               })
             }}
             onPointerUp={(event) => {
-              if (dragRef.current?.pointerId === event.pointerId) {
-                dragRef.current = null
+              if (clearDrag(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId)
               }
             }}
             onPointerCancel={(event) => {
-              if (dragRef.current?.pointerId === event.pointerId) {
-                dragRef.current = null
+              clearDrag(event.pointerId)
+            }}
+            onLostPointerCapture={(event) => {
+              clearDrag(event.pointerId)
+            }}
+            onPointerLeave={() => {
+              if (!dragRef.current) {
+                releaseHold()
               }
             }}
           >
@@ -370,6 +382,8 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               zoom={zoom}
               labelScale={labelScale}
               mapScale={mapScale}
+              heldProjectId={held?.projectId ?? null}
+              heldWorktreeId={held?.worktreeId ?? null}
               selectedPaneKey={selectedPaneKey}
               allowAggregation={allowAggregation}
               showOrchestrationLinks={showOrchestrationLinks}

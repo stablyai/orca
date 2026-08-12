@@ -2,18 +2,42 @@ import { z } from 'zod'
 import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import { importFederatedControlMessage } from '../../orchestration/federation-control-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import {
+  publishFederatedLifecycleSettlement,
+  type FederatedLifecycleSettlement
+} from '../../orchestration/federation-lifecycle-settlement'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, requiredString } from '../schemas'
 
 const FederationPullParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
   afterSequence: OptionalFiniteNumber,
+  replayUnacknowledged: z.boolean().optional(),
   limit: OptionalFiniteNumber
 })
 
 const FederationAckParams = z.object({
   dispatchId: requiredString('Missing Dispatch ID'),
-  throughSequence: z.number().int().nonnegative()
+  throughSequence: z.number().int().nonnegative(),
+  settlements: z
+    .array(
+      z.object({
+        sequence: z.number().int().positive(),
+        lifecycle: z.discriminatedUnion('action', [
+          z.object({
+            action: z.enum(['completed', 'failed']),
+            authority: z.literal('run_home')
+          }),
+          z.object({
+            action: z.literal('rejected'),
+            code: z.string(),
+            reason: z.string(),
+            authority: z.literal('run_home')
+          })
+        ])
+      })
+    )
+    .optional()
 })
 
 const FederationImportParams = z.object({
@@ -39,12 +63,16 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
       return {
         dispatchId: params.dispatchId,
         runtimeEpoch: runtime.getRuntimeId(),
-        items: runtime.getOrchestrationDb().listFederationRelay({
-          dispatchId: params.dispatchId,
-          direction: 'to_home',
-          afterSequence: params.afterSequence ?? 0,
-          limit: params.limit
-        })
+        items: params.replayUnacknowledged
+          ? runtime
+              .getOrchestrationDb()
+              .listPendingFederationRelay(params.dispatchId, 'to_home', params.limit)
+          : runtime.getOrchestrationDb().listFederationRelay({
+              dispatchId: params.dispatchId,
+              direction: 'to_home',
+              afterSequence: params.afterSequence ?? 0,
+              limit: params.limit
+            })
       }
     }
   }),
@@ -53,11 +81,42 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS: RpcMethod[] = [
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      const settlements = (params.settlements ?? []).filter(
+        (settlement) => settlement.sequence <= params.throughSequence
+      )
+      const terminalSettlements = settlements.filter(
+        (settlement) =>
+          settlement.lifecycle.action === 'completed' || settlement.lifecycle.action === 'failed'
+      )
+      if (terminalSettlements.length > 1) {
+        throw new OrchestrationError(
+          'request_mismatch',
+          `Federation acknowledgment for ${params.dispatchId} contains conflicting settlements.`
+        )
+      }
+      const terminalSettlement = terminalSettlements[0]
       runtime.getOrchestrationDb().acknowledgeFederationRelay({
         dispatchId: params.dispatchId,
         direction: 'to_home',
-        throughSequence: params.throughSequence
+        throughSequence: params.throughSequence,
+        ...(!terminalSettlement
+          ? {}
+          : {
+              settleRemoteReport: {
+                sequence: terminalSettlement.sequence,
+                outcome:
+                  terminalSettlement.lifecycle.action === 'completed' ? 'succeeded' : 'failed'
+              }
+            })
       })
+      for (const settlement of settlements) {
+        publishFederatedLifecycleSettlement(
+          runtime,
+          params.dispatchId,
+          settlement.sequence,
+          settlement.lifecycle as FederatedLifecycleSettlement
+        )
+      }
       return { dispatchId: params.dispatchId, acknowledgedThrough: params.throughSequence }
     }
   }),

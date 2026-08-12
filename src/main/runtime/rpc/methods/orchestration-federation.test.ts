@@ -194,7 +194,7 @@ describe('orchestration federation', () => {
     const attachment = workerDb.getRemoteDispatchAttachment(dispatch.id)
     expect(attachment).toMatchObject({
       task_id: task.id,
-      protocol_version: 2,
+      protocol_version: 3,
       state: 'ready',
       worktree_id: 'repo::windows-worktree',
       terminal_handle: 'term_windows_worker'
@@ -356,11 +356,8 @@ describe('orchestration federation', () => {
         })
       }
     })
-    expect(sent).toMatchObject({
-      ok: true,
-      result: { relay: { dispatchId: dispatch.id, accepted: true } }
-    })
-    expect(homeDb.getTask(task.id)?.status).toBe('dispatched')
+    expect(sent).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
+    expect(homeDb.getTask(task.id)?.status).toBe('completed')
 
     await homeRuntime.syncOrchestrationFederation()
 
@@ -508,7 +505,7 @@ describe('orchestration federation', () => {
   it('retries a lost relay acknowledgment without duplicating the home message', async () => {
     const task = createHomeTask()
     await homeDispatcher.dispatch(startRequest(task.id))
-    const dispatch = homeDb.getDispatchContext(task.id)!
+    homeRuntime.stopOrchestrationFederationRelay()
     const prompt = vi.mocked(workerRuntime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
     const capability = prompt.match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
     await workerDispatcher.dispatch({
@@ -526,6 +523,7 @@ describe('orchestration federation', () => {
       }
     })
     loseNextAckResponse = true
+    const remoteCall = vi.spyOn(homeRuntime, 'callOrchestrationWorkerServer')
 
     await expect(homeRuntime.syncOrchestrationFederation()).resolves.toBeUndefined()
     await homeRuntime.syncOrchestrationFederation()
@@ -535,7 +533,10 @@ describe('orchestration federation', () => {
         .getRunMailboxHistory(task.run_id, 10)
         .filter((message) => message.subject === 'Checkpoint')
     ).toHaveLength(1)
-    expect(homeDb.getFederatedDispatch(dispatch.id)?.to_home_imported_sequence).toBe(1)
+    const acknowledgments = remoteCall.mock.calls.filter(
+      ([, method]) => method === 'orchestration.federationAck'
+    )
+    expect(acknowledgments).toHaveLength(2)
   })
 
   it('rejects a reordered relay gap, then converges without loss or duplication', async () => {

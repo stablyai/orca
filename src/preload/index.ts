@@ -226,6 +226,7 @@ import type {
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
 import { createBrowserFindSubscriptions } from './browser-find-subscriptions'
+import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
@@ -568,9 +569,15 @@ const api = {
   platform: {
     get: () => ({
       platform: process.platform,
+      // Why: sandboxed preload cannot require node:os; Electron exposes the OS
+      // version on process.getSystemVersion when available.
       osRelease:
         (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ??
         '',
+      arch: process.arch,
+      // Why: these identify the default shell without probing user config files.
+      // process.env is available in the sandboxed preload; node:os is not.
+      shell: process.env.SHELL?.trim() || process.env.ComSpec?.trim() || '',
       displayServer: getLinuxDisplayServer()
     })
   } satisfies PreloadApi['platform'],
@@ -963,6 +970,11 @@ const api = {
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
+      snapshotPrefixAnsi?: string
+      snapshotFrameAnsi?: string
+      snapshotFrameRestoreAnsi?: string
+      snapshotKittyKeyboardFlags?: number
+      snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
@@ -1073,6 +1085,7 @@ const api = {
       opts?: { scrollbackRows?: number }
     ): Promise<{
       data: string
+      frameRestoreAnsi?: string
       cols: number
       rows: number
       cwd?: string | null
@@ -1082,6 +1095,7 @@ const api = {
       alternateScreen?: boolean
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
+      kittyKeyboardFlags?: number
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -1244,6 +1258,7 @@ const api = {
         rows: number
         seq?: number
         lastTitle?: string
+        kittyKeyboardFlags?: number
       } | null
     ): void => {
       ipcRenderer.send('pty:serializeBuffer:response', { requestId, snapshot })
@@ -1450,7 +1465,7 @@ const api = {
       checkName?: string
       url?: string | null
       prRepo?: GitHubOwnerRepo | null
-    }): Promise<unknown | null> => ipcRenderer.invoke('gh:prCheckDetails', args),
+    }): Promise<unknown> => ipcRenderer.invoke('gh:prCheckDetails', args),
 
     rerunPRChecks: (args: {
       repoPath: string
@@ -1704,11 +1719,28 @@ const api = {
       ipcRenderer.invoke('hostedReview:forBranch', args),
     getCreationEligibility: (args: unknown): Promise<unknown> =>
       ipcRenderer.invoke('hostedReview:getCreationEligibility', args),
-    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args)
+    create: (args: unknown): Promise<unknown> => ipcRenderer.invoke('hostedReview:create', args),
+    createStacked: (args: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('hostedReview:createStacked', args)
   },
 
   // Why: GitLab bindings live in `./gitlab` so `gl.*` changes don't conflict on every upstream sync of this central file.
   gl: glApi,
+
+  bitbucket: {
+    connect: (args: {
+      authMode: 'token' | 'basic'
+      accessToken?: string | null
+      email?: string | null
+      apiToken?: string | null
+      baseUrl?: string | null
+    }): Promise<{ ok: true; account: string | null } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('bitbucket:connect', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('bitbucket:disconnect'),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
+  },
 
   linear: {
     connect: (args: {
@@ -4213,59 +4245,9 @@ const api = {
     getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
   },
 
-  claudeUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('claudeUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('claudeUsage:getRecentSessions', args)
-  },
-
-  codexUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('codexUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('codexUsage:getRecentSessions', args)
-  },
-
-  openCodeUsage: {
-    getScanState: (): Promise<unknown> => ipcRenderer.invoke('openCodeUsage:getScanState'),
-    setEnabled: (args: { enabled: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:setEnabled', args),
-    refresh: (args?: { force?: boolean }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:refresh', args),
-    getSnapshot: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getSnapshot', args),
-    getSummary: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getSummary', args),
-    getDaily: (args: { scope: string; range: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getDaily', args),
-    getBreakdown: (args: { scope: string; range: string; kind: string }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getBreakdown', args),
-    getRecentSessions: (args: { scope: string; range: string; limit?: number }): Promise<unknown> =>
-      ipcRenderer.invoke('openCodeUsage:getRecentSessions', args)
-  },
+  claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
+  codexUsage: createUsageProviderApi(ipcRenderer, 'codexUsage'),
+  openCodeUsage: createUsageProviderApi(ipcRenderer, 'openCodeUsage'),
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>
@@ -4955,8 +4937,7 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore (define in dts)
   window.electron = electronAPI
-  // @ts-ignore (define in dts)
+  // @ts-expect-error (define in dts)
   window.api = api
 }

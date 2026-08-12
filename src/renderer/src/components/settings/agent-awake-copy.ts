@@ -17,13 +17,13 @@ export function getAgentAwakeDescription(
   if (userAgent.includes('Windows')) {
     return translate(
       AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY,
-      "Choose On, Auto while agents are working, or Off. Lid-close behavior follows this device's power settings."
+      "Choose On, Agent, or Off. Agent mode stays awake while agents are working; lid-close behavior follows this device's power settings."
     )
   }
 
   return translate(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
-    'Choose On, Auto while agents are working, or Off. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
+    'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
 }
 

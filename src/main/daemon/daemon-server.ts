@@ -145,7 +145,7 @@ export class DaemonServer {
   private transportSockets = new Set<Socket>()
   private createOrAttachInFlight = 0
   private idleShutdownState: 'running' | 'idle-shutdown-pending' | 'shutting-down' = 'running'
-  private initialAdoptionTimer: unknown | null = null
+  private initialAdoptionTimer: unknown = null
   private initialAdoptionDeadlineMs: number | null = null
   private retirementRequested = false
   private shutdownPromise: Promise<void> | null = null

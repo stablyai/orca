@@ -23,7 +23,7 @@ vi.mock('../providers/ssh-filesystem-dispatch', () => ({
 
 import { closeAllWatchers, registerFilesystemWatcherHandlers } from './filesystem-watcher'
 
-type HandlerMap = Record<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>
+type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 type WatchCallback = (events: FsChangeEvent[]) => void
 
 const WORKTREE_PATH = '/home/me/repo'

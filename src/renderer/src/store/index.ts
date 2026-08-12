@@ -17,9 +17,11 @@ import { createEditorSlice } from './slices/editor'
 import { createStatsSlice } from './slices/stats'
 import { createMemorySlice } from './slices/memory'
 import { createWorkspaceSpaceSlice } from './slices/workspace-space'
-import { createClaudeUsageSlice } from './slices/claude-usage'
-import { createCodexUsageSlice } from './slices/codex-usage'
-import { createOpenCodeUsageSlice } from './slices/opencode-usage'
+import {
+  createClaudeUsageSlice,
+  createCodexUsageSlice,
+  createOpenCodeUsageSlice
+} from './slices/usage-provider-slices'
 import { createBrowserSlice } from './slices/browser'
 import { createRateLimitSlice } from './slices/rate-limits'
 import { createSshSlice } from './slices/ssh'

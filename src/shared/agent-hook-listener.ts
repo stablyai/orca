@@ -1,6 +1,6 @@
 /* eslint-disable max-lines -- Why: canonical transport-agnostic listener; parser, normalizer, per-CLI extractors, and endpoint writer share invariants that must not drift between Orca's main process and the relay. */
 
-// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the pipeline without Electron (Node builtins only). See docs/design/agent-status-over-ssh.md §3.
+// Why: extracted from src/main/agent-hooks/server.ts so the relay can host the same pipeline without Electron — this file must stay on Node builtins and other shared/ modules, or the relay bundle breaks.
 import type { IncomingMessage } from 'node:http'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
@@ -150,6 +150,8 @@ export type ClaudeLeadTurnState = {
   interrupted?: true
   /** Subagent that induced the wait; only its next tool activity may clear it, so other children's churn can't dismiss a pending human-input card. */
   waitingAgentId?: string
+  /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
+  waitingToolUseId?: string
   /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
   stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted'>
 }
@@ -321,7 +323,8 @@ export type AgentHookEventPayload = {
   launchToken?: string
   tabId?: string
   worktreeId?: string
-  /** SSH connection the event arrived on, or null for local (only ingestRemote stamps it; the HTTP path can't know the mux). See docs/design/agent-status-over-ssh.md §5. */
+  /** SSH connection the event arrived on, or null for local. Only `ingestRemote` can stamp it — the loopback HTTP path has no mux identity — and receivers key off it to drop
+   *  in-flight events from a superseded connection after an SSH reconnect. */
   connectionId: string | null
   /** True when the event carried prompt text directly, not the listener's cached prompt from an earlier event in the pane. */
   hasExplicitPrompt?: boolean
@@ -840,7 +843,7 @@ function readString(record: Record<string, unknown>, key: string): string | unde
 }
 
 function hasOwnField(record: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.hasOwn(record, key)
 }
 
 function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]): boolean {
@@ -2620,7 +2623,7 @@ function normalizeClaudeSubagentLifecycleEvent(
       clearClaudePendingWaitForAgent(state, paneKey, (waitingAgentId) => waitingAgentId === agentId)
     }
   }
-  return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+  return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
 }
 
 /** Sync the Claude lead-turn record when the SERVER infers an interrupt outside the hook stream (Ctrl+C with a missed Stop); else a later child lifecycle event resurrects the cancelled pane. */
@@ -2712,8 +2715,8 @@ export function clearClaudeAnsweredQuestionWait(
   return effectiveState === restored.state ? restored : { state: effectiveState }
 }
 
-/** Re-emit the lead's cached state on child activity — gated up to 'working' while a child works — without touching the lead's tool/prompt caches, so a live card or permission wait survives child churn. */
-function buildClaudeChildDrivenStatusPayload(
+/** Re-emit the cached lead state without touching its tool/prompt caches; child churn and parallel completions must not dismiss live cards. */
+function buildClaudeCachedLeadStatusPayload(
   state: HookListenerState,
   eventName: unknown,
   paneKey: string,
@@ -2794,10 +2797,13 @@ function normalizeClaudeEvent(
     return null
   }
 
-  // Why: Claude's auto-allowed AskUserQuestion emits PreToolUse (not PermissionRequest; its Notification hook isn't registered) while blocked on a human answer.
-  // Treat that PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
-  const isAskUserQuestion =
-    eventName === 'PreToolUse' && isAskUserQuestionTool(readString(hookPayload, 'tool_name'))
+  // Why: Claude normally emits PreToolUse while AskUserQuestion is blocked; newer builds can also report it as PermissionRequest.
+  // Treat the PreToolUse as waiting so the sidebar shows amber attention, not a spinner that decays to grey. Mirrors normalizeKimiEvent.
+  const eventToolName = readString(hookPayload, 'tool_name')
+  const isAskUserQuestionWait =
+    (eventName === 'PreToolUse' || eventName === 'PermissionRequest') &&
+    isAskUserQuestionTool(eventToolName)
+  const isAskUserQuestion = eventName === 'PreToolUse' && isAskUserQuestionWait
   // Why: /compact can take minutes and does not emit Stop. PreCompact marks the pane busy;
   // PostCompact clears it so a finished compact cannot leave a sticky working spinner (#11352).
   const reportedStateName =
@@ -2836,6 +2842,20 @@ function normalizeClaudeEvent(
     state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   }
 
+  const eventToolUseId = readFirstString(hookPayload, ['tool_use_id', 'toolUseId'])
+  const previousTool = state.lastToolByPaneKey.get(paneKey)
+  const isParallelSiblingCompletionDuringQuestion =
+    eventAgentId === undefined &&
+    previousLead?.state === 'waiting' &&
+    isAskUserQuestionTool(previousTool?.toolName) &&
+    (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
+    previousLead.waitingToolUseId !== undefined &&
+    eventToolUseId !== undefined &&
+    eventToolUseId !== previousLead.waitingToolUseId
+  if (isParallelSiblingCompletionDuringQuestion) {
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+  }
+
   // Why: subagent/teammate events carry `agent_id` (lead's don't); child tool activity keeps its row live but must not become the lead's state or overwrite its tool/prompt caches (a live card would vanish).
   // Two exceptions take the full path below: waiting-inducing events (a child needs human attention on this pane) and the blocked child's own next tool event (approval granted — clear the wait as for the lead).
   const isWaitingInducing = reportedStateName === 'waiting'
@@ -2857,7 +2877,15 @@ function normalizeClaudeEvent(
   if (subagentOriginId) {
     const lead = state.claudeLeadStateByPaneKey.get(paneKey)
     if (lead?.state !== 'waiting' || lead.waitingAgentId !== subagentOriginId) {
-      return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
+    }
+    const isParallelSiblingCompletionDuringChildQuestion =
+      (eventName === 'PostToolUse' || eventName === 'PostToolUseFailure') &&
+      lead.waitingToolUseId !== undefined &&
+      eventToolUseId !== undefined &&
+      eventToolUseId !== lead.waitingToolUseId
+    if (isParallelSiblingCompletionDuringChildQuestion) {
+      return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
     }
     // Why: approval granted — update the tool snapshot (drop the pending card) as the lead's own next tool event would.
     // Restore the stashed lead state, not this child's 'working': the lead may already be done, and the done-gate never upgrades working back to done once the roster drains.
@@ -2872,7 +2900,7 @@ function normalizeClaudeEvent(
 
   // Why: lead events never carry agent_id; even a child missed by lifecycle tracking cannot own the lead turn or its background-work evidence.
   if (eventAgentId && !isWaitingInducing) {
-    return buildClaudeChildDrivenStatusPayload(state, eventName, paneKey, hookPayload)
+    return buildClaudeCachedLeadStatusPayload(state, eventName, paneKey, hookPayload)
   }
 
   if (isTurnBoundary && eventAgentId === undefined) {
@@ -2897,10 +2925,12 @@ function normalizeClaudeEvent(
             ...(previousLead.interrupted ? { interrupted: true as const } : {})
           }
       : undefined
+  const waitingToolUseId = eventToolUseId ?? previousLead?.waitingToolUseId
   state.claudeLeadStateByPaneKey.set(paneKey, {
     state: reportedStateName,
     ...(interrupted ? { interrupted } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
+    ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {})
   })
 
@@ -4332,7 +4362,6 @@ export function normalizeHookPayload(
       break
   }
 
-  // Why: connectionId is null here; ingestRemote stamps it from mux identity on receive. See docs/design/agent-status-over-ssh.md §5.
   const providerSessionOnly =
     (source === 'pi' || source === 'prime-agent') &&
     eventName === 'session_start' &&
@@ -4350,6 +4379,7 @@ export function normalizeHookPayload(
         launchToken,
         tabId,
         worktreeId,
+        // Why: normalization is transport-agnostic — only ingestRemote knows the mux identity to stamp here.
         connectionId: null,
         hasExplicitPrompt:
           source === 'amp'

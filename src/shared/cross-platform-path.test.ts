@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  areLocalWindowsWslPathAliases,
   isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
@@ -7,6 +8,32 @@ import {
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
+
+describe('local Windows WSL aliases', () => {
+  it('matches UNC aliases and mounted drives without folding Linux path case', () => {
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
+        '\\\\wsl$\\ubuntu\\home\\Alice\\file.ts'
+      )
+    ).toBe(true)
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\file.ts'
+      )
+    ).toBe(false)
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/mnt/c/repo/file.ts',
+        'C:\\repo\\file.ts'
+      )
+    ).toBe(true)
+    expect(
+      areLocalWindowsWslPathAliases('//server/share/file.ts', '\\\\server\\share\\file.ts')
+    ).toBe(false)
+  })
+})
 
 describe('isCaseInsensitiveRuntimeRoot', () => {
   it('folds Windows drive and plain UNC roots', () => {

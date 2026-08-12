@@ -1,12 +1,23 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getConnectionId } from '@/lib/connection-context'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 
 export type PreviewableLanguage = 'html'
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
+const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
+
+function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
+  void result.then((created) => {
+    if (!created) {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+    }
+  })
+}
 
 export type WorkspaceFileBrowserOpenTarget =
   | {
@@ -51,6 +62,19 @@ export function openFileInBrowserTab(params: {
   }
 
   const state = useAppStore.getState()
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, params.worktreeId)
+  if (environmentId) {
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: params.worktreeId,
+        environmentId,
+        url: target.url,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
+    return target
+  }
 
   state.createBrowserTab(params.worktreeId, target.url, {
     title: target.title,
@@ -111,6 +135,23 @@ export function openFilePreviewToSide(params: {
   })
   if (target.status === 'unsupported') {
     toast.error(target.message)
+    return
+  }
+
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (environmentId) {
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId,
+        environmentId,
+        url: target.url,
+        clientTargetGroupId: targetGroupId,
+        clientTargetGroupCreated: !existingSibling,
+        focusOnCreate: false,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
     return
   }
 

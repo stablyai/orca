@@ -1206,6 +1206,44 @@ describe('CodexRuntimeHomeService', () => {
     }
   })
 
+  it('resolves only Orca-owned homes used by live retained host shells', async () => {
+    const accountHome = createManagedAuth(
+      testState.userDataDir,
+      'account-1',
+      createCodexAuthJson('managed@example.com', 'acct-managed', 'managed')
+    )
+    const unownedHome = join(testState.fakeHomeDir, 'unowned-codex-home')
+    mkdirSync(unownedHome, { recursive: true })
+    writeFileSync(join(unownedHome, '.orca-managed-home'), 'account-2\n', 'utf-8')
+    writePaneRegistry({
+      'shared-pane': { selectionKey: 'host', accountId: null, homeRoute: 'shared-home' },
+      'account-pane': { selectionKey: 'host', accountId: 'account-1', homeRoute: 'account-home' },
+      'unowned-pane': { selectionKey: 'host', accountId: 'account-2', homeRoute: 'account-home' },
+      'real-pane': { selectionKey: 'host', accountId: null, homeRoute: 'real-home' },
+      'wsl-pane': { selectionKey: 'wsl:Ubuntu', accountId: null, homeRoute: 'wsl-home' }
+    })
+    const settings = createSettings({
+      codexManagedAccounts: [
+        createCodexAccountRecord('account-1', 'managed@example.com', 'acct-managed', accountHome),
+        createCodexAccountRecord('account-2', 'other@example.com', 'acct-other', unownedHome)
+      ]
+    })
+    const store = createStore(settings)
+    const { CodexRuntimeHomeService } = await import('./runtime-home-service')
+    const service = new CodexRuntimeHomeService(store as never)
+
+    expect(
+      service.getRetainedHostCodexHookHomePaths([
+        'shared-pane',
+        'account-pane',
+        'unowned-pane',
+        'real-pane',
+        'wsl-pane',
+        'unknown-pane'
+      ])
+    ).toEqual([getRuntimeCodexHomePath(), accountHome])
+  })
+
   it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {
     const oldSystemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'old-system')
     const systemAuth = createCodexAuthJson('system@example.com', 'acct-system', 'system')

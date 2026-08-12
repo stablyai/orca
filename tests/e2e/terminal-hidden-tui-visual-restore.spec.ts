@@ -28,7 +28,7 @@ type HiddenTuiWindow = Window & {
   __terminalPtyOutputDebug?: {
     reset: () => void
     snapshot: () => {
-      hiddenRendererMode2031ReplyCount: number
+      hiddenRendererSkipCount: number
     }
   }
 }

@@ -6,9 +6,7 @@ const {
   callRuntimeEnvironmentMock,
   registerCliHandlersMock,
   registerPreflightHandlersMock,
-  registerClaudeUsageHandlersMock,
-  registerCodexUsageHandlersMock,
-  registerOpenCodeUsageHandlersMock,
+  registerUsageProviderHandlersMock,
   registerGitHubHandlersMock,
   registerFeedbackHandlersMock,
   registerStatsHandlersMock,
@@ -50,6 +48,7 @@ const {
   registerAppHandlersMock,
   registerLinearHandlersMock,
   registerJiraHandlersMock,
+  registerBitbucketHandlersMock,
   registerGitLabHandlersMock,
   registerHostedReviewHandlersMock,
   registerExportHandlersMock,
@@ -72,9 +71,7 @@ const {
   callRuntimeEnvironmentMock: vi.fn(),
   registerCliHandlersMock: vi.fn(),
   registerPreflightHandlersMock: vi.fn(),
-  registerClaudeUsageHandlersMock: vi.fn(),
-  registerCodexUsageHandlersMock: vi.fn(),
-  registerOpenCodeUsageHandlersMock: vi.fn(),
+  registerUsageProviderHandlersMock: vi.fn(),
   registerGitHubHandlersMock: vi.fn(),
   registerFeedbackHandlersMock: vi.fn(),
   registerStatsHandlersMock: vi.fn(),
@@ -116,6 +113,7 @@ const {
   registerAppHandlersMock: vi.fn(),
   registerLinearHandlersMock: vi.fn(),
   registerJiraHandlersMock: vi.fn(),
+  registerBitbucketHandlersMock: vi.fn(),
   registerGitLabHandlersMock: vi.fn(),
   registerHostedReviewHandlersMock: vi.fn(),
   registerExportHandlersMock: vi.fn(),
@@ -180,16 +178,8 @@ vi.mock('./preflight', () => ({
   registerPreflightHandlers: registerPreflightHandlersMock
 }))
 
-vi.mock('./claude-usage', () => ({
-  registerClaudeUsageHandlers: registerClaudeUsageHandlersMock
-}))
-
-vi.mock('./codex-usage', () => ({
-  registerCodexUsageHandlers: registerCodexUsageHandlersMock
-}))
-
-vi.mock('./opencode-usage', () => ({
-  registerOpenCodeUsageHandlers: registerOpenCodeUsageHandlersMock
+vi.mock('./usage-provider-handlers', () => ({
+  registerUsageProviderHandlers: registerUsageProviderHandlersMock
 }))
 
 vi.mock('./github', () => ({
@@ -372,6 +362,10 @@ vi.mock('./jira', () => ({
   registerJiraHandlers: registerJiraHandlersMock
 }))
 
+vi.mock('./bitbucket', () => ({
+  registerBitbucketHandlers: registerBitbucketHandlersMock
+}))
+
 vi.mock('./gitlab', () => ({
   registerGitLabHandlers: registerGitLabHandlersMock
 }))
@@ -395,9 +389,7 @@ describe('registerCoreHandlers', () => {
     callRuntimeEnvironmentMock.mockReset()
     registerCliHandlersMock.mockReset()
     registerPreflightHandlersMock.mockReset()
-    registerClaudeUsageHandlersMock.mockReset()
-    registerCodexUsageHandlersMock.mockReset()
-    registerOpenCodeUsageHandlersMock.mockReset()
+    registerUsageProviderHandlersMock.mockReset()
     registerGitHubHandlersMock.mockReset()
     registerFeedbackHandlersMock.mockReset()
     registerStatsHandlersMock.mockReset()
@@ -438,6 +430,7 @@ describe('registerCoreHandlers', () => {
     registerAppHandlersMock.mockReset()
     registerLinearHandlersMock.mockReset()
     registerJiraHandlersMock.mockReset()
+    registerBitbucketHandlersMock.mockReset()
     registerGitLabHandlersMock.mockReset()
     registerHostedReviewHandlersMock.mockReset()
     registerExportHandlersMock.mockReset()
@@ -494,9 +487,11 @@ describe('registerCoreHandlers', () => {
       result: { sessions: 'bad-shape' }
     })
 
-    expect(registerClaudeUsageHandlersMock).toHaveBeenCalledWith(claudeUsage)
-    expect(registerCodexUsageHandlersMock).toHaveBeenCalledWith(codexUsage)
-    expect(registerOpenCodeUsageHandlersMock).toHaveBeenCalledWith(openCodeUsage)
+    expect(registerUsageProviderHandlersMock).toHaveBeenCalledWith({
+      claudeUsage,
+      codexUsage,
+      openCodeUsage
+    })
     expect(registerAppHandlersMock).toHaveBeenCalledWith(store, { onBeforeRelaunch })
     expect(registerCodexAccountHandlersMock).toHaveBeenCalledWith(
       codexAccounts,
@@ -516,6 +511,7 @@ describe('registerCoreHandlers', () => {
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()
+    expect(registerBitbucketHandlersMock).toHaveBeenCalled()
     expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
     expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerFeedbackHandlersMock).toHaveBeenCalled()

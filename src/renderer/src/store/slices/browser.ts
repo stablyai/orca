@@ -135,6 +135,7 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
+  openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
   closeBrowserTab: (tabId: string) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -706,6 +707,34 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     })
     get().recordFeatureInteraction('browser-tab-created')
   },
+
+  openBrowserProfileTabInActiveWorkspace: async (url, profileId) => {
+    const state = get()
+    const worktreeId = state.activeWorktreeId
+    if (!worktreeId) {
+      return false
+    }
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+    if (runtimeEnvironmentId) {
+      const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+      try {
+        return await createWebRuntimeSessionBrowserTab({
+          worktreeId,
+          environmentId: runtimeEnvironmentId,
+          url,
+          profileId
+        })
+      } catch (error) {
+        console.warn(
+          '[browser] remote profile tab creation failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+        return false
+      }
+    }
+    get().createBrowserTab(worktreeId, url, { activate: true, sessionProfileId: profileId })
+    return true
+  },
   closeBrowserTab: (tabId) => {
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
     set((s) => {
@@ -938,7 +967,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (activePageId) {
       const restoredPages = get().browserPagesByWorkspace[restored.id] ?? []
       const activePageIndex = pages.findIndex((orig) => orig.id === activePageId)
-      const targetPage = activePageIndex >= 0 ? restoredPages[activePageIndex] : null
+      const targetPage = activePageIndex !== -1 ? restoredPages[activePageIndex] : null
       if (targetPage && targetPage.id !== restoredPages[0]?.id) {
         get().setActiveBrowserPage(restored.id, targetPage.id)
       }

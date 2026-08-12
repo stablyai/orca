@@ -2518,6 +2518,16 @@ describe('FloatingTerminalPanel close behavior', () => {
 
     expect(editorPanel.props.markdownAnnotationsEnabled).toBe(false)
     expect(editorPanel.props.activeFileId).toBe('notes')
+    expect(editorPanel.props.isVisible).toBe(true)
+  })
+
+  it('marks the retained floating editor hidden when the panel is closed', async () => {
+    setFloatingEditorTabs([makeFile({ id: 'notes' })])
+
+    const element = await renderPanel(false)
+    const editorPanel = findByProp(element, 'activeFileId')
+
+    expect(editorPanel.props.isVisible).toBe(false)
   })
 
   it('keeps the panel open when the explicit close action removes the last tab', async () => {

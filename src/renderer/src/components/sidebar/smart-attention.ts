@@ -1,4 +1,5 @@
 import { classifyTitleActivity, isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { agentEntryCompletionAt } from '../../../../shared/agent-completion-time'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { tabHasLivePty } from '@/lib/tab-has-live-pty'
 import { resolveRuntimePaneTitleLeafId } from '@/lib/runtime-pane-title-leaf-id'
@@ -15,9 +16,9 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 /**
  * Ordinal class for the "Smart" sort. Lower number = more attention-demanding.
  *   1 — Needs you (`blocked` / `waiting`)
- *   2 — Done (`done`, not interrupted)
+ *   2 — Done (`done`, not interrupted, completed within AGENT_STATUS_STALE_AFTER_MS)
  *   3 — Working (`working`)
- *   4 — Idle (no live entry, stale entry, or interrupted `done`)
+ *   4 — Idle (no live entry, stale entry, interrupted `done`, or an aged-out completion)
  *
  * Primary sort key; ties fall back to the attention timestamp. See docs/smart-worktree-order-redesign.md.
  */
@@ -34,7 +35,7 @@ export type AttentionCause = 'blocked' | 'waiting' | 'title-heuristic'
  * Per-worktree resolution computed once before sorting.
  *
  * `attentionTimestamp` by class:
- *   - Class 1 / 2: `stateStartedAt` of the current entry.
+ *   - Class 1: `stateStartedAt` of the current entry. Class 2: the entry's completion time.
  *   - Class 3: `stateStartedAt` of the most recent prior `done`/`blocked`/`waiting` entry,
  *     falling back to the current `working` `stateStartedAt`.
  *   - Class 4: `0` — comparator drops to `effectiveRecentActivity` for idle ordering.
@@ -98,21 +99,6 @@ export function mostRecentAttentionInHistory(history: AgentStateHistoryEntry[]):
   return max > 0 ? max : null
 }
 
-function mostRecentCompletedTurnInHistory(history: AgentStateHistoryEntry[]): number | null {
-  let max = 0
-  for (const entry of history) {
-    if (
-      entry.state === 'done' &&
-      entry.interrupted !== true &&
-      Number.isFinite(entry.startedAt) &&
-      entry.startedAt > max
-    ) {
-      max = entry.startedAt
-    }
-  }
-  return max > 0 ? max : null
-}
-
 /**
  * One pane's contribution to a worktree's attention class. Fresh hook entries win; hookless
  * panes fall back to the title heuristic (design doc Edge case 9). Authority is per-pane, not per-worktree.
@@ -152,21 +138,19 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
         ts = entry.stateStartedAt
         cause = entry.state
       } else if (entry.state === 'done') {
-        // Why: interrupted `done` (Ctrl+C) means the user is done with the turn; treat as idle, not Class 2.
-        if (entry.interrupted) {
+        // Why: null covers interrupted `done` (Ctrl+C — user is finished with it) and idle session
+        // boundaries; neither is attention.
+        const completedAt = agentEntryCompletionAt(entry)
+        if (completedAt === null) {
+          continue
+        }
+        // Why: same-state `done` writes advance updatedAt without moving the completion, so the hook
+        // freshness gate alone can keep a row in Class 2 long after the UI shows it aged out.
+        if (now - completedAt > AGENT_STATUS_STALE_AFTER_MS) {
           continue
         }
         cls = 2
-        if (entry.sessionBoundary) {
-          // Why: idle connect is not new attention; only preserve a real completion it displaced.
-          const completedAt = mostRecentCompletedTurnInHistory(entry.stateHistory)
-          if (completedAt === null) {
-            continue
-          }
-          ts = completedAt
-        } else {
-          ts = entry.stateStartedAt
-        }
+        ts = completedAt
       } else {
         // working
         cls = 3

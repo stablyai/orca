@@ -58,16 +58,22 @@ export function mapTerminalFilePath(
   worktreePath: string,
   wslDistro?: string | null
 ): string {
-  const distro = wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
-  if (!distro || !filePath.startsWith('/') || filePath.startsWith('//')) {
+  const distro =
+    wslDistro === null ? null : wslDistro?.trim() || parseWslUncPath(worktreePath)?.distro
+  if (!distro || !filePath.startsWith('/')) {
+    return filePath
+  }
+  // Why: only a proven local WSL pane may reinterpret this POSIX-looking path; SSH/runtime paths stay literal.
+  const alreadyUnc = parseWslUncPath(filePath)
+  if (alreadyUnc) {
+    return toWindowsWslPath(alreadyUnc.linuxPath, alreadyUnc.distro)
+  }
+  if (filePath.startsWith('//')) {
     return filePath
   }
   // Why: /mnt/<drive> is a Windows drive mounted into WSL — reach it directly
   // instead of routing a native file back through the 9P share.
-  if (/^\/mnt\/[a-z](\/|$)/.test(filePath)) {
-    return toWindowsWslPath(filePath, distro)
-  }
-  return `//wsl.localhost/${distro}${filePath}`
+  return toWindowsWslPath(filePath, distro)
 }
 
 // Why: remote-runtime panes print the remote host's POSIX paths; the local WSL
@@ -75,8 +81,8 @@ export function mapTerminalFilePath(
 export function terminalLinkWslDistro(
   wslDistro: string | null | undefined,
   runtimeEnvironmentId: string | null | undefined
-): string | null {
-  return runtimeEnvironmentId ? null : (wslDistro ?? null)
+): string | null | undefined {
+  return runtimeEnvironmentId ? null : wslDistro
 }
 
 export function shouldOpenTerminalFileWithSystemDefault(

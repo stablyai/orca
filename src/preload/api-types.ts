@@ -2,12 +2,18 @@
 import type {
   CreateHostedReviewArgs,
   CreateHostedReviewResult,
+  CreateStackedHostedReviewArgs,
+  CreateStackedHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs,
   HostedReviewInfo,
   HostedReviewProvider
 } from '../shared/hosted-review'
+import type {
+  BitbucketConnectArgs,
+  BitbucketConnectionStatus
+} from '../shared/bitbucket-credentials'
 import type { NativeFileDropPayload } from '../shared/native-file-drop'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
 import type { BrowserFindSource } from '../shared/browser-find-source'
@@ -443,17 +449,7 @@ import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
 } from '../shared/computer-use-permissions-types'
-import type {
-  ClaudeUsageBreakdownKind,
-  ClaudeUsageBreakdownRow,
-  ClaudeUsageDailyPoint,
-  ClaudeUsageRange,
-  ClaudeUsageScanState,
-  ClaudeUsageScope,
-  ClaudeUsageSessionRow,
-  ClaudeUsageSnapshot,
-  ClaudeUsageSummary
-} from '../shared/claude-usage-types'
+import type { ClaudeUsageBreakdownKind, ClaudeUsageSnapshot } from '../shared/claude-usage-types'
 import type {
   CodexRateLimitResetResult,
   GrokAccountStatus,
@@ -479,27 +475,10 @@ import type {
   WorkspacePortScanResult
 } from '../shared/workspace-ports'
 import type { GhAuthDiagnostic } from '../shared/github-auth-types'
-import type {
-  CodexUsageBreakdownKind,
-  CodexUsageBreakdownRow,
-  CodexUsageDailyPoint,
-  CodexUsageRange,
-  CodexUsageScanState,
-  CodexUsageScope,
-  CodexUsageSessionRow,
-  CodexUsageSnapshot,
-  CodexUsageSummary
-} from '../shared/codex-usage-types'
+import type { CodexUsageBreakdownKind, CodexUsageSnapshot } from '../shared/codex-usage-types'
 import type {
   OpenCodeUsageBreakdownKind,
-  OpenCodeUsageBreakdownRow,
-  OpenCodeUsageDailyPoint,
-  OpenCodeUsageRange,
-  OpenCodeUsageScanState,
-  OpenCodeUsageScope,
-  OpenCodeUsageSessionRow,
-  OpenCodeUsageSnapshot,
-  OpenCodeUsageSummary
+  OpenCodeUsageSnapshot
 } from '../shared/opencode-usage-types'
 import type {
   AiVaultDeleteSessionArgs,
@@ -836,92 +815,39 @@ export type MemoryApi = {
   getSnapshot: () => Promise<MemorySnapshot>
 }
 
-export type ClaudeUsageApi = {
-  getScanState: () => Promise<ClaudeUsageScanState>
-  setEnabled: (args: { enabled: boolean }) => Promise<ClaudeUsageScanState>
-  refresh: (args?: { force?: boolean }) => Promise<ClaudeUsageScanState>
-  getSnapshot: (args: {
-    scope: ClaudeUsageScope
-    range: ClaudeUsageRange
-    limit?: number
-  }) => Promise<ClaudeUsageSnapshot>
-  getSummary: (args: {
-    scope: ClaudeUsageScope
-    range: ClaudeUsageRange
-  }) => Promise<ClaudeUsageSummary>
-  getDaily: (args: {
-    scope: ClaudeUsageScope
-    range: ClaudeUsageRange
-  }) => Promise<ClaudeUsageDailyPoint[]>
-  getBreakdown: (args: {
-    scope: ClaudeUsageScope
-    range: ClaudeUsageRange
-    kind: ClaudeUsageBreakdownKind
-  }) => Promise<ClaudeUsageBreakdownRow[]>
-  getRecentSessions: (args: {
-    scope: ClaudeUsageScope
-    range: ClaudeUsageRange
-    limit?: number
-  }) => Promise<ClaudeUsageSessionRow[]>
+type UsageProviderSnapshot = {
+  scanState: unknown
+  summary: { scope: string; range: string }
+  daily: unknown[]
+  modelBreakdown: unknown[]
+  recentSessions: unknown[]
 }
 
-export type CodexUsageApi = {
-  getScanState: () => Promise<CodexUsageScanState>
-  setEnabled: (args: { enabled: boolean }) => Promise<CodexUsageScanState>
-  refresh: (args?: { force?: boolean }) => Promise<CodexUsageScanState>
-  getSnapshot: (args: {
-    scope: CodexUsageScope
-    range: CodexUsageRange
-    limit?: number
-  }) => Promise<CodexUsageSnapshot>
-  getSummary: (args: {
-    scope: CodexUsageScope
-    range: CodexUsageRange
-  }) => Promise<CodexUsageSummary>
-  getDaily: (args: {
-    scope: CodexUsageScope
-    range: CodexUsageRange
-  }) => Promise<CodexUsageDailyPoint[]>
-  getBreakdown: (args: {
-    scope: CodexUsageScope
-    range: CodexUsageRange
-    kind: CodexUsageBreakdownKind
-  }) => Promise<CodexUsageBreakdownRow[]>
-  getRecentSessions: (args: {
-    scope: CodexUsageScope
-    range: CodexUsageRange
-    limit?: number
-  }) => Promise<CodexUsageSessionRow[]>
+type UsageQueryArgs<Snapshot extends UsageProviderSnapshot> = Pick<
+  Snapshot['summary'],
+  'scope' | 'range'
+>
+
+type UsageProviderApi<Snapshot extends UsageProviderSnapshot, BreakdownKind> = {
+  getScanState: () => Promise<Snapshot['scanState']>
+  setEnabled: (args: { enabled: boolean }) => Promise<Snapshot['scanState']>
+  refresh: (args?: { force?: boolean }) => Promise<Snapshot['scanState']>
+  getSnapshot: (args: UsageQueryArgs<Snapshot> & { limit?: number }) => Promise<Snapshot>
+  getSummary: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['summary']>
+  getDaily: (args: UsageQueryArgs<Snapshot>) => Promise<Snapshot['daily']>
+  getBreakdown: (
+    args: UsageQueryArgs<Snapshot> & { kind: BreakdownKind }
+  ) => Promise<Snapshot['modelBreakdown']>
+  getRecentSessions: (
+    args: UsageQueryArgs<Snapshot> & { limit?: number }
+  ) => Promise<Snapshot['recentSessions']>
 }
 
-export type OpenCodeUsageApi = {
-  getScanState: () => Promise<OpenCodeUsageScanState>
-  setEnabled: (args: { enabled: boolean }) => Promise<OpenCodeUsageScanState>
-  refresh: (args?: { force?: boolean }) => Promise<OpenCodeUsageScanState>
-  getSnapshot: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    limit?: number
-  }) => Promise<OpenCodeUsageSnapshot>
-  getSummary: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-  }) => Promise<OpenCodeUsageSummary>
-  getDaily: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-  }) => Promise<OpenCodeUsageDailyPoint[]>
-  getBreakdown: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    kind: OpenCodeUsageBreakdownKind
-  }) => Promise<OpenCodeUsageBreakdownRow[]>
-  getRecentSessions: (args: {
-    scope: OpenCodeUsageScope
-    range: OpenCodeUsageRange
-    limit?: number
-  }) => Promise<OpenCodeUsageSessionRow[]>
-}
+export type ClaudeUsageApi = UsageProviderApi<ClaudeUsageSnapshot, ClaudeUsageBreakdownKind>
+
+export type CodexUsageApi = UsageProviderApi<CodexUsageSnapshot, CodexUsageBreakdownKind>
+
+export type OpenCodeUsageApi = UsageProviderApi<OpenCodeUsageSnapshot, OpenCodeUsageBreakdownKind>
 
 export type AiVaultApi = {
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
@@ -1226,6 +1152,9 @@ export type PreloadApi = {
     get: () => {
       platform: NodeJS.Platform
       osRelease: string
+      arch: string
+      /** Login shell or ComSpec when available. */
+      shell: string
       displayServer: 'wayland' | 'x11' | null
     }
   }
@@ -1482,6 +1411,7 @@ export type PreloadApi = {
       worktreeId: string
       branchName: string
       expectedHead: string
+      hostId?: ExecutionHostId
     }) => Promise<ForceDeleteWorktreeBranchResult>
     updateMeta: (args: { worktreeId: string; updates: Partial<WorktreeMeta> }) => Promise<Worktree>
     listLineage: () => Promise<{
@@ -1566,6 +1496,11 @@ export type PreloadApi = {
       snapshot?: string
       snapshotCols?: number
       snapshotRows?: number
+      snapshotPrefixAnsi?: string
+      snapshotFrameAnsi?: string
+      snapshotFrameRestoreAnsi?: string
+      snapshotKittyKeyboardFlags?: number
+      snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
       replay?: string
@@ -1632,6 +1567,7 @@ export type PreloadApi = {
       opts?: { scrollbackRows?: number }
     ) => Promise<{
       data: string
+      frameRestoreAnsi?: string
       cols: number
       rows: number
       cwd?: string | null
@@ -1647,6 +1583,9 @@ export type PreloadApi = {
       /** Trailing incomplete escape the emulator ingested; the restorer must
        *  write it after its post-replay resets, last before live chunks. */
       pendingEscapeTailAnsi?: string
+      /** Effective kitty flags the snapshot owner proved at `seq`. Absent means
+       *  unknown; consumers must not turn that into a known `0`. */
+      kittyKeyboardFlags?: number
     } | null>
     getRendererDeliveryDebugSnapshot: () => Promise<{
       pendingPtyCount: number
@@ -1717,6 +1656,7 @@ export type PreloadApi = {
         rows: number
         seq?: number
         lastTitle?: string
+        kittyKeyboardFlags?: number
       } | null
     ) => void
     declarePendingPaneSerializer: (paneKey: string) => Promise<number>
@@ -2054,6 +1994,7 @@ export type PreloadApi = {
       args: HostedReviewCreationEligibilityArgs
     ) => Promise<HostedReviewCreationEligibility>
     create: (args: CreateHostedReviewArgs) => Promise<CreateHostedReviewResult>
+    createStacked: (args: CreateStackedHostedReviewArgs) => Promise<CreateStackedHostedReviewResult>
   }
   // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
   // Shapes mirror gh.* except where GitLab's API differs (MR states, host-qualified project path, `glab api -i` paging).
@@ -2198,6 +2139,13 @@ export type PreloadApi = {
         type: 'issue' | 'mr'
       }
     ) => Promise<Omit<GitLabWorkItem, 'repoId'> | null>
+  }
+  bitbucket: {
+    connect: (
+      args: BitbucketConnectArgs
+    ) => Promise<{ ok: true; account: string | null } | { ok: false; error: string }>
+    disconnect: () => Promise<void>
+    status: () => Promise<BitbucketConnectionStatus>
   }
   linear: {
     connect: (args: {

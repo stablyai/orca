@@ -339,6 +339,8 @@ export type FolderWorkspace = {
   connectionId?: string | null
   /** Renderer-owned host stamp for host-qualified folder catalogs. */
   executionHostId?: ExecutionHostId | null
+  /** Authenticated client that created this workspace. Missing means unknown legacy origin. */
+  creatorProvenance?: WorkspaceCreatorProvenance
   linkedTask: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
   comment: string
@@ -493,6 +495,8 @@ export type Worktree = {
   hostId?: ExecutionHostId
   /** Renderer projection of the paired runtime that transports operations to `hostId`. */
   runtimeOwnerEnvironmentId?: string
+  /** Authenticated client that created this workspace. Missing means unknown legacy origin. */
+  creatorProvenance?: WorkspaceCreatorProvenance
   /** Host-specific setup used to create/run this workspace. */
   projectHostSetupId?: string
   displayName: string
@@ -571,6 +575,10 @@ export type CliWorkspaceProvenance = {
   startupAgent?: TuiAgent
 }
 
+export type WorkspaceCreatorProvenance =
+  | { kind: 'host' }
+  | { kind: 'paired-device'; deviceId: string }
+
 export type AutomationWorkspaceProvenance = {
   kind: 'created-by-automation'
   automationId: string
@@ -623,6 +631,8 @@ export type WorktreeMeta = {
   hostId?: ExecutionHostId
   /** See Worktree.projectHostSetupId. Persisted for project-first workspace ownership. */
   projectHostSetupId?: string
+  /** See Worktree.creatorProvenance. */
+  creatorProvenance?: WorkspaceCreatorProvenance
   displayName: string
   comment: string
   linkedIssue: number | null
@@ -903,6 +913,8 @@ export type TerminalTab = {
    *  PTY and tab icon stay stable even if the default shell setting changes
    *  later. Older persisted tabs may omit this field. */
   shellOverride?: string
+  /** Keeps an ephemeral host fallback out of the active project's runtime. */
+  forceHostRuntime?: boolean
   /** Why: explorer-created terminals can start below the workspace root while
    *  still belonging to that workspace for tab/session ownership. */
   startupCwd?: string
@@ -1067,6 +1079,7 @@ export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
   skippedCookies: number
+  googleCookiesSkipped?: number
   domains: string[]
   warning?: {
     code: 'restart-fallback-unavailable'
@@ -1245,6 +1258,30 @@ export type GitHubPRMergeMethodSettings = {
   allowedMethods: Record<GitHubPRMergeMethod, boolean>
 }
 
+export type GitHubPRStackEntry = {
+  position: number
+  number: number
+  title: string
+  url: string
+  updatedAt?: string
+  state: PRState
+  checksStatus: CheckStatus
+  mergeable: PRMergeableState
+  reviewDecision?: PRReviewDecision | null
+  mergeStateStatus?: string | null
+  headRefName?: string
+  headSha?: string
+}
+
+export type GitHubPRStack = {
+  number: number
+  position: number
+  size: number
+  baseRefName: string
+  baseSha?: string
+  entries?: GitHubPRStackEntry[]
+}
+
 export type PRInfo = {
   number: number
   title: string
@@ -1259,6 +1296,8 @@ export type PRInfo = {
   mergeQueueRequired?: boolean | null
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
+  /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */
+  stack?: GitHubPRStack
   // Why: check-runs are keyed by the PR head commit, not the mutable branch name.
   // Keeping the head SHA in cached PR metadata lets the checks panel poll the
   // correct commit without re-querying GitHub or guessing from local branch refs.
@@ -1459,8 +1498,8 @@ export type PRCheckJob = {
 
 export type PRCheckRunDetails = {
   name: string
-  status: PRCheckDetail['status'] | string | null
-  conclusion: PRCheckDetail['conclusion'] | string | null
+  status: PRCheckDetail['status'] | (string & {}) | null
+  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null
   url: string | null
   detailsUrl: string | null
   startedAt: string | null
@@ -1711,7 +1750,7 @@ export type LinearWorkspace = LinearViewer & {
   credentialRevision?: number
 }
 
-export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelection = (string & {}) | 'all'
 export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
 export type LinearConcreteWorkspaceId = string
 
@@ -3429,6 +3468,8 @@ export type PersistedUIState = {
   hideCliCreatedWorkspaces?: boolean
   /** Hide workspaces sitting on a detached HEAD; folder workspaces (no head at all) are unaffected. */
   hideDetachedHeadWorkspaces?: boolean
+  /** Hide workspaces with known provenance from another paired device or the host UI. */
+  hideWorkspacesFromOtherDevices?: boolean
   /** Keep each project's main workspace out of the "Hide sleeping" sweep. Absent means on (#8873). */
   alwaysShowDefaultBranchWorkspace?: boolean
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */

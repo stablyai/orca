@@ -56,7 +56,6 @@ const {
   clearAgentHookPaneStateMock,
   registerPaneKeyAliasMock,
   piBuildPtyEnvMock,
-  piBuildStatusOnlyPtyEnvMock,
   piClearPtyMock,
   isPwshAvailableMock,
   wslUncDirectoryExistsAsyncMock,
@@ -70,6 +69,7 @@ const {
   clearPaneKeyAliasesForPtyMock,
   recordCodexPaneAccountMock,
   forgetCodexPaneAccountMock,
+  getCodexPaneAccountMock,
   ensureCodexBackfillRecoveryMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -95,7 +95,6 @@ const {
   clearAgentHookPaneStateMock: vi.fn(),
   registerPaneKeyAliasMock: vi.fn(),
   piBuildPtyEnvMock: vi.fn(),
-  piBuildStatusOnlyPtyEnvMock: vi.fn(),
   piClearPtyMock: vi.fn(),
   trackMock: vi.fn(),
   classifyErrorMock: vi.fn(),
@@ -107,6 +106,7 @@ const {
   clearPaneKeyAliasesForPtyMock: vi.fn(),
   recordCodexPaneAccountMock: vi.fn(),
   forgetCodexPaneAccountMock: vi.fn(),
+  getCodexPaneAccountMock: vi.fn(),
   ensureCodexBackfillRecoveryMock: vi.fn(() => Promise.resolve())
 }))
 
@@ -180,7 +180,6 @@ vi.mock('../agent-hooks/server', () => ({
 vi.mock('../pi/titlebar-extension-service', () => ({
   piTitlebarExtensionService: {
     buildPtyEnv: piBuildPtyEnvMock,
-    buildStatusOnlyPtyEnv: piBuildStatusOnlyPtyEnvMock,
     clearPty: piClearPtyMock
   }
 }))
@@ -221,7 +220,8 @@ vi.mock('../agent-hooks/migration-unsupported-pty-state', () => ({
 
 vi.mock('../codex/codex-pane-account-registry', () => ({
   recordCodexPaneAccount: recordCodexPaneAccountMock,
-  forgetCodexPaneAccount: forgetCodexPaneAccountMock
+  forgetCodexPaneAccount: forgetCodexPaneAccountMock,
+  getCodexPaneAccount: getCodexPaneAccountMock
 }))
 
 vi.mock('../codex/codex-state-db-backfill-recovery', () => ({
@@ -235,6 +235,7 @@ import { makePaneKey } from '../../shared/stable-pane-id'
 import { SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV } from '../../shared/setup-agent-sequencing'
 import {
   registerPtyHandlers,
+  buildPtyHostEnv,
   registerSshPtyProvider,
   clearPtyOwnershipForConnection,
   clearProviderPtyState,
@@ -254,6 +255,8 @@ import {
   restorePtyIncarnation,
   type PrepareCodexSessionResume
 } from './pty'
+import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
+import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
   _resetHiddenRendererPtyDeliveryGateForTest,
@@ -395,7 +398,6 @@ describe('registerPtyHandlers', () => {
     clearAgentHookPaneStateMock.mockReset()
     registerPaneKeyAliasMock.mockReset()
     piBuildPtyEnvMock.mockReset()
-    piBuildStatusOnlyPtyEnvMock.mockReset()
     piClearPtyMock.mockReset()
     isPwshAvailableMock.mockReset()
     wslUncDirectoryExistsAsyncMock.mockReset()
@@ -410,6 +412,7 @@ describe('registerPtyHandlers', () => {
     clearPaneKeyAliasesForPtyMock.mockReset()
     recordCodexPaneAccountMock.mockReset()
     forgetCodexPaneAccountMock.mockReset()
+    getCodexPaneAccountMock.mockReset()
     ensureCodexBackfillRecoveryMock.mockReset()
     ensureCodexBackfillRecoveryMock.mockResolvedValue(undefined)
     mainWindow.webContents.on.mockReset()
@@ -497,10 +500,6 @@ describe('registerPtyHandlers', () => {
         }
       }
     )
-    piBuildStatusOnlyPtyEnvMock.mockReturnValue({
-      ORCA_PRIME_AGENT_STATUS_EXTENSION:
-        'C:\\Users\\test\\AppData\\Roaming\\Orca\\prime-agent-managed-status-extension\\orca-agent-status.ts'
-    })
     isPwshAvailableMock.mockReturnValue(false)
     spawnMock.mockReturnValue({
       onData: vi.fn(() => makeDisposable()),
@@ -1948,6 +1947,65 @@ describe('registerPtyHandlers', () => {
   }
 
   describe('spawn environment', () => {
+    it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
+      const originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      __setWindowsPathRegistryLoaderForTests(() => ({
+        HK: { LM: 1, CU: 2 },
+        getRegistryKey: (root) => ({
+          Path: {
+            type: 1,
+            value:
+              root === 1
+                ? 'C:\\Windows\\System32'
+                : 'C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+          }
+        })
+      }))
+      __resetPersistedWindowsPathCacheForTests()
+
+      try {
+        const provider = new LocalPtyProvider({
+          buildSpawnEnv: (id, baseEnv, context) =>
+            buildPtyHostEnv(id, baseEnv, {
+              isPackaged: true,
+              userDataPath: '/tmp/orca-user-data',
+              selectedCodexHomePath: null,
+              githubAttributionEnabled: false,
+              agentStatusHooksEnabled: false,
+              isWsl: context?.isWsl,
+              wslDistro: context?.wslDistro
+            })
+        })
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo',
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Ubuntu',
+          env: {
+            PATH: 'C:\\Orca\\bin;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps',
+            WSLENV: 'ORCA_TERMINAL_HANDLE/u'
+          }
+        })
+        const [file, , options] = spawnMock.mock.calls.at(-1)!
+
+        expect(file).toBe('wsl.exe')
+        expect(options.env.PATH).toBe(
+          'C:\\Orca\\bin;C:\\Windows\\System32;C:\\Python314;C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps'
+        )
+        const forwardedKeys = options.env.WSLENV.split(':').map((entry) =>
+          entry.split('/')[0]!.toLowerCase()
+        )
+        expect(options.env.WSLENV).toContain('ORCA_TERMINAL_HANDLE/u')
+        expect(forwardedKeys).not.toContain('path')
+      } finally {
+        __resetPersistedWindowsPathCacheForTests()
+        __setWindowsPathRegistryLoaderForTests()
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      }
+    })
+
     it('publishes a lifecycle signal after a successful renderer spawn', async () => {
       await spawnAndGetEnv()
 
@@ -4221,10 +4279,13 @@ describe('registerPtyHandlers', () => {
         })
       })
 
-      it('bridges a host-managed Prime status extension into WSL without redirecting Prime home', async () => {
+      it('does not install or inject a Prime extension for an explicit WSL launch', async () => {
         await withWin32Platform(async () => {
           const env = await daemonSpawnAndGetEnv(
-            { PRIME_AGENT_CODING_AGENT_DIR: 'C:\\Users\\test\\.prime\\agent' },
+            {
+              PRIME_AGENT_CODING_AGENT_DIR: 'C:\\Users\\test\\.prime\\agent',
+              ORCA_PRIME_AGENT_STATUS_EXTENSION: 'C:\\stale\\orca-agent-status.ts'
+            },
             undefined,
             undefined,
             undefined,
@@ -4232,26 +4293,23 @@ describe('registerPtyHandlers', () => {
           )
 
           expect(piBuildPtyEnvMock).not.toHaveBeenCalled()
-          expect(piBuildStatusOnlyPtyEnvMock).toHaveBeenCalledWith('prime-agent')
           expect(env.ORCA_PRIME_AGENT_SOURCE_AGENT_DIR).toBeUndefined()
-          expect(env.ORCA_PRIME_AGENT_STATUS_EXTENSION).toBe(
-            'C:\\Users\\test\\AppData\\Roaming\\Orca\\prime-agent-managed-status-extension\\orca-agent-status.ts'
-          )
-          expect(env.ORCA_WSL_HOOK_INSTANCE).toBe('port5678')
+          expect(env.ORCA_PRIME_AGENT_STATUS_EXTENSION).toBeUndefined()
+          expect(env.ORCA_WSL_HOOK_INSTANCE).toBeUndefined()
           expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBe('C:\\Users\\test\\.prime\\agent')
         })
       })
 
-      it('prepares the Prime bridge for a typed launch in a bare WSL shell', async () => {
+      it('does not prepare a Prime extension for a typed launch in a bare WSL shell', async () => {
         await withWin32Platform(async () => {
           const env = await daemonSpawnAndGetEnv({}, undefined, undefined, undefined, {
             shellOverride: 'wsl.exe'
           })
 
-          expect(piBuildStatusOnlyPtyEnvMock).toHaveBeenCalledWith('prime-agent')
-          expect(env.ORCA_PRIME_AGENT_STATUS_EXTENSION).toContain(
-            'prime-agent-managed-status-extension'
+          expect(piBuildPtyEnvMock.mock.calls.some(([, , kind]) => kind === 'prime-agent')).toBe(
+            false
           )
+          expect(env.ORCA_PRIME_AGENT_STATUS_EXTENSION).toBeUndefined()
           expect(env.PRIME_AGENT_CODING_AGENT_DIR).toBeUndefined()
         })
       })
@@ -8592,6 +8650,86 @@ describe('registerPtyHandlers', () => {
     })
   })
 
+  it('shuts down a split PTY when its expected source binding was retired', async () => {
+    type RuntimeSpawnController = {
+      spawn(args: {
+        cols: number
+        rows: number
+        worktreeId: string
+        tabId: string
+        leafId: string
+        persistHostSessionBinding: boolean
+        expectedSourceBinding: {
+          worktreeId: string
+          tabId: string
+          leafId: string
+          ptyId: string
+        }
+      }): Promise<{ id: string }>
+    }
+    const proc = {
+      onData: vi.fn(),
+      onExit: vi.fn(),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      process: 'zsh',
+      pid: 12345
+    }
+    spawnMock.mockReturnValue(proc)
+    const store = { persistPtyBinding: vi.fn(() => false) }
+    let controller: RuntimeSpawnController | null = null
+    const runtime = {
+      setPtyController: vi.fn((value) => {
+        controller = value
+      }),
+      preAllocateHandleForPty: vi.fn(() => 'term_expected'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    registerPtyHandlers(
+      mainWindow as never,
+      runtime as never,
+      undefined,
+      undefined,
+      undefined,
+      store as never
+    )
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const expectedSourceBinding = {
+      worktreeId: 'wt-1',
+      tabId: 'tab-headless',
+      leafId: '11111111-1111-4111-8111-111111111111',
+      ptyId: 'pty-source'
+    }
+
+    try {
+      await expect(
+        (controller as unknown as RuntimeSpawnController).spawn({
+          cols: 80,
+          rows: 24,
+          worktreeId: 'wt-1',
+          tabId: 'tab-headless',
+          leafId,
+          persistHostSessionBinding: true,
+          expectedSourceBinding
+        })
+      ).rejects.toThrow('terminal_split_source_not_found')
+    } finally {
+      error.mockRestore()
+    }
+
+    expect(store.persistPtyBinding).toHaveBeenCalledWith(
+      expect.objectContaining({ expectedSourceBinding })
+    )
+    expect(proc.kill).toHaveBeenCalledOnce()
+  })
+
   it('reports lower-owner commit before rejecting an early-exited runtime incarnation', async () => {
     const persistPtyBinding = vi.fn()
     const onPtySpawnCommitted = vi.fn()
@@ -9092,16 +9230,20 @@ describe('registerPtyHandlers', () => {
     {
       label: 'git worktree',
       worktreeId: 'repo-1::/tmp/live-owner',
-      cwd: '/tmp/live-owner'
+      cwd: '/tmp/live-owner',
+      paneAccountAtStart: { homeRoute: 'shared-home' },
+      expectedHomeRouteAtStart: 'shared-home'
     },
     {
       label: 'folder workspace',
       worktreeId: 'folder:live-owner',
-      cwd: '/tmp'
+      cwd: '/tmp',
+      paneAccountAtStart: null,
+      expectedHomeRouteAtStart: null
     }
   ])(
     'adopts a completed runtime-owned pane before replacement launch preflight ($label)',
-    async ({ worktreeId, cwd }) => {
+    async ({ worktreeId, cwd, paneAccountAtStart, expectedHomeRouteAtStart }) => {
       type StableAdoption = {
         result: { id: string; incarnationId?: string; isReattach?: boolean }
         owner: { handle?: string; tabId: string; leafId: string; ptyId: string }
@@ -9253,13 +9395,26 @@ describe('registerPtyHandlers', () => {
       store.persistPtyBinding.mockClear()
       mainWindow.webContents.send.mockClear()
 
+      wslUncDirectoryExistsAsyncMock.mockClear()
       const mountArgs = {
         cols: 120,
         rows: 40,
-        cwd,
+        cwd: '/a',
+        cwdFallback: 'worktree',
         command: 'claude --resume provider-session',
         launchAgent: 'claude',
         worktreeId,
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'wsl',
+            hostPlatform: 'wsl',
+            projectId: 'repo-1',
+            distro: 'Ubuntu-24.04',
+            reason: 'project-override',
+            cacheKey: 'repo-1:wsl'
+          }
+        },
         tabId,
         leafId,
         env: {
@@ -9292,6 +9447,7 @@ describe('registerPtyHandlers', () => {
         sessionId: 'pty-live-owner'
       })
       expect(providerSpawn.mock.calls[1]?.[0].command).toBeUndefined()
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
       expect(runtime.createPreAllocatedTerminalHandle).not.toHaveBeenCalled()
       expect(prepareClaudeAuth).not.toHaveBeenCalled()
       expect(runtime.registerPreAllocatedHandleForPty).not.toHaveBeenCalled()
@@ -9308,8 +9464,10 @@ describe('registerPtyHandlers', () => {
       runtime.beginPtyRegistration.mockImplementation(() => {
         runtimeSecondAdoption ??= spawnController.adoptStablePane(adoptionArgs)
       })
+      getCodexPaneAccountMock.mockReturnValue(paneAccountAtStart)
       const rendererFirstMount = handlers.get('pty:spawn')!(null, mountArgs)
       await vi.waitFor(() => expect(providerSpawn).toHaveBeenCalledTimes(3))
+      getCodexPaneAccountMock.mockReturnValue({ homeRoute: 'real-home' })
       releaseAttach()
       await vi.waitFor(() => expect(runtimeSecondAdoption).not.toBeNull())
       const pendingRuntimeAdoption = runtimeSecondAdoption
@@ -9354,6 +9512,7 @@ describe('registerPtyHandlers', () => {
         id: 'pty-live-owner',
         codexHomePath: null,
         reattached: true,
+        reattachedHomeRoute: expectedHomeRouteAtStart,
         startedAt: expect.any(Date),
         startedSequence: expect.any(Number)
       })
@@ -12169,51 +12328,60 @@ describe('registerPtyHandlers', () => {
     expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
   })
 
-  it('keeps an existing POSIX startup cwd for the selected WSL runtime', async () => {
-    const originalPlatform = process.platform
-    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-cwd' })
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
-    statSyncMock.mockImplementation((target: string) => {
-      if (target === '/home/alice/repo') {
-        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
-      }
-      return { isDirectory: () => true, mode: 0o755 }
-    })
-
-    try {
-      installDaemonTestProvider({ spawn: providerSpawn })
-      registerPtyHandlers(mainWindow as never)
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        cwd: '/home/alice/repo',
-        cwdFallback: 'worktree',
-        worktreeId: 'repo-1::C:\\Users\\alice\\repo',
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            hostPlatform: 'wsl',
-            projectId: 'repo-1',
-            distro: 'Ubuntu-24.04',
-            reason: 'project-override',
-            cacheKey: 'repo-1:wsl'
-          }
+  it.each(['/home/alice/repo', '/a', '/c'])(
+    'keeps an existing POSIX startup cwd for the selected WSL runtime (%s)',
+    async (startupCwd) => {
+      const originalPlatform = process.platform
+      const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-wsl-cwd' })
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      wslUncDirectoryExistsAsyncMock.mockResolvedValue(true)
+      statSyncMock.mockImplementation((target: string) => {
+        if (target === startupCwd) {
+          throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
         }
+        return { isDirectory: () => true, mode: 0o755 }
       })
 
-      expect(statSyncMock).not.toHaveBeenCalledWith('/home/alice/repo')
-      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(
-        '\\\\wsl.localhost\\Ubuntu-24.04\\home\\alice\\repo'
-      )
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo', shellOverride: 'wsl.exe' })
-      )
-    } finally {
-      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      try {
+        installDaemonTestProvider({ spawn: providerSpawn })
+        registerPtyHandlers(mainWindow as never)
+        await handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: startupCwd,
+          cwdFallback: 'worktree',
+          worktreeId: 'repo-1::C:\\Users\\alice\\repo',
+          projectRuntime: {
+            status: 'resolved',
+            runtime: {
+              kind: 'wsl',
+              hostPlatform: 'wsl',
+              projectId: 'repo-1',
+              distro: 'Ubuntu-24.04',
+              reason: 'project-override',
+              cacheKey: 'repo-1:wsl'
+            }
+          }
+        })
+
+        const expectedValidationCwd = `\\\\wsl.localhost\\Ubuntu-24.04${startupCwd.replaceAll('/', '\\')}`
+        expect(statSyncMock).not.toHaveBeenCalledWith(startupCwd)
+        expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(1)
+        expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledWith(expectedValidationCwd)
+        expect(providerSpawn).toHaveBeenCalledWith(
+          expect.objectContaining({
+            cwd: startupCwd,
+            shellOverride: 'wsl.exe'
+          })
+        )
+        expect(providerSpawn).toHaveBeenCalledWith(
+          expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+        )
+      } finally {
+        Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+      }
     }
-  })
+  )
 
   it('falls back when the selected WSL runtime reports a POSIX cwd missing', async () => {
     const originalPlatform = process.platform
@@ -12228,7 +12396,7 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/deleted',
+        cwd: '/a',
         cwdFallback: 'worktree',
         worktreeId: `repo-1::${worktreePath}`,
         projectRuntime: {
@@ -12244,11 +12412,69 @@ describe('registerPtyHandlers', () => {
         }
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(1)
       expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: worktreePath }))
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+      )
       expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
+  })
+
+  it('does not probe or forward local WSL cwd evidence for SSH fallback spawns', async () => {
+    const sshSpawn = vi.fn(async () => ({ id: 'ssh-wsl-looking-cwd' }))
+    registerSshPtyProvider('ssh-1', {
+      spawn: sshSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(async () => []),
+      attach: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: '/a',
+      cwdFallback: 'worktree',
+      connectionId: 'ssh-1',
+      worktreeId: 'repo-1::C:\\Users\\alice\\repo',
+      shellOverride: 'wsl.exe',
+      projectRuntime: {
+        status: 'resolved',
+        runtime: {
+          kind: 'wsl',
+          hostPlatform: 'wsl',
+          projectId: 'repo-1',
+          distro: 'Ubuntu-24.04',
+          reason: 'project-override',
+          cacheKey: 'repo-1:wsl'
+        }
+      }
+    })
+
+    expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
+    expect(sshSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/a' }))
+    expect(sshSpawn).toHaveBeenCalledWith(
+      expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
+    )
   })
 
   it('preserves a POSIX WSL cwd when the distro probe is inconclusive', async () => {
@@ -12263,15 +12489,13 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/repo',
+        cwd: '/a',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
 
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo' })
-      )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/a' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12290,17 +12514,15 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/repo',
+        cwd: '/c',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::C:/Users/alice/repo',
         shellOverride: 'wsl.exe'
       })) as { startupCwdFallback?: unknown }
 
-      expect(statSyncMock).not.toHaveBeenCalledWith('/home/alice/repo')
+      expect(statSyncMock).not.toHaveBeenCalledWith('/c')
       expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
-      expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/repo' })
-      )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/c' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12308,7 +12530,11 @@ describe('registerPtyHandlers', () => {
   })
 
   it.each([
-    { exists: true, expectedCwd: '/home/alice/repo', expectedFallback: undefined },
+    {
+      exists: true,
+      expectedCwd: '/home/alice/repo',
+      expectedFallback: undefined
+    },
     {
       exists: false,
       expectedCwd: '\\\\wsl.localhost\\Ubuntu\\home\\alice',
@@ -12337,8 +12563,12 @@ describe('registerPtyHandlers', () => {
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: { kind: string; cwd: string } }
 
+      expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(testCase.exists ? 1 : 2)
       expect(providerSpawn).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: testCase.expectedCwd })
+      )
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
       )
       expect(result.startupCwdFallback).toEqual(testCase.expectedFallback)
     } finally {
@@ -12358,15 +12588,16 @@ describe('registerPtyHandlers', () => {
       const result = (await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,
-        cwd: '/home/alice/deleted',
+        cwd: '/c',
         cwdFallback: 'worktree',
         worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice'
       })) as { startupCwdFallback?: unknown }
 
       expect(wslUncDirectoryExistsAsyncMock).toHaveBeenCalledTimes(2)
       expect(providerSpawn).toHaveBeenCalledWith(
-        expect.objectContaining({ cwd: '/home/alice/deleted' })
+        expect.not.objectContaining({ prevalidatedCwd: expect.anything() })
       )
+      expect(providerSpawn).toHaveBeenCalledWith(expect.objectContaining({ cwd: '/c' }))
       expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
@@ -12429,7 +12660,41 @@ describe('registerPtyHandlers', () => {
       expect(providerSpawn).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: worktreePath, shellOverride: 'wsl.exe' })
       )
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
       expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('probes Git Bash /c as its existing native drive root without falling back', async () => {
+    const originalPlatform = process.platform
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-git-bash-cwd' })
+    const worktreePath = 'C:/Users/alice/repo'
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      installDaemonTestProvider({ spawn: providerSpawn })
+      registerPtyHandlers(mainWindow as never)
+      const result = (await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: '/c',
+        cwdFallback: 'worktree',
+        worktreeId: `repo-1::${worktreePath}`,
+        shellOverride: 'C:\\Program Files\\Git\\bin\\bash.exe'
+      })) as { startupCwdFallback?: { kind: string; cwd: string } }
+
+      expect(wslUncDirectoryExistsAsyncMock).not.toHaveBeenCalled()
+      expect(statSyncMock).toHaveBeenCalledWith('C:\\')
+      expect(statSyncMock).not.toHaveBeenCalledWith('/c')
+      expect(providerSpawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          cwd: '/c',
+          shellOverride: expect.stringContaining('bash')
+        })
+      )
+      expect(result.startupCwdFallback).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     }
@@ -17475,6 +17740,87 @@ describe('registerPtyHandlers', () => {
       { value: 900, generation: 'continued' },
       7
     )
+  })
+
+  it('pairs the daemon kitty flags with the reconciled boundary when no bytes crossed mid-spawn', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-restored',
+        isReattach: true,
+        providerSequence: { value: 900, generation: 'continued' as const },
+        snapshotKittyKeyboardFlags: 8
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      getPtyOutputSequence: vi.fn().mockReturnValue(7),
+      synchronizePtyOutputSequenceFromProvider: vi.fn().mockReturnValue(920),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    const reply = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      snapshotSeq?: number
+      snapshotKittyKeyboardFlags?: number
+    }
+
+    expect(reply.snapshotKittyKeyboardFlags).toBe(8)
+    expect(reply.snapshotSeq).toBe(920)
+  })
+
+  it('drops the daemon kitty flags claim when bytes crossed the data socket mid-spawn', async () => {
+    setLocalPtyProvider({
+      spawn: vi.fn(async () => ({
+        id: 'pty-restored',
+        isReattach: true,
+        providerSequence: { value: 900, generation: 'continued' as const },
+        snapshotKittyKeyboardFlags: 8
+      })),
+      write: vi.fn(),
+      resize: vi.fn(),
+      kill: vi.fn(),
+      shutdown: vi.fn(),
+      onData: vi.fn(() => vi.fn()),
+      onExit: vi.fn(() => vi.fn()),
+      listProcesses: vi.fn(async () => []),
+      getForegroundProcess: vi.fn(async () => null)
+    } as never)
+    const runtime = {
+      setPtyController: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      // 7 at spawn start, 20 at reconcile: bytes arrived during the spawn RPC.
+      getPtyOutputSequence: vi.fn().mockReturnValueOnce(7).mockReturnValue(20),
+      synchronizePtyOutputSequenceFromProvider: vi.fn().mockReturnValue(920),
+      onPtySpawned: vi.fn(),
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      createPreAllocatedTerminalHandle: vi.fn(() => null),
+      preAllocateHandleForPty: vi.fn()
+    }
+    registerPtyHandlers(mainWindow as never, runtime as never)
+
+    const reply = (await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24 })) as {
+      snapshotSeq?: number
+      snapshotKittyKeyboardFlags?: number
+    }
+
+    // The reconciled boundary covers bytes the daemon's flags were proven
+    // BEFORE — publishing both would erase a negotiation the pane scanned live.
+    expect(reply.snapshotKittyKeyboardFlags).toBeUndefined()
+    expect(reply.snapshotSeq).toBeUndefined()
   })
 
   it('records the launch Codex account for a fresh spawn but not for a reattach', async () => {

@@ -65,7 +65,7 @@ export function getTaskPageGitHubConfirmedAuthorityItemKeys(): ReadonlySet<strin
   for (const itemKey of itemSourceScopeByItemKey.keys()) {
     const separator = itemKey.indexOf('\0')
     if (
-      separator >= 0 &&
+      separator !== -1 &&
       hasConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
     ) {
       keys.add(itemKey)

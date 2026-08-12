@@ -445,6 +445,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
+        get: vi.fn().mockResolvedValue([]),
         set: cookiesSetMock,
         remove: cookiesRemoveMock,
         flushStore: cookiesFlushStoreMock
@@ -510,6 +511,7 @@ describe('importCookiesFromBrowser Chromium', () => {
         ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
       ).toEqual(sourceFilesBefore)
       expect(cookiesRemoveMock).not.toHaveBeenCalled()
+      expect(clearStorageDataMock).toHaveBeenCalledOnce()
       expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
       // Why: STA-3514 — imports must never impersonate the source browser; the
       // session keeps the engine UA the registry set at startup.

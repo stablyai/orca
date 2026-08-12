@@ -44,6 +44,7 @@ import { OrchestrationError } from './orchestration-error'
 import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 import {
   deriveWorkerTerminalListState,
+  WORKER_SETTLED_STATES,
   type WorkerTerminalResourceRow,
   type WorkerTerminalArchiveRow,
   type WorkerTerminalArchiveStatus,
@@ -57,6 +58,10 @@ import {
   releaseContextOnlyDispatch,
   type ContextOnlyDispatchReleaseResult
 } from './context-only-dispatch-release'
+import {
+  ensureMutationReceiptCapacity,
+  migrateMutationReceiptCapacity
+} from './mutation-receipt-capacity'
 
 // Why: leaf UUID is the remint-stable pane identity (tab half changes on break-out); exact match covers legacy/unparseable keys.
 function isEquivalentPaneKey(a: string, b: string): boolean {
@@ -68,6 +73,17 @@ function isEquivalentPaneKey(a: string, b: string): boolean {
   return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
 }
 
+function parseWorkerTerminalPriorOwnerIds(value: string): string[] | null {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed) && parsed.every((entry) => typeof entry === 'string')
+      ? parsed
+      : null
+  } catch {
+    return null
+  }
+}
+
 // Why: indexable pre-filter for isEquivalentPaneKey — equal strings and equal leaves both share the
 // text after the first ':', so this narrows candidates without deciding equivalence itself.
 const RUN_PANE_KEY_MATCH_SUFFIX_SQL =
@@ -77,7 +93,7 @@ const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =
 
 function paneKeyMatchSuffix(paneKey: string): string {
   const colon = paneKey.indexOf(':')
-  return colon < 0 ? paneKey : paneKey.slice(colon + 1)
+  return colon === -1 ? paneKey : paneKey.slice(colon + 1)
 }
 
 export type {
@@ -261,9 +277,6 @@ export const LEGACY_RUN_ID = ORCHESTRATION_LEGACY_RUN_ID
 export const LEGACY_CONTRACT_VERSION = 0
 export const CURRENT_CONTRACT_VERSION = ORCHESTRATION_CONTRACT_VERSION
 
-const MUTATION_RECEIPT_MAX_ROWS = 10_000
-const MUTATION_RECEIPT_MAX_AGE_DAYS = 30
-
 export type RunListPage = {
   runs: RunRow[]
   nextCursor: string | null
@@ -281,10 +294,10 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup.
-const SCHEMA_VERSION = 25
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
+const SCHEMA_VERSION = 26
 
-function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
+function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
     // Why: Windows protects these files through Orca's current-user-only userData DACL; POSIX mode bits are inert there.
     return
@@ -307,7 +320,7 @@ export class OrchestrationDb {
   // per-terminal fan-out. Only createDispatchContext flips this false→true.
   private hasAnyDispatchContextsCache: boolean | undefined
 
-  constructor(dbPath: string | ':memory:') {
+  constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
@@ -983,6 +996,9 @@ export class OrchestrationDb {
             WHERE assignee_handle IS NOT NULL AND status IN ('pending', 'dispatched');
         `)
       }
+      if (current < 26) {
+        migrateMutationReceiptCapacity(this.db)
+      }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
           ON dispatch_contexts(${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL})
@@ -1398,44 +1414,6 @@ export class OrchestrationDb {
 
   // ── Durable mutation receipts ──
 
-  private ensureMutationReceiptCapacity(): void {
-    this.db
-      .prepare(
-        `DELETE FROM mutation_receipts
-         WHERE state = 'completed'
-           AND updated_at < datetime('now', ?)`
-      )
-      .run(`-${MUTATION_RECEIPT_MAX_AGE_DAYS} days`)
-
-    const row = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
-    }
-    const completedToRemove = row.count - MUTATION_RECEIPT_MAX_ROWS + 1
-    if (completedToRemove > 0) {
-      this.db
-        .prepare(
-          `DELETE FROM mutation_receipts
-           WHERE rowid IN (
-             SELECT rowid FROM mutation_receipts
-             WHERE state = 'completed'
-             ORDER BY updated_at ASC, rowid ASC
-             LIMIT ?
-           )`
-        )
-        .run(completedToRemove)
-    }
-
-    const retained = this.db.prepare('SELECT COUNT(*) AS count FROM mutation_receipts').get() as {
-      count: number
-    }
-    if (retained.count >= MUTATION_RECEIPT_MAX_ROWS) {
-      throw new OrchestrationError(
-        'mutation_ledger_full',
-        'The durable mutation ledger is full of unresolved operations. Resolve or inspect them before starting another mutation.'
-      )
-    }
-  }
-
   beginMutationReceipt(params: {
     callerFingerprint: string
     requestId: string
@@ -1458,7 +1436,7 @@ export class OrchestrationDb {
         this.db.exec('COMMIT')
         return { disposition: existing.state, row: existing }
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -3885,7 +3863,7 @@ export class OrchestrationDb {
     return this.db.prepare('SELECT * FROM tasks ORDER BY created_at').all() as TaskRow[]
   }
 
-  // Why: LEFT JOIN keeps non-dispatched tasks (NULL assignee); the MAX(rowid) subquery matches getDispatchContext's most-recent-active-dispatch semantics.
+  // Why: the correlated indexed lookup avoids materializing every retained Dispatch before filtering Tasks.
   listTasksWithDispatch(filter?: {
     status?: TaskStatus
     ready?: boolean
@@ -3913,16 +3891,14 @@ export class OrchestrationDb {
         d.assignee_handle AS assignee_handle,
         d.id              AS dispatch_id
       FROM tasks t
-      LEFT JOIN (
-        SELECT dc.*
-        FROM dispatch_contexts dc
-        INNER JOIN (
-          SELECT task_id, MAX(rowid) AS max_rowid
-          FROM dispatch_contexts
-          WHERE status IN ('pending', 'dispatched')
-          GROUP BY task_id
-        ) latest ON latest.task_id = dc.task_id AND latest.max_rowid = dc.rowid
-      ) d ON d.task_id = t.id
+      LEFT JOIN dispatch_contexts d ON d.rowid = (
+        SELECT candidate.rowid
+        FROM dispatch_contexts candidate
+        WHERE candidate.task_id = t.id
+          AND candidate.status IN ('pending', 'dispatched')
+        ORDER BY candidate.rowid DESC
+        LIMIT 1
+      )
       ${where}
       ORDER BY t.created_at
     `
@@ -4009,7 +3985,7 @@ export class OrchestrationDb {
             `Mutation ${receipt.requestId} already has a durable acceptance record.`
           )
         }
-        this.ensureMutationReceiptCapacity()
+        ensureMutationReceiptCapacity(this.db)
         this.db
           .prepare(
             `INSERT INTO mutation_receipts (
@@ -4642,7 +4618,7 @@ export class OrchestrationDb {
           `Remote attachment request ${params.mutationReceipt.requestId} already exists.`
         )
       }
-      this.ensureMutationReceiptCapacity()
+      ensureMutationReceiptCapacity(this.db)
       this.db
         .prepare(
           `INSERT INTO mutation_receipts (
@@ -5130,13 +5106,44 @@ export class OrchestrationDb {
     dispatchId: string
     direction: FederationRelayDirection
     throughSequence: number
+    settleRemoteReport?: { sequence: number; outcome: WorkerReportOutcome }
   }): void {
-    this.db
-      .prepare(
-        `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
-         WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
-      )
-      .run(params.dispatchId, params.direction, params.throughSequence)
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      if (params.settleRemoteReport) {
+        const report = this.getFederationRelayItem(
+          params.dispatchId,
+          params.direction,
+          params.settleRemoteReport.sequence
+        )
+        if (
+          params.direction !== 'to_home' ||
+          params.settleRemoteReport.sequence > params.throughSequence ||
+          report?.kind !== 'worker_done' ||
+          parseFederatedWorkerReportOutcome(report.payload) !== params.settleRemoteReport.outcome
+        ) {
+          throw new OrchestrationError(
+            'request_mismatch',
+            `Federation acknowledgment for ${params.dispatchId} does not match its queued worker_done.`
+          )
+        }
+        this.settleRemoteAttachmentInRelayTransaction(
+          params.dispatchId,
+          params.settleRemoteReport.outcome,
+          'worker_report_settled'
+        )
+      }
+      this.db
+        .prepare(
+          `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
+           WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
+        )
+        .run(params.dispatchId, params.direction, params.throughSequence)
+      this.db.exec('COMMIT')
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   setFederatedHomeImportSequence(dispatchId: string, sequence: number): void {
@@ -5174,7 +5181,11 @@ export class OrchestrationDb {
           result: string
         }
       | { kind: 'rejected'; code: string; reason: string }
-  }): { message: MessageRow; duplicate: boolean } {
+  }): {
+    message: MessageRow
+    duplicate: boolean
+    lifecycle?: WorkerReportSettlement | { action: 'rejected'; code: string; reason: string }
+  } {
     this.db.exec('BEGIN IMMEDIATE')
     try {
       const federated = this.getFederatedDispatch(params.dispatchId)
@@ -5184,18 +5195,14 @@ export class OrchestrationDb {
           `Federated Dispatch ${params.dispatchId} was not found.`
         )
       }
-      if (params.sequence <= federated.to_home_imported_sequence) {
-        const existing = this.getMessageById(params.message.id)
-        if (!existing) {
-          throw new OrchestrationError(
-            'operation_unknown',
-            `Federated relay sequence ${params.sequence} was committed without its message.`
-          )
-        }
-        this.db.exec('COMMIT')
-        return { message: existing, duplicate: true }
+      const duplicate = params.sequence <= federated.to_home_imported_sequence
+      if (duplicate && !this.getMessageById(params.message.id)) {
+        throw new OrchestrationError(
+          'operation_unknown',
+          `Federated relay sequence ${params.sequence} was committed without its message.`
+        )
       }
-      if (params.sequence !== federated.to_home_imported_sequence + 1) {
+      if (!duplicate && params.sequence !== federated.to_home_imported_sequence + 1) {
         throw new OrchestrationError(
           'operation_unknown',
           `Federated relay for ${params.dispatchId} is not contiguous after sequence ${federated.to_home_imported_sequence}.`
@@ -5222,32 +5229,45 @@ export class OrchestrationDb {
           dispatchId: params.dispatchId
         })
       }
-      if (params.lifecycle.kind === 'heartbeat') {
+      let lifecycle:
+        | WorkerReportSettlement
+        | { action: 'rejected'; code: string; reason: string }
+        | undefined
+      if (params.lifecycle.kind === 'heartbeat' && !duplicate) {
         this.recordHeartbeat(params.dispatchId, params.lifecycle.at)
       } else if (params.lifecycle.kind === 'worker_report') {
-        const settlement = this.settleWorkerReportInTransaction({
+        lifecycle = this.settleWorkerReportInTransaction({
           taskId: params.lifecycle.taskId,
           dispatchId: params.dispatchId,
           outcome: params.lifecycle.outcome,
           result: params.lifecycle.result
         })
-        if (settlement.action === 'rejected') {
+        if (lifecycle.action === 'rejected' && !duplicate) {
           message = this.convertLifecycleMessageToRejection(
             message.id,
-            settlement.code,
-            settlement.reason
+            lifecycle.code,
+            lifecycle.reason
           ) as MessageRow
         }
       } else if (params.lifecycle.kind === 'rejected') {
-        message = this.convertLifecycleMessageToRejection(
-          message.id,
-          params.lifecycle.code,
-          params.lifecycle.reason
-        ) as MessageRow
+        lifecycle = {
+          action: 'rejected',
+          code: params.lifecycle.code,
+          reason: params.lifecycle.reason
+        }
+        if (!duplicate) {
+          message = this.convertLifecycleMessageToRejection(
+            message.id,
+            params.lifecycle.code,
+            params.lifecycle.reason
+          ) as MessageRow
+        }
       }
-      this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
+      if (!duplicate) {
+        this.setFederatedHomeImportSequence(params.dispatchId, params.sequence)
+      }
       this.db.exec('COMMIT')
-      return { message, duplicate: false }
+      return { message, duplicate, ...(lifecycle ? { lifecycle } : {}) }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -5348,19 +5368,37 @@ export class OrchestrationDb {
 
   private settleRemoteAttachmentInRelayTransaction(
     dispatchId: string,
-    outcome: WorkerReportOutcome | undefined
+    outcome: WorkerReportOutcome | undefined,
+    stage = 'worker_report_queued'
   ): void {
     if (!outcome) {
       return
     }
+    const attachment = this.getRemoteDispatchAttachment(dispatchId)
+    const state = outcome === 'succeeded' ? 'succeeded' : 'failed'
+    if (!attachment) {
+      throw new OrchestrationError(
+        'dispatch_not_found',
+        `Remote Dispatch ${dispatchId} was not found.`
+      )
+    }
+    if (attachment.state === state) {
+      return
+    }
+    if (attachment.state !== 'ready') {
+      throw new OrchestrationError(
+        'request_mismatch',
+        `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
+      )
+    }
     this.db
       .prepare(
         `UPDATE remote_dispatch_attachments
-         SET state = ?, stage = 'worker_report_queued', capability_hash = NULL,
+         SET state = ?, stage = ?, capability_hash = NULL,
              updated_at = datetime('now')
          WHERE dispatch_id = ? AND state = 'ready'`
       )
-      .run(outcome === 'succeeded' ? 'succeeded' : 'failed', dispatchId)
+      .run(state, stage, dispatchId)
   }
 
   isDispatchProcessCurrent(params: {
@@ -5852,12 +5890,12 @@ export class OrchestrationDb {
       if (!worker) {
         throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
       }
-      if (!['succeeded', 'failed'].includes(worker.state)) {
+      if (!WORKER_SETTLED_STATES.includes(worker.state)) {
         // Why: release is post-completion cleanup only; recording intent for an unsettled or
         // uncertain worker would let recovery close a terminal the coordinator never reviewed.
         throw new OrchestrationError(
           'dispatch_inactive',
-          `Dispatch ${dispatchId} is ${worker.state}; only a succeeded or failed worker can release. Use worker-stop to cancel an active worker.`
+          `Dispatch ${dispatchId} is ${worker.state}; only a settled worker can release. Use worker-stop to cancel an active worker.`
         )
       }
       const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
@@ -5871,6 +5909,10 @@ export class OrchestrationDb {
       if (resource.release_state === 'released' || resource.ownership_state === 'released') {
         this.db.exec('COMMIT')
         return { disposition: 'already_released', resource }
+      }
+      if (worker.state === 'stopped' || worker.state === 'abandoned') {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource, reason: 'identity_unproven' }
       }
       if (resource.ownership_state === 'external') {
         this.db.exec('COMMIT')
@@ -5914,6 +5956,66 @@ export class OrchestrationDb {
         disposition: 'requested',
         resource: this.getWorkerTerminalResource(resource.id) as WorkerTerminalResourceRow
       }
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  settleDeadWorkerTerminalRelease(params: {
+    requestingDispatchId: string
+    resourceId: string
+    processIncarnation: string
+  }):
+    | { disposition: 'released'; resource: WorkerTerminalResourceRow }
+    | { disposition: 'retained'; resource: WorkerTerminalResourceRow } {
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const resource = this.getWorkerTerminalResource(params.resourceId)
+      if (!resource) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Worker terminal resource ${params.resourceId} was not found.`
+        )
+      }
+      const priorOwners = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+      const requesterRelated =
+        resource.owner_dispatch_id === params.requestingDispatchId ||
+        priorOwners?.includes(params.requestingDispatchId) === true
+      const requester = this.getWorkerDispatch(params.requestingDispatchId)
+      const owner = this.getWorkerDispatch(resource.owner_dispatch_id)
+      const requesterSettled = Boolean(requester && WORKER_SETTLED_STATES.includes(requester.state))
+      const ownerSettled = Boolean(owner && WORKER_SETTLED_STATES.includes(owner.state))
+      if (
+        !priorOwners ||
+        !requesterRelated ||
+        !requesterSettled ||
+        !ownerSettled ||
+        resource.process_incarnation !== params.processIncarnation ||
+        resource.ownership_state === 'released' ||
+        !['not_requested', 'retained', 'unknown'].includes(resource.release_state)
+      ) {
+        this.db.exec('COMMIT')
+        return { disposition: 'retained', resource }
+      }
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+           SET release_state = 'released', ownership_state = 'released', retained_reason = NULL,
+               release_requested_at = COALESCE(release_requested_at, datetime('now')),
+               release_completed_at = datetime('now'), release_error = NULL,
+               updated_at = datetime('now')
+           WHERE id = ? AND process_incarnation = ? AND ownership_state != 'released'
+             AND release_state IN ('not_requested', 'retained', 'unknown')`
+        )
+        .run(params.resourceId, params.processIncarnation)
+      const released = this.getWorkerTerminalResource(
+        params.resourceId
+      ) as WorkerTerminalResourceRow
+      this.db.exec('COMMIT')
+      return released.release_state === 'released'
+        ? { disposition: 'released', resource: released }
+        : { disposition: 'retained', resource: released }
     } catch (error) {
       this.db.exec('ROLLBACK')
       throw error
@@ -6836,5 +6938,20 @@ export class OrchestrationDb {
 
   close(): void {
     this.db.close()
+  }
+}
+
+function parseFederatedWorkerReportOutcome(payload: string): WorkerReportOutcome | undefined {
+  try {
+    const message = JSON.parse(payload) as { payload?: unknown }
+    if (typeof message.payload !== 'string') {
+      return undefined
+    }
+    const report = JSON.parse(message.payload) as { outcome?: unknown }
+    return report.outcome === 'succeeded' || report.outcome === 'failed'
+      ? report.outcome
+      : undefined
+  } catch {
+    return undefined
   }
 }

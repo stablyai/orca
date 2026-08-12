@@ -1,5 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -174,5 +176,51 @@ test('keeps two paired browser clients and the host on independent worktrees', a
   } finally {
     await clientB?.close()
     await clientA?.close()
+  }
+})
+
+test('routes Add Project folder browsing through the paired host', async ({
+  electronApp,
+  orcaPage,
+  registerPostElectronShutdownCleanup
+}) => {
+  const hostFolder = mkdtempSync(path.join(os.tmpdir(), 'orca-paired-web-folder-'))
+  const folderName = path.basename(hostFolder)
+  registerPostElectronShutdownCleanup(async () => {
+    rmSync(hostFolder, { recursive: true, force: true })
+  })
+  const visibleWorktreeId = await orcaPage.evaluate(
+    () => window.__store?.getState().activeWorktreeId
+  )
+  if (!visibleWorktreeId) {
+    throw new Error('Host worktree was not active before paired web validation')
+  }
+
+  const offer = await createPairingOffer(orcaPage)
+  const client = await openPairedClient(electronApp, offer, visibleWorktreeId)
+  try {
+    await client
+      .getByRole('button', { name: /Add Project/i })
+      .first()
+      .click()
+    const addDialog = client.getByRole('dialog', { name: /Add a project/i })
+    await expect(addDialog).toBeVisible()
+    await expect(addDialog).not.toContainText('Local Mac')
+
+    await addDialog.getByRole('button', { name: /Browse folder/i }).click()
+    const browser = client.getByRole('dialog', { name: /Browse host filesystem/i })
+    await expect(browser).toBeVisible()
+    await expect(browser.getByRole('button', { name: /Select folder/i })).toBeVisible()
+    await browser.getByRole('button', { name: /^Cancel$/i }).click()
+
+    const manualPathDialog = client.getByRole('dialog', { name: /Open host project/i })
+    await manualPathDialog.locator('#server-project-path').fill(hostFolder)
+    await manualPathDialog.getByRole('button', { name: /Open as Folder/i }).click()
+    await expect(manualPathDialog).toBeHidden({ timeout: 30_000 })
+    await expect(
+      client.locator('[data-worktree-sidebar]').getByText(folderName, { exact: true }).first()
+    ).toBeVisible({ timeout: 30_000 })
+  } finally {
+    await client.close()
   }
 })

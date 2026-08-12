@@ -13,6 +13,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { useAppStore } from '@/store'
 import { BROWSER_FAMILY_LABELS } from '../../../../shared/constants'
 import type { BrowserSessionProfile, BrowserViewportPresetId } from '../../../../shared/types'
@@ -170,6 +171,7 @@ export function BrowserToolbarMenuDropdown({
                   'From File…'
                 )}
               </DropdownMenuItem>
+              <BrowserCookieImportDisclosure />
             </DropdownMenuSubContent>
           </DropdownMenuPortal>
         </DropdownMenuSub>
