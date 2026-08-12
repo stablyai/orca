@@ -30,6 +30,12 @@ import {
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../shared/git-worktree-command-capabilities'
+import {
+  countStashSubjectsForBranch,
+  formatWorktreeStashRemovalDetail,
+  parseStashListSubjects,
+  WORKTREE_STASH_REMOVAL_ERROR
+} from '../../shared/git-stash-worktree-ownership'
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
@@ -1142,6 +1148,13 @@ async function performRemoveWorktree(
   // Why: callers outside the IPC/runtime preflight must not bypass Git's lock contract or rely on localized stderr after side effects.
   assertWorktreeUnlockedForRemoval(removedWorktree)
 
+  // Why hard (not soft-fail into `git worktree remove`): Git re-checks porcelain
+  // dirtiness but ignores shared refs/stash. Soft-failing would let a stashed
+  // worktree delete and orphan its WIP (#13695).
+  if (!force) {
+    await assertWorktreeCleanForRemoval(worktreePath, false, options)
+  }
+
   if (
     !(await tryRemoveWorktreeWithDeferredDirectoryDeletion(repoPath, worktreePath, force, options))
   ) {
@@ -1194,14 +1207,9 @@ async function tryRemoveWorktreeWithDeferredDirectoryDeletion(
   if (options.wslDistro || parseWslPath(worktreePath)) {
     return false
   }
-  if (!force) {
-    try {
-      // Why: `git worktree remove` re-checks cleanliness as it removes; prove the same thing here or leave removal to Git.
-      await assertWorktreeCleanForRemoval(worktreePath, false, options)
-    } catch {
-      return false
-    }
-  }
+  // Why: cleanliness (including branch-attributed stash) is proven in
+  // performRemoveWorktree before this path runs. Do not soft-fail here — that
+  // used to fall through to bare `git worktree remove`, which cannot see stash.
 
   const trashPath = await withWorktreeRemoveStageSpan('trash_rename', 'local', () =>
     moveWorktreeDirectoryToTrash(worktreePath)
@@ -1431,6 +1439,12 @@ async function isLocalBranchCheckedOut(
 
 /**
  * Assert a worktree is clean enough for non-force removal.
+ *
+ * Status porcelain alone misses WIP parked in the shared `refs/stash` stack
+ * (issue #13695): a stashed tree looks clean, delete preflight would raise
+ * nothing, and the entry is left unattributable once the worktree is gone.
+ * Branch name is Git's only subject attribution — refuse non-force removal when
+ * stash subjects were recorded on this worktree's current branch.
  */
 export async function assertWorktreeCleanForRemoval(
   worktreePath: string,
@@ -1442,31 +1456,69 @@ export async function assertWorktreeCleanForRemoval(
   }
 
   const { ignoredUntrackedPaths = [], ...gitOptions } = options
+  const execOpts = {
+    ...gitExecOptions(worktreePath, gitOptions),
+    timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
+  }
   const useNullTerminatedStatus = ignoredUntrackedPaths.length > 0
   const { stdout } = await gitExecFileAsync(
     ['status', '--porcelain', ...(useNullTerminatedStatus ? ['-z'] : []), '--untracked-files=all'],
-    {
-      ...gitExecOptions(worktreePath, gitOptions),
-      timeout: gitOptions.timeout ?? WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS
-    }
+    execOpts
   )
   // Why one parse feeds both: the clean verdict and the error text must never
   // disagree about which entries block removal.
   const blockingEntries = useNullTerminatedStatus
     ? getBlockingUntrackedStatusEntries(stdout, ignoredUntrackedPaths)
     : null
-  if (blockingEntries ? blockingEntries.length === 0 : !stdout.trim()) {
+  if (blockingEntries ? blockingEntries.length > 0 : Boolean(stdout.trim())) {
+    const error = new Error('Worktree has uncommitted or untracked changes.')
+    // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
+    // interior NULs, so attaching it verbatim put raw control bytes into the
+    // user-facing removal error — and listed the tolerated shared link, the one
+    // entry that is not the user's work and cannot be committed away.
+    ;(error as Error & { stdout?: string }).stdout = blockingEntries
+      ? blockingEntries.join('\n')
+      : stdout
+    throw error
+  }
+
+  await assertNoBranchAttributedStashForRemoval(worktreePath, execOpts)
+}
+
+async function assertNoBranchAttributedStashForRemoval(
+  worktreePath: string,
+  execOpts: ReturnType<typeof gitExecOptions> & { timeout: number }
+): Promise<void> {
+  // Why: fail open on stash probe errors — a missing/broken stash list must not
+  // invent a blocker, and dirty-tree blocking already ran above.
+  let branch = ''
+  try {
+    const { stdout } = await gitExecFileAsync(['branch', '--show-current'], execOpts)
+    branch = stdout.trim()
+  } catch {
+    return
+  }
+  if (!branch) {
     return
   }
 
-  const error = new Error('Worktree has uncommitted or untracked changes.')
-  // Why not the raw stdout: `-z` output is NUL-delimited and `.trim()` leaves
-  // interior NULs, so attaching it verbatim put raw control bytes into the
-  // user-facing removal error — and listed the tolerated shared link, the one
-  // entry that is not the user's work and cannot be committed away.
-  ;(error as Error & { stdout?: string }).stdout = blockingEntries
-    ? blockingEntries.join('\n')
-    : stdout
+  let subjects: string[] = []
+  try {
+    // Why %gs only: stash@{N} is positional and concurrent sibling stashes shift
+    // indices; subject strings carry the branch recorded at stash time.
+    const { stdout } = await gitExecFileAsync(['stash', 'list', '--format=%gs'], execOpts)
+    subjects = parseStashListSubjects(stdout)
+  } catch {
+    return
+  }
+
+  const count = countStashSubjectsForBranch(subjects, branch)
+  if (count === 0) {
+    return
+  }
+
+  const error = new Error(WORKTREE_STASH_REMOVAL_ERROR)
+  ;(error as Error & { stdout?: string }).stdout = formatWorktreeStashRemovalDetail(count, branch)
   throw error
 }
 

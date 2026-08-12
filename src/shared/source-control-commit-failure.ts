@@ -183,7 +183,7 @@ export function buildFixCommitFailurePrompt({
     '',
     'Rules:',
     '- Start with git status so you understand staged, unstaged, and untracked changes.',
-    '- Preserve unrelated staged and unstaged work. Do not run broad cleanup commands like git reset --hard, git checkout ., git restore ., git clean, or git stash.',
+    '- Preserve unrelated staged and unstaged work. Do not run broad cleanup commands like git reset --hard, git checkout ., git restore ., git clean, or git stash (refs/stash is shared across every worktree of this repository).',
     '- Investigate the pre-commit or lint failure from the output. Prefer targeted code fixes over disabling rules.',
     '- Do not bypass hooks with --no-verify.',
     '- Do not commit, push, create a pull request, or assume any hosted git provider.',

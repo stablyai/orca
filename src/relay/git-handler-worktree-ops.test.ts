@@ -191,9 +191,39 @@ describe('removeWorktreeOp', () => {
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      '/repo-feature$ stash list --format=%gs',
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
+  })
+
+  it('blocks non-force SSH removal when branch-attributed stash remains', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'stash' && args[1] === 'list') {
+        return { stdout: 'On feature/test: agent WIP\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('Worktree has uncommitted or untracked changes.')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.any(String)
+    )
   })
 
   it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
@@ -230,8 +260,10 @@ describe('removeWorktreeOp', () => {
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      '/repo-feature$ stash list --format=%gs',
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       '/repo-feature$ status --porcelain --untracked-files=all',
+      '/repo-feature$ stash list --format=%gs',
       `${resolvedRepoPath()}$ worktree remove --force /repo-feature`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
@@ -433,6 +465,7 @@ describe('removeWorktreeOp', () => {
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      '/repo-feature$ stash list --format=%gs',
       `${resolvedRepoPath()}$ worktree remove /repo-feature`
     ])
   })

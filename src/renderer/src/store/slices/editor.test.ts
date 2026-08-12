@@ -4119,7 +4119,7 @@ describe('createEditorSlice remote branch actions', () => {
     const store = createEditorStore()
     gitFastForwardMock.mockRejectedValueOnce(
       new Error(
-        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+        'Pull would overwrite local changes. Commit or discard them before pulling.'
       )
     )
 
@@ -4147,7 +4147,7 @@ describe('createEditorSlice remote branch actions', () => {
     const store = createEditorStore()
     gitRebaseFromBaseMock.mockRejectedValueOnce(
       new Error(
-        'Pull would overwrite local changes. Commit, stash, or discard them before pulling.'
+        'Pull would overwrite local changes. Commit or discard them before pulling.'
       )
     )
 
