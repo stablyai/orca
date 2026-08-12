@@ -14,7 +14,7 @@ that.
 
 ## Sequence shape
 
-```
+```text
 ESC ] 9999 ; <json> <terminator>
 ```
 
@@ -56,7 +56,7 @@ Closing the tab removes the card cleanly.
 
 Unknown fields are ignored, so adding an optional field later is
 forward-compatible (same rule as [remote wire compatibility](remote-wire-compatibility.md)
-Rule 1). A malformed JSON body, an invalid `state`, or a non-string field type
+Rule 1). A malformed JSON body, an invalid `state`, or an invalid type for a known field
 rejects the whole payload — the sequence is stripped from the terminal data and
 no status is reported.
 
