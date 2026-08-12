@@ -22,6 +22,12 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
               value1: warning.loadedCookies + warning.failedCookies
             }
           )
+    case 'app-bound-encryption':
+      return translate(
+        'auto.lib.browser.cookie.import.toast.appBoundEncryption',
+        'This browser encrypts its {{value0}} cookies with app-bound encryption, which only the browser itself can unlock. Export them from the browser and use Import from File instead.',
+        { value0: warning.encryptedCookies }
+      )
   }
 }
 

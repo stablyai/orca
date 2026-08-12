@@ -1068,6 +1068,14 @@ function stripHmac(buf: Buffer): Buffer {
   return hasHmacPrefix(buf) ? buf.subarray(CHROMIUM_COOKIE_HMAC_LEN) : buf
 }
 
+/**
+ * Chrome/Edge 140+ on Windows prefix every cookie with `v20` (app-bound encryption). Only the
+ * browser's own elevation service can unwrap that layer, so these rows can never decrypt here.
+ */
+export function isAppBoundEncryptedCookie(encryptedBuffer: Buffer): boolean {
+  return encryptedBuffer.length >= 3 && encryptedBuffer.subarray(0, 3).toString('utf-8') === 'v20'
+}
+
 function decryptCookieValueRaw(
   encryptedBuffer: Buffer,
   keyResult: EncryptionKeyResult
@@ -1614,6 +1622,7 @@ export async function importCookiesFromBrowser(
 
     let imported = 0
     let skipped = 0
+    let appBoundEncrypted = 0
     let integritySkipped = 0
     let nonTransplantableSkipped = 0
     let memoryLoaded = 0
@@ -1681,6 +1690,11 @@ export async function importCookiesFromBrowser(
 
       let decryptedValue: Buffer
       if (encBuf && encBuf.length > 0) {
+        // Why: once decrypt returns null an app-bound row looks exactly like a malformed one, so
+        // record it before trying (#13192).
+        if (isAppBoundEncryptedCookie(encBuf)) {
+          appBoundEncrypted++
+        }
         const raw = sourceKey ? decryptCookieValueRaw(encBuf, sourceKey) : null
         if (!raw) {
           skipped++
@@ -1752,6 +1766,13 @@ export async function importCookiesFromBrowser(
     if (decryptedCookies.length === 0) {
       closeStagingDb()
       discardStagingFile()
+      // Why: an all-app-bound profile decrypts nothing, so it returns here — before the warning
+      // block below. Without this the very case #13192 reports still reads as a clean zero.
+      if (appBoundEncrypted > 0) {
+        diag(
+          `  ${appBoundEncrypted} cookies use app-bound encryption (v20) and cannot be decrypted`
+        )
+      }
       return {
         ok: true,
         profileId: '',
@@ -1760,7 +1781,15 @@ export async function importCookiesFromBrowser(
           importedCookies: 0,
           skippedCookies: skipped + integritySkipped + nonTransplantableSkipped,
           ...(googleCookiesSkipped > 0 ? { googleCookiesSkipped } : {}),
-          domains: []
+          domains: [],
+          ...(appBoundEncrypted > 0
+            ? {
+                warning: {
+                  code: 'app-bound-encryption' as const,
+                  encryptedCookies: appBoundEncrypted
+                }
+              }
+            : {})
         }
       }
     }
@@ -1819,6 +1848,12 @@ export async function importCookiesFromBrowser(
     diag(`  memory load: ${memoryLoaded} OK, ${memoryFailed} failed`)
 
     let warning: BrowserCookieImportSummary['warning']
+    // Why: without this the import reports a clean zero, which reads as "no cookies to import"
+    // rather than "this browser encrypts cookies in a way Orca cannot read" (#13192).
+    if (imported === 0 && appBoundEncrypted > 0) {
+      warning = { code: 'app-bound-encryption', encryptedCookies: appBoundEncrypted }
+      diag(`  ${appBoundEncrypted} cookies use app-bound encryption (v20) and cannot be decrypted`)
+    }
     if (memoryFailed > 0 && stagingAvailable) {
       // Why: keep the staging DB so the failed cookies load from SQLite on next cold start, where CookieMonster skips validation.
       browserSessionRegistry.setPendingCookieImport(targetPartition, stagingCookiesPath)

@@ -759,7 +759,8 @@
               "restartFallbackUnavailablePartial": "Imported {{value0}} of {{value1}} cookies. The rest could not be loaded, and the restart fallback was unavailable. Try the import again.",
               "googleCookiesSkipped": "Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.",
               "googleDirectSignInAction": "Sign in to Google",
-              "googleDirectSignInUnavailable": "Could not open the browser profile. Open it and sign in at accounts.google.com."
+              "googleDirectSignInUnavailable": "Could not open the browser profile. Open it and sign in at accounts.google.com.",
+              "appBoundEncryption": "This browser encrypts its {{value0}} cookies with app-bound encryption, which only the browser itself can unlock. Export them from the browser and use Import from File instead."
             }
           }
         }

@@ -1081,11 +1081,19 @@ export type BrowserCookieImportSummary = {
   skippedCookies: number
   googleCookiesSkipped?: number
   domains: string[]
-  warning?: {
-    code: 'restart-fallback-unavailable'
-    loadedCookies: number
-    failedCookies: number
-  }
+  warning?:
+    | {
+        code: 'restart-fallback-unavailable'
+        loadedCookies: number
+        failedCookies: number
+      }
+    // Why: Chrome/Edge 140+ on Windows wrap every cookie in app-bound encryption (v20), which only
+    // the browser's own elevation service can unwrap — the rows decode to nothing and the import
+    // otherwise reports a clean zero (#13192).
+    | {
+        code: 'app-bound-encryption'
+        encryptedCookies: number
+      }
 }
 
 export type BrowserCookieImportResult =
