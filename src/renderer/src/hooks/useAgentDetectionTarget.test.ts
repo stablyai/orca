@@ -1,9 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace, ProjectGroup, Repo } from '../../../shared/types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { getAgentDetectionTargetKeyForWorktree } from './useAgentDetectionTarget'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import {
+  getAgentDetectionTargetKeyForWorktree,
+  parseAgentDetectionTargetKey
+} from './useAgentDetectionTarget'
 
 describe('getAgentDetectionTargetKeyForWorktree', () => {
+  it('carries explicit local Floating Workspace authority into detection', () => {
+    const state = {
+      settings: { activeRuntimeEnvironmentId: 'active-wsl-project' },
+      folderWorkspaces: [],
+      projectGroups: [],
+      repos: [],
+      worktreesByRepo: {}
+    } as Parameters<typeof getAgentDetectionTargetKeyForWorktree>[0]
+
+    const key = getAgentDetectionTargetKeyForWorktree(state, FLOATING_TERMINAL_WORKTREE_ID)
+
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'local',
+      worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+      contextKey: 'host'
+    })
+  })
+
   it('uses an explicit runtime owner without scanning ambiguous child SSH repos', () => {
     let projectGroupReads = 0
     const repos: readonly Repo[] = Array.from({ length: 100 }, (_, index) => {

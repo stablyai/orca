@@ -3097,6 +3097,85 @@
       "demotionRule": "Demote or quarantine if identity-mismatched completion can retire newer work, cleanup retains compact authority, or the focused gate flakes without a product or harness bug."
     },
     {
+      "id": "agent-launch.discovery-authority",
+      "title": "Agent discovery and launch use the same workspace authority",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session",
+      "layer": "renderer-store-contract",
+      "surfaces": ["Quick Launch agent inventory", "agent launch", "Floating Workspace"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "wsl", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "windows"],
+      "coveredProviders": ["local", "wsl"],
+      "coverageNotes": "A deterministic Windows-mode renderer oracle keeps an active WSL project and explicit-local Floating Workspace mounted together with disjoint agent inventories, then independently asserts discovery and launch authority. Physical Windows/WSL evidence is required before promotion; SSH and paired-runtime behavior retain their existing contract coverage.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4027/p1-floating-workspace-agent-detection-still-uses-active-wsl-project",
+        "https://github.com/stablyai/orca/pull/13995"
+      ],
+      "invariant": "Every agent launch surface must advertise the provider set detected on its explicit execution authority and launch on that same authority; a local Floating Workspace must never inherit an unrelated active project's WSL, SSH, or paired-runtime context.",
+      "oracle": "Model an active WSL project and a native-Windows Floating Workspace with WSL-only Claude and host-only Codex. Keep both detection consumers mounted, require their advertised sets to stay disjoint through refresh, require the legacy active-project inventory to remain unchanged, then launch the advertised Floating agent and assert a local Floating tab with no runtime-host path.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose"
+      ],
+      "testFiles": [
+        "src/renderer/src/hooks/useDetectedAgents.test.tsx",
+        "src/renderer/src/hooks/useAgentDetectionTarget.test.ts",
+        "src/renderer/src/lib/launch-agent-in-new-tab.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/hooks/useDetectedAgents.test.tsx",
+          "assertions": [
+            "the active WSL project advertises only its WSL agent while Floating advertises only the native-host agent",
+            "Floating refresh preserves both scoped inventories and does not overwrite the legacy active-project inventory"
+          ]
+        },
+        {
+          "file": "src/renderer/src/lib/launch-agent-in-new-tab.test.ts",
+          "assertions": [
+            "the advertised Floating agent launches in a Floating tab with null runtime ownership and no paired-runtime create call"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/useDetectedAgents.test.tsx src/renderer/src/hooks/useAgentDetectionTarget.test.ts src/renderer/src/lib/launch-agent-in-new-tab.test.ts --reporter=verbose",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The Windows-mode authority oracle passed independent WSL/local inventory, refresh isolation, and actual Floating launch assertions."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 10,
+        "scope": "three focused renderer authority and launch test files"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The deterministic oracle uses mocked provider results and React effect barriers; CI history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical oracle fails on merged PR #13995 and origin/main 1136503c6a because Floating receives the WSL-only Claude inventory while launch remains local. The candidate passes; disabling the scoped Floating target reproduces the mismatch."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Floating uses one stable host context key, retained tab bars do not rescan worktree indexes on store writes, concurrent probes deduplicate per context, and in-flight promise entries are deleted on settlement."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days of soak history.",
+        "Collect physical Windows evidence with a WSL project and native-host Floating Workspace.",
+        "Keep disjoint provider inventories, refresh isolation, launch authority, and bounded in-flight state green."
+      ],
+      "knownGaps": [
+        "Live SSH and paired-runtime launch journeys are covered by existing authority contracts rather than this focused oracle."
+      ],
+      "demotionRule": "Demote if discovery and launch can resolve different authorities, a scoped Floating probe overwrites the active-project inventory, or local context selection adds recurring scans or retained in-flight entries."
+    },
+    {
       "id": "agent-session.provider-ownership",
       "title": "Provider sessions are resumed once per workspace ownership claim",
       "maturity": "experimental",

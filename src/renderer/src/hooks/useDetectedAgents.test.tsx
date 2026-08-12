@@ -16,6 +16,8 @@ import {
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 const detectLocalAgents = vi.fn()
 const detectRemoteAgents = vi.fn()
 const refreshLocalAgents = vi.fn()
@@ -109,8 +111,8 @@ beforeEach(() => {
 
 describe('Floating Workspace authority', () => {
   it('advertises native Windows agents beside an active WSL project', async () => {
-    let activeResult: UseDetectedAgentsResult | null = null
-    let floatingResult: UseDetectedAgentsResult | null = null
+    const activeResult: { current: UseDetectedAgentsResult | null } = { current: null }
+    const floatingResult: { current: UseDetectedAgentsResult | null } = { current: null }
     useAppStore.getState().clearLocalDetectedAgents()
     useAppStore.setState({
       activeRepoId: 'repo-wsl',
@@ -124,7 +126,7 @@ describe('Floating Workspace authority', () => {
       repos: [
         {
           id: 'repo-wsl',
-          path: 'C:\\repo',
+          path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
           displayName: 'WSL project',
           badgeColor: '#000000',
           addedAt: 0
@@ -135,7 +137,7 @@ describe('Floating Workspace authority', () => {
           {
             id: 'worktree-wsl',
             repoId: 'repo-wsl',
-            path: 'C:\\repo',
+            path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
             displayName: 'main'
           }
         ]
@@ -145,19 +147,37 @@ describe('Floating Workspace authority', () => {
     await renderProbe(
       { kind: 'local', worktreeId: 'worktree-wsl' } as AgentDetectionTarget,
       (result) => {
-        activeResult = result
+        activeResult.current = result
       }
     )
     await renderProbe(
       { kind: 'local', worktreeId: FLOATING_TERMINAL_WORKTREE_ID } as AgentDetectionTarget,
       (result) => {
-        floatingResult = result
+        floatingResult.current = result
       }
     )
 
-    expect(activeResult?.detectedIds).toEqual(['claude'])
-    expect(floatingResult?.detectedIds).toEqual(['codex'])
+    expect(activeResult.current?.detectedIds).toEqual(['claude'])
+    expect(floatingResult.current?.detectedIds).toEqual(['codex'])
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
     expect(detectLocalAgents).toHaveBeenLastCalledWith(undefined)
+
+    refreshLocalAgents.mockResolvedValueOnce({
+      agents: ['codex'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    await act(async () => {
+      await floatingResult.current?.refresh()
+    })
+    await flushEffects()
+
+    expect(activeResult.current?.detectedIds).toEqual(['claude'])
+    expect(floatingResult.current?.detectedIds).toEqual(['codex'])
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+    expect(refreshLocalAgents).toHaveBeenLastCalledWith(undefined)
   })
 })
 
