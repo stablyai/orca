@@ -2557,9 +2557,29 @@ describe('OrcaRuntimeService', () => {
       graphStatus: 'ready'
     })
 
-    runtime.markRendererReloading(TEST_WINDOW_ID)
     runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
 
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: TEST_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+  })
+
+  it('retires the headless fallback after renderer promotion succeeds', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+
+    runtime.markRendererReloading(TEST_WINDOW_ID)
+    runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: TEST_WINDOW_ID,
+      graphStatus: 'unavailable'
+    })
+
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: TEST_WINDOW_ID,
       graphStatus: 'ready'

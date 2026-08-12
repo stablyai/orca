@@ -74,4 +74,18 @@ describe('runtime renderer notification sender', () => {
     expect(fixture.warn).toHaveBeenCalledOnce()
     expect(fixture.onFailure).toHaveBeenCalledExactlyOnceWith('renderer-process-gone')
   })
+
+  it('keeps close terminal when renderer lifecycle events arrive late', () => {
+    const fixture = createSender()
+
+    fixture.sender.close()
+    fixture.sender.onMainFrameLoadFinished()
+    fixture.sender.onMainFrameReloadStarted()
+    fixture.sender.onRendererProcessGone()
+
+    expect(fixture.sender.send('repos:changed')).toBe(false)
+    expect(fixture.send).not.toHaveBeenCalled()
+    expect(fixture.warn).not.toHaveBeenCalled()
+    expect(fixture.onFailure).not.toHaveBeenCalled()
+  })
 })

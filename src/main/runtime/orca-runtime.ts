@@ -28334,6 +28334,9 @@ export class OrcaRuntimeService {
       return
     }
     this.graphReloadLifecycle.settleActive('success')
+    if (windowId !== HEADLESS_RUNTIME_WINDOW_ID) {
+      this.headlessGraphFallbackAvailable = false
+    }
     this.graphStatus = 'ready'
     this.setTerminalSideEffectConsumerAvailable(windowId !== HEADLESS_RUNTIME_WINDOW_ID)
     this.refreshWritableFlags()

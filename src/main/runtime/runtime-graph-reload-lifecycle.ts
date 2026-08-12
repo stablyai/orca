@@ -29,38 +29,52 @@ export class RuntimeGraphReloadLifecycle {
   ) {}
 
   begin(windowId: number): number {
-    if (this.active) {
-      this.settle(this.active.revision, 'cancelled')
-    }
+    const cancelled = this.active ? this.finish(this.active.revision, 'cancelled') : null
 
     const revision = ++this.revision
     const startedAt = Date.now()
     const timer = setTimeout(() => {
-      if (!this.settle(revision, 'timeout')) {
+      const settlement = this.finish(revision, 'timeout')
+      if (!settlement) {
         return
       }
+      this.options.onSettled?.(settlement)
       this.options.onTimeout?.(revision, windowId)
     }, this.options.timeoutMs)
     timer.unref?.()
     this.active = { revision, windowId, startedAt, timer }
+    if (cancelled) {
+      this.options.onSettled?.(cancelled)
+    }
     return revision
   }
 
   settle(revision: number, outcome: RuntimeGraphReloadOutcome): boolean {
+    const settlement = this.finish(revision, outcome)
+    if (!settlement) {
+      return false
+    }
+    this.options.onSettled?.(settlement)
+    return true
+  }
+
+  private finish(
+    revision: number,
+    outcome: RuntimeGraphReloadOutcome
+  ): RuntimeGraphReloadSettlement | null {
     const active = this.active
     if (!active || active.revision !== revision) {
-      return false
+      return null
     }
 
     clearTimeout(active.timer)
     this.active = null
-    this.options.onSettled?.({
+    return {
       revision,
       windowId: active.windowId,
       outcome,
       durationMs: Math.max(0, Date.now() - active.startedAt)
-    })
-    return true
+    }
   }
 
   settleActive(outcome: RuntimeGraphReloadOutcome): boolean {

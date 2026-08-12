@@ -19,9 +19,10 @@ export function createRuntimeRendererNotificationSender(args: {
 } {
   let available = true
   let warningEmitted = false
+  let closed = false
   const warn = args.warn ?? ((message: string) => console.warn(message))
   const suspend = (reason: RuntimeRendererGraphFailureReason): void => {
-    if (!available && warningEmitted) {
+    if (closed || (!available && warningEmitted)) {
       return
     }
     available = false
@@ -34,7 +35,7 @@ export function createRuntimeRendererNotificationSender(args: {
 
   return {
     send: (channel, ...values) => {
-      if (args.isWindowDestroyed() || args.webContents.isDestroyed() || !available) {
+      if (closed || args.isWindowDestroyed() || args.webContents.isDestroyed() || !available) {
         return false
       }
       try {
@@ -48,15 +49,22 @@ export function createRuntimeRendererNotificationSender(args: {
       }
     },
     onMainFrameReloadStarted: () => {
+      if (closed) {
+        return
+      }
       available = false
       warningEmitted = false
     },
     onMainFrameLoadFinished: () => {
+      if (closed) {
+        return
+      }
       available = true
       warningEmitted = false
     },
     onRendererProcessGone: () => suspend('renderer-process-gone'),
     close: () => {
+      closed = true
       available = false
     }
   }
