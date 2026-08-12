@@ -34,7 +34,8 @@ export const defaultGiteaStatus = {
   authenticated: false,
   account: null,
   baseUrl: null,
-  tokenConfigured: false
+  tokenConfigured: false,
+  authError: null
 }
 
 /** Shared per-test reset: mock defaults, cleared cache, darwin platform, fresh handler map. */
