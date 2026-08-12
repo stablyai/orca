@@ -30,8 +30,11 @@ function nextEventLoop(): Promise<void> {
 type Rig = {
   compositionView: HTMLElement
   compose: (preedit: string) => void
+  composeStart: () => void
+  composeUpdate: (preedit: string) => void
   terminal: Terminal
   write: (data: string) => Promise<void>
+  writeAwaitingRender: (data: string) => Promise<void>
 }
 
 function openTerminal(): Rig {
@@ -59,17 +62,47 @@ function openTerminal(): Rig {
   const write = (data: string): Promise<void> =>
     new Promise((resolve) => terminal.write(data, resolve))
 
-  const compose = (preedit: string): void => {
+  // Awaits the public repaint cycle the write triggers, so the overlay refresh
+  // runs through the production terminal.onRender hook rather than a test shortcut.
+  // The render listener arms only after the write's parse callback, because a
+  // repaint scheduled by an earlier write can fire first and still show the old row.
+  const writeAwaitingRender = async (data: string): Promise<void> => {
+    await write(data)
+    await new Promise<void>((resolve) => {
+      const rendered = terminal.onRender(() => {
+        rendered.dispose()
+        resolve()
+      })
+    })
+  }
+
+  const composeStart = (): void => {
     const start = new CompositionEvent('compositionstart', { bubbles: true })
     Object.defineProperty(start, 'data', { value: '' })
     textarea.dispatchEvent(start)
+  }
+
+  const composeUpdate = (preedit: string): void => {
     const update = new CompositionEvent('compositionupdate', { bubbles: true })
     Object.defineProperty(update, 'data', { value: preedit })
     textarea.value = preedit
     textarea.dispatchEvent(update)
   }
 
-  return { compositionView, compose, terminal, write }
+  const compose = (preedit: string): void => {
+    composeStart()
+    composeUpdate(preedit)
+  }
+
+  return {
+    compositionView,
+    compose,
+    composeStart,
+    composeUpdate,
+    terminal,
+    write,
+    writeAwaitingRender
+  }
 }
 
 function stripMarks(text: string | null): string {
@@ -115,9 +148,12 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     const rig = openTerminal()
     await rig.write('안녕하세요\x1b[6D')
 
-    rig.compose('ㄱ')
-    rig.compose('가')
-    rig.compose('강')
+    // One composition stays active while the preedit grows through updates,
+    // matching how an IME actually streams ㄱ → 가 → 강.
+    rig.composeStart()
+    rig.composeUpdate('ㄱ')
+    rig.composeUpdate('가')
+    rig.composeUpdate('강')
 
     const spans = Array.from(rig.compositionView.children) as HTMLElement[]
     expect(spans).toHaveLength(2)
@@ -156,13 +192,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     rig.compose('가')
 
     // A TUI repaint: erase from the cursor, draw a different tail, put the cursor back.
-    await rig.write('\x1b[K체크\x1b[4D')
-    const helper = (
-      rig.terminal as unknown as {
-        _core: { _compositionHelper: { updateCompositionElements: (d?: boolean) => void } }
-      }
-    )._core._compositionHelper
-    helper.updateCompositionElements(true)
+    await rig.writeAwaitingRender('\x1b[K체크\x1b[4D')
 
     const spans = Array.from(rig.compositionView.children) as HTMLElement[]
     expect(spans).toHaveLength(2)
@@ -177,13 +207,7 @@ describe('mid-line composition renders the covered row tail after the preedit', 
     expect(rig.compositionView.children).toHaveLength(0)
 
     // Streamed output arrives to the right of the cursor while the composition is open.
-    await rig.write('하세요\x1b[6D')
-    const helper = (
-      rig.terminal as unknown as {
-        _core: { _compositionHelper: { updateCompositionElements: (d?: boolean) => void } }
-      }
-    )._core._compositionHelper
-    helper.updateCompositionElements(true)
+    await rig.writeAwaitingRender('하세요\x1b[6D')
 
     const spans = Array.from(rig.compositionView.children) as HTMLElement[]
     expect(spans).toHaveLength(2)
