@@ -118,11 +118,13 @@ function createHealRig(options: {
   const root = mkdtempSync(join(tmpdir(), 'orca-codex-heal-'))
   tempRoots.push(root)
   const systemSessionsRoot = join(root, 'real-home', 'sessions')
+  const systemArchivedSessionsRoot = join(root, 'real-home', 'archived_sessions')
   const stateDir = join(root, 'state')
   mkdirSync(stateDir, { recursive: true })
   const paths: CodexSessionIndexHealPaths = {
     auditLogPath: join(stateDir, 'audit.jsonl'),
     systemSessionsRoot,
+    systemArchivedSessionsRoot,
     healLedgerPath: join(stateDir, 'index-heal-ledger.jsonl'),
     healMarkerPath: join(stateDir, 'index-heal-complete.json')
   }
@@ -197,6 +199,23 @@ function readLedgerOutcomes(paths: CodexSessionIndexHealPaths): Record<string, s
 }
 
 describe('runCodexSessionIndexHeal', () => {
+  it('does not heal a historical publication after its rollout is archived', async () => {
+    const id = threadId('1')
+    const stamp = '2026-07-01T10-00-00'
+    const rig = createHealRig({ auditedThreads: [{ stamp, id }] })
+    const archivedPath = join(rig.paths.systemArchivedSessionsRoot, `rollout-${stamp}-${id}.jsonl`)
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    writeFileSync(archivedPath, 'archived\n', 'utf-8')
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0, healedThreads: 0 })
+    expect(rig.readLog()).toMatchObject({ serverStarts: 0, threadIds: [] })
+  })
+
   it('reads every backfilled session recent-first and completes with a marker', async () => {
     const rig = createHealRig({
       auditedThreads: [

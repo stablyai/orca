@@ -1,5 +1,5 @@
-import { link, lstat, mkdir } from 'node:fs/promises'
-import { dirname, join, relative } from 'node:path'
+import { link, lstat, mkdir, unlink } from 'node:fs/promises'
+import { basename, dirname, join, relative } from 'node:path'
 import {
   getCodexSessionBackfillStateDirPath,
   getOrcaManagedCodexHomePath,
@@ -11,6 +11,7 @@ import {
   type CodexSessionBackfillAuditPass
 } from './codex-session-backfill-audit-pass'
 import { describeCodexSessionBackfillErrorCode } from './codex-session-backfill-audit'
+import { removeRedundantActiveCodexSessionHardlink } from './codex-session-archive'
 import {
   isCodexSessionRolloutPath,
   listCodexSessionBackfillFilesForDates
@@ -45,9 +46,11 @@ export function resolveCodexSessionBackfillPaths(
   systemCodexHomePathOverride?: string
 ): CodexSessionBackfillPaths {
   const stateDir = getCodexSessionBackfillStateDirPath()
+  const systemCodexHomePath = systemCodexHomePathOverride || getSystemCodexHomePath()
   return {
     managedSessionsRoot: join(getOrcaManagedCodexHomePath(), 'sessions'),
-    systemSessionsRoot: join(systemCodexHomePathOverride || getSystemCodexHomePath(), 'sessions'),
+    systemSessionsRoot: join(systemCodexHomePath, 'sessions'),
+    systemArchivedSessionsRoot: join(systemCodexHomePath, 'archived_sessions'),
     auditLogPath: join(stateDir, 'audit.jsonl'),
     markerPath: join(stateDir, 'backfill-complete.json')
   }
@@ -115,9 +118,10 @@ async function runCodexSessionBackfillOncePerHost(
 /**
  * Backfills managed-home session rollout files into the real Codex home.
  *
- * Non-destructive by contract: existing target files are always skipped, and
- * nothing in either home is deleted or moved. A hardlink keeps mutable rollout
- * contents coherent; cross-volume snapshots are skipped as unsupported.
+ * Non-destructive by contract: existing target files are always skipped. The
+ * only removal is rollback of an active hardlink this pass just created when a
+ * concurrent archive wins the race. A hardlink keeps mutable rollout contents
+ * coherent; cross-volume snapshots are skipped as unsupported.
  */
 export async function backfillManagedCodexSessionsIntoSystemHome(
   paths: CodexSessionBackfillPaths,
@@ -223,6 +227,22 @@ async function backfillOneManagedSessionFile(
   }
   const relativePath = relative(paths.managedSessionsRoot, managedSessionFilePath)
   const systemSessionFilePath = join(paths.systemSessionsRoot, relativePath)
+  const archivedSessionFilePath = join(
+    paths.systemArchivedSessionsRoot,
+    basename(managedSessionFilePath)
+  )
+  const archivedTargetStat = await readCodexSessionTargetStat(archivedSessionFilePath)
+  if (archivedTargetStat) {
+    // The archived rollout is the durable tombstone owned by Codex. Publishing
+    // the managed copy back into sessions would resurrect it on thread/read.
+    await removeRedundantActiveCodexSessionHardlink(
+      managedSessionFilePath,
+      systemSessionFilePath,
+      archivedTargetStat
+    )
+    summary.skippedExistingFiles += 1
+    return
+  }
   const existingTargetStat = await readCodexSessionTargetStat(systemSessionFilePath)
   if (existingTargetStat) {
     await auditPass.recordExisting(
@@ -245,6 +265,19 @@ async function backfillOneManagedSessionFile(
     }
     linkAttempted = true
     await link(managedSessionFilePath, systemSessionFilePath)
+    if (await readCodexSessionTargetStat(archivedSessionFilePath)) {
+      // Codex archived this rollout after our tombstone probe. Roll back only
+      // the active path this pass just installed and keep it out of the heal queue.
+      try {
+        await unlink(systemSessionFilePath)
+      } catch (error) {
+        if (!isNotFoundError(error)) {
+          throw error
+        }
+      }
+      summary.skippedExistingFiles += 1
+      return
+    }
     summary.linkedFiles += 1
     await auditPass.recordPublished(
       summary,

@@ -1,5 +1,5 @@
 import { appendFileSync, mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -26,6 +26,7 @@ const CODEX_ROLLOUT_THREAD_ID_PATTERN =
 export type CodexSessionIndexHealPaths = {
   auditLogPath: string
   systemSessionsRoot: string
+  systemArchivedSessionsRoot: string
   healLedgerPath: string
   healMarkerPath: string
 }
@@ -69,6 +70,11 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
     if (!match) {
       continue
     }
+    if (isArchivedRollout(paths, lastPathSegment(line.target))) {
+      // Historical publication records remain append-only, but an archived
+      // rollout must never be re-indexed into the active task list.
+      continue
+    }
     const threadId = match[2].toLowerCase()
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
@@ -88,6 +94,18 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
   return [...pendingByThreadId.values()].sort((left, right) =>
     left.rolloutStamp < right.rolloutStamp ? 1 : left.rolloutStamp > right.rolloutStamp ? -1 : 0
   )
+}
+
+function isArchivedRollout(paths: CodexSessionIndexHealPaths, fileName: string): boolean {
+  try {
+    statSync(join(paths.systemArchivedSessionsRoot, fileName))
+    return true
+  } catch (error) {
+    if (!isNotFoundError(error)) {
+      throw error
+    }
+    return false
+  }
 }
 
 function lastPathSegment(filePath: string): string {
