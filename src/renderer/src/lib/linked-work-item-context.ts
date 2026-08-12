@@ -98,6 +98,44 @@ export function buildLinearLaunchContextBlock(args: LinearLaunchContextArgs): st
   return lines.join('\n')
 }
 
+export type BeadsLaunchContextArgs = {
+  identifier: string | undefined
+  title?: string
+}
+
+function isBeadsWorkItemReference(
+  args:
+    | {
+        provider?: TaskProvider
+        beadsIdentifier?: string
+        linkedContext?: LinkedWorkItemContext
+      }
+    | null
+    | undefined
+): boolean {
+  return (
+    args?.provider === 'beads' ||
+    Boolean(args?.beadsIdentifier?.trim()) ||
+    args?.linkedContext?.provider === 'beads'
+  )
+}
+
+// Why: beads issues have no web URL; hand the agent the id, title, and the bd
+// command it can run in the checkout to pull full details itself.
+export function buildBeadsLaunchContextBlock(args: BeadsLaunchContextArgs): string | null {
+  const identifier = args.identifier?.trim()
+  if (!identifier) {
+    return null
+  }
+  const lines = [`Linked Beads issue: ${identifier}`]
+  const title = args.title?.trim()
+  if (title) {
+    lines.push(title)
+  }
+  lines.push(`Run \`bd show ${identifier}\` in the repository for full details.`)
+  return lines.join('\n')
+}
+
 function escapeLinkedContextControlChars(value: string): string {
   return Array.from(value, (char) => {
     const code = char.codePointAt(0) ?? 0
@@ -153,8 +191,14 @@ function capLinkedContextSourceLines(args: { sourceLines: string; fixedChars: nu
 export function getLinkedWorkItemPromptContext(
   linkedWorkItem:
     | (Pick<
-        { provider?: TaskProvider; url: string; title?: string; linearIdentifier?: string },
-        'provider' | 'url' | 'title' | 'linearIdentifier'
+        {
+          provider?: TaskProvider
+          url: string
+          title?: string
+          linearIdentifier?: string
+          beadsIdentifier?: string
+        },
+        'provider' | 'url' | 'title' | 'linearIdentifier' | 'beadsIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined
@@ -170,6 +214,15 @@ export function getLinkedWorkItemPromptContext(
       ? { linkedUrls: [], linkedContextBlocks: [linearBlock] }
       : { linkedUrls: [], linkedContextBlocks: [] }
   }
+  if (isBeadsWorkItemReference(linkedWorkItem)) {
+    const beadsBlock = buildBeadsLaunchContextBlock({
+      identifier: linkedWorkItem?.beadsIdentifier,
+      title: linkedWorkItem?.title
+    })
+    return beadsBlock
+      ? { linkedUrls: [], linkedContextBlocks: [beadsBlock] }
+      : { linkedUrls: [], linkedContextBlocks: [] }
+  }
   const linkedUrl = linkedWorkItem?.url?.trim()
   return linkedUrl
     ? { linkedUrls: [linkedUrl], linkedContextBlocks: [] }
@@ -182,6 +235,7 @@ export function getLaunchableWorkItemDraftContent(args: {
   url: string
   title?: string
   linearIdentifier?: string
+  beadsIdentifier?: string
   linkedContext?: LinkedWorkItemContext
 }): string {
   if (args.pasteContent?.trim()) {
@@ -196,6 +250,13 @@ export function getLaunchableWorkItemDraftContent(args: {
     })
     return linearBlock ? formatDraftContextBlock(linearBlock) : ''
   }
+  if (isBeadsWorkItemReference(args)) {
+    const beadsBlock = buildBeadsLaunchContextBlock({
+      identifier: args.beadsIdentifier,
+      title: args.title
+    })
+    return beadsBlock ? formatDraftContextBlock(beadsBlock) : ''
+  }
   return args.url
 }
 
@@ -208,32 +269,38 @@ export function resolveQuickCreateLinkedWorkItemPrompt(
           url: string
           title?: string
           linearIdentifier?: string
+          beadsIdentifier?: string
         },
-        'provider' | 'number' | 'url' | 'title' | 'linearIdentifier'
+        'provider' | 'number' | 'url' | 'title' | 'linearIdentifier' | 'beadsIdentifier'
       > & { linkedContext?: LinkedWorkItemContext })
     | null
     | undefined,
   note: string
 ): { prompt: string; draftPrompt: string | null } {
   const trimmedNote = note.trim()
-  const linearBlock = isLinearWorkItemReference(linkedWorkItem)
+  const contextBlock = isLinearWorkItemReference(linkedWorkItem)
     ? buildLinearLaunchContextBlock({
         provider: linkedWorkItem?.provider,
         identifier: linkedWorkItem?.linearIdentifier,
         title: linkedWorkItem?.title,
         url: linkedWorkItem?.url
       })
-    : null
-  const linearDraft = linearBlock ? formatDraftContextBlock(linearBlock) : null
+    : isBeadsWorkItemReference(linkedWorkItem)
+      ? buildBeadsLaunchContextBlock({
+          identifier: linkedWorkItem?.beadsIdentifier,
+          title: linkedWorkItem?.title
+        })
+      : null
+  const contextDraft = contextBlock ? formatDraftContextBlock(contextBlock) : null
   const linkedUrl = linkedWorkItem?.url?.trim() || null
-  const draftPrompt = linearDraft
-    ? [trimmedNote, linearDraft].filter(Boolean).join('\n\n')
+  const draftPrompt = contextDraft
+    ? [trimmedNote, contextDraft].filter(Boolean).join('\n\n')
     : linkedUrl
       ? [trimmedNote, linkedUrl].filter(Boolean).join('\n\n')
       : null
-  const isLinearTypedOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
+  const isTypedNoteOnly = linkedWorkItem?.number === 0 && Boolean(trimmedNote) && !draftPrompt
   return {
-    prompt: isLinearTypedOnly ? trimmedNote : '',
+    prompt: isTypedNoteOnly ? trimmedNote : '',
     draftPrompt
   }
 }
