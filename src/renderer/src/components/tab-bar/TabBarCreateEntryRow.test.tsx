@@ -2,6 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { getByRole } from '@testing-library/dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ActiveOption } from './tab-create-entry-active-option'
@@ -87,5 +88,19 @@ describe('EntryActionRow', () => {
   it('renders a bare filename without a directory fragment', () => {
     expect(renderRow(makeFileOption('README.md')).textContent).toContain('README.md')
     expect(container.textContent).not.toContain('/')
+  })
+
+  it('names the provider and query without retaining a built URL', () => {
+    renderRow({
+      kind: 'entry',
+      option: {
+        id: 'search:private project',
+        classification: { kind: 'search', engine: 'kagi', query: 'private project' }
+      }
+    })
+
+    expect(getByRole(container, 'option', { name: 'Search Kagi private project' })).toBeTruthy()
+    expect(container.textContent).toBe('Search Kagi·private project')
+    expect(container.textContent).not.toContain('https://')
   })
 })

@@ -842,7 +842,7 @@ function readString(record: Record<string, unknown>, key: string): string | unde
 }
 
 function hasOwnField(record: Record<string, unknown>, key: string): boolean {
-  return Object.prototype.hasOwnProperty.call(record, key)
+  return Object.hasOwn(record, key)
 }
 
 function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]): boolean {

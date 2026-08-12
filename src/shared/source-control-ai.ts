@@ -194,7 +194,7 @@ function normalizeOperationRecord<T>(
   }
   const normalized: Partial<Record<SourceControlAiOperation, T>> = {}
   for (const operation of SOURCE_CONTROL_AI_OPERATIONS) {
-    if (!Object.prototype.hasOwnProperty.call(value, operation)) {
+    if (!Object.hasOwn(value, operation)) {
       continue
     }
     const normalizedValue = normalizeValue(value[operation])
@@ -214,7 +214,7 @@ function normalizeActionRecord<T>(
   }
   const normalized: Partial<Record<SourceControlActionId, T>> = {}
   for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
-    if (!Object.prototype.hasOwnProperty.call(value, actionId)) {
+    if (!Object.hasOwn(value, actionId)) {
       continue
     }
     const normalizedValue = normalizeValue(value[actionId])
@@ -388,7 +388,7 @@ function legacyPromptFromCommandTemplate(
 function hasActionAgentRecipe(recipe: {
   agentId?: TuiAgent | CustomAgentId | null
 }): recipe is { agentId: TuiAgent | CustomAgentId | null } {
-  return Object.prototype.hasOwnProperty.call(recipe, 'agentId')
+  return Object.hasOwn(recipe, 'agentId')
 }
 
 function legacyCommitMessageCoreChanges(
@@ -541,7 +541,7 @@ function mergeLegacyModelSelectionDelta<T>(
   let changed = false
   const keys = new Set([...Object.keys(legacy ?? {}), ...Object.keys(projected ?? {})])
   for (const key of keys) {
-    const legacyHasKey = Object.prototype.hasOwnProperty.call(legacy ?? {}, key)
+    const legacyHasKey = Object.hasOwn(legacy ?? {}, key)
     const legacyValue = legacy?.[key]
     if (JSON.stringify(projected?.[key]) === JSON.stringify(legacyValue)) {
       continue
@@ -994,7 +994,7 @@ function hasOwnInstruction(
   instructions: Partial<Record<SourceControlAiOperation, string | null>> | null | undefined,
   operation: SourceControlAiOperation
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(instructions ?? {}, operation)
+  return Object.hasOwn(instructions ?? {}, operation)
 }
 
 function readRepoInstructionOverride(

@@ -99,10 +99,10 @@ export class RelayAgentHookServer {
   private state: HookListenerState = createHookListenerState()
   // Why: retain envelope metadata so replays match live POSTs.
   // Invariant: keys mirror state.lastStatusByPaneKey, populated/cleared in lockstep.
-  private lastEnvelopeMetaByPaneKey: Map<
+  private lastEnvelopeMetaByPaneKey = new Map<
     string,
     { source: AgentHookSource; env?: string; version?: string }
-  > = new Map()
+  >()
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private forward: RelayHookForward

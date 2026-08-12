@@ -713,6 +713,136 @@ describe('createEditorSlice openDiff', () => {
     expect(store.getState().openFiles[0]?.fileContentReloadNonce).toBe(2)
   })
 
+  it('reuses a restored local WSL alias without folding the Linux path tail', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Windows' })
+    const store = createEditorStore()
+    const restoredPath = '//wsl.localhost/Ubuntu/home/Alice/repo/file.ts'
+    store.setState({
+      openFiles: [
+        {
+          id: restoredPath,
+          filePath: restoredPath,
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    })
+
+    expect(
+      store.getState().openFile(
+        {
+          filePath: '\\\\wsl.localhost\\ubuntu\\home\\Alice\\repo\\file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          mode: 'edit'
+        },
+        { suppressActiveRuntimeFallback: true }
+      )
+    ).toBe(restoredPath)
+    expect(store.getState().openFiles).toHaveLength(1)
+
+    store.getState().openFile(
+      {
+        filePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo\\file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    expect(store.getState().openFiles).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('keeps local WSL-looking aliases distinct on POSIX clients', () => {
+    vi.stubGlobal('navigator', { userAgent: 'Linux' })
+    const store = createEditorStore()
+    store.setState({
+      openFiles: [
+        {
+          id: 'forward',
+          filePath: '//wsl.localhost/Ubuntu/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    })
+
+    store.getState().openFile(
+      {
+        filePath: '\\\\wsl.localhost\\Ubuntu\\repo\\file.ts',
+        relativePath: 'file.ts',
+        worktreeId: 'wt-1',
+        runtimeEnvironmentId: null,
+        language: 'typescript',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+
+    expect(store.getState().openFiles).toHaveLength(2)
+    vi.unstubAllGlobals()
+  })
+
+  it('does not reuse WSL aliases for SSH-owned tabs', () => {
+    const store = createEditorStore()
+    store.setState({
+      repos: [{ id: 'repo-1', path: '/repo', connectionId: 'ssh-1' }],
+      worktreesByRepo: {
+        'repo-1': [{ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-1' }]
+      },
+      sshConnectionStates: new Map([
+        [
+          'ssh-1',
+          {
+            targetId: 'ssh-1',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            connectionGeneration: 1
+          }
+        ]
+      ]),
+      openFiles: [
+        {
+          id: 'ssh-forward',
+          filePath: '//wsl.localhost/Ubuntu/repo/file.ts',
+          relativePath: 'file.ts',
+          worktreeId: 'wt-1',
+          runtimeEnvironmentId: null,
+          externalSshTargetId: 'ssh-1',
+          language: 'typescript',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as never)
+
+    store.getState().openFile({
+      filePath: '\\\\wsl.localhost\\Ubuntu\\repo\\file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      runtimeEnvironmentId: null,
+      externalSshTargetId: 'ssh-1',
+      language: 'typescript',
+      mode: 'edit'
+    })
+
+    expect(store.getState().openFiles).toHaveLength(2)
+  })
+
   it('rebinds an existing external tab when it is reopened from a new SSH host', () => {
     const store = createEditorStore()
     const file = {

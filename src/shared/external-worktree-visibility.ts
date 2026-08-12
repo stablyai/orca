@@ -30,7 +30,7 @@ export function getExternalWorktreeParentPath(worktreePath: string | undefined):
     return `//${parts.slice(0, -1).join('/')}`
   }
   const lastSeparatorIndex = normalized.lastIndexOf('/')
-  if (lastSeparatorIndex < 0) {
+  if (lastSeparatorIndex === -1) {
     return UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH
   }
   if (lastSeparatorIndex === 0) {

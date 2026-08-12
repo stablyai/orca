@@ -173,9 +173,7 @@ export function selectLinearWorkspaceIssueFilter(
   if (!workspaceId) {
     return emptyLinearIssueAttributeFilter()
   }
-  const filter = Object.prototype.hasOwnProperty.call(filters, workspaceId)
-    ? filters[workspaceId]
-    : undefined
+  const filter = Object.hasOwn(filters, workspaceId) ? filters[workspaceId] : undefined
   return filter ? canonicalizeLinearIssueAttributeFilter(filter) : emptyLinearIssueAttributeFilter()
 }
 

@@ -20,6 +20,7 @@ import {
 } from './setup-agent-startup-policy'
 
 const TEMP_DIRS: string[] = []
+const WINDOWS_PROCESS_TEST_TIMEOUT_MS = 30_000
 
 afterEach(() => {
   for (const dir of TEMP_DIRS.splice(0)) {
@@ -330,7 +331,8 @@ describe('createSequencedSetupAgentCommands', () => {
       expect(startupExit.code).toBe(0)
       expect(startupExit.stderr).toContain('Waiting for setup to finish before starting agent...')
       expect(readFileSync(logPath, 'utf8')).toBe('setup-done\r\nagent-start\r\n')
-    }
+    },
+    WINDOWS_PROCESS_TEST_TIMEOUT_MS
   )
 
   it.skipIf(process.platform === 'win32')(

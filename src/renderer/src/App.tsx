@@ -963,6 +963,10 @@ function App(): React.JSX.Element {
               // Why: disconnected SSH repos hydrate from local metadata; only runtime-owned repos use placeholders.
               parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'
           )
+          // Why: worktree refresh can spawn host Git; wait for main's shell-PATH generation fence first.
+          await timeRendererStartupStep('first-window-services-await', () =>
+            window.api.app.awaitFirstWindowStartupServices()
+          )
           await timeRendererStartupStep('fetch-hydration-worktrees', () =>
             mapWithConcurrency(hydrationRepos, WORKTREE_REFRESH_CONCURRENCY, (repo) =>
               actions.fetchWorktrees(repo.id, { executionHostId: getRepoExecutionHostId(repo) })
@@ -1095,10 +1099,7 @@ function App(): React.JSX.Element {
             logRendererStartupDiagnostic('ssh-reconnect-skipped', { connectionIds: 0 })
           }
 
-          // Why: main overlaps daemon/hook startup with hydration, but restored terminals need those services ready before they spawn/reconnect PTYs.
-          await timeRendererStartupStep('first-window-services-await', () =>
-            window.api.app.awaitFirstWindowStartupServices()
-          )
+          // first-window-services-await already fenced worktree hydration; terminal recovery reuses that ready state.
           await timeRendererStartupStep('recover-legacy-worker-terminals-pre-reconnect', () =>
             window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
           )
@@ -1475,18 +1476,17 @@ function App(): React.JSX.Element {
     } else if (settings.theme === 'light') {
       applyDocumentTheme('light')
       return undefined
-    } else {
-      // system
-      const mq = window.matchMedia('(prefers-color-scheme: dark)')
-      applyDocumentTheme('system')
-      const handler = (): void => {
-        applyDocumentTheme('system')
-        // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
-        scheduleRuntimeGraphSync()
-      }
-      mq.addEventListener('change', handler)
-      return () => mq.removeEventListener('change', handler)
     }
+    // system
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    applyDocumentTheme('system')
+    const handler = (): void => {
+      applyDocumentTheme('system')
+      // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
+      scheduleRuntimeGraphSync()
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [settings])
 
   useEffect(() => {

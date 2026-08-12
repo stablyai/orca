@@ -110,7 +110,7 @@ function hasActionOverride(
   overrides: NormalizedRepoSourceControlAiOverrides['actionOverrides'] | undefined,
   actionId: SourceControlActionId
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(overrides ?? {}, actionId)
+  return Object.hasOwn(overrides ?? {}, actionId)
 }
 
 function readRecipeOverrideFields(
@@ -120,13 +120,13 @@ function readRecipeOverrideFields(
     | undefined
 ): SourceControlActionRecipeOverrideField[] {
   const fields: SourceControlActionRecipeOverrideField[] = []
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentId')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentId')) {
     fields.push('agent')
   }
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'commandInputTemplate')) {
+  if (Object.hasOwn(recipe ?? {}, 'commandInputTemplate')) {
     fields.push('commandTemplate')
   }
-  if (Object.prototype.hasOwnProperty.call(recipe ?? {}, 'agentArgs')) {
+  if (Object.hasOwn(recipe ?? {}, 'agentArgs')) {
     fields.push('agentArgs')
   }
   return fields

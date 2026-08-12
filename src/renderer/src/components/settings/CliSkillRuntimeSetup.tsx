@@ -97,19 +97,7 @@ export function buildSkillCommandForRuntime(
       'copied-command'
     )
   }
-
-  const distroArg = resolvedRuntime.wslDistro?.trim()
-    ? ` -d ${quotePowerShellLiteral(resolvedRuntime.wslDistro.trim())}`
-    : ''
-  // Why: encoding preserves the user's configured login-shell PATH while
-  // avoiding raw multiline and nested quotes at the copy/paste boundary.
-  const encodedScript = encodeWslLoginShellScript(normalizedCommand)
-  const visibleCommand = normalizedCommand.replace(/[\r\n]+/g, ' ')
-  const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
-  const wslCommand = `wsl.exe${distroArg} -- sh -c ${quotePowerShellNativeArgument(shellScript)}`
-  // Why: scope Legacy argv parsing to this invocation so Windows PowerShell
-  // 5.1 and PowerShell 7 pass the same embedded quotes to wsl.exe.
-  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
+  return normalizedCommand
 }
 
 function normalizeWindowsSkillUpdateCommand(
@@ -147,6 +135,7 @@ type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
   effectiveShell: string | undefined,
+  runtime?: LocalAgentRuntime,
   currentPlatform = getSkillCommandPlatform()
 ): string {
   // Why: the created tab is authoritative when project runtime replaces the requested shell.
@@ -159,11 +148,26 @@ export function buildSkillSetupTerminalCommand(
   if (!isSetupTerminalForcedToPowerShell(effectiveShell)) {
     return copiedCommand
   }
+  if (runtime?.runtime === 'wsl' && currentPlatform === 'win32') {
+    return buildPowerShellWslSkillCommand(copiedCommand, runtime)
+  }
   return wrapWindowsSkillCommandWithNpxPrerequisite(
     copiedCommand,
     currentPlatform,
     'orca-setup-terminal'
   )
+}
+
+function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRuntime): string {
+  const distroArg = runtime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellLiteral(runtime.wslDistro.trim())}`
+    : ''
+  // Why: encoding preserves the user's configured login-shell PATH across the Windows argv boundary.
+  const encodedScript = encodeWslLoginShellScript(command)
+  const visibleCommand = command.replace(/[\r\n]+/g, ' ')
+  const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
+  const wslCommand = `wsl.exe${distroArg} -- sh -c ${quotePowerShellNativeArgument(shellScript)}`
+  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
 }
 
 function decodeWslSetupTerminalCommand(command: string): string | null {

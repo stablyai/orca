@@ -176,6 +176,12 @@ jobs:
   shell_contracts:
     name: shell contracts
     runs-on: ubuntu-latest
+    env:
+      # Why: the suites below gate their live fish tests on the binary, which is
+      # right on a developer machine and wrong here — this job is a required check
+      # and its fish lane is the only end-to-end guard for #9993, so a skip would
+      # report green with nothing exercised. Turns those skips into failures.
+      ORCA_REQUIRE_FISH: '1'
 
     steps:
       - name: Checkout
@@ -186,8 +192,46 @@ jobs:
       # Why fish: shell-ready.test.ts gates its live fish test on the binary being
       # present, so without this the fish barrier is only covered by config-shape
       # assertions and never actually exercised.
+      # Why release-4: DECSET 2031 arming lives in the fish 4.0 Rust tty_handoff, and
+      # fish-color-scheme-child-stdin.node-pty.test.ts (#9993) needs it. Noble ships
+      # 3.7, so the PPA is what makes that lane real.
       - name: Install zsh and fish
-        run: sudo apt-get update && sudo apt-get install -y zsh fish
+        run: |
+          # Why the update/PPA/fish steps are tolerant: a repo the runner image already
+          # ships can lack a Release file for this suite, and a failed add-apt-repository
+          # still leaves its list entry behind — either makes `apt-get update` exit
+          # non-zero and would red this required check over something unrelated to the
+          # PR. Every fish outcome is judged by the version gate below instead, so only
+          # the zsh install (which has no such gate) stays fatal here.
+          sudo apt-get update || true
+          # Why retry only here: adding the PPA is the network-flaky step, and the
+          # version gate below is fatal, so a transient Launchpad blip would
+          # otherwise red a required check on PRs unrelated to shells.
+          for attempt in 1 2 3; do
+            sudo add-apt-repository -y ppa:fish-shell/release-4 && break
+            echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
+            sudo add-apt-repository -y -r ppa:fish-shell/release-4 || true
+            sleep 5
+          done
+          sudo apt-get update || true
+          # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
+          # first install command in this step to prove the lane really installs them.
+          sudo apt-get install -y zsh fish
+
+      # Separate from the install so the failure names the contract, not an apt error.
+      # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
+      # instead of after a full dependency install.
+      - name: Require fish 4+
+        run: |
+          version="$(fish --version 2>/dev/null || true)"
+          major="${version##*version }"
+          major="${major%%.*}"
+          case "$major" in '' | *[!0-9]*) major=0 ;; esac
+          echo "${version:-<fish not installed>}"
+          if [ "$major" -lt 4 ]; then
+            echo "::error::shell contracts needs fish 4+ (DECSET 2031 arming, #9993) but got '${version:-none}'. Fix the ppa:fish-shell/release-4 install rather than letting the fish lane skip." >&2
+            exit 1
+          fi
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -201,6 +245,7 @@ jobs:
             src/main/providers/local-pty-shell-ready.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
@@ -235,6 +280,7 @@ jobs:
             --exclude=src/main/providers/local-pty-shell-ready.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
@@ -377,6 +423,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Test Windows PowerShell CLI boundary
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/cli/wsl-cli-powershell-boundary.test.ts
 
       - name: Build package inputs
         run: pnpm run build:release

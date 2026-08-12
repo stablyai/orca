@@ -585,6 +585,43 @@ describe('selectColdParkedTerminalTabs', () => {
     expect(selected).toEqual(new Set())
   })
 
+  // Why: view switches stamp every tab together, so UUID order cannot express recency.
+  it('resolves an identical-hiddenSinceMs tie by activation order, not by tab id', () => {
+    const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS
+    const selected = selectColdParkedTerminalTabs({
+      worktreeId: 'wt-1',
+      terminalTabs: [
+        { ...localTab('tab-aaa', hiddenSinceMs), lastActivatedSeq: 1 },
+        { ...localTab('tab-zzz', hiddenSinceMs), lastActivatedSeq: 2 }
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 0
+    })
+
+    expect(selected).toEqual(new Set(['tab-aaa']))
+  })
+
+  // Why: the cap and exemption must share one recency ranking.
+  it('keeps the most recently activated tab warm when the cap evicts a tie', () => {
+    const hiddenSinceMs = nowMs - TERMINAL_TAB_HOT_RETAIN_MS + 1
+    const selected = selectColdParkedTerminalTabs({
+      worktreeId: 'wt-1',
+      terminalTabs: [
+        { ...localTab('tab-aaa', hiddenSinceMs), lastActivatedSeq: 1 },
+        { ...localTab('tab-bbb', hiddenSinceMs), lastActivatedSeq: 3 },
+        { ...localTab('tab-ccc', hiddenSinceMs), lastActivatedSeq: 2 }
+      ],
+      pendingStartupByTabId: {},
+      parkingEnabled: true,
+      nowMs,
+      hotRetainLimit: 2
+    })
+
+    expect(selected).toEqual(new Set(['tab-aaa']))
+  })
+
   it('selects nothing when the settings kill switch disables parking', () => {
     const selected = selectColdParkedTerminalTabs({
       worktreeId: 'wt-1',

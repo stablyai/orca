@@ -12244,14 +12244,13 @@ describe('connectPanePty', () => {
       dataCallback('startup probe output\r\n')
       expect(setHiddenRendererPty).toHaveBeenCalledWith('pty-id', true)
 
-      // The fact stays the sole 2031 responder for gate-managed PTYs.
+      // The fact records the subscription for gate-managed PTYs; it never answers it (#9993).
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 8,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
     it('latches model restore from the out-of-band marker and restores on reveal', async () => {
@@ -12287,7 +12286,8 @@ describe('connectPanePty', () => {
       )
     })
 
-    it('answers each 2031-subscribe fact exactly once, before any hidden mark exists', async () => {
+    it('never answers a 2031-subscribe fact, hidden or visible', async () => {
+      // Regression pin (#9993): a subscribe arms future notifications, it is not a query.
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport } = await connectHiddenPane(deps)
@@ -12298,27 +12298,23 @@ describe('connectPanePty', () => {
       transportOptions.onPtySpawn?.('pty-id')
       const factsHandler = await import('./terminal-side-effect-facts-handler')
 
-      // Why: the fact can outrun the hidden mark (codex startup race) and must still reply — ownership is structural, not mark-dependent.
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 12,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
-
-      // Why: a visible gated pane still answers via the fact — the lifecycle suppresses xterm's CSI reply for gate-managed panes.
       ;(deps.isVisibleRef as { current: boolean }).current = true
       factsHandler._dispatchTerminalSideEffectBatchForTest({
         ptyId: 'pty-id',
         seq: 24,
         facts: [{ kind: '2031-subscribe' }]
       })
-      expect(transport.sendInput).toHaveBeenCalledTimes(2)
-      expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[?997;1n')
+
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
+      expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
-    it('registers the fact-answered 2031 subscription for later theme flips', async () => {
+    it('registers the fact-observed 2031 subscription for later theme flips', async () => {
       enableMainAuthority()
       const recordPaneMode2031Subscription = vi.fn()
       const deps = createDeps({
@@ -12338,16 +12334,16 @@ describe('connectPanePty', () => {
         facts: [{ kind: '2031-subscribe' }]
       })
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
       // Why: without the registry write, maybePushMode2031Flip won't push CSI 997 after a theme change, so the TUI keeps a stale theme.
       expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, 'dark')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     })
 
     it('retires the fact-registered subscription when the TUI withdraws it', async () => {
       // The counterpart to the test above. A gated pane never sees the withdrawal bytes
-      // (main drops them) and both the chunk scanner and xterm's CSI handler are disabled
-      // for it, so this fact is the only observer that can retire the subscription. Left
-      // registered, the next theme flip pushes CSI 997 at the shell that replaced the TUI.
+      // (main drops them) and the chunk scanner is disabled for it, so this fact is the only
+      // observer that can retire the subscription. Left registered, the next theme flip
+      // pushes CSI 997 at the shell that replaced the TUI.
       enableMainAuthority()
       const paneMode2031Ref = { current: new Map<number, boolean>() }
       const paneLastThemeModeRef = { current: new Map<number, 'dark' | 'light'>() }
@@ -12356,9 +12352,9 @@ describe('connectPanePty', () => {
         paneMode2031Ref,
         paneLastThemeModeRef,
         // Exactly what use-terminal-pane-lifecycle wires up for this callback.
-        recordPaneMode2031Subscription: (paneId: number, repliedMode: 'dark' | 'light') => {
+        recordPaneMode2031Subscription: (paneId: number, subscribedMode: 'dark' | 'light') => {
           paneMode2031Ref.current.set(paneId, true)
-          paneLastThemeModeRef.current.set(paneId, repliedMode)
+          paneLastThemeModeRef.current.set(paneId, subscribedMode)
         }
       })
       await connectHiddenPane(deps)
@@ -12385,8 +12381,7 @@ describe('connectPanePty', () => {
     })
 
     it('leaves the chunk scanner silent on a gate-managed PTY', async () => {
-      // Main's '2031-subscribe' fact already answers these; a chunk-boundary reply here
-      // would answer the same subscribe a second time.
+      // Main's '2031-subscribe' fact already records these; nothing on this path replies.
       enableMainAuthority()
       const deps = createDeps({ isVisibleRef: { current: false } })
       const { transport, dataCallback } = await connectHiddenPane(deps)
@@ -12746,6 +12741,7 @@ describe('connectPanePty', () => {
         dataCallback: (data: string, meta?: { seq?: number; rawLength?: number }) => void
         getMainBufferSnapshot: ReturnType<typeof vi.fn>
         transport: MockTransport
+        deps: ReturnType<typeof createDeps>
       }> {
         enableMainAuthority()
         const deps = createDeps({ isVisibleRef: { current: true } })
@@ -12777,7 +12773,7 @@ describe('connectPanePty', () => {
           expect.any(Function)
         )
         pane.terminal.write.mockClear()
-        return { pane, dataCallback, getMainBufferSnapshot, transport }
+        return { pane, dataCallback, getMainBufferSnapshot, transport, deps }
       }
 
       function writtenData(pane: ReturnType<typeof createPane>): string {
@@ -12798,24 +12794,25 @@ describe('connectPanePty', () => {
         expect(writtenData(pane)).toContain('NEW')
       })
 
-      it('answers a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
-        // Why the scan runs before reconciliation: the snapshot restore replays bytes
-        // into xterm without answering queries, so this live delivery is the only
-        // chance to reply. Dropping the chunk as a duplicate must not drop the query.
-        // Gate off so the chunk scanner (not main's fact) owns this pane's reply.
+      it('records a 2031 subscribe on a chunk the restored snapshot drops as duplicate', async () => {
+        // Why the scan runs before reconciliation: the snapshot restore replays bytes into
+        // xterm without tracking modes, so this live delivery is the only chance to observe
+        // the subscription. Dropping the chunk as a duplicate must not drop that.
+        // Gate off so the chunk scanner (not main's fact) owns this pane's registry.
         enableMainAuthority()
         mockStoreState.settings = {
           ...mockStoreState.settings,
           terminalHiddenDeliveryGate: false
         } as StoreState['settings']
-        const { pane, dataCallback, transport } = await restoreVisiblePaneToBaseline()
+        const { pane, dataCallback, transport, deps } = await restoreVisiblePaneToBaseline()
         transport.sendInput.mockClear()
 
         dataCallback(`SUB\x1b[?2031h`, { seq: 60, rawLength: 11 })
         await flushAsyncTicks(8)
 
         expect(writtenData(pane)).not.toContain('SUB')
-        expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+        expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+        expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       })
 
       it('slices a partial overlap when raw and clean lengths match', async () => {
@@ -13496,7 +13493,7 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  it('answers a mode 2031 subscribe once, from the raw chunk boundary', async () => {
+  it('records a mode 2031 subscribe from the raw chunk boundary without answering', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -13526,8 +13523,8 @@ describe('connectPanePty', () => {
 
       // Why the scanner and not xterm's CSI handler: xterm batches PTY chunks into one
       // parse, so only this layer knows the chunk ended still subscribed (#9993).
-      expect(transport.sendInput).toHaveBeenCalledTimes(1)
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;2n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
+      expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       // The bytes still reach xterm so the emulator tracks the mode itself.
       expect(pane.terminal.write).toHaveBeenCalledWith('\x1b[?2031h')
     } finally {
@@ -13537,12 +13534,12 @@ describe('connectPanePty', () => {
     binding.dispose()
   })
 
-  // Why these three: fish 4.7.1 enables and disables 2031 around *every* prompt with no
-  // opt-out, so back-to-back chunks each carrying a toggle are the normal case, not an edge
-  // case. Each chunk owes exactly one decision, and xterm cannot make it — it parses several
-  // chunks in one synchronous batch, so a reply deferred to the parser is either dropped or
-  // answered against a subscription a later chunk already withdrew (#9993).
-  describe('mode 2031 replies are decided per raw PTY chunk', () => {
+  // Why: fish 4.7.1 enables and disables 2031 around *every* prompt with no opt-out, so
+  // back-to-back chunks each carrying a toggle are the normal case. Subscribing is never
+  // answered (#9993) — these pin that silence plus the per-chunk subscription bookkeeping
+  // that theme-flip pushes depend on. xterm cannot do that bookkeeping: it parses several
+  // chunks in one synchronous batch and only sees the net result.
+  describe('mode 2031 subscriptions are tracked per raw PTY chunk, never answered', () => {
     async function connectVisiblePane(): Promise<{
       transport: ReturnType<typeof createMockTransport>
       deps: ReturnType<typeof createDeps>
@@ -13581,56 +13578,60 @@ describe('connectPanePty', () => {
     const replies = (transport: { sendInput: { mock: { calls: unknown[][] } } }): unknown[] =>
       transport.sendInput.mock.calls.flat().filter((arg) => String(arg).includes('997'))
 
-    it('answers a chunk that ends subscribed even when the next chunk withdraws', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
-      // Two separate PTY chunks. xterm would parse both in one batch and see only the net
-      // result; the first chunk still owes a reply.
+    it('registers a chunk that ends subscribed, then retires it when the next withdraws', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
+      // Two separate PTY chunks. xterm would parse both in one batch and see only the net result.
       emit('\x1b[?2031h')
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
       emit('\x1b[?2031l')
-      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers each chunk that ends subscribed', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('re-registers a chunk that withdraws and subscribes again', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h')
       emit('\x1b[?2031l\x1b[?2031h')
-      expect(replies(transport)).toHaveLength(2)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when one chunk both subscribes and withdraws', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
-      // The fish prompt case: the subscription is gone before the program could read a reply.
+    it('registers nothing when one chunk both subscribes and withdraws', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
+      // The fish prompt case: the subscription is gone before the program could read anything.
       emit('\x1b[?2031h prompt \x1b[?2031l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when the withdrawal is split across two chunks', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers nothing when the withdrawal is split across two chunks', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h prompt \x1b[?20')
-      expect(replies(transport)).toEqual([])
       emit('31l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('stays silent when an unrelated private mode appends a split withdrawal', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers nothing when an unrelated private mode appends a split withdrawal', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h prompt \x1b[?25')
-      expect(replies(transport)).toEqual([])
       emit(';2031l')
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers after an ambiguous tail resolves to another mode', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers the subscription once an ambiguous tail resolves to another mode', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit('\x1b[?2031h drawing \x1b[?20')
-      expect(replies(transport)).toEqual([])
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       emit('25h')
-      expect(replies(transport)).toEqual(['\x1b[?997;2n'])
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
@@ -13654,19 +13655,21 @@ describe('connectPanePty', () => {
       dispose()
     })
 
-    it('answers once when a TUI subscribes at the end of a fish prompt chunk', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('registers a TUI that subscribes at the end of a fish prompt chunk', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       emit(`${FISH_PROMPT_HANDOFF}\x1b[?2031h`)
-      expect(replies(transport)).toHaveLength(1)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
-    it('answers a subscribe whose withdrawal never arrives', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+    it('keeps a subscription whose withdrawal never arrives', async () => {
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       // A real TUI: subscribe now, unsubscribe minutes later on exit.
       emit('\x1b[?2031h')
       emit('painting the ui')
-      expect(replies(transport)).toHaveLength(1)
+      expect(deps.paneMode2031Ref.current.get(1)).toBe(true)
+      expect(replies(transport)).toEqual([])
       dispose()
     })
 
@@ -13683,7 +13686,7 @@ describe('connectPanePty', () => {
     })
 
     it('discards a half-read escape prefix when the pane swaps PTYs', async () => {
-      const { transport, emit, dispose } = await connectVisiblePane()
+      const { transport, deps, emit, dispose } = await connectVisiblePane()
       // Why: the tail is a byte range from the old stream. Splicing it onto the first
       // chunk of a replacement PTY fabricates a subscribe no program ever sent.
       transport.serializeBuffer = vi.fn().mockResolvedValue(null)
@@ -13694,12 +13697,13 @@ describe('connectPanePty', () => {
 
       emit('31h')
 
+      expect(deps.paneMode2031Ref.current.get(1)).toBeUndefined()
       expect(replies(transport)).toEqual([])
       dispose()
     })
   })
 
-  it('answers hidden Codex mode 2031 subscribes split across becoming visible', async () => {
+  it('records hidden Codex mode 2031 subscribes split across becoming visible', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-id')
     const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
@@ -13734,8 +13738,9 @@ describe('connectPanePty', () => {
     isVisibleRef.current = true
     capturedDataCallback.current?.('31h')
 
-    expect(transport.sendInputImmediate).toHaveBeenCalledWith('\x1b[?997;2n')
+    expect(transport.sendInputImmediate).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     expect(paneMode2031Ref.current.get(1)).toBe(true)
+    // Seeded so the next appearance re-apply only pushes on a real color-mode flip.
     expect(paneLastThemeModeRef.current.get(1)).toBe('light')
     expect(pane.terminal.write).not.toHaveBeenCalledWith('31h', expect.any(Function))
 
@@ -14284,7 +14289,7 @@ describe('connectPanePty', () => {
       await flushAsyncTicks(20)
 
       expect(getMainBufferSnapshot).toHaveBeenCalled()
-      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[?997;1n')
+      expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
       expect(pane.terminal.write).toHaveBeenCalledWith(
         expect.stringContaining('healed from snapshot'),
         expect.any(Function)
@@ -14982,7 +14987,8 @@ describe('connectPanePty', () => {
       undefined,
       { connectionId: null }
     )
-    expect(transport.sendInput).toHaveBeenCalledWith(expect.stringContaining('\x1b['))
+    // Remote gated panes record the subscription from the fact and answer nothing (#9993).
+    expect(transport.sendInput).not.toHaveBeenCalledWith(expect.stringMatching(/\?997/))
     expect(recordPaneMode2031Subscription).toHaveBeenCalledWith(1, expect.any(String))
     deps.paneMode2031Ref.current.set(1, true)
     deps.paneLastThemeModeRef.current.set(1, 'dark')

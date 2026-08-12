@@ -1,8 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DatabaseSync } from 'node:sqlite'
 import type { Cookie } from 'electron'
 import {
   isGoogleSourceBoundCookie,
+  isNonTransplantableCookieDomain,
+  NON_TRANSPLANTABLE_HOST_KEY_SQL,
   normalizeCookieDomain,
+  removeAllCookiesExcept,
   replaceCookiesForImportedDomains
 } from './browser-cookie-import-policy'
 
@@ -145,5 +149,162 @@ describe('replaceCookiesForImportedDomains', () => {
       httpOnly: undefined,
       sameSite: 'unspecified'
     })
+  })
+})
+
+describe('isNonTransplantableCookieDomain', () => {
+  it('covers the whole google.com registrable family', () => {
+    expect(isNonTransplantableCookieDomain('google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('.google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('accounts.google.com')).toBe(true)
+    expect(isNonTransplantableCookieDomain('MAIL.Google.Com')).toBe(true)
+  })
+
+  it('does not match lookalikes or unrelated sites', () => {
+    expect(isNonTransplantableCookieDomain('withgoogle.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('google.com.evil.example')).toBe(false)
+    expect(isNonTransplantableCookieDomain('notgoogle.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('linear.app')).toBe(false)
+    expect(isNonTransplantableCookieDomain('')).toBe(false)
+  })
+
+  // Why: youtube.com re-issues its cookies from a transplanted session, so excluding it would
+  // drop imports users asked for. Locking it in keeps a future "just add it too" edit honest.
+  it('deliberately leaves youtube.com transplantable', () => {
+    expect(isNonTransplantableCookieDomain('.youtube.com')).toBe(false)
+    expect(isNonTransplantableCookieDomain('accounts.youtube.com')).toBe(false)
+  })
+})
+
+describe('NON_TRANSPLANTABLE_HOST_KEY_SQL', () => {
+  it('selects the google.com family and nothing that merely looks like it', () => {
+    const db = new DatabaseSync(':memory:')
+    db.exec('CREATE TABLE cookies (host_key TEXT)')
+    for (const hostKey of [
+      'google.com',
+      '.google.com',
+      'accounts.google.com',
+      'withgoogle.com',
+      'google.com.evil.example',
+      '.youtube.com',
+      '.linear.app'
+    ]) {
+      db.prepare('INSERT INTO cookies (host_key) VALUES (?)').run(hostKey)
+    }
+
+    const matched = db
+      .prepare(
+        `SELECT host_key FROM cookies WHERE ${NON_TRANSPLANTABLE_HOST_KEY_SQL} ORDER BY host_key`
+      )
+      .all() as { host_key: string }[]
+    db.close()
+
+    expect(matched.map((row) => row.host_key)).toEqual([
+      '.google.com',
+      'accounts.google.com',
+      'google.com'
+    ])
+  })
+})
+
+describe('removeAllCookiesExcept', () => {
+  it('removes only the cookies the predicate does not exclude', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValue([
+        cookie('.google.com', 'SID'),
+        cookie('.example.com', 'session'),
+        cookie('other.test', 'tracker', '/scoped')
+      ])
+    const remove = vi.fn().mockResolvedValue(undefined)
+    const set = vi.fn().mockResolvedValue(undefined)
+
+    await removeAllCookiesExcept({ get, remove, set }, (c) => c.domain === '.google.com')
+
+    expect(remove.mock.calls).toEqual([
+      ['https://example.com/', 'session'],
+      ['https://other.test/scoped', 'tracker']
+    ])
+    expect(set).not.toHaveBeenCalled()
+  })
+
+  it('restores every successfully removed cookie when another removal fails', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValue([
+        cookie('.example.com', 'first', '/one'),
+        cookie('.example.com', 'second', '/two'),
+        cookie('.example.com', 'third', '/three')
+      ])
+    const remove = vi.fn().mockImplementation(async (_url: string, name: string) => {
+      if (name === 'second') {
+        throw new Error('store unavailable')
+      }
+    })
+    const set = vi.fn().mockResolvedValue(undefined)
+
+    await expect(removeAllCookiesExcept({ get, remove, set }, () => false)).rejects.toThrow(
+      'Could not clear existing cookies'
+    )
+    expect(remove).toHaveBeenCalledTimes(3)
+    expect(set.mock.calls.map(([details]) => details.name)).toEqual(['first', 'third'])
+  })
+
+  it('bounds parallel removals so large cookie jars do not clear serially or fan out', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValue(
+        Array.from({ length: 12 }, (_, index) => cookie('.example.com', `${index}`))
+      )
+    let releaseRemovals: (() => void) | undefined
+    const removalsReleased = new Promise<void>((resolve) => {
+      releaseRemovals = resolve
+    })
+    let active = 0
+    let maxActive = 0
+    const remove = vi.fn().mockImplementation(async () => {
+      active++
+      maxActive = Math.max(maxActive, active)
+      await removalsReleased
+      active--
+    })
+    const set = vi.fn().mockResolvedValue(undefined)
+
+    const clearing = removeAllCookiesExcept({ get, remove, set }, () => false)
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledTimes(8))
+    expect(maxActive).toBe(8)
+    releaseRemovals?.()
+    await clearing
+
+    expect(remove).toHaveBeenCalledTimes(12)
+    expect(set).not.toHaveBeenCalled()
+  })
+
+  it('serializes cookies that share Electron removal coordinates', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValue([
+        cookie('.example.com', 'session'),
+        { ...cookie('example.com', 'session'), hostOnly: true }
+      ])
+    let releaseFirst: (() => void) | undefined
+    const firstReleased = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const remove = vi
+      .fn()
+      .mockImplementationOnce(() => firstReleased)
+      .mockResolvedValueOnce(undefined)
+    const set = vi.fn().mockResolvedValue(undefined)
+
+    const clearing = removeAllCookiesExcept({ get, remove, set }, () => false)
+    await vi.waitFor(() => expect(remove).toHaveBeenCalledOnce())
+    releaseFirst?.()
+    await clearing
+
+    expect(remove.mock.calls).toEqual([
+      ['https://example.com/', 'session'],
+      ['https://example.com/', 'session']
+    ])
   })
 })

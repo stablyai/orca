@@ -8,6 +8,7 @@ import {
   MODE_2031_UNSUBSCRIBE_FACT_PROTOCOL_VERSION,
   SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION,
+  WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION,
   PREVIOUS_DAEMON_PROTOCOL_VERSIONS,
   PROTOCOL_VERSION,
   supportsMode2031UnsubscribeFact
@@ -15,7 +16,8 @@ import {
 
 describe('daemon protocol version', () => {
   it('ships bounded history transfer after the 2031-unsubscribe fact', () => {
-    expect(PROTOCOL_VERSION).toBe(32)
+    expect(PROTOCOL_VERSION).toBe(33)
+    expect(WSL_POSIX_CWD_DAEMON_PROTOCOL_VERSION).toBe(33)
     expect(SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION).toBe(32)
     expect(STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION).toBe(31)
     expect(HISTORY_SEED_TRANSFER_PROTOCOL_VERSION).toBe(30)
@@ -25,7 +27,7 @@ describe('daemon protocol version', () => {
     expect(AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION).toBe(26)
     expect(PREVIOUS_DAEMON_PROTOCOL_VERSIONS).toEqual(
-      Array.from({ length: 31 }, (_, index) => index + 1)
+      Array.from({ length: 32 }, (_, index) => index + 1)
     )
   })
 

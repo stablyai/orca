@@ -189,7 +189,7 @@ describe('buildLocalBlockerHostedReviewCreationEligibility', () => {
 
   it('returns null for providers that do not support hosted review creation', () => {
     expect(
-      buildLocalBlockerHostedReviewCreationEligibility('bitbucket', {
+      buildLocalBlockerHostedReviewCreationEligibility('unsupported', {
         ...featureBranch,
         hasUncommittedChanges: true,
         hasUpstream: false,
@@ -258,7 +258,7 @@ describe('buildCreatePrIntentUnavailableEligibility', () => {
 
   it('never synthesizes intent eligibility for an unsupported remote provider', () => {
     expect(
-      buildCreatePrIntentUnavailableEligibility('bitbucket', {
+      buildCreatePrIntentUnavailableEligibility('unsupported', {
         ...featureBranch,
         hasUncommittedChanges: true,
         hasUpstream: true,

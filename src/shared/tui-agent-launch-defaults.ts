@@ -85,7 +85,7 @@ export function resolveTuiAgentLaunchArgs(
 ): string {
   if (
     configuredArgs &&
-    Object.prototype.hasOwnProperty.call(configuredArgs, agent) &&
+    Object.hasOwn(configuredArgs, agent) &&
     typeof configuredArgs[agent] === 'string'
   ) {
     return configuredArgs[agent] ?? ''
@@ -97,7 +97,7 @@ export function resolveTuiAgentLaunchEnv(
   agent: TuiAgent,
   configuredEnv: Partial<Record<TuiAgent, Record<string, string>>> | null | undefined
 ): Record<string, string> {
-  if (configuredEnv && Object.prototype.hasOwnProperty.call(configuredEnv, agent)) {
+  if (configuredEnv && Object.hasOwn(configuredEnv, agent)) {
     return { ...configuredEnv[agent] }
   }
   return getTuiAgentDefaultEnv(agent)

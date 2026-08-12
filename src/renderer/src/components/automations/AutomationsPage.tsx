@@ -356,7 +356,7 @@ export default function AutomationsPage(): React.JSX.Element {
   const loadAutomationYamlHooksForRepo = useCallback(
     async (repoId: string): Promise<OrcaHooks | null> => {
       const key = getAutomationHooksCacheKey(repoId)
-      if (Object.prototype.hasOwnProperty.call(automationYamlHooksByRepoKey, key)) {
+      if (Object.hasOwn(automationYamlHooksByRepoKey, key)) {
         return automationYamlHooksByRepoKey[key] ?? null
       }
       const existingPromise = automationHookCheckPromisesRef.current.get(key)
@@ -377,7 +377,7 @@ export default function AutomationsPage(): React.JSX.Element {
         return hooks
       }
       setAutomationYamlHooksByRepoKey((current) =>
-        Object.prototype.hasOwnProperty.call(current, key) ? current : { ...current, [key]: hooks }
+        Object.hasOwn(current, key) ? current : { ...current, [key]: hooks }
       )
       return hooks
     },

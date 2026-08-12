@@ -549,7 +549,7 @@ async function main(): Promise<void> {
     const marker = process.argv.indexOf('--orca-cli')
     await runOrcaCliMode(
       sockPath,
-      marker >= 0 ? process.argv.slice(marker + 1) : [],
+      marker !== -1 ? process.argv.slice(marker + 1) : [],
       endpointCredential
     )
     return

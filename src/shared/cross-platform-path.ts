@@ -1,4 +1,4 @@
-import { isWslUncPath } from './wsl-paths'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './wsl-paths'
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 
@@ -54,6 +54,21 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
     return `//wsl/${wslUnc[1].toLowerCase()}${wslUnc[2] ?? ''}`
   }
   return isWindowsPath ? normalized.toLowerCase() : normalized
+}
+
+export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
+  const leftWslPath = parseWslUncPath(left)
+  const rightWslPath = parseWslUncPath(right)
+  if (!leftWslPath && !rightWslPath) {
+    return false
+  }
+  const normalize = (value: string): string => {
+    const wslPath = parseWslUncPath(value)
+    return normalizeRuntimePathForComparison(
+      wslPath ? toWindowsWslPath(wslPath.linuxPath, wslPath.distro) : value
+    )
+  }
+  return normalize(left) === normalize(right)
 }
 
 export function isRuntimePathAbsolute(

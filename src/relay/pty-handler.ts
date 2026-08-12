@@ -607,11 +607,7 @@ export class PtyHandler {
     for (const key of envToDelete) {
       delete result[key]
     }
-    if (
-      !envToDelete.includes('TERM') &&
-      rendererEnv &&
-      Object.prototype.hasOwnProperty.call(rendererEnv, 'TERM')
-    ) {
+    if (!envToDelete.includes('TERM') && rendererEnv && Object.hasOwn(rendererEnv, 'TERM')) {
       result.TERM = rendererEnv.TERM
     }
     // Why: node-pty defaults missing/empty TERM per-platform; normalize so POSIX and Windows children agree.
@@ -1431,7 +1427,7 @@ export class PtyHandler {
     const explicitTerm =
       !envToDelete.includes('TERM') &&
       env &&
-      Object.prototype.hasOwnProperty.call(env, 'TERM') &&
+      Object.hasOwn(env, 'TERM') &&
       typeof env.TERM === 'string' &&
       env.TERM.length > 0
         ? env.TERM

@@ -81,7 +81,7 @@ const DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL =
 
 function paneKeyMatchSuffix(paneKey: string): string {
   const colon = paneKey.indexOf(':')
-  return colon < 0 ? paneKey : paneKey.slice(colon + 1)
+  return colon === -1 ? paneKey : paneKey.slice(colon + 1)
 }
 
 export type {
@@ -285,7 +285,7 @@ type RunListCursor = {
 // Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
 const SCHEMA_VERSION = 26
 
-function hardenOrchestrationDatabaseFiles(dbPath: string | ':memory:'): void {
+function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
     // Why: Windows protects these files through Orca's current-user-only userData DACL; POSIX mode bits are inert there.
     return
@@ -308,7 +308,7 @@ export class OrchestrationDb {
   // per-terminal fan-out. Only createDispatchContext flips this false→true.
   private hasAnyDispatchContextsCache: boolean | undefined
 
-  constructor(dbPath: string | ':memory:') {
+  constructor(dbPath: (string & {}) | ':memory:') {
     this.db = new Database(dbPath)
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')

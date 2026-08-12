@@ -54,7 +54,7 @@ function getPreferredSite(
   matches: JiraSite[],
   selectedAccount: AccountSelection | null,
   requestKey: string,
-  selectedSiteId: string | 'all' | null | undefined,
+  selectedSiteId: (string & {}) | 'all' | null | undefined,
   activeSiteId: string | null | undefined
 ): JiraSite | null {
   const explicitId = selectedAccount?.requestKey === requestKey ? selectedAccount.siteId : null

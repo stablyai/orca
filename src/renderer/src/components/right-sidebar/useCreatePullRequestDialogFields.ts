@@ -166,8 +166,14 @@ export function useCreatePullRequestDialogFields({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [draft, setDraft] = useState(false)
+  // Why: stamped with the repo it came from — this hook outlives a repo switch, and a
+  // previous repo's default branch would silently suppress the stacked-PR lookup.
+  const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const [baseQuery, setBaseQuery] = useState('')
   const [baseResults, setBaseResults] = useState<string[]>([])
+  // Why: lets the picker withhold "no branches match" until a search settles, so
+  // the debounce and an SSH round-trip can't read as an observed absence.
+  const [baseSearchPending, setBaseSearchPending] = useState(false)
   const [baseSearchError, setBaseSearchError] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [generateError, setGenerateError] = useState<string | null>(null)
@@ -397,31 +403,46 @@ export function useCreatePullRequestDialogFields({
 
   const effectiveGenerating = generation?.generating ?? generating
   const effectiveGenerateError = generation?.generateError ?? generateError
+  const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
 
+  // Why: resolved separately from eligibility's defaultBaseRef, which reports the
+  // worktree's own base. Consumers that need "is this the repo's default branch?"
+  // must ask this one, not that one.
   useEffect(() => {
-    if (!open || base) {
+    // Why: the repo default doesn't move while a repo stays open, so skip the probe
+    // once it is known — on a remote runtime it is an RPC round-trip per composer open.
+    if (!open || repoDefaultBaseRef) {
       return
     }
     let stale = false
     void getRuntimeRepoBaseRefDefault(settings, repoId)
       .then((result) => {
         if (!stale && result.defaultBaseRef) {
-          setBase(stripBaseRef(result.defaultBaseRef))
+          setRepoDefault({ repoId, baseRef: stripBaseRef(result.defaultBaseRef) })
         }
       })
       .catch(() => undefined)
     return () => {
       stale = true
     }
-  }, [base, open, repoId, settings])
+  }, [open, repoDefaultBaseRef, repoId, settings])
+
+  useEffect(() => {
+    if (!open || base || !repoDefaultBaseRef) {
+      return
+    }
+    setBase(repoDefaultBaseRef)
+  }, [base, open, repoDefaultBaseRef])
 
   useEffect(() => {
     if (!open || baseQuery.trim().length < 2) {
       setBaseResults([])
+      setBaseSearchPending(false)
       setBaseSearchError(null)
       return
     }
     let stale = false
+    setBaseSearchPending(true)
     const timer = window.setTimeout(() => {
       void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
         .then((results) => {
@@ -434,6 +455,11 @@ export function useCreatePullRequestDialogFields({
           if (!stale) {
             setBaseResults([])
             setBaseSearchError('Branch discovery failed.')
+          }
+        })
+        .finally(() => {
+          if (!stale) {
+            setBaseSearchPending(false)
           }
         })
     }, 200)
@@ -608,12 +634,15 @@ export function useCreatePullRequestDialogFields({
     setBody: setUserBody,
     draft,
     setDraft: setUserDraft,
+    stackedCreationSupported: eligibility?.stackedCreationSupported === true,
+    repoDefaultBaseRef,
     fieldRevisions: fieldRevisionsRef.current,
     applyGeneratedFields,
     baseQuery,
     setBaseQuery,
     baseResults,
     setBaseResults,
+    baseSearchPending,
     baseSearchError,
     generating: effectiveGenerating,
     generateError: effectiveGenerateError,

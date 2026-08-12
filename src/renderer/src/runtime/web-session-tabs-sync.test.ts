@@ -2300,6 +2300,64 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe((initialState.sortEpoch ?? 0) + 1)
   })
 
+  it('bumps sort epoch when a mirrored same-state done update becomes a completion', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const initialSnapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'Codex',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'done',
+          prompt: 'same prompt',
+          updatedAt: NOW - 1_000,
+          stateStartedAt: NOW - 2_000,
+          agentType: 'codex',
+          paneKey: hostPaneKey,
+          stateHistory: [],
+          interrupted: true
+        }
+      }
+    ])
+    const initialPatch = applyWebSessionTabsSnapshot(
+      makeState(),
+      initialSnapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const initialState = { ...makeState(), ...initialPatch }
+
+    const patch = applyWebSessionTabsSnapshot(
+      initialState,
+      {
+        ...initialSnapshot,
+        snapshotVersion: 2,
+        tabs: initialSnapshot.tabs.map((tab) =>
+          tab.type === 'terminal' && tab.agentStatus
+            ? {
+                ...tab,
+                agentStatus: {
+                  ...tab.agentStatus,
+                  updatedAt: NOW,
+                  interrupted: undefined
+                }
+              }
+            : tab
+        )
+      },
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(patch.agentStatusEpoch).toBe((initialState.agentStatusEpoch ?? 0) + 1)
+    expect(patch.sortEpoch).toBe((initialState.sortEpoch ?? 0) + 1)
+  })
+
   it('hydrates multiple initial host snapshots in one merged patch', () => {
     const secondWorktree = 'repo::/other-worktree'
     const patch = applyWebSessionTabsSnapshots(
@@ -2954,7 +3012,7 @@ describe('applyWebSessionTabsSnapshot', () => {
       NOW
     ) as Partial<WebSessionTabsSyncState>
 
-    expect(Object.prototype.hasOwnProperty.call(patch, 'openFiles')).toBe(false)
+    expect(Object.hasOwn(patch, 'openFiles')).toBe(false)
     expect(state.openFiles).toEqual([unchanged])
   })
 

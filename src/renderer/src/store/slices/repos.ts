@@ -888,9 +888,7 @@ function areCatalogEntriesEqual(a: unknown, b: unknown): boolean {
   if (keys.length !== Object.keys(b).length) {
     return false
   }
-  return keys.every(
-    (key) => Object.prototype.hasOwnProperty.call(b, key) && areCatalogEntriesEqual(a[key], b[key])
-  )
+  return keys.every((key) => Object.hasOwn(b, key) && areCatalogEntriesEqual(a[key], b[key]))
 }
 
 // Why: returning `base` unchanged keeps referential-equality selectors quiet, so a

@@ -6959,7 +6959,7 @@ export default function TaskPage(): React.JSX.Element {
     const authorityPage = pages.findIndex((page) =>
       page?.some((item) => authorityItemKeys.has(taskPageGitHubItemKey(item.repoId, item.id)))
     )
-    const quietPage = authorityPage >= 0 ? authorityPage : currentPage
+    const quietPage = authorityPage !== -1 ? authorityPage : currentPage
     const visiblePage = currentPage > quietPage ? currentPage : undefined
     const pageItemKeys = (page: number): Set<string> =>
       new Set((pages[page] ?? []).map((item) => taskPageGitHubItemKey(item.repoId, item.id)))

@@ -419,12 +419,16 @@ export async function copyFileToOsClipboard(
     'auto.components.right.sidebar.FileExplorerRow.b234ab25b4',
     'Could not copy the file to the clipboard'
   )
+  const stagingFailureMessage = translate(
+    'auto.components.right.sidebar.FileExplorerRow.clipboardStagingUnavailable',
+    "Could not copy the file because Orca's temporary storage is unavailable"
+  )
   try {
     const result = await window.api.ui.writeClipboardFile(
       connectionId ? { filePath: node.path, connectionId } : node.path
     )
     if (!result.ok) {
-      toast.error(failureMessage)
+      toast.error(result.reason === 'staging-unavailable' ? stagingFailureMessage : failureMessage)
     }
   } catch (error) {
     toast.error(extractIpcErrorMessage(error, failureMessage))

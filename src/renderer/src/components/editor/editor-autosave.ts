@@ -1,5 +1,7 @@
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
+import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -20,6 +22,7 @@ export type EditorPathMutationTarget = {
   worktreePath: string
   relativePath: string
   runtimeEnvironmentId?: string | null
+  allowLocalWindowsWslAliases?: true
 }
 
 export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
@@ -125,7 +128,7 @@ export function getOpenFilesForExternalFileChange(
   target: EditorPathMutationTarget
 ): OpenFile[] {
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
-  const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(target, 'runtimeEnvironmentId')
+  const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
     if (file.worktreeId !== target.worktreeId) {
@@ -138,7 +141,12 @@ export function getOpenFilesForExternalFileChange(
       return false
     }
     if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-      return file.filePath === absolutePath
+      return (
+        file.filePath === absolutePath ||
+        (target.allowLocalWindowsWslAliases === true &&
+          isLocalWindowsDesktopClient() &&
+          areLocalWindowsWslPathAliases(file.filePath, absolutePath))
+      )
     }
     if (file.mode === 'diff') {
       return (

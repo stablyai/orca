@@ -669,6 +669,24 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Could not copy the file to the clipboard')
   })
 
+  it('shows an actionable toast when remote clipboard staging is unavailable', async () => {
+    const writeClipboardFile = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'staging-unavailable'
+    })
+    ;(
+      globalThis as unknown as {
+        window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
+      }
+    ).window = { api: { ui: { writeClipboardFile } } }
+
+    await copyFileToOsClipboard(fileNode, 'ssh-1')
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Could not copy the file because Orca's temporary storage is unavailable"
+    )
+  })
+
   it('shows the remote copy rejection message when SSH materialization fails', async () => {
     const writeClipboardFile = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
     ;(
