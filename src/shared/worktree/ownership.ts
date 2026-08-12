@@ -52,7 +52,10 @@ export function buildKnownOrcaWorkspaceLayouts(
       nestWorkspaces: settings.nestWorkspaces
     })
   }
-  if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
+  if (
+    isUsableWorkspaceLayoutPath(settings.workspaceDir) &&
+    shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)
+  ) {
     layouts.push({
       path: repo
         ? resolveWorkspaceLayoutPath(repo.path, settings.workspaceDir)
@@ -62,7 +65,11 @@ export function buildKnownOrcaWorkspaceLayouts(
     appendWorkspaceLayouts(
       layouts,
       (settings.workspaceDirHistory ?? [])
-        .filter((layout) => shouldIncludeWorkspaceLayout(repo, layout.path))
+        .filter(
+          (layout) =>
+            isUsableWorkspaceLayoutPath(layout?.path) &&
+            shouldIncludeWorkspaceLayout(repo, layout.path)
+        )
         .map((layout) => ({
           ...layout,
           path: repo ? resolveWorkspaceLayoutPath(repo.path, layout.path) : layout.path
@@ -116,10 +123,17 @@ function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boo
   return isRuntimePathAbsolute(layoutPath, pathFlavor)
 }
 
+function isUsableWorkspaceLayoutPath(pathValue: unknown): pathValue is string {
+  return typeof pathValue === 'string' && pathValue.trim().length > 0
+}
+
 function shouldIncludeWorkspaceLayout(
   repo: Pick<Repo, 'path' | 'connectionId'> | undefined,
   layoutPath: string
 ): boolean {
+  if (!isUsableWorkspaceLayoutPath(layoutPath)) {
+    return false
+  }
   return !repo?.connectionId || !isRuntimePathAbsoluteForRepo(repo.path, layoutPath)
 }
 

@@ -642,11 +642,18 @@ function buildWorkspaceDirHistoryForUpdate(
     return null
   }
 
+  // Why: never record a non-string path into history — corrupt entries made
+  // worktree list/ps throw on startsWith during layout classification (#14016).
+  if (typeof current.workspaceDir !== 'string' || current.workspaceDir.trim().length === 0) {
+    return null
+  }
   const previousLayout = {
     path: current.workspaceDir,
     nestWorkspaces: current.nestWorkspaces
   }
-  const existing = current.workspaceDirHistory ?? []
+  const existing = (current.workspaceDirHistory ?? []).filter(
+    (layout) => typeof layout?.path === 'string' && layout.path.trim().length > 0
+  )
   const next = [...existing]
   const previousKey = getWorkspaceLayoutHistoryKey(previousLayout)
   if (!next.some((layout) => getWorkspaceLayoutHistoryKey(layout) === previousKey)) {

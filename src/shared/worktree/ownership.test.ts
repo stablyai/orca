@@ -264,6 +264,27 @@ describe('worktree ownership classification', () => {
     ).toBe('external')
   })
 
+  it('skips corrupt workspaceDirHistory paths without throwing (#14016)', () => {
+    const repo = makeRepo({ path: 'D:/orca/workspaces/repo' })
+    const settings = makeSettings({
+      workspaceDir: 'D:/orca/workspaces',
+      nestWorkspaces: false,
+      workspaceDirHistory: [
+        { path: undefined as unknown as string, nestWorkspaces: false },
+        { path: null as unknown as string, nestWorkspaces: true },
+        { path: '', nestWorkspaces: false },
+        { path: 'D:/old/workspaces', nestWorkspaces: true }
+      ]
+    })
+
+    expect(() => buildKnownOrcaWorkspaceLayouts(settings, repo)).not.toThrow()
+    const layouts = buildKnownOrcaWorkspaceLayouts(settings, repo)
+    expect(layouts.map((layout) => layout.path)).toContain('D:/old/workspaces')
+    expect(
+      layouts.every((layout) => typeof layout.path === 'string' && layout.path.length > 0)
+    ).toBe(true)
+  })
+
   it('builds known layouts from large workspace history lists', () => {
     const repo = makeRepo()
     const workspaceDirHistory = Array.from(

@@ -4,10 +4,26 @@ import {
   isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
+  isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
+
+describe('isWindowsAbsolutePathLike', () => {
+  it('classifies drive and UNC roots', () => {
+    expect(isWindowsAbsolutePathLike('D:\\orca\\workspaces')).toBe(true)
+    expect(isWindowsAbsolutePathLike('//server/share/repo')).toBe(true)
+    expect(isWindowsAbsolutePathLike('/home/ada/repo')).toBe(false)
+  })
+
+  it('returns false for non-strings instead of throwing (#14016)', () => {
+    expect(isWindowsAbsolutePathLike(undefined as unknown as string)).toBe(false)
+    expect(isWindowsAbsolutePathLike(null as unknown as string)).toBe(false)
+    expect(isWindowsAbsolutePathLike('')).toBe(false)
+    expect(isRuntimePathAbsolute(undefined as unknown as string)).toBe(false)
+  })
+})
 
 describe('local Windows WSL aliases', () => {
   it('matches UNC aliases and mounted drives without folding Linux path case', () => {
