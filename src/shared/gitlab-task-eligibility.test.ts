@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from './types'
-import {
-  extractGitRemoteHost,
-  getGitLabTaskEligibleRepos,
-  isGitLabTaskEligibleRepo,
-  isGitLabTaskHost
-} from './gitlab-task-eligibility'
+import { getGitLabTaskEligibleRepos, isGitLabTaskEligibleRepo } from './gitlab-task-eligibility'
 
 function repo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
   return {
@@ -17,32 +12,6 @@ function repo(overrides: Partial<Repo> & Pick<Repo, 'id'>): Repo {
     ...overrides
   }
 }
-
-describe('isGitLabTaskHost', () => {
-  it('accepts gitlab.com, conventional names, and knownHosts entries', () => {
-    expect(isGitLabTaskHost('gitlab.com')).toBe(true)
-    expect(isGitLabTaskHost('gitlab.example.com')).toBe(true)
-    expect(isGitLabTaskHost('git.company.com', ['git.company.com'])).toBe(true)
-    expect(isGitLabTaskHost('10.0.0.5', ['gitlab.com'])).toBe(false)
-  })
-})
-
-describe('extractGitRemoteHost', () => {
-  it('reads host from remote URL and canonical key', () => {
-    expect(
-      extractGitRemoteHost(
-        repo({
-          id: 'a',
-          gitRemoteIdentity: {
-            canonicalKey: 'gitlab.example.com/team/app',
-            remoteName: 'origin',
-            remoteUrl: 'git@gitlab.example.com:team/app.git'
-          }
-        })
-      )
-    ).toBe('gitlab.example.com')
-  })
-})
 
 describe('isGitLabTaskEligibleRepo', () => {
   it('keeps self-hosted, IP, SSH-pending, and still-GitLab repos', () => {

@@ -43,11 +43,11 @@ export type GitLabMultiProjectAggregate = {
   skippedNotFoundCount: number
   failedCount: number
   successCount: number
-  /** Banner only when every project hard-failed and nothing rendered. */
+  // Why: banner only when every project hard-failed and nothing rendered.
   bannerError: string | null
 }
 
-/** Soft-skip not_found so one migrated peer cannot replace the multi-project view (#13817). */
+// Why: soft-skip not_found so one migrated peer cannot own the multi-project view (#13817).
 export function aggregateGitLabMultiProjectResults(
   results: readonly GitLabProjectFetchResult[]
 ): GitLabMultiProjectAggregate {
