@@ -1757,6 +1757,71 @@ describe('agent completion coordinator', () => {
     expect(dispatchAttention).not.toHaveBeenCalled()
   })
 
+  it('drops auto-review-owned PermissionRequest attention without waiting on the quiet window (#13600)', () => {
+    // Why: ownership suppress must beat the fixed 1.5s debounce when auto-review
+    // takes longer than the quiet window (WSL repro path).
+    const dispatchAttention = vi.fn()
+    const dispatchHookLifecycle = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      dispatchHookLifecycle,
+      isLive: () => true,
+      shouldSuppressHookCompletion: (payload) =>
+        payload.agentType === 'codex' &&
+        (payload.state === 'waiting' || payload.state === 'blocked') &&
+        payload.toolName !== 'request_user_input'
+    })
+
+    const turn = { prompt: 'curl example.com', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'curl -L https://example.com/'
+    })
+
+    // Why: working still updates lifecycle; only the suppressed waiting pause must not notify.
+    expect(dispatchHookLifecycle).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'working', agentType: 'codex' })
+    )
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    // Why: auto-review can exceed 1.5s; suppressed ownership must never arm the timer.
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS * 4)
+    expect(dispatchAttention).not.toHaveBeenCalled()
+  })
+
+  it('still notifies genuinely user-blocked Codex pauses when suppression does not match', () => {
+    const dispatchAttention = vi.fn()
+    const coordinator = createAgentCompletionCoordinator({
+      paneKey: 'tab-1:leaf-1',
+      getPtyId: () => 'pty-1',
+      getSettings: () => null,
+      inspectProcess: vi.fn(),
+      dispatchCompletion: vi.fn(),
+      dispatchAttention,
+      isLive: () => true,
+      shouldSuppressHookCompletion: () => false
+    })
+
+    const turn = { prompt: 'curl example.com', agentType: 'codex' as const }
+    coordinator.observeHookStatus({ state: 'working', ...turn })
+    coordinator.observeHookStatus({
+      state: 'waiting',
+      ...turn,
+      toolName: 'exec_command',
+      toolInput: 'curl -L https://example.com/'
+    })
+    expect(dispatchAttention).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(CODEX_ATTENTION_QUIET_MS)
+    expect(dispatchAttention).toHaveBeenCalledTimes(1)
+  })
+
   it('dispatches the debounced Codex attention notification after the quiet window elapses', () => {
     const dispatchAttention = vi.fn()
     const coordinator = createAgentCompletionCoordinator({

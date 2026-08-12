@@ -3260,16 +3260,25 @@ export function useIpcEvents(): void {
         return 'dropped'
       }
       if (
-        shouldSuppressCodexAutoApprovalStatus(statusPayload, {
-          paneKey,
-          tabId: ownerTabId,
-          terminalHandle: data.terminalHandle,
-          launchToken: data.launchToken,
-          providerSession: data.providerSession,
-          existingProviderSession: existingStatus?.providerSession
-        })
+        shouldSuppressCodexAutoApprovalStatus(
+          {
+            ...statusPayload,
+            ...(data.hookEventName ? { hookEventName: data.hookEventName } : {}),
+            ...(data.codexApprovalReviewer
+              ? { codexApprovalReviewer: data.codexApprovalReviewer }
+              : {})
+          },
+          {
+            paneKey,
+            tabId: ownerTabId,
+            terminalHandle: data.terminalHandle,
+            launchToken: data.launchToken,
+            providerSession: data.providerSession,
+            existingProviderSession: existingStatus?.providerSession
+          }
+        )
       ) {
-        // Why: Codex yolo permission hooks are not user-actionable; they must not drive status, titles, badges, or notifications.
+        // Why: Codex yolo and proven auto-review PermissionRequest hooks are not user-actionable (#13600).
         return 'dropped'
       }
       const terminalTitle = resolveAgentStatusTerminalTitle(statusPayload, title)

@@ -327,7 +327,11 @@ import {
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
 import type { AgentStatusState } from '../shared/agent-status-types'
-import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
+import {
+  parseExplicitCodexApprovalReviewer,
+  resolveCodexApprovalReviewer
+} from '../shared/codex-approval-reviewer'
+import { shouldSuppressCodexPermissionSyntheticTitle } from '../shared/codex-auto-review-attention'
 import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
 import {
@@ -1526,7 +1530,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       providerSessionOnly,
       promptInteractionKey,
       restoredUnconfirmed,
-      isReplay
+      isReplay,
+      hookEventName
     }) => {
       if (mainWindow?.isDestroyed()) {
         return
@@ -1550,13 +1555,24 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       maybeAutoRenameBranchOnFirstWorkFromHook({ paneKey, tabId, worktreeId, payload, isReplay })
       const orchestration = runtime?.getAgentStatusOrchestrationContextForPaneKey(paneKey)
       const terminalHandle = runtime?.getAgentStatusTerminalHandleForPaneKey(paneKey)
+      const launchConfig = runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+      const resolvedReviewer =
+        payload.agentType === 'codex'
+          ? resolveCodexApprovalReviewer(launchConfig?.agentArgs)
+          : 'unknown'
+      const codexApprovalReviewer = parseExplicitCodexApprovalReviewer(
+        resolvedReviewer === 'unknown' ? undefined : resolvedReviewer
+      )
       const suppressSyntheticCodexAutoApprovalTitle =
         payload.agentType === 'codex' &&
         (payload.state === 'waiting' || payload.state === 'blocked')
-          ? shouldSuppressCodexAutoApprovalSyntheticTitleFromHook({
+          ? shouldSuppressCodexPermissionSyntheticTitle({
               agentType: payload.agentType,
               state: payload.state,
-              launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
+              hookEventName,
+              toolName: payload.toolName,
+              reviewer: codexApprovalReviewer ?? 'unknown',
+              launchConfig
             })
           : false
       const statusEvent = {
@@ -1564,6 +1580,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         paneKey,
         ...(launchToken ? { launchToken } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
+        ...(hookEventName ? { hookEventName } : {}),
+        ...(codexApprovalReviewer ? { codexApprovalReviewer } : {}),
         tabId,
         worktreeId,
         connectionId,
@@ -2075,32 +2093,6 @@ function driveSyntheticTitleFromHook(
   sendSyntheticTitle(ptyId, `\x1b]0;${label}\x07${needsUserInput ? '\x07' : ''}`, {
     force: true
   })
-}
-
-function shouldSuppressCodexAutoApprovalSyntheticTitleFromHook(args: {
-  agentType: string | null | undefined
-  state: AgentStatusState
-  launchConfig:
-    | {
-        agentArgs?: string | null
-        agentEnv?: Record<string, string> | null
-      }
-    | null
-    | undefined
-}): boolean {
-  if (args.agentType !== 'codex' || (args.state !== 'waiting' && args.state !== 'blocked')) {
-    return false
-  }
-  if (!args.launchConfig) {
-    return false
-  }
-  return (
-    resolveTuiAgentPermissionMode({
-      agent: 'codex',
-      agentArgs: args.launchConfig.agentArgs,
-      agentEnv: args.launchConfig.agentEnv
-    }) === 'yolo'
-  )
 }
 
 void app.whenReady().then(async () => {

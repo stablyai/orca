@@ -256,4 +256,117 @@ describe('Codex auto-approval status suppression', () => {
       })
     ).toBe(false)
   })
+
+  it('suppresses auto-review-owned PermissionRequest waits without a fixed quiet window', () => {
+    registerCodexLaunchConfig({
+      agentArgs: `-c 'approvals_reviewer="auto_review"'`,
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest',
+          codexApprovalReviewer: 'auto_review'
+        },
+        { paneKey, tabId: 'tab-1' }
+      )
+    ).toBe(true)
+  })
+
+  it('preserves genuinely user-blocked Codex permission waits under manual review', () => {
+    registerCodexLaunchConfig({
+      agentArgs: `-c 'approvals_reviewer="user"'`,
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('fails open when auto-review ownership cannot be proven from launch args', () => {
+    registerCodexLaunchConfig({
+      agentArgs: '--ask-for-approval on-request',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
+  it('suppresses --approve-for-me launch ownership the same as approvals_reviewer=auto_review', () => {
+    registerCodexLaunchConfig({
+      agentArgs: '--approve-for-me',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'curl example.com',
+          agentType: 'codex',
+          toolName: 'exec_command',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(true)
+  })
+
+  it('keeps request_user_input waits under auto-review so user questions still notify', () => {
+    registerCodexLaunchConfig({
+      agentArgs: `-c 'approvals_reviewer="auto_review"'`,
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'pick a region',
+          agentType: 'codex',
+          toolName: 'request_user_input',
+          hookEventName: 'PermissionRequest'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
 })
