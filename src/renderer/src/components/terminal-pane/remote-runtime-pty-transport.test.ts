@@ -765,7 +765,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.client-default-rules.v1']
             }
           }
         }
@@ -3924,7 +3924,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           result: {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.client-default-rules.v1']
           }
         })
       }
@@ -3974,7 +3974,7 @@ describe('createRemoteRuntimePtyTransport', () => {
           result: {
             runtimeProtocolVersion: 3,
             minCompatibleRuntimeClientVersion: 2,
-            capabilities: ['agent-session.host-authority.v1']
+            capabilities: ['agent-session.client-default-rules.v1']
           }
         })
       }
@@ -4105,7 +4105,11 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1', 'agent-session.omp-resume-path.v1']
+              capabilities: [
+                'agent-session.client-default-rules.v1',
+                'agent-session.omp-resume-path.v1',
+                'agent-session.prompt-delivery-owner.v1'
+              ]
             }
           }
         : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
@@ -4118,6 +4122,8 @@ describe('createRemoteRuntimePtyTransport', () => {
       command: "codex 'old'",
       launchConfig: { agentArgs: '--old', agentEnv: {} },
       agentArgsOverride: '--profile captured',
+      agentPrompt: 'Keep this resume draft unsent',
+      agentPromptDelivery: 'draft',
       launchToken: 'old-token',
       launchAgent: 'codex'
     })
@@ -4154,8 +4160,57 @@ describe('createRemoteRuntimePtyTransport', () => {
           },
           ompResumeFilePath: '/custom/omp/project/session.jsonl',
           agentArgs: '--profile captured',
+          promptDelivery: 'draft',
+          promptDeliveryOwner: 'client',
+          clientDefaultAgentSessionRules: expect.objectContaining({
+            rules: expect.arrayContaining([expect.objectContaining({ id: 'builtin-graphify' })])
+          }),
           placement: { tabId: 'tab-1', leafId: 'pane:1' },
           presentation: 'background'
+        })
+      })
+    )
+    const resumeRequest = runtimeCall.mock.calls.find(
+      ([request]) => request.method === 'terminal.ensureAgentSession'
+    )?.[0] as { params?: Record<string, unknown> } | undefined
+    expect(resumeRequest?.params).not.toHaveProperty('prompt')
+  })
+
+  it('gives fresh auto-submit prompts to the structured execution host', async () => {
+    runtimeCall.mockImplementation(async (args: { method?: string }) =>
+      args.method === 'status.get'
+        ? {
+            ok: true,
+            result: {
+              runtimeProtocolVersion: 3,
+              minCompatibleRuntimeClientVersion: 2,
+              capabilities: [
+                'agent-session.client-default-rules.v1',
+                'agent-session.prompt-delivery-owner.v1'
+              ]
+            }
+          }
+        : { ok: true, result: { terminal: { handle: 'terminal-1' } } }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      launchAgent: 'codex',
+      agentPrompt: 'Review the pending change',
+      agentPromptDelivery: 'auto-submit'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(runtimeCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'terminal.createAgentSession',
+        params: expect.objectContaining({
+          prompt: 'Review the pending change',
+          promptDelivery: 'auto-submit',
+          promptDeliveryOwner: 'host'
         })
       })
     )
@@ -4169,7 +4224,7 @@ describe('createRemoteRuntimePtyTransport', () => {
             result: {
               runtimeProtocolVersion: 3,
               minCompatibleRuntimeClientVersion: 2,
-              capabilities: ['agent-session.host-authority.v1']
+              capabilities: ['agent-session.client-default-rules.v1']
             }
           }
         : {

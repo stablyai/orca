@@ -18,10 +18,16 @@ import type {
   SleepingAgentLaunchConfig,
   AgentProviderSessionMetadata
 } from '../../../shared/agent-session-resume'
-import { AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
+  AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import type {
+  AgentSessionHostLaunchIntent,
   AgentLaunchPreferences,
   AgentPromptDelivery,
+  AgentPromptDeliveryOwner,
   RuntimeCreateAgentSessionResult,
   RuntimeEnsureAgentSessionResult
 } from '../../../shared/agent-session-host-authority'
@@ -29,7 +35,7 @@ import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { runtimeEnvironmentSupportsCapability, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -61,6 +67,7 @@ import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import { normalizeAgentSessionRulesSettings } from '../../../shared/agent-session-rules'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -131,6 +138,7 @@ type CreateWebRuntimeSessionTerminalArgs = {
   agentSessionKind?: 'fresh' | 'resume'
   prompt?: string
   promptDelivery?: AgentPromptDelivery
+  promptDeliveryOwner?: AgentPromptDeliveryOwner
   /** Explicit CLI override; omission leaves the remote host's defaults authoritative. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
@@ -171,7 +179,10 @@ export async function createWebRuntimeAgentSessionTerminal(
   outcome: WebRuntimeTerminalCreateOutcome
   promptDelivered: boolean
 }> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await createWebRuntimeSessionTerminalResult({
+    ...args,
+    launchAgent: args.launchAgent ?? args.agent
+  })
   if (created.outcome.status === 'failed' || !created.hostTabId) {
     return { outcome: created.outcome, promptDelivered: false }
   }
@@ -197,7 +208,10 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
     launchDraft: string
   }
 ): Promise<WebRuntimeTerminalCreateOutcome> {
-  const created = await createWebRuntimeSessionTerminalResult(args)
+  const created = await createWebRuntimeSessionTerminalResult({
+    ...args,
+    launchAgent: args.launchAgent ?? args.agent
+  })
   if (created.outcome.status !== 'failed' && created.hostTabId) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: toWebTerminalSurfaceTabId(created.hostTabId),
@@ -237,8 +251,29 @@ async function createWebRuntimeSessionTerminalResult(
   let createdLeafId: string | undefined
   try {
     const agent = args.launchAgent ?? args.agent
-    const agentArgsOverride =
-      args.agentArgs !== undefined ? args.agentArgs : args.launchConfig?.agentArgs
+    const clientDefaultAgentSessionRules = normalizeAgentSessionRulesSettings(
+      useAppStore.getState().settings?.agentSessionRules
+    )
+    const agentArgsOverride = args.agentArgs
+    const hostAgentLaunch: AgentSessionHostLaunchIntent | undefined =
+      args.launchAgent && (args.agentSessionKind !== 'resume' || args.providerSession)
+        ? {
+            kind: args.agentSessionKind ?? 'fresh',
+            agent: args.launchAgent,
+            ...(args.promptDeliveryOwner !== 'client' && args.prompt !== undefined
+              ? { prompt: args.prompt }
+              : {}),
+            ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+            ...(args.promptDeliveryOwner ? { promptDeliveryOwner: args.promptDeliveryOwner } : {}),
+            ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+            ...(args.launchPreferences ? { launchPreferences: args.launchPreferences } : {}),
+            ...(clientDefaultAgentSessionRules ? { clientDefaultAgentSessionRules } : {}),
+            ...(args.providerSession ? { providerSession: args.providerSession } : {}),
+            ...(args.launchConfig?.ompResumeFilePath
+              ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
+              : {})
+          }
+        : undefined
     if (agent) {
       let legacyAlreadyPlacedInGroup = false
       // Why: structured creation cannot yet express afterTabId; keep the exact legacy placement contract until it can.
@@ -259,10 +294,18 @@ async function createWebRuntimeSessionTerminalResult(
                       ...(args.launchConfig?.ompResumeFilePath
                         ? { ompResumeFilePath: args.launchConfig.ompResumeFilePath }
                         : {}),
+                      ...(args.promptDeliveryOwner !== 'client' && args.prompt !== undefined
+                        ? { prompt: args.prompt }
+                        : {}),
+                      ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+                      ...(args.promptDeliveryOwner
+                        ? { promptDeliveryOwner: args.promptDeliveryOwner }
+                        : {}),
                       ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
                       ...(args.launchPreferences
                         ? { launchPreferences: args.launchPreferences }
                         : {}),
+                      ...(clientDefaultAgentSessionRules ? { clientDefaultAgentSessionRules } : {}),
                       presentation: 'background'
                     },
                     timeoutMs: 15_000
@@ -278,13 +321,21 @@ async function createWebRuntimeSessionTerminalResult(
                       {
                         worktree: toRuntimeWorktreeSelector(args.worktreeId),
                         agent,
-                        ...(args.prompt ? { prompt: args.prompt } : {}),
+                        ...(args.promptDeliveryOwner !== 'client' && args.prompt
+                          ? { prompt: args.prompt }
+                          : {}),
                         ...(args.promptDelivery ? { promptDelivery: args.promptDelivery } : {}),
+                        ...(args.promptDeliveryOwner
+                          ? { promptDeliveryOwner: args.promptDeliveryOwner }
+                          : {}),
                         ...(agentArgsOverride !== undefined
                           ? { agentArgs: agentArgsOverride }
                           : {}),
                         ...(args.launchPreferences
                           ? { launchPreferences: args.launchPreferences }
+                          : {}),
+                        ...(clientDefaultAgentSessionRules
+                          ? { clientDefaultAgentSessionRules }
                           : {}),
                         ...(args.cwd ? { startupCwd: args.cwd } : {}),
                         ...(args.viewMode ? { viewMode: args.viewMode } : {}),
@@ -301,10 +352,38 @@ async function createWebRuntimeSessionTerminalResult(
       }>({
         environmentId,
         ...(hostAuthority ? { hostAuthority } : {}),
-        ...(args.agentSessionKind === 'resume' && agent === 'omp'
-          ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-          : {}),
-        legacy: async () => {
+        hostAuthorityCapabilities: [
+          ...(clientDefaultAgentSessionRules
+            ? [AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY]
+            : []),
+          ...(args.agentSessionKind === 'resume' && agent === 'omp'
+            ? [AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
+            : []),
+          ...(args.promptDeliveryOwner || (args.agentSessionKind === 'resume' && args.prompt)
+            ? [AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY]
+            : [])
+        ],
+        legacy: async ({ skipCompatibilityCheck }) => {
+          const legacyHostIntentCapabilities = [
+            AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
+            ...(hostAgentLaunch?.kind === 'resume' && hostAgentLaunch.agent === 'omp'
+              ? [AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
+              : []),
+            ...(hostAgentLaunch?.promptDeliveryOwner ||
+            (hostAgentLaunch?.kind === 'resume' && hostAgentLaunch.prompt)
+              ? [AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY]
+              : [])
+          ]
+          const sendHostAgentLaunch =
+            hostAgentLaunch &&
+            !skipCompatibilityCheck &&
+            (await Promise.all(
+              legacyHostIntentCapabilities.map((capability) =>
+                runtimeEnvironmentSupportsCapability(environmentId, capability)
+              )
+            )
+              .then((supported) => supported.every(Boolean))
+              .catch(() => false))
           const response = await callEnvironment({
             method: 'session.tabs.createTerminal',
             params: {
@@ -317,6 +396,7 @@ async function createWebRuntimeSessionTerminalResult(
               ...(args.envToDelete ? { envToDelete: args.envToDelete } : {}),
               startupCommandDelivery: args.startupCommandDelivery,
               ...(args.launchConfig ? { launchConfig: args.launchConfig } : {}),
+              ...(sendHostAgentLaunch ? { hostAgentLaunch } : {}),
               ...(args.launchToken ? { launchToken: args.launchToken } : {}),
               ...(args.agent ? { agent: args.agent } : {}),
               ...(args.launchAgent ? { launchAgent: args.launchAgent } : {}),

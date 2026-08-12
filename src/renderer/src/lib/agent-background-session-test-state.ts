@@ -16,6 +16,7 @@ export type AgentBackgroundSessionTestState = {
     agentCmdOverrides: Record<string, string>
     activeRuntimeEnvironmentId: string | null
     terminalMainSideEffectAuthority: boolean | undefined
+    agentSessionRules: { enabled: boolean; rules: unknown[] }
   }
   projects: {
     id: string
@@ -34,7 +35,14 @@ export type AgentBackgroundSessionTestState = {
   projectGroups: { id: string; parentGroupId?: string | null; connectionId?: string | null }[]
   worktreesByRepo: Record<
     string,
-    { id: string; repoId: string; projectId: string; path: string; displayName: string }[]
+    {
+      id: string
+      repoId: string
+      projectId: string
+      hostId?: string
+      path: string
+      displayName: string
+    }[]
   >
   tabsByWorktree: Record<string, { id: string; title: string }[]>
   terminalLayoutsByTabId: Record<string, { ptyIdsByLeafId?: Record<string, string | undefined> }>
@@ -69,7 +77,8 @@ export function createAgentBackgroundSessionTestState(mocks: {
     settings: {
       agentCmdOverrides: {},
       activeRuntimeEnvironmentId: null as string | null,
-      terminalMainSideEffectAuthority: undefined as boolean | undefined
+      terminalMainSideEffectAuthority: undefined as boolean | undefined,
+      agentSessionRules: { enabled: false, rules: [] as unknown[] }
     },
     projects: [
       {
@@ -90,6 +99,7 @@ export function createAgentBackgroundSessionTestState(mocks: {
           id: 'wt-1',
           repoId: 'repo-1',
           projectId: 'repo-1',
+          hostId: undefined as string | undefined,
           path: '/repo/worktree',
           displayName: 'main'
         }
@@ -128,7 +138,8 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
   state.settings = {
     agentCmdOverrides: {},
     activeRuntimeEnvironmentId: null,
-    terminalMainSideEffectAuthority: undefined
+    terminalMainSideEffectAuthority: undefined,
+    agentSessionRules: { enabled: false, rules: [] }
   }
   state.projects = [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' } }]
   state.repos = [{ id: 'repo-1', connectionId: null, path: '/repo' }]
@@ -140,6 +151,7 @@ export function resetAgentBackgroundSessionTestState(state: AgentBackgroundSessi
         id: 'wt-1',
         repoId: 'repo-1',
         projectId: 'repo-1',
+        hostId: undefined as string | undefined,
         path: '/repo/worktree',
         displayName: 'main'
       }
@@ -159,8 +171,16 @@ export function useRemoteAgentBackgroundRuntime(state: AgentBackgroundSessionTes
   state.settings = {
     agentCmdOverrides: {},
     activeRuntimeEnvironmentId: 'env-1',
-    terminalMainSideEffectAuthority: undefined
+    terminalMainSideEffectAuthority: undefined,
+    agentSessionRules: { enabled: false, rules: [] }
   }
+  state.repos = state.repos.map((repo) => ({ ...repo, executionHostId: 'runtime:env-1' }))
+  state.worktreesByRepo = Object.fromEntries(
+    Object.entries(state.worktreesByRepo).map(([repoId, worktrees]) => [
+      repoId,
+      worktrees.map((worktree) => ({ ...worktree, hostId: 'runtime:env-1' }))
+    ])
+  )
 }
 
 /** The tab id reserved before the spawn; the run tab adopts it once the PTY is live. */

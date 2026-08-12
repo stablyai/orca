@@ -16,6 +16,8 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   /** Why: keep the previewed command label in sync with the real remote launch,
    * which omits the Linux-only `orca-ide` rename for SSH hosts. */
   isRemote?: boolean
+  repoId?: string | null
+  connectionId?: string | null
 }
 
 export function buildSourceControlAgentDeliveryPlan({
@@ -26,7 +28,9 @@ export function buildSourceControlAgentDeliveryPlan({
   detectedAgents,
   connectionUnavailable,
   launchPlatform,
-  isRemote
+  isRemote,
+  repoId,
+  connectionId
 }: BuildSourceControlAgentDeliveryPlanArgs): SourceControlAgentActionDeliveryPlanState {
   if (connectionUnavailable) {
     return buildSourceControlAgentConnectionErrorPlan()
@@ -47,7 +51,9 @@ export function buildSourceControlAgentDeliveryPlan({
     cmdOverrides: useAppStore.getState().settings?.agentCmdOverrides,
     terminalWindowsShell: useAppStore.getState().settings?.terminalWindowsShell,
     platform: launchPlatform,
-    isRemote
+    isRemote,
+    repoId,
+    connectionId
   })
   if (!result.ok) {
     return { status: 'error', error: result.error }

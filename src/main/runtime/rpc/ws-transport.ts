@@ -5,8 +5,9 @@ import { WebSocketServer, type WebSocket } from 'ws'
 import type { RpcTransport } from './transport'
 import { createStaticWebClientHandler } from './static-web-client-handler'
 import { RemoteRuntimeServerHeartbeat } from './remote-runtime-server-heartbeat'
+import { REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES } from '../../../shared/remote-runtime-memory-limits'
 
-const MAX_WS_MESSAGE_BYTES = 1024 * 1024
+const MAX_WS_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES
 // Why: one desktop remote-host client can hold many concurrent streams, so keep the cap high enough that stale streams don't starve control RPCs.
 const MAX_WS_CONNECTIONS = 128
 // Why: bound pre-upgrade descriptor use above the WS cap so raw sockets can't grow without bound.

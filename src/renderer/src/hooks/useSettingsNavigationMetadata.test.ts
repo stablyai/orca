@@ -37,13 +37,13 @@ describe('settings navigation metadata', () => {
       'agents',
       'accounts',
       'orchestration',
+      'agentSessionRules',
       'computer-use',
       'voice',
       'setup-guide',
       'general',
       'integrations',
-      'mobile',
-      'git'
+      'mobile'
     ])
   })
 
@@ -84,10 +84,10 @@ describe('settings navigation metadata', () => {
       'agents',
       'accounts',
       'orchestration',
+      'agentSessionRules',
       'setup-guide',
       'general',
-      'integrations',
-      'git'
+      'integrations'
     ])
   })
 

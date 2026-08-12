@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
+import nacl from 'tweetnacl'
 import {
   isRemoteRuntimeBinaryFrameWithinLimit,
   measureRemoteRuntimeSubscriptionParams,
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES,
+  REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES,
+  REMOTE_RUNTIME_E2EE_FRAME_OVERHEAD_BYTES,
+  REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_SUBSCRIPTION_PARAM_BYTES,
-  serializeRemoteRuntimePayload
+  serializeRemoteRuntimePayload,
+  serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
 
 describe('remote runtime memory limits', () => {
@@ -44,5 +49,25 @@ describe('remote runtime memory limits', () => {
         new Uint8Array(REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES + 1)
       )
     ).toBe(false)
+  })
+
+  it('rejects RPC request envelopes above the smallest supported host frame', () => {
+    expect(() =>
+      serializeRemoteRuntimeRpcRequest({
+        requestId: 'request-1',
+        deviceToken: 'token',
+        method: 'session.tabs.createTerminal',
+        params: { command: '界'.repeat(Math.ceil(REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES / 3)) }
+      })
+    ).toThrow(`exceeds ${REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES} bytes`)
+  })
+
+  it('reserves the authenticated-encryption envelope inside the host frame cap', () => {
+    expect(REMOTE_RUNTIME_E2EE_FRAME_OVERHEAD_BYTES).toBe(
+      nacl.box.nonceLength + nacl.box.overheadLength
+    )
+    expect(
+      REMOTE_RUNTIME_MAX_RPC_REQUEST_BYTES + REMOTE_RUNTIME_E2EE_FRAME_OVERHEAD_BYTES
+    ).toBeLessThanOrEqual(REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES)
   })
 })

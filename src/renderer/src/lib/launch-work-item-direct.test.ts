@@ -407,7 +407,10 @@ describe('launchWorkItemDirect', () => {
       agentEnv: {},
       sessionOptions: undefined,
       platform: 'win32',
-      isRemote: false
+      isRemote: false,
+      repoId: 'repo-1',
+      connectionId: undefined,
+      executionHostId: 'local'
     })
     expect(buildAgentStartupPlan).not.toHaveBeenCalledWith(
       expect.objectContaining({
@@ -598,7 +601,10 @@ describe('launchWorkItemDirect', () => {
       agentEnv: {},
       sessionOptions: undefined,
       platform: 'linux',
-      isRemote: true
+      isRemote: true,
+      repoId: 'repo-ssh',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
     })
     expect(buildAgentStartupPlan).toHaveBeenCalledWith({
       agent: 'cursor',
@@ -609,13 +615,19 @@ describe('launchWorkItemDirect', () => {
       sessionOptions: undefined,
       platform: 'linux',
       isRemote: true,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      repoId: 'repo-ssh',
+      connectionId: 'ssh-1',
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
       'wt-ssh',
       expect.objectContaining({
         startup: expect.objectContaining({
-          draftPrompt: 'https://github.com/acme/repo/issues/77'
+          // Why: cursor has no native session-rules flag, so the built-in
+          // graphify rule is prepended to the draft prompt text.
+          draftPrompt: expect.stringContaining('https://github.com/acme/repo/issues/77'),
+          launchDraftText: 'https://github.com/acme/repo/issues/77'
         })
       })
     )

@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -20,10 +20,13 @@ export type RequestTerminalCreateRequest = {
   requestId: string
   worktreeId?: string
   command?: string
+  launchAgent?: TuiAgent
+  startupDraftPrompt?: string
   title?: string
   activate?: boolean
   presentation?: 'background' | 'focused'
   surfaceOwner?: boolean
+  source?: 'runtime-session'
 }
 
 export type HarnessTab = { id: string; ptyId?: string | null; title?: string }

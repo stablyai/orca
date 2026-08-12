@@ -22,7 +22,7 @@ type UseSourceControlAgentActionStartArgs = {
   actionId: SourceControlLaunchActionId
   repoId?: string | null
   settings: GlobalSettings | null
-  repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
+  repo: Pick<Repo, 'id' | 'sourceControlAi' | 'connectionId'> | null
   worktreeId?: string | null
   groupId?: string | null
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -109,7 +109,9 @@ export function useSourceControlAgentActionStart({
         detectedAgents: currentDetectedAgents,
         connectionUnavailable,
         launchPlatform,
-        isRemote
+        isRemote,
+        repoId,
+        connectionId: repo?.connectionId
       })
     },
     [
@@ -120,7 +122,9 @@ export function useSourceControlAgentActionStart({
       refreshDetectedAgents,
       selectedAgent,
       launchPlatform,
-      isRemote
+      isRemote,
+      repoId,
+      repo
     ]
   )
 

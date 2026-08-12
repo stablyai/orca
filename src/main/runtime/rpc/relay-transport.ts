@@ -1,9 +1,10 @@
 import WebSocket, { type RawData } from 'ws'
 import { forEachWithConcurrency } from '../../../shared/map-with-concurrency'
+import { REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES } from '../../../shared/remote-runtime-memory-limits'
 import type { RpcTransport } from './transport'
 import type { MobileSocketTransport, MobileSocketTransportMetadata } from './mobile-socket-wiring'
 
-const MAX_RELAY_MESSAGE_BYTES = 1024 * 1024
+const MAX_RELAY_MESSAGE_BYTES = REMOTE_RUNTIME_MAX_TRANSPORT_FRAME_BYTES
 // Why: terminate() normally emits 'close' within one tick; 5s covers slow
 // teardown without letting a dead socket hold stop() (and app quit) hostage.
 export const RELAY_SOCKET_CLOSE_TIMEOUT_MS = 5_000

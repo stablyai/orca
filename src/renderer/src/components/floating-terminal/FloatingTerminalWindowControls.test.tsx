@@ -19,7 +19,8 @@ const mocks = vi.hoisted(() => ({
   setTabBarOrder: vi.fn(),
   queueTabStartupCommand: vi.fn(),
   focusTerminalTabSurface: vi.fn(),
-  buildAgentStartupPlan: vi.fn()
+  buildAgentStartupPlan: vi.fn(),
+  buildAgentSessionRulesInputDraft: vi.fn()
 }))
 
 vi.mock('react', async () => {
@@ -42,7 +43,8 @@ vi.mock('@/lib/focus-terminal-tab-surface', () => ({
 }))
 
 vi.mock('@/lib/tui-agent-startup', () => ({
-  buildAgentStartupPlan: mocks.buildAgentStartupPlan
+  buildAgentStartupPlan: mocks.buildAgentStartupPlan,
+  buildAgentSessionRulesInputDraft: mocks.buildAgentSessionRulesInputDraft
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
@@ -161,6 +163,7 @@ beforeEach(() => {
     env: undefined,
     startupCommandDelivery: undefined
   })
+  mocks.buildAgentSessionRulesInputDraft.mockReturnValue('rules-only draft')
   storeBox.state = {
     settings: {
       defaultTuiAgent: 'claude',
@@ -207,6 +210,7 @@ describe('FloatingTerminalWindowControls default-agent launch', () => {
       NEW_AGENT_TAB_ID,
       expect.objectContaining({
         command: 'claude',
+        draftPrompt: 'rules-only draft',
         launchAgent: 'claude'
       })
     )

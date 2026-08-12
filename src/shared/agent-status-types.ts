@@ -3,6 +3,7 @@
 // a narrow interrupt fallback synthesizes a final `done` when an agent misses its cancellation hook.
 
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { ExecutionHostId } from './execution-host'
 import {
   normalizeInteractivePromptField,
   normalizeOptionalField,
@@ -109,6 +110,8 @@ export type AgentStatusEntry = {
   worktreeId?: string
   /** Accepted transport authority for this live row; null means local. */
   connectionId?: string | null
+  /** Execution host that owns the provider session carried by this row. */
+  executionHostId?: ExecutionHostId
   /** Tab attribution from the hook IPC payload, when available. */
   tabId?: string
   terminalTitle?: string
@@ -147,6 +150,7 @@ export type AgentStatusEntry = {
 
 export type MigrationUnsupportedPtyEntry = {
   ptyId: string
+  executionHostId?: ExecutionHostId
   worktreeId?: string
   tabId?: string
   leafId?: string

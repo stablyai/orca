@@ -22,7 +22,8 @@ const store = {
     agentCmdOverrides: {},
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: null as string | null
+    activeRuntimeEnvironmentId: null as string | null,
+    agentSessionRules: { enabled: false, rules: [] }
   } as {
     agentCmdOverrides: Record<string, string>
     agentDefaultArgs: Record<string, string>
@@ -35,6 +36,7 @@ const store = {
       string,
       { model?: string; valuesByModel?: Record<string, Record<string, string | boolean>> }
     >
+    agentSessionRules?: { enabled: boolean; rules: unknown[] }
   },
   projects: [
     {
@@ -140,6 +142,7 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null
     }
     store.projects = [
@@ -175,7 +178,7 @@ describe('launchAgentInNewTab', () => {
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1'
     })
@@ -190,13 +193,14 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -226,13 +230,14 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'grok',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -257,6 +262,7 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
@@ -264,7 +270,7 @@ describe('launchAgentInNewTab', () => {
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'grok', worktreeId: 'wt-1' })
+    await launchAgentInNewTab({ agent: 'grok', worktreeId: 'wt-1' })
 
     expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
       launchAgent: 'grok',
@@ -277,21 +283,20 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'https://github.com/o/r/issues/12',
       promptDelivery: 'draft'
     })
 
-    // Claude takes the draft on --prefill, so no paste runs and
-    // deliverLaunchPromptToAgentTab never fires — this is the only seed.
     expect(result?.pasteDraftAfterLaunch).toBe(false)
     expect(mockSeedNativeChatLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -313,6 +318,7 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: null,
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
@@ -320,7 +326,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const prompt = 'Reproduce first\n\nhttps://github.com/o/r/issues/12'
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt,
@@ -341,7 +347,7 @@ describe('launchAgentInNewTab', () => {
   it('passes quick command labels only to locally-created agent tabs', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       quickCommandLabel: 'Review'
@@ -359,6 +365,7 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: 'web-runtime',
       nativeChatSessionOptions: {
         claude: {
@@ -369,7 +376,7 @@ describe('launchAgentInNewTab', () => {
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'review before sending',
@@ -378,8 +385,6 @@ describe('launchAgentInNewTab', () => {
     })
 
     expect(result).toEqual(expect.objectContaining({ tabId: null, pasteDraftAfterLaunch: false }))
-    // The draft rides in on the launch command, so this host-class launch also
-    // carries the text that seeds the mirrored tab's chat composer.
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
@@ -401,13 +406,14 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: true
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    await launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -426,13 +432,14 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: 'web-runtime',
       experimentalNativeChat: true,
       openAgentTabsInChatByDefault: false
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    await launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     expect(mockCreateWebRuntimeSessionTerminal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -455,11 +462,12 @@ describe('launchAgentInNewTab', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
+      agentSessionRules: { enabled: false, rules: [] },
       activeRuntimeEnvironmentId: 'web-runtime'
     }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1'
     })
@@ -474,7 +482,7 @@ describe('launchAgentInNewTab', () => {
   it('queues initial working status for Command Code argv prompt launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner'
@@ -495,7 +503,7 @@ describe('launchAgentInNewTab', () => {
   it('does not track prompt-sent for argv prompt launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',
@@ -508,7 +516,7 @@ describe('launchAgentInNewTab', () => {
   it('does not track prompt-sent for draft launches', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'review this before sending',
@@ -522,7 +530,7 @@ describe('launchAgentInNewTab', () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
     const prompt = 'x'.repeat(25_000)
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt,
@@ -558,7 +566,7 @@ describe('launchAgentInNewTab', () => {
     const prompt = 'x'.repeat(25_000)
 
     try {
-      const result = launchAgentInNewTab({
+      const result = await launchAgentInNewTab({
         agent: 'claude',
         worktreeId: 'wt-1',
         prompt,
@@ -578,7 +586,7 @@ describe('launchAgentInNewTab', () => {
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -638,7 +646,7 @@ describe('launchAgentInNewTab', () => {
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'pending prompt',
@@ -649,8 +657,6 @@ describe('launchAgentInNewTab', () => {
     }
     store.ptyIdsByTabId = { 'tab-1': [ptyId] }
 
-    // Why: explicit disconnect sends the transient clear before its state
-    // event, while the old connection can still appear connected and bound.
     store.transientClearedAgentStatusConnectionIds = { 'ssh-a': true }
     finishDelivery?.(true)
     await expect(result?.promptDeliveryResult).resolves.toEqual({
@@ -665,7 +671,7 @@ describe('launchAgentInNewTab', () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(false)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -688,7 +694,7 @@ describe('launchAgentInNewTab', () => {
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'pty-1' } as never] }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -709,11 +715,10 @@ describe('launchAgentInNewTab', () => {
       onTimeout?.()
       return Promise.resolve(false)
     })
-    // User closed the tab before the agent became ready — it is gone from the list.
-    store.tabsByWorktree = { 'wt-1': [] }
+    store.tabsByWorktree['wt-1'] = []
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -736,7 +741,7 @@ describe('launchAgentInNewTab', () => {
     store.activeWorktreeId = 'wt-2'
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -759,7 +764,7 @@ describe('launchAgentInNewTab', () => {
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: null } as never] }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'command-code',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',
@@ -776,7 +781,7 @@ describe('launchAgentInNewTab', () => {
   it('queues per-launch CLI arguments without putting generated prompts in argv', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'large generated prompt',

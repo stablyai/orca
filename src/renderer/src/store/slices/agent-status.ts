@@ -29,9 +29,12 @@ import { isCommandCodeNewTurnWhileWorking } from '../../../../shared/command-cod
 import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
 import {
   getRepoExecutionHostId,
-  getWorktreeExecutionHostId
+  getWorktreeExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
+import { sleepingAgentSessionRecordMatchesExecutionHost } from '@/lib/sleeping-agent-session-execution-owner'
 import {
   getAgentRowGeneratedTitleText,
   getOrcaDispatchTaskId,
@@ -67,6 +70,7 @@ export type AgentStatusWorktreeShutdownReason =
 type AllAgentSessionCaptureMode = 'periodic' | 'quit'
 
 type DropAgentStatusByWorktreeOptions = {
+  executionHostId?: ExecutionHostId
   shutdownReason?: AgentStatusWorktreeShutdownReason
   sleepingPaneKeys?: readonly string[] | ReadonlySet<string>
   retainedCompletionEvidence?: readonly RetainedAgentEntry[]
@@ -164,6 +168,7 @@ export type AgentStatusSlice = {
       worktreeId?: string
       terminalHandle?: string
       connectionId?: string | null
+      executionHostId?: ExecutionHostId
     },
     metadata?: {
       providerSession?: AgentProviderSessionMetadata
@@ -178,7 +183,12 @@ export type AgentStatusSlice = {
     agent: ResumableTuiAgent,
     providerSession: AgentProviderSessionMetadata,
     timing?: { updatedAt?: number },
-    routing?: { tabId?: string; worktreeId?: string; connectionId?: string | null },
+    routing?: {
+      tabId?: string
+      worktreeId?: string
+      connectionId?: string | null
+      executionHostId?: ExecutionHostId
+    },
     metadata?: { launchToken?: string }
   ) => void
 
@@ -237,7 +247,10 @@ export type AgentStatusSlice = {
   clearSleepingAgentSession: (paneKey: string) => void
   clearSleepingAgentSessionsByPaneKey: (paneKeys: readonly string[]) => void
   setSleepingAgentAutomaticResumeBlocked: (paneKey: string, blocked: boolean) => void
-  clearSleepingAgentSessionsByWorktree: (worktreeId: string) => void
+  clearSleepingAgentSessionsByWorktree: (
+    worktreeId: string,
+    executionHostId: ExecutionHostId
+  ) => void
   pruneSleepingAgentSessions: (validWorktreeIds: Set<string>) => void
 
   /** Retain agent snapshots. Accepts an array so simultaneous disappearances produce a single set() with no mid-loop intermediate states. */
@@ -532,6 +545,7 @@ function sleepingRecordFromEntry(args: {
   capturedAt: number
   launchConfig?: SleepingAgentLaunchConfig
   origin?: SleepingAgentSessionRecord['origin']
+  executionHostId?: ExecutionHostId
 }): SleepingAgentSessionRecord | null {
   const agent = args.entry.agentType
   if (!isResumableTuiAgent(agent) || !args.entry.providerSession) {
@@ -541,10 +555,25 @@ function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+  const existingRecord = args.state.sleepingAgentSessionsByPaneKey[args.entry.paneKey]
+  const existingSessionRecord =
+    existingRecord?.agent === agent &&
+    existingRecord.worktreeId === args.worktreeId &&
+    agentProviderSessionsEqual(agent, existingRecord.providerSession, args.entry.providerSession)
+      ? existingRecord
+      : undefined
+  const executionHostId =
+    args.executionHostId ?? args.entry.executionHostId ?? existingSessionRecord?.executionHostId
+  const connectionId =
+    args.entry.connectionId !== undefined
+      ? args.entry.connectionId
+      : existingSessionRecord?.connectionId
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
     worktreeId: args.worktreeId,
+    ...(executionHostId ? { executionHostId } : {}),
+    ...(connectionId !== undefined ? { connectionId } : {}),
     agent,
     providerSession: args.entry.providerSession,
     prompt: args.entry.prompt,
@@ -566,6 +595,7 @@ function sleepingRecordFromEntry(args: {
 type CollectSleepingAgentSessionRecordsOptions = {
   paneKeys?: readonly string[]
   captureMode?: 'manual-worktree-sleep' | 'completed-agent-hibernation'
+  executionHostId?: ExecutionHostId
 }
 
 function normalizeSleepingAgentSessionCollectOptions(
@@ -622,16 +652,22 @@ function carryOverAutomaticResumeBlock(
 }
 
 export function removeSleepingRecordsReplacedByManualWorktreeSleep(
-  records: Record<string, SleepingAgentSessionRecord>,
+  state: AppState,
   worktreeId: string,
+  executionHostId: ExecutionHostId,
   paneKeys?: readonly string[],
   replacements?: Readonly<Record<string, SleepingAgentSessionRecord>>
 ): { records: Record<string, SleepingAgentSessionRecord>; changed: boolean } {
+  const records = state.sleepingAgentSessionsByPaneKey
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
   for (const [paneKey, record] of Object.entries(records)) {
-    if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
+    if (
+      record.worktreeId !== worktreeId ||
+      !sleepingAgentSessionRecordMatchesExecutionHost(state, record, executionHostId) ||
+      (allowedPaneKeys && !allowedPaneKeys.has(paneKey))
+    ) {
       continue
     }
     // Why: a repeat sleep must not delete a durable record this capture cannot re-derive — the
@@ -670,7 +706,27 @@ export function collectSleepingAgentSessionRecordsForWorktree(
 
   if (isManualWorktreeSleep) {
     for (const existing of Object.values(state.sleepingAgentSessionsByPaneKey)) {
-      const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
+      if (
+        collectOptions.executionHostId &&
+        !sleepingAgentSessionRecordMatchesExecutionHost(
+          state,
+          existing,
+          collectOptions.executionHostId
+        )
+      ) {
+        continue
+      }
+      const candidateLiveEntry = state.agentStatusByPaneKey[existing.paneKey]
+      const liveEntry =
+        candidateLiveEntry &&
+        (!collectOptions.executionHostId ||
+          sleepingAgentSessionRecordMatchesExecutionHost(
+            state,
+            { ...candidateLiveEntry, worktreeId: candidateLiveEntry.worktreeId ?? worktreeId },
+            collectOptions.executionHostId
+          ))
+          ? candidateLiveEntry
+          : undefined
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
@@ -685,6 +741,9 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       // sleep must promote both instead of deleting the checkpoint.
       records[existing.paneKey] = {
         ...existing,
+        ...(collectOptions.executionHostId
+          ? { executionHostId: collectOptions.executionHostId }
+          : {}),
         state: 'working',
         capturedAt,
         updatedAt: capturedAt,
@@ -704,6 +763,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (retained.worktreeId !== worktreeId) {
       continue
     }
+    if (
+      collectOptions.executionHostId &&
+      !sleepingAgentSessionRecordMatchesExecutionHost(
+        state,
+        { ...retained.entry, worktreeId },
+        collectOptions.executionHostId
+      )
+    ) {
+      continue
+    }
     // Why: the promoted checkpoint carries recovery identity (transcript, connection) a retained
     // turn row lacks, so it must not be overwritten by a re-derived record.
     if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
@@ -718,7 +787,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       tab: retained.tab,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, retained.entry),
-      origin
+      origin,
+      executionHostId: collectOptions.executionHostId
     })
     if (record) {
       if (isManualWorktreeSleep) {
@@ -746,6 +816,16 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     if (!belongsToWorktree) {
       continue
     }
+    if (
+      collectOptions.executionHostId &&
+      !sleepingAgentSessionRecordMatchesExecutionHost(
+        state,
+        { ...entry, worktreeId },
+        collectOptions.executionHostId
+      )
+    ) {
+      continue
+    }
     if (isCompletedAgentHibernation && !isValidCompletedAgentHibernationEntry(entry)) {
       continue
     }
@@ -755,7 +835,8 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       worktreeId,
       capturedAt,
       launchConfig: getLaunchConfigForEntry(state, entry),
-      origin
+      origin,
+      executionHostId: collectOptions.executionHostId
     })
     if (record) {
       if (isManualWorktreeSleep) {
@@ -813,6 +894,8 @@ function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.paneKey === next.paneKey &&
     existing.tabId === next.tabId &&
     existing.worktreeId === next.worktreeId &&
+    existing.executionHostId === next.executionHostId &&
+    existing.connectionId === next.connectionId &&
     existing.agent === next.agent &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     existing.prompt === next.prompt &&
@@ -837,6 +920,8 @@ function recoveryRecordMatches(
     existing.origin === next.origin &&
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
+    existing.executionHostId === next.executionHostId &&
+    existing.connectionId === next.connectionId &&
     existing.tabId === next.tabId &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
@@ -853,6 +938,8 @@ function recoveryRecordTargetsSameSession(
   return (
     existing.agent === next.agent &&
     existing.worktreeId === next.worktreeId &&
+    existing.executionHostId === next.executionHostId &&
+    existing.connectionId === next.connectionId &&
     existing.tabId === next.tabId &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession)
   )
@@ -1651,6 +1738,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : existingRecord?.connectionId !== undefined
               ? { connectionId: existingRecord.connectionId }
               : {}),
+          ...((routing?.executionHostId ??
+          existingStatus?.executionHostId ??
+          existingRecord?.executionHostId)
+            ? {
+                executionHostId: (routing?.executionHostId ??
+                  existingStatus?.executionHostId ??
+                  existingRecord?.executionHostId)!
+              }
+            : {}),
           ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
           ...(existingRecordMatchesProviderSession &&
           existingRecord.automaticResumeBlockedBy === 'legacy-orchestration-worker'
@@ -1924,6 +2020,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             : existing?.connectionId !== undefined
               ? { connectionId: existing.connectionId }
               : {}),
+          ...((routing?.executionHostId ?? existing?.executionHostId)
+            ? { executionHostId: (routing?.executionHostId ?? existing?.executionHostId)! }
+            : {}),
           tabId: statusTabId,
           terminalTitle: effectiveTitle,
           stateHistory: history,
@@ -2670,25 +2769,45 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const tabPrefixes = (s.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
         const liveEntries = Object.entries(s.agentStatusByPaneKey).filter(
           ([paneKey, entry]) =>
-            entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+            (entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)) &&
+            (!opts?.executionHostId ||
+              sleepingAgentSessionRecordMatchesExecutionHost(
+                s,
+                { ...entry, worktreeId },
+                opts.executionHostId
+              ))
         )
         const liveKeys = liveEntries.map(([paneKey]) => paneKey)
         const liveKeySet = new Set(liveKeys)
-        const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
-          (paneKey) => paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes) || liveKeySet.has(paneKey)
-        )
         const retainedKeys = Object.entries(s.retainedAgentsByPaneKey)
           .filter(
             ([paneKey, retained]) =>
-              retained.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
+              (retained.worktreeId === worktreeId ||
+                paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)) &&
+              (!opts?.executionHostId ||
+                sleepingAgentSessionRecordMatchesExecutionHost(
+                  s,
+                  { ...retained.entry, worktreeId },
+                  opts.executionHostId
+                ))
           )
           .map(([paneKey]) => paneKey)
         const retainedKeySet = new Set(retainedKeys)
+        const ownerScoped = opts?.executionHostId !== undefined
+        const launchConfigKeys = Object.keys(s.agentLaunchConfigByPaneKey).filter(
+          (paneKey) =>
+            liveKeySet.has(paneKey) ||
+            retainedKeySet.has(paneKey) ||
+            (!ownerScoped && paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes))
+        )
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) =>
-            entry.worktreeId === worktreeId ||
-            (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
+            ownerScoped
+              ? (entry.executionHostId ?? (entry.source === 'local' ? 'local' : null)) ===
+                opts.executionHostId
+              : entry.worktreeId === worktreeId ||
+                (entry.paneKey ? paneKeyMatchesAnyTabPrefix(entry.paneKey, tabPrefixes) : false)
         )
         const allowedPaneKeys = normalizePaneKeySet(opts?.sleepingPaneKeys)
         const preserveHibernatedEvidence =
@@ -2728,9 +2847,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
         const ackKeys = Object.keys(nextAck).filter(
           (k) =>
             !retainedEvidenceKeys.has(k) &&
-            (paneKeyMatchesAnyTabPrefix(k, tabPrefixes) ||
-              liveKeySet.has(k) ||
-              retainedKeySet.has(k))
+            (liveKeySet.has(k) ||
+              retainedKeySet.has(k) ||
+              (!ownerScoped && paneKeyMatchesAnyTabPrefix(k, tabPrefixes)))
         )
         if (ackKeys.length > 0) {
           nextAck = { ...nextAck }
@@ -2819,8 +2938,9 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
           captureMode: 'manual-worktree-sleep'
         })
         const replaced = removeSleepingRecordsReplacedByManualWorktreeSleep(
-          s.sleepingAgentSessionsByPaneKey,
+          s,
           worktreeId,
+          LOCAL_EXECUTION_HOST_ID,
           paneKeys,
           records
         )
@@ -2922,13 +3042,16 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       })
     },
 
-    clearSleepingAgentSessionsByWorktree: (worktreeId) => {
+    clearSleepingAgentSessionsByWorktree: (worktreeId, executionHostId) => {
       set((s) => {
         let changed = false
         const next: Record<string, SleepingAgentSessionRecord> = {}
         const launchConfigKeysToRemove: string[] = []
         for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
-          if (record.worktreeId === worktreeId) {
+          if (
+            record.worktreeId === worktreeId &&
+            sleepingAgentSessionRecordMatchesExecutionHost(s, record, executionHostId)
+          ) {
             changed = true
             launchConfigKeysToRemove.push(paneKey)
             continue

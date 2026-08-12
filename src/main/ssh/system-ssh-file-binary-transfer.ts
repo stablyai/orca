@@ -25,6 +25,7 @@ type SystemSshOperationOptions = SystemSshBuildArgsOptions & {
 type SystemSshWriteBufferOptions = SystemSshOperationOptions & {
   append?: boolean
   exclusive?: boolean
+  mode?: number
 }
 
 type SystemSshUploadFileOptions = SystemSshOperationOptions & {
@@ -195,11 +196,12 @@ function makeWindowsWriteFileCommand(
 
 function makePosixWriteFileCommand(
   remotePath: string,
-  options?: { append?: boolean; exclusive?: boolean }
+  options?: { append?: boolean; exclusive?: boolean; mode?: number }
 ): string {
   const redirection = options?.append ? '>>' : '>'
   const noclobber = !options?.append && options?.exclusive ? 'set -C; ' : ''
-  return `${noclobber}cat ${redirection} ${shellEscape(remotePath)}`
+  const privateUmask = options?.mode === 0o600 ? 'umask 077; ' : ''
+  return `${privateUmask}${noclobber}cat ${redirection} ${shellEscape(remotePath)}`
 }
 
 function makeWindowsReadFileCommand(remotePath: string): string {

@@ -3,13 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const mockQueueTabInitialCwd = vi.fn()
 const mockLaunchAgentInWebHostTab = vi.fn()
 const mockIsWebRuntimeSessionActive = vi.fn()
+let executionHostId = 'local'
 
 const store = {
   settings: {
     agentCmdOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
-    activeRuntimeEnvironmentId: null as string | null
+    activeRuntimeEnvironmentId: null as string | null,
+    // Why: unrelated to this suite's cwd-delivery assertions; disabled so no
+    // rule text leaks into the exact launchCommand strings under test.
+    agentSessionRules: { enabled: false, rules: [] as unknown[] }
   },
   repos: [],
   allWorktrees: vi.fn(() => []),
@@ -43,6 +47,7 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 }))
 
 vi.mock('@/lib/worktree-runtime-owner', () => ({
+  getExecutionHostIdForWorktree: () => executionHostId,
   getRuntimeEnvironmentIdForWorktree: () => 'web-runtime'
 }))
 
@@ -66,6 +71,9 @@ vi.mock('@/components/native-chat/native-chat-session-option-cache', () => ({
 describe('launchAgentInNewTab initial cwd', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    executionHostId = 'local'
+    store.repos = []
+    store.allWorktrees.mockReturnValue([])
     mockIsWebRuntimeSessionActive.mockReturnValue(false)
     mockLaunchAgentInWebHostTab.mockResolvedValue({
       delivered: true,
@@ -76,7 +84,7 @@ describe('launchAgentInNewTab initial cwd', () => {
   it('queues the original cwd before a local Agent session starts', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       initialCwd: '/repo/worktree/packages/app'
@@ -85,11 +93,25 @@ describe('launchAgentInNewTab initial cwd', () => {
     expect(mockQueueTabInitialCwd).toHaveBeenCalledWith('tab-1', '/repo/worktree/packages/app')
   })
 
+  it('fails closed when an explicit worktree host has no matching repo owner', async () => {
+    executionHostId = 'ssh:ssh-a'
+    store.allWorktrees.mockReturnValue([
+      { id: 'wt-1', repoId: 'repo-1', hostId: 'ssh:ssh-a' } as never
+    ])
+    store.repos = [{ id: 'repo-1', connectionId: null } as never]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    const result = launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+
+    expect(result).toBeNull()
+    expect(store.createTab).not.toHaveBeenCalled()
+  })
+
   it('forwards the original cwd to a paired web runtime', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1',
@@ -111,7 +133,7 @@ describe('launchAgentInNewTab initial cwd', () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       prompt: 'continue the unfinished task',

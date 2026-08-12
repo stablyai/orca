@@ -4,6 +4,7 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './agent-session-resume'
+import type { AgentSessionRulesSettings } from './agent-session-rules-types'
 import type { RuntimeTerminalCreate, RuntimeTerminalPresentation } from './runtime-types'
 import { isTerminalLeafId } from './stable-pane-id'
 import { isValidTerminalTabId } from './terminal-tab-id'
@@ -94,6 +95,24 @@ export type AgentLaunchPreferences = {
 }
 
 export type AgentPromptDelivery = 'auto-submit' | 'draft'
+export type AgentPromptDeliveryOwner = 'host' | 'client'
+
+/** Additive intent beside the legacy command; the host owns launch mechanics and repo overrides. */
+export type AgentSessionHostLaunchIntent = {
+  kind: 'fresh' | 'resume'
+  agent: TuiAgent
+  prompt?: string
+  promptDelivery?: AgentPromptDelivery
+  /** Exactly one side owns delayed prompt/draft delivery. Host is the default. */
+  promptDeliveryOwner?: AgentPromptDeliveryOwner
+  /** Explicit client override. Omission keeps launch defaults host-owned. */
+  agentArgs?: string | null
+  launchPreferences?: AgentLaunchPreferences
+  /** Client-owned defaults; the execution host still resolves repository overrides. */
+  clientDefaultAgentSessionRules?: AgentSessionRulesSettings
+  providerSession?: AgentProviderSessionMetadata
+  ompResumeFilePath?: string
+}
 
 export type RuntimeEnsureAgentSessionRequest =
   | {
@@ -107,9 +126,14 @@ export type RuntimeEnsureAgentSessionRequest =
       agent: ResumableTuiAgent
       providerSession: AgentProviderSessionMetadata
       ompResumeFilePath?: string
+      prompt?: string
+      promptDelivery?: AgentPromptDelivery
+      promptDeliveryOwner?: AgentPromptDeliveryOwner
       /** Explicit client override. Omission keeps launch defaults host-owned. */
       agentArgs?: string | null
       launchPreferences?: AgentLaunchPreferences
+      /** Client-owned defaults; the execution host still resolves repository overrides. */
+      clientDefaultAgentSessionRules?: AgentSessionRulesSettings
       presentation?: RuntimeTerminalPresentation
       placement?: { tabId?: string; leafId?: string }
     }
@@ -125,9 +149,12 @@ export type RuntimeCreateAgentSessionRequest = {
   agent: TuiAgent
   prompt?: string
   promptDelivery?: AgentPromptDelivery
+  promptDeliveryOwner?: AgentPromptDeliveryOwner
   /** Explicit client override. Omission keeps launch defaults host-owned. */
   agentArgs?: string | null
   launchPreferences?: AgentLaunchPreferences
+  /** Client-owned defaults; the execution host still resolves repository overrides. */
+  clientDefaultAgentSessionRules?: AgentSessionRulesSettings
   startupCwd?: string
   presentation?: RuntimeTerminalPresentation
   placement?: { tabId?: string; leafId?: string }

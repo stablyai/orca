@@ -43,6 +43,8 @@ export function planSourceControlAgentActionLaunch(args: {
   /** Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
    * `orca-ide` rename must not be applied for remote launches. */
   isRemote?: boolean
+  repoId?: string | null
+  connectionId?: string | null
 }): SourceControlLaunchPlanResult {
   const agent = args.agent
   if (!agent) {
@@ -110,7 +112,9 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      repoId: args.repoId,
+      connectionId: args.connectionId
     })
     delivery = 'paste-submit'
   } else if (args.promptDelivery === 'draft') {
@@ -122,7 +126,9 @@ export function planSourceControlAgentActionLaunch(args: {
       shell,
       isRemote,
       agentArgs: args.agentArgs,
-      sessionOptions: args.sessionOptions
+      sessionOptions: args.sessionOptions,
+      repoId: args.repoId,
+      connectionId: args.connectionId
     })
     if (draftLaunchPlan) {
       startupPlan = {
@@ -150,7 +156,9 @@ export function planSourceControlAgentActionLaunch(args: {
         isRemote,
         agentArgs: args.agentArgs,
         sessionOptions: args.sessionOptions,
-        allowEmptyPromptLaunch: true
+        allowEmptyPromptLaunch: true,
+        repoId: args.repoId,
+        connectionId: args.connectionId
       })
       delivery = 'draft-paste'
     }
@@ -164,7 +172,9 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: true
+      allowEmptyPromptLaunch: true,
+      repoId: args.repoId,
+      connectionId: args.connectionId
     })
     delivery = 'draft-paste'
   } else {
@@ -177,7 +187,9 @@ export function planSourceControlAgentActionLaunch(args: {
       isRemote,
       agentArgs: args.agentArgs,
       sessionOptions: args.sessionOptions,
-      allowEmptyPromptLaunch: false
+      allowEmptyPromptLaunch: false,
+      repoId: args.repoId,
+      connectionId: args.connectionId
     })
     delivery = 'argv'
   }

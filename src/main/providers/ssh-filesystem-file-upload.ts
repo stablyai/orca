@@ -1,5 +1,5 @@
 import type { SFTPWrapper } from 'ssh2'
-import { uploadFile as uploadFileViaSftp } from '../ssh/sftp-upload'
+import { uploadBuffer, uploadFile as uploadFileViaSftp } from '../ssh/sftp-upload'
 import type { FileUploadSession } from './types'
 
 export type SftpFactory = () => Promise<SFTPWrapper>
@@ -10,7 +10,7 @@ export type SshRawTransferOptions = {
   writeBuffer?: (
     remotePath: string,
     contents: Buffer,
-    options: { append: boolean; exclusive: boolean }
+    options: { append: boolean; exclusive: boolean; mode?: number }
   ) => Promise<void>
 }
 
@@ -31,5 +31,33 @@ export async function openSshFileUploadSession(
     uploadFile: (sourcePath, destinationPath, options) =>
       uploadFileViaSftp(sftp, sourcePath, destinationPath, options),
     close: () => sftp.end()
+  }
+}
+
+export async function writeSshBase64File(
+  createSftp: SftpFactory | undefined,
+  rawTransfer: SshRawTransferOptions | undefined,
+  filePath: string,
+  contentBase64: string,
+  options: { append: boolean; mode?: number }
+): Promise<void> {
+  const contents = Buffer.from(contentBase64, 'base64')
+  const writeOptions = {
+    append: options.append,
+    exclusive: !options.append,
+    ...(options.mode === undefined ? {} : { mode: options.mode })
+  }
+  if (rawTransfer?.writeBuffer) {
+    await rawTransfer.writeBuffer(filePath, contents, writeOptions)
+    return
+  }
+  if (!createSftp) {
+    throw new Error('remote_binary_upload_unavailable')
+  }
+  const sftp = await createSftp()
+  try {
+    await uploadBuffer(sftp, contents, filePath, writeOptions)
+  } finally {
+    sftp.end()
   }
 }

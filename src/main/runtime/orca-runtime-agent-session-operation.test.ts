@@ -35,10 +35,13 @@ function terminal() {
   }
 }
 
-function createRuntime(provider?: {
-  supportsAgentSessionClaims?: () => boolean
-  supportsAgentSessionCreateOperations?: () => boolean
-}) {
+function createRuntime(
+  provider?: {
+    supportsAgentSessionClaims?: () => boolean | Promise<boolean>
+    supportsAgentSessionCreateOperations?: () => boolean | Promise<boolean>
+  },
+  sshProvider?: { supportsAgentSessionClaims?: () => boolean | Promise<boolean> }
+) {
   const runtime = new OrcaRuntimeService(
     {
       getSettings: () => ({
@@ -49,7 +52,12 @@ function createRuntime(provider?: {
       })
     } as never,
     undefined,
-    provider ? { getLocalProvider: () => provider as never } : undefined
+    provider || sshProvider
+      ? {
+          ...(provider ? { getLocalProvider: () => provider as never } : {}),
+          ...(sshProvider ? { getSshProvider: () => sshProvider as never } : {})
+        }
+      : undefined
   )
   const internal = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
@@ -106,7 +114,7 @@ describe('agent-session create operation ledger', () => {
   })
 
   it('requests exact client legacy fallback before nested SSH side effects', async () => {
-    const runtime = createRuntime()
+    const runtime = createRuntime(undefined, { supportsAgentSessionClaims: () => false })
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
     }
@@ -129,8 +137,94 @@ describe('agent-session create operation ledger', () => {
     expect(createTerminal).not.toHaveBeenCalled()
   })
 
+  it('fails closed when a modern nested SSH provider lacks an attested namespace', async () => {
+    const sshProvider = { supportsAgentSessionClaims: vi.fn(() => true) }
+    const runtime = createRuntime(undefined, sshProvider)
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/remote/worktree-1',
+      connectionId: 'ssh-1'
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await expect(
+      runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      })
+    ).rejects.toThrow('agent_session_ownership_unknown')
+
+    expect(sshProvider.supportsAgentSessionClaims).toHaveBeenCalledOnce()
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('fails closed when the nested SSH capability probe is unavailable', async () => {
+    const sshProvider = {
+      supportsAgentSessionClaims: vi.fn(async () => {
+        throw new Error('probe failed')
+      })
+    }
+    const runtime = createRuntime(undefined, sshProvider)
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/remote/worktree-1',
+      connectionId: 'ssh-1'
+    })
+    const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue(terminal())
+
+    await expect(
+      runtime.ensureAgentSession({
+        kind: 'explicit',
+        worktree: 'id:worktree-1',
+        agent: 'codex',
+        providerSession: { key: 'session_id', id: 'provider-session-1' }
+      })
+    ).rejects.toThrow('agent_session_capability_unknown')
+
+    expect(createTerminal).not.toHaveBeenCalled()
+  })
+
+  it('preserves client cancellation while probing nested SSH capability', async () => {
+    const sshProvider = {
+      supportsAgentSessionClaims: vi.fn(async () => {
+        throw new Error('aborted probe')
+      })
+    }
+    const runtime = createRuntime(undefined, sshProvider)
+    const internal = runtime as unknown as {
+      resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
+    }
+    internal.resolveTerminalWorkspaceLaunchScope.mockResolvedValue({
+      id: 'worktree-1',
+      path: '/remote/worktree-1',
+      connectionId: 'ssh-1'
+    })
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      runtime.ensureAgentSession(
+        {
+          kind: 'explicit',
+          worktree: 'id:worktree-1',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'provider-session-1' }
+        },
+        { signal: controller.signal }
+      )
+    ).rejects.toThrow('client_disconnected')
+  })
+
   it('selects nested SSH legacy fallback before reading a Pi transcript path locally', async () => {
-    const runtime = createRuntime()
+    const runtime = createRuntime(undefined, { supportsAgentSessionClaims: () => false })
     const internal = runtime as unknown as {
       resolveTerminalWorkspaceLaunchScope: ReturnType<typeof vi.fn>
       markRemoteWorkspaceTrustedForAgent: ReturnType<typeof vi.fn>
@@ -193,6 +287,26 @@ describe('agent-session create operation ledger', () => {
       runtime.createAgentSession(request(id, { agentArgs: '--profile changed' }), {
         clientId: 'device-a'
       })
+    ).rejects.toThrow('agent_session_operation_conflict')
+    await expect(
+      runtime.createAgentSession(
+        request(id, {
+          clientDefaultAgentSessionRules: {
+            enabled: true,
+            rules: [
+              {
+                id: 'changed-rule',
+                label: 'Changed rule',
+                content: 'Use a different graph.',
+                enabled: true,
+                source: 'custom'
+              }
+            ],
+            seenBuiltinRuleIds: []
+          }
+        }),
+        { clientId: 'device-a' }
+      )
     ).rejects.toThrow('agent_session_operation_conflict')
     finish(terminal())
     await expect(first).resolves.toMatchObject({ disposition: 'created' })

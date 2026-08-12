@@ -539,7 +539,7 @@ describe('captureAllSleepingAgentSessions', () => {
       agentEnv: { CODEX_PROFILE: 'second' }
     })
 
-    store.getState().clearSleepingAgentSessionsByWorktree('wt-1')
+    store.getState().clearSleepingAgentSessionsByWorktree('wt-1', 'local')
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()

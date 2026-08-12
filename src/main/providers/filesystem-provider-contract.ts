@@ -36,6 +36,7 @@ export type IFilesystemProvider = {
     options: TerminalArtifactAccessOptions
   ): Promise<FileStat>
   writeFileBase64(filePath: string, contentBase64: string): Promise<void>
+  writePrivateFileBase64?(filePath: string, contentBase64: string): Promise<void>
   writeFileBase64Chunk(filePath: string, contentBase64: string, append: boolean): Promise<void>
   stat(filePath: string): Promise<FileStat>
   lstat?(filePath: string): Promise<FileStat>

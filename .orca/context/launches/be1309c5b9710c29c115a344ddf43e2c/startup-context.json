@@ -1,0 +1,470 @@
+{
+  "schema_version": 1,
+  "input_scope": {
+    "schema_version": 1,
+    "generator": "orca-context-bridge/startup-context/v1",
+    "project": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+    "knowledge_root": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca",
+    "expected_root": "/Volumes/Extreme SSD/Orca",
+    "expected_volume_uuid": "6EF3720E-C57F-4352-BA47-CFE88BFEFDA7",
+    "reviewed_pack_authority": "orca-central-reviewed-l1-l3"
+  },
+  "input_scope_id": "sha256:9b857d4eb36d0ff6d0f0d487473bf3a8219b206d6f3cacd4df0a064eaab86e90",
+  "project": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+  "knowledge_root": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca",
+  "git": {
+    "available": true,
+    "top_level": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+    "common_dir": "/Volumes/Extreme SSD/Orca/projects/orca/.git",
+    "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+    "branch": "dcsodm09-ship-it/知识图谱-Workflow-完善",
+    "dirty_entries": 156,
+    "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+  },
+  "storage": {
+    "status": "pass",
+    "expected_root": "/Volumes/Extreme SSD/Orca",
+    "expected_volume_uuid": "6EF3720E-C57F-4352-BA47-CFE88BFEFDA7",
+    "project_inside_expected_root": true,
+    "git_common_dir_inside_expected_root": true,
+    "volume_uuid_matches": true,
+    "observed": {
+      "available": true,
+      "device_identifier": "disk7s1",
+      "volume_uuid": "6EF3720E-C57F-4352-BA47-CFE88BFEFDA7",
+      "filesystem": "apfs",
+      "mount_point": "/Volumes/Extreme SSD",
+      "internal": false,
+      "encrypted": null,
+      "filevault": true
+    }
+  },
+  "reviewed_pack": {
+    "schema_version": 2,
+    "authority": "orca-central-reviewed-l1-l3",
+    "manifest_sha256": "6b86f056fc5a27e72ed16e1a68e9126b047331190f706c1127d4419748ea6fd6",
+    "pack_sha256": "5a830e4d4a887e2e6c3f06be833d5a6392f898015b9e9c36a2de45cee586d18e",
+    "pack_size_bytes": 2279,
+    "shared_source_sha256s": {
+      "capabilities": "13758f194ce0eecdde734ed21227e4ab51233f5457d0472e80956ec6f95fae59",
+      "wiki": "ff93b6d73f490affd2f8427c5feaaa16eb728040e61f1ecba1f8522f2f7e9d02",
+      "graphify_catalog": "7454e66b9015b7f9796826b49481c583b8d7976e5fbb839a3bf8d5fc452090ef"
+    },
+    "shared_source_policy": {
+      "capabilities": {
+        "reason": null,
+        "required": true
+      },
+      "graphify_catalog": {
+        "reason": null,
+        "required": true
+      },
+      "wiki": {
+        "reason": null,
+        "required": true
+      }
+    },
+    "authority_git": {
+      "available": true,
+      "head": "b88eae79570dce5af6ff978411f9eeca2a50899e",
+      "status_sha256": "fbd68d704e748f06f0d1b44ed5e4e26dd9aba1b99d46d7d92a41dbf11b453d24"
+    },
+    "project_git": {
+      "available": true,
+      "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+      "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+    }
+  },
+  "shared_freshness": {
+    "reviewed_manifest_sha256": "6b86f056fc5a27e72ed16e1a68e9126b047331190f706c1127d4419748ea6fd6",
+    "reviewed_pack_sha256": "5a830e4d4a887e2e6c3f06be833d5a6392f898015b9e9c36a2de45cee586d18e",
+    "shared_source_sha256s": {
+      "capabilities": "13758f194ce0eecdde734ed21227e4ab51233f5457d0472e80956ec6f95fae59",
+      "wiki": "ff93b6d73f490affd2f8427c5feaaa16eb728040e61f1ecba1f8522f2f7e9d02",
+      "graphify_catalog": "7454e66b9015b7f9796826b49481c583b8d7976e5fbb839a3bf8d5fc452090ef"
+    },
+    "shared_source_policy": {
+      "capabilities": {
+        "reason": null,
+        "required": true
+      },
+      "graphify_catalog": {
+        "reason": null,
+        "required": true
+      },
+      "wiki": {
+        "reason": null,
+        "required": true
+      }
+    },
+    "authority_git": {
+      "available": true,
+      "head": "b88eae79570dce5af6ff978411f9eeca2a50899e",
+      "status_sha256": "fbd68d704e748f06f0d1b44ed5e4e26dd9aba1b99d46d7d92a41dbf11b453d24"
+    },
+    "project_git": {
+      "available": true,
+      "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+      "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+    },
+    "graphify_verification_sha256": "sha256:41f920c7b714e60c00e68b249a9a783894ac2da4997872491e2842e23adce462"
+  },
+  "indexes": {
+    "sessions": {
+      "available": true,
+      "generated_at": "2026-08-11T18:18:02+00:00",
+      "providers": {
+        "claude": 0,
+        "codex": 1
+      },
+      "total": 1
+    },
+    "processes": {
+      "available": true,
+      "generated_at": "2026-08-11T18:18:02+00:00",
+      "agent_processes_count": 0,
+      "orca_terminals_count": 0,
+      "tmux_count": 0
+    },
+    "github": {
+      "available": true,
+      "generated_at": "2026-08-11T18:18:05+00:00",
+      "repo": "stablyai/orca",
+      "pull_request_count": 20,
+      "wiki_page_count": 0
+    },
+    "knowledge_graph": {
+      "available": true,
+      "generated_at": "2026-08-11T18:18:05+00:00",
+      "node_count": 37,
+      "edge_count": 55,
+      "node_types": {
+        "pr": 20,
+        "project": 3,
+        "session": 1,
+        "wiki": 13
+      }
+    },
+    "graphify": {
+      "available": true,
+      "status": "partial",
+      "catalog_available": true,
+      "asset_count": 1,
+      "rejected_count": 1,
+      "rejection_reasons": {
+        "source_state_mismatch": 1
+      },
+      "node_count": 1247,
+      "edge_count": 4241,
+      "graph_sha256s": ["f7a90b23cb565591fce6bbc5323fdf317bc4d55d03aab609955bebbf433b9865"],
+      "source_state_sha256s": ["aeddf1430950ec1b3304326e9ff3156b29730727867fa7f88e07d1925982644e"]
+    },
+    "capabilities": {
+      "available": true,
+      "schema_version": 1,
+      "command_count": 235,
+      "verification_counts": {
+        "isolated_target_or_authorization_required": 195,
+        "live_read_only_failed_current": 1,
+        "live_read_only_verified": 17,
+        "schema_discovered_read_only": 22
+      },
+      "live_probe": {
+        "ok": false,
+        "passed": 17,
+        "failed": ["accounts"],
+        "workingDirectory": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca"
+      }
+    },
+    "wiki": {
+      "available": true,
+      "page_count": 13,
+      "page_ids": [
+        "orca-capability-tests",
+        "multi-agent-routing",
+        "resource-gate",
+        "capacity-preflight",
+        "orca-readonly-probe",
+        "orca-cli-capability-catalog",
+        "orchestration-lifecycle",
+        "orchestration-precondition-probe",
+        "sandbox-acceptance",
+        "ego-global-policy",
+        "ego-profile-isolation",
+        "ego-capability-regression",
+        "desktop-mcp-realtime-control"
+      ],
+      "status_counts": {
+        "awaiting-test-scope": 1,
+        "live-verified": 9,
+        "partial-live-verified": 1,
+        "read-only-verified": 1,
+        "schema-complete": 1
+      }
+    }
+  },
+  "sources": [
+    {
+      "name": "github",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/github.json",
+      "available": true,
+      "size_bytes": 15802,
+      "sha256": "cbd247402a267ebe60a551bd0b25288af97b92c45217fc212253182ed448b3e6"
+    },
+    {
+      "name": "knowledge_graph",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/knowledge_graph.json",
+      "available": true,
+      "size_bytes": 29364,
+      "sha256": "0d582c03cef02385612f2fcb095773f7eca6480ef896cefb4ae7eb5660a33f30"
+    },
+    {
+      "name": "processes",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/processes.json",
+      "available": true,
+      "size_bytes": 655,
+      "sha256": "403bb37da47e5afb2dfc7322cec445c7d2cc46fb410979d83ed8723959f95e64"
+    },
+    {
+      "name": "sessions",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/sessions.json",
+      "available": true,
+      "size_bytes": 1857,
+      "sha256": "c06dc5aed5ec8e7e0ec5c50913110f1574fa424694158f4d3aa3b04e66b27c8f"
+    },
+    {
+      "name": "capabilities",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca/wiki/orca-cli-capability-inventory.json",
+      "available": true,
+      "size_bytes": 73841,
+      "sha256": "13758f194ce0eecdde734ed21227e4ab51233f5457d0472e80956ec6f95fae59"
+    },
+    {
+      "name": "wiki",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca/wiki/orca-context-wiki.json",
+      "available": true,
+      "size_bytes": 6968,
+      "sha256": "ff93b6d73f490affd2f8427c5feaaa16eb728040e61f1ecba1f8522f2f7e9d02"
+    },
+    {
+      "name": "graphify_catalog",
+      "path": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca/.orca/context/graphify-assets.json",
+      "available": true,
+      "size_bytes": 1578,
+      "sha256": "7454e66b9015b7f9796826b49481c583b8d7976e5fbb839a3bf8d5fc452090ef"
+    }
+  ],
+  "bundle_identity": {
+    "schema_version": 1,
+    "input_scope": {
+      "schema_version": 1,
+      "generator": "orca-context-bridge/startup-context/v1",
+      "project": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+      "knowledge_root": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca",
+      "expected_root": "/Volumes/Extreme SSD/Orca",
+      "expected_volume_uuid": "6EF3720E-C57F-4352-BA47-CFE88BFEFDA7",
+      "reviewed_pack_authority": "orca-central-reviewed-l1-l3"
+    },
+    "input_scope_id": "sha256:9b857d4eb36d0ff6d0f0d487473bf3a8219b206d6f3cacd4df0a064eaab86e90",
+    "project": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+    "git": {
+      "available": true,
+      "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+      "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+    },
+    "storage": {
+      "status": "pass",
+      "project_inside_expected_root": true,
+      "git_common_dir_inside_expected_root": true,
+      "volume_uuid_matches": true
+    },
+    "reviewed_pack": {
+      "schema_version": 2,
+      "authority": "orca-central-reviewed-l1-l3",
+      "manifest_sha256": "6b86f056fc5a27e72ed16e1a68e9126b047331190f706c1127d4419748ea6fd6",
+      "pack_sha256": "5a830e4d4a887e2e6c3f06be833d5a6392f898015b9e9c36a2de45cee586d18e",
+      "pack_size_bytes": 2279,
+      "shared_source_sha256s": {
+        "capabilities": "13758f194ce0eecdde734ed21227e4ab51233f5457d0472e80956ec6f95fae59",
+        "wiki": "ff93b6d73f490affd2f8427c5feaaa16eb728040e61f1ecba1f8522f2f7e9d02",
+        "graphify_catalog": "7454e66b9015b7f9796826b49481c583b8d7976e5fbb839a3bf8d5fc452090ef"
+      },
+      "shared_source_policy": {
+        "capabilities": {
+          "reason": null,
+          "required": true
+        },
+        "graphify_catalog": {
+          "reason": null,
+          "required": true
+        },
+        "wiki": {
+          "reason": null,
+          "required": true
+        }
+      },
+      "authority_git": {
+        "available": true,
+        "head": "b88eae79570dce5af6ff978411f9eeca2a50899e",
+        "status_sha256": "fbd68d704e748f06f0d1b44ed5e4e26dd9aba1b99d46d7d92a41dbf11b453d24"
+      },
+      "project_git": {
+        "available": true,
+        "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+        "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+      }
+    },
+    "shared_freshness": {
+      "reviewed_manifest_sha256": "6b86f056fc5a27e72ed16e1a68e9126b047331190f706c1127d4419748ea6fd6",
+      "reviewed_pack_sha256": "5a830e4d4a887e2e6c3f06be833d5a6392f898015b9e9c36a2de45cee586d18e",
+      "shared_source_sha256s": {
+        "capabilities": "13758f194ce0eecdde734ed21227e4ab51233f5457d0472e80956ec6f95fae59",
+        "wiki": "ff93b6d73f490affd2f8427c5feaaa16eb728040e61f1ecba1f8522f2f7e9d02",
+        "graphify_catalog": "7454e66b9015b7f9796826b49481c583b8d7976e5fbb839a3bf8d5fc452090ef"
+      },
+      "shared_source_policy": {
+        "capabilities": {
+          "reason": null,
+          "required": true
+        },
+        "graphify_catalog": {
+          "reason": null,
+          "required": true
+        },
+        "wiki": {
+          "reason": null,
+          "required": true
+        }
+      },
+      "authority_git": {
+        "available": true,
+        "head": "b88eae79570dce5af6ff978411f9eeca2a50899e",
+        "status_sha256": "fbd68d704e748f06f0d1b44ed5e4e26dd9aba1b99d46d7d92a41dbf11b453d24"
+      },
+      "project_git": {
+        "available": true,
+        "head": "b5ad2ac16351ce614d1be843bed0ac814a017110",
+        "status_sha256": "85dbe5d4ea40bd6ffeca0356f1c01779aa1e617e26295099115f11f9749a3a95"
+      },
+      "graphify_verification_sha256": "sha256:41f920c7b714e60c00e68b249a9a783894ac2da4997872491e2842e23adce462"
+    },
+    "shared_indexes": {
+      "graphify": {
+        "available": true,
+        "status": "partial",
+        "catalog_available": true,
+        "asset_count": 1,
+        "rejected_count": 1,
+        "rejection_reasons": {
+          "source_state_mismatch": 1
+        },
+        "node_count": 1247,
+        "edge_count": 4241,
+        "graph_sha256s": ["f7a90b23cb565591fce6bbc5323fdf317bc4d55d03aab609955bebbf433b9865"],
+        "source_state_sha256s": ["aeddf1430950ec1b3304326e9ff3156b29730727867fa7f88e07d1925982644e"]
+      },
+      "capabilities": {
+        "available": true,
+        "schema_version": 1,
+        "command_count": 235,
+        "verification_counts": {
+          "isolated_target_or_authorization_required": 195,
+          "live_read_only_failed_current": 1,
+          "live_read_only_verified": 17,
+          "schema_discovered_read_only": 22
+        },
+        "live_probe": {
+          "ok": false,
+          "passed": 17,
+          "failed": ["accounts"],
+          "workingDirectory": "/Volumes/Extreme SSD/Orca/workspaces/orca/完善orca"
+        }
+      },
+      "wiki": {
+        "available": true,
+        "page_count": 13,
+        "page_ids": [
+          "orca-capability-tests",
+          "multi-agent-routing",
+          "resource-gate",
+          "capacity-preflight",
+          "orca-readonly-probe",
+          "orca-cli-capability-catalog",
+          "orchestration-lifecycle",
+          "orchestration-precondition-probe",
+          "sandbox-acceptance",
+          "ego-global-policy",
+          "ego-profile-isolation",
+          "ego-capability-regression",
+          "desktop-mcp-realtime-control"
+        ],
+        "status_counts": {
+          "awaiting-test-scope": 1,
+          "live-verified": 9,
+          "partial-live-verified": 1,
+          "read-only-verified": 1,
+          "schema-complete": 1
+        }
+      }
+    }
+  },
+  "bundle_id": "sha256:3533258dfc1dc5f51a53de026d0b7965fd5235034ca800a32a9cc246e1220c6c",
+  "challenge": "e2306e241828875d9998cbee5d7f91f3",
+  "generated_at": "2026-08-11T18:18:06+00:00",
+  "manifest_path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/launches/be1309c5b9710c29c115a344ddf43e2c/startup-context.json",
+  "context_path": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善/.orca/context/launches/be1309c5b9710c29c115a344ddf43e2c/startup-context.md",
+  "private_memory": {
+    "root_policy": "explicit",
+    "registry": {
+      "name": "memory_registry",
+      "available": true,
+      "size_bytes": 194983,
+      "sha256": "43d3c8ecb42660b1fc36c8066c5593b010799b6c3bf5a7ff7aa9788684a798ad"
+    },
+    "summary": {
+      "name": "memory_summary",
+      "available": true,
+      "size_bytes": 5675,
+      "sha256": "cbd877a9a15a218686a593e29ed6522de1e43eaf1771ae36305a4d2292696cc5"
+    }
+  },
+  "bundle_identity_excludes": [
+    "challenge",
+    "generated_at",
+    "manifest_path",
+    "context_path",
+    "private_memory",
+    "indexes.sessions",
+    "indexes.processes",
+    "indexes.github",
+    "indexes.knowledge_graph",
+    "sources",
+    "privacy"
+  ],
+  "privacy": {
+    "metadata_only": true,
+    "excluded": [
+      "credentials",
+      "cookies",
+      "databases",
+      "raw_transcripts",
+      "tool_output",
+      "attachments",
+      "environment_values",
+      "hidden_reasoning",
+      "graph_bodies",
+      "graph_caches",
+      "graph_databases"
+    ]
+  },
+  "launch": {
+    "id": "be1309c5b9710c29c115a344ddf43e2c",
+    "provider": "codex",
+    "session_sha256": "ba39694fd4737ad0b7c79e95ec9bea15755bc92e082a9e3c9fedd7c07ffaa8f9",
+    "issued_at": 1786472303.253272,
+    "expires_at": 1786472603.253272,
+    "ttl_seconds": 300,
+    "generator_sha256": "2095d1de3f00c323f647cb2614325b8bef0cb2f65dbc24fef529d6c1957581c3",
+    "policy_sha256": "sha256:f2d36117bd89e9178082955c7fb88d3b3106682c867a1382de163c653d084350"
+  }
+}

@@ -19,7 +19,11 @@ import {
   findPendingLinkedWorkItemCreationId,
   type WorktreeCreationRequest
 } from '@/lib/pending-worktree-creation'
-import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
+import {
+  buildAgentDraftLaunchPlan,
+  buildAgentSessionRulesPrompt,
+  buildAgentStartupPlan
+} from '@/lib/tui-agent-startup'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { repoIsRemote } from '../../../shared/agent-launch-remote'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
@@ -3774,7 +3778,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
         ),
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
-        isRemote: selectedRepoIsRemote
+        isRemote: selectedRepoIsRemote,
+        repoId: selectedRepo?.id ?? null,
+        connectionId: selectedRepo?.connectionId ?? null,
+        executionHostId: selectedRepoExecutionHostId
       })
       const shouldSeedInitialAgentStatus =
         tuiAgent === 'command-code' && submitStartupPrompt.trim().length > 0
@@ -4325,7 +4332,10 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
                 ),
                 platform: selectedRepoAgentLaunchPlatform,
                 shell: selectedRepoStartupShell,
-                isRemote: selectedRepoIsRemote
+                isRemote: selectedRepoIsRemote,
+                repoId: selectedRepo?.id ?? null,
+                connectionId: selectedRepo?.connectionId ?? null,
+                executionHostId: selectedRepoExecutionHostId
               })
 
         let startupPlan: ReturnType<typeof buildAgentStartupPlan> = null
@@ -4358,10 +4368,19 @@ export function useComposerState(options: UseComposerStateOptions): UseComposerS
             platform: selectedRepoAgentLaunchPlatform,
             shell: selectedRepoStartupShell,
             isRemote: selectedRepoIsRemote,
-            allowEmptyPromptLaunch: true
+            allowEmptyPromptLaunch: true,
+            repoId: selectedRepo?.id ?? null,
+            connectionId: selectedRepo?.connectionId ?? null,
+            executionHostId: selectedRepoExecutionHostId
           })
           if (startupPlan && quickDraftPrompt) {
-            startupPlan.draftPrompt = quickDraftPrompt
+            startupPlan.draftPrompt = buildAgentSessionRulesPrompt({
+              agent,
+              prompt: quickDraftPrompt,
+              repoId: selectedRepo?.id ?? null,
+              connectionId: selectedRepo?.connectionId ?? null,
+              executionHostId: selectedRepoExecutionHostId
+            })
           }
         }
 

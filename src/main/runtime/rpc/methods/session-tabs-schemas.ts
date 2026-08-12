@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import type { AgentSessionHostLaunchIntent } from '../../../../shared/agent-session-host-authority'
+import { getAgentResumeArgv, isResumableTuiAgent } from '../../../../shared/agent-session-resume'
 import { MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal-quick-commands'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/types'
@@ -6,6 +8,58 @@ import { sleepingAgentLaunchConfigSchema } from '../../../../shared/workspace-se
 import { RUNTIME_NAVIGATION_TARGETS } from '../../../../shared/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../../../shared/tab-activation-intent'
 import { OptionalBoolean } from '../schemas'
+import { ClientDefaultAgentSessionRules } from './agent-session-rules-rpc-schema'
+import {
+  AgentSessionArgsSchema,
+  AgentSessionLaunchPreferencesSchema,
+  AgentSessionOmpResumeFilePathSchema,
+  AgentSessionPromptDeliveryOwnerSchema,
+  AgentSessionPromptDeliverySchema,
+  AgentSessionProviderSessionSchema
+} from './agent-session'
+
+const HostAgentLaunch = z
+  .object({
+    kind: z.enum(['fresh', 'resume']),
+    agent: z.custom<TuiAgent>(isTuiAgent, { message: 'Unknown host launch agent' }),
+    prompt: z
+      .string()
+      .refine((value) => Buffer.byteLength(value, 'utf8') <= 256 * 1024, 'Prompt is too large')
+      .optional(),
+    promptDelivery: AgentSessionPromptDeliverySchema.optional(),
+    promptDeliveryOwner: AgentSessionPromptDeliveryOwnerSchema.optional(),
+    agentArgs: AgentSessionArgsSchema.optional(),
+    launchPreferences: AgentSessionLaunchPreferencesSchema.optional(),
+    clientDefaultAgentSessionRules: ClientDefaultAgentSessionRules.optional(),
+    providerSession: AgentSessionProviderSessionSchema.optional(),
+    ompResumeFilePath: AgentSessionOmpResumeFilePathSchema.optional()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.kind === 'resume' && (!isResumableTuiAgent(value.agent) || !value.providerSession)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Host resume launch requires resumable identity'
+      })
+    }
+    if (
+      value.kind === 'resume' &&
+      value.providerSession &&
+      (!isResumableTuiAgent(value.agent) ||
+        getAgentResumeArgv(value.agent, value.providerSession, value.ompResumeFilePath) === null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Provider session is not resumable for this agent'
+      })
+    }
+    if (value.ompResumeFilePath !== undefined && value.agent !== 'omp') {
+      context.addIssue({ code: 'custom', message: 'OMP resume path requires the OMP agent' })
+    }
+    if (value.promptDeliveryOwner === 'client' && value.prompt !== undefined) {
+      context.addIssue({ code: 'custom', message: 'Client-owned prompt must not be duplicated' })
+    }
+  }) as z.ZodType<AgentSessionHostLaunchIntent>
 
 export const WorktreeTabSelector = z.object({
   worktree: z
@@ -160,6 +214,9 @@ export const CreateTerminalTab = WorktreeTabSelector.extend({
       message: 'Unknown launch agent'
     })
     .optional(),
+  // Why: old hosts strip this optional field and execute the opaque command;
+  // newer execution hosts rebuild from current settings and repository rules.
+  hostAgentLaunch: HostAgentLaunch.optional(),
   viewMode: z.enum(['terminal', 'chat']).optional(),
   activate: z.boolean().optional(),
   select: z.boolean().optional(),

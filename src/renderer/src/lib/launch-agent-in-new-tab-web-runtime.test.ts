@@ -14,7 +14,10 @@ const store = {
     agentCmdOverrides: {} as Record<string, string>,
     agentDefaultArgs: {} as Record<string, string>,
     agentDefaultEnv: {} as Record<string, Record<string, string>>,
-    activeRuntimeEnvironmentId: 'web-runtime' as string | null
+    activeRuntimeEnvironmentId: 'web-runtime' as string | null,
+    // Why: unrelated to this suite's launch-behavior assertions; disabled so
+    // no rule text leaks into the exact launchCommand strings under test.
+    agentSessionRules: { enabled: false, rules: [] as unknown[] }
   },
   projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'inherit-global' as const } }],
   repos: [{ id: 'repo-1', connectionId: null, path: '/repo' }],
@@ -69,7 +72,8 @@ describe('launchAgentInNewTab paired web runtime', () => {
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime'
+      activeRuntimeEnvironmentId: 'web-runtime',
+      agentSessionRules: { enabled: false, rules: [] }
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1' }] }
     mocks.createWebRuntimeSessionTerminal.mockResolvedValue({ status: 'created' })
@@ -79,7 +83,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     store.tabsByWorktree['wt-1'].push({ id: 'stale-agent-tab', launchAgent: 'claude' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',
       groupId: 'group-1'
@@ -106,7 +110,7 @@ describe('launchAgentInNewTab paired web runtime', () => {
     store.settings.agentDefaultEnv = { codex: { CODEX_PROFILE: 'captured' } }
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
+    const result = await launchAgentInNewTab({
       agent: 'codex',
       worktreeId: 'wt-1',
       prompt: 'fix the spinner',

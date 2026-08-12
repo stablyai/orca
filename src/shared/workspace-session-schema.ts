@@ -5,12 +5,14 @@
  * "reject and fall back to defaults" point so garbage never reaches React.
  *
  * Policy: be tolerant of extra fields (future builds may add more) but strict
- * about the types of fields we actually read. Unknown enum values, wrong types,
- * and wrong shapes all collapse to "use defaults" — never throw into main.
+ * about the types of fields we actually read. Where a field holds a collection
+ * of independent records, tolerance is declared on the field itself (see
+ * ./zod-salvage): a corrupt entry is dropped and the rest of the session
+ * survives, because one bad tab record must not cost every worktree its state.
+ * Only a payload that is not a session at all falls back to defaults.
  */
 import { z } from 'zod'
 import type {
-  BrowserWorkspace,
   TabGroupLayoutNode,
   TerminalPaneLayoutNode,
   TuiAgent,
@@ -20,9 +22,14 @@ import type {
 import { isValidTerminalTabId } from './terminal-tab-id'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
-import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { isWorkspaceKey } from './workspace-scope'
+import {
+  browserHistoryEntriesSchema,
+  browserPageSchema,
+  browserWorkspaceSchema
+} from './workspace-session-browser-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
+import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
@@ -53,14 +60,16 @@ const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy((
   ])
 )
 
+const leafStringsSchema = salvagingRecord(z.string(), z.string())
+
 const terminalLayoutSnapshotSchema = z.object({
   root: terminalPaneLayoutNodeSchema.nullable(),
   activeLeafId: z.string().nullable(),
   expandedLeafId: z.string().nullable(),
-  ptyIdsByLeafId: z.record(z.string(), z.string()).optional(),
-  buffersByLeafId: z.record(z.string(), z.string()).optional(),
-  scrollbackRefsByLeafId: z.record(z.string(), z.string()).optional(),
-  titlesByLeafId: z.record(z.string(), z.string()).optional()
+  ptyIdsByLeafId: salvagedOptional('ptyIdsByLeafId', leafStringsSchema),
+  buffersByLeafId: salvagedOptional('buffersByLeafId', leafStringsSchema),
+  scrollbackRefsByLeafId: salvagedOptional('scrollbackRefsByLeafId', leafStringsSchema),
+  titlesByLeafId: salvagedOptional('titlesByLeafId', leafStringsSchema)
 })
 
 // ─── Terminal tab (legacy) ──────────────────────────────────────────
@@ -72,6 +81,15 @@ const terminalTabSchema = z.object({
   title: z.string(),
   defaultTitle: z.string().optional(),
   generatedTitle: z.string().nullable().optional(),
+  aiVaultTitle: z
+    .object({
+      agent: z.enum(['claude', 'codex']),
+      sessionId: z.string(),
+      title: z.string()
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
   quickCommandLabel: z.string().nullable().optional(),
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
@@ -112,6 +130,15 @@ const tabSchema = z.object({
   contentType: tabContentTypeSchema,
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
+  aiVaultTitle: z
+    .object({
+      agent: z.enum(['claude', 'codex']),
+      sessionId: z.string(),
+      title: z.string()
+    })
+    .nullable()
+    .optional()
+    .catch(undefined),
   quickCommandLabel: z.string().nullable().optional(),
   customLabel: z.string().nullable(),
   color: z.string().nullable(),
@@ -169,172 +196,170 @@ const persistedOpenFileSchema = z.object({
   liveTail: z.boolean().optional()
 })
 
-// ─── Browser ────────────────────────────────────────────────────────
-
-const browserLoadErrorSchema = z.object({
-  code: z.number(),
-  description: z.string(),
-  validatedUrl: z.string()
-})
-
-const browserViewportPresetIdSchema = z.enum([
-  'mobile-s',
-  'mobile-m',
-  'mobile-l',
-  'tablet',
-  'laptop',
-  'laptop-l',
-  'desktop'
-])
-
-// Why: the z.ZodType<BrowserWorkspace> cast only aligns the static type — it
-// does NOT let new fields survive parsing. z.object strips unknown keys, so
-// every additive field must be listed below (optional+nullable) or it is
-// dropped on restore.
-const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
-  id: z.string(),
-  worktreeId: z.string(),
-  label: z.string().optional(),
-  sessionProfileId: z.string().nullable().optional(),
-  // Why: optional+nullable so pre-field sessions still validate; without this
-  // zod strips the persisted partition on restore, and an isolated tab whose
-  // profile mirror is stale at startup would silently fall back to the shared
-  // default partition — reopening the storage leak (#6923) across restarts.
-  sessionPartition: z.string().nullable().optional(),
-  activePageId: z.string().nullable().optional(),
-  pageIds: z.array(z.string()).optional(),
-  url: z.string(),
-  title: z.string(),
-  loading: z.boolean(),
-  faviconUrl: z.string().nullable(),
-  canGoBack: z.boolean(),
-  canGoForward: z.boolean(),
-  loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number()
-})
-
-const browserPageSchema = z.object({
-  id: z.string(),
-  workspaceId: z.string(),
-  worktreeId: z.string(),
-  url: z.string(),
-  title: z.string(),
-  loading: z.boolean(),
-  faviconUrl: z.string().nullable(),
-  canGoBack: z.boolean(),
-  canGoForward: z.boolean(),
-  loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number(),
-  // Why: explicit null marks a browser page as client-local even when its
-  // worktree is remote-owned; older sessions omit it and keep inferred runtime.
-  browserRuntimeEnvironmentId: z.string().nullable().optional(),
-  // Why: optional+nullable so sessions persisted before viewport presets were
-  // added still validate; without this, zod would strip the field during
-  // restore and reset the user's chosen preset on every app restart.
-  viewportPresetId: browserViewportPresetIdSchema.nullable().optional()
-})
-
-const browserHistoryEntrySchema = z.object({
-  url: z.string(),
-  normalizedUrl: z.string(),
-  title: z.string(),
-  lastVisitedAt: z.number(),
-  visitCount: z.number()
-})
-
-const browserHistoryEntriesSchema = z
-  .array(browserHistoryEntrySchema)
-  .transform((entries) => normalizeBrowserHistoryEntries(entries))
-
 // ─── Workspace session ──────────────────────────────────────────────
 
+const terminalSurfaceTombstoneSchema = z.object({
+  worktreeId: z.string(),
+  parentTabId: terminalTabIdSchema,
+  leafId: z.string(),
+  ptyId: z.string(),
+  incarnationId: z.string().min(1).max(128),
+  retiredAt: z.number().finite().nonnegative()
+})
+
+const worktreeIdSchema = z.string()
+
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
-  activeRepoId: z.string().nullable(),
-  activeWorkspaceKey: workspaceKeySchema.nullable().optional(),
-  activeWorkspaceExecutionHostId: z
-    .custom<ExecutionHostId>(
-      (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
-    )
-    .nullable()
-    .optional(),
-  activeWorktreeId: z.string().nullable(),
-  activeTabId: z.string().nullable(),
-  tabsByWorktree: z.record(z.string(), z.array(terminalTabSchema)),
-  terminalLayoutsByTabId: z.record(terminalTabIdSchema, terminalLayoutSnapshotSchema),
-  activeWorktreeIdsOnShutdown: z.array(z.string()).optional(),
-  openFilesByWorktree: z.record(z.string(), z.array(persistedOpenFileSchema)).optional(),
-  activeFileIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
-  markdownFrontmatterVisible: z.record(z.string(), z.boolean()).optional(),
-  browserTabsByWorktree: z.record(z.string(), z.array(browserWorkspaceSchema)).optional(),
-  browserPagesByWorkspace: z.record(z.string(), z.array(browserPageSchema)).optional(),
-  activeBrowserTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
-  activeTabTypeByWorktree: z.record(z.string(), workspaceVisibleTabTypeSchema).optional(),
-  browserUrlHistory: browserHistoryEntriesSchema.optional(),
-  activeTabIdByWorktree: z.record(z.string(), z.string().nullable()).optional(),
-  unifiedTabs: z.record(z.string(), z.array(tabSchema)).optional(),
-  tabGroups: z.record(z.string(), z.array(tabGroupSchema)).optional(),
-  tabGroupLayouts: z.record(z.string(), tabGroupLayoutNodeSchema).optional(),
-  activeGroupIdByWorktree: z.record(z.string(), z.string()).optional(),
-  activeConnectionIdsAtShutdown: z.array(z.string()).optional(),
-  remoteSessionIdsByTabId: z.record(terminalTabIdSchema, z.string()).optional(),
-  // Why: the sort comparator in order-empty-query-worktrees.ts would produce
-  // NaN (undefined sort order) if a corrupted session file carried NaN or
-  // Infinity here. Parse leniently: drop individual bad entries rather than
-  // failing the entire session. A strict record() rejection here would cause
-  // parseWorkspaceSession to fall back to defaults for the ENTIRE session
-  // (terminals, editors, browsers, layouts) on a single corrupted timestamp
-  // — a blast radius far larger than "Cmd+J falls back to activity recency",
-  // which is all this field gates.
-  lastVisitedAtByWorktreeId: z
-    .preprocess(
-      (raw) => {
-        if (raw == null || typeof raw !== 'object') {
-          return raw
-        }
-        const cleaned: Record<string, number> = {}
-        for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
-          if (typeof v === 'number' && Number.isFinite(v) && v >= 0) {
-            cleaned[k] = v
-          }
-        }
-        return cleaned
-      },
-      z.record(z.string(), z.number().finite().nonnegative())
-    )
-    .optional(),
-  defaultTerminalTabsAppliedByWorktreeId: z.record(z.string(), z.literal(true)).optional(),
-  sleepingAgentSessionsByPaneKey: sleepingAgentSessionsByPaneKeySchema,
-  terminalPtyIncarnationsByPaneKey: z.record(z.string(), z.string().min(1).max(128)).optional(),
-  terminalTopologyRevisionByRepoId: z.record(z.string(), z.number().int().nonnegative()).optional(),
-  terminalSurfaceTombstonesByPaneKey: z
-    .record(
-      z.string(),
-      z.object({
-        worktreeId: z.string(),
-        parentTabId: terminalTabIdSchema,
-        leafId: z.string(),
-        ptyId: z.string(),
-        incarnationId: z.string().min(1).max(128),
-        retiredAt: z.number().finite().nonnegative()
-      })
-    )
-    .optional()
+  activeRepoId: salvagedField('activeRepoId', z.string().nullable(), () => null),
+  activeWorkspaceKey: salvagedOptional('activeWorkspaceKey', workspaceKeySchema.nullable()),
+  activeWorkspaceExecutionHostId: salvagedOptional(
+    'activeWorkspaceExecutionHostId',
+    z
+      .custom<ExecutionHostId>(
+        (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
+      )
+      .nullable()
+  ),
+  activeWorktreeId: salvagedField('activeWorktreeId', z.string().nullable(), () => null),
+  activeTabId: salvagedField('activeTabId', z.string().nullable(), () => null),
+  tabsByWorktree: salvagedField(
+    'tabsByWorktree',
+    salvagingRecord(worktreeIdSchema, salvagingArray(terminalTabSchema)),
+    () => ({})
+  ),
+  terminalLayoutsByTabId: salvagedField(
+    'terminalLayoutsByTabId',
+    salvagingRecord(terminalTabIdSchema, terminalLayoutSnapshotSchema),
+    () => ({})
+  ),
+  activeWorktreeIdsOnShutdown: salvagedOptional(
+    'activeWorktreeIdsOnShutdown',
+    salvagingArray(worktreeIdSchema)
+  ),
+  openFilesByWorktree: salvagedOptional(
+    'openFilesByWorktree',
+    salvagingRecord(worktreeIdSchema, salvagingArray(persistedOpenFileSchema))
+  ),
+  activeFileIdByWorktree: salvagedOptional(
+    'activeFileIdByWorktree',
+    salvagingRecord(worktreeIdSchema, z.string().nullable())
+  ),
+  markdownFrontmatterVisible: salvagedOptional(
+    'markdownFrontmatterVisible',
+    salvagingRecord(z.string(), z.boolean())
+  ),
+  browserTabsByWorktree: salvagedOptional(
+    'browserTabsByWorktree',
+    salvagingRecord(worktreeIdSchema, salvagingArray(browserWorkspaceSchema))
+  ),
+  browserPagesByWorkspace: salvagedOptional(
+    'browserPagesByWorkspace',
+    salvagingRecord(z.string(), salvagingArray(browserPageSchema))
+  ),
+  activeBrowserTabIdByWorktree: salvagedOptional(
+    'activeBrowserTabIdByWorktree',
+    salvagingRecord(worktreeIdSchema, z.string().nullable())
+  ),
+  activeTabTypeByWorktree: salvagedOptional(
+    'activeTabTypeByWorktree',
+    salvagingRecord(worktreeIdSchema, workspaceVisibleTabTypeSchema)
+  ),
+  browserUrlHistory: salvagedOptional('browserUrlHistory', browserHistoryEntriesSchema),
+  activeTabIdByWorktree: salvagedOptional(
+    'activeTabIdByWorktree',
+    salvagingRecord(worktreeIdSchema, z.string().nullable())
+  ),
+  unifiedTabs: salvagedOptional(
+    'unifiedTabs',
+    salvagingRecord(worktreeIdSchema, salvagingArray(tabSchema))
+  ),
+  tabGroups: salvagedOptional(
+    'tabGroups',
+    salvagingRecord(worktreeIdSchema, salvagingArray(tabGroupSchema))
+  ),
+  tabGroupLayouts: salvagedOptional(
+    'tabGroupLayouts',
+    salvagingRecord(worktreeIdSchema, tabGroupLayoutNodeSchema)
+  ),
+  activeGroupIdByWorktree: salvagedOptional(
+    'activeGroupIdByWorktree',
+    salvagingRecord(worktreeIdSchema, z.string())
+  ),
+  activeConnectionIdsAtShutdown: salvagedOptional(
+    'activeConnectionIdsAtShutdown',
+    salvagingArray(z.string())
+  ),
+  remoteSessionIdsByTabId: salvagedOptional(
+    'remoteSessionIdsByTabId',
+    salvagingRecord(terminalTabIdSchema, z.string())
+  ),
+  // Why: the sort comparator in order-empty-query-worktrees.ts would produce NaN
+  // (undefined sort order) from a NaN or Infinity persisted here.
+  lastVisitedAtByWorktreeId: salvagedOptional(
+    'lastVisitedAtByWorktreeId',
+    salvagingRecord(worktreeIdSchema, z.number().finite().nonnegative())
+  ),
+  defaultTerminalTabsAppliedByWorktreeId: salvagedOptional(
+    'defaultTerminalTabsAppliedByWorktreeId',
+    salvagingRecord(worktreeIdSchema, z.literal(true))
+  ),
+  sleepingAgentSessionsByPaneKey: salvagedOptional(
+    'sleepingAgentSessionsByPaneKey',
+    sleepingAgentSessionsByPaneKeySchema
+  ),
+  terminalPtyIncarnationsByPaneKey: salvagedOptional(
+    'terminalPtyIncarnationsByPaneKey',
+    salvagingRecord(z.string(), z.string().min(1).max(128))
+  ),
+  terminalTopologyRevisionByRepoId: salvagedOptional(
+    'terminalTopologyRevisionByRepoId',
+    salvagingRecord(z.string(), z.number().int().nonnegative())
+  ),
+  terminalSurfaceTombstonesByPaneKey: salvagedOptional(
+    'terminalSurfaceTombstonesByPaneKey',
+    salvagingRecord(z.string(), terminalSurfaceTombstoneSchema)
+  )
 })
 
 export type ParsedWorkspaceSession =
   | { ok: true; value: WorkspaceSessionState }
   | { ok: false; error: string }
 
+/** Why: keep the error compact — a zod issue dump is noisy and most of the time
+ *  only the first divergent field is actionable for debugging. */
+export function describeWorkspaceSessionError(error: z.ZodError): string {
+  const firstIssue = error.issues[0]
+  const path = firstIssue?.path.join('.') || '<root>'
+  return `${path}: ${firstIssue?.message ?? 'invalid session'}`
+}
+
+export const WORKSPACE_SESSION_UNVALIDATABLE = '<root>: session could not be validated'
+
+/** safeParse, or null when the validator itself could not run.
+ *  Why: safeParse is documented not to throw, but a payload holding hundreds of
+ *  thousands of bad records overflows the stack while zod materializes an issue
+ *  per field. This parse runs in the Store constructor, so an escaping RangeError
+ *  is a launch failure the user cannot recover from without deleting their
+ *  profile — exactly the "never throw into main" contract at the top of this file. */
+export function safeParseWorkspaceSession(
+  raw: unknown
+): ReturnType<typeof workspaceSessionStateSchema.safeParse> | null {
+  try {
+    return workspaceSessionStateSchema.safeParse(raw)
+  } catch {
+    return null
+  }
+}
+
 /** Validate raw JSON as a WorkspaceSessionState. Returns a discriminated union
  *  so callers can fall back to defaults on failure without a try/catch. */
 export function parseWorkspaceSession(raw: unknown): ParsedWorkspaceSession {
-  const result = workspaceSessionStateSchema.safeParse(raw)
+  const result = safeParseWorkspaceSession(raw)
+  if (!result) {
+    return { ok: false, error: WORKSPACE_SESSION_UNVALIDATABLE }
+  }
   if (result.success) {
     return { ok: true, value: result.data }
   }
-  // Why: keep the error compact — a zod issue dump is noisy and most of the
-  // time only the first divergent field is actionable for debugging.
-  const firstIssue = result.error.issues[0]
-  const path = firstIssue?.path.join('.') || '<root>'
-  return { ok: false, error: `${path}: ${firstIssue?.message ?? 'invalid session'}` }
+  return { ok: false, error: describeWorkspaceSessionError(result.error) }
 }

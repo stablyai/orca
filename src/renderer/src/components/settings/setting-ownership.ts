@@ -67,6 +67,25 @@ function buildSummaries(): Record<string, SettingOwnershipSummary> {
         'auto.components.settings.settingOwnership.providerAccounts',
         'Credentials and account checks belong to the local client or selected remote server that owns the provider integration.'
       )
+    },
+    agentSessionRulesDefaults: {
+      ownership: 'client-default',
+      label: translate('auto.components.settings.settingOwnership.clientDefault', 'Client default'),
+      description: translate(
+        'auto.components.settings.settingOwnership.agentSessionRulesDefaults',
+        'Rules are applied to supported agent launches from this client, unless a project overrides them.'
+      )
+    },
+    repositoryAgentSessionRules: {
+      ownership: 'project-host-setup',
+      label: translate(
+        'auto.components.settings.settingOwnership.projectOnThisHost',
+        'Project on this host'
+      ),
+      description: translate(
+        'auto.components.settings.settingOwnership.repositoryAgentSessionRules',
+        'These overrides apply to this project setup and inherit the client Agent Session Rules until customized.'
+      )
     }
   }
 }
@@ -77,7 +96,9 @@ const SUMMARY_KEYS = [
   'agentLaunchDefaults',
   'terminalQuickCommands',
   'workspaceDirectory',
-  'providerAccounts'
+  'providerAccounts',
+  'agentSessionRulesDefaults',
+  'repositoryAgentSessionRules'
 ] as const
 
 export type SettingOwnershipKey = (typeof SUMMARY_KEYS)[number]

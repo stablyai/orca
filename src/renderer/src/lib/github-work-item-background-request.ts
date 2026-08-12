@@ -1,6 +1,7 @@
 import type { useAppStore } from '@/store'
 import {
   buildAgentDraftLaunchPlan,
+  buildAgentSessionRulesPrompt,
   buildAgentStartupPlan,
   type AgentStartupPlan
 } from '@/lib/tui-agent-startup'
@@ -65,17 +66,10 @@ export type BuildInitialGitHubWorkItemRequestArgs = {
   telemetrySource?: WorktreeCreationRequest['telemetrySource']
 }
 
-type QuickCreateLinkedWorkItemPromptResult = ReturnType<
-  typeof resolveQuickCreateLinkedWorkItemPrompt
->
-
-function resolveGitHubWorkItemPrompt(item: GitHubWorkItem): QuickCreateLinkedWorkItemPromptResult {
-  const resolver = resolveQuickCreateLinkedWorkItemPrompt as unknown as (
-    linkedWorkItem: GitHubWorkItem,
-    note: string,
-    opts?: { cliAvailable: boolean }
-  ) => QuickCreateLinkedWorkItemPromptResult
-  return resolver(item, '', { cliAvailable: false })
+function resolveGitHubWorkItemPrompt(
+  item: GitHubWorkItem
+): ReturnType<typeof resolveQuickCreateLinkedWorkItemPrompt> {
+  return resolveQuickCreateLinkedWorkItemPrompt(item, '')
 }
 
 export function buildGitHubWorkItemBackendStartup(
@@ -83,8 +77,6 @@ export function buildGitHubWorkItemBackendStartup(
   startupPlan: AgentStartupPlan | null,
   quickTelemetry: AgentStartedTelemetry | null
 ): WorktreeCreationRequest['startup'] {
-  // Why: draft/followup launches still need the renderer to finish terminal
-  // setup, so only self-contained startup plans can move into createWorktree.
   if (!agent || !startupPlan || startupPlan.draftPrompt || startupPlan.followupPrompt) {
     return undefined
   }
@@ -147,8 +139,6 @@ function resolveGitHubWorkItemLaunchPlatform(
 ): NodeJS.Platform {
   const host = parseExecutionHostId(getRepoExecutionHostId(repo))
   if (host?.kind === 'runtime') {
-    // Why: the background runtime path gates on hostPlatform before this point;
-    // POSIX is safer than client PowerShell if another caller violates that.
     return (
       store.runtimeStatusByEnvironmentId.get(host.environmentId)?.status?.hostPlatform ?? 'linux'
     )
@@ -185,11 +175,7 @@ export function buildGitHubWorkItemStartupPlan(args: {
     return { startupPlan: null, quickPrompt: '', launchDraftPrompt: null, quickTelemetry: null }
   }
   const { prompt: quickPrompt, draftPrompt } = resolveGitHubWorkItemPrompt(item)
-  // Why: runtime-owned repos launch on their owner host, not on the client
-  // desktop, so startup shell quoting must use the runtime platform.
   const platform = resolveGitHubWorkItemLaunchPlatform(store, repo)
-  // Why: SSH remotes deploy the CLI shim as plain `orca`, so the Linux-only
-  // `orca-ide` rename must not be applied for remote launches.
   const isRemote = repoIsRemote(repo)
   const shell = resolveLocalWindowsAgentStartupShell({
     platform,
@@ -205,7 +191,10 @@ export function buildGitHubWorkItemStartupPlan(args: {
         agentEnv: resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv),
         platform,
         shell,
-        isRemote
+        isRemote,
+        repoId: repo.id,
+        connectionId: repo.connectionId,
+        executionHostId: getRepoExecutionHostId(repo)
       })
     : null
   const startupPlan = draftLaunchPlan
@@ -229,10 +218,19 @@ export function buildGitHubWorkItemStartupPlan(args: {
         platform,
         shell,
         isRemote,
-        allowEmptyPromptLaunch: true
+        allowEmptyPromptLaunch: true,
+        repoId: repo.id,
+        connectionId: repo.connectionId,
+        executionHostId: getRepoExecutionHostId(repo)
       })
   if (startupPlan && draftPrompt && !draftLaunchPlan) {
-    startupPlan.draftPrompt = draftPrompt
+    startupPlan.draftPrompt = buildAgentSessionRulesPrompt({
+      agent,
+      prompt: draftPrompt,
+      repoId: repo.id,
+      connectionId: repo.connectionId,
+      executionHostId: getRepoExecutionHostId(repo)
+    })
   }
   return {
     startupPlan,

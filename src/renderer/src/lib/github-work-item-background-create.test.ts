@@ -9,6 +9,7 @@ import {
 
 vi.mock('@/lib/tui-agent-startup', () => ({
   buildAgentDraftLaunchPlan: vi.fn(() => null),
+  buildAgentSessionRulesPrompt: vi.fn(({ prompt }: { prompt: string }) => prompt),
   buildAgentStartupPlan: vi.fn(() => ({
     agent: 'codex',
     launchCommand: 'codex',

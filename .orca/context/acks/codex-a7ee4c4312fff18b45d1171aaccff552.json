@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "provider": "codex",
+  "launch_id": "a7ee4c4312fff18b45d1171aaccff552",
+  "session_sha256": "e93dc3f0bc50b3e3712d065ffe678b66a54efcf33acbd81e5116dbdc2edabaf7",
+  "cwd": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+  "bundle_id": "sha256:3533258dfc1dc5f51a53de026d0b7965fd5235034ca800a32a9cc246e1220c6c",
+  "challenge_sha256": "65ceb91cbef511119c13e245c52a8746d78ca47fd8fe16589832b5087362306c",
+  "launch_manifest_sha256": "11923140cb6ae1a4b7ba9dc2107d6905f4b1372489af775771e2a8877cdff39c",
+  "launch_directory_device": 16777244,
+  "launch_directory_inode": 10499066,
+  "launch_manifest_device": 16777244,
+  "launch_manifest_inode": 10499067,
+  "generator_sha256": "2095d1de3f00c323f647cb2614325b8bef0cb2f65dbc24fef529d6c1957581c3",
+  "policy_sha256": "sha256:f2d36117bd89e9178082955c7fb88d3b3106682c867a1382de163c653d084350",
+  "issued_at": 1786472286.4783711,
+  "expires_at": 1786472586.4783711,
+  "acknowledged_at": 1786472301.848709
+}

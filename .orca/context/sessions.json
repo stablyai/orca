@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "generated_at": "2026-08-11T18:43:10+00:00",
+  "privacy": {
+    "mode": "local-private",
+    "contains_full_session_ids": true,
+    "contains_absolute_working_directories": true,
+    "contains_credentials": false,
+    "contains_messages": false,
+    "contains_redacted_titles": true
+  },
+  "path_map": {
+    "path_map_id": "sha256:f1382d719e9d706edad5d07396d2ff273d158cef4523372e1d786497551fc106",
+    "volume": {
+      "mount": "/Volumes/Extreme SSD",
+      "uuid": "6EF3720E-C57F-4352-BA47-CFE88BFEFDA7"
+    },
+    "mapping_count": 7
+  },
+  "counts": {
+    "claude": {
+      "candidate_files": 114,
+      "synced_sessions": 0
+    },
+    "codex": {
+      "candidate_files": 701,
+      "synced_sessions": 2
+    },
+    "sources": {
+      "claude": {
+        "candidate_files": 114,
+        "synced_sessions": 0
+      },
+      "codex": {
+        "candidate_files": 131,
+        "synced_sessions": 2
+      },
+      "codex:acct-a": {
+        "candidate_files": 226,
+        "synced_sessions": 0
+      },
+      "codex:acct-b": {
+        "candidate_files": 344,
+        "synced_sessions": 0
+      }
+    }
+  },
+  "sessions": [
+    {
+      "provider": "codex",
+      "source": "codex",
+      "id": "019ff20b-bf60-7110-804f-dc2f14f652ea",
+      "title": "# AGENTS.md instructions for /Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+      "cwd": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+      "updated_at": "2026-08-11T18:43:06+00:00",
+      "cwd_available": true,
+      "original_cwd": null,
+      "cwd_remapped": false,
+      "remap_status": "not_mapped",
+      "path_map_id": "sha256:f1382d719e9d706edad5d07396d2ff273d158cef4523372e1d786497551fc106",
+      "source_limited": true,
+      "parse_errors": 0,
+      "codex_home": "/Volumes/Extreme SSD/Orca/local-homes/.codex"
+    },
+    {
+      "provider": "codex",
+      "source": "codex",
+      "id": "019ff20b-5653-78f3-bede-aee6cfc98f95",
+      "title": "# AGENTS.md instructions for /Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+      "cwd": "/Volumes/Extreme SSD/Orca/workspaces/orca/知识图谱-Workflow-完善",
+      "updated_at": "2026-08-11T18:29:58+00:00",
+      "cwd_available": true,
+      "original_cwd": null,
+      "cwd_remapped": false,
+      "remap_status": "not_mapped",
+      "path_map_id": "sha256:f1382d719e9d706edad5d07396d2ff273d158cef4523372e1d786497551fc106",
+      "source_limited": true,
+      "parse_errors": 0,
+      "codex_home": "/Volumes/Extreme SSD/Orca/local-homes/.codex"
+    }
+  ]
+}

@@ -110,12 +110,13 @@ export function uploadBuffer(
   sftp: SFTPWrapper,
   buffer: Buffer,
   remotePath: string,
-  options?: { append?: boolean; exclusive?: boolean }
+  options?: { append?: boolean; exclusive?: boolean; mode?: number }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false
     const writeStream = sftp.createWriteStream(remotePath, {
-      flags: options?.append ? 'a' : options?.exclusive ? 'wx' : 'w'
+      flags: options?.append ? 'a' : options?.exclusive ? 'wx' : 'w',
+      ...(options?.mode === undefined ? {} : { mode: options.mode })
     })
 
     const cleanupListeners = (): void => {

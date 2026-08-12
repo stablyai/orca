@@ -20,6 +20,24 @@
       ]
     },
     {
+      "name": "graphify",
+      "sourcePath": "skills/graphify",
+      "releaseRevision": 1,
+      "packageDigest": "aece11832c02a156838d1ee658c7dc9a089353079cbfe2ed8118084f259f7b81",
+      "gitTreeSha": "6741535779214e50466487ac073ece22acc7ec66",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 3686,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "a549503d5ecbe78afa46c6bdc0d30874be2214a630bcd0ce6edf1cb9c6bcd8e5",
+          "textNormalizedSha256": "a549503d5ecbe78afa46c6bdc0d30874be2214a630bcd0ce6edf1cb9c6bcd8e5",
+          "identitySha256": "a549503d5ecbe78afa46c6bdc0d30874be2214a630bcd0ce6edf1cb9c6bcd8e5"
+        }
+      ]
+    },
+    {
       "name": "linear-tickets",
       "sourcePath": "skills/linear-tickets",
       "releaseRevision": 10,

@@ -19,6 +19,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcAnyMethod } from '../core'
+import { ClientDefaultAgentSessionRules } from './agent-session-rules-rpc-schema'
 
 const MAX_WORKTREE_SELECTOR_LENGTH = 32_768
 const MAX_TRANSCRIPT_PATH_BYTES = 16 * 1024
@@ -55,7 +56,7 @@ const Placement = z
     message: 'Placement must include a tab or leaf ID'
   })
 
-const LaunchPreferences = z
+export const AgentSessionLaunchPreferencesSchema = z
   .object({
     model: StrictNonEmptyString(
       MAX_LAUNCH_PREFERENCE_LENGTH,
@@ -69,9 +70,10 @@ const LaunchPreferences = z
   })
   .strict()
 
-const PromptDelivery = z.enum(['auto-submit', 'draft'])
+export const AgentSessionPromptDeliverySchema = z.enum(['auto-submit', 'draft'])
+export const AgentSessionPromptDeliveryOwnerSchema = z.enum(['host', 'client'])
 
-const AgentArgs = z
+export const AgentSessionArgsSchema = z
   .string()
   .refine(
     (value) => Buffer.byteLength(value, 'utf8') <= MAX_AGENT_ARGS_BYTES,
@@ -79,7 +81,7 @@ const AgentArgs = z
   )
   .nullable()
 
-const OmpResumeFilePath = z
+export const AgentSessionOmpResumeFilePathSchema = z
   .string()
   .min(1)
   .refine((value) => value === value.trim(), 'Invalid OMP resume path')
@@ -90,7 +92,7 @@ const OmpResumeFilePath = z
     'Invalid OMP resume path'
   )
 
-const ProviderSession = z
+export const AgentSessionProviderSessionSchema = z
   .object({
     key: z.enum(['session_id', 'conversation_id']),
     id: StrictNonEmptyString(512, 'Invalid provider session ID').refine(
@@ -128,10 +130,20 @@ const ExplicitEnsure = z
     kind: z.literal('explicit'),
     worktree: WorktreeSelector,
     agent: z.enum(RESUMABLE_TUI_AGENTS),
-    providerSession: ProviderSession,
-    ompResumeFilePath: OmpResumeFilePath.optional(),
-    agentArgs: AgentArgs.optional(),
-    launchPreferences: LaunchPreferences.optional(),
+    providerSession: AgentSessionProviderSessionSchema,
+    ompResumeFilePath: AgentSessionOmpResumeFilePathSchema.optional(),
+    prompt: z
+      .string()
+      .refine(
+        (value) => Buffer.byteLength(value, 'utf8') <= MAX_PROMPT_BYTES,
+        'Prompt is too large'
+      )
+      .optional(),
+    promptDelivery: AgentSessionPromptDeliverySchema.optional(),
+    promptDeliveryOwner: AgentSessionPromptDeliveryOwnerSchema.optional(),
+    agentArgs: AgentSessionArgsSchema.optional(),
+    launchPreferences: AgentSessionLaunchPreferencesSchema.optional(),
+    clientDefaultAgentSessionRules: ClientDefaultAgentSessionRules.optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional()
   })
@@ -149,6 +161,24 @@ const ExplicitEnsure = z
         code: z.ZodIssueCode.custom,
         path: ['providerSession'],
         message: 'Provider session is not resumable for this agent'
+      })
+    }
+    if (value.promptDeliveryOwner === 'client' && value.prompt !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['prompt'],
+        message: 'Client-owned prompt must not be duplicated'
+      })
+    }
+    if (
+      value.promptDeliveryOwner !== 'client' &&
+      value.prompt?.trim() &&
+      value.promptDelivery !== 'draft'
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['promptDelivery'],
+        message: 'Resume prompts require draft delivery'
       })
     }
   })
@@ -173,9 +203,11 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
         'Prompt is too large'
       )
       .optional(),
-    promptDelivery: PromptDelivery.optional(),
-    agentArgs: AgentArgs.optional(),
-    launchPreferences: LaunchPreferences.optional(),
+    promptDelivery: AgentSessionPromptDeliverySchema.optional(),
+    promptDeliveryOwner: AgentSessionPromptDeliveryOwnerSchema.optional(),
+    agentArgs: AgentSessionArgsSchema.optional(),
+    launchPreferences: AgentSessionLaunchPreferencesSchema.optional(),
+    clientDefaultAgentSessionRules: ClientDefaultAgentSessionRules.optional(),
     startupCwd: z.string().min(1).max(MAX_WORKTREE_SELECTOR_LENGTH).optional(),
     presentation: Presentation.optional(),
     placement: Placement.optional(),
@@ -183,11 +215,22 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.promptDelivery === 'draft' && !value.prompt?.trim()) {
+    if (
+      value.promptDelivery === 'draft' &&
+      value.promptDeliveryOwner !== 'client' &&
+      !value.prompt?.trim()
+    ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['prompt'],
         message: 'Draft delivery requires a non-empty prompt'
+      })
+    }
+    if (value.promptDeliveryOwner === 'client' && value.prompt !== undefined) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['prompt'],
+        message: 'Client-owned prompt must not be duplicated'
       })
     }
   })

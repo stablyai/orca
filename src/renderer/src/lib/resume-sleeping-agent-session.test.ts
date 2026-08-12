@@ -513,7 +513,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
   })
 
-  it('uses captured launch config instead of changed settings when resuming worktree sleep', () => {
+  it('uses captured launch config plus current session rules when resuming worktree sleep', () => {
     const record = makeRecord({
       agent: 'codex',
       origin: 'worktree-sleep',
@@ -539,9 +539,10 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const state = useAppStore.getState()
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
-    expect(startup?.command).toBe(
-      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
+    expect(startup?.command).toMatch(
+      /^codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' -c 'developer_instructions=/
     )
+    expect(startup?.command).toMatch(/'resume' 'sess-1'$/)
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
     expect(startup?.command).not.toContain('changed')
     expect(startup?.launchConfig).toEqual(record.launchConfig)

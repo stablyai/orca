@@ -133,6 +133,21 @@ describe('SSH fresh agent-session create operations', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
+  it('does not classify a transient create-operation probe failure as an old relay', async () => {
+    const probeError = new Error('SSH transport interrupted')
+    request.mockRejectedValueOnce(probeError)
+
+    await expect(
+      provider.spawn({
+        cols: 80,
+        rows: 24,
+        command: 'codex',
+        agentSessionCreateOperationId: 'c'.repeat(43)
+      })
+    ).rejects.toBe(probeError)
+    expect(request).toHaveBeenCalledOnce()
+  })
+
   it('keeps a client-selected old-relay spawn byte-for-byte legacy', async () => {
     request.mockResolvedValueOnce({ id: 'pty-legacy' })
 
@@ -180,7 +195,7 @@ describe('SSH fresh agent-session create operations', () => {
     const live = provider.supportsAgentSessionCreateOperations()
 
     abort.abort()
-    await expect(canceled).resolves.toBe(false)
+    await expect(canceled).rejects.toThrow('client_disconnected')
     finishProbe({
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION
     })

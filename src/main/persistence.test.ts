@@ -2840,6 +2840,38 @@ describe('Store', () => {
     ])
   })
 
+  it('persists newly seen builtin agent session rule ids for existing profiles', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const migrated = await createStore()
+    migrated.flush()
+
+    const settled = readDataFile() as { settings: Record<string, unknown> }
+    settled.settings.agentSessionRules = { enabled: true, rules: [] }
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(5000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as {
+      settings?: { agentSessionRules?: { seenBuiltinRuleIds?: string[] } }
+    }
+    expect(persisted.settings?.agentSessionRules?.seenBuiltinRuleIds).toContain('builtin-graphify')
+  })
+
   it('migrates the legacy floating terminal disabled default to enabled', async () => {
     writeDataFile({
       schemaVersion: 1,

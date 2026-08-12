@@ -20,9 +20,12 @@ import type {
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
 import {
+  AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
+import { normalizeAgentSessionRulesSettings } from '../../../../shared/agent-session-rules'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
   iterateTerminalInputChunks
@@ -358,6 +361,9 @@ export function createRemoteRuntimePtyTransport(
   // Why: reconnect retries must replay one host operation instead of creating
   // another fresh agent when the first response was lost.
   const agentCreateOperation = createAgentSessionCreateOperation()
+  const clientDefaultAgentSessionRules = normalizeAgentSessionRulesSettings(
+    useAppStore.getState().settings?.agentSessionRules
+  )
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -2004,6 +2010,9 @@ export function createRemoteRuntimePtyTransport(
             createEnvironmentId,
             connectLifecycleEpoch
           )
+        const hasAgentPrompt = Boolean(agentPrompt?.trim())
+        const hostOwnsAgentPrompt = hasAgentPrompt && agentPromptDelivery === 'auto-submit'
+        const promptDeliveryOwner = hostOwnsAgentPrompt ? 'host' : 'client'
         const hostAuthorityCreate = () =>
           createWithUnknownOutcomeRecovery(
             'agent-session',
@@ -2021,9 +2030,17 @@ export function createRemoteRuntimePtyTransport(
                         ? { ompResumeFilePath: launchConfigToSend.ompResumeFilePath }
                         : {}),
                       ...(agentArgsOverride !== undefined ? { agentArgs: agentArgsOverride } : {}),
+                      ...(hasAgentPrompt
+                        ? {
+                            ...(hostOwnsAgentPrompt ? { prompt: agentPrompt } : {}),
+                            promptDelivery: 'draft' as const,
+                            promptDeliveryOwner
+                          }
+                        : {}),
                       ...(agentLaunchPreferences
                         ? { launchPreferences: agentLaunchPreferences }
                         : {}),
+                      clientDefaultAgentSessionRules,
                       placement: { tabId, leafId },
                       presentation: 'background'
                     },
@@ -2036,14 +2053,16 @@ export function createRemoteRuntimePtyTransport(
                       {
                         worktree: toRuntimeTerminalWorktreeSelector(worktreeId),
                         agent: launchAgentToSend!,
-                        ...(agentPrompt ? { prompt: agentPrompt } : {}),
+                        ...(hostOwnsAgentPrompt ? { prompt: agentPrompt } : {}),
                         ...(agentPromptDelivery ? { promptDelivery: agentPromptDelivery } : {}),
+                        ...(hasAgentPrompt ? { promptDeliveryOwner } : {}),
                         ...(agentArgsOverride !== undefined
                           ? { agentArgs: agentArgsOverride }
                           : {}),
                         ...(agentLaunchPreferences
                           ? { launchPreferences: agentLaunchPreferences }
                           : {}),
+                        clientDefaultAgentSessionRules,
                         placement: { tabId, leafId },
                         presentation: 'background'
                       },
@@ -2060,9 +2079,15 @@ export function createRemoteRuntimePtyTransport(
             : await runRemoteAgentSessionLaunch<RemoteAgentSessionLaunchResult | null>({
                 environmentId: createEnvironmentId,
                 hostAuthority: hostAuthorityCreate,
-                ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
-                  ? { hostAuthorityCapability: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY }
-                  : {}),
+                hostAuthorityCapabilities: [
+                  AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
+                  ...(resumeProviderSessionToSend && launchAgentToSend === 'omp'
+                    ? [AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY]
+                    : []),
+                  ...(agentPrompt?.trim()
+                    ? [AGENT_SESSION_PROMPT_DELIVERY_OWNER_RUNTIME_CAPABILITY]
+                    : [])
+                ],
                 legacy: legacyCreate
               })
           : await legacyCreate()

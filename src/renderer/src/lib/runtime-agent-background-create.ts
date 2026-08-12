@@ -1,4 +1,5 @@
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { AgentSessionRulesSettings } from '../../../shared/agent-session-rules-types'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../shared/runtime-types'
@@ -11,6 +12,7 @@ import {
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
+import { AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 
 export async function createRuntimeAgentBackgroundTerminal(args: {
   environmentId: string
@@ -19,6 +21,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   leafId: string
   agent: TuiAgent
   prompt?: string
+  clientDefaultAgentSessionRules: AgentSessionRulesSettings
   sessionOptions?: Record<string, SessionOptionValue>
   legacy: {
     command: string
@@ -33,6 +36,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
   const launchPreferences = toAgentLaunchPreferences(args.sessionOptions)
   return await runRemoteAgentSessionLaunch({
     environmentId: args.environmentId,
+    hostAuthorityCapability: AGENT_SESSION_CLIENT_DEFAULT_RULES_RUNTIME_CAPABILITY,
     hostAuthority: () =>
       operation.run((clientOperationId) =>
         callRuntimeRpc<{ terminal: RuntimeTerminalCreate }>(
@@ -46,6 +50,7 @@ export async function createRuntimeAgentBackgroundTerminal(args: {
                 ? { prompt: args.prompt, promptDelivery: 'auto-submit' as const }
                 : {}),
               ...(launchPreferences ? { launchPreferences } : {}),
+              clientDefaultAgentSessionRules: args.clientDefaultAgentSessionRules,
               placement: { tabId: args.tabId, leafId: args.leafId },
               // Why: local renderer owns the hidden tab; remote runtime should not reveal UI.
               presentation: 'background'

@@ -66,6 +66,7 @@ describe('bundled skill guide generator', () => {
       expect(projection.length).toBeLessThan(source.length)
       expect(projection).toContain('discovery stub')
       expect(projection).toContain(`skills get ${name}`)
+      expect(projection).not.toContain('</content>')
     }
   })
 
@@ -90,6 +91,37 @@ describe('bundled skill guide generator', () => {
       }
       expect(fallback, name).not.toContain('ORCA worktree ps --json')
     }
+  })
+
+  it('documents native Graphify installation for all supported agent platforms', async () => {
+    const source = await readFile(path.join(projectDir, 'skill-guides', 'graphify.md'), 'utf8')
+
+    for (const command of [
+      'graphify install',
+      'graphify install --platform codex',
+      'graphify install --platform gemini',
+      'graphify install --platform opencode'
+    ]) {
+      expect(source).toContain(command)
+    }
+  })
+
+  it('keeps Graphify query fallback independent of the cached interpreter file', async () => {
+    const source = await readFile(path.join(projectDir, 'skill-guides', 'graphify.md'), 'utf8')
+    const querySection = source.slice(
+      source.lastIndexOf('\n## Query, Path, and Explain'),
+      source.indexOf('## Incremental Update and Cluster-Only')
+    )
+
+    expect(querySection).toContain('GRAPHIFY_PYTHON=')
+    expect(querySection).not.toContain('\n$(cat graphify-out/.graphify_python)')
+  })
+
+  it('documents native installers that write into the current project without --project', async () => {
+    const source = await readFile(path.join(projectDir, 'skill-guides', 'graphify.md'), 'utf8')
+
+    expect(source).toContain('Cursor always writes into the current project')
+    expect(source).toMatch(/Gemini and\s+OpenCode can also modify the current project/u)
   })
 
   it('embeds canonical names, discovery descriptions, Markdown, and append-only aliases', async () => {

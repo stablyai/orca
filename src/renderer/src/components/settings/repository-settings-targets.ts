@@ -18,3 +18,7 @@ export function getRepositorySourceControlAiActionRecipeSectionId(
 ): string {
   return `repo-${repoId}-source-control-ai-${actionId}`
 }
+
+export function getRepositoryAgentSessionRulesSectionId(repoId: string): string {
+  return `repo-${repoId}-agent-session-rules`
+}

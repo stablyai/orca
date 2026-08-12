@@ -9287,4 +9287,26 @@ describe('useIpcEvents silent terminal adoption (surfaceOwner: false)', () => {
     expect(storeState.setActiveTabType).not.toHaveBeenCalled()
     expect(storeState.setActiveTab).not.toHaveBeenCalled()
   })
+
+  it('queues the host-resolved rules draft on a renderer-backed agent tab', async () => {
+    const storeState = createBackgroundWorkspaceState()
+    const harness = await loadIpcEventsHarness(storeState)
+    harness.useIpcEvents()
+
+    harness.requestTerminalCreate({
+      requestId: 'req-host-draft',
+      worktreeId: 'wt-2',
+      command: 'opencode',
+      launchAgent: 'opencode',
+      startupDraftPrompt: 'Query the execution host graph first.',
+      surfaceOwner: false,
+      source: 'runtime-session'
+    })
+
+    expect(storeState.queueTabStartupCommand).toHaveBeenCalledWith('tab-minted', {
+      command: 'opencode',
+      launchAgent: 'opencode',
+      draftPrompt: 'Query the execution host graph first.'
+    })
+  })
 })
