@@ -71,7 +71,6 @@ import {
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
-import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
@@ -3349,6 +3348,10 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       )
       if (folderWorktree) {
         const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
+        // Why: lazy-import to avoid a circular module load — onboarding-folder-agent-startup.ts
+        // imports the renderer tui-agent-startup wrapper, which imports the store root.
+        const { buildDismissedOnboardingFolderAgentStartup } =
+          await import('@/lib/onboarding-folder-agent-startup')
         const onboarding = await window.api.onboarding.get().catch(() => null)
         // Why: adding the first folder from Landing skips onboarding's completeRepo hook; carry the default agent into the first terminal here.
         const startup = buildDismissedOnboardingFolderAgentStartup(
