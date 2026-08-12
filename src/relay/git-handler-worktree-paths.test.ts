@@ -104,6 +104,7 @@ describe('relay worktree path parsing', () => {
       '/repo-feature$ rev-parse --git-common-dir',
       `${resolvedRepoPath()}$ worktree list --porcelain -z`,
       `${resolvedRepoPath()}$ worktree list --porcelain`,
+      '/repo-feature$ stash list --format=%gs',
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])

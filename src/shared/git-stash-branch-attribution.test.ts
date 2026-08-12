@@ -3,13 +3,15 @@ import {
   branchFromStashSubject,
   countStashSubjectsForBranch,
   formatWorktreeStashRemovalDetail,
+  formatWorktreeStashVerificationDetail,
   parseStashListSubjects,
   stashSubjectMatchesBranch,
   WORKTREE_STASH_REMOVAL_DETAIL_PREFIX,
-  WORKTREE_STASH_REMOVAL_ERROR
-} from './git-stash-worktree-ownership'
+  WORKTREE_STASH_REMOVAL_ERROR,
+  WORKTREE_STASH_VERIFICATION_ERROR
+} from './git-stash-branch-attribution'
 
-describe('git-stash-worktree-ownership', () => {
+describe('git-stash-branch-attribution', () => {
   it('parses On and WIP-on subjects and rejects detached / free-form lines', () => {
     expect(branchFromStashSubject('On agent-a: agent-a WIP')).toBe('agent-a')
     expect(branchFromStashSubject('WIP on agent-b: 84050c1 init')).toBe('agent-b')
@@ -37,13 +39,21 @@ describe('git-stash-worktree-ownership', () => {
     expect(countStashSubjectsForBranch(subjects, '')).toBe(0)
   })
 
-  it('formats a force-classifiable dirty detail that names the shared-stack hazard', () => {
-    expect(WORKTREE_STASH_REMOVAL_ERROR).toContain('uncommitted or untracked')
+  it('formats stash and verification details without claiming worktree ownership', () => {
+    expect(WORKTREE_STASH_REMOVAL_ERROR).not.toContain('uncommitted or untracked')
     const detail = formatWorktreeStashRemovalDetail(2, 'agent-a')
     expect(detail.startsWith(WORKTREE_STASH_REMOVAL_DETAIL_PREFIX)).toBe(true)
     expect(detail).toContain('2 entries')
     expect(detail).toContain('branch agent-a')
-    expect(detail).toContain('shared across every worktree')
+    expect(detail).toContain('attribution only')
+    expect(detail).toContain('may come from another worktree')
+    expect(detail).toContain('force-delete to leave the shared stack unchanged')
+    expect(detail.toLowerCase()).not.toContain('ownership')
     expect(formatWorktreeStashRemovalDetail(1, 'feat')).toContain('1 entry')
+
+    const verification = formatWorktreeStashVerificationDetail('agent-a')
+    expect(verification).toContain(WORKTREE_STASH_VERIFICATION_ERROR)
+    expect(verification).toContain('Branch agent-a')
+    expect(verification).toContain('force-delete')
   })
 })

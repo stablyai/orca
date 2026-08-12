@@ -1803,6 +1803,7 @@ describe('removeWorktree', () => {
 
   it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // stash list (known branch)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     // Git refuses to delete an unmerged branch with `-d`.
@@ -1820,6 +1821,7 @@ describe('removeWorktree', () => {
 
   it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // stash list (known branch)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
@@ -1835,6 +1837,7 @@ describe('removeWorktree', () => {
   })
 
   it('reuses known removed worktree metadata instead of relisting before removal', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // stash list (known branch, no re-probe)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
@@ -1847,6 +1850,7 @@ describe('removeWorktree', () => {
     })
 
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
+      ['stash', 'list', '--format=%gs'],
       ['status', '--porcelain', '--untracked-files=all'],
       ['worktree', 'remove', '/repo-feature'],
       ['branch', '-d', '--', 'feature/test']
@@ -1855,6 +1859,7 @@ describe('removeWorktree', () => {
 
   it('prunes and retries branch deletion only when Git reports a checked-out branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // stash list (known branch)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
     gitExecFileAsyncMock.mockRejectedValueOnce(
@@ -1867,6 +1872,7 @@ describe('removeWorktree', () => {
 
     expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
       ['worktree', 'list', '--porcelain', '-z'],
+      ['stash', 'list', '--format=%gs'],
       ['status', '--porcelain', '--untracked-files=all'],
       ['worktree', 'remove', '/repo-feature'],
       ['branch', '-d', '--', 'feature/test'],

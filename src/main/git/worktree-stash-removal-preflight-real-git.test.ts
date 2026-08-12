@@ -1,6 +1,7 @@
-// Real-binary coverage for #13695: a stashed worktree reports clean porcelain,
-// so delete preflight must still refuse non-force removal when stash subjects
-// were recorded on that worktree's branch (shared refs/stash).
+// Real-binary coverage for #13695 adjacency: a stashed worktree reports clean
+// porcelain, so delete preflight must refuse non-force removal when stash
+// subjects were recorded on that worktree's branch (shared refs/stash).
+// Branch attribution is not ownership — subjects may originate elsewhere.
 import { execFile } from 'node:child_process'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,9 +10,14 @@ import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   WORKTREE_STASH_REMOVAL_DETAIL_PREFIX,
-  WORKTREE_STASH_REMOVAL_ERROR
-} from '../../shared/git-stash-worktree-ownership'
-import { assertWorktreeCleanForRemoval, removeWorktree } from './worktree'
+  WORKTREE_STASH_REMOVAL_ERROR,
+  WORKTREE_STASH_VERIFICATION_ERROR
+} from '../../shared/git-stash-branch-attribution'
+import {
+  assertBranchAttributedStashSafeForRemoval,
+  assertWorktreeCleanForRemoval,
+  removeWorktree
+} from './worktree'
 
 const execFileAsync = promisify(execFile)
 
@@ -66,14 +72,14 @@ describe('worktree stash removal preflight against real Git', () => {
     expect(await git(['stash', 'list'], repoPath)).toContain('agent-a')
   })
 
-  it('does not block removal for a sibling worktree whose branch has no stash subjects', async () => {
+  it('does not block removal for a sibling worktree whose branch has no matching stash subjects', async () => {
     await writeFile(join(worktreeA, 'shared.txt'), 'line1\nagent A only\n')
     await git(['stash', 'push', '-m', 'agent-a WIP'], worktreeA)
 
     await expect(assertWorktreeCleanForRemoval(worktreeB, false)).resolves.toBeUndefined()
   })
 
-  it('allows force removal while leaving the shared stash entry for recovery', async () => {
+  it('allows force removal while leaving the shared stash entry intact', async () => {
     await writeFile(join(worktreeA, 'shared.txt'), 'line1\nforce path\n')
     await git(['stash', 'push', '-m', 'agent-a force'], worktreeA)
 
@@ -85,7 +91,18 @@ describe('worktree stash removal preflight against real Git', () => {
     expect(await git(['stash', 'list'], repoPath)).toContain('agent-a force')
   })
 
-  it('reproduces cross-worktree pop theft so the hazard remains documented', async () => {
+  it('skips stash attribution when the worktree is detached (no inventable branch)', async () => {
+    await git(['checkout', '--detach', 'HEAD'], worktreeA)
+    await writeFile(join(worktreeA, 'shared.txt'), 'line1\ndetached WIP\n')
+    await git(['stash', 'push', '-m', 'detached WIP'], worktreeA)
+
+    // Known empty branch: no attribution probe invents a match against "On (no branch)".
+    await expect(
+      assertBranchAttributedStashSafeForRemoval(worktreeA, '')
+    ).resolves.toBeUndefined()
+  })
+
+  it('reproduces cross-worktree pop theft so the remaining hazard stays documented', async () => {
     await writeFile(
       join(worktreeA, 'shared.txt'),
       'line1\nIMPORTANT half-finished refactor by agent A\n'
@@ -100,3 +117,6 @@ describe('worktree stash removal preflight against real Git', () => {
     expect((await git(['stash', 'list'], worktreeA)).trim()).toBe('')
   })
 })
+
+// Keep the verification constant referenced so renames break this file loudly.
+void WORKTREE_STASH_VERIFICATION_ERROR
