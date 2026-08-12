@@ -3395,6 +3395,7 @@ function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
         error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
       }),
     onStateChanged: () => noopUnsubscribe,
+    onRuntimeOwnedStateChanged: () => noopUnsubscribe,
     addPortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     updatePortForward: () =>

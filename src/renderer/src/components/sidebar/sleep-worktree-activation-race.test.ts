@@ -17,10 +17,12 @@ const mocks = vi.hoisted(() => {
   }
   const activateAndRevealWorktree = vi.fn()
   const activateAndRevealFolderWorkspace = vi.fn()
+  const hydrateEphemeralVmSshAuthority = vi.fn().mockResolvedValue(true)
   const resumeWorkspace = vi.fn().mockResolvedValue(null)
   return {
     activateAndRevealFolderWorkspace,
     activateAndRevealWorktree,
+    hydrateEphemeralVmSshAuthority,
     resumeWorkspace,
     state,
     toastError: vi.fn()
@@ -38,6 +40,10 @@ vi.mock('@/lib/worktree-activation', () => ({
   activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
+vi.mock('@/runtime/ephemeral-vm-ssh-authority', () => ({
+  hydrateEphemeralVmSshAuthority: mocks.hydrateEphemeralVmSshAuthority
+}))
+
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 
 import { activateWorktreeFromSidebar } from '@/lib/sidebar-worktree-activation'
@@ -47,6 +53,7 @@ describe('sleep flow vs slept-workspace activation', () => {
   beforeEach(() => {
     mocks.activateAndRevealWorktree.mockClear()
     mocks.activateAndRevealFolderWorkspace.mockClear()
+    mocks.hydrateEphemeralVmSshAuthority.mockClear().mockResolvedValue(true)
     mocks.resumeWorkspace.mockClear().mockResolvedValue(null)
     mocks.toastError.mockClear()
     vi.stubGlobal('window', {
@@ -86,6 +93,7 @@ describe('sleep flow vs slept-workspace activation', () => {
 
     await activateWorktreeFromSidebar('wt-parent')
     expect(mocks.resumeWorkspace).toHaveBeenCalledWith({ workspaceId: 'wt-parent' })
+    expect(mocks.hydrateEphemeralVmSshAuthority).not.toHaveBeenCalled()
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
       revealInSidebar: false
@@ -94,6 +102,39 @@ describe('sleep flow vs slept-workspace activation', () => {
     await runSleepWorktrees(['wt-child-1', 'wt-child-2', 'wt-child-3'])
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+  })
+
+  it('hydrates a resumed runtime-owned SSH target before activation', async () => {
+    mocks.resumeWorkspace.mockResolvedValueOnce({ sshTargetId: 'runtime-ssh-1' })
+    mocks.hydrateEphemeralVmSshAuthority.mockImplementationOnce(async (targetId: string) => {
+      expect(targetId).toBe('runtime-ssh-1')
+      expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+      return true
+    })
+
+    await activateWorktreeFromSidebar('wt-parent')
+
+    expect(mocks.hydrateEphemeralVmSshAuthority).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledTimes(1)
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-parent', {
+      revealInSidebar: false
+    })
+  })
+
+  it('fails closed when resumed runtime-owned SSH authority cannot be hydrated', async () => {
+    mocks.resumeWorkspace.mockResolvedValueOnce({ sshTargetId: 'runtime-ssh-1' })
+    mocks.hydrateEphemeralVmSshAuthority.mockResolvedValueOnce(false)
+
+    await activateWorktreeFromSidebar('wt-parent')
+
+    expect(mocks.hydrateEphemeralVmSshAuthority).toHaveBeenCalledWith('runtime-ssh-1')
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalled()
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Failed to wake ephemeral VM workspace',
+      expect.objectContaining({
+        description: 'Could not verify the resumed ephemeral VM SSH authority.'
+      })
+    )
   })
 
   it('does not activate a slept worktree when VM resume fails', async () => {

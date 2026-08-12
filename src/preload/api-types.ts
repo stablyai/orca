@@ -3456,6 +3456,9 @@ export type PreloadApi = {
     onStateChanged: (
       callback: (data: { targetId: string; state: SshConnectionState }) => void
     ) => () => void
+    onRuntimeOwnedStateChanged?: (
+      callback: (data: { targetId: string; state: SshConnectionState }) => void
+    ) => () => void
     addPortForward: (args: {
       targetId: string
       localPort: number

@@ -100,6 +100,10 @@ import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { subscribeToUnpairedDeviceAuthNotification } from './unpaired-device-auth-notification'
 import {
+  applyEphemeralVmSshState,
+  clearEphemeralVmSshAuthority
+} from '@/runtime/ephemeral-vm-ssh-authority'
+import {
   applyRuntimeEnvironmentSshStateChanged,
   hydrateRuntimeEnvironmentSshState,
   refreshRuntimeEnvironmentSshTargetMetadata
@@ -2938,6 +2942,23 @@ export function useIpcEvents(): void {
 
       latestSshTargetStateEventByTargetId.delete(data.targetId)
       applySshConnectionStateChange(data.targetId, state, 'push')
+    }
+    const handleRuntimeOwnedSshStateChanged = (data: {
+      targetId: string
+      state: SshConnectionState
+    }): void => {
+      if (data.state.status === 'connected') {
+        applyEphemeralVmSshState(data.targetId, data.state)
+      } else {
+        clearEphemeralVmSshAuthority(data.targetId)
+      }
+    }
+
+    const unsubscribeRuntimeOwnedSshState = window.api.ssh.onRuntimeOwnedStateChanged?.(
+      handleRuntimeOwnedSshStateChanged
+    )
+    if (unsubscribeRuntimeOwnedSshState) {
+      unsubs.push(unsubscribeRuntimeOwnedSshState)
     }
 
     unsubs.push(window.api.ssh.onStateChanged(handleSshStateChangedEvent))

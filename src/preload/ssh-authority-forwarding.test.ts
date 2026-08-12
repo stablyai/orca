@@ -185,4 +185,119 @@ describe('native preload SSH authority forwarding', () => {
 
     expect(onStateChanged).not.toHaveBeenCalled()
   })
+  it('forwards complete authority on the runtime-owned channel', async () => {
+    const state: SshConnectionState = {
+      targetId: 'runtime-ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'runtime-provider-epoch' as SshProviderEpoch,
+      connectionGeneration: 29
+    }
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onRuntimeOwnedStateChanged = vi.fn()
+    api.ssh.onRuntimeOwnedStateChanged?.(onRuntimeOwnedStateChanged)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-state-changed'
+    )?.[1] as (event: unknown, data: { targetId: string; state: SshConnectionState }) => void
+
+    listener({}, { targetId: 'runtime-ssh-1', state })
+
+    expect(onRuntimeOwnedStateChanged).toHaveBeenCalledWith({ targetId: 'runtime-ssh-1', state })
+    expect(onRuntimeOwnedStateChanged.mock.calls[0]?.[0].state).toEqual(state)
+  })
+
+  it('normalizes partial runtime authority through reconciliation admission', async () => {
+    const partialState = {
+      targetId: 'runtime-ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'partial-runtime-provider-epoch'
+    } as SshConnectionState
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onRuntimeOwnedStateChanged = vi.fn()
+    api.ssh.onRuntimeOwnedStateChanged?.(onRuntimeOwnedStateChanged)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-state-changed'
+    )?.[1] as (event: unknown, data: { targetId: string; state: SshConnectionState }) => void
+
+    listener({}, { targetId: 'runtime-ssh-1', state: partialState })
+
+    expect(onRuntimeOwnedStateChanged).toHaveBeenCalledWith({
+      targetId: 'runtime-ssh-1',
+      state: {
+        targetId: 'runtime-ssh-1',
+        status: 'connected',
+        error: null,
+        reconnectAttempt: 0,
+        providerEpoch: null
+      }
+    })
+  })
+
+  it('drops malformed runtime authority before it reaches the renderer', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onRuntimeOwnedStateChanged = vi.fn()
+    api.ssh.onRuntimeOwnedStateChanged?.(onRuntimeOwnedStateChanged)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-state-changed'
+    )?.[1] as (event: unknown, data: { targetId: string; state: SshConnectionState }) => void
+
+    listener(
+      {},
+      {
+        targetId: 'runtime-ssh-1',
+        state: {
+          targetId: 'runtime-ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          providerEpoch: '' as SshProviderEpoch,
+          connectionGeneration: 29
+        }
+      }
+    )
+
+    expect(onRuntimeOwnedStateChanged).not.toHaveBeenCalled()
+  })
+
+  it('ignores ordinary target IDs on the runtime-owned channel', async () => {
+    const state: SshConnectionState = {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'native-provider-epoch' as SshProviderEpoch,
+      connectionGeneration: 29
+    }
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onRuntimeOwnedStateChanged = vi.fn()
+    api.ssh.onRuntimeOwnedStateChanged?.(onRuntimeOwnedStateChanged)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-state-changed'
+    )?.[1] as (event: unknown, data: { targetId: string; state: SshConnectionState }) => void
+
+    listener({}, { targetId: 'ssh-1', state })
+
+    expect(onRuntimeOwnedStateChanged).not.toHaveBeenCalled()
+  })
+
+  it('unsubscribes the runtime-owned listener from its dedicated channel', async () => {
+    await import('./index')
+    const api = exposeInMainWorld.mock.calls.find(([name]) => name === 'api')?.[1] as PreloadApi
+    const onRuntimeOwnedStateChanged = vi.fn()
+    const unsubscribe = api.ssh.onRuntimeOwnedStateChanged?.(onRuntimeOwnedStateChanged)
+    const listener = on.mock.calls.find(
+      ([channel]) => channel === 'ssh:runtime-owned-state-changed'
+    )?.[1]
+
+    unsubscribe?.()
+
+    expect(removeListener).toHaveBeenCalledWith('ssh:runtime-owned-state-changed', listener)
+  })
 })

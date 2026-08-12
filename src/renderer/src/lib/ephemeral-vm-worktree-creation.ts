@@ -4,11 +4,14 @@ import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../shared/execution-host'
 import type { CreateWorktreeResult, Repo, WorktreeMeta } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
-
+import {
+  clearEphemeralVmSshAuthority,
+  hydrateEphemeralVmSshAuthority
+} from '@/runtime/ephemeral-vm-ssh-authority'
 const MAX_PROVISIONING_LOG_CHARS = 12_000
-
 export async function prepareRequestForCreate(
   creationId: string,
   request: WorktreeCreationRequest
@@ -103,7 +106,6 @@ export async function prepareRequestForCreate(
   })
   return preparedRequest
 }
-
 function getEphemeralVmPortableBaseSelection(
   request: WorktreeCreationRequest
 ): Pick<WorktreeCreationRequest, 'baseBranch' | 'compareBaseRef'> {
@@ -128,7 +130,6 @@ function getEphemeralVmPortableBaseSelection(
   // provider-backed start point above.
   return { baseBranch: undefined, compareBaseRef: undefined }
 }
-
 function appendProvisioningWarnings(
   creationId: string,
   warnings: readonly { message: string; remediation?: string }[]
@@ -136,16 +137,16 @@ function appendProvisioningWarnings(
   if (warnings.length === 0) {
     return
   }
-  const text = warnings
-    .map((warning) =>
-      warning.remediation
-        ? `Warning: ${warning.message}\n${warning.remediation}\n`
-        : `Warning: ${warning.message}\n`
-    )
-    .join('')
-  appendProvisioningLog(creationId, text)
+  appendProvisioningLog(
+    creationId,
+    warnings
+      .map(
+        ({ message, remediation }) =>
+          `Warning: ${message}\n${remediation ? `${remediation}\n` : ''}`
+      )
+      .join('')
+  )
 }
-
 function appendProvisioningLog(creationId: string, chunk: string): void {
   const store = useAppStore.getState()
   const entry = store.pendingWorktreeCreations[creationId]
@@ -157,7 +158,6 @@ function appendProvisioningLog(creationId: string, chunk: string): void {
   const nextLog = `${entry.provisioningLog ?? ''}${chunk}`.slice(-MAX_PROVISIONING_LOG_CHARS)
   store.updatePendingWorktreeCreation(creationId, { provisioningLog: nextLog })
 }
-
 export async function attachEphemeralVmRuntimeToWorkspace(
   request: WorktreeCreationRequest,
   workspaceId: string
@@ -175,15 +175,18 @@ export async function attachEphemeralVmRuntimeToWorkspace(
       .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId)
   }
 }
-
 export async function adoptEphemeralVmProvisionedRoot(
   request: WorktreeCreationRequest
 ): Promise<CreateWorktreeResult> {
   if (request.sparseCheckout) {
     throw new Error(getProvisionedRootSparseCheckoutError())
   }
-  const store = useAppStore.getState()
-  const hostId = request.workspaceRunContext?.hostId
+  const store = useAppStore.getState(),
+    hostId = request.workspaceRunContext?.hostId
+  const runtimeSshTargetId = getRuntimeSshTargetId(hostId)
+  if (runtimeSshTargetId && !(await hydrateEphemeralVmSshAuthority(runtimeSshTargetId))) {
+    throw new Error('Could not verify the recipe-provisioned Git checkout.')
+  }
   const authoritative = await store.fetchWorktrees(request.repoId, {
     ...(hostId ? { executionHostId: hostId } : {}),
     requireAuthoritative: true
@@ -191,7 +194,6 @@ export async function adoptEphemeralVmProvisionedRoot(
   if (authoritative !== true) {
     throw new Error('Could not verify the recipe-provisioned Git checkout.')
   }
-
   const expectedPath = request.workspaceRunContext?.path
   const normalizedExpectedPath = expectedPath
     ? normalizeRuntimePathForComparison(expectedPath)
@@ -206,7 +208,6 @@ export async function adoptEphemeralVmProvisionedRoot(
   if (!worktree) {
     throw new Error('The recipe projectRoot is not the imported Git checkout root.')
   }
-
   const now = Date.now()
   const metadata: Partial<WorktreeMeta> = {
     displayName: request.displayName ?? request.name,
@@ -256,47 +257,57 @@ export async function adoptEphemeralVmProvisionedRoot(
   }
   return { worktree: { ...worktree, ...metadata } }
 }
-
 function getProvisionedRootSparseCheckoutError(): string {
   return translate(
     'auto.lib.ephemeralVmWorktreeCreation.sparseCheckoutUnsupported',
     'Provisioned-root recipes do not support sparse checkout.'
   )
 }
-
 function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | null {
   if (!repo) {
     return null
   }
-  // Why: reuse the shared GitHub-identity projection so the portable project id
-  // can't drift from the canonical `github:<owner>/<repo>` key. Gate on the
-  // `github:` prefix to preserve the previous null-for-non-GitHub behavior
-  // (the shared key also returns `git:`/`repo:` fallbacks we don't want here).
+  // Why: shared identity projection keeps the portable id canonical; only GitHub keys are accepted.
   const key = getProjectIdentityKey(repo)
   return key.startsWith('github:') ? key : null
 }
-
+function getRuntimeSshTargetId(hostId: string | undefined): string | null {
+  const parsedHost = parseExecutionHostId(hostId)
+  return parsedHost?.kind === 'ssh' && isRuntimeOwnedSshTargetId(parsedHost.targetId)
+    ? parsedHost.targetId
+    : null
+}
 export async function cleanupEphemeralVmRuntimeForFailedCreate(
   request: WorktreeCreationRequest
 ): Promise<void> {
   if (!request.ephemeralVmRuntimeId) {
     return
   }
-  const setupId = request.workspaceRunContext?.projectHostSetupId
-  if (setupId) {
-    try {
-      const deleted = await useAppStore.getState().deleteProjectHostSetup({ setupId })
-      if (!deleted) {
+  const setupId = request.workspaceRunContext?.projectHostSetupId,
+    runtimeSshTargetId = getRuntimeSshTargetId(request.workspaceRunContext?.hostId)
+  try {
+    if (setupId) {
+      try {
+        const deleted = await useAppStore.getState().deleteProjectHostSetup({ setupId })
+        if (!deleted) {
+          return
+        }
+      } catch (error) {
+        console.error('Failed to remove ephemeral VM project setup after creation failed:', error)
         return
       }
-    } catch (error) {
-      console.error('Failed to remove ephemeral VM project setup after creation failed:', error)
-      return
     }
-  }
-  try {
-    await window.api.ephemeralVm.cleanup({ runtimeId: request.ephemeralVmRuntimeId })
-  } catch (error) {
-    console.error('Failed to clean up ephemeral VM runtime after workspace creation failed:', error)
+    try {
+      await window.api.ephemeralVm.cleanup({ runtimeId: request.ephemeralVmRuntimeId })
+    } catch (error) {
+      console.error(
+        'Failed to clean up ephemeral VM runtime after workspace creation failed:',
+        error
+      )
+    }
+  } finally {
+    if (runtimeSshTargetId) {
+      clearEphemeralVmSshAuthority(runtimeSshTargetId)
+    }
   }
 }

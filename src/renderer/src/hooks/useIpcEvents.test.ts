@@ -5599,6 +5599,183 @@ describe('useIpcEvents agent status snapshot integration', () => {
       }
     }
   )
+  it('applies hidden runtime SSH events without the unknown-target guard or direct SSH routing', async () => {
+    const targetId = 'runtime-ssh-1'
+    const userTargetId = 'user-target'
+    const userState = {
+      targetId: userTargetId,
+      status: 'connected' as const,
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'user-epoch',
+      connectionGeneration: 1
+    }
+    const connectedState = {
+      targetId,
+      status: 'connected' as const,
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: 'epoch-1',
+      connectionGeneration: 1
+    }
+    const newerConnectedState = {
+      ...connectedState,
+      providerEpoch: 'epoch-2',
+      connectionGeneration: 2
+    }
+    const disconnectedState = {
+      ...connectedState,
+      status: 'disconnected' as const
+    }
+    const reconnectingState = {
+      ...connectedState,
+      status: 'reconnecting' as const
+    }
+    const sshConnectionStates = new Map<string, unknown>([[userTargetId, userState]])
+    const setSshConnectionState = vi.fn((nextTargetId: string, state: unknown) => {
+      sshConnectionStates.set(nextTargetId, state)
+    })
+    const clearSshConnectionState = vi.fn((nextTargetId: string) => {
+      sshConnectionStates.delete(nextTargetId)
+    })
+    const listTargets = vi.fn(() => new Promise<{ id: string; label: string }[]>(() => {}))
+    const setSshTargetsMetadata = vi.fn()
+    const setRemovedSshTargetLabels = vi.fn()
+    const setSshTargetLabels = vi.fn()
+    const setPortForwards = vi.fn()
+    const clearPortForwards = vi.fn()
+    const setDetectedPorts = vi.fn()
+    const clearRemoteDetectedAgents = vi.fn()
+    const clearDirectSshTargetPtyBindings = vi.fn()
+    const clearRemovedSshTargetState = vi.fn()
+    const setRemoteWorkspaceSyncStatus = vi.fn()
+    let runtimeOwnedStateListener:
+      | ((data: { targetId: string; state: unknown }) => void)
+      | undefined
+    const ordinarySshStateListener = vi.fn()
+    const unsubscribeRuntimeOwnedState = vi.fn()
+    const storeState = buildStoreState({
+      // Why: the runtime-owned target is intentionally absent from normal SSH metadata.
+      sshTargetLabels: new Map(),
+      sshConnectionStates,
+      setSshConnectionState,
+      clearSshConnectionState,
+      setSshTargetsMetadata,
+      setRemovedSshTargetLabels,
+      setSshTargetLabels,
+      setPortForwards,
+      clearPortForwards,
+      setDetectedPorts,
+      clearRemoteDetectedAgents,
+      clearDirectSshTargetPtyBindings,
+      clearRemovedSshTargetState,
+      setRemoteWorkspaceSyncStatus
+    })
+    const coordinator = {
+      requestReconnect: vi.fn(),
+      replaceAuthority: vi.fn(),
+      prepareOnly: vi.fn(),
+      correctUnboundTerminals: vi.fn(),
+      finalizeHydratedTerminals: vi.fn(),
+      invalidate: vi.fn(),
+      stop: vi.fn()
+    }
+
+    stubReactSyncEffect()
+    stubAuxiliaryModules()
+    vi.doMock('../store', () => ({
+      useAppStore: {
+        subscribe: vi.fn(() => () => {}),
+        getState: () => storeState
+      }
+    }))
+    vi.doMock('./direct-ssh-reconnect-rollout', () => ({
+      isDirectSshReconnectCoordinatorRoutingEnabled: () => true
+    }))
+    vi.doMock('./direct-ssh-worktree-refresh-scheduler', () => ({
+      createDirectSshWorktreeRefreshScheduler: () => ({
+        stop: vi.fn(),
+        disposeProvider: vi.fn()
+      })
+    }))
+    vi.doMock('./direct-ssh-host-hydration', () => ({
+      createDirectSshHostHydration: () => ({
+        capturePreparationInput: vi.fn(),
+        readHostScopedLineage: vi.fn(),
+        isPreparationTokenCurrent: vi.fn(() => true),
+        stop: vi.fn()
+      })
+    }))
+    vi.doMock('./direct-ssh-reconnect-coordinator', () => ({
+      createDirectSshReconnectCoordinator: () => coordinator
+    }))
+    vi.doMock('@/lib/direct-ssh-reconnect-product-telemetry', () => ({
+      createDirectSshReconnectProductTelemetryAdapter: vi.fn()
+    }))
+    vi.stubGlobal(
+      'window',
+      buildWindowApi({
+        onSet: () => () => {},
+        ssh: {
+          listTargets,
+          onStateChanged: (listener: (data: { targetId: string; state: unknown }) => void) => {
+            ordinarySshStateListener.mockImplementation(listener)
+            return () => {}
+          },
+          onRuntimeOwnedStateChanged: (
+            listener: (data: { targetId: string; state: unknown }) => void
+          ) => {
+            runtimeOwnedStateListener = listener
+            return unsubscribeRuntimeOwnedState
+          }
+        }
+      })
+    )
+
+    const { useIpcEvents } = await import('./useIpcEvents')
+    useIpcEvents()
+    expect(runtimeOwnedStateListener).toBeTypeOf('function')
+    expect(ordinarySshStateListener).not.toHaveBeenCalled()
+
+    // Ignore the startup target snapshot; any subsequent listTargets call is the ordinary
+    // unknown-target deletion guard that runtime-owned events must bypass.
+    listTargets.mockClear()
+    runtimeOwnedStateListener?.({ targetId, state: connectedState })
+    expect(sshConnectionStates.get(targetId)).toEqual(connectedState)
+    expect(setSshConnectionState).toHaveBeenCalledWith(targetId, connectedState)
+    expect(listTargets).not.toHaveBeenCalled()
+    expect(setSshTargetsMetadata).not.toHaveBeenCalled()
+    expect(setRemovedSshTargetLabels).not.toHaveBeenCalled()
+    expect(setSshTargetLabels).not.toHaveBeenCalled()
+    expect(clearRemovedSshTargetState).not.toHaveBeenCalled()
+    expect(clearPortForwards).not.toHaveBeenCalled()
+    expect(setPortForwards).not.toHaveBeenCalled()
+    expect(setDetectedPorts).not.toHaveBeenCalled()
+    expect(clearRemoteDetectedAgents).not.toHaveBeenCalled()
+    expect(clearDirectSshTargetPtyBindings).not.toHaveBeenCalled()
+    expect(setRemoteWorkspaceSyncStatus).not.toHaveBeenCalled()
+    expect(coordinator.requestReconnect).not.toHaveBeenCalled()
+    expect(coordinator.replaceAuthority).not.toHaveBeenCalled()
+    expect(coordinator.prepareOnly).not.toHaveBeenCalled()
+    expect(coordinator.correctUnboundTerminals).not.toHaveBeenCalled()
+    expect(coordinator.finalizeHydratedTerminals).not.toHaveBeenCalled()
+    expect(coordinator.invalidate).not.toHaveBeenCalled()
+
+    runtimeOwnedStateListener?.({ targetId, state: disconnectedState })
+    expect(clearSshConnectionState).toHaveBeenCalledWith(targetId)
+    expect(sshConnectionStates.has(targetId)).toBe(false)
+    expect(sshConnectionStates.get(userTargetId)).toEqual(userState)
+
+    runtimeOwnedStateListener?.({ targetId, state: reconnectingState })
+    expect(clearSshConnectionState).toHaveBeenCalledTimes(2)
+    expect(sshConnectionStates.has(targetId)).toBe(false)
+    expect(sshConnectionStates.get(userTargetId)).toEqual(userState)
+
+    runtimeOwnedStateListener?.({ targetId, state: newerConnectedState })
+    expect(sshConnectionStates.get(targetId)).toEqual(newerConnectedState)
+    expect(setSshConnectionState).toHaveBeenLastCalledWith(targetId, newerConnectedState)
+    expect(sshConnectionStates.get(userTargetId)).toEqual(userState)
+  })
 
   it('does not let initial SSH port snapshots overwrite newer push events', async () => {
     const targetId = 'target-ports'

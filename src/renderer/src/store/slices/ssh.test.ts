@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { toAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import type { SshProviderEpoch } from '../../../../shared/ssh-types'
+import type { SshConnectionState, SshProviderEpoch } from '../../../../shared/ssh-types'
 import { createTestStore, makeTab, makeWorktree, TEST_REPO } from './store-test-helpers'
 
 describe('createSshSlice', () => {
@@ -363,6 +363,97 @@ describe('createSshSlice', () => {
     expect(store.getState()).toBe(previousState)
     expect(store.getState().sshConnectionStates).toBe(sshConnectionStates)
     expect(store.getState().sshConnectedGeneration).toBe(1)
+  })
+
+  it('clears one SSH connection state without purging unrelated state', () => {
+    const store = createTestStore()
+    const clearedTargetId = 'ssh-1'
+    const survivingTargetId = 'ssh-2'
+    const clearedState: SshConnectionState = {
+      targetId: clearedTargetId,
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    }
+    const survivingState: SshConnectionState = {
+      targetId: survivingTargetId,
+      status: 'reconnecting',
+      error: 'connection lost',
+      reconnectAttempt: 2
+    }
+
+    store.setState({
+      sshConnectionStates: new Map<string, SshConnectionState>([
+        [clearedTargetId, clearedState],
+        [survivingTargetId, survivingState]
+      ]),
+      sshTargetLabels: new Map([
+        [clearedTargetId, 'Cleared target'],
+        [survivingTargetId, 'Surviving target']
+      ]),
+      removedSshTargetLabels: new Map([['ssh-removed', 'Removed target']]),
+      sshTargetsHydrated: true,
+      remoteWorkspaceHydratedTargetIds: new Set([survivingTargetId]),
+      remoteWorkspaceSyncStatusByTargetId: {
+        [survivingTargetId]: { phase: 'synced' }
+      },
+      sshCredentialQueue: [
+        {
+          requestId: 'request-1',
+          targetId: survivingTargetId,
+          kind: 'password',
+          detail: 'password'
+        }
+      ],
+      sshConnectedGeneration: 4,
+      portForwardsByConnection: { [survivingTargetId]: [] },
+      detectedPortsByConnection: { [survivingTargetId]: [] }
+    })
+
+    const before = store.getState()
+    store.getState().clearSshConnectionState(clearedTargetId)
+    const after = store.getState()
+
+    expect(after.sshConnectionStates).not.toBe(before.sshConnectionStates)
+    expect(after.sshConnectionStates).toEqual(new Map([[survivingTargetId, survivingState]]))
+    expect(after.sshConnectionStates.get(survivingTargetId)).toBe(survivingState)
+    expect({ ...after, sshConnectionStates: undefined }).toEqual({
+      ...before,
+      sshConnectionStates: undefined
+    })
+  })
+
+  it('is a no-op when clearing an absent SSH connection state', () => {
+    const store = createTestStore()
+    const firstTargetId = 'ssh-1'
+    const secondTargetId = 'ssh-2'
+    const sshConnectionStates = new Map([
+      [
+        firstTargetId,
+        { targetId: firstTargetId, status: 'connected' as const, error: null, reconnectAttempt: 0 }
+      ],
+      [
+        secondTargetId,
+        {
+          targetId: secondTargetId,
+          status: 'disconnected' as const,
+          error: null,
+          reconnectAttempt: 0
+        }
+      ]
+    ])
+    const sshTargetLabels = new Map([
+      [firstTargetId, 'First target'],
+      [secondTargetId, 'Second target']
+    ])
+    store.setState({ sshConnectionStates, sshTargetLabels, sshTargetsHydrated: true })
+
+    const before = store.getState()
+    store.getState().clearSshConnectionState('missing-target')
+
+    expect(store.getState()).toBe(before)
+    expect(store.getState().sshConnectionStates).toBe(sshConnectionStates)
+    expect(store.getState().sshTargetLabels).toBe(sshTargetLabels)
   })
 
   it('publishes an authoritative SSH connection generation change', () => {

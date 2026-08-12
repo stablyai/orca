@@ -2,10 +2,11 @@ import {
   activateAndRevealFolderWorkspace,
   activateAndRevealWorktree
 } from '@/lib/worktree-activation'
+import { isRuntimeOwnedSshTargetId, type ExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { hydrateEphemeralVmSshAuthority } from '@/runtime/ephemeral-vm-ssh-authority'
 
 export async function activateWorktreeFromSidebar(
   worktreeId: string,
@@ -26,6 +27,12 @@ export async function activateWorktreeFromSidebar(
   if (typeof window !== 'undefined' && window.api?.ephemeralVm?.resumeWorkspace) {
     try {
       const runtime = await window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
+      if (runtime?.sshTargetId && isRuntimeOwnedSshTargetId(runtime.sshTargetId)) {
+        const hydrated = await hydrateEphemeralVmSshAuthority(runtime.sshTargetId)
+        if (!hydrated) {
+          throw new Error('Could not verify the resumed ephemeral VM SSH authority.')
+        }
+      }
       if (runtime?.runtimeEnvironmentId) {
         const store = (await import('@/store')).useAppStore
         store.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())
