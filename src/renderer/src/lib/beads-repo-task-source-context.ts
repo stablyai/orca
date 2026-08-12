@@ -4,7 +4,7 @@ import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 /** The repo-backed beads source context. Every producer must mint the same
  *  cache scope (identity prefix unknown pre-fetch → cache part ''), or warm

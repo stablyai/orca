@@ -4,7 +4,7 @@ import {
   findBeadsIssueWorkspaceAttachment,
   getBeadsIssueWorkspaceAttachmentLabel
 } from './beads-issue-workspace-attachment'
-import type { Worktree, WorkspaceLinkedItem } from '../../../shared/types'
+import type { Worktree, WorkspaceLinkedItem } from '../../../shared/worktree/types'
 
 function beadsLinkedItem(overrides: Partial<WorkspaceLinkedItem> = {}): WorkspaceLinkedItem {
   return {

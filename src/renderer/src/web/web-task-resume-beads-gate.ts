@@ -1,6 +1,6 @@
 import { BEADS_TASK_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { TaskResumeState } from '../../../shared/types'
+import type { TaskResumeState } from '../../../shared/ui-chrome-types'
 
 type UiSetTaskResumeUpdates = { taskResumeState?: TaskResumeState }
 

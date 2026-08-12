@@ -1,4 +1,4 @@
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { getWorktreeAttachmentLabel } from './worktree-attachment-label'
 
 /** Beads issues have no numbers, so attachment matches on the linked item's beadsIdentifier. */

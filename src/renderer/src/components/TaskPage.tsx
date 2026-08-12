@@ -403,7 +403,7 @@ import type {
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProvider } from '../../../shared/task-providers'
 import type { TaskViewPresetId } from '../../../shared/ui-chrome-types'
-import type { BeadsIssue, BeadsIssuePreset } from '../../../shared/beads-types'
+import type { BeadsIssue } from '../../../shared/beads-types'
 import type { PreflightStatus } from '../../../preload/api-types'
 import {
   LINEAR_ISSUE_LIST_MAX,

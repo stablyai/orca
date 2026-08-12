@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspaceLinkedItem } from './types'
+import type { WorkspaceLinkedItem } from './worktree/types'
 import { areWorkspaceLinkedItemsEqual, normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { WorkspaceLinkedItemSchema } from './workspace-linked-item-schema'
 

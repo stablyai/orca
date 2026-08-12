@@ -1,5 +1,5 @@
 import { beadsGetIssue } from '@/runtime/runtime-beads-client'
-import type { WorktreeMeta } from '../../../../shared/types'
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 const TITLE_LOOKUP_TIMEOUT_MS = 5_000
 

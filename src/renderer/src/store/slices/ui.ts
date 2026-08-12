@@ -53,13 +53,8 @@ import {
 } from '../../../../shared/status-bar-usage-mode'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
-import {
-  normalizeTaskSourceContext,
-  type TaskSourceContext
-} from '../../../../shared/task-source-context'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
-import type { Repo } from '../../../../shared/repo-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal

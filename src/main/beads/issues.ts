@@ -51,6 +51,22 @@ function truncateBdOutput(output: string): string {
   return output.length > 200 ? `${output.slice(0, 200)}…` : output
 }
 
+/** bd wraps every --json payload as {"schema_version": 1, "data": <payload>}
+ *  under BD_JSON_ENVELOPE=1 — announced as the default from bd 2.0. Unwrapping
+ *  before the shape checks keeps both wire formats working. */
+function unwrapBdJsonEnvelope(parsed: unknown): unknown {
+  if (
+    parsed !== null &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed) &&
+    'schema_version' in parsed &&
+    'data' in parsed
+  ) {
+    return (parsed as { data: unknown }).data
+  }
+  return parsed
+}
+
 /** Empty stdout is an empty list; anything else must parse as a JSON array or the load failed. */
 export function parseBdJsonArray(stdout: string): unknown[] {
   const trimmed = stdout.trim()
@@ -59,7 +75,7 @@ export function parseBdJsonArray(stdout: string): unknown[] {
   }
   let parsed: unknown
   try {
-    parsed = JSON.parse(trimmed)
+    parsed = unwrapBdJsonEnvelope(JSON.parse(trimmed))
   } catch {
     throw new Error(`bd returned unparseable JSON output: ${truncateBdOutput(trimmed)}`)
   }

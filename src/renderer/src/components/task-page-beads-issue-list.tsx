@@ -16,7 +16,7 @@ import {
   getBeadsIssueWorkspaceAttachmentLabel
 } from '@/lib/beads-issue-workspace-attachment'
 import { cn } from '@/lib/utils'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { TaskPageBeadsIssueRow, TaskPageBeadsListState } from './task-page-beads-issues'
 import {
   getBeadsListNoticeCopy,

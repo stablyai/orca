@@ -203,6 +203,43 @@ describe('listBeadsIssues', () => {
     )
   })
 
+  // BD_JSON_ENVELOPE=1 today, announced as the default wire format from bd 2.0.
+  it('unwraps the {"schema_version", "data"} envelope around the issue array', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ schema_version: 1, data: [RAW_ISSUE] }),
+      stderr: ''
+    })
+
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
+
+    expect(result.issues.map((issue) => issue.id)).toEqual(['probe-a1'])
+  })
+
+  it('surfaces an enveloped error payload as a load error', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ schema_version: 1, data: { error: 'database is locked' } }),
+      stderr: ''
+    })
+
+    await expect(listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })).rejects.toThrow(
+      'database is locked'
+    )
+  })
+
+  it('surfaces an enveloped non-array payload as a load error', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ schema_version: 1, data: { issues: [] } }),
+      stderr: ''
+    })
+
+    await expect(listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })).rejects.toThrow(
+      /non-array JSON payload/
+    )
+  })
+
   it('treats empty exit-0 stdout as an empty list, not an error', async () => {
     queueVersionOk()
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '\n', stderr: '' })
