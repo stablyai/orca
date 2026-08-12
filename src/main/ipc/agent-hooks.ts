@@ -21,6 +21,7 @@ import { copilotHookService } from '../copilot/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
@@ -62,6 +63,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentHooks:devinStatus')
   ipcMain.removeHandler('agentHooks:kimiStatus')
+  ipcMain.removeHandler('agentHooks:zcodeStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
@@ -279,6 +281,19 @@ export function registerAgentHookHandlers(
     } catch (err) {
       return {
         agent: 'kimi',
+        state: 'error',
+        configPath: '',
+        managedHooksPresent: false,
+        detail: err instanceof Error ? err.message : String(err)
+      }
+    }
+  })
+  ipcMain.handle('agentHooks:zcodeStatus', (): AgentHookInstallStatus => {
+    try {
+      return zcodeHookService.getStatus()
+    } catch (err) {
+      return {
+        agent: 'zcode',
         state: 'error',
         configPath: '',
         managedHooksPresent: false,

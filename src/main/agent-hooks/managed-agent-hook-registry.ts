@@ -14,6 +14,7 @@ import { grokHookService } from '../grok/hook-service'
 import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { zcodeHookService } from '../zcode/hook-service'
 
 export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
@@ -34,7 +35,8 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
-  ['kimi', () => kimiHookService.install()]
+  ['kimi', () => kimiHookService.install()],
+  ['zcode', () => zcodeHookService.install()]
 ]
 
 // Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
@@ -55,7 +57,8 @@ export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScri
   ['grok', () => grokHookService.refreshManagedScripts()],
   ['copilot', () => copilotHookService.refreshManagedScripts()],
   ['devin', () => devinHookService.refreshManagedScripts()],
-  ['kimi', () => kimiHookService.refreshManagedScripts()]
+  ['kimi', () => kimiHookService.refreshManagedScripts()],
+  ['zcode', () => zcodeHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -72,7 +75,8 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['copilot', () => copilotHookService.remove()],
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
-  ['kimi', () => kimiHookService.remove()]
+  ['kimi', () => kimiHookService.remove()],
+  ['zcode', () => zcodeHookService.remove()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [
@@ -89,5 +93,6 @@ export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusR
   ['copilot', () => copilotHookService.getStatus()],
   ['hermes', () => hermesHookService.getStatus()],
   ['devin', () => devinHookService.getStatus()],
-  ['kimi', () => kimiHookService.getStatus()]
+  ['kimi', () => kimiHookService.getStatus()],
+  ['zcode', () => zcodeHookService.getStatus()]
 ]
