@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import type { BrowserCookieImportSummary } from '../../../shared/types'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 
 type CookieImportWarning = NonNullable<BrowserCookieImportSummary['warning']>
 
@@ -24,16 +25,69 @@ function formatCookieImportWarning(warning: CookieImportWarning): string {
   }
 }
 
+const GOOGLE_SIGN_IN_URL = 'https://accounts.google.com/'
+
+function googleSignInErrorMessage(): string {
+  return translate(
+    'auto.lib.browser.cookie.import.toast.googleDirectSignInUnavailable',
+    'Could not open the browser profile. Open it and sign in at accounts.google.com.'
+  )
+}
+
+function emitGoogleCookieImportWarning(
+  summary: BrowserCookieImportSummary,
+  profileId: string
+): void {
+  if (!summary.googleCookiesSkipped) {
+    return
+  }
+  const message = translate(
+    'auto.lib.browser.cookie.import.toast.googleCookiesSkipped',
+    'Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.'
+  )
+  if (!useAppStore.getState().activeWorktreeId) {
+    toast.warning(message)
+    return
+  }
+  toast.warning(message, {
+    duration: 12000,
+    action: {
+      label: translate(
+        'auto.lib.browser.cookie.import.toast.googleDirectSignInAction',
+        'Sign in to Google'
+      ),
+      onClick: () => {
+        void useAppStore
+          .getState()
+          .openBrowserProfileTabInActiveWorkspace(GOOGLE_SIGN_IN_URL, profileId)
+          .then((opened) => {
+            if (!opened) {
+              toast.error(googleSignInErrorMessage())
+              return
+            }
+            // Why: Settings would cover the newly opened browser tab.
+            useAppStore.getState().closeSettingsPage()
+          })
+          .catch(() => {
+            toast.error(googleSignInErrorMessage())
+          })
+      }
+    }
+  })
+}
+
 // Why: a degraded import returns ok:true with a warning, so every call site must route it to a
 // warning toast instead of reporting an unqualified success (#9355).
 export function emitBrowserCookieImportToast(
   summary: BrowserCookieImportSummary,
-  successMessage: string
+  successMessage: string,
+  profileId: string
 ): void {
   const warning = summary.warning
   if (warning) {
     toast.warning(formatCookieImportWarning(warning))
-    return
+  } else {
+    toast.success(successMessage)
   }
-  toast.success(successMessage)
+  emitGoogleCookieImportWarning(summary, profileId)
 }

@@ -11437,6 +11437,57 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
+  it('keeps blocked prompt text authoritative over an OpenCode marker', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'opencode'
+    })
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'OC | Native session',
+          activeLeafId: leafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId,
+          paneRuntimeId: 1,
+          ptyId: 'pty-1',
+          paneTitle: 'OC | Native session'
+        }
+      ]
+    })
+    runtime.onPtyData(
+      'pty-1',
+      'Permission required\nThis command requires permission\nAllow once\nAllow always\nReject\n',
+      123
+    )
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: 'permission'
+    })
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      satisfied: false,
+      blockedReason: 'codex-interactive-prompt'
+    })
+  })
+
   it('reports permission from blocked wait text over title-only working state', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -16046,6 +16097,28 @@ describe('OrcaRuntimeService', () => {
       runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 1_000 })
     ).resolves.toMatchObject({
       handle,
+      condition: 'tui-idle',
+      status: 'running'
+    })
+  })
+
+  it('resolves live-leaf tui-idle from an OpenCode native title', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    syncSinglePty(runtime, 'remote:pty-1', {
+      tabTitle: 'repo terminal',
+      paneTitle: 'ssh build-host | OC | Native session'
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(
+      runtime.waitForTerminal(terminal.handle, { condition: 'tui-idle', timeoutMs: 1_000 })
+    ).resolves.toMatchObject({
+      handle: terminal.handle,
       condition: 'tui-idle',
       status: 'running'
     })
@@ -23231,6 +23304,65 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
     await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
       handle: terminal.handle,
+      isRunningAgent: false,
+      status: null
+    })
+  })
+
+  it('does not authorize an OpenCode marker left on a shell pane', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'zsh'
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'OC | zsh' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(false)
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: false,
+      status: null
+    })
+  })
+
+  it('authorizes a hookless OpenCode marker with an OpenCode foreground process', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'opencode'
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'OC | Native session' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.isTerminalRunningAgent(terminal.handle)).resolves.toBe(true)
+    await expect(runtime.getTerminalAgentStatus(terminal.handle)).resolves.toEqual({
+      handle: terminal.handle,
+      isRunningAgent: true,
+      status: 'idle'
+    })
+  })
+
+  it('does not authorize an OpenCode marker left on a runtime PTY shell', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'zsh'
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      command: 'bash',
+      title: 'OC | zsh'
+    })
+
+    await expect(runtime.isTerminalRunningAgent(handle)).resolves.toBe(false)
+    await expect(runtime.getTerminalAgentStatus(handle)).resolves.toEqual({
+      handle,
       isRunningAgent: false,
       status: null
     })

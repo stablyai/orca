@@ -1,6 +1,5 @@
-import type { Cookie, Cookies } from 'electron'
+import type { Cookie, Cookies, Session } from 'electron'
 import { parse as parseDomain } from 'psl'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 
 const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
   'SIDCC',
@@ -64,7 +63,6 @@ export function normalizeCookieImportDomain(domain: string): string | null {
 // its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
 // users actually asked for.
 const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
-const COOKIE_CLEAR_CONCURRENCY = 8
 
 export function isNonTransplantableCookieDomain(domain: string): boolean {
   const normalized = normalizeCookieDomain(domain)
@@ -196,53 +194,55 @@ export async function restoreImportedDomainCookies(
   }
 }
 
-// Why: clearStorageData wipes the whole jar, including the non-transplantable families an
-// import is never allowed to remove; this is the clear step that can leave them in place.
-export async function removeAllCookiesExcept(
-  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+type CookieClearSession = {
+  cookies: Pick<Cookies, 'get' | 'set'>
+  clearStorageData: Session['clearStorageData']
+}
+
+async function restoreCookieClearSnapshot(
+  store: Pick<Cookies, 'set'>,
+  snapshot: readonly Cookie[],
+  originalError: unknown,
+  rollbackMessage: string
+): Promise<never> {
+  try {
+    await restoreImportedDomainCookies(store, snapshot)
+  } catch (rollbackError) {
+    throw new AggregateError([originalError, rollbackError], rollbackMessage)
+  }
+  throw originalError
+}
+
+// Why: after a bulk clear starts, Electron cannot reveal whether a rejected operation mutated
+// the jar, so keep the complete snapshot until excluded cookies have been restored.
+export async function bulkClearCookiesExcept(
+  targetSession: CookieClearSession,
   isExcluded: (cookie: Cookie) => boolean
 ): Promise<void> {
-  const existingCookies = await store.get({})
-  const removableGroups = new Map<string, { cookie: Cookie; url: string }[]>()
-  for (const cookie of existingCookies) {
-    if (isExcluded(cookie)) {
-      continue
-    }
-    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-    const url = domain ? cookieRemovalUrl(cookie, domain) : null
-    if (!url) {
-      continue
-    }
-    const key = JSON.stringify([url, cookie.name])
-    const group = removableGroups.get(key) ?? []
-    group.push({ cookie, url })
-    removableGroups.set(key, group)
+  const snapshot = await targetSession.cookies.get({})
+  const excludedCookies = snapshot.filter(isExcluded)
+
+  try {
+    await targetSession.clearStorageData({ storages: ['cookies'] })
+  } catch (clearError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([clearError], 'Could not clear existing cookies'),
+      'Cookie bulk clear and rollback failed'
+    )
   }
 
-  const removedCookies: Cookie[] = []
-  const results = await mapSettledWithConcurrency(
-    [...removableGroups.values()],
-    COOKIE_CLEAR_CONCURRENCY,
-    async (group) => {
-      // Why: identical remove keys must stay ordered so duplicate scoped cookies are not raced.
-      for (const { cookie, url } of group) {
-        await store.remove(url, cookie.name)
-        removedCookies.push(cookie)
-      }
-    }
-  )
-  const failures = results.flatMap((result) =>
-    result.status === 'rejected' ? [result.reason] : []
-  )
-  if (failures.length === 0) {
-    return
-  }
   try {
-    await restoreImportedDomainCookies(store, removedCookies)
-  } catch (restoreError) {
-    throw new AggregateError([...failures, restoreError], 'Cookie clearing and rollback failed')
+    await restoreImportedDomainCookies(targetSession.cookies, excludedCookies)
+  } catch (preservationError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([preservationError], 'Could not preserve excluded cookies'),
+      'Cookie preservation and rollback failed'
+    )
   }
-  throw new AggregateError(failures, 'Could not clear existing cookies')
 }
 
 export async function replaceCookiesForImportedDomains(

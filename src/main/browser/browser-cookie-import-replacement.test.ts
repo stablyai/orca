@@ -79,6 +79,7 @@ describe('validated cookie replacement', () => {
       totalCookies: 3,
       importedCookies: 1,
       skippedCookies: 2,
+      googleCookiesSkipped: 2,
       domains: ['example.com']
     })
     expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'old-example']])
@@ -99,6 +100,7 @@ describe('validated cookie replacement', () => {
       totalCookies: 1,
       importedCookies: 0,
       skippedCookies: 1,
+      googleCookiesSkipped: 1,
       domains: []
     })
     expect(cookiesGetMock).not.toHaveBeenCalled()
@@ -215,6 +217,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         totalCookies: 3,
         importedCookies: 1,
         skippedCookies: 2,
+        googleCookiesSkipped: 2,
         domains: ['example.com']
       })
       expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['AEC'])
@@ -246,6 +249,7 @@ describe('native Chromium integrity-cookie accounting', () => {
         totalCookies: 3,
         importedCookies: 0,
         skippedCookies: 3,
+        googleCookiesSkipped: 2,
         domains: []
       })
       expect(clearStorageDataMock).not.toHaveBeenCalled()

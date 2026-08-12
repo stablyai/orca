@@ -511,9 +511,8 @@ describe('importCookiesFromBrowser Chromium', () => {
         ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
       ).toEqual(sourceFilesBefore)
       expect(cookiesRemoveMock).not.toHaveBeenCalled()
-      // Why: STA-3811 — the pre-import clear is selective now, so a wholesale wipe would
-      // take the non-transplantable families with it.
-      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      expect(clearStorageDataMock).toHaveBeenCalledOnce()
+      expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
       // Why: STA-3514 — imports must never impersonate the source browser; the
       // session keeps the engine UA the registry set at startup.
       expect(setUserAgentMock).not.toHaveBeenCalled()

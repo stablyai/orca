@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { Repo, Worktree } from '../../../shared/types'
 import type { AppState } from '@/store/types'
 import {
@@ -471,6 +472,38 @@ describe('local preflight context', () => {
         reason: 'project-override',
         cacheKey: 'repo-1:windows-host'
       }
+    })
+  })
+
+  it('does not assign the active project runtime to the floating workspace', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo', worktreePath: 'C:\\Users\\alice\\repo' }),
+      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }]
+    } as unknown as AppState
+
+    expect(
+      getLocalProjectExecutionRuntimeContext(state, FLOATING_TERMINAL_WORKTREE_ID, 'win32')
+    ).toBeUndefined()
+  })
+
+  it('keeps the active project runtime fallback for a detected-only worktree', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
+      detectedWorktreesByRepo: {
+        'repo-1': {
+          repoId: 'repo-1',
+          authoritative: true,
+          source: 'git',
+          worktrees: [{ id: 'repo-1::detected', repoId: 'repo-1', path: 'C:\\detected' }]
+        }
+      },
+      projects: [{ id: 'repo-1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }]
+    } as unknown as AppState
+
+    expect(
+      getLocalProjectExecutionRuntimeContext(state, 'repo-1::detected', 'win32')
+    ).toMatchObject({
+      runtime: { kind: 'wsl', distro: 'Ubuntu', projectId: 'repo-1' }
     })
   })
 

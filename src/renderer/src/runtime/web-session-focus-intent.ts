@@ -10,13 +10,49 @@
 // snapshots, unlike a transient per-snapshot flag).
 
 import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
+import type { AppState } from '../store/types'
 
 export type WebSessionFocusIntent = {
   hostTabId: string
   leafId?: string
+  expectedCurrentLocalTabId?: string | null
 }
 
 const pendingFocusByOwnerAndWorktree = new Map<string, WebSessionFocusIntent>()
+
+type WebSessionVisibleTabState = Pick<
+  AppState,
+  | 'activeBrowserTabIdByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeTabIdByWorktree'
+  | 'activeTabType'
+  | 'activeTabTypeByWorktree'
+  | 'activeWorktreeId'
+  | 'unifiedTabsByWorktree'
+>
+
+export function resolveWebSessionVisibleTabId(
+  state: WebSessionVisibleTabState,
+  worktreeId: string,
+  tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+): string | null {
+  const currentType =
+    state.activeTabTypeByWorktree?.[worktreeId] ??
+    (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+  if (currentType === 'terminal') {
+    const tabId = state.activeTabIdByWorktree?.[worktreeId]
+    return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
+  }
+  const entityId =
+    currentType === 'browser'
+      ? state.activeBrowserTabIdByWorktree?.[worktreeId]
+      : currentType === 'editor'
+        ? state.activeFileIdByWorktree?.[worktreeId]
+        : null
+  return (
+    tabs.find((tab) => tab.contentType === currentType && tab.entityId === entityId)?.id ?? null
+  )
+}
 
 function focusIntentPartitionKey(owner: WebSessionIntentOwner, worktreeId: string): string {
   return `${webSessionIntentOwnerKey(owner)}\0${worktreeId}`
@@ -26,7 +62,8 @@ export function recordWebSessionFocusIntent(
   owner: WebSessionIntentOwner,
   worktreeId: string,
   hostTabId: string,
-  leafId?: string
+  leafId?: string,
+  expectedCurrentLocalTabId?: string | null
 ): void {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
@@ -35,7 +72,8 @@ export function recordWebSessionFocusIntent(
   const trimmedLeafId = leafId?.trim()
   pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
     hostTabId: trimmed,
-    ...(trimmedLeafId ? { leafId: trimmedLeafId } : {})
+    ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
+    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
   })
 }
 
@@ -48,6 +86,17 @@ export function peekWebSessionFocusIntent(
 
 export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktreeId: string): void {
   pendingFocusByOwnerAndWorktree.delete(focusIntentPartitionKey(owner, worktreeId))
+}
+
+export function clearWebSessionFocusIntentIfMatches(
+  owner: WebSessionIntentOwner,
+  worktreeId: string,
+  hostTabId: string
+): void {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  if (pendingFocusByOwnerAndWorktree.get(key)?.hostTabId === hostTabId) {
+    pendingFocusByOwnerAndWorktree.delete(key)
+  }
 }
 
 export function clearWebSessionFocusIntentsForOwner(owner: WebSessionIntentOwner): void {
