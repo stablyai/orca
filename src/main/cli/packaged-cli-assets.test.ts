@@ -70,6 +70,43 @@ describe('packaged CLI assets', () => {
     }
   })
 
+  it('retries an incomplete listener-state write', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
+    const statePath = join(root, 'listener-state.json')
+    const expectedState = { pid: 1234, port: 5678 }
+    await writeFile(statePath, '{"pid":', 'utf8')
+    const completedWrite = new Promise<void>((resolve, reject) => {
+      setTimeout(() => {
+        writeFile(statePath, JSON.stringify(expectedState), 'utf8').then(resolve, reject)
+      }, 50)
+    })
+
+    try {
+      await expect(waitForListenerState(statePath)).resolves.toEqual(expectedState)
+    } finally {
+      await completedWrite
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    { state: { pid: '1234', port: 5678 }, reason: 'non-numeric pid' },
+    { state: { pid: 0, port: 5678 }, reason: 'non-positive pid' },
+    { state: { pid: 1234, port: '5678' }, reason: 'non-numeric port' },
+    { state: { pid: 1234, port: 65_536 }, reason: 'out-of-range port' }
+  ])('rejects $reason in listener state', async ({ state }) => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-listener-state-'))
+    const statePath = join(root, 'listener-state.json')
+    try {
+      await writeFile(statePath, JSON.stringify(state), 'utf8')
+      await expect(waitForListenerState(statePath)).rejects.toThrow(
+        'Invalid launcher listener state'
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   itRunsUnixShell(
     'delivers SIGTERM to the Linux executable and releases its listener',
     async () => {
@@ -259,9 +296,25 @@ async function waitForListenerState(path: string): Promise<{ pid: number; port: 
   const deadline = Date.now() + 5_000
   while (Date.now() < deadline) {
     try {
-      return JSON.parse(await readFile(path, 'utf8')) as { pid: number; port: number }
+      const state: unknown = JSON.parse(await readFile(path, 'utf8'))
+      if (
+        typeof state !== 'object' ||
+        state === null ||
+        !('pid' in state) ||
+        typeof state.pid !== 'number' ||
+        !Number.isInteger(state.pid) ||
+        state.pid <= 0 ||
+        !('port' in state) ||
+        typeof state.port !== 'number' ||
+        !Number.isInteger(state.port) ||
+        state.port <= 0 ||
+        state.port > 65_535
+      ) {
+        throw new Error('Invalid launcher listener state')
+      }
+      return { pid: state.pid, port: state.port }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      if (!(error instanceof SyntaxError) && (error as NodeJS.ErrnoException).code !== 'ENOENT') {
         throw error
       }
       await new Promise((resolve) => setTimeout(resolve, 10))
