@@ -1,4 +1,8 @@
-import { isSkillsCliAgentKeyShaped } from './skills-cli-agent-keys'
+import type { TuiAgent } from './types'
+import {
+  isSkillsCliAgentKeyShaped,
+  toSkillsCliAgentKeys
+} from './skills-cli-agent-keys'
 
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 
@@ -10,9 +14,10 @@ export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
 
-// Why: `yes` and `agents` default off so every Settings/onboarding string a human
-// pastes keeps its interactive prompts and the CLI's own agent detection. Only an
-// unattended spawn, which nothing can answer, opts in.
+// Why: the raw builder still defaults interactive so callers can paste a
+// detection-driven prompt when a human is answering. Settings/onboarding UI
+// strings and the CLI path use the unattended builders — an inline PTY and a
+// headless host both hang forever on the skills agent picker without -y (#13542).
 export type AgentFeatureSkillCommandOptions = {
   global?: boolean
   yes?: boolean
@@ -64,6 +69,25 @@ export function buildAgentFeatureSkillInstallCommand(
   return `npx ${buildAgentFeatureSkillInstallArgs(skillNames, options).join(' ')}`
 }
 
+/**
+ * Install command for paths nothing can answer (Settings inline terminal, CLI,
+ * SSH paste). Always pairs `-y` with mapped `--agent` keys (at least `universal`)
+ * so the skills CLI never opens the agent picker or the all-agents install.
+ */
+export function buildUnattendedAgentFeatureSkillInstallCommand(
+  skillNames: readonly string[],
+  options: {
+    global?: boolean
+    detectedAgents?: readonly TuiAgent[]
+  } = {}
+): string {
+  return buildAgentFeatureSkillInstallCommand(skillNames, {
+    global: options.global,
+    yes: true,
+    agents: toSkillsCliAgentKeys(options.detectedAgents ?? [])
+  })
+}
+
 export function buildAgentFeatureSkillUpdateArgs(
   skillNames: string | readonly string[],
   options: AgentFeatureSkillCommandOptions = {}
@@ -90,45 +114,51 @@ export function buildAgentFeatureSkillUpdateCommand(
   return `npx ${buildAgentFeatureSkillUpdateArgs(skillNames, options).join(' ')}`
 }
 
-export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+/** Update command for unattended UI/CLI paths — skip the skills confirmation prompt. */
+export function buildUnattendedAgentFeatureSkillUpdateCommand(
+  skillNames: string | readonly string[],
+  options: { global?: boolean } = {}
+): string {
+  return buildAgentFeatureSkillUpdateCommand(skillNames, { ...options, yes: true })
+}
+
+export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME
 ])
 
 export const ORCA_CLI_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCA_CLI_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(ORCA_CLI_SKILL_NAME)
 
-export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+export const COMPUTER_USE_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   COMPUTER_USE_SKILL_NAME
 ])
 
 export const COMPUTER_USE_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(COMPUTER_USE_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(COMPUTER_USE_SKILL_NAME)
 
-export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+export const ORCHESTRATION_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCHESTRATION_SKILL_NAME
 ])
 
 export const ORCHESTRATION_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCHESTRATION_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(ORCHESTRATION_SKILL_NAME)
 
-export const EPHEMERAL_VMS_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+export const EPHEMERAL_VMS_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   EPHEMERAL_VMS_SKILL_NAME
 ])
 
 export const EPHEMERAL_VMS_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(EPHEMERAL_VMS_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(EPHEMERAL_VMS_SKILL_NAME)
 
-export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  ORCA_CLI_SKILL_NAME,
-  ORCHESTRATION_SKILL_NAME
-])
+export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND =
+  buildUnattendedAgentFeatureSkillInstallCommand([ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME])
 
-export const ORCA_LINEAR_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+export const ORCA_LINEAR_SKILL_INSTALL_COMMAND = buildUnattendedAgentFeatureSkillInstallCommand([
   ORCA_LINEAR_SKILL_NAME
 ])
 
 export const ORCA_LINEAR_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(ORCA_LINEAR_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(ORCA_LINEAR_SKILL_NAME)
 
 export const LINEAR_TICKETS_SKILL_UPDATE_COMMAND =
-  buildAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)
+  buildUnattendedAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)

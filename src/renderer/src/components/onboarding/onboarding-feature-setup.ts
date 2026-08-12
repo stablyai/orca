@@ -8,7 +8,7 @@ import {
   ORCA_LINEAR_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME,
-  buildAgentFeatureSkillInstallCommand
+  buildUnattendedAgentFeatureSkillInstallCommand
 } from '@/lib/agent-feature-install-commands'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser-use-setup-state'
 import { e2eConfig } from '@/lib/e2e-config'
@@ -127,7 +127,7 @@ export function buildOnboardingFeatureSetupSkillCommand(
   if (skillNames.length === 0) {
     return null
   }
-  return buildAgentFeatureSkillInstallCommand(skillNames)
+  return buildUnattendedAgentFeatureSkillInstallCommand(skillNames)
 }
 
 export function onboardingFeatureSetupTelemetryFeature(

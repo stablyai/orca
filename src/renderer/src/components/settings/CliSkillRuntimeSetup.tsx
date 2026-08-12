@@ -12,7 +12,7 @@ import { isWslShellName } from '../../../../shared/local-windows-terminal-runtim
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
+import { buildUnattendedAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import {
@@ -117,7 +117,7 @@ function normalizeWindowsSkillUpdateCommand(
   // Why: the `skills update` subcommand is currently unreliable on native
   // Windows, while reinstalling from the same repo source is idempotent and
   // keeps the setup affordance working.
-  return buildAgentFeatureSkillInstallCommand([updateMatch[1]])
+  return buildUnattendedAgentFeatureSkillInstallCommand([updateMatch[1]])
 }
 
 /**

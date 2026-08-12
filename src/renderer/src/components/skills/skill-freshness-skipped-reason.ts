@@ -1,4 +1,4 @@
-import { buildAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
+import { buildUnattendedAgentFeatureSkillInstallCommand } from '../../../../shared/agent-feature-install-commands'
 import type { SkillLocationChip, SkillLocationRow } from './skill-freshness-grouping'
 import { translate } from '@/i18n/i18n'
 
@@ -102,7 +102,7 @@ export function skippedReason(locations: readonly SkillLocationRow[], skillName?
         ? translate(
             'auto.components.skills.SkillFreshnessRow.skippedReasonStaleRecord',
             'The skills updater has no usable record of this copy, so it reports the skill as already up to date and changes nothing. Reinstall it to bring the record back in line: {{value0}}',
-            { value0: buildAgentFeatureSkillInstallCommand([skillName]) }
+            { value0: buildUnattendedAgentFeatureSkillInstallCommand([skillName]) }
           )
         : translate(
             'auto.components.skills.SkillFreshnessRow.cantUpdateReason',
