@@ -11,14 +11,16 @@ export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
 const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
 
-function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
+function reportRemoteFileBrowserOpen(result: Promise<boolean>, onFailure?: () => void): void {
   void result
     .then((created) => {
       if (!created) {
+        onFailure?.()
         toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
       }
     })
     .catch(() => {
+      onFailure?.()
       toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
     })
 }
@@ -107,6 +109,14 @@ export function openFilePreviewToSide(params: {
 
   const state = useAppStore.getState()
   const worktreeId = params.worktreeId
+  const target = getWorkspaceFileBrowserOpenTarget({
+    filePath: params.filePath,
+    worktreeId
+  })
+  if (target.status === 'unsupported') {
+    toast.error(target.message)
+    return
+  }
 
   // Resolve the group this action originated from. Prefer the caller-supplied
   // id (the tab's own group under split-pane layouts), fall back to the
@@ -133,15 +143,6 @@ export function openFilePreviewToSide(params: {
     return
   }
 
-  const target = getWorkspaceFileBrowserOpenTarget({
-    filePath: params.filePath,
-    worktreeId
-  })
-  if (target.status === 'unsupported') {
-    toast.error(target.message)
-    return
-  }
-
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   if (environmentId) {
     reportRemoteFileBrowserOpen(
@@ -154,7 +155,8 @@ export function openFilePreviewToSide(params: {
         focusOnCreate: false,
         stagedTitle: target.title,
         stagedFocusAddressBar: false
-      })
+      }),
+      existingSibling ? undefined : () => state.closeEmptyGroup(worktreeId, targetGroupId)
     )
     return
   }

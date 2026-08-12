@@ -7,6 +7,7 @@ import {
 } from './file-preview'
 
 const mocks = vi.hoisted(() => ({
+  closeEmptyGroup: vi.fn(),
   createBrowserTab: vi.fn(),
   createEmptySplitGroup: vi.fn(() => 'group-2'),
   createWebRuntimeSessionBrowserTab: vi.fn(),
@@ -28,6 +29,7 @@ vi.mock('@/runtime/web-runtime-session', () => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
+      closeEmptyGroup: mocks.closeEmptyGroup,
       createBrowserTab: mocks.createBrowserTab,
       createEmptySplitGroup: mocks.createEmptySplitGroup,
       groupsByWorktree: {},
@@ -112,7 +114,22 @@ describe('openFileInBrowserTab', () => {
     await vi.waitFor(() =>
       expect(mocks.toastError).toHaveBeenCalledWith('Unable to open this file in Orca Browser.')
     )
+    expect(mocks.closeEmptyGroup).toHaveBeenCalledWith('wt-1', 'group-2')
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+
+  it('does not create a side split for unsupported SSH previews', () => {
+    mocks.connectionId = 'ssh-1'
+
+    openFilePreviewToSide({
+      language: 'html',
+      filePath: '/home/alice/report.html',
+      worktreeId: 'wt-1',
+      sourceGroupId: 'group-1'
+    })
+
+    expect(mocks.toastError).toHaveBeenCalledWith(REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE)
+    expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
   })
 
   it('returns unsupported for SSH worktrees without creating a local file URL tab', () => {
