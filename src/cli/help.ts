@@ -294,6 +294,8 @@ Agent Sessions And Worktrees:
   \`worktree create --agent\` creates a new checkout with an agent.
   To start a fresh agent in the current worktree, use:
     orca terminal create --worktree active --command "codex"
+  \`active\` and \`current\` are local-cwd shortcuts. Remote calls need an explicit
+  server-side selector such as \`id:\`, \`name:\`, \`branch:\`, \`issue:\`, or \`path:\`.
 
 Browser Workflow:
   1. Create or navigate:  orca tab create --url https://example.com
