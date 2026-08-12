@@ -1,4 +1,16 @@
+import { toast } from 'sonner'
 import type { TerminalPasteExecutionReason } from './terminal-paste-model'
+
+/** Stable sonner id so repeated focus-churn cancels replace instead of stacking. */
+export const TERMINAL_PASTE_CANCELLED_TOAST_ID = 'terminal-paste-cancelled'
+
+const TRANSIENT_PASTE_CANCELLATION_REASONS: ReadonlySet<TerminalPasteExecutionReason> = new Set([
+  'stale-target',
+  'target-disconnected',
+  'operation-timeout'
+])
+
+const PASTE_CANCELLED_PREFIX = 'Paste cancelled:'
 
 export function formatTerminalPasteExecutionError(
   reason: TerminalPasteExecutionReason | undefined
@@ -19,4 +31,35 @@ export function formatTerminalPasteExecutionError(
     return 'Paste cancelled: terminal did not accept paste before the safety timeout.'
   }
   return 'Paste failed.'
+}
+
+/** Focus/disconnect/timeout cancels are expected races — one-shot notice, not a durable error. */
+export function isTransientTerminalPasteCancellation(
+  reason: TerminalPasteExecutionReason | undefined
+): boolean {
+  return reason != null && TRANSIENT_PASTE_CANCELLATION_REASONS.has(reason)
+}
+
+/** Defense for any path that still parked a cancel string on the durable error surface. */
+export function isTransientTerminalPasteCancellationMessage(message: string): boolean {
+  return message.split('\n').some((line) => line.startsWith(PASTE_CANCELLED_PREFIX))
+}
+
+/**
+ * Surfaces paste outcome to the user: cancellations auto-dismiss via sonner;
+ * real failures stay on the durable terminal error banner.
+ */
+export function reportTerminalPasteExecutionOutcome(
+  reason: TerminalPasteExecutionReason | undefined,
+  onPersistentError: (message: string) => void
+): void {
+  const message = formatTerminalPasteExecutionError(reason)
+  if (isTransientTerminalPasteCancellation(reason)) {
+    toast.message(message, {
+      id: TERMINAL_PASTE_CANCELLED_TOAST_ID,
+      duration: 4_000
+    })
+    return
+  }
+  onPersistentError(message)
 }

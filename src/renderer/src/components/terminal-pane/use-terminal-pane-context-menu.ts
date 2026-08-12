@@ -18,7 +18,7 @@ import {
   type TerminalPasteSource,
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { reportTerminalPasteExecutionOutcome } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import { isTerminalPanePasteTargetCurrent } from './terminal-paste-target-state'
@@ -272,7 +272,7 @@ export function useTerminalPaneContextMenu({
       canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
     })
     if (execution.status !== 'pasted') {
-      onPasteError(formatTerminalPasteExecutionError(execution.reason))
+      reportTerminalPasteExecutionOutcome(execution.reason, onPasteError)
       return false
     }
     if (text) {

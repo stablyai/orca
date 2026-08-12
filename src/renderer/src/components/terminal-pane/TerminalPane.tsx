@@ -215,7 +215,7 @@ import {
   type TerminalPasteTextOptions
 } from './terminal-paste-coordinator'
 import { appendTerminalErrorMessage } from './terminal-error-accumulation'
-import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
+import { reportTerminalPasteExecutionOutcome } from './terminal-paste-errors'
 import { resolveTerminalPasteRuntime } from './terminal-paste-runtime'
 import { getTerminalPasteSshRemotePlatform } from './terminal-paste-ssh-platform'
 import {
@@ -1946,7 +1946,7 @@ function TerminalPane(
         canContinue: () => isPanePasteTargetMounted(pane, transport, ptyId)
       })
       if (execution.status !== 'pasted') {
-        setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+        reportTerminalPasteExecutionOutcome(execution.reason, setTerminalError)
         return
       }
       if (text) {
@@ -2739,7 +2739,7 @@ function TerminalPane(
           canContinue: targetStillMounted
         })
         if (execution.status !== 'pasted') {
-          setTerminalError(formatTerminalPasteExecutionError(execution.reason))
+          reportTerminalPasteExecutionOutcome(execution.reason, setTerminalError)
           return
         }
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)

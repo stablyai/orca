@@ -2,6 +2,10 @@ import { useEffect, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { resolveClientEnvironmentFooter } from '@/lib/client-environment-info'
 import { hasClientEnvironmentFooter } from '../../../../shared/client-environment-info'
+import { isTransientTerminalPasteCancellationMessage } from './terminal-paste-errors'
+
+/** Auto-clear expected paste cancels if they still land on the durable surface. */
+const TRANSIENT_PASTE_CANCEL_DISMISS_MS = 4_000
 
 const SSH_PREFIX = 'SSH connection is not active'
 // Produced by pty-connection.ts reportError() when a PTY reattach can't reach its SSH host.
@@ -108,8 +112,11 @@ export function TerminalErrorToast({
 }): React.JSX.Element {
   const ssh = isSshError(error)
   const showDaemonRestart = !ssh && onRestartDaemon && shouldOfferDaemonRestart(error)
+  const isPasteCancel = isTransientTerminalPasteCancellationMessage(error)
   // Restart cannot recover a session after its owning daemon exits.
-  const showIssueLink = !ssh && !showDaemonRestart && !isExplainedTerminalError(error)
+  // Paste cancels are expected races — never ask the user to file an issue.
+  const showIssueLink =
+    !ssh && !showDaemonRestart && !isExplainedTerminalError(error) && !isPasteCancel
   const displayError = humanizeTerminalError(error)
   const [environmentFooter, setEnvironmentFooter] = useState<{
     error: string
@@ -118,7 +125,7 @@ export function TerminalErrorToast({
 
   // Why: a select-all copy should carry details loaded asynchronously from preload.
   useEffect(() => {
-    if (ssh || hasClientEnvironmentFooter(displayError)) {
+    if (ssh || isPasteCancel || hasClientEnvironmentFooter(displayError)) {
       return
     }
     let cancelled = false
@@ -130,7 +137,20 @@ export function TerminalErrorToast({
     return () => {
       cancelled = true
     }
-  }, [displayError, ssh])
+  }, [displayError, isPasteCancel, ssh])
+
+  // Why: durable banner is for actionable/fatal faults; paste cancels are one-shot.
+  useEffect(() => {
+    if (!isPasteCancel) {
+      return
+    }
+    const timerId = window.setTimeout(() => {
+      onDismiss()
+    }, TRANSIENT_PASTE_CANCEL_DISMISS_MS)
+    return () => {
+      window.clearTimeout(timerId)
+    }
+  }, [error, isPasteCancel, onDismiss])
 
   const footer = environmentFooter?.error === displayError ? environmentFooter.footer : ''
 

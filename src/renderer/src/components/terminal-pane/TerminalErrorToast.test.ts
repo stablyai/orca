@@ -21,6 +21,9 @@ import {
   stripSshReconnectOwnedErrorLines
 } from './TerminalErrorToast'
 
+const PASTE_FOCUS_CANCEL =
+  'Paste cancelled: terminal focus changed before paste started.'
+
 beforeEach(() => {
   environmentMocks.resolveFooter.mockReset()
   environmentMocks.resolveFooter.mockResolvedValue(
@@ -203,6 +206,59 @@ describe('shouldOfferDaemonRestart', () => {
   it('does not match unrelated terminal spawn errors', () => {
     expect(shouldOfferDaemonRestart('SSH connection is not active.')).toBe(false)
     expect(shouldOfferDaemonRestart('node-pty: open_slave failed: EMFILE (errno 24)')).toBe(false)
+  })
+})
+
+describe('TerminalErrorToast paste cancellation surface', () => {
+  it('omits the issue link and environment footer for paste focus cancellation', async () => {
+    const view = render(
+      React.createElement(TerminalErrorToast, {
+        error: PASTE_FOCUS_CANCEL,
+        onDismiss: vi.fn()
+      })
+    )
+
+    expect(view.container.textContent).toContain(PASTE_FOCUS_CANCEL)
+    expect(view.container.textContent).not.toContain('file an issue')
+    await waitFor(() => expect(environmentMocks.resolveFooter).not.toHaveBeenCalled())
+  })
+
+  it('auto-dismisses a paste focus cancellation after a short delay', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    try {
+      render(
+        React.createElement(TerminalErrorToast, {
+          error: PASTE_FOCUS_CANCEL,
+          onDismiss
+        })
+      )
+
+      expect(onDismiss).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(4_000)
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps durable paste failures until the user dismisses them', async () => {
+    vi.useFakeTimers()
+    const onDismiss = vi.fn()
+    try {
+      const view = render(
+        React.createElement(TerminalErrorToast, {
+          error: 'Paste failed.',
+          onDismiss
+        })
+      )
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(onDismiss).not.toHaveBeenCalled()
+      expect(view.container.textContent).toContain('file an issue')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
