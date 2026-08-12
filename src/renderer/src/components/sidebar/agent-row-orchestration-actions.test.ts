@@ -153,6 +153,12 @@ describe('dispatchTaskToAgent', () => {
           const paneKey = String(request.params?.paneKey ?? '')
           return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
         }
+        if (request.method === 'orchestration.runCurrent') {
+          return ok({ run: null })
+        }
+        if (request.method === 'orchestration.runCreate') {
+          return ok({ run: { id: 'run_1', objective: 'Fix the login button' } })
+        }
         if (request.method === 'orchestration.taskList') {
           return ok({ tasks: [], count: 0 })
         }
@@ -181,6 +187,13 @@ describe('dispatchTaskToAgent', () => {
     })
 
     expect(callRuntime).toHaveBeenCalledWith({
+      method: 'orchestration.runCreate',
+      params: {
+        objective: 'Fix the login button',
+        from: 'term_coord'
+      }
+    })
+    expect(callRuntime).toHaveBeenCalledWith({
       method: 'orchestration.taskCreate',
       params: {
         spec: 'Fix the login button',
@@ -204,12 +217,54 @@ describe('dispatchTaskToAgent', () => {
     expect(resolvePaneCalls).toHaveLength(2)
   })
 
+  it('reuses the coordinator current Run instead of creating another', async () => {
+    const callRuntime = vi.fn(
+      async (request: { method: string; params?: Record<string, unknown> }) => {
+        if (request.method === 'terminal.resolvePane') {
+          const paneKey = String(request.params?.paneKey ?? '')
+          return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
+        }
+        if (request.method === 'orchestration.runCurrent') {
+          return ok({ run: { id: 'run_existing' } })
+        }
+        if (request.method === 'orchestration.taskList') {
+          return ok({ tasks: [], count: 0 })
+        }
+        if (request.method === 'orchestration.taskCreate') {
+          return ok({ task: { id: 'task_1', status: 'ready' } })
+        }
+        if (request.method === 'orchestration.dispatch') {
+          return ok({ dispatch: { id: 'ctx_1' }, injected: true })
+        }
+        throw new Error(`unexpected ${request.method}`)
+      }
+    )
+
+    await dispatchTaskToAgent({
+      workerPaneKey: WORKER_PANE,
+      coordinatorPaneKey: COORD_PANE,
+      spec: 'Fix the login button',
+      callRuntime
+    })
+
+    expect(callRuntime).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'orchestration.runCreate' })
+    )
+    expect(callRuntime).toHaveBeenCalledWith({
+      method: 'orchestration.taskList',
+      params: { status: 'dispatched', callerTerminalHandle: 'term_coord' }
+    })
+  })
+
   it('rejects when the worker already has an active dispatch', async () => {
     const callRuntime = vi.fn(
       async (request: { method: string; params?: Record<string, unknown> }) => {
         if (request.method === 'terminal.resolvePane') {
           const paneKey = String(request.params?.paneKey ?? '')
           return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
+        }
+        if (request.method === 'orchestration.runCurrent') {
+          return ok({ run: { id: 'run_busy' } })
         }
         if (request.method === 'orchestration.taskList') {
           return ok({
@@ -293,7 +348,7 @@ describe('findActiveDispatchForWorker / wait hint', () => {
 
   it('returns the coordinator wait hint used after dispatch', () => {
     expect(formatCoordinatorWaitHint()).toContain('orchestration check --wait')
-    expect(formatCoordinatorWaitHint()).toContain('worker_done,escalation,decision_gate')
+    expect(formatCoordinatorWaitHint()).toContain('worker_done,escalation,question')
   })
 })
 
@@ -332,15 +387,15 @@ describe('sendMessageToAgent / askAgent', () => {
     })
   })
 
-  it('asks the worker and returns the answer', async () => {
+  it('sends a question message from coordinator to worker', async () => {
     const callRuntime = vi.fn(
       async (request: { method: string; params?: Record<string, unknown> }) => {
         if (request.method === 'terminal.resolvePane') {
           const paneKey = String(request.params?.paneKey ?? '')
           return resolvePaneResponse(paneKey.startsWith('tab-coord') ? 'term_coord' : 'term_worker')
         }
-        if (request.method === 'orchestration.ask') {
-          return ok({ answer: 'use bcrypt', timedOut: false })
+        if (request.method === 'orchestration.send') {
+          return ok({ message: { id: 'msg_q1' } })
         }
         throw new Error(`unexpected ${request.method}`)
       }
@@ -354,10 +409,18 @@ describe('sendMessageToAgent / askAgent', () => {
         callRuntime
       })
     ).resolves.toMatchObject({
-      answer: 'use bcrypt',
-      timedOut: false,
       workerHandle: 'term_worker',
       coordinatorHandle: 'term_coord'
+    })
+
+    expect(callRuntime).toHaveBeenCalledWith({
+      method: 'orchestration.send',
+      params: {
+        to: 'term_worker',
+        from: 'term_coord',
+        subject: 'Which hash?',
+        type: 'question'
+      }
     })
   })
 })

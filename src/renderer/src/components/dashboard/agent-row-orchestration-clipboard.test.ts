@@ -15,7 +15,7 @@ describe('agent-row-orchestration-clipboard', () => {
       'orca orchestration send --to term_worker --subject "" --json'
     )
     expect(buildOrchestrationAskCommand('term_worker')).toBe(
-      'orca orchestration ask --to term_worker --question "" --json'
+      'orca orchestration send --to term_worker --type question --subject "" --json'
     )
     expect(buildWorktreeGroupAddress('wt_abc')).toBe('@worktree:wt_abc')
   })

@@ -29,7 +29,9 @@ export function buildOrchestrationSendCommand(handle: string): string {
 }
 
 export function buildOrchestrationAskCommand(handle: string): string {
-  return `orca orchestration ask --to ${handle} --question "" --json`
+  // Why: orchestration.ask no longer takes --to; coordinator→worker questions
+  // are send --type question.
+  return `orca orchestration send --to ${handle} --type question --subject "" --json`
 }
 
 // Why: group fan-out address from the orchestration skill (`@worktree:<id>`).

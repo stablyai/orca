@@ -36,13 +36,46 @@ function readTaskId(result: unknown): string {
   return result.task.id
 }
 
-function readAskAnswer(result: unknown): { answer: string | null; timedOut: boolean } {
-  if (!isRecord(result)) {
-    return { answer: null, timedOut: true }
+function readRunId(result: unknown): string | null {
+  if (!isRecord(result) || !isRecord(result.run) || typeof result.run.id !== 'string') {
+    return null
   }
-  const answer = typeof result.answer === 'string' ? result.answer : null
-  const timedOut = result.timedOut === true
-  return { answer, timedOut }
+  return result.run.id
+}
+
+// Why: taskCreate/taskList/dispatch now require a Run bound to the coordinator.
+// Create one from the spec when the chosen terminal has no current Run.
+async function ensureCoordinatorRun(args: {
+  coordinatorHandle: string
+  objective: string
+  callRuntime: CallRuntime
+}): Promise<string> {
+  const currentId = readRunId(
+    assertOk(
+      await args.callRuntime({
+        method: 'orchestration.runCurrent',
+        params: { from: args.coordinatorHandle }
+      })
+    )
+  )
+  if (currentId) {
+    return currentId
+  }
+  const createdId = readRunId(
+    assertOk(
+      await args.callRuntime({
+        method: 'orchestration.runCreate',
+        params: {
+          objective: args.objective,
+          from: args.coordinatorHandle
+        }
+      })
+    )
+  )
+  if (!createdId) {
+    throw new Error('Run create did not return a run id')
+  }
+  return createdId
 }
 
 export type ActiveWorkerDispatch = {
@@ -55,14 +88,22 @@ export type ActiveWorkerDispatch = {
 // taskList so the menu can disable Dispatch before the RPC fails.
 export async function findActiveDispatchForWorker(args: {
   workerPaneKey: string
+  coordinatorPaneKey?: string | null
   callRuntime: CallRuntime
 }): Promise<ActiveWorkerDispatch | null> {
   const workerHandle = await resolveTerminalHandleForPaneKey({
     paneKey: args.workerPaneKey,
     callRuntime: args.callRuntime
   })
+  const coordinatorHandle = args.coordinatorPaneKey
+    ? await resolveTerminalHandleForPaneKey({
+        paneKey: args.coordinatorPaneKey,
+        callRuntime: args.callRuntime
+      })
+    : null
   return findActiveDispatchForWorkerHandle({
     workerHandle,
+    coordinatorHandle,
     callRuntime: args.callRuntime
   })
 }
@@ -71,12 +112,17 @@ export async function findActiveDispatchForWorker(args: {
 // terminal.resolvePane round-trip when probing taskList.
 async function findActiveDispatchForWorkerHandle(args: {
   workerHandle: string
+  coordinatorHandle?: string | null
   callRuntime: CallRuntime
 }): Promise<ActiveWorkerDispatch | null> {
   const listResult = assertOk(
     await args.callRuntime({
       method: 'orchestration.taskList',
-      params: { status: 'dispatched' }
+      params: {
+        status: 'dispatched',
+        // Why: taskList is Run-scoped; without a caller the RPC throws run_required.
+        ...(args.coordinatorHandle ? { callerTerminalHandle: args.coordinatorHandle } : {})
+      }
     })
   )
   if (!isRecord(listResult) || !Array.isArray(listResult.tasks)) {
@@ -105,7 +151,7 @@ async function findActiveDispatchForWorkerHandle(args: {
 export function formatCoordinatorWaitHint(): string {
   return (
     'On the coordinator terminal, run:\n' +
-    'orca orchestration check --wait --types worker_done,escalation,decision_gate --timeout-ms 900000 --json'
+    'orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json'
   )
 }
 
@@ -166,8 +212,15 @@ export async function dispatchTaskToAgent(args: {
     callRuntime: args.callRuntime
   })
 
+  await ensureCoordinatorRun({
+    coordinatorHandle,
+    objective: spec,
+    callRuntime: args.callRuntime
+  })
+
   const active = await findActiveDispatchForWorkerHandle({
     workerHandle,
+    coordinatorHandle,
     callRuntime: args.callRuntime
   })
   if (active) {
@@ -241,13 +294,10 @@ export async function askAgent(args: {
   workerPaneKey: string
   coordinatorPaneKey: string | null
   question: string
-  timeoutMs?: number
   callRuntime: CallRuntime
 }): Promise<{
   workerHandle: string
   coordinatorHandle: string
-  answer: string | null
-  timedOut: boolean
 }> {
   const question = args.question.trim()
   if (!question) {
@@ -258,19 +308,18 @@ export async function askAgent(args: {
     coordinatorPaneKey: args.coordinatorPaneKey,
     callRuntime: args.callRuntime
   })
-  const result = assertOk(
+  // Why: orchestration.ask is now worker→Run (requires an active Dispatch on
+  // --from). Coordinator→worker questions go through send --type question.
+  assertOk(
     await args.callRuntime({
-      method: 'orchestration.ask',
+      method: 'orchestration.send',
       params: {
         to: workerHandle,
         from: coordinatorHandle,
-        question,
-        // Why: UI should not block for the CLI default (10m); keep a short wait
-        // so the dialog can surface timeout vs answer without hanging forever.
-        timeoutMs: args.timeoutMs ?? 120_000
+        subject: question,
+        type: 'question'
       }
     })
   )
-  const { answer, timedOut } = readAskAnswer(result)
-  return { workerHandle, coordinatorHandle, answer, timedOut }
+  return { workerHandle, coordinatorHandle }
 }

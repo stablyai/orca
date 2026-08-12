@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import {
   Dialog,
@@ -210,23 +210,17 @@ export function AgentRowOrchestrationActionDialog({ state, onOpenChange }: Props
           question: primary,
           callRuntime
         })
-        if (result.timedOut || !result.answer) {
-          toast.error(
-            translate(
-              'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.timeout',
-              'No reply from {{handle}} within 2 minutes',
-              { handle: result.workerHandle }
-            )
-          )
-        } else {
-          toast.success(
-            translate(
-              'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.success',
-              'Answer from {{handle}}: {{answer}}',
-              { handle: result.workerHandle, answer: result.answer }
-            )
-          )
-        }
+        toast.success(
+          translate(
+            'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.success',
+            'Question sent to {{handle}}',
+            { handle: result.workerHandle }
+          ),
+          {
+            description: formatCoordinatorWaitHint(),
+            duration: 12_000
+          }
+        )
       }
       onOpenChange(false)
     } catch (error) {

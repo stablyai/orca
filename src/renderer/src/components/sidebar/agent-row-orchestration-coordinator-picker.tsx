@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react'
+import { useCallback } from 'react'
 import { Label } from '@/components/ui/label'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
@@ -77,7 +77,7 @@ export function AgentRowOrchestrationCoordinatorPicker({
         aria-labelledby="orchestration-action-coordinator-label"
         aria-activedescendant={value ? optionDomId(value) : undefined}
         onKeyDown={onListboxKeyDown}
-        className="border-input max-h-40 space-y-1 overflow-y-auto rounded-md border p-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="border-input scrollbar-sleek max-h-40 space-y-1 overflow-y-auto rounded-md border p-1 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
       >
         {options.length === 0 ? (
           <p className="text-muted-foreground px-2 py-1.5 text-sm">

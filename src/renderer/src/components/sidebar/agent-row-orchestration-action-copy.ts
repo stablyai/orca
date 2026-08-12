@@ -63,7 +63,7 @@ export function dialogCopy(kind: OrchestrationActionKind): {
         ),
         description: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.description',
-          'Asks this agent and waits up to 2 minutes for a reply. Choose which terminal is the coordinator (--from).'
+          'Sends a question to this agent. Choose which terminal is --from (usually your coordinator). Wait for the reply with orchestration check --wait.'
         ),
         primaryLabel: translate(
           'auto.components.sidebar.agent.row.orchestration.action.dialog.ask.submit',
