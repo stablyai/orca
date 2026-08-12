@@ -5169,9 +5169,48 @@ export function connectPanePty(
     // composer. Deferred callers re-invoke this once pendingStartupCommand
     // clears; it is a no-op otherwise (including when there is no active
     // cold-restore draft at all).
-    const armActiveColdRestoreDraftObservationIfReady = (): void => {
+    //
+    // Why attemptLaunchToken: readinessArmed/settled/pendingStartupCommand
+    // alone identify *whether* the draft is ready to arm, never *whose*
+    // attempt is asking. startFreshSpawn calls this on every fresh spawn,
+    // cold-restore or not — if an earlier cold-restore attempt got aborted
+    // after arming the draft (armActiveColdRestoreDraft) but before this ever
+    // ran (e.g. startFreshSpawn's isLegacyWorkerAutomaticResumeBlocked/
+    // isDeleting early returns), the draft is left sitting in
+    // activeColdRestoreDraft with readinessArmed still false. A later,
+    // completely unrelated startFreshSpawn call (a plain shell restart with
+    // no cold restore involved) would otherwise arm that stale draft onto
+    // its own brand-new transportStreamGeneration, and the aborted attempt's
+    // old "## Agent session rules" text would get bracket-pasted into a
+    // shell that has nothing to do with it. Requiring the caller's own
+    // cold-restore launchToken (or null, for a non-cold-restore attempt) to
+    // match the draft's launchToken — the same explicit per-attempt
+    // identifier already stamped on the draft at creation — closes that gap.
+    // A mismatch means some other attempt now owns the PTY stream, so the
+    // draft is provably stale and is torn down here rather than left to be
+    // mis-armed by a still-later attempt.
+    //
+    // attemptLaunchToken is `string | null` from callers that know FOR
+    // CERTAIN which attempt (if any cold-restore one at all) they are —
+    // startFreshSpawn and the reattach cold-restore path both compute it
+    // fresh, right there, from their own startup/preparedStartup object, so
+    // the check above is exact for them. It is left `undefined` only by
+    // schedulePendingStartupCommandDelivery's deferred re-arm call, which
+    // cannot always tell whose attempt a given pendingStartupCommand
+    // clearing belongs to (that gate is shared with plain, non-cold-restore
+    // SSH startup commands) — guessing wrong there would risk resetting a
+    // still-legitimate draft, so that one call site intentionally skips the
+    // match check and falls back to the readinessArmed/settled/
+    // pendingStartupCommand-only gate above.
+    const armActiveColdRestoreDraftObservationIfReady = (
+      attemptLaunchToken?: string | null
+    ): void => {
       const draft = activeColdRestoreDraft
       if (!draft || draft.readinessArmed || draft.settled) {
+        return
+      }
+      if (attemptLaunchToken !== undefined && draft.launchToken !== attemptLaunchToken) {
+        resetActiveColdRestoreDraft()
         return
       }
       if (pendingStartupCommand) {
@@ -5485,6 +5524,19 @@ export function connectPanePty(
           // Why: this is the submission-confirmation point a deferred
           // cold-restore draft (armed while pendingStartupCommand was still
           // set) is waiting on — see armActiveColdRestoreDraftObservationIfReady.
+          // No launchToken argument here (leaving the strict ownership check
+          // skipped) on purpose: pendingStartupCommand is a general-purpose
+          // gate also used by non-cold-restore SSH startup commands (see its
+          // declaration above and the reattach cold-restore path further
+          // down), so this call site cannot always tell which attempt — if
+          // any — a given pendingStartupCommand clearing belongs to. Passing
+          // a guessed launchToken here risks a false-positive reset of a
+          // still-legitimate, unrelated draft that happens to be waiting on
+          // the SAME pendingStartupCommand gate. The unambiguous call sites
+          // in startFreshSpawn and the reattach cold-restore path — which DO
+          // know their own attempt's launchToken with certainty — are what
+          // actually close the staleness gap; this call only ever re-arms a
+          // draft that has already survived their check.
           armActiveColdRestoreDraftObservationIfReady()
         })()
       }, 50)
@@ -5539,7 +5591,29 @@ export function connectPanePty(
       startupOverride?: PendingStartupCommand | null,
       options: FreshSpawnOptions = {}
     ): Promise<string | null> => {
+      // Why: computed up front (pure — depends only on the startupOverride
+      // param) so the early-return branches below can use it too: if a
+      // cold-restore draft was already armed for THIS SAME attempt's
+      // launchToken (via applyColdRestoreAgentResumeStartup, called just
+      // before startFreshSpawn by startFreshColdRestoreAgentResume) and this
+      // attempt now aborts before ever reaching
+      // armActiveColdRestoreDraftObservationIfReady below, the draft must not
+      // be left sitting in activeColdRestoreDraft for a later, unrelated
+      // spawn attempt to mistakenly arm.
+      const coldRestoreOverride =
+        startupOverride && 'launchConfig' in startupOverride
+          ? (startupOverride as ColdRestoreAgentResumeStartup)
+          : null
+      const resetOwnedColdRestoreDraftOnAbortedAttempt = (): void => {
+        if (
+          coldRestoreOverride &&
+          activeColdRestoreDraft?.launchToken === coldRestoreOverride.launchToken
+        ) {
+          resetActiveColdRestoreDraft()
+        }
+      }
       if (isLegacyWorkerAutomaticResumeBlocked()) {
+        resetOwnedColdRestoreDraftOnAbortedAttempt()
         return Promise.resolve(null)
       }
       if (useAppStore.getState().deleteStateByWorktreeId?.[deps.worktreeId]?.isDeleting) {
@@ -5547,6 +5621,7 @@ export function connectPanePty(
         // filesystem teardown. A fresh shell must not spawn into a directory the
         // removal is about to delete (main fences it anyway), and the pane is
         // about to unmount — so skip the doomed respawn instead of racing it.
+        resetOwnedColdRestoreDraftOnAbortedAttempt()
         return Promise.resolve(null)
       }
       authoritativeReattachGeneration += 1
@@ -5567,10 +5642,6 @@ export function connectPanePty(
         pendingStartupCommand = { command: startupOverride.command }
       }
       armSshStartupShellReady()
-      const coldRestoreOverride =
-        startupOverride && 'launchConfig' in startupOverride
-          ? (startupOverride as ColdRestoreAgentResumeStartup)
-          : null
       // Why: pre-signal the main process so its cooperation gate suppresses
       // the daemon-snapshot seed for this paneKey. We issue declare and the
       // spawn back-to-back without awaiting, because Electron's
@@ -5588,8 +5659,11 @@ export function connectPanePty(
       // draft armed here is scoped to THIS connect attempt, not the previous one)
       // and after the pendingStartupCommand assignment above (so an SSH resume
       // whose command still needs typing defers to schedulePendingStartupCommandDelivery's
-      // submission confirmation instead of racing the bare shell prompt).
-      armActiveColdRestoreDraftObservationIfReady()
+      // submission confirmation instead of racing the bare shell prompt). Passing
+      // coldRestoreOverride's own launchToken (or null for a non-cold-restore
+      // spawn) is what stops this from arming a stale draft left behind by a
+      // different, earlier attempt — see armActiveColdRestoreDraftObservationIfReady.
+      armActiveColdRestoreDraftObservationIfReady(coldRestoreOverride?.launchToken ?? null)
       const spawnedRaw = transport.connect({
         url: '',
         cols,
@@ -8722,8 +8796,12 @@ export function connectPanePty(
           // Why: this reattach's connect() already resolved with the resume
           // fully spawned (command/launchConfig/resumeProviderSession all rode
           // the same connect() call above) — unlike startFreshSpawn's SSH path,
-          // there is no separate typed-command step to wait on here.
-          armActiveColdRestoreDraftObservationIfReady()
+          // there is no separate typed-command step to wait on here. Passing
+          // preparedStartup's own launchToken ties this arm call to the draft
+          // this exact reattach just created (see
+          // armActiveColdRestoreDraftObservationIfReady for why that match
+          // matters).
+          armActiveColdRestoreDraftObservationIfReady(preparedStartup?.launchToken ?? null)
           if (didPrepareResume) {
             if (connectResult.agentResumeUnavailable) {
               // Why: main dropped the resume argv, so this pane is a NEW session —

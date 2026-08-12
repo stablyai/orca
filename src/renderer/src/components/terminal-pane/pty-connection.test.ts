@@ -10919,37 +10919,41 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('never delivers a superseded cold-restore attempt draft into the next attempt shell', async () => {
-    // Regression: sleep -> wake -> sleep -> wake within one pane lifetime must not let
-    // attempt N's readiness scanner (still listening on its own captured onData closure)
-    // fire its rules paste against attempt N+1's PTY stream. The two attempts use
-    // DIFFERENT rules content (by mutating settings between them) so a leak is
-    // distinguishable from a legitimate attempt-2 delivery, not just "was anything
-    // sent" — this is what actually exercises the armedGeneration staleness guard
-    // rather than the pre-existing per-connect isCurrent() gate alone (that gate
-    // already blocks a truly stale onData closure from invoking dataCallback at
-    // all, but does nothing for a still-current closure observing a STALE draft
-    // object that a supersede failed to clear).
+  it('never arms a stale cold-restore draft (left by an aborted attempt) onto a later unrelated spawn', async () => {
+    // Regression for op5's review of 4027be5548 (ISSUE 3): applyColdRestoreAgentResumeStartup
+    // arms activeColdRestoreDraft BEFORE startFreshSpawn runs (see startFreshColdRestoreAgentResume).
+    // If startFreshSpawn then aborts early — e.g. its isDeleting guard — before ever reaching
+    // armActiveColdRestoreDraftObservationIfReady, the draft used to sit in activeColdRestoreDraft
+    // forever with readinessArmed still false. A LATER, totally unrelated startFreshSpawn call (a
+    // plain shell restart with no cold-restore override at all) reaches
+    // armActiveColdRestoreDraftObservationIfReady too — and used to arm that stale leftover draft
+    // onto its OWN brand-new transportStreamGeneration, so the aborted attempt's stale rules text
+    // got bracket-pasted into a shell that has nothing to do with it.
+    //
+    // This constructs exactly that: attempt 1's cold restore is aborted mid-flight by a worktree
+    // deletion race (isDeleting), leaving its draft (content "Attempt-one-only") unarmed and
+    // un-reset in the buggy code. Attempt 2 is a plain, non-cold-restore fresh spawn (its sleeping
+    // record's agent is not resumable, so buildColdRestoreAgentResumeStartup returns null and
+    // startFreshColdRestoreAgentResume degrades to a bare startFreshSpawn). The ready bytes are fed
+    // into attempt 2's OWN, freshly captured, CURRENT (never superseded) onData closure — so a pass
+    // here cannot be explained by the pre-existing per-connect isCurrent() gate (attempt 2's
+    // closure is never stale); it can only be explained by activeColdRestoreDraft correctly being
+    // gone/refused by the time attempt 2 tries to arm it.
     const { connectPanePty } = await import('./pty-connection')
     const capturedDataCallbacks: ((data: string) => void)[] = []
-    const transport = createMockTransport('fresh-pty')
-    transport.connect.mockImplementation(
-      async ({ sessionId, callbacks }: { sessionId?: string; callbacks: ConnectCallbacks }) => {
-        capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
-        if (sessionId) {
-          return {
-            id: 'fresh-pty',
-            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
-          }
-        }
-        return 'fresh-pty'
-      }
-    )
+    let currentPtyId: string | null = null
+    const transport = createMockTransport(null)
+    transport.getPtyId = vi.fn(() => currentPtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      const id = `pty-${capturedDataCallbacks.length}`
+      capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
+      currentPtyId = id
+      return id
+    })
     transportFactoryQueue.push(transport)
     const paneKey = makePaneKey('tab-1', LEAF_1)
     mockStoreState = {
       ...mockStoreState,
-      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
       settings: {
         ...mockStoreState.settings,
         agentSessionRules: {
@@ -10966,27 +10970,10 @@ describe('connectPanePty', () => {
           seenBuiltinRuleIds: ['builtin-graphify']
         }
       },
-      agentStatusByPaneKey: {},
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          agent: 'opencode',
-          providerSession: { key: 'session_id', id: 'opencode-session-1' },
-          prompt: 'finish the task',
-          state: 'working',
-          capturedAt: 1,
-          updatedAt: 1
-        }
-      }
+      agentStatusByPaneKey: {}
     } as StoreState
 
-    const deps = createDeps({
-      restoredLeafId: LEAF_1,
-      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' },
-      consumeSuppressedPtyExit: vi.fn(() => true)
-    })
+    const deps = createDeps({ consumeSuppressedPtyExit: vi.fn(() => true) })
     const binding = connectPanePty(
       createPane(1) as never,
       createManager(1) as never,
@@ -10994,75 +10981,82 @@ describe('connectPanePty', () => {
     ) as unknown as { noteVisibilityResume: () => void }
     await flushAsyncTicks(20)
 
-    // Attempt 1 (cold-restore via the restored-pty reattach path) is now armed
-    // and waiting for opencode's composer-ready signal on its own onData closure.
+    // Initial connect: a plain shell, nothing cold-restore related yet.
     expect(capturedDataCallbacks.length).toBe(1)
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
 
-    // Simulate the just-resumed agent completing and hibernating again while
-    // hidden: a fresh sleeping record (different provider session) plus a
-    // suppressed exit arms the hibernation wake target for a SECOND attempt.
-    // The rules text also changes, so attempt 2's draft is content-distinct
-    // from attempt 1's.
-    mockStoreState = {
-      ...mockStoreState,
-      settings: {
-        ...mockStoreState.settings,
-        agentSessionRules: {
-          enabled: true,
-          rules: [
-            {
-              id: 'attempt-2-rule',
-              label: 'Attempt 2 rule',
-              content: 'Attempt-two-only rule text.',
-              enabled: true,
-              source: 'custom'
-            }
-          ],
-          seenBuiltinRuleIds: ['builtin-graphify']
-        }
-      }
-    } as StoreState
+    // The shell hibernates: a resumable sleeping record (opencode, with attempt-1's
+    // distinct rules content resolved as its draftPrompt) arms the hibernation wake
+    // target on its suppressed exit.
     mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
       paneKey,
       tabId: 'tab-1',
       worktreeId: 'wt-1',
       agent: 'opencode',
-      providerSession: { key: 'session_id', id: 'opencode-session-2' },
-      prompt: 'finish another task',
+      providerSession: { key: 'session_id', id: 'opencode-session-1' },
+      prompt: 'finish the task',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['pty-0'] = true
+    deps.isVisibleRef.current = false
+    onPtyExit?.('pty-0')
+    // Why: a real exit clears the transport's tracked ptyId; nothing ever replaces
+    // it below since attempt 1 aborts before transport.connect() is ever called.
+    currentPtyId = null
+
+    // The wake races a worktree-deletion: startFreshSpawn's isDeleting guard aborts
+    // attempt 1's respawn AFTER applyColdRestoreAgentResumeStartup already armed its
+    // draft (armActiveColdRestoreDraft), never reaching
+    // armActiveColdRestoreDraftObservationIfReady.
+    mockStoreState.deleteStateByWorktreeId = { 'wt-1': { isDeleting: true } }
+    deps.isVisibleRef.current = true
+    binding.noteVisibilityResume()
+    await flushAsyncTicks(20)
+
+    // Attempt 1 never reached transport.connect() at all — aborted before it, no
+    // new onData closure, and definitely no paste yet.
+    expect(capturedDataCallbacks.length).toBe(1)
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+
+    // Later: the deletion is no longer in the way, but the sleeping record's agent
+    // is no longer resumable — buildColdRestoreAgentResumeStartup now returns null,
+    // so this next wake degrades to a PLAIN startFreshSpawn with NO cold-restore
+    // override at all: exactly "the user does something unrelated — a plain shell
+    // restart" from op5's repro. A second suppressed exit (different ptyId, since
+    // handledExitPtyId already latched on 'pty-0') re-arms the wake target.
+    mockStoreState.deleteStateByWorktreeId = {}
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'not-a-resumable-agent' as never,
+      providerSession: { key: 'session_id', id: 'opencode-session-1' },
+      prompt: 'finish the task',
       state: 'done',
       capturedAt: 2,
       updatedAt: 2,
       origin: 'worktree-sleep'
     }
-    mockStoreState.suppressedPtyExitIds['fresh-pty'] = true
+    mockStoreState.suppressedPtyExitIds['pty-0-b'] = true
     deps.isVisibleRef.current = false
-    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
-    onPtyExit?.('fresh-pty')
-    await flushAsyncTicks()
-
+    onPtyExit?.('pty-0-b')
     deps.isVisibleRef.current = true
     binding.noteVisibilityResume()
     await flushAsyncTicks(20)
 
-    // Attempt 2 (the hibernation wake's fresh spawn) is now armed on its own,
-    // separately captured onData closure — attempt 1's is now stale.
+    // Attempt 2 is a fresh, unrelated connect — its own onData closure is captured,
+    // and it is CURRENT (never superseded by anything).
     expect(capturedDataCallbacks.length).toBe(2)
 
-    // Attempt 1's stale scanner must not fire even when fed the exact ready bytes.
-    capturedDataCallbacks[0]?.('\x1b[?2004h\x1b[?25h')
-    await flushAsyncTicks()
-    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
-
-    // Attempt 2's current scanner delivers ONLY attempt 2's content.
+    // Attempt 2's current onData closure must never receive attempt 1's stale draft
+    // content, even when fed the exact bracketed-paste-ready signal opencode's
+    // scanner is armed on.
     capturedDataCallbacks[1]?.('\x1b[?2004h\x1b[?25h')
     await flushAsyncTicks()
-    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
-    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
-      expect.stringContaining('Attempt-two-only rule text.')
-    )
-    expect(transport.sendInputAccepted).not.toHaveBeenCalledWith(
-      expect.stringContaining('Attempt-one-only rule text.')
-    )
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
   })
 
   it('uses sleeping-record launch config for pane cold restore after settings change', async () => {
