@@ -9,7 +9,11 @@ let tempHome = ''
 const decryptStringMock = vi.fn((value: Buffer) => value.toString('utf-8'))
 
 async function loadStore(
-  options: { unlinkError?: NodeJS.ErrnoException; writeError?: Error } = {}
+  options: {
+    unlinkError?: NodeJS.ErrnoException
+    writeError?: Error
+    shortWrites?: boolean
+  } = {}
 ) {
   vi.resetModules()
   // Why: doMock registrations outlive resetModules, so an injected failure from
@@ -26,6 +30,18 @@ async function loadStore(
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }
   })
+  if (options.shortWrites) {
+    vi.doMock('node:fs', async () => {
+      const actual = await vi.importActual<typeof Fs>('node:fs')
+      return {
+        ...actual,
+        // Why: write(2) may return a short count; publishing without looping
+        // would rename a truncated credential into place.
+        writeSync: (fd: number, data: Buffer, offset = 0, length = data.length) =>
+          actual.writeSync(fd, data, offset, Math.min(1, length))
+      }
+    })
+  }
   if (options.writeError) {
     const error = options.writeError
     vi.doMock('node:fs', async () => {
@@ -281,6 +297,25 @@ describe('Bitbucket credential store', () => {
       email: 'ada@example.com',
       apiToken: 'legacy-token'
     })
+  })
+
+  it('writes the whole credential even when the filesystem short-writes (STA-3941)', async () => {
+    const store = await loadStore({ shortWrites: true })
+    store.saveBitbucketCredential({
+      authMode: 'basic',
+      email: 'ada@example.com',
+      baseUrl: null,
+      account: 'ada',
+      accessToken: null,
+      apiToken: 'a-token-long-enough-to-need-several-writes'
+    })
+    store._resetBitbucketCredentialCache()
+
+    expect(store.loadStoredBitbucketSecret({ force: true })).toMatchObject({
+      apiToken: 'a-token-long-enough-to-need-several-writes',
+      email: 'ada@example.com'
+    })
+    expect(store.getStoredBitbucketMetadata()?.account).toBe('ada')
   })
 
   it('clears both files and in-memory state on disconnect', async () => {

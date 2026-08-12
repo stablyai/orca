@@ -50,7 +50,16 @@ export function writeCredentialFileAtomic(path: string, data: Buffer): void {
   let handle: number | null = null
   try {
     handle = openSync(tempPath, 'w', 0o600)
-    writeSync(handle, data)
+    // Why: write(2) is allowed to return a short count, so a single writeSync
+    // could publish a truncated credential — the very corruption this avoids.
+    let written = 0
+    while (written < data.length) {
+      const bytes = writeSync(handle, data, written, data.length - written)
+      if (bytes <= 0) {
+        throw new Error(`Credential write stalled at ${written}/${data.length} bytes`)
+      }
+      written += bytes
+    }
     fsyncSync(handle)
     closeSync(handle)
     handle = null
