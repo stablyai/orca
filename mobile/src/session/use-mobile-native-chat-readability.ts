@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { isMobileNativeChatTranscriptReadable } from './mobile-native-chat-eligibility'
+import {
+  isMobileNativeChatHostReadable,
+  isMobileNativeChatTranscriptReadable
+} from './mobile-native-chat-eligibility'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
 type RepoSummary = { id: string; connectionId?: string | null }
@@ -12,6 +15,7 @@ export function useMobileNativeChatReadability(
   worktreeId: string
 ): boolean {
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
+  const isFolderWorkspace = worktreeId.startsWith('folder:')
   const [state, setState] = useState<ReadabilityState>({
     client: null,
     worktreeId: '',
@@ -27,10 +31,20 @@ export function useMobileNativeChatReadability(
       setState({ client, worktreeId, readable: false })
       return
     }
-    void client
-      .sendRequest('repo.list')
+    const request = isFolderWorkspace
+      ? client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` })
+      : client.sendRequest('repo.list')
+    void request
       .then((response) => {
         if (!active) {
+          return
+        }
+        if (isFolderWorkspace) {
+          const hostId = response.ok
+            ? ((response.result as { worktree?: { hostId?: string | null } }).worktree?.hostId ??
+              null)
+            : null
+          setState({ client, worktreeId, readable: isMobileNativeChatHostReadable(hostId) })
           return
         }
         const repos = response.ok
@@ -52,7 +66,7 @@ export function useMobileNativeChatReadability(
     return () => {
       active = false
     }
-  }, [client, isFloatingWorkspace, worktreeId])
+  }, [client, isFolderWorkspace, isFloatingWorkspace, worktreeId])
   if (isFloatingWorkspace) {
     return true
   }

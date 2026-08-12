@@ -55,6 +55,43 @@ describe('useMobileNativeChatReadability', () => {
     expect(readable).toBe(false)
   })
 
+  it('resolves folder workspace ownership from worktree.show', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { worktree: { hostId: 'runtime:environment-1' } }
+    })
+    const client = { sendRequest } as unknown as RpcClient
+    function Harness(): null {
+      readable = useMobileNativeChatReadability(client, 'folder:workspace-1')
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
+    expect(readable).toBe(true)
+    expect(sendRequest).toHaveBeenCalledWith('worktree.show', {
+      worktree: 'id:folder:workspace-1'
+    })
+  })
+
+  it('fails closed for a Model-A SSH folder workspace', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({
+      ok: true,
+      result: { worktree: { hostId: 'ssh:model-a-1' } }
+    })
+    const client = { sendRequest } as unknown as RpcClient
+    function Harness(): null {
+      readable = useMobileNativeChatReadability(client, 'folder:workspace-1')
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
+    })
+    expect(readable).toBe(false)
+  })
+
   it('treats the host-local floating workspace as readable without listing repos', async () => {
     const sendRequest = await mount(null, FLOATING_WORKSPACE_WORKTREE_ID)
 

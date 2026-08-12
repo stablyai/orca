@@ -2,7 +2,7 @@ import type { Tab, TuiAgent } from '../../../../shared/types'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
+  nativeChatRequiresHostReadableTranscript
 } from '@/lib/native-chat-supported-agent'
 
 export { isNativeChatSupportedAgent }
@@ -25,7 +25,7 @@ export type NativeChatAvailabilityInput = {
    *  terminal title resolver) when it identifies the foreground as an agent
    *  before hooks arrive. */
   resolvedAgent?: TuiAgent | null
-  /** Whether this renderer's native-chat reader can access the agent transcript. */
+  /** Whether this renderer's native-chat reader can access host-owned transcript storage. */
   nativeChatTranscriptIsLocalReadable?: boolean
   /** Already-chat tabs must always be allowed to toggle back to terminal, even
    *  if live hook state was lost during a dev/app restart. */
@@ -50,8 +50,8 @@ export function canToggleNativeChat(input: NativeChatAvailabilityInput): boolean
   }
   const agent = input.detectedAgent ?? input.launchAgent ?? input.resolvedAgent
   if (
-    nativeChatRequiresLocalTranscript(agent) &&
-    input.nativeChatTranscriptIsLocalReadable !== true
+    nativeChatRequiresHostReadableTranscript(agent) &&
+    input.nativeChatTranscriptIsLocalReadable === false
   ) {
     return false
   }

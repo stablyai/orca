@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import {
   canShowMobileNativeChat,
+  isMobileNativeChatHostReadable,
   isMobileNativeChatTranscriptReadable,
   resolveMobileNativeChat
 } from './mobile-native-chat-eligibility'
@@ -115,6 +116,35 @@ describe('resolveMobileNativeChat', () => {
     )
   })
 
+  // Why: like omp, OpenCode reports only a session id, so mobile can only show
+  // its chat when the serving host holds the OpenCode SQLite DB.
+  it('admits opencode only when its transcript is readable by the serving host', () => {
+    const tab = { type: 'terminal', launchAgent: 'opencode' }
+    expect(resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable(null))).toMatchObject({
+      agent: 'opencode'
+    })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('runtime-ssh-environment'))
+    ).toMatchObject({ agent: 'opencode' })
+    expect(
+      resolveMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))
+    ).toBeNull()
+    expect(canShowMobileNativeChat(tab, isMobileNativeChatTranscriptReadable('model-a-ssh'))).toBe(
+      false
+    )
+  })
+
+  it('rejects path-backed agents on Model-A SSH because the path is remote', () => {
+    for (const agent of ['claude', 'openclaude', 'codex'] as const) {
+      expect(
+        resolveMobileNativeChat(
+          { type: 'terminal', launchAgent: agent },
+          isMobileNativeChatTranscriptReadable('model-a-ssh')
+        )
+      ).toBeNull()
+    }
+  })
+
   it('returns null for a plain shell (no agent)', () => {
     expect(resolveMobileNativeChat({ type: 'terminal' })).toBeNull()
   })
@@ -126,5 +156,19 @@ describe('resolveMobileNativeChat', () => {
   it('canShowMobileNativeChat mirrors resolution', () => {
     expect(canShowMobileNativeChat({ type: 'terminal', launchAgent: 'claude' })).toBe(true)
     expect(canShowMobileNativeChat(null)).toBe(false)
+  })
+})
+
+describe('isMobileNativeChatHostReadable', () => {
+  it('accepts local and runtime-owned folder hosts', () => {
+    expect(isMobileNativeChatHostReadable('local')).toBe(true)
+    expect(isMobileNativeChatHostReadable('runtime:environment-1')).toBe(true)
+    expect(isMobileNativeChatHostReadable('ssh:runtime-ssh-environment-1')).toBe(true)
+  })
+
+  it('rejects Model-A SSH and malformed folder host ids', () => {
+    expect(isMobileNativeChatHostReadable('ssh:model-a-1')).toBe(false)
+    expect(isMobileNativeChatHostReadable('not-a-host')).toBe(false)
+    expect(isMobileNativeChatHostReadable(null)).toBe(false)
   })
 })

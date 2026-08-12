@@ -866,13 +866,13 @@ export type AiVaultApi = {
   onWindowFocused: (callback: () => void) => () => void
 }
 
-// notFound marks a not-yet-on-disk miss (retry-worthy) vs a real read/parse error (#8401).
+// notFound marks a not-yet-on-disk miss; retryable marks a transient read error.
 export type NativeChatReadSessionResult =
   | {
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
     }
-  | { error: string; notFound?: true }
+  | { error: string; notFound?: true; retryable?: true }
 
 /** Messages appended to a live-tailed transcript since the previous emit. */
 export type NativeChatAppendedMessages = NativeChatMessage[]

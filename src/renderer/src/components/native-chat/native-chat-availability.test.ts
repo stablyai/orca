@@ -90,6 +90,19 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
+  it('rejects path-backed agents on Model-A SSH because the path is remote', () => {
+    for (const agent of ['claude', 'openclaude', 'codex'] as const) {
+      expect(
+        canToggleNativeChat({
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: agent,
+          nativeChatTranscriptIsLocalReadable: false
+        })
+      ).toBe(false)
+    }
+  })
+
   // Why: omp discloses no hook transcript path either, so its session file is
   // only reachable when this process can read the agent's disk.
   it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
@@ -98,6 +111,21 @@ describe('canToggleNativeChat', () => {
         experimentalNativeChatEnabled: true,
         contentType: 'terminal',
         launchAgent: 'omp',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
+  // Why: OpenCode keeps conversations in its local SQLite DB and reports no
+  // hook transcript path, so its chat is only reachable on a readable disk.
+  it('rejects Model-A SSH opencode but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'opencode',
         nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
       })
     expect(forConnection('ssh-target-1')).toBe(false)

@@ -19,6 +19,7 @@ const store = {
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
   repos: [{ id: 'repo-runtime', connectionId: null }],
+  worktreesByRepo: {},
   pendingWorktreeCreations: {} as Record<string, PendingWorktreeCreation>,
   beginPendingWorktreeCreation: vi.fn((entry: PendingWorktreeCreation) => {
     store.pendingWorktreeCreations[entry.creationId] = entry
@@ -44,8 +45,7 @@ const store = {
   refreshRuntimeEnvironmentStatus: vi.fn(),
   seedNativeChatLaunchDraft: vi.fn(),
   setTabViewMode: vi.fn(),
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>,
-  unifiedTabsByWorktree: {}
+  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string }[]>
 }
 
 vi.mock('@/store', () => ({
@@ -101,11 +101,10 @@ beforeEach(() => {
   store.settings.openAgentTabsInChatByDefault = undefined
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
-  store.repos = []
+  Object.assign(store, { repos: [], worktreesByRepo: {} })
   store.pendingWorktreeCreations = { 'creation-1': makePendingCreation(makeRequest()) }
   store.createWorktree.mockImplementation(() => new Promise(() => {}))
   store.tabsByWorktree = {}
-  store.unifiedTabsByWorktree = {}
   vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
 })
 

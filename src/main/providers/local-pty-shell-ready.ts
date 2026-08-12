@@ -165,20 +165,49 @@ __orca_osc133_preexec() {
   printf "\\033]133;C\\007"
   __orca_in_command=1
 }
-# Why: prepend so we capture $? before the user's PROMPT_COMMAND chain mutates it.
+# Why: normalize PROMPT_COMMAND without interpreting inherited command text;
+# semicolons inside quotes or escaped semicolons are command data.
 __orca_normalize_prompt_command() {
   local __orca_joined="" __orca_prompt_part
   if [[ "$(declare -p PROMPT_COMMAND 2>/dev/null)" == "declare -a"* ]]; then
     for __orca_prompt_part in "\${PROMPT_COMMAND[@]}"; do
       [[ -n "$__orca_prompt_part" ]] || continue
-      if [[ -n "$__orca_joined" ]]; then
-        __orca_joined="$__orca_joined;$__orca_prompt_part"
-      else
-        __orca_joined="$__orca_prompt_part"
-      fi
+      __orca_joined+="\${__orca_joined:+;}$__orca_prompt_part"
     done
     PROMPT_COMMAND="$__orca_joined"
   fi
+  local __orca_normalized="" __orca_segment="" __orca_quote="" __orca_escaped=0 __orca_char __orca_index
+  for ((__orca_index = 0; __orca_index < \${#PROMPT_COMMAND}; __orca_index++)); do
+    __orca_char="\${PROMPT_COMMAND:__orca_index:1}"
+    if [[ "$__orca_escaped" == "1" ]]; then
+      __orca_segment+="$__orca_char"; __orca_escaped=0; continue
+    fi
+    if [[ "$__orca_char" == $'\\\\' ]]; then
+      __orca_segment+="$__orca_char"; __orca_escaped=1; continue
+    fi
+    if [[ -n "$__orca_quote" ]]; then
+      __orca_segment+="$__orca_char"
+      [[ "$__orca_char" == "$__orca_quote" ]] && __orca_quote=""
+      continue
+    fi
+    case "$__orca_char" in
+      "'") __orca_quote="'"; __orca_segment+="$__orca_char" ;;
+      '"') __orca_quote='"'; __orca_segment+="$__orca_char" ;;
+      ';')
+        if [[ -n "\${__orca_segment//[[:space:]]/}" ]]; then
+          [[ -n "$__orca_normalized" ]] && __orca_normalized+=";"
+          __orca_normalized+="$__orca_segment"
+        fi
+        __orca_segment=""
+        ;;
+      *) __orca_segment+="$__orca_char" ;;
+    esac
+  done
+  if [[ -n "\${__orca_segment//[[:space:]]/}" ]]; then
+    [[ -n "$__orca_normalized" ]] && __orca_normalized+=";"
+    __orca_normalized+="$__orca_segment"
+  fi
+  PROMPT_COMMAND="$__orca_normalized"
 }
 __orca_prepend_prompt_command() {
   __orca_normalize_prompt_command

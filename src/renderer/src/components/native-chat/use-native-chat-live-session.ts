@@ -127,7 +127,6 @@ export function useNativeChatLiveSession(
   const retainedSourceKeyRef = useRef(sourceKey)
 
   useEffect(() => {
-    // Why: agent/path/owner rebinds can keep the same session; every source generation must invalidate pagination captured before it.
     transcriptEpochRef.current += 1
     setLoadingEarlier(false)
     const sourceChanged = retainedSourceKeyRef.current !== sourceKey

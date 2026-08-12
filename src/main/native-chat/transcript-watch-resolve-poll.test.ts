@@ -1,24 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as HostReadableTranscriptPathModule from './host-readable-transcript-path'
-
 const mocks = vi.hoisted(() => ({
   install: vi.fn(),
   resolve: vi.fn(),
-  toHostReadable: vi.fn()
+  resolveHostOwned: vi.fn()
 }))
 
 vi.mock('./session-file-resolver', () => ({
-  resolveSessionFilePath: mocks.resolve
+  resolveSessionFilePath: mocks.resolve,
+  resolveHostOwnedTranscriptPath: mocks.resolveHostOwned
 }))
 vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
-vi.mock('./host-readable-transcript-path', async (importOriginal) => ({
-  ...(await importOriginal<typeof HostReadableTranscriptPathModule>()),
-  toHostReadableTranscriptPath: mocks.toHostReadable
-}))
-
 import { subscribeNativeChatTranscript } from './transcript-watch'
 
 const realPlatform = process.platform
@@ -32,7 +26,7 @@ describe('native chat transcript resolve polling', () => {
     vi.useFakeTimers()
     mocks.install.mockReset().mockReturnValue(null)
     mocks.resolve.mockReset().mockResolvedValue(null)
-    mocks.toHostReadable.mockReset().mockResolvedValue(null)
+    mocks.resolveHostOwned.mockReset().mockResolvedValue(null)
     // Why: a POSIX exact path is a WSL guest path on win32 and is deliberately
     // never installed raw there, so pin the platform instead of inheriting the
     // host's — otherwise these cases only hold on non-Windows machines.
@@ -45,6 +39,7 @@ describe('native chat transcript resolve polling', () => {
   })
 
   it('fast-probes an exact hook path without repeatedly scanning the session tree', async () => {
+    mocks.resolveHostOwned.mockResolvedValue('/verified/exact.jsonl')
     const subscription = await subscribeNativeChatTranscript({
       agent: 'claude',
       sessionId: 'session-id',
@@ -80,21 +75,35 @@ describe('native chat transcript resolve polling', () => {
     })
 
     await vi.advanceTimersByTimeAsync(100)
-    expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
+    expect(mocks.resolveHostOwned).toHaveBeenCalledTimes(1)
     expect(mocks.install.mock.calls.some(([filePath]) => String(filePath).startsWith('/'))).toBe(
       false
     )
 
     await vi.advanceTimersByTimeAsync(5_100)
-    expect(mocks.toHostReadable).toHaveBeenCalledTimes(2)
+    expect(mocks.resolveHostOwned).toHaveBeenCalledTimes(2)
 
+    subscription.unsubscribe()
+  })
+
+  it('does not install an unverified exact path after the initial resolver misses', async () => {
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'claude',
+      sessionId: 'session-id',
+      transcriptPath: '/unrelated/existing.jsonl',
+      resolvePollIntervalMs: 10,
+      onAppend: () => {}
+    })
+
+    await vi.advanceTimersByTimeAsync(5_100)
+    expect(mocks.install).not.toHaveBeenCalled()
     subscription.unsubscribe()
   })
 
   it('installs the translated UNC path once the WSL transcript becomes readable', async () => {
     setPlatform('win32')
     const unc = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\.codex\\sessions\\rollout-session-id.jsonl'
-    mocks.toHostReadable.mockResolvedValue(unc)
+    mocks.resolveHostOwned.mockResolvedValue(unc)
 
     const subscription = await subscribeNativeChatTranscript({
       agent: 'codex',
@@ -107,7 +116,7 @@ describe('native chat transcript resolve polling', () => {
     await vi.advanceTimersByTimeAsync(100)
     expect(mocks.install.mock.calls.some(([filePath]) => filePath === unc)).toBe(true)
     // Memoized: a successful translation is not re-probed on later ticks.
-    expect(mocks.toHostReadable).toHaveBeenCalledTimes(1)
+    expect(mocks.resolveHostOwned).toHaveBeenCalledTimes(1)
 
     subscription.unsubscribe()
   })
@@ -128,11 +137,11 @@ describe('native chat transcript resolve polling', () => {
   it('cancels queued WSL resolution when the subscription closes', async () => {
     setPlatform('win32')
     let receivedSignal: AbortSignal | undefined
-    mocks.toHostReadable.mockImplementation(
-      (_path: string, deps: { signal?: AbortSignal }) =>
+    mocks.resolveHostOwned.mockImplementation(
+      (_agent: string, _path: string, _args: unknown, signal?: AbortSignal) =>
         new Promise<null>((_resolve, reject) => {
-          receivedSignal = deps.signal
-          deps.signal?.addEventListener('abort', () => reject(deps.signal?.reason), { once: true })
+          receivedSignal = signal
+          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
         })
     )
     const subscription = await subscribeNativeChatTranscript({
@@ -202,5 +211,25 @@ describe('native chat transcript resolve polling', () => {
     installControl.finish?.({ unsubscribe, watching: true })
     await expect(setup).rejects.toBe(cancelled)
     expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+  it('does not poll OpenCode for a blank session id', async () => {
+    const onInitialSnapshot = vi.fn()
+    const onAppend = vi.fn()
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'opencode',
+      sessionId: '   ',
+      openCodeDbPath: '/tmp/opencode-test.db',
+      reconciliationIntervalMs: 10,
+      onInitialSnapshot,
+      onAppend
+    })
+
+    expect(subscription.watching).toBe(false)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(onInitialSnapshot).not.toHaveBeenCalled()
+    expect(onAppend).not.toHaveBeenCalled()
+    expect(mocks.install).not.toHaveBeenCalled()
+    expect(mocks.resolve).not.toHaveBeenCalled()
+    subscription.unsubscribe()
   })
 })

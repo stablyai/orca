@@ -1,16 +1,16 @@
 import { extname } from 'node:path'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
-import {
-  needsWslHostTranslation,
-  toHostReadableTranscriptPath
-} from './host-readable-transcript-path'
-import { resolveSessionFilePath } from './session-file-resolver'
+import { needsWslHostTranslation } from './host-readable-transcript-path'
+import { resolveHostOwnedTranscriptPath, resolveSessionFilePath } from './session-file-resolver'
 import { installTranscriptWatcher } from './transcript-watch-engine'
 import type {
   NativeChatTranscriptSubscription,
   SubscribeNativeChatTranscriptArgs
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
+import { subscribeOpenCodeNativeChatTranscript } from './opencode-sqlite-live'
+import { resolveOpenCodeNativeChatDbPath } from './opencode-sqlite-transcript'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -111,9 +111,8 @@ function subscribeViaResolvePoll(
     try {
       if (exactPath && !hostReadableExactPath) {
         if (!needsWslHostTranslation(exactPath)) {
-          // Non-WSL paths stay raw: installTranscriptWatcher already handles a
-          // not-yet-created file, so don't spend an extra probe per tick.
-          hostReadableExactPath = exactPath
+          // Validate the exact path before passing it as an internal file path.
+          hostReadableExactPath = await resolveHostOwnedTranscriptPath(args.agent, exactPath, args)
         } else if (Date.now() - lastWslTranslateAt >= FALLBACK_RESOLVE_POLL_MS) {
           // Why: translating probes the UNC twin per distro over the 9P
           // share, and the guest file usually appears well after the hook does,
@@ -121,9 +120,12 @@ function subscribeViaResolvePoll(
           // guest path is never installed on Windows — it would resolve against
           // the current drive (`C:\home\…`) and bind chat to a look-alike file.
           lastWslTranslateAt = Date.now()
-          hostReadableExactPath = await toHostReadableTranscriptPath(exactPath, {
-            signal: resolveController.signal
-          })
+          hostReadableExactPath = await resolveHostOwnedTranscriptPath(
+            args.agent,
+            exactPath,
+            args,
+            resolveController.signal
+          )
         }
       }
       result = hostReadableExactPath
@@ -195,7 +197,23 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  const agent = resolveNativeChatTranscriptAgent(args.agent)
   const decode = nativeChatLineDecoderForAgent(args.agent)
+  if (agent === 'opencode' && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+  // Why: OpenCode keeps conversations in SQLite, not a JSONL file, so live
+  // updates come from a poll-based reconcile loop instead of fs.watch on a file.
+  if (agent === 'opencode') {
+    return subscribeOpenCodeNativeChatTranscript({
+      dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
+      sessionId: args.sessionId,
+      initialLimit: args.initialLimit,
+      reconciliationIntervalMs: args.reconciliationIntervalMs,
+      onInitialSnapshot: args.onInitialSnapshot,
+      onAppend: args.onAppend
+    })
+  }
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.

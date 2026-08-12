@@ -1,15 +1,24 @@
-import { stat } from 'node:fs/promises'
+import { realpath, stat } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join } from 'node:path'
 import type {
   AiVaultAgent,
   AiVaultFirstUserPromptResult,
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
+import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import { resolveOpenCodeDataDirectory } from '../opencode/opencode-data-directory'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import { parseOpenCodeSqliteSession } from './session-scanner-opencode-sqlite'
 import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
 import type { FileWithMtime } from './session-scanner-types'
+const OPEN_CODE_DATABASE_NAME = /^opencode(?:-[A-Za-z0-9_.-]+)?\.db$/i
+
+type CanonicalOpenCodeSession = {
+  dbPath: string
+  sessionId?: string
+}
 
 export type ReadAiVaultFirstUserPromptArgs = {
   agent: AiVaultAgent
@@ -20,6 +29,55 @@ export type ReadAiVaultFirstUserPromptArgs = {
 }
 
 export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
+async function canonicalOpenCodeDatabasePath(
+  filePath: string
+): Promise<CanonicalOpenCodeSession | null> {
+  const dataDirectory = resolveOpenCodeDataDirectory()
+  const configured = process.env.OPENCODE_DB?.trim()
+  const configuredPath =
+    configured && configured !== ':memory:'
+      ? isAbsolute(configured)
+        ? configured
+        : join(dataDirectory, configured)
+      : null
+  const synthetic = splitOpenCodeSqliteCandidate(filePath, configuredPath ?? undefined)
+  const requestedPath = (synthetic?.dbPath ?? filePath).trim()
+  if (!requestedPath) {
+    return null
+  }
+
+  const canonicalPath = await realpath(requestedPath).catch(() => null)
+  if (!canonicalPath) {
+    return null
+  }
+  if (configuredPath) {
+    const configuredCanonicalPath = await realpath(configuredPath).catch(() => null)
+    if (configuredCanonicalPath === canonicalPath) {
+      return { dbPath: canonicalPath, sessionId: synthetic?.sessionId }
+    }
+  }
+  if (!OPEN_CODE_DATABASE_NAME.test(basename(canonicalPath))) {
+    return null
+  }
+
+  const roots = [dataDirectory]
+  if (process.platform === 'win32') {
+    const homes = await Promise.all(
+      (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
+    )
+    roots.push(
+      ...homes
+        .filter((home): home is string => Boolean(home))
+        .map((home) => join(home, '.local', 'share', 'opencode'))
+    )
+  }
+  const canonicalParent = dirname(canonicalPath)
+  const canonicalRoots = await Promise.all(roots.map((root) => realpath(root).catch(() => null)))
+  if (!canonicalRoots.some((root) => root === canonicalParent)) {
+    return null
+  }
+  return { dbPath: canonicalPath, sessionId: synthetic?.sessionId }
+}
 
 /**
  * Re-parse one session transcript under full first-prompt capture and return
@@ -28,7 +86,7 @@ export type ReadAiVaultFirstUserPromptResult = AiVaultFirstUserPromptResult
 export async function readAiVaultFirstUserPrompt(
   args: ReadAiVaultFirstUserPromptArgs
 ): Promise<ReadAiVaultFirstUserPromptResult> {
-  const filePath = args.filePath.trim()
+  let filePath = args.filePath.trim()
   if (!filePath || !args.agent) {
     return { prompt: null }
   }
@@ -39,6 +97,15 @@ export async function readAiVaultFirstUserPrompt(
   if (executionHostId !== LOCAL_EXECUTION_HOST_ID) {
     return { prompt: null }
   }
+  let sessionId = args.sessionId?.trim() || undefined
+  if (args.agent === 'opencode') {
+    const canonicalSession = await canonicalOpenCodeDatabasePath(filePath).catch(() => null)
+    if (!canonicalSession) {
+      return { prompt: null }
+    }
+    filePath = canonicalSession.dbPath
+    sessionId = sessionId ?? canonicalSession.sessionId
+  }
 
   // Why: partial/corrupt transcripts make parsers throw. Resolve null like every
   // other unavailable case instead of rejecting the IPC call.
@@ -48,7 +115,7 @@ export async function readAiVaultFirstUserPrompt(
       parseSessionForFullFirstUserPrompt({
         agent: args.agent,
         filePath,
-        sessionId: args.sessionId?.trim() || undefined,
+        sessionId,
         codexHome: args.codexHome ?? null
       })
     )
@@ -71,17 +138,17 @@ async function parseSessionForFullFirstUserPrompt(args: {
   // earliest user row (worker list-scan path only joins newest messages).
   if (args.agent === 'opencode') {
     const fromSynthetic = splitOpenCodeSqliteCandidate(args.filePath)
+    if (args.sessionId) {
+      return parseOpenCodeSqliteSession({
+        dbPath: fromSynthetic?.dbPath ?? args.filePath,
+        sessionId: args.sessionId,
+        platform: process.platform
+      })
+    }
     if (fromSynthetic) {
       return parseOpenCodeSqliteSession({
         dbPath: fromSynthetic.dbPath,
         sessionId: fromSynthetic.sessionId,
-        platform: process.platform
-      })
-    }
-    if (args.sessionId) {
-      return parseOpenCodeSqliteSession({
-        dbPath: args.filePath,
-        sessionId: args.sessionId,
         platform: process.platform
       })
     }

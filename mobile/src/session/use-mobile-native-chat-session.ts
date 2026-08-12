@@ -198,6 +198,9 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
+        // A successful replay replaces a prior stream error; do not carry the
+        // stale banner into a readable session after reconnect.
+        setError(undefined)
         setRead({ client, identity, status: 'ready' })
       }
     )
@@ -260,6 +263,7 @@ export function useMobileNativeChatSession(args: {
           setList(result.messages)
           setHasMore(result.messages.length >= nextLimit)
         }
+        setError(undefined)
       } finally {
         // A late page from a prior tab must not unlock the current tab's request.
         if (

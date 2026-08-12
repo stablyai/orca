@@ -43,7 +43,6 @@ export function isAgentScratchWorktreePath(repoPath: string, worktreePath: strin
 const AGENT_SCRATCH_REPO_ROOT_SEGMENTS: readonly (readonly string[])[] = [
   ['.codex-tmp'],
   ['.codex', 'vendor_imports'],
-  ['.claude', 'skills'],
   ...AGENT_SCRATCH_PATH_PREFIXES
 ]
 

@@ -1,5 +1,6 @@
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, extname, isAbsolute, join, relative, sep, win32 } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
@@ -11,7 +12,11 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  needsWslHostTranslation,
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs
+} from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
@@ -53,6 +58,103 @@ function ompSessionsDir(): string {
   )
 }
 
+function hasParentPathSegment(path: string): boolean {
+  return path.split(/[\\/]/).includes('..')
+}
+
+function isPathWithinRoot(root: string, candidate: string): boolean {
+  const usesWindowsPaths =
+    root.startsWith('\\\\') ||
+    root.startsWith('//') ||
+    candidate.startsWith('\\\\') ||
+    candidate.startsWith('//') ||
+    /^[A-Za-z]:[\\/]/.test(root) ||
+    /^[A-Za-z]:[\\/]/.test(candidate)
+  const descendant = usesWindowsPaths ? win32.relative(root, candidate) : relative(root, candidate)
+  const separator = usesWindowsPaths ? win32.sep : sep
+  const isDescendantAbsolute = usesWindowsPaths
+    ? win32.isAbsolute(descendant)
+    : isAbsolute(descendant)
+  return (
+    descendant === '' ||
+    (descendant !== '..' && !descendant.startsWith(`..${separator}`) && !isDescendantAbsolute)
+  )
+}
+
+async function transcriptRoots(
+  agent: AgentType,
+  options: ResolveSessionFileOptions,
+  transcriptPath?: string
+): Promise<string[]> {
+  const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  if (!transcriptAgent) {
+    return []
+  }
+  if (transcriptAgent === 'claude') {
+    return [options.claudeProjectsDir ?? claudeProjectsDir()]
+  }
+  if (transcriptAgent === 'codex') {
+    const roots = [...(options.codexSessionsDirs ?? codexSessionsDirs())]
+    // WSL hooks report guest paths; the host-readable path is a UNC path under
+    // one of these roots, so include them in the same containment check.
+    if (
+      options.codexSessionsDirs === undefined ||
+      (transcriptPath !== undefined && needsWslHostTranslation(transcriptPath))
+    ) {
+      roots.push(...(await wslCodexSessionsDirs()))
+    }
+    return [...new Set(roots)]
+  }
+  if (transcriptAgent === 'grok') {
+    return [options.grokSessionsDir ?? grokSessionsDir()]
+  }
+  if (transcriptAgent === 'omp') {
+    return [options.ompSessionsDir ?? ompSessionsDir()]
+  }
+  return []
+}
+
+/** Accept only an existing, canonical transcript under this agent's storage root. */
+export async function resolveHostOwnedTranscriptPath(
+  agent: AgentType,
+  transcriptPath: string,
+  options: ResolveSessionFileOptions,
+  signal?: AbortSignal
+): Promise<string | null> {
+  // Windows' path module can reject a guest POSIX path before the WSL
+  // translator gets a chance to convert it to its host UNC path.
+  if (
+    (!isAbsolute(transcriptPath) && !needsWslHostTranslation(transcriptPath)) ||
+    hasParentPathSegment(transcriptPath)
+  ) {
+    return null
+  }
+  signal?.throwIfAborted()
+  const hostReadablePath = await toHostReadableTranscriptPath(transcriptPath, { signal })
+  signal?.throwIfAborted()
+  if (!hostReadablePath) {
+    return null
+  }
+  const roots = await transcriptRoots(agent, options, transcriptPath)
+  signal?.throwIfAborted()
+  if (roots.length === 0) {
+    return null
+  }
+  try {
+    const [canonicalPath, ...canonicalRoots] = await Promise.all([
+      realpath(hostReadablePath),
+      ...roots.map((root) => realpath(root))
+    ])
+    signal?.throwIfAborted()
+    return canonicalRoots.some((root) => isPathWithinRoot(root, canonicalPath))
+      ? canonicalPath
+      : null
+  } catch {
+    // A missing or inaccessible root/path is handled by the id-based fallback.
+    return null
+  }
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
@@ -68,6 +170,11 @@ export type ResolveSessionFileOptions = {
    *  directly — recent Claude Code names the transcript with a UUID that differs
    *  from the hook session_id, so the id-based glob below would miss it. */
   transcriptPath?: string
+  /** Internal host-owned provider metadata; never pass a client-supplied path here. */
+  transcriptPathIsHostOwned?: boolean
+  /** Absolute path to the OpenCode SQLite DB (open code overrides the default
+   *  `~/.local/share/opencode/opencode.db` — used by tests/isolated reads). */
+  openCodeDbPath?: string
 }
 
 /**
@@ -97,9 +204,11 @@ export async function resolveSessionFilePath(
   // stale/missing paths fall through to the id-based search.
   const hookPath = options.transcriptPath?.trim()
   if (hookPath && extname(hookPath) === '.jsonl') {
-    const hostReadable = await toHostReadableTranscriptPath(hookPath, { signal })
-    if (hostReadable) {
-      return hostReadable
+    const hostOwnedPath = options.transcriptPathIsHostOwned
+      ? await toHostReadableTranscriptPath(hookPath, { signal })
+      : await resolveHostOwnedTranscriptPath(agent, hookPath, options, signal)
+    if (hostOwnedPath) {
+      return hostOwnedPath
     }
   }
 

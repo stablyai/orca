@@ -5,7 +5,7 @@ import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed
 import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
-import { nativeChatRequiresLocalTranscript } from '@/lib/native-chat-supported-agent'
+import { nativeChatRequiresHostReadableTranscript } from '@/lib/native-chat-supported-agent'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { toWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
@@ -57,6 +57,7 @@ function applyBackendSpawnedDraftViewMode(args: {
   if (!backendSpawned || !request.launchDraftPrompt) {
     return
   }
+  const connectionId = getConnectionIdFromState(state, worktreeId)
   const desiredViewMode =
     decideInitialAgentTabViewMode({
       experimentalNativeChat: state.settings?.experimentalNativeChat,
@@ -64,11 +65,9 @@ function applyBackendSpawnedDraftViewMode(args: {
       agent,
       promptDelivery: 'draft',
       launchDraftText: request.launchDraftPrompt,
-      ...(nativeChatRequiresLocalTranscript(agent)
+      ...(nativeChatRequiresHostReadableTranscript(agent) && connectionId !== undefined
         ? {
-            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-              getConnectionIdFromState(state, worktreeId)
-            )
+            nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
           }
         : {})
     }) ?? 'terminal'

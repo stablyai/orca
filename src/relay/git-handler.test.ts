@@ -1974,7 +1974,7 @@ describe('GitHandler', () => {
 
       await expect(
         dispatcher.callRequest('git.upstreamStatus', { worktreePath: nonRepoDir })
-      ).rejects.toThrow(/not a git repository/i)
+      ).rejects.toThrow(/not a git repository|stopping at filesystem boundary/i)
     })
   })
 

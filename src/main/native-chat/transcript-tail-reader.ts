@@ -7,6 +7,10 @@ import type {
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
+  readOpenCodeNativeChatTranscriptTail,
+  resolveOpenCodeNativeChatDbPath
+} from './opencode-sqlite-transcript'
+import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
@@ -227,10 +231,21 @@ export async function readNativeChatTranscriptTail(
       hasMore: boolean
       beforeOffset: number
     }
-  | { error: string; notFound?: true }
+  | { error: string; notFound?: true; retryable?: true }
 > {
   const decode = nativeChatLineDecoderForAgent(args.agent)
   const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
+  // Why: OpenCode keeps conversations in SQLite, not a JSONL file — route it to
+  // the record-based reader before the file-path resolver runs.
+  if (resolveNativeChatTranscriptAgent(args.agent) === 'opencode') {
+    return readOpenCodeNativeChatTranscriptTail({
+      dbPath: resolveOpenCodeNativeChatDbPath(args.openCodeDbPath),
+      sessionId: args.sessionId,
+      limit: args.limit,
+      beforeOffset: args.beforeOffset,
+      signal
+    })
+  }
   const filePath =
     args.filePath ?? (await resolveSessionFilePath(args.agent, args.sessionId, args, signal))
   signal?.throwIfAborted()
@@ -265,9 +280,9 @@ export async function readNativeChatTranscriptTail(
     }
   } catch (error) {
     signal?.throwIfAborted()
-    const message = error instanceof Error ? error.message : String(error)
+    // Do not disclose host transcript paths or provider filesystem details.
     return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-      ? { error: message, notFound: true }
-      : { error: message }
+      ? { error: 'Transcript unavailable', notFound: true }
+      : { error: 'Transcript unavailable' }
   }
 }

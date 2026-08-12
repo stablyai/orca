@@ -2,7 +2,7 @@ import type { GlobalSettings, Tab, TuiAgent } from '../../../shared/types'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
 import {
   isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
+  nativeChatRequiresHostReadableTranscript
 } from '@/lib/native-chat-supported-agent'
 
 export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
@@ -32,8 +32,8 @@ export function decideInitialAgentTabViewMode(args: {
     return undefined
   }
   if (
-    nativeChatRequiresLocalTranscript(args.agent) &&
-    args.nativeChatTranscriptIsLocalReadable !== true
+    nativeChatRequiresHostReadableTranscript(args.agent) &&
+    args.nativeChatTranscriptIsLocalReadable === false
   ) {
     return undefined
   }

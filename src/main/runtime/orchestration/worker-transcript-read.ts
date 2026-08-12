@@ -53,7 +53,8 @@ export async function readWorkerTranscript(args: {
   let filePath: string | null
   try {
     filePath = await resolveSessionFilePath(args.agent, args.sessionId, {
-      transcriptPath: args.transcriptPath
+      transcriptPath: args.transcriptPath,
+      transcriptPathIsHostOwned: true
     })
   } catch {
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }

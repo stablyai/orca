@@ -111,9 +111,8 @@ describe('isAgentScratchRepoRootPath', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/.codex-tmp/rc-fwd-qEXuEq')).toBe(true)
   })
 
-  it('matches codex vendor imports and claude skills containers', () => {
+  it('matches codex vendor import containers', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/.codex/vendor_imports/skills')).toBe(true)
-    expect(isAgentScratchRepoRootPath('/Users/dev/.claude/skills/obsidian-second-brain')).toBe(true)
   })
 
   it('matches a repo registered at the scratch container itself', () => {
@@ -126,9 +125,12 @@ describe('isAgentScratchRepoRootPath', () => {
     expect(isAgentScratchRepoRootPath('/Users/dev/app/.gsd-workspaces/phase-1')).toBe(true)
   })
 
-  it('matches Windows separators and casing', () => {
+  it('matches Windows separators and casing for Codex scratch roots', () => {
     expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.codex-tmp\\Capsule-X')).toBe(true)
-    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.Claude\\Skills\\foo')).toBe(true)
+  })
+
+  it('does not classify Claude Skills as a scratch repo root', () => {
+    expect(isAgentScratchRepoRootPath('C:\\Users\\Dev\\.Claude\\Skills\\foo')).toBe(false)
   })
 
   it('does not match ordinary user repos', () => {

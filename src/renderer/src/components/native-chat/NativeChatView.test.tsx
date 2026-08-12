@@ -137,6 +137,45 @@ describe('NativeChatSessionGate', () => {
     )
   })
 
+  it('does not retain a cached chat when the pane explicitly becomes unsupported', () => {
+    const paneKey = 'tab-1:leaf-1'
+    const connectedEntry = entry({
+      paneKey,
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session' }
+    })
+    const renderGate = (agentStatusEntry?: AgentStatusEntry) => (
+      <NativeChatSessionGate
+        paneKey={paneKey}
+        launchAgent={null}
+        resolvedAgent={null}
+        agentStatusEntry={agentStatusEntry}
+        ptyId="pty-1"
+      >
+        {(resolution) => (
+          <div data-testid="native-chat-resolution">
+            {resolution.agent}:{resolution.sessionId ?? 'no-session'}
+          </div>
+        )}
+      </NativeChatSessionGate>
+    )
+
+    const view = render(renderGate(connectedEntry))
+    expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent('codex:codex-session')
+
+    view.rerender(
+      renderGate(
+        entry({
+          paneKey,
+          agentType: 'gemini'
+        })
+      )
+    )
+
+    expect(screen.getByText('No conversation here')).toBeInTheDocument()
+    expect(screen.queryByTestId('native-chat-resolution')).not.toBeInTheDocument()
+  })
+
   it('does not open native chat from an unsupported title fallback', () => {
     renderResolution({
       paneKey: 'tab-1:leaf-1',

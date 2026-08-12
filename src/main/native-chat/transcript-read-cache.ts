@@ -19,11 +19,12 @@ import { readNativeChatTranscript, type ReadTranscriptResult } from './transcrip
 
 type CachedTranscript = {
   result: ReadTranscriptResult
-  /** mtime of the resolved file when cached; a newer mtime invalidates it. */
+  /** File identity and metadata captured with the cached parse. */
   mtimeMs: number
-  /** On-disk byte size of the resolved file — a cheap, monotonic proxy for this
-   *  entry's parsed memory footprint, used to bound the cache by total bytes. */
+  ctimeMs: number
   bytes: number
+  dev: number
+  ino: number
 }
 
 const cache = new Map<string, CachedTranscript>()
@@ -69,19 +70,31 @@ function cacheKey(agent: AgentType, filePath: string): string {
   return `${agent}:${filePath}`
 }
 
-async function fileStat(filePath: string): Promise<{ mtimeMs: number; bytes: number }> {
+async function fileStat(filePath: string): Promise<{
+  mtimeMs: number
+  ctimeMs: number
+  bytes: number
+  dev: number
+  ino: number
+} | null> {
   try {
     const stats = await stat(filePath)
-    return { mtimeMs: stats.mtimeMs, bytes: stats.size }
+    return {
+      mtimeMs: stats.mtimeMs,
+      ctimeMs: stats.ctimeMs,
+      bytes: stats.size,
+      dev: stats.dev,
+      ino: stats.ino
+    }
   } catch {
-    return { mtimeMs: Number.NaN, bytes: 0 }
+    return null
   }
 }
 
 /**
  * Read the full transcript for an agent + session, returning the cached parse on
- * an mtime hit and re-reading (and re-caching) when the file changed. Returns the
- * canonical, unwindowed result; callers apply their own windowing/truncation.
+ * a metadata hit and re-reading (and re-caching) when the file changed. Returns
+ * the canonical, unwindowed result; callers apply their own windowing/truncation.
  */
 export async function readNativeChatTranscriptCached(
   agent: AgentType,
@@ -97,17 +110,30 @@ export async function readNativeChatTranscriptCached(
   }
 
   const key = cacheKey(agent, filePath)
-  const { mtimeMs, bytes } = await fileStat(filePath)
+  const metadata = await fileStat(filePath)
   const cached = cache.get(key)
-  if (cached && Number.isFinite(mtimeMs) && cached.mtimeMs === mtimeMs) {
+  if (
+    cached &&
+    metadata &&
+    cached.mtimeMs === metadata.mtimeMs &&
+    cached.ctimeMs === metadata.ctimeMs &&
+    cached.bytes === metadata.bytes &&
+    cached.dev === metadata.dev &&
+    cached.ino === metadata.ino
+  ) {
     // Bump recency so a frequently-read session survives eviction.
     setCached(key, cached)
     return cached.result
   }
+  // A vanished path must not leave an old parse eligible after the file is
+  // recreated at the same path.
+  if (!metadata) {
+    cache.delete(key)
+  }
 
   const result = await readNativeChatTranscript(agent, sessionId, { filePath })
-  if (Number.isFinite(mtimeMs)) {
-    setCached(key, { result, mtimeMs, bytes })
+  if (metadata) {
+    setCached(key, { result, ...metadata })
   }
   return result
 }

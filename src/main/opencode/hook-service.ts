@@ -3,6 +3,7 @@ import { app } from 'electron'
 import { join } from 'node:path'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -12,7 +13,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { createHash } from 'node:crypto'
-import { mirrorEntry, safeRemoveTree } from '../pty/overlay-mirror'
+import { mirrorEntry, safeRemoveOverlay } from '../pty/overlay-mirror'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
 const OPENCODE_LEGACY_HOOKS_DIR = 'opencode-hooks'
@@ -33,6 +34,15 @@ function isUsableId(id: string): boolean {
 function toSafeDirName(id: string): string {
   // Why: 32 hex chars (128 bits) makes collisions negligible and stays filesystem-portable (no base64 padding or `/`).
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
+}
+function removeExistingMirrorLink(path: string, overlayRoot: string): void {
+  try {
+    if (lstatSync(path).isSymbolicLink()) {
+      safeRemoveOverlay(path, overlayRoot)
+    }
+  } catch {
+    // A stale mirror is best-effort; the subsequent mirror attempt handles the source error.
+  }
 }
 
 export function getOpenCodePluginSource(): string {
@@ -617,7 +627,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     'function clearAttentionForResolution(event, sessionID, factoryID) {',
     '  const hookEventName =',
     '    event.type === "permission.replied" ? "PermissionRequest" : "AskUserQuestion";',
-    '  const requestID = event.properties?.requestID || "";',
+    '  const requestID = event.properties?.requestID || event.properties?.id || "";',
     '  const key = attentionKey(factoryID, hookEventName, requestID, sessionID);',
     '  const attention = pendingAttentionByKey.get(key);',
     '  if (!attention || attention.sourceSessionID !== sessionID) return null;',
@@ -656,6 +666,16 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '    latest = provisional;',
     '  }',
     '  return latest;',
+    '}',
+    '',
+    'function fallbackRootSessionID(factoryID, sessionID) {',
+    '  // A root Busy event proves one root owner even when a later child lookup',
+    '  // fails; use it only when this factory has exactly one known root.',
+    '  const roots = [];',
+    '  for (const [rootSessionID, ownerID] of busyRootOwnerBySessionID) {',
+    '    if (ownerID === factoryID && rootSessionID !== sessionID) roots.push(rootSessionID);',
+    '  }',
+    '  return roots.length === 1 ? roots[0] : null;',
     '}',
     '',
     'async function publishAggregateStatus(fallbackFactoryID, preferredSessionID) {',
@@ -759,7 +779,9 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '      event.type === "permission.asked" ? "PermissionRequest" : "AskUserQuestion";',
     '    // Why: show the blocker on the root turn while retaining its real child',
     '    // owner for exact reply, tool-completion, and disposal cleanup.',
-    '    const properties = { ...(event.properties || {}), sessionID: rootSessionID || sessionID };',
+    '    const fallbackRoot = childState === null ? fallbackRootSessionID(factoryID, sessionID) : null;',
+    '    const ownerSessionID = rootSessionID || fallbackRoot || sessionID;',
+    '    const properties = { ...(event.properties || {}), sessionID: ownerSessionID };',
     '    const requestID = properties.id || sessionID || "";',
     '    const key = attentionKey(factoryID, hookEventName, requestID, sessionID);',
     '    // Why: unresolved blockers are live UI authority and cannot be evicted;',
@@ -770,7 +792,7 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '      factoryID,',
     '      sourceSessionID: sessionID,',
     '    });',
-    '    await publishAggregateStatus(factoryID, rootSessionID || sessionID);',
+    '    await publishAggregateStatus(factoryID, ownerSessionID);',
     '    return;',
     '  }',
     '  if (isIdleEvent) {',
@@ -833,7 +855,10 @@ export function getOpenCodeFamilyPluginSource(hookPathname: string): string {
     '      rememberMessageRole(info && info.id, info && info.role);',
     '    }',
     '',
-    '    const sessionID = event.properties?.sessionID;',
+    '    const sessionID =',
+    '      event.type === "message.part.updated"',
+    '        ? event.properties?.part?.sessionID || event.properties?.sessionID',
+    '        : event.properties?.sessionID;',
     '    const updatedPart = event.properties?.part;',
     '    if (',
     '      event.type === "message.part.updated" &&',
@@ -1056,8 +1081,12 @@ export class OpenCodeHookService {
         readFileSync(join(overlayDir, OPENCODE_OVERLAY_MANIFEST_FILE), 'utf8')
       ) as Partial<OpenCodeOverlayManifest>
       return {
-        topLevelEntries: Array.isArray(parsed.topLevelEntries) ? parsed.topLevelEntries : [],
-        pluginEntries: Array.isArray(parsed.pluginEntries) ? parsed.pluginEntries : []
+        topLevelEntries: Array.isArray(parsed.topLevelEntries)
+          ? parsed.topLevelEntries.filter((entry): entry is string => typeof entry === 'string')
+          : [],
+        pluginEntries: Array.isArray(parsed.pluginEntries)
+          ? parsed.pluginEntries.filter((entry): entry is string => typeof entry === 'string')
+          : []
       }
     } catch {
       return { topLevelEntries: [], pluginEntries: [] }
@@ -1073,7 +1102,7 @@ export class OpenCodeHookService {
 
   private clearManifestEntries(overlayDir: string, manifest: OpenCodeOverlayManifest): void {
     for (const entryName of manifest.topLevelEntries) {
-      safeRemoveTree(join(overlayDir, entryName))
+      safeRemoveOverlay(join(overlayDir, entryName), overlayDir)
     }
 
     const overlayPluginsDir = join(overlayDir, 'plugins')
@@ -1081,7 +1110,7 @@ export class OpenCodeHookService {
       if (entryName === ORCA_OPENCODE_PLUGIN_FILE) {
         continue
       }
-      safeRemoveTree(join(overlayPluginsDir, entryName))
+      safeRemoveOverlay(join(overlayPluginsDir, entryName), overlayPluginsDir)
     }
   }
 
@@ -1119,6 +1148,7 @@ export class OpenCodeHookService {
             if (pluginEntry.name === ORCA_OPENCODE_PLUGIN_FILE) {
               continue
             }
+            removeExistingMirrorLink(join(overlayPluginsDir, pluginEntry.name), overlayPluginsDir)
             mirrorEntry(
               join(resolvedSource, pluginEntry.name),
               join(overlayPluginsDir, pluginEntry.name)
@@ -1129,6 +1159,7 @@ export class OpenCodeHookService {
         }
       }
 
+      removeExistingMirrorLink(join(overlayDir, entry.name), overlayDir)
       mirrorEntry(sourcePath, join(overlayDir, entry.name))
       nextManifest.topLevelEntries.push(entry.name)
     }

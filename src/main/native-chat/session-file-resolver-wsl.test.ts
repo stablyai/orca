@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 
 const UBUNTU_HOME = '\\\\wsl.localhost\\Ubuntu\\home\\ada'
@@ -31,7 +32,8 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       if (!READABLE_WSL_UNC_PATHS.has(path)) {
         throw Object.assign(new Error(`ENOENT: ${path}`), { code: 'ENOENT' })
       }
-    }
+    },
+    realpath: vi.fn(async (path: string) => path)
   }
 })
 
@@ -71,7 +73,7 @@ afterEach(() => {
 })
 
 describe('resolveSessionFilePath on a Windows host with WSL', () => {
-  it('translates a WSL hook transcript path to its host-readable UNC twin (#10326)', async () => {
+  it('accepts a WSL POSIX hook path before converting it to the host-readable UNC twin (#10326)', async () => {
     const resolved = await resolveSessionFilePath('codex', 'wsl-sess', {
       transcriptPath: ROLLOUT_LINUX,
       codexSessionsDirs: []

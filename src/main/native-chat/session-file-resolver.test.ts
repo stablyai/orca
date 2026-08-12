@@ -281,6 +281,36 @@ describe('resolveSessionFilePath', () => {
     expect(resolved).toBe(target)
   })
 
+  it('ignores an existing transcript path outside the agent-owned root', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-path-outside-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    await mkdir(claudeProjectsDir, { recursive: true })
+    const unrelatedTranscript = join(root, 'unrelated.jsonl')
+    await writeFile(unrelatedTranscript, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'not-a-real-session', {
+        claudeProjectsDir,
+        transcriptPath: unrelatedTranscript
+      })
+    ).resolves.toBeNull()
+  })
+
+  it('rejects parent traversal even when it points at an existing JSONL file', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-path-traversal-')
+    const claudeProjectsDir = join(root, 'claude-projects')
+    await mkdir(claudeProjectsDir, { recursive: true })
+    const unrelatedTranscript = join(root, 'unrelated.jsonl')
+    await writeFile(unrelatedTranscript, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('claude', 'not-a-real-session', {
+        claudeProjectsDir,
+        transcriptPath: join(claudeProjectsDir, '..', 'unrelated.jsonl')
+      })
+    ).resolves.toBeNull()
+  })
+
   it('ignores a non-jsonl transcriptPath and falls back to the glob', async () => {
     const root = await makeRoot('orca-native-chat-resolve-path-ext-')
     const claudeProjectsDir = join(root, 'claude-projects')

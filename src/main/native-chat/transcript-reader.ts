@@ -5,7 +5,6 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
-import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import {
   decodeClaudeTranscriptLine,
@@ -20,9 +19,9 @@ export type ReadTranscriptResult =
       messages: NativeChatMessage[]
       lifecycle?: NativeChatTurnLifecycle
     }
-  // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
-  // #8401) as opposed to a real parse/IO error callers surface immediately.
-  | { error: string; notFound?: true }
+  // notFound covers first-flush misses; retryable covers transient provider
+  // errors such as a short SQLite writer lock.
+  | { error: string; notFound?: true; retryable?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery (used by tests). */
@@ -61,12 +60,11 @@ export async function readNativeChatTranscript(
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
-    // Why: ENOENT after a successful resolve is the same first-flush/rotation
-    // race as an unresolved path — keep it retry-worthy (#8401).
+    // Do not disclose host transcript paths or provider filesystem details.
     if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
-      return { error: errorMessage(err), notFound: true }
+      return { error: 'Transcript unavailable', notFound: true }
     }
-    return { error: errorMessage(err) }
+    return { error: 'Transcript unavailable' }
   }
 }
 
