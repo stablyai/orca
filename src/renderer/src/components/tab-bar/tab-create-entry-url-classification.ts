@@ -16,72 +16,138 @@ const HOST_FILE_EXTENSIONS = new Set([
   'yml'
 ])
 
-const LOCALHOST_WITH_PORT_PATTERN = /^localhost(?::\d{1,5})?$/i
-const IPV4_WITH_PORT_PATTERN =
-  /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?::\d{1,5})?$/
-const DOMAIN_WITH_PORT_PATTERN =
-  /^(?=.{1,253}(?::\d{1,5})?$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}(?::\d{1,5})?$/i
+const IPV4_PATTERN =
+  /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/
+const DOMAIN_PATTERN = /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i
+const HTTP_SCHEME_PATTERN = /^https?:\/\//i
+const BRACKETED_IPV6_ATTEMPT_PATTERN = /^\[[0-9a-f:]+\](?::[^/?#]*)?(?:[/?#].*)?$/i
+const SCHEME_PREFIX_PATTERN = /^[a-z][a-z0-9+.-]*:/i
+const SCHEME_WITH_SLASHES_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i
 
 export type ExplicitUrlClassification =
   | { kind: 'blocked'; message: string }
   | { kind: 'explicit-url'; url: string }
 
-export type HostUrlClassification = { kind: 'host-url'; url: string }
+export type HostUrlClassification =
+  | { kind: 'blocked'; message: string }
+  | { kind: 'host-url'; url: string }
 
-export function classifyExplicitUrl(query: string): ExplicitUrlClassification | null {
-  // Local dev inputs are handled by host-url classification so users can
-  // enter localhost/IP addresses without an explicit scheme.
-  if (classifySchemeLessLocalDevAddress(query)) {
-    return null
+function invalidUrl(): { kind: 'blocked'; message: string } {
+  return {
+    kind: 'blocked',
+    message: translate(
+      'auto.components.tab.bar.tab.create.entry.classifier.90eb94dc48',
+      'Enter an http:// or https:// URL.'
+    )
   }
-  let url: URL
+}
+
+function parseHttpUrl(query: string): ExplicitUrlClassification {
   try {
-    url = new URL(query)
+    const url = new URL(query)
+    return (url.protocol === 'http:' || url.protocol === 'https:') && url.hostname
+      ? { kind: 'explicit-url', url: url.href }
+      : invalidUrl()
   } catch {
-    return null
+    return invalidUrl()
   }
-  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !url.hostname) {
-    return {
-      kind: 'blocked',
-      message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.90eb94dc48',
-        'Enter an http:// or https:// URL.'
-      )
-    }
-  }
-  return { kind: 'explicit-url', url: url.href }
 }
 
-function classifyLocalDevUrl(query: string): HostUrlClassification | null {
-  const url = classifySchemeLessLocalDevAddress(query)
-  return url?.hostname ? { kind: 'host-url', url: url.href } : null
-}
-
-function classifyHostLikeUrl(query: string): HostUrlClassification | null {
-  if (/[\\/]/.test(query) || /\s/.test(query)) {
+function splitHostCandidate(query: string): { host: string; port: string | null } | null {
+  if (/[\\/\s?#]/.test(query)) {
     return null
   }
-  const extension = query.split(':')[0]?.split('.').pop()?.toLowerCase() ?? ''
+  const colonIndex = query.indexOf(':')
+  const host = colonIndex === -1 ? query : query.slice(0, colonIndex)
+  const port = colonIndex === -1 ? null : query.slice(colonIndex + 1)
+  const extension = host.split('.').pop()?.toLowerCase() ?? ''
   if (HOST_FILE_EXTENSIONS.has(extension)) {
     return null
   }
   if (
-    !LOCALHOST_WITH_PORT_PATTERN.test(query) &&
-    !IPV4_WITH_PORT_PATTERN.test(query) &&
-    !DOMAIN_WITH_PORT_PATTERN.test(query)
+    host.toLowerCase() !== 'localhost' &&
+    !IPV4_PATTERN.test(host) &&
+    !DOMAIN_PATTERN.test(host)
   ) {
     return null
   }
-  try {
-    const url = new URL(`https://${query}`)
-    return url.hostname ? { kind: 'host-url', url: url.href } : null
-  } catch {
+  return { host, port }
+}
+
+// Why: a bare LAN/dev address almost never serves TLS, but a public IP still
+// deserves https — plaintext there would be a downgrade, and IPs get no HSTS.
+function isPrivateIpv4(host: string): boolean {
+  if (!IPV4_PATTERN.test(host)) {
+    return false
+  }
+  const [first = 0, second = 0] = host.split('.').map(Number)
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) || // CGNAT, incl. Tailscale
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 169 && second === 254) ||
+    (first === 192 && second === 168)
+  )
+}
+
+function hasSourceExtensionBeforeColon(query: string): boolean {
+  const colonIndex = query.indexOf(':')
+  if (colonIndex === -1) {
+    return false
+  }
+  const extension = query.slice(0, colonIndex).split('.').pop()?.toLowerCase() ?? ''
+  return HOST_FILE_EXTENSIONS.has(extension)
+}
+
+export function classifyExplicitUrl(query: string): ExplicitUrlClassification | null {
+  if (HTTP_SCHEME_PATTERN.test(query)) {
+    return parseHttpUrl(query)
+  }
+  if (SCHEME_WITH_SLASHES_PATTERN.test(query)) {
+    return invalidUrl()
+  }
+  if (classifySchemeLessLocalDevAddress(query)) {
     return null
   }
+  if (splitHostCandidate(query)) {
+    return null
+  }
+  if (hasSourceExtensionBeforeColon(query)) {
+    return null
+  }
+  if (!SCHEME_PREFIX_PATTERN.test(query)) {
+    return null
+  }
+  if (/\s/.test(query)) {
+    return null
+  }
+  return invalidUrl()
 }
 
 export function classifyHostUrl(query: string): HostUrlClassification | null {
-  // Try exact local-dev forms first so localhost keeps http:// parity with
-  // the previous inline classifier before falling back to public hostnames.
-  return classifyLocalDevUrl(query) ?? classifyHostLikeUrl(query)
+  const candidate = splitHostCandidate(query)
+  if (!candidate) {
+    const localDevUrl = classifySchemeLessLocalDevAddress(query)
+    if (localDevUrl?.hostname) {
+      return { kind: 'host-url', url: localDevUrl.href }
+    }
+    return BRACKETED_IPV6_ATTEMPT_PATTERN.test(query) ? invalidUrl() : null
+  }
+  if (candidate.port !== null && !/^\d+$/.test(candidate.port)) {
+    // Why: "docker.io:latest" reads as a tag, not a URL attempt — fall through so
+    // file matches and search still get offered instead of blocking every row.
+    return null
+  }
+  try {
+    const scheme =
+      candidate.host.toLowerCase() === 'localhost' || isPrivateIpv4(candidate.host)
+        ? 'http'
+        : 'https'
+    const url = new URL(`${scheme}://${query}`)
+    return url.hostname ? { kind: 'host-url', url: url.href } : invalidUrl()
+  } catch {
+    return invalidUrl()
+  }
 }

@@ -20,6 +20,7 @@ type RichMarkdownProgrammaticSyncOptions = {
   editor: Editor | null
   fileId: string
   filePath: string
+  externalSshTargetId?: string
   isApplyingProgrammaticUpdateRef: MutableRefObject<boolean>
   lastCommittedMarkdownRef: MutableRefObject<string>
   originalSourceRef: MutableRefObject<string>
@@ -46,6 +47,7 @@ export function useRichMarkdownProgrammaticSync({
   editor,
   fileId,
   filePath,
+  externalSshTargetId,
   isApplyingProgrammaticUpdateRef,
   lastCommittedMarkdownRef,
   originalSourceRef,
@@ -68,6 +70,7 @@ export function useRichMarkdownProgrammaticSync({
         editor,
         createRichMarkdownImageResolverContext({
           filePath,
+          externalSshTargetId,
           runtimeEnvironmentId,
           settings,
           worktreeId,
@@ -79,6 +82,7 @@ export function useRichMarkdownProgrammaticSync({
     }
   }, [
     editor,
+    externalSshTargetId,
     filePath,
     isApplyingProgrammaticUpdateRef,
     runtimeEnvironmentId,

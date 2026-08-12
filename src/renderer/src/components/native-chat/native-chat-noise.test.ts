@@ -38,6 +38,7 @@ describe('isNoiseMessage', () => {
 
   it('keeps assistant and tool turns', () => {
     expect(isNoiseMessage(msg('assistant', '<system-reminder> in prose'))).toBe(false)
+    expect(isNoiseMessage(msg('system', 'Conversation interrupted'))).toBe(false)
   })
 
   it('keeps a user turn that carries tool results', () => {

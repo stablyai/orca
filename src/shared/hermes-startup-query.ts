@@ -1,5 +1,7 @@
+import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
   buildShellCommandFromArgv,
+  isPosixStartupShell,
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -13,15 +15,6 @@ const POWERSHELL_QUERY_VARIABLE = 'orcaHermesStartupQuery'
 const POWERSHELL_NATIVE_QUERY_VARIABLE = 'orcaHermesNativeQuery'
 
 export const ORCA_HERMES_STARTUP_QUERY_ENV = 'ORCA_HERMES_STARTUP_QUERY'
-
-function encodePowerShellCommand(command: string): string {
-  let bytes = ''
-  for (let index = 0; index < command.length; index += 1) {
-    const code = command.charCodeAt(index)
-    bytes += String.fromCharCode(code & 0xff, code >>> 8)
-  }
-  return btoa(bytes)
-}
 
 function encodePosixEvalScript(command: string): string {
   return Array.from(
@@ -122,7 +115,7 @@ function normalizeHermesArgv(
     assignmentCount += 1
   }
   if (assignmentCount > 0) {
-    if (shell !== 'posix') {
+    if (!isPosixStartupShell(shell)) {
       return null
     }
     commandPrefix = ['env', ...commandPrefix]
@@ -147,7 +140,7 @@ function normalizeHermesArgv(
 }
 
 function buildQueryCommand(argv: string[], shell: AgentStartupShell): string {
-  if (shell !== 'posix') {
+  if (!isPosixStartupShell(shell)) {
     const invocation = buildShellCommandFromArgv(argv, 'powershell').replace(
       quoteStartupArg(QUERY_ARG_PLACEHOLDER, 'powershell'),
       `"--query=$${POWERSHELL_NATIVE_QUERY_VARIABLE}"`

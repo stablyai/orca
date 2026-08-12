@@ -22,7 +22,6 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
-
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
 function makePane(id: number): ManagedPane {
@@ -48,6 +47,8 @@ function renderOverlay({
   onClosePane = vi.fn(),
   onRemoveTitle = vi.fn(),
   onRenameSubmit = vi.fn(),
+  canContinueAgentSessionInNewSession = false,
+  onContinueAgentSessionInNewSession = vi.fn(),
   renameValue = '',
   renamingPaneId = null
 }: {
@@ -58,6 +59,8 @@ function renderOverlay({
   onClosePane?: ReturnType<typeof vi.fn>
   onRemoveTitle?: ReturnType<typeof vi.fn>
   onRenameSubmit?: ReturnType<typeof vi.fn>
+  canContinueAgentSessionInNewSession?: boolean
+  onContinueAgentSessionInNewSession?: ReturnType<typeof vi.fn>
   renameValue?: string
   renamingPaneId?: number | null
 }): {
@@ -95,6 +98,10 @@ function renderOverlay({
         hiddenStartupStyle={{}}
         managerRef={{ current: null } as RefObject<PaneManager | null>}
         paneTransportsRef={{ current: new Map() } as RefObject<Map<number, PtyTransport>>}
+        canContinueAgentSessionInNewSession={canContinueAgentSessionInNewSession}
+        onContinueAgentSessionInNewSession={
+          onContinueAgentSessionInNewSession as (pane: ManagedPane) => void
+        }
         onSplitPane={vi.fn()}
         onBeginPaneDrag={vi.fn()}
         onActivatePaneTitleInteraction={vi.fn()}
@@ -197,5 +204,24 @@ describe('TerminalPaneHeaderOverlay', () => {
     pressInputKey(input as HTMLInputElement, 'Enter')
 
     expect(onRenameSubmit).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows new-session continuation on the active agent pane header', () => {
+    const onContinueAgentSessionInNewSession = vi.fn()
+    const { container } = renderOverlay({
+      paneTitles: { 1: '', 2: '' },
+      canContinueAgentSessionInNewSession: true,
+      onContinueAgentSessionInNewSession
+    })
+    const handoff = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Continue in New Session…"]'
+    )
+
+    expect(handoff).not.toBeNull()
+    act(() => handoff?.click())
+
+    expect(onContinueAgentSessionInNewSession).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1 })
+    )
   })
 })

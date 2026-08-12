@@ -109,6 +109,28 @@ export function createVisibleFileExplorerRowProjection(
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
+/**
+ * Holds the array identity while its contents are unchanged.
+ *
+ * Why: a tree refresh commits dirCache once per read wave, and every commit
+ * rebuilds this list. Each new identity would re-issue the uncancellable git
+ * check-ignore over the whole visible tree — the remote round trips the wave cap
+ * exists to bound.
+ */
+function useContentStableRelativePaths(relativePaths: string[], enabled: boolean): string[] {
+  // Why: filters need fresh identities per keystroke and must not evict the tree signature.
+  // Why: NUL cannot occur in paths, so the signature can reconstruct the list losslessly.
+  const signature = useMemo(
+    () => (enabled ? relativePaths.join('\u0000') : null),
+    [enabled, relativePaths]
+  )
+  const stableTreePaths = useMemo(
+    () => (signature ? signature.split('\u0000') : EMPTY_RELATIVE_PATHS),
+    [signature]
+  )
+  return enabled ? stableTreePaths : relativePaths
+}
+
 export function useFileExplorerVisibleRowProjection(
   activeWorktreeId: string | null,
   worktreePath: string | null,
@@ -128,7 +150,7 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
-  const relativePaths = useMemo(
+  const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
         ? nameFilter
@@ -140,6 +162,9 @@ export function useFileExplorerVisibleRowProjection(
         : EMPTY_RELATIVE_PATHS,
     [activeRepoSupportsGit, dirCache, expanded, nameFilter, showDotfiles, worktreePath]
   )
+  // Why: the name-filter list is debounced per keystroke, so it must keep a fresh
+  // identity; only the dirCache-derived list needs stability across wave commits.
+  const relativePaths = useContentStableRelativePaths(rebuiltRelativePaths, !nameFilter)
   const canLoadIgnoredPaths =
     activeRepoSupportsGit &&
     Boolean(activeWorktreeId) &&

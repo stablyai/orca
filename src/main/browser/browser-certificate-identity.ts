@@ -1,14 +1,11 @@
 import { createHash } from 'node:crypto'
 
+import { normalizeCertificateError } from '../../shared/browser-certificate-errors'
+
+export { normalizeCertificateError }
+
 export const SUPPORTED_CERTIFICATE_ERROR = 'ERR_CERT_AUTHORITY_INVALID'
 export const SUPPORTED_CERTIFICATE_ERROR_CODE = -202
-
-export function normalizeCertificateError(error: string): string {
-  return error
-    .trim()
-    .replace(/^net::/i, '')
-    .toUpperCase()
-}
 
 export function getSupportedCertificateErrorCode(error: string): number | null {
   return normalizeCertificateError(error) === SUPPORTED_CERTIFICATE_ERROR

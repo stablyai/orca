@@ -1,4 +1,5 @@
 import type { JiraIssue, JiraPriority } from '../../../shared/types'
+import { compareNumericLocaleText } from '@/lib/locale-text-collators'
 
 export type JiraIssueSortColumn = 'key' | 'title' | 'status' | 'priority' | 'assignee' | 'updated'
 
@@ -57,7 +58,7 @@ export function sortJiraIssues(
   return [...issues].sort((a, b) => {
     let comparison = 0
     if (orderBy === 'key') {
-      comparison = a.key.localeCompare(b.key, undefined, { numeric: true })
+      comparison = compareNumericLocaleText(a.key, b.key)
     } else if (orderBy === 'title') {
       comparison = a.title.localeCompare(b.title)
     } else if (orderBy === 'status') {

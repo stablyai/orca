@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Bell, ChevronDown, ChevronRight, GitBranch, GitPullRequest } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
@@ -57,7 +58,7 @@ type Props<T extends WorktreeListRowItem> = {
   onToggleLineage?: (item: T) => void
 }
 
-export function WorktreeListRow<T extends WorktreeListRowItem>({
+function WorktreeListRowComponent<T extends WorktreeListRowItem>({
   item,
   isReadOnly,
   now,
@@ -194,6 +195,8 @@ export function WorktreeListRow<T extends WorktreeListRowItem>({
     </Pressable>
   )
 }
+
+export const WorktreeListRow = memo(WorktreeListRowComponent) as typeof WorktreeListRowComponent
 
 const styles = StyleSheet.create({
   worktreeRow: {

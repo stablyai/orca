@@ -1,5 +1,4 @@
-import type { IDisposable, IMarker, Terminal } from '@xterm/xterm'
-import type { ITerminalOptions } from '@xterm/xterm'
+import type { IDisposable, IMarker, Terminal, ITerminalOptions } from '@xterm/xterm'
 import type { FitAddon } from '@xterm/addon-fit'
 import type { LigaturesAddon } from '@xterm/addon-ligatures'
 import type { SearchAddon } from '@xterm/addon-search'
@@ -27,7 +26,7 @@ export type PaneSpawnHints = {
 export type ClosedPaneInfo = {
   paneId: number
   leafId: TerminalLeafId
-  reason?: 'close' | 'detach'
+  reason?: 'close' | 'detach' | 'retire'
 }
 
 export type PaneExternalDropTarget = {
@@ -59,8 +58,14 @@ export type PaneManagerOptions = {
   onExternalPaneDrop?: PaneExternalDropHandler
   terminalOptions?: (paneId: number) => Partial<ITerminalOptions>
   terminalTuiScrollSensitivity?: () => number | undefined
-  onLinkClick?: (event: MouseEvent | undefined, url: string) => void
+  onLinkClick?: (paneId: number, event: MouseEvent | undefined, url: string) => void
+  /** Resolved per hover so link-routing setting changes apply without recreating panes. */
+  // Why: required so dropping the wiring is a compile error — an optional hint with a
+  // default would silently serve stale copy that no test can distinguish.
+  // Why: paneId-scoped because the hovered pane's host decides where its links can go.
+  linkOpenHint: (paneId: number) => string
   formatLinkTooltip?: (
+    paneId: number,
     url: string,
     openLinkHint: string
   ) => string | null | undefined | Promise<string | null | undefined>
@@ -109,6 +114,7 @@ export type PaneRenderingDiagnostics = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  webglAttachFailedSinceRecovery: boolean
   hasComplexScriptOutput: boolean
   terminalWebglAutoDecision: TerminalWebglAutoDecision
   hasWebgl: boolean
@@ -136,6 +142,12 @@ export type ManagedPaneInternal = {
   gpuRenderingEnabled: boolean
   webglAttachmentDeferred: boolean
   webglDisabledAfterContextLoss: boolean
+  // Hidden retained renderers rebuild at the resume boundary, never behind the hidden surface.
+  webglRebuildDeferred?: boolean
+  // Why per-pane: one pane's failed WebGL attach must not strand every other
+  // pane on the DOM renderer until the next recovery boundary. Optional so
+  // absent means "never failed"; only the attach failure path sets it.
+  webglAttachFailedSinceRecovery?: boolean
   // Why: expose complex-output diagnostics without changing renderer choice;
   // auto renderer fallback is reserved for platform or WebGL failures.
   hasComplexScriptOutput: boolean
@@ -145,6 +157,9 @@ export type ManagedPaneInternal = {
   // value means "currently disabled".
   ligaturesAddon: LigaturesAddon | null
   fitResizeObserver: ResizeObserver | null
+  // Why: fit-element pixel size at the last successful fit; the reveal fit compares
+  // against it to tell a real hidden-time resize from a transient cell-metric wobble.
+  lastFitClientSize?: { width: number; height: number }
   // Stored so disposePane() can cancel the first post-open fit if a pane closes before paint.
   pendingInitialFitRafId?: number | null
   // Stored so disposePane() can cancel the post-WebGL-teardown refresh frame.
@@ -163,6 +178,14 @@ export type ManagedPaneInternal = {
   focusClassSyncCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
+  // Stored so disposePane() can detach the streamed-output hover-cache reset
+  // that keeps freshly printed links linkifiable without a scroll.
+  linkifierHoverResetDisposable?: IDisposable | null
+  // Stored because mouseleave does not bubble from xterm's screen.
+  linkifierMouseLeaveResetDisposable?: IDisposable | null
+  // Stored because a window blur may strand xterm's active link without a
+  // follow-up mouse event.
+  linkifierWindowBlurResetDisposable?: IDisposable | null
   // Stored so disposePane() can deregister the joiner; terminal.dispose()
   // does not remove registered character joiners.
   arabicShapingJoinerCleanup?: (() => void) | null

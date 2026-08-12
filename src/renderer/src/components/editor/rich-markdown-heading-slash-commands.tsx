@@ -198,5 +198,26 @@ export const headingSlashCommands: SlashCommand[] = [
     run: (editor) => {
       insertToggle(editor, 'heading-4')
     }
+  },
+  {
+    id: 'toggle-h5',
+    get label() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.21d8c463e5',
+        'Toggle H5'
+      )
+    },
+    aliases: ['toggle-h5'],
+    icon: icon(ChevronRight),
+    group: 'Toggle headings',
+    get description() {
+      return translate(
+        'auto.components.editor.rich.markdown.slash.commands.dc239b41ad',
+        'Create a collapsible section with a deep heading summary.'
+      )
+    },
+    run: (editor) => {
+      insertToggle(editor, 'heading-5')
+    }
   }
 ]

@@ -19,7 +19,7 @@ export type JiraViewer = {
   avatarUrl?: string
 }
 
-export type JiraSiteSelection = string | 'all'
+export type JiraSiteSelection = (string & {}) | 'all'
 
 export type JiraConnectionStatus = {
   connected: boolean

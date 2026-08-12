@@ -11,6 +11,7 @@ const OSC_SCAN_TAIL_LIMIT = 4096
 export type TerminalOscCwdTitleScannerOptions = {
   pathFlavor?: 'posix' | 'win32'
   remotePosixAuthority?: boolean
+  wslDistro?: string
 }
 
 export class TerminalOscCwdTitleScanner {
@@ -39,7 +40,8 @@ export class TerminalOscCwdTitleScanner {
     scanOsc7Uris(input, (uri) => {
       const parsed = parseFileUriPath(uri, {
         pathFlavor: this.parseOptions.pathFlavor,
-        remotePosixAuthority: this.parseOptions.remotePosixAuthority
+        remotePosixAuthority: this.parseOptions.remotePosixAuthority,
+        wslDistro: this.parseOptions.wslDistro
       })
       if (parsed) {
         this.cwd = parsed

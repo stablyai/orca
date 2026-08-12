@@ -50,6 +50,10 @@ export async function removeLargeFileCountRepo(repoPath: string): Promise<void> 
   }
 }
 
+export function removeLargeFileCountUntrackedTree(repoPath: string): void {
+  rmSync(path.join(repoPath, 'generated'), { recursive: true, force: true })
+}
+
 function writeFileTree(
   repoPath: string,
   rootDirName: string,

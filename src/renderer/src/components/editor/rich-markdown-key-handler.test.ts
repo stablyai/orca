@@ -3,6 +3,8 @@ import { Editor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import { createIsolatedMarkdownExtensionForTests } from './isolated-markdown-extension-for-tests'
 import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-markdown-key-handler'
+import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 // Why: keybinding matching resolves the platform from navigator.userAgent,
 // which is environment-dependent under vitest; pin it for determinism.
@@ -18,6 +20,39 @@ function createEditor(content: object): Editor {
     extensions,
     content
   })
+}
+
+const TABLE_MARKDOWN = `| A | B |
+| --- | --- |
+| a1 | b1 |
+| a2 | b2 |
+`
+
+// The StarterKit schema above has no table nodes, so table key paths need this one.
+function createTableEditor(): Editor {
+  return new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+    content: TABLE_MARKDOWN,
+    contentType: 'markdown'
+  })
+}
+
+function caretAtText(editor: Editor, text: string): number {
+  let position: number | null = null
+  editor.state.doc.descendants((node, pos) => {
+    if (!node.isText || node.text !== text) {
+      return true
+    }
+    position = pos
+    return false
+  })
+
+  if (position === null) {
+    throw new Error(`Expected cell text: ${text}`)
+  }
+
+  return position
 }
 
 function firstEmptyParagraphPosition(editor: Editor): number {
@@ -117,7 +152,7 @@ describe('rich markdown key handler', () => {
 
     try {
       const ctx = createContext(editor, false)
-      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
       expect(event.preventDefault).toHaveBeenCalled()
@@ -133,11 +168,48 @@ describe('rich markdown key handler', () => {
     try {
       const ctx = createContext(editor, false)
       ctx.openAnnotationPopoverRef.current = vi.fn(() => false)
-      const event = keyEvent('n', { metaKey: true, altKey: true, code: 'KeyN' })
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
 
       expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
       expect(event.preventDefault).not.toHaveBeenCalled()
       expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('ignores OS key-repeat for the add-review-note shortcut', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA', repeat: true })
+
+      // Why: leave the repeat unconsumed here; open drafts are consumed by the
+      // mounted composer guard (product B) instead of this editor key path.
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(false)
+      expect(event.preventDefault).not.toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).not.toHaveBeenCalled()
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('delegates a fresh add-review-note chord to openAnnotationPopover and consumes it', () => {
+    const editor = createEditor(emptyTopLevelOrderedList())
+
+    try {
+      const ctx = createContext(editor, false)
+      // Why: the ProseMirror-selection flush moved into openAnnotationPopover
+      // (which reads the selection), so the handler now only delegates the open
+      // with requireLiveSelection and consumes the chord when it succeeds.
+      ctx.openAnnotationPopoverRef.current = vi.fn(() => true)
+      const event = keyEvent('a', { metaKey: true, shiftKey: true, code: 'KeyA' })
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(event.preventDefault).toHaveBeenCalled()
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledTimes(1)
+      expect(ctx.openAnnotationPopoverRef.current).toHaveBeenCalledWith(true)
     } finally {
       editor.destroy()
     }
@@ -258,6 +330,26 @@ describe('rich markdown key handler', () => {
       expect(event.preventDefault).not.toHaveBeenCalled()
       expect(editor.getText()).toBe('/')
       expect(ctx.slashMenuRef.current?.query).toBe('')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('runs the selected slash command on Enter instead of the table cell-below move', () => {
+    const editor = createTableEditor()
+
+    try {
+      editor.commands.setTextSelection(caretAtText(editor, 'a1'))
+      const ctx = createContext(editor, false)
+      const from = editor.state.selection.from
+      const run = vi.fn()
+      ctx.slashMenuRef.current = { query: '', from, to: from, left: 0, top: 0 }
+      ctx.filteredSlashCommandsRef.current = [{ id: 'heading-1', run } as never]
+      const event = keyEvent('Enter')
+
+      expect(createRichMarkdownKeyHandler(ctx)(null, event)).toBe(true)
+      expect(run).toHaveBeenCalledWith(editor)
+      expect(editor.state.selection.$from.parent.textContent).toBe('a1')
     } finally {
       editor.destroy()
     }

@@ -1,6 +1,7 @@
 import { readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import type { GitHubRepoContext } from './github-repository-identity'
 
 type LocalGitConfigPaths = {
@@ -8,7 +9,15 @@ type LocalGitConfigPaths = {
   worktreeConfigPath: string
 }
 
-const localGitConfigSignatureInFlight = new Map<string, Promise<string | undefined>>()
+/**
+ * Why: `stat` on a dead network mount is uninterruptible, and this read runs
+ * *before* the bounded remote probe — unbounded, it reintroduces the hang that
+ * probe timeout removes (P1-D). Abandoning the read only costs the shorter
+ * negative-cache TTL that a missing signature already implies.
+ */
+const CONFIG_SIGNATURE_DEADLINE_MS = 2_000
+
+const localGitConfigSignatureInFlight: CoalescedProbes<string | undefined> = new Map()
 
 export async function readLocalGitConfigSignature(
   context: GitHubRepoContext
@@ -18,21 +27,37 @@ export async function readLocalGitConfigSignature(
     // runtimes are already separated by cache key and probed through git.
     return undefined
   }
-  const cacheKey = context.repoPath
-  const inFlight = localGitConfigSignatureInFlight.get(cacheKey)
-  if (inFlight) {
-    return inFlight
-  }
+  // Why: the deadline is caller-facing only. Bounding the coalesced probe itself
+  // would drop its map entry after 2s while the read runs on, so every later
+  // call would start another unbounded read instead of joining the one already
+  // out — the coalescing that keeps a wedged mount to one read (P1-D).
+  return withConfigSignatureDeadline(
+    runCoalescedProbe(localGitConfigSignatureInFlight, context.repoPath, () =>
+      readUncachedLocalGitConfigSignature(context.repoPath)
+    )
+  )
+}
 
-  const read = readUncachedLocalGitConfigSignature(context.repoPath)
-  localGitConfigSignatureInFlight.set(cacheKey, read)
-  try {
-    return await read
-  } finally {
-    if (localGitConfigSignatureInFlight.get(cacheKey) === read) {
-      localGitConfigSignatureInFlight.delete(cacheKey)
+/** Resolves undefined rather than waiting on a read the filesystem may never finish. */
+function withConfigSignatureDeadline(
+  read: Promise<string | undefined>
+): Promise<string | undefined> {
+  return new Promise((settle) => {
+    const timer = setTimeout(() => settle(undefined), CONFIG_SIGNATURE_DEADLINE_MS)
+    if (typeof timer === 'object' && 'unref' in timer) {
+      timer.unref()
     }
-  }
+    void read.then(
+      (signature) => {
+        clearTimeout(timer)
+        settle(signature)
+      },
+      () => {
+        clearTimeout(timer)
+        settle(undefined)
+      }
+    )
+  })
 }
 
 export function __resetLocalGitConfigSignatureCacheForTests(): void {

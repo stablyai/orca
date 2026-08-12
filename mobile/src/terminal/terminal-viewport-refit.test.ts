@@ -135,6 +135,18 @@ describe('terminal viewport refit', () => {
     expect(timerBody).toContain('if (!decision.shouldRefit)')
   })
 
+  it('suppresses refits while native chat covers the active terminal', () => {
+    // Why: native chat renders the transcript, not the grid — a refit there would
+    // reflow the desktop PTY to phone dims the user never sees.
+    const timerStart = hookSource.indexOf('refitTimerRef.current = setTimeout(')
+    const coveredCheck = hookSource.indexOf('if (nativeChatCoveredRef.current)', timerStart)
+    const measureIndex = hookSource.indexOf('measureFitDimensions', timerStart)
+    expect(timerStart).toBeGreaterThanOrEqual(0)
+    expect(coveredCheck).toBeGreaterThan(timerStart)
+    expect(measureIndex).toBeGreaterThan(coveredCheck)
+    expect(sessionSource).toContain('nativeChatCoveredRef: showNativeChatRef')
+  })
+
   it('is wired into the session screen', () => {
     expect(sessionSource).toContain('useTerminalViewportRefit({')
     expect(sessionSource).toContain('tabStripVisible: terminals.length > 1')
@@ -301,6 +313,7 @@ describe('terminal viewport refit', () => {
       expectedHandle: 'term-1',
       currentRef: expectedRef,
       expectedRef,
+      nativeChatCovered: false,
       disposed: false,
       runSeq: 2,
       currentRunSeq: 2
@@ -313,5 +326,8 @@ describe('terminal viewport refit', () => {
     ).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, currentRunSeq: 3 })).toBe(false)
     expect(isTerminalViewportRefitTargetCurrent({ ...current, disposed: true })).toBe(false)
+    expect(isTerminalViewportRefitTargetCurrent({ ...current, nativeChatCovered: true })).toBe(
+      false
+    )
   })
 })

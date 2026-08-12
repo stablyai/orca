@@ -70,6 +70,7 @@ export type ReactErrorBoundarySurface =
   | 'modal'
   | 'overlay'
   | 'rich-markdown-editor'
+  | 'dashboard-popout'
 
 export type ReactErrorBoundaryReportArgs = {
   boundaryId: string
@@ -182,7 +183,8 @@ export function sanitizeCrashReportString(
 }
 
 function maxDetailStringLengthForKey(key: string): number {
-  return /(?:^|_)(?:stack|component_stack|error_stack)$/i.test(key)
+  const normalizedKey = key.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+  return /(?:^|_)(?:stack|component_stack|error_stack)$/i.test(normalizedKey)
     ? MAX_STACK_DETAIL_LENGTH
     : MAX_STRING_DETAIL_LENGTH
 }

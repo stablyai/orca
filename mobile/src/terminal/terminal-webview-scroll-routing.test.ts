@@ -212,10 +212,12 @@ describe('TerminalWebView scroll routing', () => {
       "document.addEventListener('touchend'",
       '}, { capture: true, passive: true });'
     )
-    expect(touchEndBlock).toContain('notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y)')
+    expect(touchEndBlock).toContain(
+      'notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true)'
+    )
 
     const tapHandlerBlock = sliceBetween(
-      'function notifyTerminalSurfaceTap(originX, originY)',
+      'function notifyTerminalSurfaceTap(originX, originY, focusKeyboard)',
       "document.addEventListener('touchstart'"
     )
     expect(tapHandlerBlock.indexOf('oscLinkAtViewportPoint')).toBeLessThan(
@@ -229,6 +231,9 @@ describe('TerminalWebView scroll routing', () => {
     )
     expect(tapHandlerBlock).toContain("notify({ type: 'open-url', url: tappedUrl });")
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-input', bytes: clickInput });")
+    expect(tapHandlerBlock).toContain(
+      'if (focusKeyboard || !isClickMouseTrackingMode(getMouseTrackingMode()))'
+    )
     expect(tapHandlerBlock).toContain("notify({ type: 'terminal-tap' });")
   })
 

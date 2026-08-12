@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import Placeholder from '@tiptap/extension-placeholder'
 import { ImageIcon, Paperclip } from 'lucide-react'
@@ -20,6 +20,7 @@ import { createEditableMarkdownLinkBubble } from '@/components/editor/rich-markd
 import { copyRichMarkdownLink } from '@/components/editor/rich-markdown-link-clipboard'
 import { normalizeSoftBreaks } from '@/components/editor/rich-markdown-normalize'
 import { GitHubMarkdownComposerPreviewPane } from '@/components/github/github-markdown-composer-preview-pane'
+import { GitHubMarkdownComposerEditorPane } from '@/components/github/GitHubMarkdownComposerEditorPane'
 import {
   GitHubMarkdownComposerTabbar,
   type ComposerTab
@@ -337,13 +338,7 @@ export function GitHubMarkdownComposer({
       </Button>
     </form>
   ) : null
-
-  const editorPane = (
-    <div className="max-h-[360px] overflow-y-auto scrollbar-sleek">
-      <EditorContent editor={editor} />
-    </div>
-  )
-
+  const editorPane = <GitHubMarkdownComposerEditorPane disabled={disabled} editor={editor} />
   const previewPane = (
     <GitHubMarkdownComposerPreviewPane
       value={value}
@@ -351,7 +346,6 @@ export function GitHubMarkdownComposer({
       previewGithubRepo={previewGithubRepo}
     />
   )
-
   const attachmentFooter = isTabbed ? (
     <button
       type="button"
@@ -368,7 +362,6 @@ export function GitHubMarkdownComposer({
       </span>
     </button>
   ) : null
-
   return (
     <div
       ref={rootRef}

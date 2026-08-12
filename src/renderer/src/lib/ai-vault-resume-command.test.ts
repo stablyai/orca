@@ -69,6 +69,30 @@ function buildQueuedAiVaultResumeCommand(
 }
 
 describe('ai vault resume command runtime', () => {
+  it('repro: queues a host-runtime resume without configured-WSL shell syntax', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      localWindowsRuntimePreference: { kind: 'windows-host' },
+      terminalWindowsShell: 'wsl.exe'
+    })
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'claude',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toMatchObject({
+      command: "claude '--resume' 'session one'",
+      cwd: 'C:\\Users\\alice\\repo'
+    })
+  })
+
   it('queues a PowerShell-valid command for the default Windows shell', () => {
     // Why: the queued command is typed into the live tab shell (default
     // PowerShell), which mis-parses the cmd `""`-doubled wrapper (#6152).
@@ -85,7 +109,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('queues direct cmd syntax when the configured Windows shell is cmd.exe', () => {
@@ -105,7 +129,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
+    ).toBe('claude "--resume" "session one"')
   })
 
   it('queues a POSIX command for the Git Bash Windows shell', () => {
@@ -125,7 +149,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd 'C:\\Users\\alice\\repo' && claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('follows the live Windows shell for non-resumable agents in the fallback path', () => {
@@ -144,9 +168,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe(
-      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; cursor-agent --resume 'session one'"
-    )
+    ).toBe("cursor-agent --resume 'session one'")
   })
 
   it('queues a PowerShell-valid local OMP resume by absolute transcript path', () => {
@@ -166,9 +188,7 @@ describe('ai vault resume command runtime', () => {
       }
     })
 
-    expect(command).toBe(
-      "Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
-    )
+    expect(command).toBe("omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'")
     expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
   })
 
@@ -190,9 +210,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe(
-      'cd /d "C:\\Users\\alice\\repo" && omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"'
-    )
+    ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
   })
 
   it('copies syntax that matches the configured cmd shell', () => {
@@ -232,6 +250,88 @@ describe('ai vault resume command runtime', () => {
     ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
   })
 
+  it('copies a real-home Codex command that clears inherited homes in PowerShell', () => {
+    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
+
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      "Remove-Item Env:CODEX_HOME -ErrorAction SilentlyContinue; Remove-Item Env:ORCA_CODEX_HOME -ErrorAction SilentlyContinue; Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; codex 'resume' 'session one'"
+    )
+  })
+
+  it('copies a real-home Codex command that clears inherited homes in cmd', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      'set "CODEX_HOME=" & set "ORCA_CODEX_HOME=" & cd /d "C:\\Users\\alice\\repo" && codex "resume" "session one"'
+    )
+  })
+
+  it('copies a real-home Codex command that clears inherited homes in POSIX shells', () => {
+    const state = makeState({
+      worktreePath: '/home/alice/repo',
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe(
+      "unset CODEX_HOME; unset ORCA_CODEX_HOME; cd '/home/alice/repo' && codex 'resume' 'session one'"
+    )
+  })
+
+  it('keeps copied custom-home Codex commands pinned to that home', () => {
+    const state = makeState({
+      worktreePath: '/home/alice/repo',
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+
+    const command = buildAiVaultResumeCopyCommandForWorktree({
+      state,
+      session: {
+        agent: 'codex',
+        sessionId: 'session one',
+        cwd: '/home/alice/repo',
+        codexHome: '/home/alice/custom-codex'
+      }
+    })
+
+    expect(command).toBe(
+      "cd '/home/alice/repo' && CODEX_HOME='/home/alice/custom-codex' codex 'resume' 'session one'"
+    )
+    expect(command).not.toContain('unset CODEX_HOME')
+  })
+
   it('uses configured agent defaults for resumable session history entries', () => {
     const state = makeState({
       worktreePath: 'C:\\Users\\alice\\repo',
@@ -255,14 +355,15 @@ describe('ai vault resume command runtime', () => {
         }
       })
     ).toEqual({
-      command:
-        "cd '/home/alice/repo' && claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      command: "claude '--dangerously-skip-permissions' '--effort' 'max' '--resume' 'session-1'",
+      cwd: '/home/alice/repo',
       env: { ANTHROPIC_BASE_URL: 'https://claude.example.test' },
       launchConfig: {
         agentCommand: "claude '--dangerously-skip-permissions' '--effort' 'max'",
         agentArgs: '--dangerously-skip-permissions --effort max',
         agentEnv: { ANTHROPIC_BASE_URL: 'https://claude.example.test' }
-      }
+      },
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
   })
 
@@ -284,7 +385,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('uses POSIX command wrapping for SSH-owned worktrees on Windows clients', () => {
@@ -303,7 +404,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/repo' && claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('uses POSIX command wrapping for folder workspaces with their own SSH target', () => {
@@ -332,7 +433,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('uses POSIX command wrapping for WSL UNC folder workspaces on Windows clients', () => {
@@ -360,7 +461,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("cd '/home/alice/platform' && claude '--resume' 'session one'")
+    ).toBe("claude '--resume' 'session one'")
   })
 
   it('keeps WSL UNC worktrees on POSIX command wrapping without an explicit override', () => {
@@ -387,10 +488,52 @@ describe('ai vault resume command runtime', () => {
           codexHome: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'
         }
       })
-    ).toBe("cd '/home/alice/repo' && CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
+    ).toBe("CODEX_HOME='/home/alice/.codex' codex 'resume' 'session one'")
   })
 
-  it('returns the remote resume command verbatim for non-local host sessions', () => {
+  it('converts WSL UNC OMP transcript paths before building Linux resume commands', () => {
+    const state = makeState({
+      worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })
+
+    expect(
+      buildQueuedAiVaultResumeCommand({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath:
+            '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toBe("omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
+  })
+
+  it('deletes inherited Codex homes when resuming a real-home session', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+
+    expect(
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'codex',
+          sessionId: 'session one',
+          cwd: '/home/alice/repo',
+          codexHome: null
+        }
+      })
+    ).toMatchObject({
+      command: "codex 'resume' 'session one'",
+      cwd: '/home/alice/repo',
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME']
+    })
+  })
+
+  it('rebuilds remote real-home Codex commands without a stored home assignment', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
@@ -407,10 +550,15 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toEqual({ command: "CODEX_HOME='/root/.codex' codex resume 'session one'" })
+    ).toMatchObject({
+      command: "codex 'resume' 'session one'",
+      cwd: '/home/alice/repo',
+      envToDelete: ['CODEX_HOME', 'ORCA_CODEX_HOME'],
+      providerSession: { key: 'session_id', id: 'session one' }
+    })
   })
 
-  it('bypasses the resume pipeline even when the command override is blank', () => {
+  it('rebuilds remote real-home Codex commands when the override is blank', () => {
     const state = makeState({ worktreePath: '/home/alice/repo' })
     state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
 
@@ -428,7 +576,31 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("CODEX_HOME='/root/.codex' codex resume 'session one'")
+    ).toBe("codex 'resume' 'session one'")
+  })
+
+  it('copies remote real-home Codex commands with explicit environment cleanup', () => {
+    const state = makeState({ worktreePath: '/home/alice/repo' })
+    state.repos = [{ id: 'repo-1', path: '/home/alice/repo', connectionId: 'ssh-1' }] as never
+
+    const command = buildAiVaultResumeCopyCommandForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: {
+        agent: 'codex',
+        sessionId: 'session one',
+        cwd: '/home/alice/repo',
+        codexHome: null,
+        executionHostId: 'runtime:env-1',
+        executionHostPlatform: 'linux',
+        resumeCommand: "CODEX_HOME='/retired/shared-home' codex resume 'session one'"
+      }
+    })
+
+    expect(command).toBe(
+      "unset CODEX_HOME; unset ORCA_CODEX_HOME; cd '/home/alice/repo' && codex 'resume' 'session one'"
+    )
+    expect(command).not.toContain('/retired/shared-home')
   })
 
   it('rebuilds the command when a non-blank override is supplied for a remote session', () => {
@@ -449,7 +621,7 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("cd '/home/alice/repo' && my-codex 'resume' 'session one'")
+    ).toBe("my-codex 'resume' 'session one'")
   })
 
   it('rebuilds overridden remote commands with the recorded remote host platform', () => {
@@ -475,9 +647,7 @@ describe('ai vault resume command runtime', () => {
             'cmd /d /s /c "cd /d ""C:/Users/alice/repo"" && set ""CODEX_HOME=C:/Users/alice/.codex"" && codex resume ""session one"""'
         }
       })
-    ).toBe(
-      "Set-Location -LiteralPath 'C:/Users/alice/repo'; $env:CODEX_HOME='C:/Users/alice/.codex'; my-codex 'resume' 'session one'"
-    )
+    ).toBe("$env:CODEX_HOME='C:/Users/alice/.codex'; my-codex 'resume' 'session one'")
   })
 
   it('ignores a stored resume command for local-host sessions', () => {
@@ -497,6 +667,6 @@ describe('ai vault resume command runtime', () => {
           resumeCommand: "CODEX_HOME='/root/.codex' codex resume 'session one'"
         }
       })
-    ).toBe("cd '/home/alice/repo' && codex 'resume' 'session one'")
+    ).toBe("codex 'resume' 'session one'")
   })
 })

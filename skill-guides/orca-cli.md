@@ -2,12 +2,13 @@
 name: orca-cli
 description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, worktree comments, and the browser embedded
-  inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
+  terminals, repos, automations, artifacts, worktree comments, and the browser
+  embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
   "Orca worktree", "child worktree", "cardStatus", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "terminal send", "full handoff", "handover",
-  "give this to another agent", "another worktree", "Orca browser", or
-  "control the browser inside Orca". Prefer this over raw `git worktree`, ad hoc
+  "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
+  "share HTML/Markdown", "public artifact link", or "control the browser inside
+  Orca". Prefer this over raw `git worktree`, ad hoc
   PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
   Use Computer Use for browser windows, webviews, or desktop UI outside Orca's
   embedded browser.
@@ -143,12 +144,12 @@ ORCA worktree create --name task --setup skip --json
 ORCA worktree create --name task --run-hooks --json
 ```
 
-- `--agent <id>` launches that agent **in the first terminal** (Orca docs: *"`--agent` launches the selected agent in the first terminal"*); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
+- `--agent <id>` launches that agent **in the first terminal** (Orca docs: _"`--agent` launches the selected agent in the first terminal"_); `--prompt <text>` sends initial work to it. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed TUI agents.
 - **Prefer agent-first create for agent workers.** `orca worktree create --agent <id> --prompt "..."` puts the agent in the worktree's first terminal without adding a separate fallback shell for that worker. Repo setup or default-terminal settings may still add tabs or splits. Without configured default tabs, the bare-create fallback shell plus a later `terminal create --command <agent>` is an anti-pattern for ordinary agent worktrees — use `--agent` instead of “create worktree, then open agent.” Configured default tabs are intentional surfaces; never treat one as disposable without verifying that it is an unused shell.
 - After create, use exactly one agent handle: `startupTerminal.handle` from the create response when present, or the matching result from `orca terminal list --worktree id:<repoId>::<newWorktreePath> --json` (or `name:<displayName>`) when the response omits it. If a handle later returns `terminal_handle_stale`, re-list it; never dual-send to old and replacement handles.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
-- `--agent`, `--activate`, and `--run-hooks` reveal the new worktree. Plain create stays in the background.
+- `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals when `--agent` already owns the first tab.
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
@@ -195,6 +196,7 @@ ORCA terminal close --terminal <handle> --json
 Terminal rules:
 
 - `--terminal` is optional for most commands; omitted means the active terminal in the current worktree.
+- `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - Use `terminal send` only for direct terminal input or one-off prompts where no task state, inbox, or reply tracking is needed.
 - For structured coordination, invoke the `orchestration` skill; it uses `orca orchestration ...` commands for messages, handoffs, task DAGs, dispatches, inbox/reply flows, and coordinator loops. A receiving agent can run `orca orchestration check --unread --inject` to render its unread mail in agent-readable form; this checks the caller's inbox and does not remotely deliver input to another terminal.
@@ -223,6 +225,52 @@ ORCA automations remove <automationId> --json
 Schedules accept `hourly`, `daily`, `weekdays`, `weekly`, 5-field cron, or RRULE. Use `--time <HH:MM>` with `daily`/`weekdays`/`weekly`, and `--day <0-6>` only with `weekly` where Sunday is `0`.
 
 Use `--repo <selector>` for a new worktree per run, or `--workspace <selector>` / `--workspace-mode existing` for an existing Orca worktree. `--repo` and `--workspace` are mutually exclusive. Use `--reuse-session` only for existing-workspace automations; if the previous terminal is gone, Orca falls back to a fresh session. Prefer `--disabled` while testing setup.
+
+## Artifacts
+
+Artifacts publish HTML or Markdown files through the signed-in Orca account. The public
+share URL is viewable without signing in; creating, listing, updating, and deleting
+artifacts require the active Orca profile to be signed in.
+
+**Publishing is off by default and only a human can turn it on.** `share` and `update` are
+gated by a device-wide capability that the user grants in the Orca desktop app under
+Settings → Artifacts ("Allow publishing public artifact links"). The gate applies to every
+caller on the device, agent or human. There is no CLI or RPC way to grant it — do not try.
+`list`, `unshare`, and `delete` are never gated, so old links stay auditable and revocable.
+
+`share` and `update` check the capability before reading the file, so a denial costs one
+small round trip rather than an upload-sized payload.
+
+When a share is denied, the CLI fails with code `artifact_sharing_disabled` and prints the
+recovery steps. Do not retry — the answer will not change until a human acts. Tell the user
+to open Settings → Artifacts in the Orca desktop app on this device, turn on "Allow
+publishing public artifact links", and then re-run the command. If they do not want to grant
+it, deliver the file locally instead.
+
+```text
+ORCA artifacts share <file> --json
+ORCA artifacts update <file> --json
+ORCA artifacts unshare <file> --json
+ORCA artifacts list [--cursor <cursor>] --json
+ORCA artifacts delete <id> --json
+```
+
+- `share`, `update`, and `unshare` accept `.html`, `.htm`, `.md`, and `.markdown` files.
+- `share` saves the returned edit token in the active Orca profile and never includes it
+  in CLI output. `update` and `unshare` look up that record by the resolved local file
+  path, so use the same path and Orca profile that originally shared the file.
+- `list` returns one page of artifacts owned by the signed-in account. If JSON output has
+  `nextCursor`, pass it back with `--cursor <cursor>`. `delete <id>` deletes an account-owned
+  artifact by the id returned from `list`; it does not need the original local file or its
+  edit-token record.
+- Relative HTML assets are not uploaded. Share a self-contained HTML file or use absolute
+  asset URLs.
+- If an upload exceeds the CLI transport limit, use the browser upload page as directed
+  by the error.
+- For local or staging development, `--api-url <url>` overrides the artifact service;
+  `ORCA_ARTIFACTS_API_URL` provides the same override for the session.
+- `ORCA_CLOUD_AUTH_TOKEN` is a development-only authentication override. Prefer the active
+  Orca profile's normal PropelAuth session and never expose the token in logs or agent output.
 
 ## Built-In Browser
 
@@ -295,7 +343,7 @@ Common recoveries:
 
 ## Next Action
 
-Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, or built-in browser `snapshot`.
+Confirm `orca status --json` unless already checked this turn, then choose the narrowest command for the job: `worktree ps/current/create`, `terminal list/read/wait/send`, `automations list`, `artifacts list/share`, or built-in browser `snapshot`.
 
 ## Mobile Emulator (iOS Simulator via serve-sim)
 

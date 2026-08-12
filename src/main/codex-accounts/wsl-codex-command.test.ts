@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildWslCodexAvailabilityArgs, buildWslCodexLoginArgs } from './wsl-codex-command'
+import {
+  buildWslCodexAvailabilityArgs,
+  buildWslCodexIdentityArgs,
+  buildWslCodexLoginArgs
+} from './wsl-codex-command'
 
 describe('WSL Codex commands', () => {
   it('checks the alias-neutral PATH from the distro login shell', () => {
@@ -19,5 +23,12 @@ describe('WSL Codex commands', () => {
     expect(command).toContain('export CODEX_HOME=')
     expect(command).toContain('/home/alice/managed-home')
     expect(command).toContain('exec "\\$resolved" login')
+  })
+
+  it('reports the login-shell binary path and version for identity checks', () => {
+    const command = buildWslCodexIdentityArgs('Ubuntu').at(-1)
+
+    expect(command).toMatch(/printf .*"\\\$resolved"/)
+    expect(command).toContain('exec "\\$resolved" --version')
   })
 })

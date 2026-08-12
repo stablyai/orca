@@ -6,7 +6,6 @@ import { openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
-import { requestEditorFileSave } from './editor-autosave'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { EditorPanelShell } from './EditorPanelShell'
@@ -24,14 +23,20 @@ import {
   selectEditorPanelGitStatusEntries
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
+import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
+import { useEditorPanelSave } from './useEditorPanelSave'
 
 function EditorPanelInner({
   activeFileId: activeFileIdProp,
   activeViewStateId: activeViewStateIdProp,
+  isVisible = true,
+  isCmdSaveOwner = isVisible,
   markdownAnnotationsEnabled = true
 }: {
   activeFileId?: string | null
   activeViewStateId?: string | null
+  isVisible?: boolean
+  isCmdSaveOwner?: boolean
   markdownAnnotationsEnabled?: boolean
 } = {}): React.JSX.Element | null {
   const openFiles = useAppStore((s) => s.openFiles)
@@ -60,7 +65,6 @@ function EditorPanelInner({
   const setMarkdownFrontmatterVisible = useAppStore((s) => s.setMarkdownFrontmatterVisible)
   const markdownTableOfContentsVisible = useAppStore((s) => s.markdownTableOfContentsVisible)
   const setMarkdownTableOfContentsVisible = useAppStore((s) => s.setMarkdownTableOfContentsVisible)
-  const closeFile = useAppStore((s) => s.closeFile)
   const clearUntitled = useAppStore((s) => s.clearUntitled)
   const editorDraftSelector = useMemo(
     () => createEditorPanelDraftSelector(activeFile),
@@ -114,7 +118,8 @@ function EditorPanelInner({
     isChangesMode: requestedChangesMode,
     openFiles,
     gitStatusEntries,
-    editorViewMode
+    editorViewMode,
+    isVisible
   })
   const isChangesMode =
     requestedChangesMode &&
@@ -127,7 +132,7 @@ function EditorPanelInner({
     requestRenameForFile,
     closeRenameDialog,
     handleRenameConfirm
-  } = useUntitledFileRename({ openFiles, closeFile, openFile, clearUntitled })
+  } = useUntitledFileRename({ openFiles, clearUntitled })
 
   useClosedEditorTabCleanup(openFiles)
   useMarkdownPreviewShortcut({ activeFile, panelRef, openMarkdownPreview })
@@ -172,39 +177,18 @@ function EditorPanelInner({
     [activeFile, markFileDirty]
   )
 
-  const handleSaveForFile = useCallback(
-    async (file: typeof activeFile, content: string) => {
-      if (!file) {
-        return
-      }
-      const saveTargetFile =
-        file.mode === 'markdown-preview'
-          ? (openFiles.find(
-              (openFile) =>
-                openFile.id === file.markdownPreviewSourceFileId && openFile.mode === 'edit'
-            ) ?? null)
-          : file
-      if (!saveTargetFile) {
-        return
-      }
-      if (saveTargetFile.isUntitled) {
-        requestRenameForFile(saveTargetFile.id)
-        return
-      }
-      try {
-        await requestEditorFileSave({ fileId: saveTargetFile.id, fallbackContent: content })
-      } catch {}
-    },
-    [openFiles, requestRenameForFile]
-  )
-
-  const handleSave = useCallback(
-    async (content: string) => {
-      await handleSaveForFile(activeFile, content)
-    },
-    [activeFile, handleSaveForFile]
-  )
-  useEditorCmdSaveRequest({ activeFile, openFiles, fileContents, handleSave })
+  const { handleSave, handleSaveForFile } = useEditorPanelSave({
+    activeFile,
+    openFiles,
+    requestRenameForFile
+  })
+  useEditorCmdSaveRequest({
+    activeFile,
+    openFiles,
+    fileContents,
+    handleSave,
+    enabled: isCmdSaveOwner
+  })
 
   const handleCopyPath = useCallback(async (): Promise<void> => {
     if (!activeFile) {
@@ -351,6 +335,14 @@ function EditorPanelInner({
     markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
   const isMarkdownTableOfContentsVisible =
     markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
+  const createActiveMarkdownArtifactRequest = () =>
+    Promise.resolve(
+      createCurrentMarkdownArtifactRequest(
+        activeFile,
+        markdownDocumentStateFileId,
+        activeMarkdownContent ?? ''
+      )
+    )
 
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
@@ -391,6 +383,9 @@ function EditorPanelInner({
         }
         onExportMarkdownToPdf={() =>
           void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
+        }
+        createMarkdownArtifactRequest={
+          activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
         }
         onContentChange={handleContentChange}
         onContentChangeForFile={handleContentChangeForFile}

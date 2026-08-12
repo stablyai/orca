@@ -7,6 +7,9 @@
  * until then (and in non-renderer contexts) recording is a silent no-op.
  */
 
+/** Crash-report breadcrumb name these crumbs are mirrored under. */
+export const TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB = 'terminal_webgl_diagnostic'
+
 export type WebglDiagnosticRecorder = (
   kind: string,
   detail?: Record<string, string | number | boolean | null>

@@ -15,6 +15,9 @@ const MONTH_DAY_TIME_RE = new RegExp(
 const WEEKDAY_TIME_RE =
   /\b(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\.?\s+(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i
 const TIME_ONLY_RE = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i
+// Why: newer Codex CLIs print 24-hour reset times ("10:21 on 28 Jul") with no am/pm.
+const TIME_24H_RE = /\b(\d{1,2}):(\d{2})\b/
+const DAY_MONTH_RE = new RegExp(`\\b(?:on\\s+)?(\\d{1,2})\\s+(${MONTH_PATTERN})\\b`, 'i')
 const RELATIVE_RESET_RE = /^(?:\s*\d+\s*(?:d(?:ays?)?|h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)\s*)+$/i
 const RELATIVE_RESET_TOKEN_RE = /(\d+)\s*(d(?:ays?)?|h(?:ours?|rs?)?|m(?:in(?:ute)?s?)?)/gi
 const IANA_TIME_ZONE_RE = /\(([^()]*)\)?\s*$/
@@ -94,13 +97,16 @@ export function extractClaudePtyResetMetadata(
 function normalizeResetDescription(raw: string): string {
   // Why: Claude's TUI occasionally drops spaces around the Fable reset date
   // when copied from the PTY buffer, but the value still encodes a real reset.
-  return raw
-    .trim()
-    .replace(/[)]+$/, '')
-    .replace(/\s+/g, ' ')
-    .replace(MONTH_DAY_COMPACT_RE, '$1 $2')
-    .replace(/(\d{1,2})\s*at\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i, '$1 at $2')
-    .replace(/(\d)(am|pm)\(/gi, '$1$2 (')
+  return (
+    raw
+      .trim()
+      // Why: PTY captures keep trailing box-border glyphs from framed status panels.
+      .replace(/[)\s│]+$/, '')
+      .replace(/\s+/g, ' ')
+      .replace(MONTH_DAY_COMPACT_RE, '$1 $2')
+      .replace(/(\d{1,2})\s*at\s*(\d{1,2}(?::\d{2})?\s*(?:am|pm))/i, '$1 at $2')
+      .replace(/(\d)(am|pm)\(/gi, '$1$2 (')
+  )
 }
 
 function parseResetTimestamp(resetDescription: string | null): number | null {
@@ -112,8 +118,51 @@ function parseResetTimestamp(resetDescription: string | null): number | null {
     parseRelativeResetTimestamp(resetDescription) ??
     parseMonthDayResetTimestamp(resetDescription) ??
     parseWeekdayResetTimestamp(resetDescription) ??
-    parseTimeOnlyResetTimestamp(resetDescription)
+    parseTimeOnlyResetTimestamp(resetDescription) ??
+    parseTwentyFourHourResetTimestamp(resetDescription)
   )
+}
+
+function parseTwentyFourHourResetTimestamp(resetDescription: string): number | null {
+  const resetText = stripResetTimeZone(resetDescription)
+  const timeMatch = TIME_24H_RE.exec(resetText)
+  if (!timeMatch) {
+    return null
+  }
+  const hour = Number(timeMatch[1])
+  const minute = Number(timeMatch[2])
+  if (!isValidClockTime(hour, minute)) {
+    return null
+  }
+
+  const dayMonthMatch = DAY_MONTH_RE.exec(resetText)
+  if (dayMonthMatch) {
+    const day = Number(dayMonthMatch[1])
+    const monthIndex = MONTH_INDEX_BY_NAME[dayMonthMatch[2].toLowerCase()]
+    if (monthIndex === undefined || day < 1 || day > 31) {
+      return null
+    }
+    const now = new Date()
+    const timeZone = extractResetTimeZone(resetDescription)
+    let timestamp = buildWallClockTimestamp(
+      { year: now.getFullYear(), monthIndex, day, hour, minute },
+      timeZone
+    )
+    if (timestamp !== null && timestamp <= Date.now()) {
+      timestamp = buildWallClockTimestamp(
+        { year: now.getFullYear() + 1, monthIndex, day, hour, minute },
+        timeZone
+      )
+    }
+    return timestamp
+  }
+
+  const candidate = new Date()
+  candidate.setHours(hour, minute, 0, 0)
+  if (candidate.getTime() <= Date.now()) {
+    candidate.setDate(candidate.getDate() + 1)
+  }
+  return candidate.getTime()
 }
 
 function parseRelativeResetTimestamp(resetDescription: string): number | null {

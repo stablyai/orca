@@ -26,9 +26,7 @@ export function resolveTokens(files: string[], modelDir: string): string {
   return join(modelDir, match)
 }
 
-// Why: BPE models need a vocab file for hotwords token matching. The file
-// ships in the model archive but isn't listed in the manifest. We discover
-// it at runtime to avoid breaking existing downloads.
+// Why: BPE models need a vocab file for hotwords token matching, but older caches may omit it.
 function discoverBpeVocab(modelDir: string): string | undefined {
   try {
     const entries = readdirSync(modelDir)

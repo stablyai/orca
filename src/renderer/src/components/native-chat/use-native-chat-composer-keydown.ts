@@ -1,22 +1,21 @@
 import { useCallback, type Dispatch, type KeyboardEventHandler, type SetStateAction } from 'react'
-import type { DiscoveredSkill } from '../../../../shared/skills'
 import {
-  applySkillSuggestion,
   recallNext,
   recallPrevious,
   type ComposerAutocomplete,
   type HistoryState,
-  type SlashCommandSuggestion
+  type NativeChatPickerItem
 } from './native-chat-composer-state'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
   activeSuggestion: number
   draft: string
-  caret: number
   history: HistoryState
-  chooseSlash: (command: SlashCommandSuggestion) => void
-  dispatchSlash: (command: SlashCommandSuggestion) => void
+  isComposing: () => boolean
+  completePickerItem: (item: NativeChatPickerItem) => void
+  dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
+  dismissPicker: (triggerKey: string) => void
   interrupt: () => void
   send: () => void
   setActiveSuggestion: Dispatch<SetStateAction<number>>
@@ -29,10 +28,11 @@ export function useNativeChatComposerKeyDown({
   autocomplete,
   activeSuggestion,
   draft,
-  caret,
   history,
-  chooseSlash,
-  dispatchSlash,
+  isComposing,
+  completePickerItem,
+  dispatchPickerCommand,
+  dismissPicker,
   interrupt,
   send,
   setActiveSuggestion,
@@ -42,60 +42,40 @@ export function useNativeChatComposerKeyDown({
 }: UseNativeChatComposerKeyDownArgs): KeyboardEventHandler<HTMLTextAreaElement> {
   return useCallback(
     (event) => {
-      if (autocomplete.mode === 'slash' && autocomplete.suggestions.length > 0) {
-        if (event.key === 'ArrowDown') {
-          event.preventDefault()
-          setActiveSuggestion((i) => (i + 1) % autocomplete.suggestions.length)
-          return
-        }
-        if (event.key === 'ArrowUp') {
-          event.preventDefault()
-          setActiveSuggestion(
-            (i) => (i - 1 + autocomplete.suggestions.length) % autocomplete.suggestions.length
-          )
-          return
-        }
+      if (isComposing() || event.nativeEvent.isComposing || event.keyCode === 229) {
+        // Why: IME Enter confirms composition; allowing it to fall through
+        // would accept a picker row or submit a partial draft.
         if (event.key === 'Enter') {
           event.preventDefault()
-          dispatchSlash(autocomplete.suggestions[activeSuggestion] ?? autocomplete.suggestions[0])
-          return
         }
-        if (event.key === 'Tab') {
-          event.preventDefault()
-          chooseSlash(autocomplete.suggestions[activeSuggestion] ?? autocomplete.suggestions[0])
-          return
-        }
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          setDraft('')
-          setCaret(0)
-          return
-        }
+        return
       }
 
-      if (autocomplete.mode === 'skill') {
-        if (event.key === 'ArrowDown' && autocomplete.suggestions.length > 0) {
+      if (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') {
+        const items = autocomplete.items
+        if (event.key === 'ArrowDown' && items.length > 0) {
           event.preventDefault()
-          setActiveSuggestion((i) => (i + 1) % autocomplete.suggestions.length)
+          setActiveSuggestion((index) => (index + 1) % items.length)
           return
         }
-        if (event.key === 'ArrowUp' && autocomplete.suggestions.length > 0) {
+        if (event.key === 'ArrowUp' && items.length > 0) {
           event.preventDefault()
-          setActiveSuggestion(
-            (i) => (i - 1 + autocomplete.suggestions.length) % autocomplete.suggestions.length
-          )
+          setActiveSuggestion((index) => (index - 1 + items.length) % items.length)
           return
         }
-        if ((event.key === 'Enter' || event.key === 'Tab') && autocomplete.suggestions.length > 0) {
+        if ((event.key === 'Enter' || event.key === 'Tab') && items.length > 0) {
           event.preventDefault()
-          const skill = autocomplete.suggestions[activeSuggestion] ?? autocomplete.suggestions[0]
-          applySkill({ skill, draft, caret, setDraft, setCaret, setActiveSuggestion })
+          const item = items[activeSuggestion] ?? items[0]
+          if (event.key === 'Enter' && item.kind === 'command') {
+            dispatchPickerCommand(item)
+          } else {
+            completePickerItem(item)
+          }
           return
         }
         if (event.key === 'Escape') {
           event.preventDefault()
-          setDraft('')
-          setCaret(0)
+          dismissPicker(autocomplete.triggerKey)
           return
         }
       }
@@ -105,13 +85,11 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
-
       if (event.key === 'Enter' && !event.shiftKey) {
         event.preventDefault()
         send()
         return
       }
-
       if (event.key === 'ArrowUp' && (draft === '' || history.index !== null)) {
         const recall = recallPrevious(history)
         if (recall.draft !== null) {
@@ -133,40 +111,20 @@ export function useNativeChatComposerKeyDown({
       }
     },
     [
-      autocomplete,
       activeSuggestion,
-      chooseSlash,
-      dispatchSlash,
-      interrupt,
-      send,
+      autocomplete,
+      completePickerItem,
+      dismissPicker,
+      dispatchPickerCommand,
       draft,
-      caret,
       history,
+      interrupt,
+      isComposing,
+      send,
       setActiveSuggestion,
       setCaret,
       setDraft,
       setHistory
     ]
   )
-}
-
-function applySkill({
-  skill,
-  draft,
-  caret,
-  setDraft,
-  setCaret,
-  setActiveSuggestion
-}: {
-  skill: DiscoveredSkill
-  draft: string
-  caret: number
-  setDraft: Dispatch<SetStateAction<string>>
-  setCaret: Dispatch<SetStateAction<number>>
-  setActiveSuggestion: Dispatch<SetStateAction<number>>
-}): void {
-  const result = applySkillSuggestion(draft, caret, skill.name)
-  setDraft(result.draft)
-  setCaret(result.caret)
-  setActiveSuggestion(0)
 }

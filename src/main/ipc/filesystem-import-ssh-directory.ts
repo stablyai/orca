@@ -45,7 +45,8 @@ export async function uploadSshImportDirectory(
   localDir: string,
   remoteDir: string,
   rootRealPath: string,
-  remotePathFlavor: RemotePathFlavor
+  remotePathFlavor: RemotePathFlavor,
+  assertCurrent?: () => void
 ): Promise<void> {
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
@@ -63,6 +64,7 @@ export async function uploadSshImportDirectory(
     }
 
     if (statResult.isDirectory()) {
+      assertCurrent?.()
       await provider.createDirNoClobber(remotePath)
       await uploadSshImportDirectory(
         provider,
@@ -70,10 +72,12 @@ export async function uploadSshImportDirectory(
         localPath,
         remotePath,
         rootRealPath,
-        remotePathFlavor
+        remotePathFlavor,
+        assertCurrent
       )
       continue
     }
+    assertCurrent?.()
     await uploadSession.uploadFile(localPath, remotePath, { exclusive: true })
   }
 }

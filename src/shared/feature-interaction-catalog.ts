@@ -59,8 +59,8 @@ export type FeatureInteractionDefinition = {
   interaction: string
 }
 
-// Why: these ids become persisted product state; see
-// docs/reference/feature-discovery-interaction-tracking.md before changing them.
+// Why: these ids become persisted product state; changing them breaks
+// feature-discovery interaction tracking.
 export const FEATURE_INTERACTIONS = [
   { id: 'workspace-board', interaction: 'workspace board opened' },
   {

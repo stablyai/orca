@@ -2,7 +2,6 @@ import {
   collectCompactWorkspaceWords,
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
-import { formatIdentifierFirst } from './work-item-reference'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
@@ -215,10 +214,7 @@ export function getWorkspaceIntentName(args: {
     const action = detectIntentAction(sourceText) ?? defaultActionForWorkItem(item)
     const identity = workItemIdentity(item)
     if (action) {
-      // Identifier-first so the sidebar leads with the searchable token
-      // (`PR 1033 - Review`); the shared formatIdentifierFirst keeps first-create,
-      // auto-rename, and tab-title names on one format.
-      displayName = formatIdentifierFirst(identity, action)
+      displayName = `${action} ${identity}`
     } else {
       const subject = compactWorkItemTitle(item.title, item)
       displayName = [identity, subject].filter(Boolean).join(' ')

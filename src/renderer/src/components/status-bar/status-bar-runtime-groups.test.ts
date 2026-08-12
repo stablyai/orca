@@ -116,10 +116,12 @@ describe('status bar runtime switch groups', () => {
     expect(
       getStatusBarPreferredWslDistro(
         {
+          localAccountRuntime: 'wsl',
           localAccountWslDistro: null,
           terminalWindowsWslDistro: 'Debian'
         } as GlobalSettings,
-        ['Ubuntu']
+        ['Ubuntu'],
+        'win32'
       )
     ).toBe('Ubuntu')
   })
@@ -128,12 +130,28 @@ describe('status bar runtime switch groups', () => {
     expect(
       getStatusBarPreferredWslDistro(
         {
+          localAccountRuntime: 'wsl',
           localAccountWslDistro: 'Fedora',
           terminalWindowsWslDistro: 'Debian'
         } as GlobalSettings,
-        ['Ubuntu']
+        ['Ubuntu'],
+        'win32'
       )
     ).toBe('Fedora')
+  })
+
+  it('uses the auto runtime distro instead of a stale account-runtime distro', () => {
+    expect(
+      getStatusBarPreferredWslDistro(
+        {
+          localAccountRuntime: 'auto',
+          localAccountWslDistro: 'Fedora',
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+        } as GlobalSettings,
+        ['Fedora', 'Ubuntu'],
+        'win32'
+      )
+    ).toBe('Ubuntu')
   })
 
   it('labels the host account group with the active remote server name', () => {

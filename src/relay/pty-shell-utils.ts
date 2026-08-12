@@ -1,4 +1,4 @@
-import { execFile as execFileCb } from 'node:child_process'
+import { execFile as execFileCb, execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
@@ -11,6 +11,10 @@ import {
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
 import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  resolveOuterWrapperForegroundProcess,
+  shouldInspectOuterWrapperForegroundProcess
+} from '../shared/foreground-wrapper-agent'
 import { isShellProcess } from '../shared/shell-process-detection'
 import {
   resolveWindowsAgentForegroundProcess,
@@ -19,13 +23,42 @@ import {
 
 const execFile = promisify(execFileCb)
 
+const OPENSSH_REGISTRY_KEY = 'HKLM\\SOFTWARE\\OpenSSH'
+let openSshDefaultShell: string | undefined
+
+export function readOpenSshDefaultShell(): string {
+  if (openSshDefaultShell !== undefined) {
+    return openSshDefaultShell
+  }
+
+  try {
+    const output = execFileSync('reg.exe', ['query', OPENSSH_REGISTRY_KEY, '/v', 'DefaultShell'], {
+      encoding: 'utf8',
+      timeout: 3000,
+      windowsHide: true
+    })
+    const match = output.match(/^\s*DefaultShell\s+REG_\w+\s+(.+?)\s*$/im)
+    openSshDefaultShell = match?.[1] ?? ''
+  } catch {
+    openSshDefaultShell = ''
+  }
+
+  return openSshDefaultShell
+}
+
 export function resolveWindowsDefaultShell(
   env: NodeJS.ProcessEnv = process.env,
-  existsPath: (path: string) => boolean = existsSync
+  existsPath: (path: string) => boolean = existsSync,
+  readDefaultShell: () => string = readOpenSshDefaultShell
 ): string {
   const envShell = env.SHELL
   if (envShell && existsPath(envShell)) {
     return envShell
+  }
+
+  const configuredShell = readDefaultShell()
+  if (configuredShell && existsPath(configuredShell)) {
+    return configuredShell
   }
 
   const systemRoot = env.SystemRoot || env.WINDIR || env.windir || 'C:\\Windows'
@@ -232,7 +265,9 @@ async function getRecognizedForegroundDescendant(
     for (const candidate of inspectionCandidates) {
       const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
       if (recognized) {
-        return recognized.processName
+        // Why: return the outer wrapper (omp) rather than the deeper wrapped child
+        // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
+        return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
       }
     }
   } catch {
@@ -251,6 +286,20 @@ export async function getForegroundProcessName(
   if (fallbackProcess) {
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
     if (fallbackRecognition) {
+      // Why: node-pty can report OMP's wrapped Pi; enrich only that ambiguous
+      // fallback so authoritative OMP reads keep the zero-subprocess fast path.
+      if (shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) {
+        if (process.platform === 'win32') {
+          return (
+            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ??
+            fallbackRecognition.processName
+          )
+        }
+        return (
+          (await getRecognizedForegroundDescendant(pid, fallbackProcess)) ??
+          fallbackRecognition.processName
+        )
+      }
       return fallbackRecognition.processName
     }
     if (process.platform === 'win32') {

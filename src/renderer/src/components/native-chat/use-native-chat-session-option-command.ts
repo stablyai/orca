@@ -6,7 +6,8 @@ import {
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
-import { sendNativeChatMessageVerified } from './native-chat-runtime-send'
+import { sendNativeChatMessageVerified, typeNativeChatCommand } from './native-chat-runtime-send'
+import { cancelNativeChatPtySends, waitForNativeChatPtyIdle } from './native-chat-pty-send-queue'
 import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver
@@ -53,36 +54,52 @@ export function useNativeChatSessionOptionCommand(args: {
       if (!target || disabled) {
         throw new Error('No live terminal is available.')
       }
-      const detectClaudeConfirmation =
-        options?.detectAgentInteraction === 'claude-model-switch-confirmation'
-      let observer: ClaudeModelSwitchConfirmationObserver | null = null
-      if (detectClaudeConfirmation) {
-        observer = createClaudeModelSwitchConfirmationObserver({
-          ptyId: target.ptyId,
-          settings: target.settings,
-          expectedModelLabel: options?.expectedChoiceLabel ?? null
-        })
-        activeObserversRef.current.add(observer)
-        await observer.ready
-        if (!mountedRef.current) {
-          activeObserversRef.current.delete(observer)
-          observer.dispose()
-          throw new Error('Native chat command was canceled because the composer closed.')
-        }
-        // Why: arm only after the observer reaches the live PTY tail, then
-        // submit immediately so historical output cannot satisfy the match.
-        observer.arm()
-      }
       const sendController = new AbortController()
       activeSendsRef.current.add(sendController)
+      // Why: block composer chat sends for the whole drain+observe+verify window.
       setIsDispatching(true)
+      let observer: ClaudeModelSwitchConfirmationObserver | null = null
       try {
-        const accepted = await sendNativeChatMessageVerified(
-          target.settings,
-          target.ptyId,
-          command,
-          sendController.signal
-        )
+        // Why: chat sends keep a delayed Enter for 500ms. Drain them *before*
+        // arming the model-switch observer so (a) that Enter cannot hit Claude's
+        // confirmation UI and (b) any Ctrl+U cleanup is outside the observation
+        // window (Ctrl+U mid-observe can miss "Set model to …" markers).
+        cancelNativeChatPtySends(target.ptyId)
+        await waitForNativeChatPtyIdle(target.ptyId)
+        if (!mountedRef.current || sendController.signal.aborted) {
+          throw new Error('Chat UI command was canceled because the composer closed.')
+        }
+        const detectClaudeConfirmation =
+          options?.detectAgentInteraction === 'claude-model-switch-confirmation'
+        if (detectClaudeConfirmation) {
+          observer = createClaudeModelSwitchConfirmationObserver({
+            ptyId: target.ptyId,
+            settings: target.settings,
+            expectedModelLabel: options?.expectedChoiceLabel ?? null
+          })
+          activeObserversRef.current.add(observer)
+          await observer.ready
+          if (!mountedRef.current || sendController.signal.aborted) {
+            throw new Error('Chat UI command was canceled because the composer closed.')
+          }
+          // Why: arm only after the observer reaches the live PTY tail, then
+          // submit immediately so historical output cannot satisfy the match.
+          observer.arm()
+        }
+        const accepted =
+          agent === 'codex'
+            ? await typeNativeChatCommand(
+                target.settings,
+                target.ptyId,
+                command,
+                sendController.signal
+              )
+            : await sendNativeChatMessageVerified(
+                target.settings,
+                target.ptyId,
+                command,
+                sendController.signal
+              )
         if (!accepted) {
           throw new Error('The terminal did not accept the command.')
         }

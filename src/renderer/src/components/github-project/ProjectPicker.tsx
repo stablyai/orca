@@ -3,7 +3,7 @@
 // header tab strip). Pinned + Recent come from settings; Browse all lazy-loads
 // from `listAccessibleProjects` and is cached for 5 minutes. Paste-to-add
 // accepts org/user project URLs and `owner/number` shorthand.
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ChevronDown, Loader, Pin, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { GhAuthErrorHelp } from '@/components/github-project/GhAuthErrorHelp'
@@ -36,11 +36,16 @@ import {
   rememberProjectPickerBrowseCacheEntry
 } from './project-picker-browse-cache'
 import { translate } from '@/i18n/i18n'
+import {
+  githubProjectHost,
+  githubProjectIdentityKey
+} from '../../../../shared/github-project-identity'
 
 export type ResolvedProjectSelection = {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
+  host?: string
   viewId?: string
 }
 
@@ -49,35 +54,46 @@ type Props = {
     owner: string
     ownerType: GitHubProjectOwnerType
     number: number
+    host?: string
     title?: string
   } | null
   onSelect: (selection: ResolvedProjectSelection) => void
 }
 
 function getProjectPickerRuntimeScope(
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  host: string
 ): string {
   const target = getActiveRuntimeTarget(settings)
-  return target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+  const runtimeScope = target.kind === 'environment' ? `runtime:${target.environmentId}` : 'local'
+  return `${runtimeScope}\0${host.toLowerCase()}`
 }
 
 async function listAccessibleProjectsForRuntime(
-  settings: Parameters<typeof getActiveRuntimeTarget>[0]
+  settings: Parameters<typeof getActiveRuntimeTarget>[0],
+  host: string
 ): Promise<ListAccessibleProjectsResult> {
   const target = getActiveRuntimeTarget(settings)
+  const args = { host }
   return target.kind === 'environment'
-    ? callRuntimeRpc<ListAccessibleProjectsResult>(
-        target,
-        'github.project.listAccessible',
-        {},
-        { timeoutMs: 60_000 }
-      )
-    : window.api.gh.listAccessibleProjects()
+    ? callRuntimeRpc<ListAccessibleProjectsResult>(target, 'github.project.listAccessible', args, {
+        timeoutMs: 60_000
+      })
+    : window.api.gh.listAccessibleProjects(args)
+}
+
+export function getProjectPickerBrowseHost(activeProject: { host?: string } | null): string {
+  return githubProjectHost(activeProject?.host).toLowerCase()
 }
 
 async function listProjectViewsForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  args: { owner: string; ownerType: GitHubProjectOwnerType; projectNumber: number }
+  args: {
+    owner: string
+    ownerType: GitHubProjectOwnerType
+    projectNumber: number
+    host?: string
+  }
 ): Promise<ListProjectViewsResult> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
@@ -89,17 +105,18 @@ async function listProjectViewsForRuntime(
 
 async function resolveProjectRefForRuntime(
   settings: Parameters<typeof getActiveRuntimeTarget>[0],
-  input: string
+  input: string,
+  host?: string
 ): Promise<ResolveProjectRefResult> {
   const target = getActiveRuntimeTarget(settings)
   return target.kind === 'environment'
     ? callRuntimeRpc<ResolveProjectRefResult>(
         target,
         'github.project.resolveRef',
-        { input },
+        { input, ...(host ? { host } : {}) },
         { timeoutMs: 30_000 }
       )
-    : window.api.gh.resolveProjectRef({ input })
+    : window.api.gh.resolveProjectRef({ input, ...(host ? { host } : {}) })
 }
 
 export default function ProjectPicker({ activeProject, onSelect }: Props): React.JSX.Element {
@@ -121,7 +138,16 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [query, setQuery] = useState('')
   const [browseLoading, setBrowseLoading] = useState(false)
   const [browseError, setBrowseError] = useState<GitHubProjectViewError | null>(null)
-  const browseCache = peekProjectPickerBrowseCacheEntry(getProjectPickerRuntimeScope(settings))
+  const browseHost = getProjectPickerBrowseHost(activeProject ?? projectSettings.activeProject)
+  const browseCacheKey = getProjectPickerRuntimeScope(settings, browseHost)
+  const activeBrowseCacheKeyRef = useRef(browseCacheKey)
+  // Why: sync the ref after commit, not during render — a discarded concurrent
+  // render must not publish a newer cache key that drops the committed tree's
+  // in-flight browse request.
+  useLayoutEffect(() => {
+    activeBrowseCacheKeyRef.current = browseCacheKey
+  }, [browseCacheKey])
+  const browseCache = peekProjectPickerBrowseCacheEntry(browseCacheKey)
   const [browseProjects, setBrowseProjects] = useState<GitHubProjectSummary[]>(
     () => browseCache?.projects ?? []
   )
@@ -142,46 +168,52 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
   const [viewLoading, setViewLoading] = useState(false)
 
   const loadBrowse = useCallback(async () => {
-    const cacheKey = getProjectPickerRuntimeScope(settings)
+    const cacheKey = browseCacheKey
     const cached = getProjectPickerBrowseCacheEntry(cacheKey)
     if (cached) {
+      setBrowseLoading(false)
+      setBrowseError(null)
       setBrowseProjects(cached.projects)
       setPartialFailures(cached.partialFailures ?? [])
       return
     }
     setBrowseLoading(true)
     setBrowseError(null)
+    setBrowseProjects([])
+    setPartialFailures([])
     try {
-      const res = await listAccessibleProjectsForRuntime(settings)
+      const res = await listAccessibleProjectsForRuntime(settings, browseHost)
       if (res.ok) {
         rememberProjectPickerBrowseCacheEntry(cacheKey, {
           projects: res.projects,
           partialFailures: res.partialFailures
         })
-        if (!mountedRef.current) {
+        // Why: runtime or active-host changes can leave the prior request in
+        // flight; its scoped cache is useful, but its rows must not cross hosts.
+        if (!mountedRef.current || activeBrowseCacheKeyRef.current !== cacheKey) {
           return
         }
         setBrowseProjects(res.projects)
         setPartialFailures(res.partialFailures ?? [])
       } else {
-        if (!mountedRef.current) {
+        if (!mountedRef.current || activeBrowseCacheKeyRef.current !== cacheKey) {
           return
         }
         setBrowseError(res.error)
       }
     } catch (err) {
-      if (mountedRef.current) {
+      if (mountedRef.current && activeBrowseCacheKeyRef.current === cacheKey) {
         setBrowseError({
           type: 'unknown',
           message: err instanceof Error ? err.message : 'Failed to list projects'
         })
       }
     } finally {
-      if (mountedRef.current) {
+      if (mountedRef.current && activeBrowseCacheKeyRef.current === cacheKey) {
         setBrowseLoading(false)
       }
     }
-  }, [mountedRef, settings])
+  }, [browseCacheKey, browseHost, mountedRef, settings])
 
   useEffect(() => {
     if (open && !viewPickFor) {
@@ -203,16 +235,22 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
 
   const commitSelection = useCallback(
     async (selection: ResolvedProjectSelection, title: string | null) => {
-      const key = `${selection.ownerType}:${selection.owner}:${selection.projectNumber}`
+      const key = githubProjectIdentityKey({
+        owner: selection.owner,
+        ownerType: selection.ownerType,
+        number: selection.projectNumber,
+        host: selection.host
+      })
       await updateProjectSettings((prev) => {
         const recent = [
           {
             owner: selection.owner,
             ownerType: selection.ownerType,
             number: selection.projectNumber,
+            host: githubProjectHost(selection.host),
             lastOpenedAt: new Date().toISOString()
           },
-          ...prev.recent.filter((r) => `${r.ownerType}:${r.owner}:${r.number}` !== key)
+          ...prev.recent.filter((r) => githubProjectIdentityKey(r) !== key)
         ].slice(0, 10)
         const lastViewByProject = { ...prev.lastViewByProject }
         if (selection.viewId) {
@@ -225,7 +263,8 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
           activeProject: {
             owner: selection.owner,
             ownerType: selection.ownerType,
-            number: selection.projectNumber
+            number: selection.projectNumber,
+            host: githubProjectHost(selection.host)
           }
         }
       })
@@ -246,13 +285,14 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
       owner: string
       ownerType: GitHubProjectOwnerType
       number: number
+      host?: string
       title?: string
       // Why: when the paste resolver parsed a /views/{n} URL, the caller
       // passes the view number through so we can skip the view-pick step
       // and commit directly once listProjectViews returns the matching id.
       viewNumber?: number
     }) => {
-      const key = `${selection.ownerType}:${selection.owner}:${selection.number}`
+      const key = githubProjectIdentityKey(selection)
       const lastView = projectSettings.lastViewByProject[key]?.viewId
       // Why: an explicit viewNumber from the URL takes precedence over the
       // remembered last view — the user's intent (paste this exact view) wins
@@ -263,6 +303,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
             owner: selection.owner,
             ownerType: selection.ownerType,
             projectNumber: selection.number,
+            host: githubProjectHost(selection.host),
             viewId: lastView
           },
           selection.title ?? null
@@ -273,14 +314,16 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
       setViewPickFor({
         owner: selection.owner,
         ownerType: selection.ownerType,
-        projectNumber: selection.number
+        projectNumber: selection.number,
+        host: githubProjectHost(selection.host)
       })
       setViewLoading(true)
       try {
         const res = await listProjectViewsForRuntime(settings, {
           owner: selection.owner,
           ownerType: selection.ownerType,
-          projectNumber: selection.number
+          projectNumber: selection.number,
+          host: githubProjectHost(selection.host)
         })
         if (!mountedRef.current) {
           return
@@ -299,6 +342,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                   owner: selection.owner,
                   ownerType: selection.ownerType,
                   projectNumber: selection.number,
+                  host: githubProjectHost(selection.host),
                   viewId: match.id
                 },
                 selection.title ?? null
@@ -348,7 +392,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
     setPasteError(null)
     setPasteBusy(true)
     try {
-      const res = await resolveProjectRefForRuntime(settings, input)
+      const res = await resolveProjectRefForRuntime(settings, input, parsed.host)
       if (!mountedRef.current) {
         return
       }
@@ -361,6 +405,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
         owner: res.owner,
         ownerType: res.ownerType,
         number: res.number,
+        host: githubProjectHost(res.host ?? parsed.host),
         title: res.title,
         // Why: forward the parsed view number from /views/{n} URLs so the
         // chooser can skip the view-pick step and commit directly.
@@ -426,7 +471,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 />
               </div>
             </div>
-            {browseError ? <AuthErrorBanner error={browseError} /> : null}
+            {browseError ? <AuthErrorBanner error={browseError} host={browseHost} /> : null}
             {!browseError && partialFailures.length > 0 ? (
               <PartialFailuresBanner failures={partialFailures} />
             ) : null}
@@ -439,11 +484,9 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                   )}
                 >
                   {projectSettings.pinned.map((p) => {
-                    const key = `${p.ownerType}:${p.owner}:${p.number}`
+                    const key = githubProjectIdentityKey(p)
                     const knownGood = projectSettings.lastViewByProject[key]?.viewId != null
-                    const match = browseProjects.find(
-                      (bp) => `${bp.ownerType}:${bp.owner}:${bp.number}` === key
-                    )
+                    const match = browseProjects.find((bp) => githubProjectIdentityKey(bp) === key)
                     return (
                       <PickerRow
                         key={key}
@@ -455,15 +498,14 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                             owner: p.owner,
                             ownerType: p.ownerType,
                             number: p.number,
+                            host: githubProjectHost(p.host),
                             title: match?.title
                           })
                         }
                         onRemovePin={async () => {
                           await updateProjectSettings((prev) => ({
                             ...prev,
-                            pinned: prev.pinned.filter(
-                              (x) => `${x.ownerType}:${x.owner}:${x.number}` !== key
-                            )
+                            pinned: prev.pinned.filter((x) => githubProjectIdentityKey(x) !== key)
                           }))
                         }}
                       />
@@ -482,16 +524,13 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                     .filter(
                       (r) =>
                         !projectSettings.pinned.some(
-                          (p) =>
-                            p.ownerType === r.ownerType &&
-                            p.owner === r.owner &&
-                            p.number === r.number
+                          (p) => githubProjectIdentityKey(p) === githubProjectIdentityKey(r)
                         )
                     )
                     .map((r) => {
-                      const key = `${r.ownerType}:${r.owner}:${r.number}`
+                      const key = githubProjectIdentityKey(r)
                       const match = browseProjects.find(
-                        (bp) => `${bp.ownerType}:${bp.owner}:${bp.number}` === key
+                        (bp) => githubProjectIdentityKey(bp) === key
                       )
                       const pinnable = projectSettings.lastViewByProject[key]?.viewId != null
                       return (
@@ -505,7 +544,12 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                               ...prev,
                               pinned: [
                                 ...prev.pinned,
-                                { owner: r.owner, ownerType: r.ownerType, number: r.number }
+                                {
+                                  owner: r.owner,
+                                  ownerType: r.ownerType,
+                                  number: r.number,
+                                  host: githubProjectHost(r.host)
+                                }
                               ].slice(0, 20)
                             }))
                           }}
@@ -514,6 +558,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                               owner: r.owner,
                               ownerType: r.ownerType,
                               number: r.number,
+                              host: githubProjectHost(r.host),
                               title: match?.title
                             })
                           }
@@ -546,7 +591,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                 ) : null}
                 {filteredBrowse.map((p) => (
                   <PickerRow
-                    key={`${p.ownerType}:${p.owner}:${p.number}`}
+                    key={githubProjectIdentityKey(p)}
                     title={p.title}
                     subtitle={p.owner}
                     onClick={() =>
@@ -554,6 +599,7 @@ export default function ProjectPicker({ activeProject, onSelect }: Props): React
                         owner: p.owner,
                         ownerType: p.ownerType,
                         number: p.number,
+                        host: githubProjectHost(p.host),
                         title: p.title
                       })
                     }
@@ -784,12 +830,19 @@ function PartialFailuresBanner({
   )
 }
 
-function AuthErrorBanner({ error }: { error: GitHubProjectViewError }): React.JSX.Element {
+function AuthErrorBanner({
+  error,
+  host
+}: {
+  error: GitHubProjectViewError
+  host: string
+}): React.JSX.Element {
   if (error.type === 'auth_required' || error.type === 'scope_missing') {
     return (
       <GhAuthErrorHelp
         error={error as GitHubProjectViewError & { type: 'auth_required' | 'scope_missing' }}
         variant="banner"
+        host={host}
       />
     )
   }
@@ -801,41 +854,54 @@ function AuthErrorBanner({ error }: { error: GitHubProjectViewError }): React.JS
   )
 }
 
-function parseProjectInput(
+export function parseProjectInput(
   input: string
-): { owner: string; number: number; viewNumber?: number } | null {
-  if (!input) {
+): { owner: string; number: number; host?: string; viewNumber?: number } | null {
+  const trimmed = input.trim()
+  if (!trimmed) {
     return null
   }
-  if (isGitHubProjectRefInputTooLarge(input)) {
+  if (isGitHubProjectRefInputTooLarge(trimmed)) {
     return null
   }
   // owner/number
-  const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(input)
+  const short = /^([A-Za-z0-9][A-Za-z0-9-]*)\/(\d+)$/.exec(trimmed)
   if (short) {
-    return { owner: short[1], number: Number(short[2]) }
+    const number = Number(short[2])
+    return Number.isSafeInteger(number) && number > 0 ? { owner: short[1], number } : null
   }
   try {
-    const url = new URL(input)
-    if (url.hostname !== 'github.com') {
+    const url = new URL(trimmed)
+    if (
+      (url.protocol !== 'https:' && url.protocol !== 'http:') ||
+      url.username ||
+      url.password ||
+      !url.host
+    ) {
       return null
     }
     const parts = url.pathname.split('/').filter(Boolean)
+    const hasView = parts.length === 6 && parts[4] === 'views'
     // /orgs/{owner}/projects/{n} or /users/{owner}/projects/{n}[/views/{viewNumber}]
-    if ((parts[0] === 'orgs' || parts[0] === 'users') && parts[2] === 'projects' && parts[3]) {
+    if (
+      (parts[0] === 'orgs' || parts[0] === 'users') &&
+      /^[A-Za-z0-9][A-Za-z0-9-]*$/.test(parts[1] ?? '') &&
+      parts[2] === 'projects' &&
+      (parts.length === 4 || hasView)
+    ) {
       const owner = parts[1]
       const number = Number(parts[3])
-      if (Number.isNaN(number)) {
+      const viewNumber = hasView ? Number(parts[5]) : undefined
+      if (
+        !Number.isSafeInteger(number) ||
+        number < 1 ||
+        (hasView && (!Number.isSafeInteger(viewNumber) || (viewNumber ?? 0) < 1))
+      ) {
         return null
       }
-      let viewNumber: number | undefined
-      if (parts[4] === 'views' && parts[5]) {
-        const v = Number(parts[5])
-        if (!Number.isNaN(v)) {
-          viewNumber = v
-        }
-      }
-      return { owner, number, viewNumber }
+      // Why: URL.host preserves non-default GHES ports; URL.hostname would
+      // silently route a project on :8443 to the server's default port.
+      return { owner, number, host: url.host.toLowerCase(), viewNumber }
     }
   } catch {
     return null

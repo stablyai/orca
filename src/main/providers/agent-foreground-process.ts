@@ -1,4 +1,5 @@
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot,
@@ -101,7 +102,8 @@ export async function resolveAgentForegroundProcessWithAvailability(
       processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
     }
   } catch {
-    return { available: !options.fresh, processName: fallbackProcess }
+    // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.
+    return { available: false, processName: fallbackProcess }
   }
 }
 
@@ -125,7 +127,9 @@ function resolveAgentForegroundProcessFromPs(
     }
     const recognized = recognizeAgentProcessFromCommandLine(candidate.command)
     if (recognized) {
-      return recognized.processName
+      // Why: return the outer wrapper (omp) rather than the deeper wrapped child
+      // (pi) of a shell→omp→pi tree — see resolveOuterWrapperForegroundProcess.
+      return resolveOuterWrapperForegroundProcess(recognized, candidate, candidates)
     }
   }
   return null

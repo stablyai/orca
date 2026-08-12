@@ -1,8 +1,6 @@
-/* eslint-disable max-lines -- Why: the collector's platform-specific
-   enumeration paths (`ps` on Unix, `wmic` on Windows) plus the history
-   ring buffer plus the Electron bucketing live together to keep one
-   snapshot's worth of code in one place. Splitting them produces extra
-   modules whose only consumer is this file. */
+/* eslint-disable max-lines -- Why: the collector's host-process index,
+   history ring buffer, Electron bucketing, and worktree attribution live
+   together to keep one snapshot's orchestration in one place. */
 /**
  * Memory dashboard collector.
  *
@@ -10,7 +8,7 @@
  *   - Orca's own Electron processes, via `app.getAppMetrics()`, bucketed
  *     into main / renderer / other.
  *   - Each registered PTY's process subtree, enumerated once from a host-
- *     wide `ps` sweep (`wmic` on Windows).
+ *     wide process sweep (PowerShell CIM with a Typeperf fallback on Windows).
  *
  * Memory samples are held in a per-key ring (one key per worktree, plus
  * a reserved app-total key) so the UI can draw a trend sparkline.
@@ -29,16 +27,13 @@ import {
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
 import { app } from 'electron'
-import type {
-  AppMemory,
-  MemorySnapshot,
-  HostMemory,
-  SessionMemory,
-  WorktreeMemory
-} from '../../shared/types'
+import type { AppMemory, MemorySnapshot, SessionMemory, WorktreeMemory } from '../../shared/types'
 import type { Store } from '../persistence'
 import { ORPHAN_WORKTREE_ID } from '../../shared/constants'
 import { listRegisteredPtys } from './pty-registry'
+import { enumerateWindowsProcessResources } from './windows-process-resource-collector'
+import { collectHostMemory, fallbackHostMemory } from './host-memory'
+import { getProcessMemoryMetric } from './process-memory-metric'
 
 export type MemorySnapshotStore = Pick<Store, 'getRepo' | 'getWorktreeMeta'>
 
@@ -77,13 +72,13 @@ const PS_MAX_BUFFER = 10 * 1024 * 1024
 type ProcRow = {
   pid: number
   ppid: number
-  /** Percent of one core (may exceed 100 on multi-core). 0 on Windows. */
+  /** Percent of one core (may exceed 100 on multi-core). */
   cpu: number
   /** Resident memory in bytes. */
   memory: number
 }
 
-/** Indexed view of a single `ps`/`wmic` sweep. */
+/** Indexed view of a single host process sweep. */
 type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
@@ -96,26 +91,13 @@ function clampNumber(value: unknown): number {
   return Math.max(0, value)
 }
 
-function hostMetrics(): HostMemory {
-  const total = clampNumber(os.totalmem())
-  const free = clampNumber(os.freemem())
-  const used = Math.max(0, total - free)
-  return {
-    totalMemory: total,
-    freeMemory: free,
-    usedMemory: used,
-    memoryUsagePercent: total > 0 ? (used / total) * 100 : 0,
-    cpuCoreCount: Math.max(1, os.cpus().length),
-    loadAverage1m: clampNumber(os.loadavg()[0])
-  }
-}
-
 function emptySnapshot(): MemorySnapshot {
   const zero = { cpu: 0, memory: 0 }
   return {
     app: { ...zero, main: zero, renderer: zero, other: zero, history: [] },
     worktrees: [],
-    host: hostMetrics(),
+    host: fallbackHostMemory(),
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: 0,
     totalMemory: 0,
     collectedAt: Date.now()
@@ -226,69 +208,8 @@ export function parsePsOutput(stdout: string): ProcRow[] {
 }
 
 async function enumerateWindows(): Promise<ProcRow[]> {
-  // Why: `wmic` ships with stock Windows and emits a plain, tab-separated
-  // table without the CSV-quoting edge cases PowerShell's ConvertTo-Csv
-  // introduces. CPU% would require delta sampling between two queries; for
-  // v1 we report 0% on Windows — memory attribution is the primary signal.
-  try {
-    const { stdout } = await execAsync(
-      'wmic process get ProcessId,ParentProcessId,WorkingSetSize /format:value',
-      { maxBuffer: PS_MAX_BUFFER, timeout: PS_EXEC_TIMEOUT_MS }
-    )
-    return parseWmicOutput(stdout)
-  } catch (err) {
-    console.warn('[memory] wmic enumeration failed', err)
-    return []
-  }
+  return enumerateWindowsProcessResources()
 }
-
-/** Exported for tests: parses `wmic /format:value` stanza output. */
-export function parseWmicOutput(stdout: string): ProcRow[] {
-  // wmic /format:value emits stanzas of `Key=Value` lines separated by blank
-  // lines. We accumulate a record until a blank line, then flush.
-  const rows: ProcRow[] = []
-  let pid = Number.NaN
-  let ppid = Number.NaN
-  let ws = Number.NaN
-
-  const flush = (): void => {
-    if (!Number.isNaN(pid) && !Number.isNaN(ppid)) {
-      rows.push({
-        pid,
-        ppid,
-        cpu: 0,
-        memory: Number.isFinite(ws) && ws > 0 ? ws : 0
-      })
-    }
-    pid = Number.NaN
-    ppid = Number.NaN
-    ws = Number.NaN
-  }
-
-  for (const raw of stdout.split(/\r?\n/)) {
-    const line = raw.trim()
-    if (line.length === 0) {
-      flush()
-      continue
-    }
-    const eq = line.indexOf('=')
-    if (eq < 0) {
-      continue
-    }
-    const key = line.slice(0, eq)
-    const value = line.slice(eq + 1)
-    if (key === 'ProcessId') {
-      pid = Number.parseInt(value, 10)
-    } else if (key === 'ParentProcessId') {
-      ppid = Number.parseInt(value, 10)
-    } else if (key === 'WorkingSetSize') {
-      ws = Number.parseInt(value, 10)
-    }
-  }
-  flush()
-  return rows
-}
-
 /** Walk every descendant PID of `root`, inclusive. Exported for tests. */
 export function collectSubtree(index: ProcIndex, root: number): number[] {
   const result: number[] = []
@@ -414,7 +335,7 @@ function makeEmptyBucket(
 // ─── Main collection path ───────────────────────────────────────────
 
 async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> {
-  const processIndex = await enumerateProcesses()
+  const [processIndex, host] = await Promise.all([enumerateProcesses(), collectHostMemory()])
   const appBuckets = bucketElectronMetrics(processIndex)
   const ptys = listRegisteredPtys()
 
@@ -508,7 +429,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   return {
     app: { ...appBuckets, history: readHistory(APP_HISTORY_KEY) },
     worktrees,
-    host: hostMetrics(),
+    host,
+    processMemoryMetric: getProcessMemoryMetric(),
     totalCpu: appBuckets.cpu + sessionCpuTotal,
     totalMemory: appBuckets.memory + sessionMemoryTotal,
     collectedAt: now

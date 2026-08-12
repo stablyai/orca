@@ -26,6 +26,7 @@ describe('shared control keepalive timeout refresh semantics', () => {
     const pendingRequests = new Map<string, SharedControlPendingRequest<unknown>>()
     const promise = requestSharedControl({
       pendingRequests,
+      deviceToken: 'device-token',
       method: 'git.status',
       params: undefined,
       timeoutMs: 1000,

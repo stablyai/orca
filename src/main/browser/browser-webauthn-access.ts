@@ -15,7 +15,7 @@ function isSecureBrowserOrigin(rawOrigin: string | undefined): boolean {
   }
 }
 
-function isFidoHidDevice(device: Electron.HIDDevice | unknown): device is Electron.HIDDevice {
+function isFidoHidDevice(device: unknown): device is Electron.HIDDevice {
   if (!device || typeof device !== 'object') {
     return false
   }

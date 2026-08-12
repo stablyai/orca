@@ -5,12 +5,12 @@ import { translateSearchKeyword } from './settings-search-keywords'
 /** Stable Settings deep-link / scroll target for the Used/Remaining control. */
 export const USAGE_PERCENTAGE_DISPLAY_SETTING_ID = 'usage-percentage-display'
 
-/** Appearance accordion keys that can be force-opened for nested deep links. */
+/** Appearance section keys that can be force-opened for nested deep links. */
 export type AppearanceAccordionSection = 'interface' | 'terminal' | 'window'
 
 /**
- * Map a Settings subsection id to the Appearance accordion that must be open
- * before the row is visible (collapsed accordion content is not user-visible).
+ * Map a Settings subsection id to the Appearance section that must be open
+ * before the row is visible (collapsed section content is not user-visible).
  */
 export function resolveAppearanceAccordionDeepLink(
   sectionId: string | undefined

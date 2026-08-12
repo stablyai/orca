@@ -1,4 +1,4 @@
-import { branchName } from '@/lib/git-utils'
+import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
@@ -35,7 +35,9 @@ export function buildWorktreeChecksReviewIndex({
     if (!repo) {
       continue
     }
-    const branch = branchName(worktree.branch)
+    // Why: Cmd+J builds this index for every worktree before search runs, so a
+    // branch-less folder workspace or partially hydrated row must not throw here.
+    const branch = resolveWorktreeBranchLabel(worktree)
     const prKey = getGitHubPRCacheKey(
       repo.path,
       repo.id,

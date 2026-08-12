@@ -20,8 +20,8 @@ function subagentRowKey(parentPaneKey: string, subagentId: string): string {
 export function buildSubagentChildRows(args: {
   parentEntry: AgentStatusEntry
   tab: TerminalTab
-  /** Freshness of the parent's hook stream. A stale parent means the child
-   *  working states are equally stale, so they decay to idle together. */
+  /** Freshness of the parent's hook stream. A stale parent means active child
+   *  states are equally stale, so they decay to idle together. */
   parentIsFresh: boolean
 }): DashboardAgentRow[] {
   const subagents = args.parentEntry.subagents
@@ -29,15 +29,17 @@ export function buildSubagentChildRows(args: {
     return []
   }
   return subagents.map((subagent) => {
-    const working = subagent.state === 'working' && args.parentIsFresh
+    const activeState = args.parentIsFresh && subagent.state !== 'idle' ? subagent.state : undefined
+    const state = activeState ?? 'idle'
     const startedAt = subagent.startedAt > 0 ? subagent.startedAt : args.parentEntry.stateStartedAt
     const paneKey = subagentRowKey(args.parentEntry.paneKey, subagent.id)
     const entry: AgentStatusEntry = {
-      state: working ? 'working' : 'done',
-      prompt: subagent.description ?? '',
+      state: activeState ?? 'done',
+      prompt: subagent.description ?? subagent.agentType ?? '',
       updatedAt: args.parentEntry.updatedAt,
       stateStartedAt: startedAt,
       agentType: subagent.agentType,
+      model: subagent.model,
       paneKey,
       worktreeId: args.parentEntry.worktreeId,
       tabId: args.parentEntry.tabId,
@@ -55,7 +57,7 @@ export function buildSubagentChildRows(args: {
       tab: args.tab,
       agentType: subagent.agentType ?? 'unknown',
       rowSource: 'subagent' as const,
-      state: working ? ('working' as const) : ('idle' as const),
+      state,
       activationPaneKey: args.parentEntry.paneKey,
       startedAt
     }

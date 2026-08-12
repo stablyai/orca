@@ -1,0 +1,281 @@
+import type { Cookie, Cookies, Session } from 'electron'
+import { parse as parseDomain } from 'psl'
+
+const GOOGLE_SOURCE_BOUND_COOKIE_NAMES = new Set([
+  'SIDCC',
+  '__Secure-1PSIDCC',
+  '__Secure-3PSIDCC',
+  '__Secure-STRP',
+  'AEC'
+])
+
+export type CookieImportMode = 'merge' | 'replace-imported-domains'
+
+export function normalizeCookieDomain(domain: string): string | null {
+  const candidate = domain.trim().replace(/^\.+/, '')
+  const isBracketedIpv6 = candidate.startsWith('[') && candidate.endsWith(']')
+  if (!candidate || /[/\\@?#%]/.test(candidate) || (!isBracketedIpv6 && candidate.includes(':'))) {
+    return null
+  }
+  try {
+    const parsed = new URL(`https://${candidate}/`)
+    const normalized = parsed.hostname.toLowerCase()
+    if (
+      parsed.username ||
+      parsed.password ||
+      parsed.port ||
+      parsed.pathname !== '/' ||
+      parsed.search ||
+      parsed.hash ||
+      normalized.endsWith('.') ||
+      normalized.includes('..')
+    ) {
+      return null
+    }
+    return normalized
+  } catch {
+    return null
+  }
+}
+
+export function normalizeCookieImportDomain(domain: string): string | null {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return null
+  }
+  const parsed = parseDomain(normalized)
+  if ('error' in parsed) {
+    return normalized.startsWith('[') && normalized.endsWith(']') ? normalized : null
+  }
+  if (parsed.domain === null && parsed.listed) {
+    return null
+  }
+  return normalized
+}
+
+// Why (STA-3811): registrable families whose sessions are device-bound server-side, so a
+// transplanted cookie is rejected (or flagged and expired within ~1h) no matter how faithfully
+// it is copied. Signing in directly inside Orca is the only path that produces a working
+// session, so an import must never write these cookies and never remove them either — the
+// live session is always more valuable than anything an import could put in its place.
+// Adding a site is one entry here.
+// youtube.com is deliberately NOT listed: YouTube accepts a transplanted session and re-issues
+// its cookies via the accounts.youtube.com relay, so excluding it would silently drop imports
+// users actually asked for.
+const NON_TRANSPLANTABLE_DOMAINS = ['google.com'] as const
+
+export function isNonTransplantableCookieDomain(domain: string): boolean {
+  const normalized = normalizeCookieDomain(domain)
+  if (!normalized) {
+    return false
+  }
+  return NON_TRANSPLANTABLE_DOMAINS.some(
+    (root) => normalized === root || normalized.endsWith(`.${root}`)
+  )
+}
+
+// Why: Chromium stores host_key lowercase as 'google.com', '.google.com' or 'sub.google.com';
+// the LIKE pattern covers the leading-dot row and cannot match lookalikes ('withgoogle.com').
+export const NON_TRANSPLANTABLE_HOST_KEY_SQL = NON_TRANSPLANTABLE_DOMAINS.map(
+  (root) => `host_key = '${root}' OR host_key LIKE '%.${root}'`
+).join(' OR ')
+
+// Why: subsumed by the domain exclusion above for google.com — kept because it is the general
+// rule for rotation-only cookies and applies to any family added without a full exclusion.
+export function isGoogleSourceBoundCookie(name: string, domain: string): boolean {
+  if (!GOOGLE_SOURCE_BOUND_COOKIE_NAMES.has(name)) {
+    return false
+  }
+  const normalized = normalizeCookieDomain(domain)
+  return normalized === 'google.com' || normalized?.endsWith('.google.com') === true
+}
+
+function domainSuffixes(domain: string): string[] {
+  const labels = domain.split('.')
+  return labels.map((_, index) => labels.slice(index).join('.'))
+}
+
+function importDomainAncestors(domain: string): string[] {
+  const parsed = parseDomain(domain)
+  const boundary = 'error' in parsed ? domain : (parsed.domain ?? domain)
+  const ancestors: string[] = []
+  for (const suffix of domainSuffixes(domain)) {
+    ancestors.push(suffix)
+    if (suffix === boundary) {
+      break
+    }
+  }
+  return ancestors
+}
+
+function importedDomainScopes(domains: readonly string[]): {
+  exact: Set<string>
+  ancestors: Set<string>
+  descendantRoots: Set<string>
+} {
+  const exact = new Set<string>()
+  const ancestors = new Set<string>()
+  const descendantRoots = new Set<string>()
+  const seen = new Set<string>()
+  for (const domain of domains) {
+    const candidate = normalizeCookieDomain(domain)
+    if (!candidate || seen.has(candidate)) {
+      continue
+    }
+    seen.add(candidate)
+    const normalized = normalizeCookieImportDomain(candidate)
+    if (!normalized || exact.has(normalized)) {
+      continue
+    }
+    exact.add(normalized)
+    if (normalized.includes('.')) {
+      descendantRoots.add(normalized)
+    }
+    for (const suffix of importDomainAncestors(normalized)) {
+      ancestors.add(suffix)
+    }
+  }
+  return { exact, ancestors, descendantRoots }
+}
+
+function overlapsImportedDomain(
+  cookie: Cookie,
+  domain: string,
+  scopes: ReturnType<typeof importedDomainScopes>
+): boolean {
+  if (scopes.exact.has(domain)) {
+    return true
+  }
+  if (cookie.hostOnly !== true && scopes.ancestors.has(domain)) {
+    return true
+  }
+  return domainSuffixes(domain).some((suffix) => scopes.descendantRoots.has(suffix))
+}
+
+function cookieRemovalUrl(cookie: Cookie, domain: string): string | null {
+  try {
+    const url = new URL(`${cookie.secure ? 'https' : 'http'}://${domain}/`)
+    url.pathname = cookie.path?.startsWith('/') ? cookie.path : '/'
+    return url.toString()
+  } catch {
+    return null
+  }
+}
+
+export async function restoreImportedDomainCookies(
+  store: Pick<Cookies, 'set'>,
+  cookies: readonly Cookie[]
+): Promise<void> {
+  const failures: unknown[] = []
+  for (const cookie of cookies) {
+    try {
+      const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+      const url = domain ? cookieRemovalUrl(cookie, domain) : null
+      if (!url) {
+        continue
+      }
+      await store.set({
+        url,
+        name: cookie.name,
+        value: cookie.value,
+        ...(cookie.hostOnly ? {} : { domain: cookie.domain }),
+        ...(cookie.path ? { path: cookie.path } : {}),
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        ...(cookie.expirationDate ? { expirationDate: cookie.expirationDate } : {})
+      })
+    } catch (err) {
+      failures.push(err)
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'Could not restore replaced cookies')
+  }
+}
+
+type CookieClearSession = {
+  cookies: Pick<Cookies, 'get' | 'set'>
+  clearStorageData: Session['clearStorageData']
+}
+
+async function restoreCookieClearSnapshot(
+  store: Pick<Cookies, 'set'>,
+  snapshot: readonly Cookie[],
+  originalError: unknown,
+  rollbackMessage: string
+): Promise<never> {
+  try {
+    await restoreImportedDomainCookies(store, snapshot)
+  } catch (rollbackError) {
+    throw new AggregateError([originalError, rollbackError], rollbackMessage)
+  }
+  throw originalError
+}
+
+// Why: after a bulk clear starts, Electron cannot reveal whether a rejected operation mutated
+// the jar, so keep the complete snapshot until excluded cookies have been restored.
+export async function bulkClearCookiesExcept(
+  targetSession: CookieClearSession,
+  isExcluded: (cookie: Cookie) => boolean
+): Promise<void> {
+  const snapshot = await targetSession.cookies.get({})
+  const excludedCookies = snapshot.filter(isExcluded)
+
+  try {
+    await targetSession.clearStorageData({ storages: ['cookies'] })
+  } catch (clearError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([clearError], 'Could not clear existing cookies'),
+      'Cookie bulk clear and rollback failed'
+    )
+  }
+
+  try {
+    await restoreImportedDomainCookies(targetSession.cookies, excludedCookies)
+  } catch (preservationError) {
+    await restoreCookieClearSnapshot(
+      targetSession.cookies,
+      snapshot,
+      new AggregateError([preservationError], 'Could not preserve excluded cookies'),
+      'Cookie preservation and rollback failed'
+    )
+  }
+}
+
+export async function replaceCookiesForImportedDomains(
+  store: Pick<Cookies, 'get' | 'remove' | 'set'>,
+  importedDomains: readonly string[]
+): Promise<Cookie[]> {
+  const scopes = importedDomainScopes(importedDomains)
+  if (scopes.exact.size === 0) {
+    return []
+  }
+
+  const existingCookies = await store.get({})
+  const removedCookies: Cookie[] = []
+  for (const cookie of existingCookies) {
+    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+    if (!domain || !overlapsImportedDomain(cookie, domain, scopes)) {
+      continue
+    }
+    const url = cookieRemovalUrl(cookie, domain)
+    if (!url) {
+      continue
+    }
+    try {
+      await store.remove(url, cookie.name)
+      removedCookies.push(cookie)
+    } catch (err) {
+      try {
+        await restoreImportedDomainCookies(store, removedCookies)
+      } catch (restoreError) {
+        throw new AggregateError([err, restoreError], 'Cookie replacement and rollback failed')
+      }
+      throw err
+    }
+  }
+  return removedCookies
+}

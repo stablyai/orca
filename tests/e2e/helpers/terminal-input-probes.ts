@@ -11,7 +11,7 @@
  *
  * Direct `window.api.pty.write` bypasses the renderer transport, so:
  *   direct dead                 → MAIN-side drop (ownership/provider routing)
- *   direct alive, transport dead → RENDERER transport unbound
+ *   direct alive, renderer dead → RENDERER input path (replay, focus, binding)
  * The ownership-rebuild probe invokes pty:listSessions, which repopulates
  * `ptyOwnership` as a side effect — input reviving after it is a smoking gun
  * for the missing-ownership drop path.
@@ -25,6 +25,7 @@
 
 import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
 import { sendToTerminal, waitForTerminalOutput } from './terminal'
+import { buildSettledShellProbeInputSequence } from '../terminal-probe-input-sequence'
 
 // ─── Page-based probes (healthy CDP session) ────────────────────────
 
@@ -34,9 +35,9 @@ export async function probeDirectWrite(
   marker: string,
   timeoutMs = 10_000
 ): Promise<boolean> {
-  // \x03\x15 = ETX+NAK (interrupt + kill-line) so a TUI or half-typed line on
-  // the shell doesn't swallow the probe — same trick discoverActivePtyId uses.
-  await sendToTerminal(page, ptyId, `\x03\x15echo ${marker}\r`)
+  for (const input of buildSettledShellProbeInputSequence(`echo ${marker}\r`)) {
+    await sendToTerminal(page, ptyId, input)
+  }
   try {
     await waitForTerminalOutput(page, marker, timeoutMs)
     return true
@@ -209,6 +210,7 @@ export async function mainProbeTransportPaste(
   timeoutMs = 10_000
 ): Promise<boolean> {
   try {
+    const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
     const fed = await mainRendererEval<boolean>(
       electronApp,
       `(() => {
@@ -217,7 +219,9 @@ export async function mainProbeTransportPaste(
         for (const manager of managers.values()) {
           const pane = manager.getActivePane?.() ?? (manager.getPanes?.() ?? [])[0]
           if (pane?.terminal?.input) {
-            pane.terminal.input('\\x03\\x15echo ${marker}\\r', true)
+            for (const input of ${JSON.stringify(inputs)}) {
+              pane.terminal.input(input, true)
+            }
             return true
           }
         }
@@ -240,9 +244,10 @@ export async function mainProbeDirectWrite(
   timeoutMs = 10_000
 ): Promise<boolean> {
   try {
+    const inputs = buildSettledShellProbeInputSequence(`echo ${marker}\r`)
     await mainRendererEval<void>(
       electronApp,
-      `window.api.pty.write(${JSON.stringify(ptyId)}, ${JSON.stringify(`\x03\x15echo ${marker}\r`)})`
+      `for (const input of ${JSON.stringify(inputs)}) { window.api.pty.write(${JSON.stringify(ptyId)}, input) }`
     )
   } catch {
     return false
@@ -275,14 +280,20 @@ export function buildFrozenPaneReport(
     directAlive: boolean
     transportAlive: boolean
     revivedByOwnershipRebuild: boolean
+    ownershipRebuildAttempted?: boolean
+    readinessAlive?: boolean
     ptyIds: string[]
     terminalTail: string
   }
 ): string {
   return [
     `REPRODUCED frozen terminal (${context}):`,
+    ...(probes.readinessAlive === undefined
+      ? []
+      : [`  replay + transport readiness probe alive: ${probes.readinessAlive}`]),
     `  direct pty:write probe alive: ${probes.directAlive} (false ⇒ MAIN-side drop: ptyOwnership/provider)`,
-    `  transport (onData→sendInput) probe alive: ${probes.transportAlive} (false with direct alive ⇒ RENDERER transport unbound)`,
+    `  renderer input-path probe alive: ${probes.transportAlive} (false with direct alive ⇒ replay, focus, or renderer binding failure)`,
+    `  ownership rebuild attempted: ${probes.ownershipRebuildAttempted ?? true}`,
     `  revived by pty:listSessions ownership rebuild: ${probes.revivedByOwnershipRebuild}`,
     `  pane ptyIds: ${JSON.stringify(probes.ptyIds)}`,
     `  terminal tail:\n${probes.terminalTail.slice(-600)}`

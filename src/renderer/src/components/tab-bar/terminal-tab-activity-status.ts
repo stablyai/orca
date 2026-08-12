@@ -56,22 +56,21 @@ function getTerminalTabActivityFlags(
   const now = Date.now()
   for (const [paneKey, entry] of Object.entries(agentStatusByPaneKey ?? {})) {
     const identity = parseAgentStatusPaneKey(entry.paneKey || paneKey)
+    if (!identity) {
+      continue
+    }
+    if (entry.restoredUnconfirmed) {
+      const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
+      flags.paneIds.add(identity.paneId)
+      continue
+    }
     // Why: stale hook entries (>30m) are not authority; a slept/abandoned pane
     // must not keep a tab spinning. Same freshness gate as the sidebar.
-    if (!identity || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
     }
 
-    let flags = flagsByTabId.get(identity.tabId)
-    if (!flags) {
-      flags = {
-        hasPermission: false,
-        hasLiveWorking: false,
-        hasLiveDone: false,
-        paneIds: new Set()
-      }
-      flagsByTabId.set(identity.tabId, flags)
-    }
+    const flags = getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId)
     flags.paneIds.add(identity.paneId)
     if (entry.state === 'blocked' || entry.state === 'waiting') {
       flags.hasPermission = true
@@ -89,6 +88,23 @@ function getTerminalTabActivityFlags(
   return flagsByTabId
 }
 
+function getOrCreateTerminalTabActivityFlags(
+  flagsByTabId: Map<string, TerminalTabActivityFlags>,
+  tabId: string
+): TerminalTabActivityFlags {
+  let flags = flagsByTabId.get(tabId)
+  if (!flags) {
+    flags = {
+      hasPermission: false,
+      hasLiveWorking: false,
+      hasLiveDone: false,
+      paneIds: new Set()
+    }
+    flagsByTabId.set(tabId, flags)
+  }
+  return flags
+}
+
 // Why: mirror the sidebar summary's parse — live entries on restored/imported
 // sessions can still carry pre-UUID numeric pane keys. Keep the numeric pane id
 // so the title-heuristic dedup in resolveWorktreeStatus can still match them.
@@ -104,7 +120,10 @@ function parseAgentStatusPaneKey(paneKey: string): { tabId: string; paneId: stri
 const EMPTY_PANE_IDS: ReadonlySet<string> = new Set()
 
 type TerminalTabActivityInput = {
-  tab: Pick<TerminalTab, 'id' | 'title'>
+  // Why: launchAgent is read, not just carried — the status gate needs it to attribute a
+  // bare spinner title to an agent (#9040). Narrowing it away here compiles (it is optional)
+  // but silently drops the tab-bar dot back to the pre-#9040 behavior.
+  tab: Pick<TerminalTab, 'id' | 'title' | 'launchAgent'>
   agentStatusByPaneKey?: Record<string, AgentStatusEntry>
   // Why: the store bumps this at the 30m stale boundary without replacing the
   // pane-status map; it is the flag cache's invalidation key (see above).
@@ -150,12 +169,79 @@ export function isTerminalTabActivityLive(status: TerminalTabActivityStatus): bo
   return status === 'working' || status === 'permission'
 }
 
+/**
+ * Glyph-bearing attention states for a terminal tab (tab bar + Cmd+J recent chats).
+ * Quiet active/inactive map to null so identity icons stay clean.
+ */
+export type TerminalTabAttentionBadge = 'working' | 'permission' | 'unread' | 'done'
+
+/**
+ * Single priority ladder shared by the tab strip and Cmd+J recent rows:
+ * in-turn (working / permission) → unread bell → freshly done check.
+ */
+export function resolveTerminalTabAttentionBadge({
+  status,
+  hasUnread
+}: {
+  status: WorktreeStatus | null | undefined
+  hasUnread: boolean
+}): TerminalTabAttentionBadge | null {
+  if (status === 'working') {
+    return 'working'
+  }
+  if (status === 'permission') {
+    return 'permission'
+  }
+  if (hasUnread) {
+    return 'unread'
+  }
+  if (status === 'done') {
+    return 'done'
+  }
+  return null
+}
+
+/** Map a container activity status onto AgentStateDot's vocabulary (no unread — that's a bell). */
+export function terminalTabActivityToAgentDotState(
+  status: TerminalTabActivityStatus
+): 'working' | 'permission' | 'done' | null {
+  switch (status) {
+    case 'working':
+    case 'permission':
+    case 'done':
+      return status
+    case 'active':
+    case 'inactive':
+      return null
+  }
+}
+
+/** Bell or unacked agent completion — same sources the tab strip and floating launcher use. */
+export function terminalTabHasUnreadActivity({
+  terminalTabId,
+  unreadTerminalTabs,
+  unreadAgentCompletionPanes
+}: {
+  terminalTabId: string
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
+}): boolean {
+  return (
+    unreadTerminalTabs[terminalTabId] === true ||
+    hasUnreadAgentCompletionForTerminalTab(unreadAgentCompletionPanes, terminalTabId)
+  )
+}
+
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, true> | undefined,
+  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
-  for (const paneKey of Object.keys(unreadAgentCompletionPanes ?? {})) {
+  for (const [paneKey, unread] of Object.entries(unreadAgentCompletionPanes ?? {})) {
+    // Why entries, not keys: the widened value type lets a cleared marker linger as `false`.
+    if (!unread) {
+      continue
+    }
     // paneKey is `${tabId}:${leafId}` and tab ids never contain ":", so the
     // prefix up to the first ":" is the owning tab id (see
     // selectFloatingWorkspaceHasUnread). Prefix-match to keep legacy keys.

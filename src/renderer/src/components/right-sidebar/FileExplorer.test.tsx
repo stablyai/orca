@@ -293,6 +293,14 @@ function makeToolbar(overrides: Partial<Parameters<typeof FileExplorerToolbar>[0
   })
 }
 
+function setDownloadPlatform(platform: NodeJS.Platform): void {
+  ;(
+    window as unknown as {
+      api: { platform: { get: () => { platform: NodeJS.Platform } } }
+    }
+  ).api.platform = { get: () => ({ platform }) }
+}
+
 beforeEach(() => {
   toastErrorMock.mockReset()
   toastSuccessMock.mockReset()
@@ -587,7 +595,7 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowViewFileAction(directoryNode)).toBe(false)
   })
 
-  it('shows remote download only for desktop SSH or Remote Host file-like rows', () => {
+  it('shows remote download only for desktop SSH rows and file-like Remote Host rows', () => {
     const runtimeContext = {
       settings: { activeRuntimeEnvironmentId: 'runtime-1' },
       worktreeId: 'wt-1',
@@ -598,7 +606,12 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(shouldShowRemoteDownloadAction({ ...fileNode, isSymlink: true }, 'ssh-1')).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null, runtimeContext)).toBe(true)
     expect(shouldShowRemoteDownloadAction(fileNode, null)).toBe(false)
+    // Why: directory download defaults fail-closed until the connection advertises
+    // supportsFolderDownload (SFTP); system-SSH and unknown capability stay hidden.
     expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1')).toBe(false)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, true)).toBe(true)
+    expect(shouldShowRemoteDownloadAction(directoryNode, 'ssh-1', null, false)).toBe(false)
+    expect(shouldShowRemoteDownloadAction(fileNode, 'ssh-1', null, false)).toBe(true)
     expect(shouldShowRemoteDownloadAction(directoryNode, null, runtimeContext)).toBe(false)
 
     ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
@@ -656,6 +669,24 @@ describe('FileExplorerRow collapse folder action', () => {
     expect(toastErrorMock).toHaveBeenCalledWith('Could not copy the file to the clipboard')
   })
 
+  it('shows an actionable toast when remote clipboard staging is unavailable', async () => {
+    const writeClipboardFile = vi.fn().mockResolvedValue({
+      ok: false,
+      reason: 'staging-unavailable'
+    })
+    ;(
+      globalThis as unknown as {
+        window: { api: { ui: { writeClipboardFile: typeof writeClipboardFile } } }
+      }
+    ).window = { api: { ui: { writeClipboardFile } } }
+
+    await copyFileToOsClipboard(fileNode, 'ssh-1')
+
+    expect(toastErrorMock).toHaveBeenCalledWith(
+      "Could not copy the file because Orca's temporary storage is unavailable"
+    )
+  })
+
   it('shows the remote copy rejection message when SSH materialization fails', async () => {
     const writeClipboardFile = vi.fn().mockRejectedValue(new Error('Remote connection dropped'))
     ;(
@@ -672,7 +703,10 @@ describe('FileExplorerRow collapse folder action', () => {
   it('calls the preload download API and shows success only when not canceled', async () => {
     const downloadFile = vi
       .fn()
-      .mockResolvedValueOnce({ canceled: false, destinationPath: '/downloads/index.ts' })
+      .mockResolvedValueOnce({
+        canceled: false,
+        destinationPath: '/downloads/renamed\\entry.ts'
+      })
       .mockResolvedValueOnce({ canceled: true })
     const openPath = vi.fn().mockResolvedValue(undefined)
     ;(
@@ -685,6 +719,7 @@ describe('FileExplorerRow collapse folder action', () => {
         }
       }
     ).window = { api: { fs: { downloadFile }, shell: { openPath } } }
+    setDownloadPlatform('linux')
 
     await downloadRemoteFile(fileNode, 'ssh-1')
     await downloadRemoteFile(fileNode, 'ssh-1')
@@ -694,7 +729,7 @@ describe('FileExplorerRow collapse folder action', () => {
       connectionId: 'ssh-1'
     })
     expect(toastSuccessMock).toHaveBeenCalledTimes(1)
-    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'index.ts'", {
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded 'renamed\\entry.ts'", {
       action: {
         label: 'Open',
         onClick: expect.any(Function)
@@ -704,7 +739,60 @@ describe('FileExplorerRow collapse folder action', () => {
       | { onClick: () => void }
       | undefined
     action?.onClick()
-    expect(openPath).toHaveBeenCalledWith('/downloads/index.ts')
+    expect(openPath).toHaveBeenCalledWith('/downloads/renamed\\entry.ts')
+    expect(toastErrorMock).not.toHaveBeenCalled()
+  })
+
+  it('reports the saved folder name from a Windows destination path', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: 'C:\\Users\\dev\\Downloads\\src-copy'
+    })
+    ;(
+      globalThis as unknown as {
+        window: { api: { fs: { downloadFolder: typeof downloadFolder } } }
+      }
+    ).window = { api: { fs: { downloadFolder } } }
+    setDownloadPlatform('win32')
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(toastSuccessMock).toHaveBeenCalledWith(
+      "Downloaded folder 'src-copy'",
+      expect.objectContaining({ action: expect.anything() })
+    )
+  })
+
+  it('calls the preload folder download API for SSH directory rows', async () => {
+    const downloadFolder = vi.fn().mockResolvedValue({
+      canceled: false,
+      destinationPath: '/downloads/src'
+    })
+    const openPath = vi.fn().mockResolvedValue(undefined)
+    ;(
+      globalThis as unknown as {
+        window: {
+          api: {
+            fs: { downloadFolder: typeof downloadFolder }
+            shell: { openPath: typeof openPath }
+          }
+        }
+      }
+    ).window = { api: { fs: { downloadFolder }, shell: { openPath } } }
+    setDownloadPlatform('linux')
+
+    await downloadRemoteFile(directoryNode, 'ssh-1')
+
+    expect(downloadFolder).toHaveBeenCalledWith({
+      dirPath: '/repo/src',
+      connectionId: 'ssh-1'
+    })
+    expect(toastSuccessMock).toHaveBeenCalledWith("Downloaded folder 'src'", {
+      action: {
+        label: 'Open',
+        onClick: expect.any(Function)
+      }
+    })
     expect(toastErrorMock).not.toHaveBeenCalled()
   })
 
@@ -728,6 +816,7 @@ describe('FileExplorerRow collapse folder action', () => {
         }
       }
     ).window = { api: { shell: { openPath } } }
+    setDownloadPlatform('linux')
 
     await downloadRemoteFile(fileNode, runtimeContext)
 

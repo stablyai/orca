@@ -6,6 +6,10 @@ import {
   SettingsUpdate,
   UiUpdate
 } from './client-ui-schemas'
+// Type-only side effect: keeps the schema/PersistedUIState parity assertions in
+// the typecheck graph so drift fails the build instead of a paired client.
+
+import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
@@ -16,7 +20,25 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'settings.update',
     params: SettingsUpdate,
-    handler: (params, { runtime }) => ({ settings: runtime.updateClientSettings(params) })
+    handler: async (params, { runtime }) => ({
+      settings: await runtime.updateClientSettings(params)
+    })
+  }),
+  defineMethod({
+    name: 'settings.getTerminalQuickCommands',
+    params: null,
+    // Why: command bodies can total ~240 KB, so keep unrelated settings reads
+    // from carrying them over every paired/relay connection.
+    handler: (_params, { runtime }) => ({
+      terminalQuickCommands: runtime.getClientTerminalQuickCommands()
+    })
+  }),
+  defineMethod({
+    name: 'settings.updateTerminalQuickCommands',
+    params: TerminalQuickCommandsUpdate,
+    handler: (params, { runtime }) => ({
+      terminalQuickCommands: runtime.updateClientTerminalQuickCommands(params.mutation)
+    })
   }),
   defineMethod({
     name: 'settings.updatePRBotAuthorOverride',
@@ -33,9 +55,11 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'ui.set',
     params: UiUpdate,
-    handler: (params, { runtime }) => ({
-      ui: runtime.updateUIState(params as Partial<PersistedUIState>)
-    })
+    handler: (params, { runtime }) => {
+      const { hideWorkspacesFromOtherDevices: _clientLocalFilter, ...hostUpdates } = params
+      void _clientLocalFilter
+      return { ui: runtime.updateUIState(hostUpdates as Partial<PersistedUIState>) }
+    }
   }),
   defineMethod({
     name: 'ui.recordFeatureInteraction',

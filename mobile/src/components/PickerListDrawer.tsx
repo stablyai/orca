@@ -3,7 +3,8 @@ import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 
 import { colors, spacing, typography } from '../theme/mobile-theme'
-import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawer } from './BottomDrawer'
+import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 
 type Props<T extends { id: string; label: string }> = {
   visible: boolean

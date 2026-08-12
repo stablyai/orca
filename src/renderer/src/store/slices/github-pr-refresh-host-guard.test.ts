@@ -35,12 +35,15 @@ function createTestStore() {
   )
 }
 
-function seed(store: ReturnType<typeof createTestStore>, repo: Record<string, unknown>) {
+function seed(
+  store: ReturnType<typeof createTestStore>,
+  repo: Record<string, unknown> & { id: string; path: string }
+) {
   store.setState({
     settings: { activeRuntimeEnvironmentId: null } as never,
     repos: [repo],
     worktreesByRepo: {
-      [repo.id as string]: [
+      [repo.id]: [
         {
           id: 'wt-1',
           repoId: repo.id,

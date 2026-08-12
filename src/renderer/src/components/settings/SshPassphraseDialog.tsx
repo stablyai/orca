@@ -133,7 +133,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.dbf9b6f2d0',
                   'Enter the password for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             ) : (
@@ -141,7 +141,7 @@ export function SshPassphraseDialog(): React.JSX.Element | null {
                 {translate(
                   'auto.components.settings.SshPassphraseDialog.ce4fdf7914',
                   'Enter the passphrase for'
-                )}
+                )}{' '}
                 <span className="font-medium">{label}</span>
               </>
             )}

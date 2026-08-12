@@ -13,13 +13,20 @@ const repo = {
 } satisfies Repo
 
 function ids(
-  args: { isMac?: boolean; isWindows?: boolean; isWebClient?: boolean; isDev?: boolean } = {}
+  args: {
+    isMac?: boolean
+    isWindows?: boolean
+    isWebClient?: boolean
+    isDev?: boolean
+    isLinearConnected?: boolean
+  } = {}
 ): string[] {
   return buildSettingsNavigationMetadata({
     isMac: args.isMac ?? false,
     isWindows: args.isWindows ?? false,
     isWebClient: args.isWebClient ?? false,
     isDev: args.isDev ?? false,
+    isLinearConnected: args.isLinearConnected ?? false,
     repos: [repo]
   }).map((section) => section.id)
 }
@@ -32,12 +39,33 @@ describe('settings navigation metadata', () => {
       'orchestration',
       'computer-use',
       'voice',
+      'orca-account',
       'setup-guide',
       'general',
       'integrations',
-      'mobile',
-      'git'
+      'mobile'
     ])
+  })
+
+  it('adds the Linear capability section right after Orchestration only when connected', () => {
+    expect(ids()).not.toContain('linear')
+
+    const connectedIds = ids({ isLinearConnected: true })
+    expect(connectedIds).toContain('linear')
+    expect(connectedIds.indexOf('linear')).toBe(connectedIds.indexOf('orchestration') + 1)
+
+    const linearSection = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      isLinearConnected: true,
+      repos: [repo]
+    }).find((section) => section.id === 'linear')
+    expect(linearSection?.group).toBe('capabilities')
+  })
+
+  it('keeps the Linear capability section available on web clients when connected', () => {
+    expect(ids({ isWebClient: true, isLinearConnected: true })).toContain('linear')
   })
 
   it('places Mobile under Set Up instead of its own sidebar group', () => {
@@ -51,15 +79,51 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
+  it('places Automations and Artifacts first under Workflows', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const automations = sections.find((section) => section.id === 'automations')
+    const artifacts = sections.find((section) => section.id === 'artifacts')
+    const workflowIds = sections
+      .filter((section) => section.group === 'workflows')
+      .map((section) => section.id)
+
+    expect(automations?.group).toBe('workflows')
+    expect(automations?.searchEntries[0]?.title).toBe('Show Automations Button')
+    expect(artifacts?.group).toBe('workflows')
+    expect(artifacts?.badge).toBe('Beta')
+    expect(artifacts?.description).toBe(
+      'Share HTML and Markdown files with your team and manage their public links.'
+    )
+    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
+  })
+
+  it('places the Orca account in Set Up on desktop only', () => {
+    const desktopSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const account = desktopSections.find((section) => section.id === 'orca-account')
+
+    expect(account?.group).toBe('setup')
+    expect(account?.searchEntries[0]?.title).toBe('Orca account')
+    expect(ids({ isWebClient: true })).not.toContain('orca-account')
+  })
+
   it('puts web-safe AI capability panes at the top while hiding desktop-only panes', () => {
-    expect(ids({ isWebClient: true }).slice(0, 7)).toEqual([
+    expect(ids({ isWebClient: true }).slice(0, 6)).toEqual([
       'agents',
       'accounts',
       'orchestration',
       'setup-guide',
       'general',
-      'integrations',
-      'git'
+      'integrations'
     ])
   })
 
@@ -88,7 +152,7 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'voice')?.badge).toBeUndefined()
   })
 
-  it('places per-workspace environments under Experimental instead of as a beta sidebar item', () => {
+  it('places Cloud VM under Experimental instead of as a beta sidebar item', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -97,12 +161,26 @@ describe('settings navigation metadata', () => {
     })
     const experimental = sections.find((section) => section.id === 'experimental')
     const entry = experimental?.searchEntries.find(
-      (searchEntry) => searchEntry.title === 'Per-Workspace Environments'
+      (searchEntry) => searchEntry.title === 'Cloud VM'
     )
 
     expect(sections.map((section) => section.id)).not.toContain('ephemeral-vms')
     expect(experimental?.group).toBe('experimental')
     expect(entry?.targetSectionId).toBe('ephemeral-vms')
+  })
+
+  it('places Plugins under Experimental on desktop and omits it on the web', () => {
+    const desktopSections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const desktopIds = desktopSections.map((section) => section.id)
+
+    expect(desktopSections.find((section) => section.id === 'plugins')?.group).toBe('experimental')
+    expect(desktopIds.indexOf('plugins')).toBe(desktopIds.indexOf('experimental') + 1)
+    expect(ids({ isWebClient: true })).not.toContain('plugins')
   })
 
   it('omits Windows project runtime search entries when the active host is unsupported', () => {
@@ -159,6 +237,54 @@ describe('settings navigation metadata', () => {
     // indexed even when only the terminal host — not the client — is Windows.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
+    )
+  })
+
+  it('does not expose local runtime settings from a remote Windows host', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isLocalWindowsHost: false,
+      isWindowsTerminalHost: true,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    const agents = sections.find((section) => section.id === 'agents')
+    const general = sections.find((section) => section.id === 'general')
+    const terminal = sections.find((section) => section.id === 'terminal')
+    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+
+    expect(agents?.searchEntries.some((entry) => entry.title === 'Agent Runtime')).toBe(false)
+    expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
+      false
+    )
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
+    expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
+  })
+
+  it('keeps local runtime settings but hides remote Linux entries on a Windows desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: true,
+      isLocalWindowsHost: true,
+      isWindowsTerminalHost: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+
+    const agents = sections.find((section) => section.id === 'agents')
+    const general = sections.find((section) => section.id === 'general')
+    const terminal = sections.find((section) => section.id === 'terminal')
+    const repoSection = sections.find((section) => section.id === 'repo-repo-1')
+
+    expect(agents?.searchEntries.some((entry) => entry.title === 'Agent Runtime')).toBe(true)
+    expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
+      true
+    )
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(false)
+    expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(
+      false
     )
   })
 

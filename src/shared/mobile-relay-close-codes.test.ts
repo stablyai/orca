@@ -42,4 +42,11 @@ describe('mobile relay close-code contract', () => {
       directUnaffected: true
     })
   })
+
+  it('keeps host-offline recovery self-healing', () => {
+    expect(mobileRelayRecoveryFor(4404, 'phone-resume')).toEqual({
+      kind: 'retry-after-host-offline',
+      fullJitter: true
+    })
+  })
 })

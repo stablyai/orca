@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 
 function formatShortTimeAgo(ts: number, now: number): string {
@@ -26,26 +28,11 @@ function formatShortTimeAgo(ts: number, now: number): string {
   return `${Math.floor(hours / 24)}d`
 }
 
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  // Why: idle subagent child rows are alive-but-idle (teammates persist
-  // between turns), not finished — fall through to the started-at timestamp.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
-    return null
-  }
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = (entry.stateHistory?.length ?? 0) - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
-}
-
-function getCompactAgentPrimary(agent: DashboardAgentRowData): string {
-  const prompt = getAgentRowPrimaryText(agent.entry)
+function getCompactAgentPrimary(
+  agent: DashboardAgentRowData,
+  conversationName: string | null
+): string {
+  const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
@@ -63,7 +50,15 @@ function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
       return toolName
     }
   }
-  return agent.entry.lastAssistantMessage?.trim() || formatAgentTypeLabel(agent.agentType)
+  const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
+  if (lastAssistantMessage) {
+    return lastAssistantMessage
+  }
+  // Why: child rows without descriptions use their role as primary text; repeating its formatted label adds no information.
+  if (agent.rowSource === 'subagent' && agent.entry.prompt?.trim() === agent.agentType.trim()) {
+    return ''
+  }
+  return formatAgentTypeLabel(agent.agentType)
 }
 
 function getCompactAgentTime(agent: DashboardAgentRowData, now: number): string | null {
@@ -125,9 +120,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // "?" glyph. Nesting under the parent already conveys identity.
   const hideIcon = hideIdentityIcon || agent.rowSource === 'subagent'
   const dotState = getAgentDotState(agent)
-  const primary = getCompactAgentPrimary(agent)
+  const conversationName = useAgentRowConversationName(agent)
+  const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
+  const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
@@ -218,6 +215,17 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         )}
       </span>
+      {model && (
+        <span
+          className={cn(
+            'min-w-0 max-w-24 truncate font-mono text-[10px]',
+            isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/70'
+          )}
+          title={model}
+        >
+          {model}
+        </span>
+      )}
       {hasChildDisclosure && !childAgentsExpanded && (
         <span
           className={cn(
@@ -247,7 +255,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     <div
       draggable={false}
       className={cn(
-        'compact-agent-row group/compact-agent-row min-w-0 cursor-pointer rounded-sm px-1 text-[11px] leading-none',
+        'compact-agent-row group/compact-agent-row min-w-0 overflow-hidden cursor-pointer rounded-sm px-1 text-[11px] leading-none',
         'text-muted-foreground worktree-agent-row-hover',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',

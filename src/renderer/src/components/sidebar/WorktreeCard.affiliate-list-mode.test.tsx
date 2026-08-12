@@ -80,10 +80,6 @@ vi.mock('./WorktreeCardAgents', () => ({
   default: () => <div data-testid="inline-agents" />
 }))
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => (
     <div data-testid="context-menu-wrapper">{children}</div>
@@ -206,7 +202,8 @@ describe('WorktreeCard affiliate list mode', () => {
     })
 
     expect(testDoubles.activateWorktreeFromSidebar).toHaveBeenCalledWith(
-      'repo-1::/repo/worktrees/affiliate'
+      'repo-1::/repo/worktrees/affiliate',
+      'local'
     )
   })
 

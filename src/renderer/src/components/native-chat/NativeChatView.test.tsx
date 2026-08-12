@@ -3,10 +3,12 @@
 import '@testing-library/jest-dom/vitest'
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type * as React from 'react'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
+import { useNativeChatDraft } from './use-native-chat-draft'
+import { clearNativeChatDraftCacheForTests } from './native-chat-draft-cache'
 
 function entry(overrides: Partial<AgentStatusEntry> & Pick<AgentStatusEntry, 'paneKey'>) {
   return {
@@ -33,9 +35,24 @@ function renderResolution(
   )
 }
 
+function DraftProbe({ paneKey, sessionId }: { paneKey: string; sessionId: string | null }) {
+  const { draft, setDraft } = useNativeChatDraft(paneKey)
+  return (
+    <label>
+      Session {sessionId ?? 'none'}
+      <input
+        aria-label="Message draft"
+        value={draft}
+        onChange={(event) => setDraft(event.currentTarget.value)}
+      />
+    </label>
+  )
+}
+
 describe('NativeChatSessionGate', () => {
   afterEach(() => {
     cleanup()
+    clearNativeChatDraftCacheForTests()
   })
 
   it.each(['codex', 'claude'] as const)(
@@ -69,6 +86,54 @@ describe('NativeChatSessionGate', () => {
 
     expect(screen.getByTestId('native-chat-resolution')).toHaveTextContent(
       'claude:claude-session:tab-1:leaf-1'
+    )
+  })
+
+  it('preserves the open composer, session, and draft through disconnect and reconnect', () => {
+    const paneKey = 'tab-1:leaf-1'
+    const connectedEntry = entry({
+      paneKey,
+      agentType: 'codex',
+      providerSession: { key: 'session_id', id: 'codex-session' }
+    })
+    const renderGate = (
+      agentStatusEntry?: AgentStatusEntry,
+      launchAgent: 'codex' | null = null
+    ) => (
+      <NativeChatSessionGate
+        paneKey={paneKey}
+        launchAgent={launchAgent}
+        resolvedAgent={null}
+        agentStatusEntry={agentStatusEntry}
+        ptyId={agentStatusEntry ? 'pty-connected' : null}
+      >
+        {(resolution) => (
+          <DraftProbe paneKey={resolution.paneKey} sessionId={resolution.sessionId} />
+        )}
+      </NativeChatSessionGate>
+    )
+    const view = render(renderGate(connectedEntry))
+    const composer = screen.getByRole('textbox', { name: 'Message draft' })
+
+    fireEvent.change(composer, { target: { value: 'keep this unsent message' } })
+    view.rerender(renderGate(undefined, 'codex'))
+
+    expect(screen.getByText('Session codex-session')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
+      'keep this unsent message'
+    )
+
+    view.rerender(renderGate())
+
+    expect(screen.getByText('Session codex-session')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
+      'keep this unsent message'
+    )
+
+    view.rerender(renderGate(connectedEntry))
+    expect(screen.getByText('Session codex-session')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message draft' })).toHaveValue(
+      'keep this unsent message'
     )
   })
 

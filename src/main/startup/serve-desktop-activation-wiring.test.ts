@@ -5,17 +5,18 @@ import { describe, expect, it } from 'vitest'
 describe('serve desktop activation wiring', () => {
   const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
 
-  it('routes second-instance and app activation through one safety gate', () => {
+  it('routes second-instance and windowless app activation through one safety gate', () => {
     expect(source).toContain('createServeDesktopActivationGate({')
     expect(source).toContain('acquireSingleInstanceLock(app, requestDesktopActivation)')
-    expect(source).toContain("app.on('activate', requestDesktopActivation)")
+    expect(source).toContain('createMacAppActivationHandler({')
+    expect(source).toContain("app.on('activate', handleMacAppActivation)")
     expect(source).toContain('getDesktopWindowStatus: getDesktopWindowStatus')
   })
 
   it('settles the persistent provider before headless PTY registration', () => {
     const appReadyIndex = source.indexOf('app.whenReady().then(async () => {')
     const startupIndex = source.indexOf(
-      '\n  startTerminalRuntimeStartupServices()\n',
+      'bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))',
       appReadyIndex
     )
     const serveIndex = source.indexOf('if (serveOptions) {', appReadyIndex)
@@ -45,5 +46,9 @@ describe('serve desktop activation wiring', () => {
     expect(rpcIndex).toBeGreaterThan(sentinelIndex)
     expect(settleIndex).toBeGreaterThan(rpcIndex)
     expect(source).not.toContain('runtime.syncWindowGraph(0,')
+  })
+
+  it('keeps the headless install policy after desktop promotion', () => {
+    expect(source).toContain('updateInstallMode: resolveUpdateInstallMode(isServeMode)')
   })
 })

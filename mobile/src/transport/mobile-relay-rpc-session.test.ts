@@ -4,6 +4,7 @@ import {
   encodeBrowserScreencastFrame
 } from '../../../src/shared/browser-screencast-protocol'
 import { encodeTerminalStreamFrame, TerminalStreamOpcode } from './terminal-stream-protocol'
+import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 const fakes = vi.hoisted(() => ({
   linkOptions: null as null | {
@@ -118,7 +119,7 @@ describe('mobile relay RPC session', () => {
     })
     expect(confirmationRequest.params).not.toHaveProperty('relayDeviceId')
     expect(confirmationRequest.params).not.toHaveProperty('acceptedCredentialVersion')
-    expect(session.getLeaseExpiresAt()).toEqual(expect.any(Number))
+    expect(session.getAttachDeadlineAt()).toEqual(expect.any(Number))
   })
 
   it('rejects a mismatched outer credential version and closes the physical link', () => {
@@ -202,6 +203,39 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions!.onError(new Error('relay transport error'))
 
     await expect(pending).rejects.toThrow('relay transport error')
+    // The frame reached the wire, so the failure must read as delivery-unknown.
+    await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
     expect(session.getState()).toBe('disconnected')
+  })
+
+  it('marks in-flight requests delivery-unknown when the session closes', async () => {
+    const { session } = await authenticateSession()
+    const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+    await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledOnce())
+    session.close()
+
+    await expect(pending).rejects.toThrow('Client closed')
+    await expect(pending.catch((error: unknown) => isRpcDeliveryUnknown(error))).resolves.toBe(true)
+  })
+
+  it('marks a relay RPC timeout delivery-unknown', async () => {
+    const { session } = await authenticateSession()
+    vi.useFakeTimers()
+    try {
+      const pending = session.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+      const outcome = pending.catch((error: unknown) => ({
+        message: (error as Error).message,
+        unknown: isRpcDeliveryUnknown(error)
+      }))
+      // Let sendRequest pass its connected-check microtask and register the timer.
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(1_000)
+      await expect(outcome).resolves.toEqual({
+        message: 'relay RPC timed out: terminal.send',
+        unknown: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

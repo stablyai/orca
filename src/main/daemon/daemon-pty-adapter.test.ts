@@ -1,18 +1,28 @@
 /* oxlint-disable max-lines */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mkdtempSync, mkdirSync, rmSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonPtyAdapter, LIVENESS_PROBE_TIMEOUT_MS } from './daemon-pty-adapter'
+import {
+  COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+  GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+  GET_SIZE_PROTOCOL_VERSION,
+  PROTOCOL_VERSION
+} from './daemon-protocol-version'
 import { DaemonServer } from './daemon-server'
 import { HeadlessEmulator } from './headless-emulator'
 import { getHistorySessionDirName } from './history-paths'
 import type { HistoryReader } from './history-reader'
 import type { SubprocessHandle } from './session'
+import type { PendingOutputRecord } from './types'
+import type { DaemonFileLog } from './daemon-file-log'
 import type * as DaemonHealthModule from './daemon-health'
-import { getDaemonSocketPath } from './daemon-spawner'
+import { getDaemonSocketPath, serializeDaemonPidFile } from './daemon-spawner'
+import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
+import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
 
 const { getMacDaemonSystemResolverHealthMock } = vi.hoisted(() => ({
   getMacDaemonSystemResolverHealthMock: vi.fn(async () => 'unknown')
@@ -33,6 +43,7 @@ function createTestDir(): string {
 }
 
 function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
+  write: ReturnType<typeof vi.fn<(data: string) => void>>
   pause: ReturnType<typeof vi.fn<() => void>>
   resume: ReturnType<typeof vi.fn<() => void>>
   _simulateData: (data: string) => void
@@ -41,8 +52,7 @@ function createMockSubprocess(dataOnSubscribe?: string): SubprocessHandle & {
   let onDataCb: ((data: string) => void) | null = null
   let onExitCb: ((code: number) => void) | null = null
   return {
-    // Why: getCwd falls back to OS pid lookup; a plausible fake pid can
-    // collide with an unrelated local process and leak its cwd into tests.
+    // Why: getCwd falls back to OS pid lookup; an implausibly-high fake pid can't collide with a real process' cwd.
     pid: 999_999_999,
     getForegroundProcess: vi.fn(() => null),
     write: vi.fn(),
@@ -97,6 +107,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     command?: string
   } | null
   let subprocessDataOnSubscribe: string | undefined
+  let daemonLog: DaemonFileLog
+  let daemonLogEvents: string[]
 
   beforeEach(async () => {
     subprocessDataOnSubscribe = undefined
@@ -104,9 +116,15 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     socketPath = getDaemonSocketPath(dir)
     tokenPath = join(dir, 'test.token')
 
+    daemonLogEvents = []
+    daemonLog = {
+      log: (event) => daemonLogEvents.push(event),
+      close() {}
+    }
     server = new DaemonServer({
       socketPath,
       tokenPath,
+      log: daemonLog,
       spawnSubprocess: (opts) => {
         lastSpawnOpts = opts
         lastSubprocess = createMockSubprocess(subprocessDataOnSubscribe)
@@ -119,6 +137,16 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     lastSpawnOpts = null
     getMacDaemonSystemResolverHealthMock.mockReset()
     getMacDaemonSystemResolverHealthMock.mockResolvedValue('unknown')
+  })
+
+  it('reports whether its daemon protocol can participate in agent claims', () => {
+    const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+
+    expect(adapter.supportsAgentSessionClaims()).toBe(true)
+    expect(legacy.supportsAgentSessionClaims()).toBe(false)
+    expect(adapter.supportsAgentSessionCreateOperations()).toBe(true)
+    expect(legacy.supportsAgentSessionCreateOperations()).toBe(false)
+    legacy.dispose()
   })
 
   afterEach(async () => {
@@ -135,9 +163,233 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
     })
 
+    it('carries classified startup spans from the daemon source to the adapter', async () => {
+      const onData = vi.fn()
+      adapter.onData(onData)
+      const { id } = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        startupIngress: {
+          colors: { foreground: '#2e3434', background: '#ffffff' },
+          deadlineMs: 5_000
+        }
+      })
+      const query = '\x1b]10;?\x07'
+      lastSubprocess._simulateData(query)
+      lastSubprocess._simulateData('prompt')
+
+      await waitFor(() => onData.mock.calls.length >= 2)
+
+      expect(lastSubprocess.write).toHaveBeenCalledWith('\x1b]10;rgb:2e2e/3434/3434\x1b\\')
+      expect(onData).toHaveBeenCalledWith({
+        id,
+        data: '',
+        sequenceChars: query.length,
+        seq: query.length,
+        transformed: true
+      })
+      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
+        data: expect.not.stringContaining(']10;rgb')
+      })
+    })
+
+    it('omits startup intent and close control for the preserved v23 protocol', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: true,
+        pid: null,
+        shellState: 'unsupported',
+        snapshot: null
+      } as never)
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 23 })
+      try {
+        await legacy.spawn({
+          sessionId: 'legacy-session',
+          cols: 80,
+          rows: 24,
+          startupIngress: {
+            colors: { foreground: '#2e3434', background: '#ffffff' },
+            deadlineMs: 5_000
+          }
+        })
+        const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+        expect(createPayload).not.toHaveProperty('startupIngress')
+        await expect(legacy.closeStartupQueryAuthority('legacy-session')).resolves.toBe(0)
+        expect(requestSpy).not.toHaveBeenCalledWith('closeStartupQueryAuthority', expect.anything())
+      } finally {
+        legacy.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('does not republish adapter state when stream exit beats the create reply', async () => {
+      const sessionId = 'exit-before-create-reply'
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(exits).toHaveLength(2)
+      expect(exits[0]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).toBeDefined()
+      expect(exits[1]?.incarnationId).not.toBe(exits[0]?.incarnationId)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+      }
+      expect(internals.activeSessionIds.has(sessionId)).toBe(false)
+      expect(internals.sessionIncarnations.has(sessionId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has(sessionId)).toBe(false)
+    })
+
+    it('does not republish an adopted canonical id when its exit beats the reply', async () => {
+      const claim = {
+        digestVersion: 1 as const,
+        keyId: 'key',
+        identityDigest: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        worktreeScopeDigest: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+        agent: 'codex' as const
+      }
+      const surface = {
+        worktreeId: 'worktree',
+        tabId: 'tab',
+        leafId: '11111111-1111-4111-8111-111111111111',
+        terminalHandle: 'term_claimed'
+      }
+      const canonicalId = 'canonical-claimed-session'
+      const first = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: canonicalId,
+        agentSessionEnsure: { claim, surface }
+      })
+      expect(first.agentSessionEnsure?.disposition).toBe('created')
+
+      const exits: { id: string; incarnationId?: string }[] = []
+      adapter.onExit((payload) => exits.push(payload))
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const originalRequest = client.request.bind(client)
+      vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
+        const response = await originalRequest(type, payload)
+        if (type === 'createOrAttach') {
+          const exitCount = exits.length
+          lastSubprocess._simulateExit(0)
+          await waitFor(() => exits.length === exitCount + 1)
+        }
+        return response
+      })
+
+      const adopted = await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        sessionId: 'different-requested-session',
+        agentSessionEnsure: {
+          claim,
+          surface: { ...surface, terminalHandle: 'term_retry' }
+        }
+      })
+
+      expect(adopted.id).toBe(canonicalId)
+      expect(adopted.agentSessionEnsure?.disposition).toBe('adopted')
+      expect(adapter.didExitBeforeSpawnReply(adopted)).toBe(true)
+      const internals = adapter as unknown as {
+        activeSessionIds: Set<string>
+        sessionIncarnations: Map<string, string>
+        pendingSpawnOperationsBySessionId: Map<string, unknown>
+        pendingClaimSpawnOperations: Set<unknown>
+      }
+      expect(internals.activeSessionIds.has(canonicalId)).toBe(false)
+      expect(internals.sessionIncarnations.has(canonicalId)).toBe(false)
+      expect(internals.pendingSpawnOperationsBySessionId.has('different-requested-session')).toBe(
+        false
+      )
+      expect(internals.pendingClaimSpawnOperations.size).toBe(0)
+    })
+
+    it('does not dispatch createOrAttach when cancellation wins during preflight', async () => {
+      let finishPreflight: (() => void) | undefined
+      const preflight = new Promise<void>((resolve) => {
+        finishPreflight = resolve
+      })
+      const internals = adapter as unknown as {
+        ensureConnected(): Promise<void>
+        client: { request: (...args: unknown[]) => Promise<unknown> }
+      }
+      const ensureConnected = vi
+        .spyOn(internals, 'ensureConnected')
+        .mockImplementation(() => preflight)
+      const request = vi.spyOn(internals.client, 'request')
+      const abort = new AbortController()
+
+      const spawning = adapter.spawn({ cols: 80, rows: 24, signal: abort.signal })
+      await waitFor(() => ensureConnected.mock.calls.length === 1)
+      abort.abort()
+      finishPreflight?.()
+
+      await expect(spawning).rejects.toThrow('client_disconnected')
+      expect(request).not.toHaveBeenCalledWith('createOrAttach', expect.anything())
+    })
+
     it('uses worktreeId as session prefix when provided', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, worktreeId: 'wt-1' })
       expect(result.id).toContain('wt-1')
+    })
+
+    it('keeps a reattached native UNC session native despite a conflicting WSL preference', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const sessionId = 'native-conflicting-wsl-attach'
+        const created = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId,
+          cwd: '\\\\server\\share\\repo',
+          shellOverride: 'powershell.exe'
+        })
+        const attached = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId,
+          cwd: 'C:\\repo',
+          shellOverride: 'wsl.exe',
+          terminalWindowsWslDistro: 'Ubuntu'
+        })
+
+        expect(created.wslDistro).toBeNull()
+        expect(attached.wslDistro).toBeNull()
+        expect(attached.isReattach).toBe(true)
+        expect(lastSpawnOpts?.cwd).toBe('\\\\server\\share\\repo')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
     })
 
     itOnPosix('keeps plain Codex startup on the short daemon shell-ready timeout', async () => {
@@ -234,8 +486,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       adapter.pauseProducer(id)
       await waitFor(() => lastSubprocess.pause.mock.calls.length > 0)
 
-      // Drop the daemon out from under the adapter: the in-flight pause has no
-      // matching resume anymore.
+      // Drop the daemon out from under the adapter: the in-flight pause now has no matching resume.
       await server.shutdown()
       await waitFor(() => !(adapter as unknown as { client: DaemonClient }).client.isConnected())
 
@@ -261,9 +512,436 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
+  describe('dead-endpoint write respawn (STA-2373)', () => {
+    function restartServerOnRespawn(): void {
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+    }
+
+    it('rejects stale input until createOrAttach remounts the pane onto the new daemon', async () => {
+      let respawnServer: DaemonServer | undefined
+      let respawnSubprocess: ReturnType<typeof createMockSubprocess> | undefined
+      const respawn = vi.fn(async () => {
+        respawnServer = new DaemonServer({
+          socketPath,
+          tokenPath,
+          spawnSubprocess: () => {
+            respawnSubprocess = createMockSubprocess()
+            return respawnSubprocess
+          }
+        })
+        await respawnServer.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const internals = healingAdapter as unknown as {
+          sessionsAwaitingDaemonRecovery: Set<string>
+        }
+
+        await server.shutdown()
+        await waitFor(() => internals.sessionsAwaitingDaemonRecovery.has(id))
+
+        expect(() => healingAdapter.write(id, 'first')).toThrow(PtyWriteUnavailableError)
+        expect(() => healingAdapter.write(id, 'second')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+
+        expect(respawnSubprocess).toBeUndefined()
+        expect(() => healingAdapter.write(id, 'still-stale')).toThrow(PtyWriteUnavailableError)
+
+        await healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        expect(() => healingAdapter.write(id, 'rebound')).not.toThrow()
+        await waitFor(
+          () =>
+            respawnSubprocess !== undefined &&
+            vi.mocked(respawnSubprocess.write).mock.calls.length === 1
+        )
+        expect(respawnSubprocess?.write).toHaveBeenCalledWith('rebound')
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        healingAdapter.dispose()
+        await respawnServer?.shutdown()
+      }
+    })
+
+    it('requires createOrAttach before writing to a session that survives a socket disconnect', async () => {
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        client.disconnect()
+        expect(() => healingAdapter.write(id, 'stale')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => client.isConnected())
+        expect(() => healingAdapter.write(id, 'still-stale')).toThrow(PtyWriteUnavailableError)
+
+        await healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        healingAdapter.write(id, 'rebound')
+        await waitFor(() => lastSubprocess.write.mock.calls.length > 0)
+        expect(lastSubprocess.write.mock.calls).toEqual([['rebound']])
+        expect(healingAdapter.hasPty(id)).toBe(true)
+        expect(respawn).not.toHaveBeenCalled()
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not spawn a daemon per keystroke after respawn fails', async () => {
+      const respawn = vi.fn(async () => {
+        throw new Error('daemon unavailable')
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+        for (let i = 0; i < 100; i += 1) {
+          expect(() => healingAdapter.write(id, 'b')).toThrow(PtyWriteUnavailableError)
+        }
+
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        warn.mockRestore()
+        healingAdapter.dispose()
+      }
+    })
+
+    it('joins a request-path respawn instead of forking a second daemon', async () => {
+      let releaseRespawn!: () => void
+      const respawn = vi.fn(async () => {
+        await new Promise<void>((resolve) => {
+          releaseRespawn = resolve
+        })
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        const newSpawn = healingAdapter.spawn({
+          sessionId: 'request-path-session',
+          cols: 80,
+          rows: 24
+        })
+        await waitFor(() => releaseRespawn !== undefined)
+        expect(() => healingAdapter.write(id, 'queued')).toThrow(PtyWriteUnavailableError)
+        releaseRespawn()
+
+        await expect(newSpawn).resolves.toMatchObject({ id: 'request-path-session' })
+        expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('does not respawn when a dropped write targets no active session', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const idleAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const client = (idleAdapter as unknown as { client: DaemonClient }).client
+        await idleAdapter.listProcesses()
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        idleAdapter.write('never-attached-session', 'ls\n')
+
+        await new Promise((r) => setTimeout(r, 50))
+        expect(respawn).not.toHaveBeenCalled()
+      } finally {
+        idleAdapter.dispose()
+      }
+    })
+
+    it('signals every active pane to recover when one pane hits the dead endpoint', async () => {
+      const respawn = vi.fn(async () => {})
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        const { id: a } = await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        const { id: b } = await healingAdapter.spawn({ sessionId: 'pane-b', cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        // Only pane A is written; pane B is a passive sibling the user never typed into.
+        expect(() => healingAdapter.write(a, 'typed-into-a')).toThrow(PtyWriteUnavailableError)
+
+        // Why revert-sensitive: a dead endpoint takes down EVERY session on the
+        // daemon, so both panes must be told to remount + re-attach. Without the
+        // fan-out, only the written pane (a) recovers and sibling b stays frozen
+        // with silently dropped input (STA-2373 sibling-freeze regression).
+        expect(recovered).toContain(a)
+        expect(recovered).toContain(b)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('keeps dropping writes silently on an adapter that cannot respawn', async () => {
+      // Why revert-sensitive: legacy adapters are built with no respawn, so a remount
+      // reattaches to nothing and rebuilds the pane EMPTY, losing scrollback the user
+      // could still read. Rejecting the write is only an improvement where the endpoint
+      // can actually come back, so an unrecoverable one must keep the old silent drop.
+      const legacyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      const recovered: string[] = []
+      legacyAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        const { id } = await legacyAdapter.spawn({ sessionId: 'legacy-pane', cols: 80, rows: 24 })
+        const client = (legacyAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => legacyAdapter.write(id, 'typed')).not.toThrow()
+        expect(recovered).toEqual([])
+      } finally {
+        legacyAdapter.dispose()
+      }
+    })
+
+    it('re-arms recovery for a second daemon death when a background session never rebinds', async () => {
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const recovered: string[] = []
+      healingAdapter.onWriteUnavailable(({ id }) => recovered.push(id))
+      try {
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        // A backgrounded session: no pane is mounted for it, so nothing in the
+        // renderer ever calls createOrAttach to rebind it after a daemon death.
+        await healingAdapter.spawn({ sessionId: 'background-b', cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+        expect(() => healingAdapter.write('pane-a', 'first-death')).toThrow(
+          PtyWriteUnavailableError
+        )
+        await waitFor(() => respawn.mock.calls.length === 1)
+        await waitFor(() => client.isConnected())
+
+        // Only the mounted pane rebinds; background-b keeps the awaiting set non-empty.
+        await healingAdapter.spawn({ sessionId: 'pane-a', cols: 80, rows: 24 })
+        recovered.length = 0
+
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        // Why revert-sensitive: the storm latch is otherwise only released when the
+        // awaiting set empties, which a never-rebinding background session prevents
+        // forever. That silently downgrades the fix to one-shot — every daemon death
+        // after the first would respawn nothing and leave siblings frozen again.
+        expect(() => healingAdapter.write('pane-a', 'second-death')).toThrow(
+          PtyWriteUnavailableError
+        )
+        expect(recovered).toContain('pane-a')
+        await waitFor(() => respawn.mock.calls.length === 2)
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+  })
+
+  describe('mode 2031 fact compatibility (#9993)', () => {
+    let onEventSpy: ReturnType<typeof vi.spyOn>
+    // Why these tests exist: daemons survive app updates, so a NEW desktop can be
+    // driving a PRESERVED older daemon. Those daemons emit '2031-subscribe' but have
+    // no unsubscribe fact at all. For a gate-managed pane the renderer never sees the
+    // bytes, so main's facts are the only thing that can retire the subscription —
+    // trusting a subscribe that can never be retracted leaves it live forever, and the
+    // next theme flip injects CSI 997 into whatever shell replaced the exited TUI.
+    function captureForwardedFacts(target: DaemonPtyAdapter): {
+      kinds: () => string[]
+      emit: (fact: { kind: string }) => void
+    } {
+      const forwarded: string[] = []
+      target.onBackgroundStreamEvent((payload) => {
+        if (payload.kind === 'transientFact') {
+          forwarded.push((payload.fact as { kind: string }).kind)
+        }
+      })
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      return {
+        kinds: () => forwarded,
+        emit: (fact) => {
+          expect(listeners.length).toBeGreaterThan(0)
+          for (const listener of listeners) {
+            // `type: 'event'` is the envelope the routing switch requires.
+            listener({
+              type: 'event',
+              event: 'transientFact',
+              sessionId: 'session-1',
+              payload: fact
+            })
+          }
+        }
+      }
+    }
+
+    it('drops a pre-v29 daemon 2031-subscribe it could never retract', () => {
+      // v28 is the version shipping today, so this is the live upgrade hazard: a v28
+      // daemon preserved across an app update, still holding real sessions.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        // Force a fresh wire-up so the spy above is the listener the adapter installs.
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: 'bell' })
+
+        // The unretractable subscribe is withheld; unrelated facts still flow, so the
+        // gate is narrow rather than "ignore this daemon's facts".
+        expect(captured.kinds()).toEqual(['bell'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('never delegates scan authority to a v28 daemon, so a hidden withdrawal is still seen', () => {
+      // The scenario the fact filter alone does NOT cover, and the reason the gate sits
+      // on backgrounding: while the pane is VISIBLE, main's own scanner registers the
+      // 2031 subscribe (bytes transit main either way). Only backgrounding hands scan
+      // authority to the daemon. If a v28 daemon were allowed to take it, the TUI could
+      // exit while hidden with no party able to emit the withdrawal — #9993 via upgrade.
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        legacy.setPtyBackgrounded('v28-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v28-session',
+          background: false
+        })
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('delegates scan authority to a v32 daemon with faithful snapshots', () => {
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
+      try {
+        current.setPtyBackgrounded('v32-session', true)
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'v32-session',
+          background: true
+        })
+      } finally {
+        current.dispose()
+        notifySpy.mockRestore()
+      }
+    })
+
+    it('forwards a provisional subscribe with the foreground handoff marker', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      const forwarded: unknown[] = []
+      current.onBackgroundStreamEvent((payload) => forwarded.push(payload))
+      const listeners: ((event: unknown) => void)[] = []
+      onEventSpy = vi.spyOn(DaemonClient.prototype, 'onEvent').mockImplementation((listener) => {
+        listeners.push(listener)
+        return () => {}
+      })
+      try {
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        for (const listener of listeners) {
+          listener({
+            type: 'event',
+            event: 'sessionBackgroundMarker',
+            sessionId: 'session-1',
+            payload: {
+              background: false,
+              scanSeedAnsi: '\x1b[?',
+              mode2031PendingSubscribe: true
+            }
+          })
+        }
+
+        expect(forwarded).toEqual([
+          {
+            id: 'session-1',
+            kind: 'backgroundMarker',
+            background: false,
+            scanSeedAnsi: '\x1b[?',
+            mode2031PendingSubscribe: true
+          }
+        ])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('forwards a v28 unsubscribe, which can only retire state main registered', () => {
+      // Asymmetric on purpose: an unretractable subscribe is the hazard, a withdrawal
+      // never is. A stale relay tracker on a preserved daemon must still be able to
+      // clear a subscription rather than be silenced into stranding it.
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        const captured = captureForwardedFacts(legacy)
+        legacy['removeEventListener'] = null
+        legacy['setupEventRouting']()
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-unsubscribe'])
+      } finally {
+        legacy.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+
+    it('forwards 2031 facts from a v29 daemon that can retract them', () => {
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
+      try {
+        const captured = captureForwardedFacts(current)
+        current['removeEventListener'] = null
+        current['setupEventRouting']()
+        captured.emit({ kind: '2031-subscribe' })
+        captured.emit({ kind: '2031-unsubscribe' })
+
+        expect(captured.kinds()).toEqual(['2031-subscribe', '2031-unsubscribe'])
+      } finally {
+        current.dispose()
+        onEventSpy.mockRestore()
+      }
+    })
+  })
+
   describe('background stream thinning compatibility', () => {
-    it('reports authoritative snapshot support only for protocol v20 and newer', () => {
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+    it('reports authoritative snapshot support only for the corrected serializer protocol', () => {
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         expect(legacy.canProvideAuthoritativeBufferSnapshot('legacy-session')).toBe(false)
         expect(adapter.canProvideAuthoritativeBufferSnapshot('current-session')).toBe(true)
@@ -285,9 +963,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('keeps preserved v19 sessions unthinned because their snapshots have no sequence', () => {
+    it('keeps preserved v31 sessions unthinned because their snapshots can corrupt replay', () => {
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         legacy.setPtyBackgrounded('legacy-session', true)
         expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
@@ -300,7 +978,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('clears a preserved v19 background hint before attaching its stream', async () => {
+    it('clears a preserved v31 background hint before attaching its stream', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -311,7 +989,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         snapshot: null
       } as never)
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -330,7 +1008,116 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('still returns the v19 attach snapshot for a desktop renderer replay', async () => {
+    it.each([
+      { protocolVersion: 28, clearsHint: true },
+      { protocolVersion: 29, clearsHint: true },
+      { protocolVersion: 31, clearsHint: true },
+      { protocolVersion: 32, clearsHint: false }
+    ])(
+      'uses protocol v$protocolVersion background authority before spawn',
+      async ({ protocolVersion, clearsHint }) => {
+        const ensureConnectedSpy = vi
+          .spyOn(DaemonClient.prototype, 'ensureConnected')
+          .mockResolvedValue()
+        const requestSpy = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+          isNew: true,
+          pid: null,
+          shellState: 'unsupported',
+          snapshot: null
+        } as never)
+        const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+        const target = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+        const sessionId = `spawn-v${protocolVersion}-session`
+        try {
+          await target.spawn({ sessionId, cols: 80, rows: 24 })
+
+          if (clearsHint) {
+            expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+              sessionId,
+              background: false
+            })
+            expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+              requestSpy.mock.invocationCallOrder[0]
+            )
+          } else {
+            expect(notifySpy).not.toHaveBeenCalledWith(
+              'setSessionBackground',
+              expect.objectContaining({ sessionId })
+            )
+          }
+        } finally {
+          target.dispose()
+          notifySpy.mockRestore()
+          requestSpy.mockRestore()
+          ensureConnectedSpy.mockRestore()
+        }
+      }
+    )
+
+    it('clears a preserved v28 background hint before attaching, so scan authority comes home', async () => {
+      // The gate on setPtyBackgrounded only binds THIS process. Daemons outlive the desktop:
+      // a v28 that a previous desktop backgrounded is still scanning when a new desktop
+      // attaches, and this process never called setPtyBackgrounded for it — so without the
+      // pre-attach clear the daemon keeps authority it can never retract (#9993).
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
+      try {
+        await legacy.attach('preserved-v28-session')
+
+        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+          sessionId: 'preserved-v28-session',
+          background: false
+        })
+        expect(notifySpy.mock.invocationCallOrder[0]).toBeLessThan(
+          requestSpy.mock.invocationCallOrder[0]
+        )
+      } finally {
+        legacy.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('leaves a v32 background hint alone on attach', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 80, rows: 24 } } as never)
+            : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
+        )
+      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
+      try {
+        await current.attach('preserved-v32-session')
+
+        expect(notifySpy).not.toHaveBeenCalledWith(
+          'setSessionBackground',
+          expect.objectContaining({ sessionId: 'preserved-v32-session' })
+        )
+      } finally {
+        current.dispose()
+        notifySpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('still returns the v31 attach snapshot so desktop replay retains shell history', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -347,7 +1134,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           rows: 24
         }
       } as never)
-      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 19 })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 31 })
       try {
         const result = await legacy.spawn({ sessionId: 'legacy-session', cols: 80, rows: 24 })
 
@@ -380,30 +1167,142 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(await adapter.getAppliedSize(id)).toEqual({ cols: 120, rows: 40 })
     })
 
-    // Why: this is the regression the fix targets. resize() is a fire-and-forget
-    // notify; a resize that arrives after the session exited is silently dropped
-    // daemon-side. getAppliedSize must keep reporting the last size the PTY
-    // genuinely took (the stale pre-exit dims) rather than the dropped request —
-    // so the renderer can tell its requested size never landed. The old
-    // requested-size cache would have masked the drop.
+    // Why: a resize after exit is a dropped fire-and-forget notify; getAppliedSize must report the PTY's last real size, not the drop.
     it('does not advance when a resize is dropped after the session exited', async () => {
       const { id } = await adapter.spawn({ cols: 200, rows: 50 })
 
-      // Simulate the child exiting, then a late narrow resize racing in. The
-      // daemon Session.resize early-returns for an exited session, so the child
-      // is never resized and the applied size never becomes the requested 80×24.
+      // Child exits, then a late narrow resize races in; daemon Session.resize early-returns for an exited session so 80×24 never lands.
       lastSubprocess._simulateExit(0)
       await new Promise((r) => setTimeout(r, 50))
 
       adapter.resize(id, 80, 24)
       await new Promise((r) => setTimeout(r, 50))
 
-      // The drop must be visible: the subprocess was never resized to the narrow
-      // dims the renderer requested, and getAppliedSize never reports 80 cols —
-      // it stays wide (or null once reaped), never masking the drop as "applied".
+      // The drop must stay visible: never resized to 80 cols, and getAppliedSize never reports 80 (stays wide, or null once reaped).
       expect(lastSubprocess.resize).not.toHaveBeenCalledWith(80, 24)
       const applied = await adapter.getAppliedSize(id)
       expect(applied?.cols).not.toBe(80)
+    })
+  })
+
+  describe('probePtyLiveness', () => {
+    it('reads daemon truth before a fresh adapter has attached the session', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const activeSessionIds = (adapter as unknown as { activeSessionIds: Set<string> })
+        .activeSessionIds
+      activeSessionIds.clear()
+
+      expect(adapter.hasPty(id)).toBe(false)
+      await expect(adapter.probePtyLiveness(id)).resolves.toBe(true)
+      await expect(adapter.probePtyLiveness('missing-session')).resolves.toBe(false)
+    })
+
+    it('returns unknown when the daemon cannot answer', async () => {
+      const client = (
+        adapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      vi.spyOn(client, 'request').mockRejectedValueOnce(new Error('unavailable'))
+
+      await expect(adapter.probePtyLiveness('session')).resolves.toBeNull()
+    })
+
+    function createProbeAdapter(
+      protocolVersion: number,
+      request: ReturnType<typeof vi.fn>
+    ): DaemonPtyAdapter {
+      const probeAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+      ;(
+        probeAdapter as unknown as {
+          client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+        }
+      ).client = { request, disconnect: vi.fn() }
+      return probeAdapter
+    }
+
+    // Why: a pre-v18 daemon rejects `getSize` as an unknown request type, so it would answer
+    // `null` forever — and one `null` makes the owner fan-out permanently unprovable, which
+    // would leave a genuinely dead pane unable to ever retire and respawn.
+    it('answers a pre-getSize daemon from its session inventory', async () => {
+      // Faithful pre-v18 daemon: routeRequest falls through its switch and error-replies.
+      const request = vi.fn(async (type: string) => {
+        if (type !== 'listSessions') {
+          throw new Error(`Unknown request type: ${type}`)
+        }
+        return {
+          sessions: [
+            { sessionId: 'legacy-live', isAlive: true },
+            { sessionId: 'legacy-exited', isAlive: false }
+          ]
+        }
+      })
+      const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBe(true)
+      await expect(legacy.probePtyLiveness('legacy-exited')).resolves.toBe(false)
+      await expect(legacy.probePtyLiveness('never-existed')).resolves.toBe(false)
+      expect(request).toHaveBeenCalledWith('listSessions', undefined, LIVENESS_PROBE_TIMEOUT_MS)
+      expect(request).not.toHaveBeenCalledWith('getSize', expect.anything())
+
+      legacy.dispose()
+    })
+
+    // The P0 boundary: an owner that cannot be reached must never read as one that answered "absent".
+    it('still answers unknown when a pre-getSize daemon cannot be reached', async () => {
+      const request = vi.fn(async () => {
+        throw new Error('Not connected')
+      })
+      const legacy = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.probePtyLiveness('legacy-live')).resolves.toBeNull()
+
+      legacy.dispose()
+    })
+
+    // Why: `getSize` shipped into an already-released protocol without a version bump, so a
+    // daemon can report a version that implies support and still reject the request. Gating on
+    // the number alone left those daemons permanently unprovable — the same wedge, narrowed.
+    it('falls back when a daemon rejects getSize despite reporting a version that has it', async () => {
+      const request = vi.fn(async (type: string) => {
+        if (type === 'getSize') {
+          throw new Error(`Unknown request type: ${type}`)
+        }
+        return { sessions: [{ sessionId: 'ambiguous-live', isAlive: true }] }
+      })
+      const ambiguous = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
+
+      await expect(ambiguous.probePtyLiveness('ambiguous-live')).resolves.toBe(true)
+      await expect(ambiguous.probePtyLiveness('never-existed')).resolves.toBe(false)
+
+      // The rejection is remembered, so later probes skip the round trip that cannot work.
+      expect(request.mock.calls.filter(([type]) => type === 'getSize')).toHaveLength(1)
+      // Why pinned here: a wedged daemon holds its socket open, so an unbounded getSize would
+      // stall a pane mount for the client's 30s default instead of answering "unknown" in 2s.
+      expect(request).toHaveBeenCalledWith(
+        'getSize',
+        { sessionId: 'ambiguous-live' },
+        LIVENESS_PROBE_TIMEOUT_MS
+      )
+
+      ambiguous.dispose()
+    })
+
+    // The safety direction: only the daemon's own "I do not implement that" may switch strategy.
+    // A transient failure must stay unproven rather than be retried as a capability question.
+    it('keeps a transient getSize failure unproven instead of treating it as unsupported', async () => {
+      const request = vi.fn(async (type: string) => {
+        if (type === 'getSize') {
+          throw new Error('Connection lost')
+        }
+        return { sessions: [] }
+      })
+      const flaky = createProbeAdapter(GET_SIZE_PROTOCOL_VERSION, request)
+
+      await expect(flaky.probePtyLiveness('live-elsewhere')).resolves.toBeNull()
+      expect(request).not.toHaveBeenCalledWith('listSessions', undefined, LIVENESS_PROBE_TIMEOUT_MS)
+
+      flaky.dispose()
     })
   })
 
@@ -422,6 +1321,60 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         source: 'headless'
       })
     })
+
+    // A proven `0` and an absent field are different facts. Dropping
+    // the zero left consumers unable to tell "the app negotiated nothing" from
+    // "this source could not say", which is what makes Preview guess wrong.
+    it('publishes proven kitty flags including a known zero', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('plain output\r\n')
+
+      await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
+        kittyKeyboardFlags: 0
+      })
+
+      lastSubprocess._simulateData('\x1b[>8u')
+      await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
+        kittyKeyboardFlags: 8
+      })
+    })
+
+    // The other half of that contract: a daemon that cannot say must leave the
+    // key absent, so consumers keep the state unknown instead of reading a `0`.
+    it('omits kitty flags when the daemon snapshot has none', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('plain output\r\n')
+      const realRequest = DaemonClient.prototype.request
+      const legacyClient = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async function (this: DaemonClient, type, payload, timeoutMs) {
+          const result = await realRequest.call(this, type, payload, timeoutMs)
+          if (type !== 'getSnapshot') {
+            return result
+          }
+          const { snapshot } = result as { snapshot: { modes: Record<string, unknown> } }
+          const { kittyKeyboardFlags: _omitted, ...modes } = snapshot.modes
+          return { snapshot: { ...snapshot, modes } }
+        })
+
+      const snapshot = await adapter.getBufferSnapshot(id)
+      legacyClient.mockRestore()
+
+      expect(snapshot).not.toBeNull()
+      expect(snapshot).not.toHaveProperty('kittyKeyboardFlags')
+    })
+
+    it('exposes live state separately from the visible frame', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      lastSubprocess._simulateData('\x1b[?1049h\x1b[?1004h\x1b[?25lframe')
+
+      const snapshot = await adapter.getBufferSnapshot(id)
+
+      expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?1004h')
+      expect(snapshot?.frameRestoreAnsi).toContain('\x1b[?25l')
+      expect(snapshot?.frameRestoreAnsi).not.toContain('frame')
+      expect(snapshot?.data).toContain('frame')
+    })
   })
 
   describe('shutdown', () => {
@@ -437,12 +1390,45 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(lastSubprocess.kill).not.toHaveBeenCalled()
       expect(lastSubprocess.forceKill).toHaveBeenCalled()
     })
+
+    // Why: shutdown can be the first lazy-client op after restart; connect before killing or a healthy session is orphaned (#7742).
+    it('kills a live session from a fresh adapter that has not connected yet', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      try {
+        await freshAdapter.shutdown(id, { immediate: true })
+      } finally {
+        freshAdapter.dispose()
+      }
+      expect(lastSubprocess.forceKill).toHaveBeenCalled()
+      await expect(adapter.listProcesses()).resolves.not.toContainEqual(
+        expect.objectContaining({ id })
+      )
+    })
+
+    it('coalesces the lazy connection when a fresh adapter shuts down concurrent sessions', async () => {
+      const ids = await Promise.all(
+        ['concurrent-kill-a', 'concurrent-kill-b'].map(async (sessionId) =>
+          adapter.spawn({ cols: 80, rows: 24, sessionId }).then((result) => result.id)
+        )
+      )
+      const freshAdapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+      daemonLogEvents.length = 0
+
+      try {
+        await Promise.all(ids.map((id) => freshAdapter.shutdown(id, { immediate: true })))
+      } finally {
+        freshAdapter.dispose()
+      }
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+      expect(daemonLogEvents.filter((event) => event === 'client-hello-accepted')).toHaveLength(2)
+    })
   })
 
   describe('sessionsNeedingFullCheckpoint cleanup (leak regression)', () => {
-    // Why: the cold-restore path flags a session for a full checkpoint. If the
-    // session exits before that checkpoint lands, the flag was never cleared and
-    // leaked a permanent Set entry for the daemon's lifetime.
+    // Why: cold-restore flags a session for a full checkpoint; exiting before it lands leaked a permanent Set entry for the daemon's life.
     it('clears the pending full-checkpoint flag when a session exits', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
       const internals = adapter as unknown as { sessionsNeedingFullCheckpoint: Set<string> }
@@ -530,7 +1516,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateExit(42)
 
       await waitFor(() => exits.length > 0)
-      expect(exits[0]).toEqual({ id, code: 42 })
+      expect(exits[0]).toEqual({ id, code: 42, incarnationId: expect.any(String) })
     })
   })
 
@@ -574,12 +1560,163 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.snapshot).toContain('prompt$')
     })
 
+    it('publishes the alt-frame payload as explicit strings', async () => {
+      const sessionId = 'alt-frame-boundary'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSubprocess._simulateData('\x1b[?1049h\x1b[HSTATIC-ALT-FRAME')
+      await new Promise((r) => setTimeout(r, 50))
+
+      const result = await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      expect(result.snapshotPrefixAnsi).toContain('\x1b[?1049h')
+      expect(result.snapshotFrameAnsi).toContain('STATIC-ALT-FRAME')
+      expect(result.snapshot).toBe([result.snapshotPrefixAnsi, result.snapshotFrameAnsi].join(''))
+      expect(result.snapshotFrameRestoreAnsi).not.toContain('STATIC-ALT-FRAME')
+    })
+
+    it('returns the preserved sequence from attach-only adoption', async () => {
+      const sessionId = 'attach-sequence-handoff'
+      await adapter.spawn({ cols: 80, rows: 24, sessionId })
+      lastSubprocess._simulateData('preserved output')
+      await new Promise((r) => setTimeout(r, 50))
+
+      await expect(adapter.attach(sessionId)).resolves.toEqual({
+        providerSequence: {
+          value: 'preserved output'.length,
+          generation: 'continued'
+        }
+      })
+    })
+
     it('returns plain result for new sessionId', async () => {
       const result = await adapter.spawn({ cols: 80, rows: 24, sessionId: 'brand-new' })
       expect(result.id).toBe('brand-new')
       expect(result.isReattach).toBeUndefined()
       expect(result.snapshot).toBeUndefined()
       expect(result.providerSequence).toEqual({ value: 0, generation: 'reset' })
+    })
+
+    it('forwards attach-only and never creates an absent stable session', async () => {
+      const subprocessBeforeAttach = lastSubprocess
+      await expect(
+        adapter.spawn({
+          cols: 80,
+          rows: 24,
+          sessionId: 'missing-stable-pane-session',
+          attachOnly: true
+        })
+      ).rejects.toThrow('Session not found: missing-stable-pane-session')
+      expect(lastSubprocess).toBe(subprocessBeforeAttach)
+    })
+
+    it('does not inspect cold history for attach-only ownership checks', async () => {
+      const historyDir = join(dir, 'attach-only-history')
+      const historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        historyPath: historyDir
+      })
+      const reader = (historyAdapter as unknown as { historyReader: HistoryReader }).historyReader
+      const probe = vi.spyOn(reader, 'probeRestorableHistory')
+      const getAppliedSize = vi.spyOn(historyAdapter, 'getAppliedSize')
+
+      try {
+        await expect(
+          historyAdapter.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'missing-attach-only-history-session',
+            attachOnly: true
+          })
+        ).rejects.toThrow('Session not found: missing-attach-only-history-session')
+        expect(probe).not.toHaveBeenCalled()
+        expect(getAppliedSize).not.toHaveBeenCalled()
+      } finally {
+        historyAdapter.dispose()
+      }
+    })
+
+    it('reattaches a stable pane through a preserved v30 daemon', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi.spyOn(DaemonClient.prototype, 'request').mockResolvedValue({
+        isNew: false,
+        snapshot: null,
+        pid: 4321,
+        shellState: 'unsupported',
+        incarnationId: 'legacy-stable-pane-incarnation'
+      })
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'legacy-stable-pane-session',
+            attachOnly: true,
+            command: 'must-not-run'
+          })
+        ).resolves.toMatchObject({
+          id: 'legacy-stable-pane-session',
+          incarnationId: 'legacy-stable-pane-incarnation',
+          isReattach: true
+        })
+        expect(request).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({
+            command: undefined,
+            launchAgent: undefined,
+            startupCommandDelivery: undefined
+          })
+        )
+        expect(request.mock.calls[0]?.[1]).not.toHaveProperty('attachOnly')
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
+
+    it('retires a replacement created by a raced-out v30 stable pane', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockResolvedValueOnce({
+          isNew: true,
+          snapshot: null,
+          pid: 4321,
+          shellState: 'unsupported',
+          incarnationId: 'legacy-replacement-incarnation'
+        })
+        .mockResolvedValueOnce({})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(
+          legacy.spawn({
+            cols: 80,
+            rows: 24,
+            sessionId: 'raced-out-legacy-session',
+            attachOnly: true,
+            command: 'must-not-run'
+          })
+        ).rejects.toThrow('Session not found: raced-out-legacy-session')
+        expect(request).toHaveBeenNthCalledWith(
+          1,
+          'createOrAttach',
+          expect.objectContaining({ command: undefined })
+        )
+        expect(request).toHaveBeenNthCalledWith(2, 'kill', {
+          sessionId: 'raced-out-legacy-session',
+          immediate: true
+        })
+        expect(legacy.getActiveSessionIds()).toEqual([])
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
     })
   })
 
@@ -600,11 +1737,151 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       adapter2.dispose()
     })
+
+    it('preserves the live session dimensions instead of forcing 80×24', async () => {
+      const { id } = await adapter.spawn({ cols: 137, rows: 41 })
+
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+      await adapter2.attach(id)
+
+      // The running TUI keeps its geometry: no resize, size unchanged.
+      expect(lastSubprocess.resize).not.toHaveBeenCalled()
+      expect(await adapter2.getAppliedSize(id)).toEqual({ cols: 137, rows: 41 })
+      adapter2.dispose()
+    })
+
+    it('keeps legacy attach behavior when no output sequence is available', async () => {
+      const ensureConnected = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const request = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : ({
+                isNew: false,
+                snapshot: null,
+                pid: 4321,
+                shellState: 'unsupported',
+                incarnationId: 'legacy-attach-incarnation'
+              } as never)
+        )
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('legacy-session')).resolves.toBeUndefined()
+      } finally {
+        legacy.dispose()
+        request.mockRestore()
+        ensureConnected.mockRestore()
+      }
+    })
+
+    it('refuses to create when the session is absent (attach-only)', async () => {
+      const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+      await expect(adapter2.attach('wt-x@@deadbeef')).rejects.toThrow(
+        'Session not found: wt-x@@deadbeef'
+      )
+
+      // No shell was spawned as a side effect of the refused attach.
+      expect(lastSpawnOpts).toBeNull()
+      adapter2.dispose()
+    })
+
+    it('retires the accidental spawn of a pre-v31 daemon that ignores attachOnly', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) =>
+          type === 'getSize'
+            ? ({ size: { cols: 100, rows: 30 } } as never)
+            : type === 'createOrAttach'
+              ? ({ isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never)
+              : ({} as never)
+        )
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('raced-legacy-session')).rejects.toThrow(
+          'Session not found: raced-legacy-session'
+        )
+
+        expect(requestSpy).toHaveBeenCalledWith(
+          'createOrAttach',
+          expect.objectContaining({ cols: 100, rows: 30, attachOnly: true })
+        )
+        expect(requestSpy).toHaveBeenCalledWith('kill', {
+          sessionId: 'raced-legacy-session',
+          immediate: true
+        })
+      } finally {
+        legacy.dispose()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
+
+    it('surfaces a failed retire of the accidental legacy spawn instead of swallowing it', async () => {
+      const ensureConnectedSpy = vi
+        .spyOn(DaemonClient.prototype, 'ensureConnected')
+        .mockResolvedValue()
+      const requestSpy = vi
+        .spyOn(DaemonClient.prototype, 'request')
+        .mockImplementation(async (type: string) => {
+          if (type === 'getSize') {
+            return { size: { cols: 100, rows: 30 } } as never
+          }
+          if (type === 'createOrAttach') {
+            return { isNew: true, pid: 77, shellState: 'unsupported', snapshot: null } as never
+          }
+          throw new Error('kill transport lost')
+        })
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 30 })
+      try {
+        await expect(legacy.attach('orphaned-legacy-session')).rejects.toThrow(
+          'Session not found: orphaned-legacy-session'
+        )
+
+        // The orphaned replacement is at least diagnosable.
+        expect(warnSpy).toHaveBeenCalledWith(
+          '[daemon] attach-only retire of accidental legacy spawn failed',
+          expect.objectContaining({ sessionId: 'orphaned-legacy-session' })
+        )
+      } finally {
+        legacy.dispose()
+        warnSpy.mockRestore()
+        requestSpy.mockRestore()
+        ensureConnectedSpy.mockRestore()
+      }
+    })
   })
 
   describe('listProcesses', () => {
+    // Why: hasPty reads the activeSessionIds cache; an exit missed while the
+    // socket was down must not survive an authoritative inventory, or absence
+    // proofs (terminal list demotion, send guard) are defeated forever.
+    it('drops cached session ids an authoritative inventory omits', async () => {
+      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const staleId = 'repo::/repo/stale@@deadbeef'
+      ;(adapter as unknown as { activeSessionIds: Set<string> }).activeSessionIds.add(staleId)
+      expect(adapter.hasPty(staleId)).toBe(true)
+
+      await adapter.listProcesses()
+
+      expect(adapter.hasPty(staleId)).toBe(false)
+      expect(adapter.hasPty(id)).toBe(true)
+    })
+
     it('returns active sessions', async () => {
-      await adapter.spawn({ cols: 80, rows: 24, cwd: '/repo/owned-before-osc7' })
+      await adapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/repo/owned-before-osc7',
+        worktreeId: 'repo::/repo/owned-before-osc7'
+      })
       await adapter.spawn({ cols: 80, rows: 24 })
 
       const procs = await adapter.listProcesses()
@@ -613,6 +1890,177 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(procs[0]).toHaveProperty('cwd')
       expect(procs[0]).toHaveProperty('title')
       expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
+      expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
+      expect(adapter.getLastAuditObservation()).toMatchObject({
+        state: 'present',
+        reason: 'authenticated_inventory',
+        inventoryAuthority: 'authoritative'
+      })
+    })
+
+    it('loads persisted Linux birth identity for audit observations', async () => {
+      adapter.dispose()
+      await server.shutdown()
+      const startedAtMs = 1_700_000_000_000
+      const launchNonce = 'launch-with-linux-identity'
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        startedAtMs,
+        launchNonce,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+      const pidPath = join(dir, 'daemon.pid')
+      writeFileSync(
+        pidPath,
+        serializeDaemonPidFile({
+          pid: process.pid,
+          startedAtMs,
+          launchNonce,
+          linuxStartTicks: '4242',
+          bootId: 'boot-a'
+        })
+      )
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
+      try {
+        adapter = new DaemonPtyAdapter({ socketPath, tokenPath, pidPath })
+
+        await expect(adapter.listProcesses()).resolves.toEqual([])
+
+        expect(adapter.getLastAuditObservation()?.exactIncarnation).toMatchObject({
+          linuxStartTicks: '4242',
+          bootId: 'boot-a'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
+    it('reports the daemon session WSL owner', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const spawned = await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+
+        const procs = await adapter.listProcesses()
+
+        expect(procs.find((process) => process.id === spawned.id)?.wslDistro).toBe('Ubuntu')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+    })
+
+    it('retains authenticated identity and reports replacement across a same-endpoint reconnect', async () => {
+      await adapter.listProcesses()
+      const firstIdentity = adapter.getLastAuthenticatedDaemonIdentity()
+      expect(firstIdentity).not.toBeNull()
+      const identityChanges: {
+        previous: NonNullable<typeof firstIdentity>
+        current: NonNullable<typeof firstIdentity>
+      }[] = []
+      adapter.onDaemonIdentityChanged(() => {
+        throw new Error('audit listener failed')
+      })
+      adapter.onDaemonIdentityChanged((event) => identityChanges.push(event))
+
+      await server.shutdown()
+      await waitFor(
+        () => !(adapter as unknown as { client: { isConnected(): boolean } }).client.isConnected()
+      )
+      expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(firstIdentity)
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        launchNonce: 'replacement-launch',
+        startedAtMs: (firstIdentity?.startedAtMs ?? 0) + 10_000,
+        log: daemonLog,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+
+      expect(identityChanges).toEqual([
+        {
+          previous: firstIdentity,
+          current: {
+            pid: process.pid,
+            startedAtMs: (firstIdentity?.startedAtMs ?? 0) + 10_000,
+            launchNonce: 'replacement-launch'
+          }
+        }
+      ])
+      expect(adapter.getLastAuthenticatedDaemonIdentity()).toEqual(identityChanges[0]?.current)
+    })
+
+    it('isolates audit observation listeners from inventory and later listeners', async () => {
+      const laterListener = vi.fn()
+      adapter.onAuditEligibilityObservation(() => {
+        throw new Error('audit listener failed')
+      })
+      adapter.onAuditEligibilityObservation(laterListener)
+
+      await expect(adapter.listProcesses()).resolves.toEqual([])
+
+      expect(laterListener).toHaveBeenCalledOnce()
+      expect(laterListener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          state: 'present',
+          reason: 'authenticated_inventory'
+        })
+      )
+      expect(adapter.getLastAuditObservation()).toMatchObject({
+        state: 'present',
+        reason: 'authenticated_inventory'
+      })
+    })
+
+    it('audits token ENOENT only after an authenticated disconnect', async () => {
+      const observations: {
+        trigger: string
+        state: string
+        evidenceSources: readonly string[]
+      }[] = []
+      adapter.onAuditEligibilityObservation((observation) => observations.push(observation))
+      await adapter.listProcesses()
+
+      await server.shutdown()
+      await waitFor(
+        () => !(adapter as unknown as { client: { isConnected(): boolean } }).client.isConnected()
+      )
+      await expect(adapter.listProcesses()).rejects.toThrow()
+      await waitFor(() =>
+        observations.some(
+          (observation) => observation.trigger === 'token_missing_after_authenticated_disconnect'
+        )
+      )
+
+      expect(observations).toContainEqual(
+        expect.objectContaining({
+          trigger: 'token_missing_after_authenticated_disconnect',
+          state: 'unknown',
+          evidenceSources: expect.arrayContaining(['token_file'])
+        })
+      )
     })
   })
 
@@ -634,6 +2082,118 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       vi.mocked(lastSubprocess.getForegroundProcess).mockReturnValue('codex')
       expect(await adapter.getForegroundProcess(id)).toBe('codex')
     })
+  })
+
+  describe('inspectProcess on pre-inspection daemon protocols', () => {
+    type ClientInternals = {
+      client: { request: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }
+    }
+
+    function createInspectionAdapter(
+      protocolVersion: number,
+      request: ReturnType<typeof vi.fn>
+    ): DaemonPtyAdapter {
+      const inspectionAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion
+      })
+      ;(inspectionAdapter as unknown as ClientInternals).client = {
+        request,
+        disconnect: vi.fn()
+      }
+      return inspectionAdapter
+    }
+
+    it('reports protocol 10 inspection as unavailable without unsupported RPCs', async () => {
+      const request = vi.fn()
+      const legacy = createInspectionAdapter(GET_FOREGROUND_PROCESS_PROTOCOL_VERSION - 1, request)
+
+      await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: true,
+        unavailable: true
+      })
+      await expect(legacy.getForegroundProcess('sess-a')).resolves.toBeNull()
+      await expect(legacy.hasChildProcesses('sess-a')).resolves.toBe(true)
+      expect(request).not.toHaveBeenCalled()
+
+      legacy.dispose()
+    })
+
+    it.each([
+      GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
+      COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+    ])('composes protocol %s inspection from getForegroundProcess', async (protocolVersion) => {
+      const request = vi.fn(async () => ({ foregroundProcess: 'codex' }))
+      const legacy = createInspectionAdapter(protocolVersion, request)
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true
+      })
+      expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
+      expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
+
+      legacy.dispose()
+    })
+
+    it('reports an idle shell as having no child processes', async () => {
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: 'bash' }))
+      )
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: 'bash',
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('reports a null foreground as idle, matching what the legacy daemon can report', async () => {
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => ({ foregroundProcess: null }))
+      )
+
+      expect(await legacy.inspectProcess('sess-a')).toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false
+      })
+
+      legacy.dispose()
+    })
+
+    it('rejects rather than reading as idle when the daemon call fails', async () => {
+      // Why: getForegroundProcess swallows errors into null; composing through it would turn a dead
+      // socket into a false "agent exited" completion, the mirror of the bug this path fixes.
+      const legacy = createInspectionAdapter(
+        COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1,
+        vi.fn(async () => {
+          throw new Error('socket_closed')
+        })
+      )
+
+      await expect(legacy.inspectProcess('sess-a')).rejects.toThrow('socket_closed')
+
+      legacy.dispose()
+    })
+
+    it.each([COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
+      'delegates protocol %s inspection to inspectProcess',
+      async (protocolVersion) => {
+        const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
+        const current = createInspectionAdapter(protocolVersion, request)
+
+        await current.inspectProcess('sess-a')
+
+        expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
+
+        current.dispose()
+      }
+    )
   })
 
   describe('serialize / revive', () => {
@@ -691,11 +2251,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('evicts oldest tombstone when exceeding limit', async () => {
-      // Why: MAX_TOMBSTONES is 1000, but spawning that many real sessions is
-      // slow. Instead verify the eviction logic by spawning a small batch and
-      // checking the oldest tombstone is gone after crossing the cap. We access
-      // the private map size via the public API: the oldest session should
-      // become spawnable again once evicted.
+      // Why: MAX_TOMBSTONES is 1000; spawning that many is slow, so verify eviction with a small batch via the public spawn API.
       const ids: string[] = []
       for (let i = 0; i < 5; i++) {
         const id = `evict-${i}`
@@ -716,8 +2272,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })
       await adapter.shutdown(ids[0], { immediate: true })
 
-      // First tombstone was re-added at the end of the Map, so eviction
-      // order is now [evict-1, evict-2, evict-3, evict-4, evict-0]
+      // First tombstone was re-added at the Map's end, so eviction order is now [evict-1, evict-2, evict-3, evict-4, evict-0]
       await expect(adapter.spawn({ cols: 80, rows: 24, sessionId: ids[0] })).rejects.toThrow(
         'was explicitly killed'
       )
@@ -766,13 +2321,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('kills sessions whose id does not match the minted format, even if id is in valid set', async () => {
-      // Why: parsePtySessionId rejects bare UUIDs (no `@@`) and ids without
-      // the `::` worktree shape. Such sessions can't be attributed to any
-      // current worktree and must be treated as orphans regardless of
-      // valid-set membership. Passing the bare-uuid as a member of
-      // validWorktreeIds proves the new strict parser short-circuits the
-      // membership check — under the old loose parser this session would
-      // have been kept.
+      // Why: parsePtySessionId rejects ids with no worktree shape, so they're orphaned regardless of valid-set membership.
       const sessionId = 'bare-uuid-no-separators'
       await adapter.spawn({ cols: 80, rows: 24, sessionId })
 
@@ -820,8 +2369,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       lastSubprocess._simulateData('hello from pty\r\n')
       await new Promise((r) => setTimeout(r, 50))
 
-      // Why: checkpoint-based persistence does not write on every data event.
-      // No scrollback.bin should exist — checkpoints write checkpoint.json on a timer.
+      // Why: checkpoint-based persistence writes checkpoint.json on a timer, never scrollback.bin per data event.
       expect(existsSync(join(historyDir, getHistorySessionDirName(id), 'scrollback.bin'))).toBe(
         false
       )
@@ -845,8 +2393,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         await new Promise((r) => setTimeout(r, 80))
 
-        // Why: idle terminals can be numerous. A periodic pass with no data
-        // must not serialize every live daemon session just because it exists.
+        // Why: idle terminals can be numerous; a periodic pass with no data must not serialize every live session.
         expect(appendSpy).not.toHaveBeenCalled()
 
         lastSubprocess._simulateData('new output\r\n')
@@ -854,8 +2401,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
           { kind: 'output', data: 'new output\r\n' }
         ])
-        // Why: the periodic tick must persist increments, never re-serialize
-        // the full emulator buffer (the issue #5096 stall).
+        // Why: the periodic tick must persist increments, never re-serialize the full emulator buffer (the issue #5096 stall).
         expect(checkpointSpy).not.toHaveBeenCalled()
         const logPath = join(historyDir, getHistorySessionDirName(id), 'output.log')
         await waitFor(() => {
@@ -896,7 +2442,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           snapshot: null
         }
       })
-      const checkpoint = vi.fn(async () => {})
+      const checkpoint = vi.fn(async () => 'committed' as const)
       const appendIncrements = vi.fn(async () => 'ok' as const)
       const dispose = vi.fn(async () => {})
       const disconnect = vi.fn()
@@ -952,11 +2498,18 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       function makeCooldownHarness(takeResult: {
         overflowed: boolean
         appendResult?: 'ok' | 'needs-checkpoint'
+        checkpointResult?: 'committed' | 'retryable' | 'unavailable'
+        snapshotRecords?: PendingOutputRecord[]
       }): CooldownInternals {
         historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
         const request = vi.fn(async (_type: string, payload: Record<string, unknown>) => {
           if (payload.includeSnapshot === true) {
-            return { records: [], seq: 2, overflowed: false, snapshot: { cols: 80, rows: 24 } }
+            return {
+              records: takeResult.snapshotRecords ?? [],
+              seq: 2,
+              overflowed: false,
+              snapshot: { cols: 80, rows: 24 }
+            }
           }
           return {
             records: [{ kind: 'output', data: 'x' }],
@@ -968,7 +2521,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         const internals = historyAdapter as unknown as CooldownInternals
         internals.client = { request, disconnect: vi.fn() }
         internals.historyManager = {
-          checkpoint: vi.fn(async () => {}),
+          checkpoint: vi.fn(async () => takeResult.checkpointResult ?? 'committed'),
           appendIncrements: vi.fn(async () => takeResult.appendResult ?? 'ok'),
           dispose: vi.fn(async () => {})
         }
@@ -982,15 +2535,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set(['hot']))
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
 
-        // Second tick inside the cooldown: the overflow defers and flags the
-        // session; no snapshot write.
+        // Second tick inside the cooldown: the overflow defers and flags the session; no snapshot write.
         await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.sessionsNeedingFullCheckpoint.has('hot')).toBe(true)
         const requestsAfterSecondTick = internals.client.request.mock.calls.length
 
-        // Ticks 3..24 (a hot session over ~2 minutes): flagged + cooling down
-        // short-circuits with ZERO daemon RPCs and zero disk writes.
+        // Ticks 3..24 (a hot session over ~2 minutes): flagged + cooling down short-circuits with zero daemon RPCs and zero disk writes.
         for (let i = 0; i < 22; i++) {
           await expect(internals.checkpointSessions(['hot'])).resolves.toEqual(new Set())
         }
@@ -1009,8 +2560,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await internals.checkpointSessions(['hot'])
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
 
-        // Cooldown is active, but quit/sleep-time persistence must not be
-        // deferred — stale-on-crash is acceptable, stale-on-clean-exit is not.
+        // Cooldown is active, but quit/sleep persistence must not defer — stale-on-crash is acceptable, stale-on-clean-exit is not.
         await expect(internals.checkpointSessions(['hot'], { final: true })).resolves.toEqual(
           new Set(['hot'])
         )
@@ -1032,6 +2582,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await expect(internals.checkpointSessions(['capped'])).resolves.toEqual(new Set(['capped']))
         expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
         expect(internals.sessionsNeedingFullCheckpoint.has('capped')).toBe(false)
+      })
+
+      it('defers a teardown checkpoint that fails to serialize and drops its held tail', async () => {
+        const internals = makeCooldownHarness({
+          overflowed: false,
+          checkpointResult: 'retryable',
+          // Held shell-ready bytes ride out with the teardown snapshot (Session.prepareForFinalSnapshot).
+          snapshotRecords: [{ kind: 'output', data: 'held tail' }]
+        })
+
+        await expect(
+          internals.checkpointSessions(['sleeping'], { final: true, teardown: true })
+        ).resolves.toEqual(new Set())
+
+        expect(internals.historyManager.checkpoint).toHaveBeenCalledTimes(1)
+        expect(internals.sessionsNeedingFullCheckpoint.has('sleeping')).toBe(true)
+        // Why the tail must not be appended: the output this take drained went into the failed snapshot, so the tail
+        // would land at a contiguous seq over that hole and pass the log's gap detection.
+        expect(internals.historyManager.appendIncrements).not.toHaveBeenCalled()
+        expect(internals.lastFullCheckpointAt.has('sleeping')).toBe(false)
       })
     })
 
@@ -1154,8 +2724,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
         const metaPath = join(historyDir, getHistorySessionDirName(id), 'meta.json')
         const checkpointPath = join(historyDir, getHistorySessionDirName(id), 'checkpoint.json')
-        // Why: keep-history sleep stays unclean so cold restore remains eligible;
-        // the final checkpoint is the deterministic handoff signal.
+        // Why: keep-history sleep stays unclean so cold restore stays eligible; the final checkpoint is the deterministic handoff signal.
         expect(JSON.parse(readFileSync(metaPath, 'utf-8')).endedAt).toBeNull()
         expect(JSON.parse(readFileSync(checkpointPath, 'utf-8')).snapshotAnsi).toContain(
           'first cycle content'
@@ -1296,12 +2865,193 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Server running')
       expect(result.coldRestore!.cwd).toBe('/projects/myapp')
+      expect(result.coldRestore).toMatchObject({ cols: 120, rows: 40 })
       expect(lastSpawnOpts).toMatchObject({
         sessionId,
         cwd: '/projects/myapp',
         cols: 120,
         rows: 40
       })
+    })
+
+    it('uploads a large cold-restore seed in bounded protocol chunks', async () => {
+      const sessionId = 'chunked-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const snapshotAnsi = `${'x'.repeat(TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 1)}\r\nCHUNKED-SEED-MARKER`
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/chunked',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-25T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        join(sessionDir, 'checkpoint.json'),
+        JSON.stringify({
+          snapshotAnsi,
+          scrollbackAnsi: '',
+          rehydrateSequences: '',
+          cwd: '/projects/chunked',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-07-25T10:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore?.scrollback).toContain('CHUNKED-SEED-MARKER')
+      expect(requestSpy.mock.calls.map(([type]) => type)).toEqual(
+        expect.arrayContaining([
+          'startHistorySeedTransfer',
+          'appendHistorySeedTransfer',
+          'finishHistorySeedTransfer',
+          'createOrAttach'
+        ])
+      )
+      const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+      expect(createPayload).toMatchObject({
+        historySeedTransferId: expect.any(String)
+      })
+      expect(createPayload).not.toHaveProperty('historySeed')
+      await expect(historyAdapter.getBufferSnapshot(sessionId)).resolves.toMatchObject({
+        data: expect.stringContaining('CHUNKED-SEED-MARKER')
+      })
+    })
+
+    it('keeps large recovery renderer-only with a preserved legacy daemon', async () => {
+      await server.shutdown()
+      server = new DaemonServer({
+        socketPath,
+        tokenPath,
+        protocolVersion: 29,
+        spawnSubprocess: (opts) => {
+          lastSpawnOpts = opts
+          lastSubprocess = createMockSubprocess()
+          return lastSubprocess
+        }
+      })
+      await server.start()
+      const sessionId = 'legacy-large-cold-restore'
+      const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+      const checkpointPath = join(sessionDir, 'checkpoint.json')
+      mkdirSync(sessionDir, { recursive: true })
+      writeFileSync(
+        join(sessionDir, 'meta.json'),
+        JSON.stringify({
+          cwd: '/projects/legacy',
+          cols: 80,
+          rows: 24,
+          startedAt: '2026-07-25T10:00:00Z',
+          endedAt: null,
+          exitCode: null
+        })
+      )
+      writeFileSync(
+        checkpointPath,
+        JSON.stringify({
+          snapshotAnsi: `${'x'.repeat(TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS + 1)}LEGACY-MARKER`,
+          scrollbackAnsi: '',
+          rehydrateSequences: '',
+          cwd: '/projects/legacy',
+          cols: 80,
+          rows: 24,
+          modes: {
+            bracketedPaste: false,
+            mouseTracking: false,
+            applicationCursor: false,
+            alternateScreen: false
+          },
+          scrollbackLines: 0,
+          generation: 0,
+          checkpointedAt: '2026-07-25T10:00:00Z'
+        })
+      )
+      historyAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: 29,
+        historyPath: historyDir
+      })
+      const client = (
+        historyAdapter as unknown as {
+          client: { request: (type: string, payload?: unknown) => Promise<unknown> }
+        }
+      ).client
+      const requestSpy = vi.spyOn(client, 'request')
+
+      const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
+
+      expect(result.coldRestore?.scrollback).toContain('LEGACY-MARKER')
+      expect(requestSpy.mock.calls.map(([type]) => type)).not.toContain('startHistorySeedTransfer')
+      const createPayload = requestSpy.mock.calls.find(([type]) => type === 'createOrAttach')?.[1]
+      expect(createPayload).not.toHaveProperty('historySeed')
+      expect(createPayload).not.toHaveProperty('historySeedTransferId')
+      expect(existsSync(checkpointPath)).toBe(true)
+      const managerInternals = historyAdapter.getHistoryManager()! as unknown as {
+        writers: Map<string, unknown>
+      }
+      expect(managerInternals.writers.has(sessionId)).toBe(false)
+    })
+
+    it('repairs legacy hostname UNC cwd for WSL spawn and cold-restore metadata', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      try {
+        const sessionId = 'wsl-legacy-cwd'
+        const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
+        mkdirSync(sessionDir, { recursive: true })
+        writeFileSync(
+          join(sessionDir, 'meta.json'),
+          JSON.stringify({
+            cwd: `\\\\${hostname()}\\home\\jin`,
+            cols: 80,
+            rows: 24,
+            startedAt: '2026-04-15T10:00:00Z',
+            endedAt: null,
+            exitCode: null
+          })
+        )
+        writeFileSync(join(sessionDir, 'scrollback.bin'), 'legacy WSL output\r\n')
+        historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+
+        const result = await historyAdapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo',
+          terminalWindowsWslDistro: 'Debian',
+          sessionId
+        })
+
+        const repaired = '\\\\wsl.localhost\\Ubuntu\\home\\jin'
+        expect(lastSpawnOpts?.cwd).toBe(repaired)
+        expect(result.coldRestore?.cwd).toBe(repaired)
+        expect(result.wslDistro).toBe('Ubuntu')
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
     })
 
     it('returns cold restore OSC link ranges from checkpoint history', async () => {
@@ -1348,11 +3098,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('cold-restores an alt-screen agent snapshot as scrollback on wake (hibernation)', async () => {
-      // Why: agent hibernation force-kills Claude/Codex while still in their
-      // alt-screen TUI, so scrollbackAnsi is empty. The fix falls back to the
-      // saved snapshot so the pane repaints the agent's last frame instead of
-      // coming back blank. (The payload is snapshotAnsi alone — no
-      // rehydrateSequences — so it never re-enters alt-screen.)
+      // Why: hibernation force-kills the agent in alt-screen (empty scrollbackAnsi); fall back to the snapshot so the pane repaints instead of blanking.
       const sessionId = 'cold-restore-alt-screen'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -1394,14 +3140,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const result = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('Claude Code')
-      // The payload must NOT re-enter alt-screen — that would fight the
-      // relaunched agent's repaint and the renderer's POST_REPLAY_MODE_RESET.
+      // The payload must NOT re-enter alt-screen — it would fight the relaunched agent's repaint and the renderer's POST_REPLAY_MODE_RESET.
       expect(result.coldRestore!.scrollback).not.toContain('\x1b[?1049h')
     })
 
     it('skips cold restore for an alt-screen session with an empty snapshot', async () => {
-      // Why: alt-screen entered before any content → nothing to show. Keep the
-      // no-op (blank) rather than fabricate a payload.
+      // Why: alt-screen entered before any content → nothing to show; keep the no-op rather than fabricate a payload.
       const sessionId = 'cold-restore-alt-screen-empty'
       const sessionDir = join(historyDir, getHistorySessionDirName(sessionId))
       mkdirSync(sessionDir, { recursive: true })
@@ -1477,10 +3221,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         lastSubprocess._simulateData('revived session output\r\n')
         await waitFor(() => checkpointSpy.mock.calls.length === 1)
 
-        // Why: appending the fresh session's records to the pre-crash log
-        // would be rejected by the sequence check on a second crash, reverting
-        // the restore to pre-crash content. The full checkpoint resets the log
-        // to a new generation.
+        // Why: appending fresh records to the pre-crash log would fail the sequence check on a second crash; a full checkpoint resets the log to a new generation.
         expect(appendSpy).not.toHaveBeenCalled()
         expect(checkpointSpy).toHaveBeenCalledWith(
           sessionId,
@@ -1519,14 +3260,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         lastFullCheckpointAt: Map<string, number>
         sessionsNeedingFullCheckpoint: Set<string>
       }
-      // A daemon respawn inside one adapter keeps this map: seed a fresh
-      // cooldown as if the pre-crash generation just snapshotted.
+      // A daemon respawn inside one adapter keeps this map, so seed a fresh cooldown as if the pre-crash generation just snapshotted.
       internals.lastFullCheckpointAt.set(sessionId, Date.now())
 
       await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
 
-      // The revived generation has no checkpoint of its own — the re-anchor
-      // must not inherit the previous generation's cooldown.
+      // The revived generation has no checkpoint of its own — the re-anchor must not inherit the previous generation's cooldown.
       expect(internals.sessionsNeedingFullCheckpoint.has(sessionId)).toBe(true)
       expect(internals.lastFullCheckpointAt.has(sessionId)).toBe(false)
     })
@@ -1537,10 +3276,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       await first.spawn({ cols: 80, rows: 24, sessionId })
       first.dispose()
 
-      // A fresh adapter (app relaunch) attaches to the still-live daemon
-      // session. The old adapter may have drained records it never persisted
-      // (deferred hot-session tick), so appends must not resume until a full
-      // snapshot re-anchors the log.
+      // The old adapter may have drained records it never persisted (deferred hot-session tick), so appends must wait for a full snapshot to re-anchor the log.
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       const internals = historyAdapter as unknown as {
         sessionsNeedingFullCheckpoint: Set<string>
@@ -1556,9 +3292,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const sessionId = 'warm-reattach-skip-replay'
       const first = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
       await first.spawn({ cols: 80, rows: 24, cwd: '/home/user', sessionId })
-      // Why disconnectOnly: the production app-quit path leaves meta.endedAt
-      // null so the session stays crash-recoverable — the state every app
-      // relaunch with a live daemon sees.
+      // Why disconnectOnly: the app-quit path leaves meta.endedAt null, keeping the session crash-recoverable like every relaunch with a live daemon.
       await first.disconnectOnly()
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
@@ -1616,12 +3350,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       ).client
       const originalRequest = client.request.bind(client)
-      // Why: simulates the probe→createOrAttach race — the probe sees the
-      // session alive, but it is gone by the time createOrAttach runs. The
-      // meta rewrite mimics the dying session's exit event beating the
-      // createOrAttach reply and writing endedAt via closeSession; the
-      // fallback detect must still restore instead of falling through to
-      // openSession (which would delete the checkpoint).
+      // Why: simulates the probe→createOrAttach race (session dies mid-call, writing endedAt); fallback detect must still restore, not fall through to openSession which deletes the checkpoint.
       vi.spyOn(client, 'request').mockImplementation(async (type: string, payload?: unknown) => {
         if (type === 'getSize') {
           return { size: { cols: 100, rows: 30 } }
@@ -1647,8 +3376,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(result.coldRestore).toBeDefined()
       expect(result.coldRestore!.scrollback).toContain('raced output')
-      // The unseeded race winner is replaced before exposure, so the retained
-      // shell uses the recovered dimensions as well as the recovered history.
+      // The unseeded race winner is replaced before exposure, so the retained shell uses recovered dimensions as well as history.
       expect(lastSpawnOpts).toMatchObject({ sessionId, cols: 100, rows: 30 })
       // The recovery data must survive — openSession would have deleted it.
       expect(existsSync(join(sessionDir, 'scrollback.bin'))).toBe(true)
@@ -1684,8 +3412,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       ).client
       const originalRequest = client.request.bind(client)
-      // Why: an old daemon rejects the unknown getSize method; the spawn must
-      // behave exactly like the unprobed path.
+      // Why: an old daemon rejects the unknown getSize method; the spawn must behave exactly like the unprobed path.
       vi.spyOn(client, 'request').mockImplementation((type: string, payload?: unknown) => {
         if (type === 'getSize') {
           return Promise.reject(new Error('Unknown request type'))
@@ -1723,9 +3450,13 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       writeFileSync(join(sessionDir, 'scrollback.bin'), 'cached output')
 
       historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const internals = historyAdapter as unknown as {
+        coldRestoreCache: { byteSize: number }
+      }
 
       const first = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(first.coldRestore).toBeDefined()
+      expect(internals.coldRestoreCache.byteSize).toBeGreaterThan(0)
 
       // Second call (StrictMode remount) should get cached data
       const second = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
@@ -1734,6 +3465,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       // After ack, cold restore should not be returned
       historyAdapter.ackColdRestore(sessionId)
+      expect(internals.coldRestoreCache.byteSize).toBe(0)
       const third = await historyAdapter.spawn({ cols: 80, rows: 24, sessionId })
       expect(third.coldRestore).toBeUndefined()
     })
@@ -1821,9 +3553,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       await new Promise((r) => setTimeout(r, 50))
 
-      // Why: checkpoint-based persistence opens the session for future
-      // checkpointing but does not seed scrollback.bin. New data is persisted
-      // via periodic checkpoint timer, not per-chunk appendData.
+      // Why: checkpoint-based persistence doesn't seed scrollback.bin — new data lands via the periodic checkpoint timer, not per-chunk appendData.
       const meta = JSON.parse(
         readFileSync(join(historyDir, getHistorySessionDirName(sessionId), 'meta.json'), 'utf-8')
       )
@@ -1978,7 +3708,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       // Next spawn should detect the dead socket, call respawn, and succeed
       const r2 = await respawnAdapter.spawn({ cols: 80, rows: 24 })
       expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
@@ -2000,10 +3731,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     it('treats a hello handshake timeout as daemon-gone and respawns (#8689)', async () => {
-      // Why: a wedged daemon accepts the socket connection but never answers
-      // hello, so ensureConnected() rejects with "Hello response timed out".
-      // That must be classified as daemon-gone so withDaemonRetry respawns and
-      // retries — otherwise every terminal spawn fails against the wedge forever.
+      // Why: a wedged daemon accepts the socket but never answers hello; classify as daemon-gone so withDaemonRetry respawns, else every spawn fails forever.
       const realEnsureConnected = DaemonClient.prototype.ensureConnected
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
@@ -2020,7 +3748,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       try {
         const result = await respawnAdapter.spawn({ cols: 80, rows: 24 })
         expect(result.id).toBeDefined()
-        expect(respawnFn).toHaveBeenCalledOnce()
+        expect(respawnFn).toHaveBeenCalledTimes(1)
+        expect(respawnFn).toHaveBeenCalledWith('daemon_died')
       } finally {
         ensureConnectedSpy.mockRestore()
         respawnAdapter.dispose()
@@ -2053,7 +3782,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       ])
       expect(r1.id).toBeDefined()
       expect(r2.id).toBeDefined()
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('daemon_died')
 
       respawnAdapter.dispose()
       await respawnServer?.shutdown()
@@ -2128,7 +3858,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         tokenPath,
         respawnAdapter.protocolVersion
       )
-      expect(respawnFn).toHaveBeenCalledOnce()
+      expect(respawnFn).toHaveBeenCalledTimes(1)
+      expect(respawnFn).toHaveBeenCalledWith('unhealthy_resolver')
       expect(exits).toEqual([])
       expect(replacement.id).toBeDefined()
 
@@ -2171,12 +3902,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
   })
 
-  // Why: the restart flow (docs/daemon-staleness-ux.md §Phase 1 step 1) relies
-  // on these two primitives to fan synthetic pty:exit out to every attached
-  // session *before* tearing the adapter down. The design doc calls out
-  // session.ts:246-252 as the reason — the daemon's kill-all-and-shutdown
-  // explicitly does NOT fan exits back through onExit. Without the fanout the
-  // renderer would black-hole writes against a disposed adapter.
+  // Why: daemon kill-all-and-shutdown doesn't fan exits through onExit, so these primitives synthesize pty:exit before dispose, else the renderer black-holes writes (docs/daemon-staleness-ux.md §Phase 1).
   describe('fanoutSyntheticExits / getActiveSessionIds (restart primitives)', () => {
     it('reports every live spawn in getActiveSessionIds', async () => {
       const { id: id1 } = await adapter.spawn({ cols: 80, rows: 24 })

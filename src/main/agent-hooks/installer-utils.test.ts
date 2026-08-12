@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
   chmodSync
 } from 'node:fs'
@@ -22,12 +24,14 @@ import {
   removeManagedCommands,
   wrapPosixHookCommand,
   wrapWindowsCmdHookCommand,
-  wrapWindowsGitBashHookCommand,
+  readHooksJsonWithRaw,
   wrapWindowsHookCommand,
   writeManagedScript,
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
 let tmpDir: string
 let configPath: string
@@ -41,7 +45,69 @@ afterEach(() => {
   rmSync(tmpDir, { recursive: true, force: true })
 })
 
+describe('readHooksJsonWithRaw', () => {
+  it('returns the parsed config together with the exact bytes it came from', () => {
+    const contents = '{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('parses one leading BOM while preserving the exact raw contents', () => {
+    const contents = '\uFEFF{"hooks": {"Stop": []}, "custom": 1}\n'
+    writeFileSync(configPath, contents, 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: contents,
+      config: { hooks: { Stop: [] }, custom: 1 }
+    })
+  })
+
+  it('rejects multiple or misplaced BOM characters', () => {
+    const body = '{"hooks": {"Stop": []}}'
+    for (const contents of [`\uFEFF\uFEFF${body}`, ` \uFEFF${body}`, `{\uFEFF"hooks": {}}`]) {
+      writeFileSync(configPath, contents, 'utf-8')
+
+      expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: contents, config: null })
+    }
+  })
+
+  it('reports a missing file as an empty config with no raw bytes', () => {
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: null, config: {} })
+  })
+
+  it('keeps the raw bytes when the contents are not a JSON object', () => {
+    writeFileSync(configPath, 'not json\n', 'utf-8')
+
+    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: 'not json\n', config: null })
+  })
+})
+
 describe('writeHooksJson', () => {
+  it('updates a symlink target without replacing the hook config link', () => {
+    const targetPath = join(tmpDir, 'dotfiles-hooks.json')
+    writeFileSync(targetPath, '{"hooks":{}}\n')
+    symlinkSync(targetPath, configPath)
+
+    writeHooksJson(configPath, { hooks: { Stop: [] } })
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({ hooks: { Stop: [] } })
+  })
+
+  it('does not replace a dangling hook config symlink', () => {
+    const targetPath = join(tmpDir, 'missing-dotfiles-hooks.json')
+    symlinkSync(targetPath, configPath)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow()
+
+    expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
+    expect(existsSync(targetPath)).toBe(false)
+  })
+
   it('writes the config as formatted JSON', () => {
     const config: HooksConfig = {
       hooks: { Stop: [{ hooks: [{ type: 'command', command: 'foo' }] }] }
@@ -70,6 +136,22 @@ describe('writeHooksJson', () => {
 
     const bak = JSON.parse(readFileSync(`${configPath}.bak`, 'utf-8'))
     expect(bak).toEqual(original)
+  })
+
+  it('does not follow an existing .bak symlink', () => {
+    const original = '{"hooks":{}}\n'
+    const backupTarget = join(tmpDir, 'dotfiles-backup.json')
+    writeFileSync(configPath, original, 'utf-8')
+    writeFileSync(backupTarget, 'pristine backup target\n', 'utf-8')
+    symlinkSync(backupTarget, `${configPath}.bak`)
+
+    expect(() => writeHooksJson(configPath, { hooks: { Stop: [] } })).toThrow(
+      'Refusing to overwrite symlinked backup'
+    )
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+    expect(lstatSync(`${configPath}.bak`).isSymbolicLink()).toBe(true)
+    expect(readFileSync(backupTarget, 'utf-8')).toBe('pristine backup target\n')
   })
 
   it('does not create a .bak file when the config does not yet exist', () => {
@@ -238,6 +320,53 @@ describe('removeManagedCommands', () => {
 
     expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
   })
+
+  it('removes exec-form hooks whose managed script path is an argument', () => {
+    const cleaned = removeManagedCommands(
+      [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: [
+                '--headless',
+                'C:\\Windows\\System32\\cmd.exe',
+                '/d',
+                '/c',
+                'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd'
+              ]
+            },
+            { type: 'command', command: 'echo keep me' }
+          ]
+        }
+      ],
+      match
+    )
+
+    expect(cleaned).toEqual([{ hooks: [{ type: 'command', command: 'echo keep me' }] }])
+  })
+
+  it('preserves user hooks with malformed args fields', () => {
+    const definitions = [
+      {
+        hooks: [
+          {
+            type: 'command' as const,
+            command: 'echo keep me',
+            args: 'not-an-array' as unknown as string[]
+          },
+          {
+            type: 'command' as const,
+            command: 'echo keep me too',
+            args: [42] as unknown as string[]
+          }
+        ]
+      }
+    ]
+
+    expect(removeManagedCommands(definitions, match)).toEqual(definitions)
+  })
 })
 
 describe('hookDefinitionHasManagedCommand', () => {
@@ -256,6 +385,34 @@ describe('hookDefinitionHasManagedCommand', () => {
         match
       )
     ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'C:\\Windows\\System32\\conhost.exe',
+              args: ['--headless', 'C:\\Users\\alice\\.orca\\agent-hooks\\copilot-hook.cmd']
+            }
+          ]
+        },
+        match
+      )
+    ).toBe(true)
+    expect(
+      hookDefinitionHasManagedCommand(
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: 'echo no',
+              args: 'not-an-array' as unknown as string[]
+            }
+          ]
+        },
+        match
+      )
+    ).toBe(false)
     expect(hookDefinitionHasManagedCommand({ bash: 'echo no' }, match)).toBe(false)
   })
 })
@@ -295,7 +452,7 @@ describe('wrapPosixHookCommand', () => {
   it('produces a guarded command that no-ops when the script is missing', () => {
     const cmd = wrapPosixHookCommand('/does/not/exist.sh')
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -313,7 +470,7 @@ describe('wrapPosixHookCommand', () => {
     // /bin/sh as a single argument.
     const cmd = wrapPosixHookCommand("/path/with'quote/x.sh")
     expect(cmd).toBe(
-      "if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/path/with'\\''quote/x.sh' ] && [ -r '/path/with'\\''quote/x.sh' ] && [ -x '/path/with'\\''quote/x.sh' ]; then /bin/sh '/path/with'\\''quote/x.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -322,7 +479,7 @@ describe('wrapPosixHookCommand', () => {
       ORCA_COPILOT_HOOK_EVENT: 'UserPromptSubmit'
     })
     expect(cmd).toBe(
-      "if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else cat >/dev/null 2>&1 || :; fi"
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit' /bin/sh '/does/not/exist.sh'; else ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
     )
   })
 
@@ -491,28 +648,87 @@ describe('wrapWindowsCmdHookCommand', () => {
   })
 })
 
-describe('wrapWindowsGitBashHookCommand', () => {
-  it('guards the forward-slash fast path and drains when missing', () => {
-    expect(
-      wrapWindowsGitBashHookCommand('C:\\Users\\alice\\.orca\\agent-hooks\\claude-hook.cmd')
-    ).toBe(
-      "if [ -f 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd' ]; then 'C:/Users/alice/.orca/agent-hooks/claude-hook.cmd'; else cat >/dev/null 2>&1 || :; fi"
+describe('wrapRuntimeHomeHookCommand', () => {
+  it('selects the runtime platform variant under HOME', () => {
+    const command = wrapRuntimeHomeHookCommand('claude-hook')
+
+    expect(command).toContain('case "${OSTYPE-}" in msys*|cygwin*|win32*)')
+    expect(command).toContain('case "$HOME" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
+    expect(command).not.toContain('uname')
+    expect(command).toContain('"$HOME/.orca/agent-hooks/claude-hook.cmd"')
+    expect(command).toContain('/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"')
+    expect(command).not.toMatch(/[A-Z]:[\\/]|\/Users\/|\/home\//)
+  })
+
+  it('rejects a script base name that could inject shell syntax', () => {
+    expect(() => wrapRuntimeHomeHookCommand('claude-hook; echo injected')).toThrow(
+      'Invalid managed script base name'
     )
   })
 
-  it('falls back to the encoded launcher when bash would split the path', () => {
-    const scriptPath = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\claude-hook.cmd'
-    const command = wrapWindowsGitBashHookCommand(scriptPath)
-    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  it('executes the destination HOME script for the current runtime', () => {
+    const sourceHome = join(tmpDir, 'source profile')
+    const destinationHome = join(tmpDir, "destination $HOME ' & profile")
+    const sourceScriptDir = join(sourceHome, '.orca', 'agent-hooks')
+    const destinationScriptDir = join(destinationHome, '.orca', 'agent-hooks')
+    mkdirSync(sourceScriptDir, { recursive: true })
+    mkdirSync(destinationScriptDir, { recursive: true })
+    const windowsExitCode = process.platform === 'win32' ? 7 : 9
+    const posixExitCode = process.platform === 'win32' ? 9 : 7
+    writeFileSync(
+      join(destinationScriptDir, 'claude-hook.cmd'),
+      `@echo off\r\nexit /b ${windowsExitCode}\r\n`,
+      'utf-8'
+    )
+    writeFileSync(
+      join(destinationScriptDir, 'claude-hook.sh'),
+      `#!/bin/sh\nexit ${posixExitCode}\n`,
+      'utf-8'
+    )
+    writeFileSync(join(sourceScriptDir, 'claude-hook.cmd'), '@echo off\r\nexit /b 9\r\n', 'utf-8')
+    writeFileSync(join(sourceScriptDir, 'claude-hook.sh'), '#!/bin/sh\nexit 9\n', 'utf-8')
+    chmodSync(join(destinationScriptDir, 'claude-hook.sh'), 0o755)
+
+    const shell =
+      process.platform === 'win32'
+        ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+        : '/bin/sh'
+    const result = spawnSync(shell, ['-c', wrapRuntimeHomeHookCommand('claude-hook')], {
+      env: {
+        ...process.env,
+        HOME: destinationHome.replaceAll('\\', '/'),
+        USERPROFILE: destinationHome
+      }
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr.toString()).toBe(7)
   })
 
-  it('falls back to the encoded launcher when bash metacharacters are present', () => {
-    const scriptPath = 'C:\\Users\\alice & bob\\.orca\\agent-hooks\\claude-hook.cmd'
-    const command = wrapWindowsGitBashHookCommand(scriptPath)
-    expect(command).toMatch(qualifiedWindowsPowerShellCommand)
-    expect(command).not.toContain('& bob')
-    expect(decodeWindowsHookCommand(command)).toBe(expectedDecodedWindowsHookCommand(scriptPath))
+  it.skipIf(process.platform !== 'win32')('keeps common Windows profiles on the fast path', () => {
+    const destinationHome = join(tmpDir, 'destination 国際 profile')
+    const scriptDir = join(destinationHome, '.orca', 'agent-hooks')
+    mkdirSync(scriptDir, { recursive: true })
+    writeFileSync(join(scriptDir, 'claude-hook.cmd'), '@echo off\r\nexit /b 7\r\n', 'utf-8')
+    const gitBash = join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+    const result = spawnSync(gitBash, ['-c', wrapRuntimeHomeHookCommand('claude-hook')], {
+      env: { ...process.env, HOME: destinationHome.replaceAll('\\', '/') }
+    })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr.toString()).toBe(7)
+  })
+
+  it('drains stdin when HOME is unavailable', () => {
+    const command = `unset HOME; ${wrapRuntimeHomeHookCommand('claude-hook')}`
+    const shell =
+      process.platform === 'win32'
+        ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+        : '/bin/sh'
+    const result = spawnSync(shell, ['-c', command], { input: Buffer.alloc(1_000_000, 'x') })
+
+    expect(result.error).toBeUndefined()
+    expect(result.status).toBe(0)
   })
 })
 

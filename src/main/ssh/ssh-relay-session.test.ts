@@ -1,17 +1,43 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
-import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../shared/agent-hook-relay'
+import {
+  AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+  AGENT_HOOK_INSTALL_PLUGINS_METHOD
+} from '../../shared/agent-hook-relay'
 import { SSH_RELAY_CONFIGURE_GRACE_TIME_METHOD } from '../../shared/ssh-types'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
 
-const { muxRequestMock, installRemoteManagedAgentHooksMock } = vi.hoisted(() => ({
-  muxRequestMock: vi.fn(),
-  installRemoteManagedAgentHooksMock: vi.fn()
-}))
+const { acceptOutputDataMock, muxRequestMock, openConsumerSessionMock, pauseAdapterMock } =
+  vi.hoisted(() => ({
+    acceptOutputDataMock: vi.fn().mockResolvedValue(undefined),
+    muxRequestMock: vi.fn(),
+    openConsumerSessionMock: vi.fn(),
+    pauseAdapterMock: vi.fn()
+  }))
 
 vi.mock('./ssh-relay-deploy', () => ({
   deployAndLaunchRelay: vi.fn()
+}))
+
+vi.mock('./ssh-pty-consumer-session', () => ({
+  openSshPtyConsumerSession: openConsumerSessionMock
+}))
+
+vi.mock('../ipc/ssh-pty-output-intake-registry', () => ({
+  acceptSshPtyOutputData: acceptOutputDataMock,
+  acceptSshPtyOutputExit: vi.fn().mockResolvedValue(undefined),
+  allocateSshPtyProviderGeneration: vi.fn(() => 41),
+  beginSshPtyOutputGenerationMigration: vi.fn(() => ({
+    byPty: new Map(),
+    completion: Promise.resolve()
+  })),
+  closeSshPtyOutputGeneration: vi.fn(),
+  getSshPtyAcceptedSourceCheckpoints: vi.fn(() => []),
+  applySshPtySourceCancellationProof: vi.fn(() => true),
+  applySshPtySourceRecoveryCancellationProof: vi.fn(() => true),
+  installSshPtySourceAckPublisher: vi.fn(() => () => {}),
+  installSshPtySourceCancellationPublisher: vi.fn(() => () => {})
 }))
 
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -22,8 +48,10 @@ vi.mock('./ssh-channel-multiplexer', () => {
   return {
     SshChannelMultiplexer: class MockSshChannelMultiplexer {
       notify = vi.fn()
+      notifyWithSettlement = vi.fn()
       request = muxRequestMock
       onNotification = vi.fn().mockReturnValue(() => {})
+      onNotificationByMethod = vi.fn().mockReturnValue(() => {})
       onRequest = vi.fn().mockReturnValue(() => {})
       onDispose = vi.fn().mockReturnValue(() => {})
       dispose = vi.fn()
@@ -31,10 +59,6 @@ vi.mock('./ssh-channel-multiplexer', () => {
     }
   }
 })
-
-vi.mock('../agent-hooks/remote-managed-hook-installers', () => ({
-  installRemoteManagedAgentHooks: installRemoteManagedAgentHooksMock
-}))
 
 vi.mock('../providers/ssh-pty-provider', () => ({
   isSshPtyNotFoundError: (err: unknown) =>
@@ -47,6 +71,7 @@ vi.mock('../providers/ssh-pty-provider', () => ({
     onExit = vi.fn().mockReturnValue(() => {})
     attach = vi.fn().mockResolvedValue(undefined)
     attachForReconnect = vi.fn().mockResolvedValue({})
+    setPtyDeliveryPauseAdapter = pauseAdapterMock
     dispose = vi.fn()
   }
 }))
@@ -74,7 +99,8 @@ vi.mock('../ipc/pty', () => ({
   clearProviderPtyState: vi.fn(),
   deletePtyOwnership: vi.fn(),
   setPtyOwnership: vi.fn(),
-  answerStartupTerminalColorQueriesForPty: vi.fn((_id: string, data: string) => data)
+  restorePtyIncarnation: vi.fn(),
+  isCurrentPtyExit: vi.fn(() => true)
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({
@@ -89,12 +115,6 @@ vi.mock('../providers/ssh-git-dispatch', () => ({
 }))
 
 const { deployAndLaunchRelay } = await import('./ssh-relay-deploy')
-// Why: the hidden-delivery gate module is intentionally real (pure state, no
-// electron deps) so the SSH parity tests exercise the same gate main uses.
-const { markHiddenRendererPty, setRendererPtyDeliveryInterest } =
-  await import('../ipc/pty-hidden-delivery-gate')
-const { _resetHiddenRendererPtyDeliveryGateForTest } =
-  await import('../ipc/pty-hidden-delivery-gate')
 const { execCommand } = await import('./ssh-relay-deploy-helpers')
 const { getRemoteHostPlatform } = await import('./ssh-remote-platform')
 const {
@@ -113,22 +133,21 @@ const { registerSshGitProvider, unregisterSshGitProvider } =
 describe('SshRelaySession', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    openConsumerSessionMock.mockImplementation(async (_mux, options) => ({
+      mode: 'legacy-fallback',
+      clientInstanceId: options.clientInstanceId,
+      serverBuildId: 'test-relay-build'
+    }))
     delete process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS
     muxRequestMock.mockReset()
     muxRequestMock.mockResolvedValue([])
-    installRemoteManagedAgentHooksMock.mockReset()
-    installRemoteManagedAgentHooksMock.mockResolvedValue([])
     mockDeploySuccess()
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
-    _resetHiddenRendererPtyDeliveryGateForTest()
   })
 
-  it('drops hidden-gated PTY data after runtime ingestion with one restore marker', async () => {
+  it('hands each PTY data event exactly once to the bounded main intake', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
-    const runtime = {
-      onPtyData: vi.fn(() => 99),
-      onPtyExit: vi.fn()
-    }
+    const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }
     const session = new SshRelaySession(
       'target-1',
       getMainWindow,
@@ -143,72 +162,28 @@ describe('SshRelaySession', () => {
     const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
       id: string
       data: string
+      providerGeneration: number
+      ptyIncarnation: string
     }) => void
 
-    markHiddenRendererPty('ssh-pty-1')
-    onData({ id: 'ssh-pty-1', data: 'hidden ssh output' })
-
-    // Runtime ingestion still ran; renderer delivery shrank to one marker.
-    expect(runtime.onPtyData).toHaveBeenCalledWith(
-      'ssh-pty-1',
-      'hidden ssh output',
-      expect.any(Number)
-    )
-    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
-    // Why out-of-band: an in-band empty pty:data sentinel is ambiguous with
-    // chunks fully consumed by renderer OSC-9999 stripping.
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:modelRestoreNeeded', {
+    onData({
       id: 'ssh-pty-1',
-      reason: 'hidden-drop',
-      markerSeq: 99
+      data: 'ssh output',
+      providerGeneration: 41,
+      ptyIncarnation: 'incarnation-1'
     })
 
-    onData({ id: 'ssh-pty-1', data: 'more hidden ssh output' })
-    expect(mockWindow.webContents.send).toHaveBeenCalledTimes(1)
-
-    // Delivery interest (renderer sidecars) suppresses the gate — parity with
-    // the local path in ipc/pty.ts.
-    setRendererPtyDeliveryInterest('ssh-pty-1', true)
-    onData({ id: 'ssh-pty-1', data: 'sidecar ssh bytes' })
-    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
+    expect(acceptOutputDataMock).toHaveBeenCalledTimes(1)
+    expect(acceptOutputDataMock).toHaveBeenCalledWith({
       id: 'ssh-pty-1',
-      data: 'sidecar ssh bytes',
-      seq: 99,
-      rawLength: 'sidecar ssh bytes'.length
+      data: 'ssh output',
+      providerGeneration: 41,
+      ptyIncarnation: 'incarnation-1',
+      rawLength: 'ssh output'.length,
+      transformed: false
     })
-
-    // Non-hidden PTYs are unaffected.
-    onData({ id: 'ssh-pty-2', data: 'visible ssh output' })
-    expect(mockWindow.webContents.send).toHaveBeenLastCalledWith('pty:data', {
-      id: 'ssh-pty-2',
-      data: 'visible ssh output',
-      seq: 99,
-      rawLength: 'visible ssh output'.length
-    })
-  })
-
-  it('keeps hidden SSH delivery when the gate kill switch is off', async () => {
-    const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
-    ;(mockStore as unknown as { getSettings: () => unknown }).getSettings = vi.fn(() => ({
-      terminalHiddenDeliveryGate: false
-    }))
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-    await session.establish(mockConn)
-    const ptyProvider = vi.mocked(registerSshPtyProvider).mock.calls[0]?.[1] as unknown as {
-      onData: ReturnType<typeof vi.fn>
-    }
-    const onData = ptyProvider.onData.mock.calls[0]?.[0] as (payload: {
-      id: string
-      data: string
-    }) => void
-
-    markHiddenRendererPty('ssh-pty-1')
-    onData({ id: 'ssh-pty-1', data: 'still delivered' })
-
-    expect(mockWindow.webContents.send).toHaveBeenCalledWith('pty:data', {
-      id: 'ssh-pty-1',
-      data: 'still delivered'
-    })
+    expect(runtime.onPtyData).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:data', expect.anything())
   })
 
   it('starts in idle state', () => {
@@ -231,99 +206,63 @@ describe('SshRelaySession', () => {
     expect(registerSshGitProvider).toHaveBeenCalledWith('target-1', expect.anything())
   })
 
-  it.each([
-    ['/bin/bash', "'/bin/bash' -lc 'printenv GROK_HOME | head -c 4097'"],
-    ['/usr/bin/fish', "'/usr/bin/fish' -lc 'printenv GROK_HOME | head -c 4097'"],
-    ['/bin/tcsh', "'/bin/tcsh' -lc 'printenv GROK_HOME | head -c 4097'"],
-    ['/bin/sh', "'/bin/sh' -c 'printenv GROK_HOME | head -c 4097'"]
-  ])('uses a shell-independent GROK_HOME probe with login shell %s', async (shell, command) => {
-    process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockImplementation(async (method: string) =>
-      method === 'session.resolveHome' ? { resolvedPath: '/home/orca' } : { ok: true }
-    )
-    vi.mocked(execCommand).mockResolvedValueOnce(`${shell}\n`).mockResolvedValueOnce('/srv/grok\n')
-    const sftp = { end: vi.fn() }
-    const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = { sftp: vi.fn().mockResolvedValue(sftp) } as unknown as SshConnection
-    const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
-
-    await session.establish(mockConn)
-
-    expect(execCommand).toHaveBeenNthCalledWith(
-      1,
-      mockConn,
-      "printenv SHELL || printf '/bin/sh\\n'",
-      { timeoutMs: 8_000 }
-    )
-    expect(execCommand).toHaveBeenNthCalledWith(2, mockConn, command, {
-      wrapCommand: false,
-      timeoutMs: 8_000
-    })
-    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
-      grokHomeDir: '/srv/grok'
-    })
-  })
-
-  it('installs remote managed hooks and relay-owned plugin assets before registering the SSH PTY provider', async () => {
+  it('continues provider registration when the relay managed-hook request fails', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
     muxRequestMock.mockImplementation(async (method: string) => {
-      if (method === 'session.resolveHome') {
-        return { resolvedPath: '/home/orca' }
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
+      if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
+        throw new Error('runtime unavailable')
       }
       return { ok: true }
     })
-    const sftp = { end: vi.fn() }
-    vi.mocked(execCommand)
-      .mockResolvedValueOnce('/bin/bash\n')
-      .mockResolvedValueOnce('/srv/grok profile\n')
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = {
-      sftp: vi.fn().mockResolvedValue(sftp)
-    } as unknown as SshConnection
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
-    await session.establish(mockConn)
+    await session.establish({} as SshConnection)
+    await vi.waitFor(() =>
+      expect(muxRequestMock).toHaveBeenCalledWith(
+        AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+        expect.anything()
+      )
+    )
 
-    const installPluginsCallIndex = muxRequestMock.mock.calls.findIndex(
-      ([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD
-    )
-    expect(installPluginsCallIndex).toBeGreaterThanOrEqual(0)
-    const installPluginsParams = muxRequestMock.mock.calls[installPluginsCallIndex]?.[1]
-    expect(installPluginsParams).toMatchObject({
-      piExtensionSource: expect.stringContaining('/hook/pi'),
-      ompExtensionSource: expect.stringContaining('/hook/omp')
-    })
-    expect(mockConn.sftp).toHaveBeenCalledTimes(1)
-    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
-      grokHomeDir: '/srv/grok profile'
-    })
-    expect(sftp.end).toHaveBeenCalledTimes(1)
-    expect(installRemoteManagedAgentHooksMock.mock.invocationCallOrder[0]).toBeLessThan(
-      muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]
-    )
-    expect(muxRequestMock.mock.invocationCallOrder[installPluginsCallIndex]).toBeLessThan(
-      vi.mocked(registerSshPtyProvider).mock.invocationCallOrder[0]
-    )
+    expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
+    expect(
+      muxRequestMock.mock.calls.some(([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD)
+    ).toBe(true)
   })
 
-  it('falls back to login-home Grok config when the remote env probe is invalid', async () => {
+  it('suppresses expected managed-hook teardown errors during disconnect', async () => {
     process.env.ORCA_FEATURE_REMOTE_AGENT_HOOKS = '1'
-    muxRequestMock.mockImplementation(async (method: string) =>
-      method === 'session.resolveHome' ? { resolvedPath: '/home/orca' } : { ok: true }
-    )
-    vi.mocked(execCommand)
-      .mockResolvedValueOnce('/bin/bash\n')
-      .mockResolvedValueOnce('relative/grok-home\n')
-    const sftp = { end: vi.fn() }
+    muxRequestMock.mockImplementation(async (method: string) => {
+      if (method === 'preflight.detectAgents') {
+        return { agents: ['codex'] }
+      }
+      if (method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD) {
+        throw Object.assign(new Error('request disposed'), { code: 'DISPOSED' })
+      }
+      return { ok: true }
+    })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { mockStore, mockPortForward, getMainWindow } = createMockDeps()
-    const mockConn = { sftp: vi.fn().mockResolvedValue(sftp) } as unknown as SshConnection
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
-    await session.establish(mockConn)
+    try {
+      await session.establish({} as SshConnection)
+      await vi.waitFor(() =>
+        expect(muxRequestMock).toHaveBeenCalledWith(
+          AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD,
+          expect.anything()
+        )
+      )
 
-    expect(installRemoteManagedAgentHooksMock).toHaveBeenCalledWith(sftp, '/home/orca', {
-      grokHomeDir: '/home/orca/.grok'
-    })
+      expect(registerSshPtyProvider).toHaveBeenCalledWith('target-1', expect.anything())
+      expect(warn.mock.calls.flat().join(' ')).not.toContain('relay managed hook install failed')
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('does not run POSIX managed hook installers on Windows remotes', async () => {
@@ -349,7 +288,11 @@ describe('SshRelaySession', () => {
 
     await session.establish(mockConn)
 
-    expect(installRemoteManagedAgentHooksMock).not.toHaveBeenCalled()
+    expect(
+      muxRequestMock.mock.calls.some(
+        ([method]) => method === AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD
+      )
+    ).toBe(false)
     expect(
       muxRequestMock.mock.calls.some(([method]) => method === AGENT_HOOK_INSTALL_PLUGINS_METHOD)
     ).toBe(true)
@@ -512,7 +455,7 @@ describe('SshRelaySession', () => {
     })
   })
 
-  it('drops identical reconnect replay payloads inside one reconnect burst', async () => {
+  it('does not wall-clock dedupe identical replay payloads from distinct reconnects', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     await session.establish(mockConn)
@@ -534,7 +477,7 @@ describe('SshRelaySession', () => {
       .mocked(mockWindow.webContents.send)
       .mock.calls.filter(([channel]) => channel === 'pty:replay')
     expect(mockAttach).toHaveBeenCalledTimes(2)
-    expect(replaySends).toHaveLength(1)
+    expect(replaySends).toHaveLength(2)
   })
 
   it('establish re-attaches owned PTYs after explicit disconnect', async () => {
@@ -553,7 +496,9 @@ describe('SshRelaySession', () => {
 
     expect(mockAttach).toHaveBeenCalledWith('pty-1')
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-1', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith('target-1', [
+      'pty-1'
+    ])
   })
 
   it('establish re-attaches durable leases after app restart', async () => {
@@ -567,6 +512,7 @@ describe('SshRelaySession', () => {
     vi.mocked(getPtyIdsForConnection).mockReturnValue([])
     vi.mocked(mockStore.getSshRemotePtyLeases).mockReturnValue([
       { targetId: 'target-1', ptyId: 'pty-live', state: 'detached' },
+      { targetId: 'target-1', ptyId: 'pty-live-2', state: 'detached' },
       { targetId: 'target-1', ptyId: 'pty-expired', state: 'expired' }
     ] as ReturnType<typeof mockStore.getSshRemotePtyLeases>)
 
@@ -575,9 +521,14 @@ describe('SshRelaySession', () => {
     await session.establish(mockConn)
 
     expect(mockAttach).toHaveBeenCalledWith('pty-live')
+    expect(mockAttach).toHaveBeenCalledWith('pty-live-2')
     expect(mockAttach).not.toHaveBeenCalledWith('pty-expired')
     expect(setPtyOwnership).toHaveBeenCalledWith('ssh:target-1@@pty-live', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).toHaveBeenCalledWith('target-1', 'pty-live', 'attached')
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledOnce()
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).toHaveBeenCalledWith(
+      'target-1',
+      expect.arrayContaining(['pty-live', 'pty-live-2'])
+    )
   })
 
   it('forwards a lease tab identity to reattach so a reset relay cannot cross-wire it', async () => {
@@ -687,11 +638,7 @@ describe('SshRelaySession', () => {
 
     await expect(establish).rejects.toThrow('Session disposed during establish')
     expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      'target-1',
-      'pty-1',
-      'attached'
-    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('does not mark PTYs attached if detach wins while reattach is in flight', async () => {
@@ -721,11 +668,7 @@ describe('SshRelaySession', () => {
     await reconnect
 
     expect(setPtyOwnership).not.toHaveBeenCalledWith('pty-1', 'target-1')
-    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
-      'target-1',
-      'pty-1',
-      'attached'
-    )
+    expect(mockStore.markSshRemotePtyLeasesAttachedAsync).not.toHaveBeenCalled()
   })
 
   it('invalidates and broadcasts remote PTYs that cannot reattach after relay reconnect', async () => {
@@ -758,7 +701,7 @@ describe('SshRelaySession', () => {
     })
   })
 
-  it('routes transient reattach failures through relay-lost retry handling', async () => {
+  it('retries transient reattach failure without tearing down provider registration', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow } = createMockDeps()
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
     const onRelayLost = vi.fn()
@@ -774,11 +717,17 @@ describe('SshRelaySession', () => {
       dispose: vi.fn()
     } as unknown as ReturnType<typeof getSshPtyProvider>)
     vi.mocked(getPtyIdsForConnection).mockReturnValue(['pty-live'])
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0)
 
-    await session.reconnect(mockConn)
+    try {
+      await session.reconnect(mockConn)
+    } finally {
+      random.mockRestore()
+    }
 
-    expect(mockAttach).toHaveBeenCalledWith('pty-live')
-    expect(onRelayLost).toHaveBeenCalledWith('target-1')
+    expect(mockAttach).toHaveBeenCalledTimes(2)
+    expect(onRelayLost).not.toHaveBeenCalled()
+    expect(session.getState()).toBe('ready')
     expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalledWith(
       'target-1',
       'pty-live',

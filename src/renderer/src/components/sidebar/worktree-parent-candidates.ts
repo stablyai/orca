@@ -1,6 +1,7 @@
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo, Worktree, WorktreeLineage } from '../../../../shared/types'
 import { canAssignWorktreeParent } from './worktree-parent-eligibility'
+import { getCyclicProjectedWorktreeLineageIds } from './worktree-lineage-projection'
 
 type ParentCandidateArgs = {
   child: Worktree
@@ -8,6 +9,7 @@ type ParentCandidateArgs = {
   lineageById: Record<string, WorktreeLineage>
   worktreeMap: Map<string, Worktree>
   repoMap: Map<string, Pick<Repo, 'connectionId' | 'executionHostId'>>
+  cyclicLineageIds?: ReadonlySet<string>
 }
 
 function getWorktreeOwnerHostId(
@@ -23,20 +25,51 @@ export function getEligibleWorktreeParents({
   worktrees,
   lineageById,
   worktreeMap,
-  repoMap
+  repoMap,
+  cyclicLineageIds: precomputedCyclicLineageIds
 }: ParentCandidateArgs): Worktree[] {
   const childHostId = getWorktreeOwnerHostId(child, repoMap)
-  return worktrees.filter(
-    (candidate) =>
-      candidate.repoId === child.repoId &&
-      childHostId !== null &&
-      getWorktreeOwnerHostId(candidate, repoMap) === childHostId &&
-      !candidate.isArchived &&
-      canAssignWorktreeParent({
-        child,
-        candidateParent: candidate,
-        lineageById,
-        worktreeMap
-      })
+  const cyclicLineageIds =
+    precomputedCyclicLineageIds ?? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+  return worktrees.filter((candidate) =>
+    isEligibleWorktreeParent({
+      child,
+      candidateParent: candidate,
+      lineageById,
+      worktreeMap,
+      repoMap,
+      cyclicLineageIds,
+      childHostId
+    })
+  )
+}
+
+export function isEligibleWorktreeParent({
+  child,
+  candidateParent,
+  lineageById,
+  worktreeMap,
+  repoMap,
+  cyclicLineageIds,
+  childHostId = getWorktreeOwnerHostId(child, repoMap)
+}: Omit<ParentCandidateArgs, 'worktrees'> & {
+  candidateParent: Worktree
+  childHostId?: string | null
+}): boolean {
+  return (
+    candidateParent.repoId === child.repoId &&
+    childHostId !== null &&
+    getWorktreeOwnerHostId(candidateParent, repoMap) === childHostId &&
+    (child.projectId === undefined ||
+      candidateParent.projectId === undefined ||
+      child.projectId === candidateParent.projectId) &&
+    !candidateParent.isArchived &&
+    canAssignWorktreeParent({
+      child,
+      candidateParent,
+      lineageById,
+      worktreeMap,
+      cyclicLineageIds
+    })
   )
 }

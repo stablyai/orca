@@ -83,6 +83,25 @@ describe('Codex auto-approval status suppression', () => {
     ).toBe(true)
   })
 
+  it('preserves request_user_input question waits even under yolo attribution', () => {
+    registerCodexLaunchConfig({
+      agentArgs: YOLO_TUI_AGENT_ARGS.codex ?? '',
+      launchToken
+    })
+
+    expect(
+      shouldSuppressCodexAutoApprovalStatus(
+        {
+          state: 'waiting',
+          prompt: 'pick a color',
+          agentType: 'codex',
+          toolName: 'request_user_input'
+        },
+        { paneKey, tabId: 'tab-1', launchToken }
+      )
+    ).toBe(false)
+  })
+
   it('preserves manual Codex permission attention', () => {
     registerCodexLaunchConfig({ agentArgs: '', launchToken })
 

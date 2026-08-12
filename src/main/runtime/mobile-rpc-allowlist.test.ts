@@ -8,6 +8,9 @@ const MOBILE_DYNAMIC_RPC_METHODS = [
   // mobile source scan below, but still must stay mobile-authorized.
   'accounts.selectClaude',
   'accounts.selectCodex',
+  'accounts.selectCodexForTarget',
+  'terminal.createAgentSession',
+  'terminal.ensureAgentSession',
   'github.updateIssue',
   'github.updatePRState',
   'gitlab.updateIssue',
@@ -128,5 +131,14 @@ describe('mobile RPC allowlist', () => {
     const missing = MOBILE_STREAMING_CLEANUP_RPC_METHODS.filter((method) => !allowed.has(method))
 
     expect(missing).toEqual([])
+  })
+
+  it('does not grant mobile credentials control over host updates', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      ['updater.getStatus', 'updater.check', 'updater.download', 'updater.install'].filter(
+        (method) => allowed.has(method)
+      )
+    ).toEqual([])
   })
 })

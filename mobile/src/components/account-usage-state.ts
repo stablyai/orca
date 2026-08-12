@@ -6,54 +6,25 @@
 // unit-tested directly; AccountUsage.tsx re-exports them alongside the
 // UsageBar component.
 import { formatResetCountdown } from '../../../src/shared/rate-limit-reset-format'
+import type {
+  AccountsSnapshot,
+  InactiveAccountUsage,
+  ProviderRateLimits
+} from './accounts-snapshot'
 
-export type RateLimitWindow = {
-  usedPercent: number
-  windowMinutes: number
-  resetsAt: number | null
-  resetDescription: string | null
-}
-
-export type ProviderRateLimits = {
-  provider: 'claude' | 'codex' | 'gemini' | 'opencode-go' | 'kimi'
-  session: RateLimitWindow | null
-  weekly: RateLimitWindow | null
-  monthly?: RateLimitWindow | null
-  buckets?: Array<RateLimitWindow & { name: string }>
-  updatedAt: number
-  error: string | null
-  status: 'idle' | 'fetching' | 'ok' | 'error' | 'unavailable'
-}
-
-export type InactiveAccountUsage = {
-  accountId: string
-  rateLimits: ProviderRateLimits | null
-  updatedAt: number
-  isFetching: boolean
-}
-
-export type ClaudeAccountSummary = {
-  id: string
-  email: string
-  organizationName?: string | null
-}
-
-export type CodexAccountSummary = {
-  id: string
-  email: string
-  workspaceLabel?: string | null
-}
-
-export type AccountsSnapshot = {
-  claude: { accounts: ClaudeAccountSummary[]; activeAccountId: string | null }
-  codex: { accounts: CodexAccountSummary[]; activeAccountId: string | null }
-  rateLimits: {
-    claude: ProviderRateLimits | null
-    codex: ProviderRateLimits | null
-    inactiveClaudeAccounts: InactiveAccountUsage[]
-    inactiveCodexAccounts: InactiveAccountUsage[]
-  }
-}
+export {
+  AccountsSnapshotSchema,
+  decodeAccountsSnapshot,
+  ProviderRateLimitsSchema,
+  RateLimitRuntimeTargetSchema,
+  type AccountsSnapshot,
+  type ClaudeAccountSummary,
+  type CodexAccountSummary,
+  type InactiveAccountUsage,
+  type ProviderRateLimits,
+  type RateLimitRuntimeTarget,
+  type RateLimitWindow
+} from './accounts-snapshot'
 
 export type ProviderKey = 'claude' | 'codex'
 

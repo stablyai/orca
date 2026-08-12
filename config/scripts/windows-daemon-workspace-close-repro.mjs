@@ -22,7 +22,10 @@ function log(message) {
 }
 
 function readProtocolVersion() {
-  const source = readFileSync(join(projectDir, 'src/main/daemon/types.ts'), 'utf8')
+  const source = readFileSync(
+    join(projectDir, 'src/main/daemon/daemon-protocol-version.ts'),
+    'utf8'
+  )
   const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
   if (!match) {
     throw new Error('Could not read the daemon protocol version')
@@ -30,19 +33,99 @@ function readProtocolVersion() {
   return Number(match[1])
 }
 
+function createStreamSocket(socketPath, token, protocolVersion, clientId, onFailure) {
+  const socket = connect(socketPath)
+  let buffer = ''
+
+  return new Promise((resolveStream, rejectStream) => {
+    let handshakeComplete = false
+    const rejectHandshake = (error) => {
+      if (handshakeComplete) {
+        onFailure(error)
+        return
+      }
+      handshakeComplete = true
+      clearTimeout(timer)
+      socket.removeListener('data', onData)
+      socket.removeListener('error', onError)
+      socket.removeListener('close', onClose)
+      socket.destroy()
+      rejectStream(error)
+    }
+    const onError = (error) => rejectHandshake(error)
+    const onClose = () => rejectHandshake(new Error('Daemon stream socket closed'))
+    const onData = (chunk) => {
+      buffer += chunk.toString('utf8')
+      const newline = buffer.indexOf('\n')
+      if (newline === -1) {
+        return
+      }
+      const message = JSON.parse(buffer.slice(0, newline))
+      if (message.type !== 'hello') {
+        return
+      }
+      if (!message.ok) {
+        rejectHandshake(new Error(message.error ?? 'Daemon rejected stream hello'))
+        return
+      }
+      handshakeComplete = true
+      clearTimeout(timer)
+      socket.removeListener('data', onData)
+      // Why: drain terminal events even though this lifecycle repro only asserts through RPC.
+      socket.on('data', () => {})
+      resolveStream(socket)
+    }
+    const timer = setTimeout(
+      () => rejectHandshake(new Error('Daemon stream hello timed out')),
+      requestTimeoutMs
+    )
+    socket.on('error', onError)
+    socket.on('close', onClose)
+    socket.on('data', onData)
+    socket.once('connect', () => {
+      socket.write(
+        `${JSON.stringify({
+          type: 'hello',
+          version: protocolVersion,
+          token,
+          clientId,
+          role: 'stream'
+        })}\n`
+      )
+    })
+  })
+}
+
 function createRpcClient(socketPath, tokenPath) {
   const socket = connect(socketPath)
+  const clientId = randomUUID()
+  const protocolVersion = readProtocolVersion()
+  const token = readFileSync(tokenPath, 'utf8').trim()
   const pending = new Map()
   let buffer = ''
   let requestId = 0
+  let streamSocket
+  let connectionError
   let helloResolve
   let helloReject
+  let helloTimer
   const hello = new Promise((resolveHello, rejectHello) => {
-    helloResolve = resolveHello
-    helloReject = rejectHello
+    helloResolve = () => {
+      clearTimeout(helloTimer)
+      resolveHello()
+    }
+    helloReject = (error) => {
+      clearTimeout(helloTimer)
+      rejectHello(error)
+    }
   })
+  helloTimer = setTimeout(() => {
+    helloReject(new Error('Daemon control hello timed out'))
+    socket.destroy()
+  }, requestTimeoutMs)
 
   const rejectPending = (error) => {
+    connectionError ??= error
     helloReject(error)
     for (const { reject, timer } of pending.values()) {
       clearTimeout(timer)
@@ -82,25 +165,40 @@ function createRpcClient(socketPath, tokenPath) {
     }
   })
 
-  const connected = new Promise((resolveConnected, rejectConnected) => {
+  const socketConnected = new Promise((resolveConnected, rejectConnected) => {
     socket.once('connect', resolveConnected)
     socket.once('error', rejectConnected)
-  }).then(() => {
-    socket.write(
-      `${JSON.stringify({
-        type: 'hello',
-        version: readProtocolVersion(),
-        token: readFileSync(tokenPath, 'utf8').trim(),
-        clientId: randomUUID(),
-        role: 'control'
-      })}\n`
+  })
+  const connected = Promise.all([
+    socketConnected.then(() => {
+      socket.write(
+        `${JSON.stringify({
+          type: 'hello',
+          version: protocolVersion,
+          token,
+          clientId,
+          role: 'control'
+        })}\n`
+      )
+    }),
+    hello
+  ]).then(async () => {
+    // Why: v24 only admits terminals for the same complete control+stream pair as production.
+    streamSocket = await createStreamSocket(
+      socketPath,
+      token,
+      protocolVersion,
+      clientId,
+      rejectPending
     )
-    return hello
   })
 
   return {
     async request(type, payload) {
       await connected
+      if (connectionError) {
+        throw connectionError
+      }
       const id = `repro-${++requestId}`
       return new Promise((resolveRequest, rejectRequest) => {
         const timer = setTimeout(() => {
@@ -112,6 +210,7 @@ function createRpcClient(socketPath, tokenPath) {
       })
     },
     close() {
+      streamSocket?.destroy()
       socket.destroy()
     }
   }

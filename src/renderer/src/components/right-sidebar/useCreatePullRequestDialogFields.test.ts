@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
-import React from 'react'
-import { act } from 'react'
+import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
@@ -51,6 +50,7 @@ function createEligibility(
     canCreate: true,
     blockedReason: null,
     nextAction: null,
+    reviewLookupOutcome: 'not_found',
     defaultBaseRef: 'refs/remotes/origin/main',
     title: 'Review title',
     body: 'Review body',

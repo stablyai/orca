@@ -39,10 +39,20 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
+  toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison
+} from '../../../../shared/cross-platform-path'
+import {
+  getCyclicProjectedWorktreeLineageIds,
+  getLineageRenderInfo
+} from './worktree-lineage-projection'
+
+export { getLineageRenderInfo } from './worktree-lineage-projection'
 
 export { branchName }
 
@@ -171,28 +181,43 @@ type WorktreeGroupEntry = {
 type ProjectGroupingIndex = {
   projectById: Map<string, Project>
   setupByRepoId: Map<string, ProjectHostSetup>
-  projectIdsRequiringSetupGroups: Set<string>
+  surfaceKeysRequiringSetupGroups: Set<string>
 }
 
 const projectGroupingIndexCache = new WeakMap<ProjectGroupingModel, ProjectGroupingIndex | null>()
 
-// Why: `provisioned` setups are ephemeral recipe-created runtime copies that
-// nest under the project header; every other method is a real user checkout. See #5374.
+// Why: provisioned and folder setups are not independent Git checkouts.
 function isDistinctUserCheckout(setup: ProjectHostSetup): boolean {
-  return setup.setupMethod !== 'provisioned'
+  return setup.setupMethod !== 'provisioned' && setup.kind !== 'folder'
 }
 
+// Why: execution target and filesystem namespace independently identify a surface.
 function getProjectSetupSurfaceKey(setup: ProjectHostSetup): string {
+  return `${setup.projectId}::${setup.hostId}::${getExecutionSurface(setup)}::${getPathSurface(setup)}`
+}
+
+function getExecutionSurface(setup: ProjectHostSetup): string {
+  const connectionId = setup.connectionId?.trim()
+  if (connectionId) {
+    return toSshExecutionHostId(connectionId)
+  }
+  return setup.executionHostId?.trim() || setup.hostId
+}
+
+// Why: projection twins differ by row identity, not checkout directory.
+function getCheckoutIdentity(setup: ProjectHostSetup): string {
+  return normalizeRuntimePathForComparison(setup.path.trim()) || setup.repoId || setup.id
+}
+
+function getPathSurface(setup: ProjectHostSetup): string {
   const wslPath = parseWslUncPath(setup.path)
   if (wslPath) {
-    // Why: Windows host and WSL on one machine are separate execution surfaces;
-    // only duplicate checkouts within one surface make project grouping ambiguous.
-    return `${setup.projectId}::${setup.hostId}::wsl:${wslPath.distro.toLowerCase()}`
+    return `wsl:${wslPath.distro.toLowerCase()}`
   }
   if (isWindowsAbsolutePathLike(setup.path)) {
-    return `${setup.projectId}::${setup.hostId}::windows-host`
+    return 'windows-host'
   }
-  return `${setup.projectId}::${setup.hostId}::default`
+  return 'default'
 }
 
 function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupingIndex | null {
@@ -209,9 +234,7 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
     projectGroupingIndexCache.set(model, null)
     return null
   }
-  // Count real user checkouts per host surface (provisioned copies excluded so
-  // they keep nesting); more than one on a surface makes that project ambiguous.
-  const checkoutsByProjectSurface = new Map<string, { projectId: string; count: number }>()
+  const checkoutsByProjectSurface = new Map<string, Set<string>>()
   for (const setup of projectHostSetups) {
     if (!isDistinctUserCheckout(setup)) {
       continue
@@ -219,21 +242,21 @@ function buildProjectGroupingIndex(model?: ProjectGroupingModel): ProjectGroupin
     const key = getProjectSetupSurfaceKey(setup)
     const existing = checkoutsByProjectSurface.get(key)
     if (existing) {
-      existing.count += 1
+      existing.add(getCheckoutIdentity(setup))
     } else {
-      checkoutsByProjectSurface.set(key, { projectId: setup.projectId, count: 1 })
+      checkoutsByProjectSurface.set(key, new Set([getCheckoutIdentity(setup)]))
     }
   }
-  const projectIdsRequiringSetupGroups = new Set<string>()
-  for (const { projectId, count } of checkoutsByProjectSurface.values()) {
-    if (count > 1) {
-      projectIdsRequiringSetupGroups.add(projectId)
+  const surfaceKeysRequiringSetupGroups = new Set<string>()
+  for (const [surfaceKey, checkouts] of checkoutsByProjectSurface) {
+    if (checkouts.size > 1) {
+      surfaceKeysRequiringSetupGroups.add(surfaceKey)
     }
   }
   const index = {
     projectById: new Map(projects.map((project) => [project.id, project])),
     setupByRepoId: new Map(projectHostSetups.map((setup) => [setup.repoId, setup])),
-    projectIdsRequiringSetupGroups
+    surfaceKeysRequiringSetupGroups
   }
   projectGroupingIndexCache.set(model, index)
   return index
@@ -262,11 +285,10 @@ function getProjectGroupingForRepo(
     }
   }
   if (
-    projectIndex?.projectIdsRequiringSetupGroups.has(setup.projectId) &&
+    projectIndex?.surfaceKeysRequiringSetupGroups.has(getProjectSetupSurfaceKey(setup)) &&
     isDistinctUserCheckout(setup)
   ) {
-    // Why: independent user checkouts of one project on the same host surface
-    // can't be safely merged, so each keeps its own sidebar entry. See #5374.
+    // Why: only the ambiguous surface needs checkout-specific headers.
     return {
       key: `project:${project.id}::setup:${repoId}`,
       label: repo?.displayName ?? setup.displayName,
@@ -373,30 +395,6 @@ export function getLineageGroupKey(worktreeId: string): string {
   return `${LINEAGE_GROUP_PREFIX}${worktreeId}`
 }
 
-export type LineageRenderInfo =
-  | { state: 'none' }
-  | { state: 'valid'; lineage: WorktreeLineage; parent: Worktree }
-  | { state: 'missing'; lineage: WorktreeLineage }
-
-export function getLineageRenderInfo(
-  worktree: Worktree,
-  lineageById: Record<string, WorktreeLineage>,
-  worktreeMap: Map<string, Worktree>
-): LineageRenderInfo {
-  const lineage = lineageById[worktree.id]
-  if (!lineage) {
-    return { state: 'none' }
-  }
-  const parent = worktreeMap.get(lineage.parentWorktreeId)
-  if (
-    !parent ||
-    worktree.instanceId !== lineage.worktreeInstanceId ||
-    parent.instanceId !== lineage.parentWorktreeInstanceId
-  ) {
-    return { state: 'missing', lineage }
-  }
-  return { state: 'valid', lineage, parent }
-}
 export function getPRGroupKey(
   worktree: Worktree,
   repoMap: Map<string, Repo>,
@@ -603,9 +601,19 @@ function appendWorktreeRows(
     groupDepth: number
     sectionKey: string
     hostContextLabelByRepoId?: ReadonlyMap<string, string>
+    hostContextLabelByWorktreeId?: ReadonlyMap<string, string>
+    cyclicLineageIds: ReadonlySet<string>
   }
 ): void {
-  const { nestLineage, collapsedGroups, groupDepth, sectionKey, hostContextLabelByRepoId } = options
+  const {
+    nestLineage,
+    collapsedGroups,
+    groupDepth,
+    sectionKey,
+    hostContextLabelByRepoId,
+    hostContextLabelByWorktreeId,
+    cyclicLineageIds
+  } = options
   if (!nestLineage) {
     for (const worktree of worktrees) {
       result.push(
@@ -618,7 +626,9 @@ function appendWorktreeRows(
           isLastLineageChild: false,
           lineageChildCount: 0,
           lineageCollapsed: false,
-          hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+          hostContextLabel:
+            hostContextLabelByWorktreeId?.get(worktree.id) ??
+            hostContextLabelByRepoId?.get(worktree.repoId)
         })
       )
     }
@@ -629,7 +639,7 @@ function appendWorktreeRows(
   const childrenByParentId = new Map<string, Worktree[]>()
   const childIds = new Set<string>()
   for (const worktree of worktrees) {
-    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap)
+    const lineage = getLineageRenderInfo(worktree, lineageById, worktreeMap, cyclicLineageIds)
     if (lineage.state !== 'valid' || !visibleIds.has(lineage.parent.id)) {
       continue
     }
@@ -663,7 +673,9 @@ function appendWorktreeRows(
         isLastLineageChild: isLastChild,
         lineageChildCount: children.length,
         lineageCollapsed,
-        hostContextLabel: hostContextLabelByRepoId?.get(worktree.repoId)
+        hostContextLabel:
+          hostContextLabelByWorktreeId?.get(worktree.id) ??
+          hostContextLabelByRepoId?.get(worktree.repoId)
       })
     )
     if (lineageCollapsed) {
@@ -729,6 +741,22 @@ function getMixedHostContextLabels(
     uniqueLabels.add(label)
   }
   return uniqueLabels.size > 1 ? labelsByRepoId : undefined
+}
+
+function getMixedWorktreeHostContextLabels(
+  worktrees: readonly Worktree[],
+  repoMap: Map<string, Repo>,
+  hostLabelById: ReadonlyMap<string, string> | undefined,
+  defaultHostId: ExecutionHostId
+): Map<string, string> | undefined {
+  const labelsByWorktreeId = new Map<string, string>()
+  const uniqueHostIds = new Set<ExecutionHostId>()
+  for (const worktree of worktrees) {
+    const hostId = getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId), defaultHostId)
+    uniqueHostIds.add(hostId)
+    labelsByWorktreeId.set(worktree.id, hostLabelById?.get(hostId) ?? getExecutionHostLabel(hostId))
+  }
+  return uniqueHostIds.size > 1 ? labelsByWorktreeId : undefined
 }
 
 function getHostWorktreeCounts(
@@ -978,9 +1006,7 @@ export function buildRows(
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = cloneDefaultWorkspaceStatuses(),
   projectOrderBy: ProjectOrderBy = 'manual',
   lineageById: Record<string, WorktreeLineage> = {},
-  worktreeMap: Map<string, Worktree> = new Map(
-    worktrees.map((worktree) => [worktree.id, worktree])
-  ),
+  worktreeMap = new Map<string, Worktree>(worktrees.map((worktree) => [worktree.id, worktree])),
   nestLineage = false,
   settings?: AppState['settings'],
   projectGroups: readonly ProjectGroup[] = [],
@@ -999,6 +1025,9 @@ export function buildRows(
 ): Row[] {
   const result: Row[] = []
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
+  const cyclicLineageIds = nestLineage
+    ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
+    : new Set<string>()
 
   const pendingByRepo = new Map<string, PendingCreationRef[]>()
   for (const creation of pendingCreations) {
@@ -1020,6 +1049,12 @@ export function buildRows(
     pinnedDisplayPolicy === 'duplicate-in-groups'
       ? worktrees
       : worktrees.filter((worktree) => !worktree.isPinned)
+  const mixedWorktreeHostContextLabels = getMixedWorktreeHostContextLabels(
+    naturalWorktrees,
+    repoMap,
+    hostLabelById,
+    defaultHostId
+  )
   const renderedNaturalAnchorRepoIds = getRenderedNaturalAnchorRepoIds({
     groupBy,
     worktrees: naturalWorktrees,
@@ -1058,7 +1093,9 @@ export function buildRows(
           nestLineage,
           collapsedGroups,
           groupDepth: 0,
-          sectionKey: ALL_GROUP_KEY
+          sectionKey: ALL_GROUP_KEY,
+          hostContextLabelByWorktreeId: mixedWorktreeHostContextLabels,
+          cyclicLineageIds
         })
       }
     }
@@ -1296,13 +1333,17 @@ export function buildRows(
           groupBy === 'repo'
             ? getMixedHostContextLabels(group, repoMap, projectIndex, hostLabelById)
             : undefined
+        const hostContextLabelByWorktreeId =
+          groupBy === 'repo' ? undefined : mixedWorktreeHostContextLabels
         if (groupBy === 'repo') {
           appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
             nestLineage,
             collapsedGroups,
             groupDepth: projectGroupDepth,
             sectionKey: key,
-            hostContextLabelByRepoId
+            hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
+            cyclicLineageIds
           })
         } else {
           appendWorktreeRows(result, items, repoMap, lineageById, worktreeMap, {
@@ -1310,7 +1351,9 @@ export function buildRows(
             collapsedGroups,
             groupDepth: projectGroupDepth,
             sectionKey: key,
-            hostContextLabelByRepoId
+            hostContextLabelByRepoId,
+            hostContextLabelByWorktreeId,
+            cyclicLineageIds
           })
         }
       }

@@ -1,13 +1,12 @@
-/* oxlint-disable max-lines -- Why: the PTY transport manages lifecycle, data flow,
-agent status extraction, and title tracking for terminal panes. Splitting would
-scatter the tightly coupled IPC ↔ xterm data pipeline across files with no clear
-module boundary, making the data flow harder to trace during debugging. */
+/* oxlint-disable max-lines -- Why: tightly coupled IPC ↔ xterm data pipeline (lifecycle, data, agent-status, titles) with no clean split point. */
 import {
   detectAgentStatusFromTitle,
   clearWorkingIndicators,
   createAgentStatusTracker,
   normalizeTerminalTitle,
-  extractAllOscTitles
+  extractAllOscTitles,
+  isCursorNativeAgentTitle,
+  shouldSuppressCursorNativeTitle
 } from '../../../../shared/agent-detection'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -17,10 +16,14 @@ import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   ptyDataHandlers,
   ptyReplayHandlers,
+  drainRolledBackPtyShutdownData,
   ptyExitHandlers,
   ptyTeardownHandlers,
+  ptyShutdownLifecycleHandlers,
+  ptyWriteUnavailableHandlers,
   ensurePtyDispatcher,
-  getEagerPtyBufferHandle
+  getEagerPtyBufferHandle,
+  isPtyDataHandlerShutdownPending
 } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
@@ -42,6 +45,10 @@ import {
   type ProcessedAgentStatusChunk
 } from '../../../../shared/agent-status-osc'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import {
+  registerPtySideEffectPendingGauge,
+  type PtySideEffectGauge
+} from './pty-side-effect-pending-census'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 
 // Re-export public API so existing consumers keep working.
@@ -59,22 +66,23 @@ export type {
   LocalPtySessionMetadata,
   PtyBufferSnapshot,
   PtyConnectResult,
+  PtyReplayDataMeta,
   PtyTransport
 } from './pty-transport-types'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
 
 const SSH_SESSION_EXPIRED_ERROR = 'SSH_SESSION_EXPIRED'
-// Why: an app SSH PTY id embeds the connection it was created under. When a pane
-// restored after a workspace/host change reattaches a session that belongs to a
-// *different* connection, the main-side id router rejects it with this phrase.
-// That session is unreachable from this pane, so it is stale like an expired one
-// — recover by spawning fresh rather than surfacing a red "file an issue" crash.
+// Why: main rejects a session reattached under a different SSH connection with this phrase; treat as stale (spawn fresh), not a crash.
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
 const STALE_TITLE_TIMEOUT = 3000 // ms before stale working title is cleared
 const MAX_PTY_SIDE_EFFECTS_PER_DRAIN = 64
-
-// Why: onAgentStatus callback added to IpcPtyTransportOptions in pty-dispatcher
-// so the OSC 9999 status payloads can be forwarded to the store.
+// Why: background timer throttling clamps the drain to ~64 effects/s while an agent CLI can queue
+// hundreds/s, so an overnight minimized window otherwise grows this queue without bound (C1/H2).
+// 512 ≈ 8 drain ticks of catch-up latency once visible; entries are compact facts (≤1 title/payload).
+export const MAX_PENDING_PTY_SIDE_EFFECTS = 512
+// Why: agent status is last-wins store state, but payloads can carry KB-scale prompt/tool strings;
+// carry only the newest few through eviction so a status flood cannot re-grow what it evicted.
+export const MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY = 16
 
 type PtyOutputCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
@@ -87,9 +95,7 @@ type PtyOutputProcessorOptions = Pick<
   | 'onAgentExited'
   | 'onAgentStatus'
 > & {
-  /** Seed for processors that start mid-session (parked-tab byte watchers):
-   *  the pane's last known title, so a working agent that finishes while the
-   *  processor owns the stream still yields a working→idle transition. */
+  /** Seed for mid-session processors (parked-tab watchers): pane's last title, so an agent finishing mid-stream still yields a working→idle transition. */
   initialAgentTitle?: string
 }
 
@@ -97,10 +103,11 @@ type ProcessPtyOutputOptions = {
   replayingBufferedData?: boolean
   suppressAttentionEvents?: boolean
   clearBeforeReplay?: boolean
-  // Why: a mid-escape tail the daemon could not serialize. The replay consumer
-  // must write it LAST, after the post-replay reset, so the next live chunk
-  // completes it instead of rendering literally (#7329).
+  // Why: a mid-escape tail; the replay consumer writes it LAST (after the post-replay reset) so the next live chunk completes it, not renders it literally (#7329).
   pendingEscapeTailAnsi?: string
+  /** Kitty flags the snapshot owner proved at `snapshotSeq`. */
+  kittyKeyboardFlags?: number
+  snapshotSeq?: number
 }
 
 type PendingPtySideEffect = {
@@ -111,27 +118,27 @@ type PendingPtySideEffect = {
   suppressAttentionEvents: boolean
 }
 
-function isIgnoredCursorNativeTitle(title: string): boolean {
-  return title.trim().toLowerCase() === 'cursor agent'
-}
-
-function removeIgnoredCursorNativeTitles(titles: string[]): boolean {
+// Why: mirrors main's applyObservedTitle — the literal survives whenever the title before it
+// is not already Cursor-owned, which is how a pane re-establishes Cursor identity after the
+// shell prompt repaints the title (#10258). Only the redraw repeats are dropped, so they cost
+// neither an allocation nor a drain slot; `processObservedTitles` re-checks and stays
+// authoritative, so this must never drop a title that gate would have emitted.
+function removeSuppressedCursorNativeTitles(
+  titles: string[],
+  precedingTitle: string | null
+): boolean {
   let writeIndex = 0
-  let removed = false
-  for (let readIndex = 0; readIndex < titles.length; readIndex += 1) {
-    const title = titles[readIndex]
-    if (isIgnoredCursorNativeTitle(title)) {
-      removed = true
+  let previousTitle = precedingTitle
+  for (const title of titles) {
+    if (isCursorNativeAgentTitle(title) && shouldSuppressCursorNativeTitle(previousTitle)) {
       continue
     }
-    if (writeIndex !== readIndex) {
-      titles[writeIndex] = title
-    }
+    previousTitle = normalizeTerminalTitle(title)
+    titles[writeIndex] = title
     writeIndex += 1
   }
-  if (removed) {
-    titles.length = writeIndex
-  }
+  const removed = writeIndex < titles.length
+  titles.length = writeIndex
   return removed
 }
 
@@ -151,19 +158,17 @@ export function createPtyOutputProcessor({
     meta?: PtyDataMeta
   ) => void
   clearAccumulatedState: () => void
+  pausePendingSideEffects: () => void
   clearStaleTitleTimer: () => void
   flushPendingSideEffects: () => void
   resetBellDetector: () => void
   resetAgentStatusCarry: () => void
+  disposePendingSideEffectGauge: () => void
 } {
   const bellDetector = createBellDetector()
-  // Why `let`: a model-restore marker means bytes were dropped between
-  // chunks; a partial OSC-9999 prefix carried across that gap would swallow
-  // the next live chunk's head as bogus payload. Reset recreates the parser.
+  // Why let: a model-restore marker drops bytes; recreating the parser stops a partial OSC-9999 carry from swallowing the next chunk's head.
   let processAgentStatusChunk = createAgentStatusOscProcessor()
-  // Why: seed both the emitted-title memory (stale-title probe) and the agent
-  // tracker so a mid-session processor behaves as if it had observed the
-  // pane's last live title — full parity with the live path it replaces.
+  // Why: seed emitted-title memory and the agent tracker so a mid-session processor behaves as if it had observed the pane's last live title.
   let lastEmittedTitle: string | null =
     initialAgentTitle !== undefined ? normalizeTerminalTitle(initialAgentTitle) : null
   let staleTitleTimer: ReturnType<typeof setTimeout> | null = null
@@ -171,6 +176,16 @@ export function createPtyOutputProcessor({
   let pendingSideEffects: PendingPtySideEffect[] = []
   let pendingSideEffectIndex = 0
   let pendingWorkingTitleSideEffects = 0
+  // Why both counts: drained entries survive until compaction, so depth alone understates what the array retains.
+  const pendingSideEffectGauge: PtySideEffectGauge = {
+    pending: () => pendingSideEffects.length - pendingSideEffectIndex,
+    retained: () => pendingSideEffects.length
+  }
+  const disposePendingSideEffectGauge = registerPtySideEffectPendingGauge(pendingSideEffectGauge)
+  const initialAgentStatusTitle =
+    initialAgentTitle !== undefined && !isCursorNativeAgentTitle(initialAgentTitle)
+      ? initialAgentTitle
+      : undefined
   const agentTracker =
     onAgentBecameIdle || onAgentBecameWorking || onAgentExited
       ? createAgentStatusTracker(
@@ -179,7 +194,7 @@ export function createPtyOutputProcessor({
           },
           onAgentBecameWorking,
           onAgentExited,
-          initialAgentTitle
+          initialAgentStatusTitle
         )
       : null
 
@@ -216,9 +231,40 @@ export function createPtyOutputProcessor({
     if (sideEffectDrainTimer !== null) {
       return
     }
-    // Why: xterm.write() buffers parsing onto its own timer. Defer Orca's
-    // title/status/BEL store work so live terminal rendering gets the next turn.
+    // Why: defer title/status/BEL store work so xterm.write()'s own parse timer and live rendering get the next turn.
     sideEffectDrainTimer = setTimeout(drainPtySideEffects, 0)
+  }
+
+  // Why: oldest-first eviction at the cap. Evicted titles are safe to drop (titles are last-wins);
+  // bells and agent-status payloads collapse onto the next-oldest survivor so a pending bell latch
+  // and the newest statuses still apply on drain instead of vanishing.
+  function evictOldestPendingSideEffectsIfFull(): void {
+    while (pendingSideEffects.length - pendingSideEffectIndex >= MAX_PENDING_PTY_SIDE_EFFECTS) {
+      const evicted = pendingSideEffects[pendingSideEffectIndex]
+      if (!evicted) {
+        return
+      }
+      pendingSideEffectIndex += 1
+      // Why: mirror applyPtySideEffect's accounting so stale-probe arming doesn't stick past eviction.
+      pendingWorkingTitleSideEffects -= countWorkingTitles(evicted.titles)
+      if (pendingWorkingTitleSideEffects < 0) {
+        pendingWorkingTitleSideEffects = 0
+      }
+      const survivor = pendingSideEffects[pendingSideEffectIndex]
+      if (survivor) {
+        if (evicted.containsBell) {
+          survivor.containsBell = true
+        }
+        if (evicted.payloads.length > 0) {
+          const merged = evicted.payloads.concat(survivor.payloads)
+          survivor.payloads =
+            merged.length > MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY
+              ? merged.slice(-MAX_EVICTED_AGENT_STATUS_PAYLOAD_CARRY)
+              : merged
+        }
+      }
+      compactPendingSideEffectsIfNeeded()
+    }
   }
 
   function enqueuePtySideEffect(next: PendingPtySideEffect): void {
@@ -234,12 +280,12 @@ export function createPtyOutputProcessor({
       next.payloads.length === 0 &&
       !next.containsBell
     ) {
-      // Why: for adjacent no-op scans, only the latest event decides whether
-      // stale-title detection should remain cleared or be re-armed.
+      // Why: for adjacent no-op scans, only the latest event decides whether stale-title detection stays cleared or re-arms.
       prior.titleScanEffect = next.titleScanEffect
       pendingWorkingTitleSideEffects += workingTitleCount
       return
     }
+    evictOldestPendingSideEffectsIfFull()
     pendingSideEffects.push(next)
     pendingWorkingTitleSideEffects += workingTitleCount
   }
@@ -251,9 +297,14 @@ export function createPtyOutputProcessor({
   ): void {
     const scannedForTitles = Boolean(onTitleChange && data.includes('\x1b]'))
     const titles = scannedForTitles ? extractAllOscTitles(data) : []
-    // Why: Cursor emits this ignored title on every redraw; keep one ordered
-    // queue fact instead of one allocation and drain slot per native frame.
-    const ignoredCursorNativeTitle = removeIgnoredCursorNativeTitles(titles)
+    // Why: Cursor emits this ignored title every redraw; keep one queue fact instead of an allocation and drain slot per frame.
+    // Why the drained check: `lastEmittedTitle` only advances on drain, so while facts are
+    // still queued it is not the predecessor the drain will see — leave that call to the gate.
+    const drained = pendingSideEffectIndex >= pendingSideEffects.length
+    const ignoredCursorNativeTitle = removeSuppressedCursorNativeTitles(
+      titles,
+      drained ? lastEmittedTitle : null
+    )
     const deliveredPayloads =
       onAgentStatus && !suppressAttentionEvents && payloads.length > 0 ? payloads : []
     const containsBell = Boolean(
@@ -276,9 +327,7 @@ export function createPtyOutputProcessor({
       return
     }
 
-    // Why: keep only compact derived side-effect facts here. Retaining raw
-    // PTY chunks duplicates the terminal scheduler backlog while timers are
-    // throttled in a backgrounded Electron window.
+    // Why: queue compact derived facts, not raw PTY chunks, which would duplicate the terminal scheduler backlog while timers are throttled.
     if (deliveredPayloads.length === 0 && titles.length === 0) {
       enqueuePtySideEffect({
         payloads: [],
@@ -381,9 +430,7 @@ export function createPtyOutputProcessor({
     }
     compactPendingSideEffectsIfNeeded(options.flushAll === true)
     if (pendingSideEffectIndex < pendingSideEffects.length) {
-      // Why: long-idle agent CLIs can queue thousands of OSC title/status
-      // facts while Chromium throttles timers. Bound each callback so cursor
-      // blink, paint, and terminal input get chances to run between batches.
+      // Why: thousands of queued OSC facts can pile up under timer throttling; bound each drain so paint and terminal input run between batches.
       scheduleSideEffectDrain()
     }
   }
@@ -401,13 +448,18 @@ export function createPtyOutputProcessor({
     if (!onTitleChange) {
       return
     }
-    // Why: feed EVERY OSC title in the chunk through the observer, not just
-    // the last one. node-pty + the main-process 8ms batch window commonly
-    // coalesce multiple title updates into a single IPC payload; processing
-    // titles in order preserves working-to-idle transitions.
+    // Why: process every OSC title in order, not just the last; batching coalesces titles into one payload and order preserves working→idle transitions.
     if (titles.length > 0) {
       clearStaleTitleTimer()
       for (const title of titles) {
+        if (isCursorNativeAgentTitle(title)) {
+          // Why: identity for a hookless Cursor pane (#10258), never activity — the literal's
+          // null status would read as an agent exit, and a repeat must not stomp hook state.
+          if (!shouldSuppressCursorNativeTitle(lastEmittedTitle)) {
+            applyObservedTerminalTitle(title, true)
+          }
+          continue
+        }
         applyObservedTerminalTitle(title, suppressAgentTracker)
       }
     } else if (titleScanEffect === 'ignored-cursor-native') {
@@ -439,24 +491,24 @@ export function createPtyOutputProcessor({
   ): void {
     const rawLength = meta?.rawLength ?? data.length
     const suppressAttentionEvents = options.suppressAttentionEvents === true
-    // Why: OSC 9999 is an Orca control protocol. Parse it before xterm sees
-    // the bytes, and keep parser state across chunks so partial PTY reads do
-    // not drop valid status updates or print escape garbage.
+    // Why: parse Orca's OSC 9999 before xterm; carry parser state across chunks so partial reads don't drop status or print escape garbage.
     const processed = processAgentStatusChunk(data)
     data = processed.cleanData
-    // Why: mirror the onBell / onAgentBecameIdle guard below — during eager-buffer
-    // replay we must not surface stale agent-status payloads from a prior app
-    // session into the live store. The parser still consumes the bytes so they
-    // do not leak into xterm, we just suppress the callback.
+    // Why: during eager-buffer replay, suppress stale agent-status callbacks from a prior session (bytes still consumed so nothing leaks into xterm).
     if (options.replayingBufferedData && callbacks.onReplayData) {
       const replayMeta = {
         ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
         ...(options.pendingEscapeTailAnsi
           ? { pendingEscapeTailAnsi: options.pendingEscapeTailAnsi }
-          : {})
+          : {}),
+        // Why forwarded together: the flags are only valid for the boundary the
+        // image describes, so they never travel without their sequence.
+        ...(options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
+        ...(options.snapshotSeq !== undefined ? { snapshotSeq: options.snapshotSeq } : {})
       }
-      // Why: preserve the bare-data call shape when there is no replay metadata,
-      // so eager-buffer replay (which passes neither) is unchanged.
+      // Why: preserve the bare-data call shape when there's no replay metadata, so eager-buffer replay (which passes none) is unchanged.
       if (Object.keys(replayMeta).length > 0) {
         callbacks.onReplayData(data, replayMeta)
       } else {
@@ -482,15 +534,22 @@ export function createPtyOutputProcessor({
     bellDetector.reset()
   }
 
+  function pausePendingSideEffects(): void {
+    clearSideEffectDrainTimer()
+    clearStaleTitleTimer()
+  }
+
   return {
     processData,
     clearAccumulatedState,
+    pausePendingSideEffects,
     clearStaleTitleTimer,
     flushPendingSideEffects,
     resetBellDetector: () => bellDetector.reset(),
     resetAgentStatusCarry: () => {
       processAgentStatusChunk = createAgentStatusOscProcessor()
-    }
+    },
+    disposePendingSideEffectGauge
   }
 }
 
@@ -499,8 +558,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     cwd,
     cwdFallback,
     env,
+    envToDelete,
     command,
     launchConfig,
+    resumeProviderSession,
     launchToken,
     launchAgent,
     startupCommandDelivery,
@@ -524,15 +585,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
-  // Why: eager PTY buffers contain output produced before the pane attached —
-  // often from the previous app session. We still replay that data so titles
-  // and scrollback restore correctly, but it must not produce fresh bells,
-  // unread marks, or notifications for unrelated worktrees just because Orca
-  // is reconnecting background terminals on launch.
+  // Why: replayed eager-buffer data (often from a prior app session) must not fire fresh bells, unread marks, or notifications on reconnect.
   let suppressAttentionEvents = false
+  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data)
+    write: (id, data) => window.api.pty.write(id, data),
+    // Guard like the registered writeUnavailable handler: a rebind during the async drain
+    // must not tell the new pane that its write failed.
+    onDrainFailure: (id) => {
+      if (ptyId === id) {
+        storedCallbacks.onWriteUnavailable?.()
+      }
+    }
   })
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
@@ -546,17 +611,14 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     onAgentExited,
     onAgentStatus
   })
-  let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
-
-  // Why: pane->tab detach / split-group moves rehome the React subtree, so a
-  // NEW TerminalPane can attach to the same ptyId before the OLD instance's
-  // detach() runs. Track the handlers THIS instance registered so unregister
-  // paths only delete map entries they still own — an unconditional delete
-  // destroys the live handler and the pane freezes (data diverts into the
-  // pre-handler buffer forever).
+  // Why: a new pane can attach to the same ptyId before the old instance's detach() runs; track owned handlers so unregister never deletes the live one.
   const ownedDataAndReplayHandlers = new Map<
     string,
-    { data: (data: string, meta?: PtyDataMeta) => void; replay: (data: string) => void }
+    {
+      data: (data: string, meta?: PtyDataMeta) => void
+      replay: (data: string) => void
+      writeUnavailable: () => void
+    }
   >()
   const ownedExitHandlers = new Map<string, (code: number) => void>()
 
@@ -570,6 +632,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     if (ptyTeardownHandlers.get(id) === clearAccumulatedState) {
       ptyTeardownHandlers.delete(id)
     }
+    if (ptyShutdownLifecycleHandlers.get(id) === shutdownLifecycle) {
+      ptyShutdownLifecycleHandlers.delete(id)
+    }
   }
 
   function unregisterPtyDataAndStatusHandlers(id: string): void {
@@ -581,16 +646,15 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (ptyReplayHandlers.get(id) === owned.replay) {
         ptyReplayHandlers.delete(id)
       }
+      if (ptyWriteUnavailableHandlers.get(id) === owned.writeUnavailable) {
+        ptyWriteUnavailableHandlers.delete(id)
+      }
     }
     ownedDataAndReplayHandlers.delete(id)
   }
 
-  // Why: shared by connect() and attach() to avoid duplicating title/bell/exit
-  // logic across the two code paths that register a PTY.
   function registerPtyDataHandler(id: string): void {
-    // Why: relay pty.attach sends replay data via a dedicated pty:replay IPC
-    // channel. Route it through onReplayData so the renderer engages the
-    // replay guard and xterm auto-replies do not leak into the shell.
+    // Why: route relay replay data through onReplayData so the replay guard stops xterm auto-replies from leaking into the shell.
     const replayHandler = (data: string): void => {
       if (ptyId !== id) {
         return
@@ -616,12 +680,34 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       )
     }
     ptyDataHandlers.set(id, dataHandler)
-    ownedDataAndReplayHandlers.set(id, { data: dataHandler, replay: replayHandler })
-    drainPreHandlerPtyData(id, dataHandler)
+    // Guard like the data/replay handlers: a transport that rebinds to a new id without
+    // detaching leaves this entry behind, and a fan-out for the stale id would otherwise
+    // remount a healthy pane.
+    const writeUnavailable = (): void => {
+      if (ptyId === id) {
+        storedCallbacks.onWriteUnavailable?.()
+      }
+    }
+    ptyWriteUnavailableHandlers.set(id, writeUnavailable)
+    ownedDataAndReplayHandlers.set(id, {
+      data: dataHandler,
+      replay: replayHandler,
+      writeUnavailable
+    })
+    if (!isPtyDataHandlerShutdownPending(id)) {
+      drainPreHandlerPtyData(id, dataHandler)
+      drainRolledBackPtyShutdownData(id)
+    }
   }
 
   function clearAccumulatedState(): void {
     outputProcessor.clearAccumulatedState()
+  }
+
+  const shutdownLifecycle = {
+    pause: outputProcessor.pausePendingSideEffects,
+    rollback: outputProcessor.flushPendingSideEffects,
+    commit: clearAccumulatedState
   }
 
   function yieldToInputWriteDrain(): Promise<void> {
@@ -659,8 +745,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     const hadBufferedExit = hasPreHandlerPtyExit(id)
     const exitHandler = (code: number): void => {
       if (ptyId !== null && ptyId !== id) {
-        // Why: a preserved sleep/reconnect session can report its old exit
-        // after this transport has already rebound to a replacement PTY.
+        // Why: a preserved sleep/reconnect session can report its old exit after this transport already rebound to a replacement PTY.
         unregisterPtyHandlers(id)
         return
       }
@@ -674,21 +759,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     ptyExitHandlers.set(id, exitHandler)
     ownedExitHandlers.set(id, exitHandler)
-    // Why: shutdownWorktreeTerminals bypasses the transport layer — it
-    // kills PTYs directly via IPC without calling disconnect()/destroy().
-    // This teardown callback lets unregisterPtyDataHandlers cancel
-    // accumulated closure state (staleTitleTimer, agent tracker) that
-    // would otherwise fire stale notifications after the data handler
-    // is removed but before the exit event arrives.
+    // Why: shutdownWorktreeTerminals kills PTYs directly, bypassing disconnect/destroy; this cancels timers/tracker state that would fire stale notifications.
     ptyTeardownHandlers.set(id, clearAccumulatedState)
+    ptyShutdownLifecycleHandlers.set(id, shutdownLifecycle)
     try {
       drainPreHandlerPtyExit(id, exitHandler)
     } catch (error) {
       if (!hadBufferedExit) {
         throw error
       }
-      // Why: cleanup callback failures must not turn an already-delivered
-      // pre-attach exit into a generic connect rejection and fallback spawn.
+      // Why: a cleanup failure must not turn an already-delivered pre-attach exit into a connect rejection and fallback spawn.
       console.error('[pty] buffered pre-attach exit cleanup failed', error)
     }
     return hadBufferedExit
@@ -704,9 +784,10 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
 
       if (options.sessionId && hasPreHandlerPtyExit(options.sessionId)) {
-        // Why: an exited parked session can be recreated under the same id by
-        // createOrAttach. Deliver its buffered final frame/exit before spawn so
-        // the dead incarnation cannot disconnect and orphan a fresh shell.
+        if (options.admitPtyId && !options.admitPtyId(options.sessionId)) {
+          return { id: options.sessionId } satisfies PtyConnectResult
+        }
+        // Why: deliver the exited parked session's buffered final frame/exit before spawn, so the dead incarnation can't orphan a fresh shell reusing its id.
         ptyId = options.sessionId
         connected = true
         registerPtyDataHandler(options.sessionId)
@@ -719,17 +800,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           ? options.sessionId
           : undefined
 
-      // Why: reconnecting may intentionally reuse a session id whose prior
-      // exit was consumed. Re-admit exits without clearing bytes already
-      // buffered for a still-live session before its pane registered.
+      // Why: reconnect may reuse a session id whose prior exit was consumed; re-admit exits without clearing bytes already buffered for the live session.
       if (admittedSessionId) {
         clearConsumedPreHandlerPtyExit(admittedSessionId)
       }
 
       try {
-        // Why: missing-cwd recovery is only valid for fresh local spawns —
-        // reattach must keep the session's exact cwd and SSH-tagged transports
-        // resolve cwd on the remote host.
+        // Why: cwd fallback is only for fresh local spawns — reattach keeps the session's cwd and SSH transports resolve cwd on the remote host.
         const shouldSendLocalCwdFallback =
           cwdFallback === 'worktree' && !connectionId && !admittedSessionId
         const result = await window.api.pty.spawn({
@@ -738,9 +815,17 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           cwd,
           ...(shouldSendLocalCwdFallback ? { cwdFallback } : {}),
           env: options.env ?? env,
+          ...((options.envToDelete ?? envToDelete)
+            ? { envToDelete: options.envToDelete ?? envToDelete }
+            : {}),
           command: options.command ?? command,
           ...((options.launchConfig ?? launchConfig)
             ? { launchConfig: options.launchConfig ?? launchConfig }
+            : {}),
+          ...((options.resumeProviderSession ?? resumeProviderSession)
+            ? {
+                resumeProviderSession: options.resumeProviderSession ?? resumeProviderSession
+              }
             : {}),
           ...((options.launchToken ?? launchToken)
             ? { launchToken: options.launchToken ?? launchToken }
@@ -753,9 +838,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             : {}),
           ...(connectionId ? { connectionId } : {}),
           ...(admittedSessionId ? { sessionId: admittedSessionId } : {}),
-          // Why: hidden-at-spawn mark must land in main before the PTY's
-          // first byte, so it rides the spawn IPC instead of the pane's
-          // first visibility sync (terminal-query-authority.md).
+          // Why: hidden-at-spawn mark must reach main before the PTY's first byte — ride the spawn IPC, not the visibility sync (terminal-query-authority.md).
           ...(options.initiallyHidden ? { initiallyHidden: true } : {}),
           worktreeId,
           ...(tabId ? { tabId } : {}),
@@ -769,26 +852,31 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         const resultLaunchAgent = isTuiAgent(spawnResult.launchAgent)
           ? spawnResult.launchAgent
           : undefined
-
-        // If destroyed while the connect was in flight, bail — and kill only
-        // what this connect CREATED. A fresh spawn is ours to reap, but a
-        // reattach (sessionId) resolves to a pre-existing session owned by the
-        // tab lifecycle: tab close kills it by id through its own path, and
-        // killing it here turns a remount racing a slow reattach into the loss
-        // of a live shell — the exact failure pane recovery exists to prevent.
-        if (destroyed) {
-          if (!options.sessionId) {
-            window.api.pty.kill(spawnResult.id)
+        const retireFreshSpawn = async (): Promise<void> => {
+          if (!spawnResult.isReattach && !spawnResult.coldRestore) {
+            await window.api.pty.kill(spawnResult.id)
           }
+        }
+
+        // Why: on destroy mid-connect, kill only a fresh spawn — killing a reattached session (owned by the tab lifecycle) loses a live shell.
+        if (destroyed) {
+          await retireFreshSpawn()
           return
         }
 
+        if (options.admitPtyId && !options.admitPtyId(spawnResult.id)) {
+          // Why: a rejected session-expired fallback has no owner to retire its newly created process.
+          await retireFreshSpawn()
+          return spawnResult
+        }
+
+        if (spawnResult.isReattach && !admittedSessionId) {
+          storedCallbacks.onReattachDetermined?.()
+        }
         ptyId = spawnResult.id
         connected = true
 
-        // Why: for deferred reattach (Option 2), the daemon returns snapshot/
-        // coldRestore data from createOrAttach. Skip onPtySpawn for reattach —
-        // it would reset lastActivityAt and destroy the recency sort order.
+        // Why: skip onPtySpawn for reattach/coldRestore — it would reset lastActivityAt and destroy the recency sort order.
         if (!spawnResult.isReattach && !spawnResult.coldRestore) {
           onPtySpawn?.(spawnResult.id)
         }
@@ -808,26 +896,46 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
         if (spawnResult.isReattach || spawnResult.coldRestore || spawnResult.sessionExpired) {
           return {
             id: spawnResult.id,
+            // Why: recovery needs to distinguish an attach that ignored startup intent from a fresh spawn that ran it.
+            ...(spawnResult.isReattach ? { isReattach: true } : {}),
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             snapshot: spawnResult.snapshot,
             snapshotCols: spawnResult.snapshotCols,
             snapshotRows: spawnResult.snapshotRows,
+            ...(spawnResult.snapshotPrefixAnsi !== undefined
+              ? { snapshotPrefixAnsi: spawnResult.snapshotPrefixAnsi }
+              : {}),
+            ...(spawnResult.snapshotFrameAnsi !== undefined
+              ? { snapshotFrameAnsi: spawnResult.snapshotFrameAnsi }
+              : {}),
+            ...(spawnResult.snapshotFrameRestoreAnsi !== undefined
+              ? { snapshotFrameRestoreAnsi: spawnResult.snapshotFrameRestoreAnsi }
+              : {}),
             isAlternateScreen: spawnResult.isAlternateScreen,
             sessionExpired: spawnResult.sessionExpired,
             coldRestore: spawnResult.coldRestore,
             replay: spawnResult.replay,
-            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi
+            pendingEscapeTailAnsi: spawnResult.pendingEscapeTailAnsi,
+            // Why: the cold-restore path re-runs the launch command, so it needs the
+            // same "main declined the resume" signal the fresh-spawn path gets.
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
-        if (resultLaunchAgent || spawnResult.launchConfig || spawnResult.startupCwdFallback) {
+        if (
+          resultLaunchAgent ||
+          spawnResult.launchConfig ||
+          spawnResult.startupCwdFallback ||
+          spawnResult.agentResumeUnavailable
+        ) {
           return {
             id: spawnResult.id,
             ...(resultLaunchAgent ? { launchAgent: resultLaunchAgent } : {}),
             ...(spawnResult.launchConfig ? { launchConfig: spawnResult.launchConfig } : {}),
             ...(spawnResult.startupCwdFallback
               ? { startupCwdFallback: spawnResult.startupCwdFallback }
-              : {})
+              : {}),
+            ...(spawnResult.agentResumeUnavailable ? { agentResumeUnavailable: true as const } : {})
           } satisfies PtyConnectResult
         }
         return spawnResult.id
@@ -844,29 +952,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
             sessionExpired: true
           } satisfies PtyConnectResult
         }
-        // Why: after "Kill All" from Settings → Manage Sessions, mounted panes
-        // can still trigger pty:spawn with the killed session ID (tab remount,
-        // navigating back to the workspace). The main-side adapter correctly
-        // rejects with TerminalKilledError ("...was explicitly killed") via
-        // its tombstone. Surfacing that rejection as a red "Terminal error,
-        // please file an issue" toast misrepresents an intentional user
-        // action as a bug. The pane will already render "Process exited" via
-        // the normal lifecycle — that is the correct signal. Match against
-        // both the raw Error.message and Electron's IPC-wrapped form
-        // ("Error invoking remote method 'pty:spawn': TerminalKilledError:
-        // ..."). The phrase "was explicitly killed" only appears in that one
-        // error type (see src/main/daemon/daemon-pty-adapter.ts), so a
-        // substring match is safe.
+        // Why: re-spawning a Kill-All'd session throws TerminalKilledError; swallow it (pane still shows "Process exited"), don't toast (src/main/daemon/daemon-pty-adapter.ts).
         if (msg.includes('was explicitly killed')) {
           return undefined
         }
-        // Why: on cold start, SSH provider isn't registered yet so pty:spawn
-        // throws a raw IPC error. Replace with a friendly message since this
-        // is an expected state, not an application crash.
+        // Why: on cold start the SSH provider isn't registered yet, so pty:spawn throws a raw IPC error; replace with a friendly message.
         if (connectionId && msg.includes('No PTY provider for connection')) {
-          // Why: a runtime-owned (per-workspace-env) SSH target disappearing is an expected
-          // teardown state (e.g. the workspace was deleted) with no user-facing reconnect dialog —
-          // don't surface a "reconnect" toast for it.
+          // Why: a disappearing runtime-owned SSH target is expected teardown (e.g. workspace deleted); don't surface a reconnect toast.
           if (!isRuntimeOwnedSshTargetId(connectionId)) {
             storedCallbacks.onError?.(
               'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
@@ -890,8 +982,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       const id = options.existingPtyId
       ptyId = id
       connected = true
-      // Why: skip onPtySpawn — it would reset lastActivityAt and destroy the
-      // recency sort order that reconnectPersistedTerminals preserved.
+      // Why: skip onPtySpawn — it would reset lastActivityAt and destroy the recency sort order reconnectPersistedTerminals preserved.
       registerPtyDataHandler(id)
       registerPtyExitHandler(id)
       if (!connected || ptyId !== id) {
@@ -905,50 +996,28 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
           const replayData = trimIncompleteTerminalControlTail(buffered)
           const shouldClearBeforeReplay =
             !options.isAlternateScreen && hasTerminalDisplayContent(replayData)
-          // Why: hidden automation PTYs may have already rendered their TUI into
-          // the eager buffer. Clear stale pane contents before replaying
-          // terminal-visible bytes, but keep scrollback for control-only frames.
+          // Why: hidden PTYs may pre-render a TUI into the eager buffer; clear stale contents before replay, keep scrollback for control-only frames.
           if (shouldClearBeforeReplay && !storedCallbacks.onReplayData) {
             const clear = '\x1b[2J\x1b[3J\x1b[H'
             storedCallbacks.onData?.(clear)
           }
 
-          // Why: eager-buffered bytes are raw PTY output captured before the
-          // pane mounted — often from the previous app session. We replay
-          // them so titles/scrollback restore correctly, but must silence
-          // attention side effects during that replay: a historical BEL
-          // or completion captured from the prior session must not produce
-          // a fresh bell on the freshly mounted pane.
-          //
-          // The replay option routes the bytes through onReplayData so the
-          // renderer engages the replay guard — xterm's auto-replies to
-          // embedded query sequences would otherwise leak into shell stdin.
+          // Why: silence attention events during replay so a historical BEL from a prior session doesn't ring on the freshly mounted pane.
           suppressAttentionEvents = true
           try {
+            // Why: replayingBufferedData routes bytes through onReplayData so the replay guard blocks xterm query auto-replies from leaking into shell stdin.
             outputProcessor.processData(replayData, storedCallbacks, {
               replayingBufferedData: true,
               suppressAttentionEvents: true,
               clearBeforeReplay: shouldClearBeforeReplay
             })
           } finally {
-            // Why: replay side effects are intentionally deferred for live
-            // output, but replay cleanup must observe them before resetting
-            // parser state or a partial OSC can swallow the next live BEL.
+            // Why: flush deferred side effects before resetting parser state, else a partial OSC can swallow the next live BEL.
             outputProcessor.flushPendingSideEffects()
             suppressAttentionEvents = false
-            // Why: replaying eager-buffered bytes may have observed a "working" title
-            // without a follow-up title, starting a stale-title timer. That timer would
-            // fire 3s later — outside the suppression window — and trigger a spurious
-            // working→idle transition (and phantom cache-timer write) for a session
-            // that was never live in this app instance. Cancel it so the replay has
-            // no lingering side effects.
+            // Why: replay may arm a stale-title timer that fires 3s later (outside suppression) and force a spurious working→idle transition.
             outputProcessor.clearStaleTitleTimer()
-            // Why: eager-buffered bytes may end mid-OSC (truncated/partial session
-            // data), leaving bellDetector with inOsc = true. Without resetting, the
-            // next real BEL in live data would be silently classified as an OSC
-            // terminator and dropped. BEL is the sole attention signal per the PR
-            // design, so this reset guards the attention pipeline against a silent
-            // regression driven by replay state leaking into the live stream.
+            // Why: eager-buffered bytes may end mid-OSC (inOsc=true); reset so the next live BEL isn't swallowed as an OSC terminator.
             outputProcessor.resetBellDetector()
           }
         }
@@ -976,16 +1045,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     },
 
-    detach() {
+    detach(options) {
+      // Why first: the successor transport owns the PTY after detach, and nothing below may
+      // throw its way past the census drop — a stranded gauge outlives the transport.
+      outputProcessor.disposePendingSideEffectGauge()
       clearAccumulatedState()
       inputWriteQueue.clear()
       if (ptyId) {
-        // Why: detach() is used for in-session remounts such as moving a tab
-        // between split groups. Stop delivering data/title events into the
-        // unmounted pane immediately, but keep the PTY exit observer alive so
-        // a shell that dies during the remount gap can still clear stale
-        // tab/leaf bindings before the next pane attempts to reattach.
-        unregisterPtyDataAndStatusHandlers(ptyId)
+        // Why: on remount keep the exit observer alive so a shell dying in the gap still clears stale tab/leaf bindings before reattach.
+        if (options?.preserveExitObserver === false) {
+          unregisterPtyHandlers(ptyId)
+        } else {
+          unregisterPtyDataAndStatusHandlers(ptyId)
+        }
       }
       connected = false
       ptyId = null
@@ -999,15 +1071,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       return inputWriteQueue.enqueue(ptyId, data)
     },
 
-    // Why: the local write queue already drains a lone item in the same turn
-    // (no wall-clock debounce), so query replies are prompt without special
-    // handling. Kept as a distinct method so callers express intent and the
-    // remote transport can override with its flush-then-send behavior (#7329).
+    // Why: kept distinct from sendInput so the remote transport can override with flush-then-send (#7329); local queue drains same-turn.
     sendInputImmediate(data: string): boolean {
       if (!connected || !ptyId) {
         return false
       }
-      return inputWriteQueue.enqueue(ptyId, data)
+      return inputWriteQueue.enqueueQueryReply(ptyId, data)
     },
 
     ...(connectionId
@@ -1063,8 +1132,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       if (connectionId) {
         return null
       }
-      // Why: input routing and diagnostics must follow the launched PTY
-      // session, not later project setting changes.
+      // Why: input routing/diagnostics must follow the launched PTY session, not later project setting changes.
       return {
         ...(cwd ? { cwd } : {}),
         ...(shellOverride ? { shellOverride } : {})
@@ -1072,15 +1140,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     resetCrossChunkParserState() {
-      // Why: only the OSC-9999 carry spans the dropped-byte gap a
-      // model-restore marker reports; title/bell trackers re-sync from the
-      // snapshot's side-effect replay and must not be reset here.
+      // Why: only the OSC-9999 carry spans the model-restore dropped-byte gap; title/bell re-sync from the snapshot replay.
       outputProcessor.resetAgentStatusCarry()
     },
 
     destroy() {
       destroyed = true
-      this.disconnect()
+      // Why finally: disconnect runs pty.kill IPC and consumer onDisconnect callbacks; a throw
+      // there must not strand the gauge in the very path where teardown already went wrong.
+      try {
+        this.disconnect()
+      } finally {
+        outputProcessor.disposePendingSideEffectGauge()
+      }
     }
   }
 }

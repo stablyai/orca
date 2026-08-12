@@ -1,9 +1,3 @@
-import {
-  extractWorkIdentifier,
-  formatIdentifierFirst,
-  stripWorkIdentifierEcho
-} from './work-item-reference'
-
 export const GENERATED_TAB_TITLE_MAX_LENGTH = 40
 export const GENERATED_TAB_TITLE_SOURCE_SCAN_LIMIT = 512
 
@@ -108,18 +102,6 @@ export function deriveGeneratedTabTitle(prompt: string): string | null {
   }
 
   candidate = foldGeneratedTabTitleWhitespace(candidate.replace(/[^\p{L}\p{N}\s]/gu, ' '))
-
-  // Lead with the review target (`PR 1094 - …`) so the tab matches the sidebar
-  // workspace name; the pipeline above strips the URL/prefix, so the number is
-  // recovered from the raw prompt rather than the cleaned clause.
-  const identifier = extractWorkIdentifier(promptPreview)
-  if (identifier) {
-    const detail = capitalizeFirstLetter(stripWorkIdentifierEcho(candidate, identifier))
-    return truncateAtWordBoundary(
-      formatIdentifierFirst(identifier.label, detail),
-      GENERATED_TAB_TITLE_MAX_LENGTH
-    )
-  }
 
   if (!candidate) {
     return null

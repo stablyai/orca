@@ -20,20 +20,34 @@ export function sendToTrustedUIRenderer(
   payload: unknown,
   excludedWebContentsId?: number
 ): void {
+  const renderer = getTrustedUIRendererWebContents(excludedWebContentsId)
+  renderer?.send(channel, payload)
+}
+
+export function getTrustedUIRendererWebContents(
+  excludedWebContentsId?: number
+): WebContents | null {
+  // Why: exact targeting avoids waking retained browser/utility windows that cannot consume app UI events.
   const rendererId = trustedUIRendererWebContentsId
   if (rendererId == null || rendererId === excludedWebContentsId) {
-    return
+    return null
   }
   const renderer = webContents.fromId(rendererId)
   if (!renderer || renderer.isDestroyed()) {
-    return
+    return null
   }
-  // Why: app events belong to the registered UI renderer; enumerating every
-  // WebContents wakes retained browser guests that cannot consume the channel.
-  renderer.send(channel, payload)
+  return renderer
 }
 
-export function registerUIHandlers(store: Store): void {
+export function getTrustedUIRendererWindow(): BrowserWindow | null {
+  const renderer = getTrustedUIRendererWebContents()
+  return renderer ? BrowserWindow.fromWebContents(renderer) : null
+}
+
+export function registerUIHandlers(
+  store: Store,
+  options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
+): void {
   // Why: UI view-state is shared between the desktop renderer and mobile (ui.set
   // RPC). Broadcast every change so the desktop re-hydrates when mobile (or
   // another window) updates it — bi-directional sync, mirroring settings:changed.
@@ -74,9 +88,25 @@ export function registerUIHandlers(store: Store): void {
     }
     webContents?.paste()
   })
+
+  ipcMain.removeAllListeners('ui:performNativeSelectionAction')
+  ipcMain.on('ui:performNativeSelectionAction', (event, action: unknown) => {
+    if (
+      !isTrustedUIRenderer(event.sender) &&
+      options.isDashboardPopoutRenderer?.(event.sender) !== true
+    ) {
+      return
+    }
+    const target = BrowserWindow.fromWebContents(event.sender)?.webContents
+    if (action === 'copy') {
+      target?.copy()
+    } else if (action === 'select-all') {
+      target?.selectAll()
+    }
+  })
 }
 
-function isTrustedUIRenderer(sender: WebContents): boolean {
+export function isTrustedUIRenderer(sender: WebContents): boolean {
   if (sender.isDestroyed() || sender.getType() !== 'window') {
     return false
   }

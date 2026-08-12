@@ -4,7 +4,7 @@ import {
   createWebRuntimeSessionTerminal,
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 
 export function createNewTerminalTab(
   activeWorktreeId: string | null,
@@ -15,7 +15,11 @@ export function createNewTerminalTab(
     return
   }
   const state = useAppStore.getState()
-  const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, activeWorktreeId)
+  const worktreeRoute = resolveTerminalWorktreeRoute(state, activeWorktreeId)
+  if (!worktreeRoute) {
+    return
+  }
+  const runtimeEnvironmentId = worktreeRoute.runtimeEnvironmentId
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
     // Why: paired web clients receive host-owned terminal tabs through
     // session.tabs. Creating a local tab first races the host snapshot and can

@@ -144,10 +144,6 @@ vi.mock('./CacheTimer', () => ({
 
 // NOTE: intentionally NOT mocking ./WorktreeCardAgents — we render the real one.
 
-vi.mock('./SshDisconnectedDialog', () => ({
-  SshDisconnectedDialog: () => null
-}))
-
 vi.mock('./WorktreeContextMenu', () => ({
   default: ({ children }: { children: ReactNode }) => <>{children}</>,
   CLOSE_ALL_CONTEXT_MENUS_EVENT: 'orca:test-close-context-menus',
@@ -474,8 +470,9 @@ describe('WorktreeCard agent-list <-> child-worktrees expansion coupling', () =>
     setAgentLineageState({ agentActivityDisplayMode: 'full' })
     const { container } = await renderWorktreeList()
 
-    // Sanity: real agent rows rendered (parent + its lineage child agent).
-    expect(container.textContent).toContain('PARENT_AGENT_PROMPT')
+    // Same-tab lineage children must not inherit the parent's conversation name.
+    expect(container.textContent).toContain('Parent Terminal')
+    expect(container.textContent).not.toContain('PARENT_AGENT_PROMPT')
     expect(container.textContent).toContain('CHILD_AGENT_PROMPT')
 
     // Both controls exist and are independent DOM elements.

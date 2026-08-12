@@ -13,7 +13,7 @@ import type {
 } from '../../shared/types'
 import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
-import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListIssuesError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
+import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
 
 // Why: parallel to GitHub's IssueListResult — distinguishes a successful-
 // empty listing from a failed fetch.
@@ -44,7 +44,7 @@ export async function getIssue(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabIssueInfo | null> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const projectRef = await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions)
   // Why: don't fall back to a cwd-inferred `glab issue view` when the project
   // can't be resolved — on an SSH connection cwd is not the repo dir, so glab
@@ -92,7 +92,7 @@ export async function listIssues(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<IssueListResult> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -128,7 +128,7 @@ export async function listIssues(
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = JSON.parse(stdout) as Record<string, unknown>[]
+    const data = parseGlabJsonList<Record<string, unknown>>(stdout)
     // Why: GitLab's project issues endpoint returns true issues only
     // (MRs are a separate endpoint), so no equivalent of GitHub's
     // pull_request filter is needed here.
@@ -136,10 +136,9 @@ export async function listIssues(
       items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
     }
   } catch (err) {
-    const stderr = err instanceof Error ? err.message : String(err)
     return {
       items: [],
-      error: classifyListIssuesError(stderr)
+      error: classifyListFetchError(err)
     }
   } finally {
     release()
@@ -162,7 +161,7 @@ export async function createIssue(
   if (!trimmedTitle) {
     return { ok: false, error: 'Title is required' }
   }
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -232,7 +231,7 @@ export async function updateIssue(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId),
+        await getGlabKnownHosts(connectionId, localGitOptions),
         connectionId,
         localGitOptions
       )
@@ -369,7 +368,7 @@ export async function addIssueComment(
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId),
+        await getGlabKnownHosts(connectionId, localGitOptions),
         connectionId,
         localGitOptions
       )
@@ -427,7 +426,7 @@ export async function listLabels(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<string[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,
@@ -468,7 +467,7 @@ export async function listAssignableUsers(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<GitLabAssignableUser[]> {
-  const knownHosts = await getGlabKnownHosts(connectionId)
+  const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
     preference,

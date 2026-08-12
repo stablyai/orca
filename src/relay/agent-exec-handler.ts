@@ -1,9 +1,10 @@
-import { exec, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import { applyTerminalGitCredentialPromptGuard } from '../shared/terminal-git-credential-guard'
 import { mergeGitConfigEnvProtocol } from '../shared/git-credential-prompt-env'
+import { terminateRelaySubprocessTree } from './subprocess-tree-termination'
 
 const DEFAULT_TIMEOUT_MS = 60_000
 const MAX_TIMEOUT_MS = 5 * 60 * 1000
@@ -64,29 +65,6 @@ function getWindowsSafeSpawn(
   }
   const commandLine = [resolvedBinary, ...args].map(quoteWindowsBatchToken).join(' ')
   return { spawnCmd: getCmdExePath(), spawnArgs: ['/d', '/s', '/c', commandLine] }
-}
-
-// Why: mirrors src/main/text-generation/commit-message-text-generation.ts. On
-// Windows, npm-installed CLIs like `claude`/`codex` are usually `.cmd` shims.
-// We route those through cmd.exe so Node can launch them, and taskkill is
-// needed to terminate the whole wrapper + node.exe process tree. Kept
-// duplicated rather than imported because the relay ships to remote hosts.
-function killProcessTree(child: ChildProcess): void {
-  const pid = child.pid
-  if (!pid) {
-    return
-  }
-  if (process.platform === 'win32') {
-    exec(`taskkill /pid ${pid} /T /F`, () => {
-      // Best-effort; the spawn's `close` listener fires once the tree exits.
-    })
-    return
-  }
-  try {
-    child.kill('SIGKILL')
-  } catch {
-    // Child may already have exited between the kill request and now.
-  }
 }
 
 type ExecParams = {
@@ -232,7 +210,7 @@ export class AgentExecHandler {
       }
       const cancelCurrent = (): void => {
         canceled = true
-        killProcessTree(child)
+        terminateRelaySubprocessTree(child)
       }
       if (laneKey) {
         // Why: the relay owns one visible non-interactive job per cwd+operation.
@@ -252,14 +230,14 @@ export class AgentExecHandler {
         // Why: tree-kill because some CLIs trap SIGTERM and continue streaming;
         // also Windows wraps `.cmd` shims in cmd.exe, so the immediate child
         // is not the real node.exe process.
-        killProcessTree(child)
+        terminateRelaySubprocessTree(child)
         finish({ stdout, stderr, exitCode: null, timedOut, canceled })
       }, timeoutMs)
 
       const onStdoutData = (chunk: Buffer): void => {
         stdoutBytes += chunk.byteLength
         if (stdoutBytes > MAX_OUTPUT_BYTES) {
-          killProcessTree(child)
+          terminateRelaySubprocessTree(child)
           return
         }
         stdout += chunk.toString('utf-8')
@@ -267,7 +245,7 @@ export class AgentExecHandler {
       const onStderrData = (chunk: Buffer): void => {
         stderrBytes += chunk.byteLength
         if (stderrBytes > MAX_OUTPUT_BYTES) {
-          killProcessTree(child)
+          terminateRelaySubprocessTree(child)
           return
         }
         stderr += chunk.toString('utf-8')

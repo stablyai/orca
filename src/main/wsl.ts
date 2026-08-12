@@ -1,9 +1,51 @@
 import { execFile, execFileSync } from 'node:child_process'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
+import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
+import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
+import {
+  _resetWslAvailabilityCacheForTests,
+  _setWslAvailabilityCacheForTests,
+  dropStaleWslAvailabilityFailure
+} from './wsl-availability'
+
+export { toWindowsWslPath } from '../shared/wsl-paths'
+export {
+  getCachedWslAvailability,
+  hasCachedWslAvailability,
+  isWslAvailable,
+  isWslAvailableAsync
+} from './wsl-availability'
 
 export type WslPathInfo = {
   distro: string
   linuxPath: string
+}
+
+const WSL_DIRECTORY_EXISTS_MARKER = '__ORCA_DIRECTORY_EXISTS__'
+const WSL_DIRECTORY_MISSING_MARKER = '__ORCA_DIRECTORY_MISSING__'
+
+function getWslDirectoryProbeArgs(info: WslPathInfo): string[] {
+  return [
+    '-d',
+    info.distro,
+    '--',
+    'sh',
+    '-c',
+    `if [ -d "$1" ]; then printf ${WSL_DIRECTORY_EXISTS_MARKER}; else printf ${WSL_DIRECTORY_MISSING_MARKER}; fi`,
+    'sh',
+    info.linuxPath
+  ]
+}
+
+function parseWslDirectoryProbeOutput(stdout: unknown): boolean | null {
+  const output = String(stdout)
+  if (output.includes(WSL_DIRECTORY_EXISTS_MARKER)) {
+    return true
+  }
+  if (output.includes(WSL_DIRECTORY_MISSING_MARKER)) {
+    return false
+  }
+  return null
 }
 
 /**
@@ -34,8 +76,8 @@ export function isWslPath(path: string): boolean {
  * Why: Win32 fs.statSync against the WSL 9P filesystem (\\wsl.localhost\...)
  * is unreliable for repos that live on the WSL side — it can report ENOENT for
  * directories that exist, which made opening a WSL worktree fail with
- * "Working directory ... does not exist". `wsl.exe -d <distro> test -d` asks
- * the distro directly, which is the authoritative answer. Returns null (rather
+ * "Working directory ... does not exist". The guest marker probe asks the
+ * distro directly, which is the authoritative answer. Returns null (rather
  * than false) when wsl.exe is unavailable or errors so callers can fall back to
  * the fs check instead of falsely rejecting a valid directory.
  */
@@ -48,20 +90,31 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
     return null
   }
   try {
-    execFileSync('wsl.exe', ['-d', info.distro, '--', 'test', '-d', info.linuxPath], {
+    const stdout = execFileSync('wsl.exe', getWslDirectoryProbeArgs(info), {
       stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
+      timeout: 5000,
+      encoding: 'utf8'
     })
-    return true
-  } catch (error) {
-    // A non-zero exit (directory missing) surfaces as an error with a numeric
-    // `status`; treat that as a definitive "does not exist". Any other failure
-    // (wsl.exe missing, distro not running, timeout) is inconclusive -> null.
-    if (typeof (error as { status?: unknown })?.status === 'number') {
-      return false
-    }
+    return parseWslDirectoryProbeOutput(stdout)
+  } catch {
     return null
   }
+}
+
+export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | null> {
+  if (process.platform !== 'win32') {
+    return Promise.resolve(null)
+  }
+  const info = parseWslUncPath(uncPath)
+  if (!info) {
+    return Promise.resolve(null)
+  }
+  return new Promise((resolve) => {
+    execFile('wsl.exe', getWslDirectoryProbeArgs(info), { timeout: 5000 }, (_error, stdout) => {
+      // Why: wsl.exe uses numeric exits for both guest results and host failures; only the guest marker is authoritative.
+      resolve(parseWslDirectoryProbeOutput(stdout))
+    })
+  })
 }
 
 /**
@@ -89,26 +142,6 @@ export function toLinuxPath(windowsPath: string): string {
   return `/mnt/${driveLetter}/${rest}`
 }
 
-/**
- * Convert a Linux path inside a WSL distro to a Windows path.
- *
- * Why two forms: paths under /mnt/<drive>/... are Windows-native filesystem
- * paths that WSL exposes via the DrvFs mount. These map back to their native
- * Windows form (e.g. /mnt/c/Users → C:\Users). All other paths live on the
- * WSL virtual filesystem and use the UNC form (\\wsl.localhost\Distro\...).
- */
-export function toWindowsWslPath(linuxPath: string, distro: string): string {
-  // /mnt/c/Users/... → C:\Users\...
-  const mntMatch = linuxPath.match(/^\/mnt\/([a-z])(\/.*)?$/)
-  if (mntMatch) {
-    const driveLetter = mntMatch[1].toUpperCase()
-    const rest = (mntMatch[2] || '').replace(/\//g, '\\')
-    return `${driveLetter}:${rest || '\\'}`
-  }
-
-  return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
-}
-
 // ─── WSL home directory resolution ──────────────────────────────────
 
 const wslHomeCache = new Map<string, string>()
@@ -117,26 +150,61 @@ let wslDistroCache: string[] | null = null
 // otherwise hide every distro until restart), but repeated failures cannot
 // re-spawn a blocking wsl.exe on every caller; brief negative caching bounds
 // the spawn rate on machines where WSL is absent or persistently broken.
-const WSL_DISTRO_LIST_FAILURE_TTL_MS = 15_000
-let wslDistroListFailedUntilMs = 0
-
-function normalizeWslListOutput(output: string): string[] {
-  // Why: wsl.exe can emit UTF-16-looking NUL bytes when inherited through
-  // some Windows shells; strip them before line parsing.
-  return output
-    .replaceAll(String.fromCharCode(0), '')
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/^\*\s*/, ''))
-    .filter(Boolean)
+// Empty and failed probes back off from 15 seconds to a five-minute cap.
+let wslDistroListRetryAfterMs = 0
+let wslDistroListEmptyStreak = 0
+let wslDistroProbeSequence = 0
+let wslDistroCacheSequence = 0
+function armWslDistroListRetry(): void {
+  const now = Date.now()
+  // Concurrent completions belong to the retry window already armed by the first result.
+  if (now < wslDistroListRetryAfterMs) {
+    return
+  }
+  wslDistroListEmptyStreak += 1
+  wslDistroListRetryAfterMs = now + wslDistroListRetryDelayMs(wslDistroListEmptyStreak)
 }
 
-function isUserWslDistro(distro: string): boolean {
-  return !distro.toLowerCase().startsWith('docker-desktop')
+// Why: `wsl --install` reports zero distros while one is still provisioning, so an
+// empty answer is transient and must stay retryable — caching it for the process
+// lifetime is what made WSL vanish from the picker after setup. It is still cached
+// for reads, so a missing distro stays visible to `isKnownMissingDistro`.
+function cacheWslDistroList(rawDistros: string[], probeSequence: number): string[] {
+  const userDistros = filterUserWslDistros(rawDistros)
+  // An older positive result must not replace the newer lifetime-stable list.
+  if (
+    probeSequence < wslDistroCacheSequence &&
+    (userDistros.length === 0 || (wslDistroCache?.length ?? 0) > 0)
+  ) {
+    return wslDistroCache ?? []
+  }
+  // Why: probes overlap and can resolve out of order — a slow pre-registration wsl.exe
+  // can land after a fast one that already found the distro. A late empty answer must
+  // not erase that list, or provisioning reverts to "no distros" and backs off again.
+  if (userDistros.length === 0 && wslDistroCache !== null && wslDistroCache.length > 0) {
+    return wslDistroCache
+  }
+  if (userDistros.length > 0) {
+    dropStaleWslAvailabilityFailure()
+  }
+  wslDistroCacheSequence = probeSequence
+  wslDistroCache = userDistros
+  if (wslDistroCache.length === 0) {
+    armWslDistroListRetry()
+  }
+  return wslDistroCache
+}
+
+/** A non-empty list is stable; an empty one re-probes once the retry window elapses. */
+function shouldReuseCachedWslDistros(): boolean {
+  return (
+    wslDistroCache !== null && (wslDistroCache.length > 0 || Date.now() < wslDistroListRetryAfterMs)
+  )
 }
 
 export function listWslDistros(): string[] {
-  if (wslDistroCache) {
-    return wslDistroCache
+  if (shouldReuseCachedWslDistros()) {
+    return wslDistroCache ?? []
   }
 
   if (process.platform !== 'win32') {
@@ -144,27 +212,27 @@ export function listWslDistros(): string[] {
     return wslDistroCache
   }
 
-  if (Date.now() < wslDistroListFailedUntilMs) {
-    return []
+  if (Date.now() < wslDistroListRetryAfterMs) {
+    return wslDistroCache ?? []
   }
 
   try {
+    const probeSequence = ++wslDistroProbeSequence
     const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       timeout: 5000
     })
-    wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
-    return wslDistroCache
+    return cacheWslDistroList(parseWslDistros(output), probeSequence)
   } catch {
-    wslDistroListFailedUntilMs = Date.now() + WSL_DISTRO_LIST_FAILURE_TTL_MS
-    return []
+    armWslDistroListRetry()
+    return wslDistroCache ?? []
   }
 }
 
 export async function listWslDistrosAsync(): Promise<string[]> {
-  if (wslDistroCache !== null) {
-    return wslDistroCache
+  if (shouldReuseCachedWslDistros()) {
+    return wslDistroCache ?? []
   }
 
   if (process.platform !== 'win32') {
@@ -172,17 +240,17 @@ export async function listWslDistrosAsync(): Promise<string[]> {
     return wslDistroCache
   }
 
-  if (Date.now() < wslDistroListFailedUntilMs) {
-    return []
+  if (Date.now() < wslDistroListRetryAfterMs) {
+    return wslDistroCache ?? []
   }
 
   try {
+    const probeSequence = ++wslDistroProbeSequence
     const output = await execFileUtf8('wsl.exe', ['--list', '--quiet'])
-    wslDistroCache = normalizeWslListOutput(output).filter(isUserWslDistro)
-    return wslDistroCache
+    return cacheWslDistroList(parseWslDistros(output), probeSequence)
   } catch {
-    wslDistroListFailedUntilMs = Date.now() + WSL_DISTRO_LIST_FAILURE_TTL_MS
-    return []
+    armWslDistroListRetry()
+    return wslDistroCache ?? []
   }
 }
 
@@ -190,6 +258,11 @@ export function hasCachedWslDistros(): boolean {
   return wslDistroCache !== null
 }
 
+// Why: report the last observed answer even once it is stale. An empty list is a real
+// probe result, so it must keep driving the `wsl-distro-missing` repair prompt; going
+// null instead fails open and silently spawns `wsl.exe -d <distro>` for a distro Orca
+// last saw was absent. Staleness self-corrects — `listWslDistros` re-probes after the
+// retry window and a distro installed since clears the prompt on its own.
 export function getCachedWslDistros(): string[] | null {
   return wslDistroCache
 }
@@ -252,67 +325,50 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
   }
 }
 
-// Cached WSL availability check — evaluated once per process lifetime
-let wslAvailableCache: boolean | null = null
-
-/**
- * Check whether wsl.exe is available and functional on this Windows machine.
- * Result is cached for the process lifetime.
- */
-export function isWslAvailable(): boolean {
-  if (wslAvailableCache !== null) {
-    return wslAvailableCache
-  }
-
-  if (process.platform !== 'win32') {
-    wslAvailableCache = false
-    return false
-  }
-
-  try {
-    execFileSync('wsl.exe', ['--status'], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000
-    })
-    wslAvailableCache = true
-  } catch {
-    wslAvailableCache = false
-  }
-
-  return wslAvailableCache
-}
-
-export function hasCachedWslAvailability(): boolean {
-  return wslAvailableCache !== null
-}
-
-export function getCachedWslAvailability(): boolean | null {
-  return wslAvailableCache
-}
-
 export function _resetWslCachesForTests(): void {
   wslHomeCache.clear()
   wslDistroCache = null
-  wslDistroListFailedUntilMs = 0
-  wslAvailableCache = null
+  wslDistroListRetryAfterMs = 0
+  wslDistroListEmptyStreak = 0
+  wslDistroProbeSequence = 0
+  wslDistroCacheSequence = 0
+  _resetWslAvailabilityCacheForTests()
 }
 
+// Why: seeded state expires like real state — an `available: false` seed is re-probed
+// once its window lapses, and a `distros` seed is filtered and arms the retry window.
+// Tests that advance timers past either window must mock child_process.
 export function _setWslCachesForTests(args: {
   available?: boolean | null
   distros?: string[] | null
+  availabilityRetryable?: boolean
 }): void {
-  wslAvailableCache = args.available ?? null
-  wslDistroCache = args.distros ?? null
+  _setWslAvailabilityCacheForTests(args.available, args.availabilityRetryable ?? false)
+  // Why: seed through the real cache path so an empty seed arms the retry window
+  // too — otherwise a seeded [] lets the next call spawn a real 5s wsl.exe.
+  wslDistroListRetryAfterMs = 0
+  wslDistroListEmptyStreak = 0
+  wslDistroProbeSequence = 0
+  wslDistroCacheSequence = 0
+  wslDistroCache = null
+  if (args.distros) {
+    cacheWslDistroList(args.distros, ++wslDistroProbeSequence)
+  }
 }
 
 function execFileUtf8(command: string, args: string[]): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { encoding: 'utf-8', timeout: 5000 }, (error, stdout) => {
-      if (error) {
-        reject(error)
-        return
+    execFile(
+      command,
+      args,
+      { encoding: 'utf-8', timeout: 5000, windowsHide: true },
+      (error, stdout) => {
+        if (error) {
+          reject(error)
+          return
+        }
+        resolve(stdout)
       }
-      resolve(stdout)
-    })
+    )
   })
 }

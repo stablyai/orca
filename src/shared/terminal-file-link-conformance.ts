@@ -13,7 +13,7 @@ export type TerminalFileLinkTapConformanceCase = {
 
 export function columnForTerminalFileLinkTap(testCase: TerminalFileLinkTapConformanceCase): number {
   const column = testCase.lineText.indexOf(testCase.tapText)
-  if (column < 0) {
+  if (column === -1) {
     throw new Error(`Tap text "${testCase.tapText}" not found in "${testCase.lineText}"`)
   }
   return column
@@ -31,6 +31,16 @@ export const TERMINAL_FILE_LINK_TAP_CONFORMANCE_CASES: TerminalFileLinkTapConfor
     lineText: 'see src/components/Button.tsx:12:7 here',
     tapText: 'Button',
     expected: { pathText: 'src/components/Button.tsx', line: 12, column: 7 }
+  },
+  {
+    name: 'relative markdown path with line',
+    lineText: 'documented in docs/terminal-scroll-intent-architecture.md:230',
+    tapText: 'terminal-scroll',
+    expected: {
+      pathText: 'docs/terminal-scroll-intent-architecture.md',
+      line: 230,
+      column: null
+    }
   },
   {
     name: 'tilde path',

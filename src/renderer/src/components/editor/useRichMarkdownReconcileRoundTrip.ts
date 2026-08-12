@@ -7,6 +7,7 @@ import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-htm
 type ReconcileRoundTripParams = {
   htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   filePath: string
+  externalSshTargetId?: string
   runtimeEnvironmentId?: string | null
   worktreeId: string
   worktreeRoot: string | null
@@ -21,6 +22,7 @@ type ReconcileRoundTripParams = {
 export function useRichMarkdownReconcileRoundTrip({
   htmlSuperscriptLinkContext,
   filePath,
+  externalSshTargetId,
   runtimeEnvironmentId,
   worktreeId,
   worktreeRoot
@@ -32,6 +34,7 @@ export function useRichMarkdownReconcileRoundTrip({
       htmlSuperscriptLinkContext,
       imageResolverContext: createRichMarkdownImageResolverContext({
         filePath,
+        externalSshTargetId,
         runtimeEnvironmentId,
         settings,
         worktreeId,

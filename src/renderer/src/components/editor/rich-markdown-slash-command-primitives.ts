@@ -23,6 +23,7 @@ export type SlashCommandId =
   | 'heading-4'
   | 'toggle-h4'
   | 'heading-5'
+  | 'toggle-h5'
   | 'task-list'
   | 'bullet-list'
   | 'ordered-list'

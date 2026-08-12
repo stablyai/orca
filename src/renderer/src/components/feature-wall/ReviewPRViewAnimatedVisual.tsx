@@ -272,7 +272,7 @@ export function ReviewPRViewAnimatedVisual(props: { reducedMotion: boolean }): J
                   {translate(
                     'auto.components.feature.wall.ReviewPRViewAnimatedVisual.6f4c2d7cb7',
                     'Add a coverage case for'
-                  )}
+                  )}{' '}
                   <code>
                     {translate(
                       'auto.components.feature.wall.ReviewPRViewAnimatedVisual.c2062da7ec',

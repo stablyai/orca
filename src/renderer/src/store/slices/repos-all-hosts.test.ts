@@ -479,7 +479,9 @@ describe('fetchReposForAllHosts', () => {
     await store.getState().fetchReposForAllHosts()
 
     expectSharedProjectMetadata(store.getState().projects, sharedProjectId)
-    expect(store.getState().projectHostSetups).toEqual(
+    const setups = store.getState().projectHostSetups
+    expect(setups).toHaveLength(2)
+    expect(setups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           projectId: sharedProjectId,
@@ -778,13 +780,15 @@ describe('fetchReposForAllHosts', () => {
     expect(store.getState().projectGroups).toEqual([
       { ...localProjectGroup, executionHostId: 'local' }
     ])
-    expect(store.getState().folderWorkspaces).toEqual([localFolderWorkspace])
+    expect(store.getState().folderWorkspaces).toEqual([
+      { ...localFolderWorkspace, executionHostId: 'local' }
+    ])
   })
 
   it('preserves remote repo filters during first-paint local catalog refresh', async () => {
     const store = createTestStore()
-    const remoteDismissalKey = getSetupScriptPromptDismissalKey('remote-repo')
-    const staleDismissalKey = getSetupScriptPromptDismissalKey('stale-repo')
+    const remoteDismissalKey = getSetupScriptPromptDismissalKey('runtime:env-1\0remote-repo')
+    const staleDismissalKey = getSetupScriptPromptDismissalKey('local\0stale-repo')
     store.setState({
       activeRepoId: 'remote-repo',
       filterRepoIds: ['remote-repo', 'stale-repo'],

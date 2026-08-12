@@ -10,7 +10,8 @@ const {
   getProjectRefMock,
   resolveIssueSourceMock,
   acquireMock,
-  releaseMock
+  releaseMock,
+  gitExecFileAsyncMock
 } = vi.hoisted(() => ({
   glabExecFileAsyncMock: vi.fn(),
   glabApiWithHeadersMock: vi.fn(),
@@ -18,7 +19,14 @@ const {
   getProjectRefMock: vi.fn(),
   resolveIssueSourceMock: vi.fn(),
   acquireMock: vi.fn(),
-  releaseMock: vi.fn()
+  releaseMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn()
+}))
+
+// Why: the #9171 default-branch guard resolves the repo default branch via
+// git; keep those probes hermetic instead of spawning real git processes.
+vi.mock('../git/runner', () => ({
+  gitExecFileAsync: gitExecFileAsyncMock
 }))
 
 vi.mock('./gl-utils', async () => {
@@ -41,6 +49,7 @@ import {
   addMRComment,
   getMergeRequest,
   getMergeRequestForBranch,
+  getMergeRequestForBranchOrThrow,
   getJobTrace,
   addMRInlineComment,
   closeMR,
@@ -55,6 +64,21 @@ import {
   updateMR,
   updateMRReviewers
 } from './client'
+import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
+import { _resetKnownHostsCache } from './gitlab-known-host-probe'
+
+/** Answer the real default-branch resolver probes (#9171 guard). */
+function primeGitDefaultBranch(defaultRef = 'refs/remotes/origin/main'): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'symbolic-ref' && args.includes('refs/remotes/origin/HEAD')) {
+      return { stdout: `${defaultRef}\n`, stderr: '' }
+    }
+    if (args[0] === 'rev-parse' && args[1] === '--verify' && args.includes(defaultRef)) {
+      return { stdout: 'default-oid\n', stderr: '' }
+    }
+    throw new Error(`unexpected git call: ${args.join(' ')}`)
+  })
+}
 
 describe('gitlab client — MR operations', () => {
   beforeEach(() => {
@@ -66,12 +90,29 @@ describe('gitlab client — MR operations', () => {
     acquireMock.mockReset()
     releaseMock.mockReset()
     acquireMock.mockResolvedValue(undefined)
+    gitExecFileAsyncMock.mockReset()
+    primeGitDefaultBranch()
+    __resetRepoDefaultBranchCacheForTests()
+    _resetKnownHostsCache()
     _resetGitLabRateLimitCache()
     getGlabKnownHostsMock.mockResolvedValue(['gitlab.com'])
     resolveIssueSourceMock.mockResolvedValue({
       source: { host: 'gitlab.com', path: 'g/p' },
       fellBack: false
     })
+  })
+
+  it('getMergeRequestForBranchOrThrow surfaces a glab failure instead of null (finding 4)', async () => {
+    getProjectRefMock.mockResolvedValue({ host: 'gitlab.com', path: 'g/p' })
+    glabExecFileAsyncMock.mockRejectedValue(new Error('glab: connection refused'))
+
+    // The swallowing variant collapses a real failure into a false "no MR".
+    await expect(getMergeRequestForBranch('/repo', 'feature/x')).resolves.toBeNull()
+    // The throwing variant makes the failure visible so eligibility records
+    // `unavailable` rather than a false "No merge request found".
+    await expect(getMergeRequestForBranchOrThrow('/repo', 'feature/x')).rejects.toThrow(
+      /connection refused/
+    )
   })
 
   it('routes local WSL MR review-management and job actions through project resolution and glab options', async () => {
@@ -249,6 +290,39 @@ describe('gitlab client — MR operations', () => {
         allowDefaultWslFallback: false
       })
     })
+
+    it('merges many authenticated hosts with one cache scan', async () => {
+      const hostCount = 256
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: Array.from(
+          { length: hostCount },
+          (_, index) => `Logged in to gitlab-${index}.example.test as user`
+        ).join('\n'),
+        stderr: ''
+      })
+      const originalMap = Array.prototype.map
+      let knownHostCacheScans = 0
+      const mapSpy = vi.spyOn(Array.prototype, 'map').mockImplementation(function (
+        this: unknown[],
+        callback: (value: unknown, index: number, array: unknown[]) => unknown,
+        thisArg?: unknown
+      ): unknown[] {
+        if (this[0] === 'gitlab.com' && this.every((value) => typeof value === 'string')) {
+          knownHostCacheScans += 1
+        }
+        return Reflect.apply(originalMap, this, [callback, thisArg])
+      })
+
+      try {
+        await expect(diagnoseAuth()).resolves.toMatchObject({
+          authenticated: true,
+          hosts: expect.any(Array)
+        })
+      } finally {
+        mapSpy.mockRestore()
+      }
+      expect(knownHostCacheScans).toBe(1)
+    })
   })
 
   describe('getRateLimit', () => {
@@ -324,10 +398,22 @@ describe('gitlab client — MR operations', () => {
       expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
         [
           'api',
-          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1'
+          'projects/g%2Fp/merge_requests?source_branch=feature%2Ffoo&order_by=updated_at&sort=desc&per_page=1&with_merge_status_recheck=true'
         ],
         { cwd: '/repo' }
       )
+    })
+
+    // Why: GitLab does not proactively recompute merge status on list endpoints, so without the
+    // recheck request the row can sit at `unchecked` forever and the sidebar merge button — which
+    // gates on MERGEABLE — never becomes available.
+    it('asks GitLab to recheck merge status on the branch lookup', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
+
+      await getMergeRequestForBranch('/repo', 'feature/recheck')
+      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
+      expect(callArgs[1]).toContain('with_merge_status_recheck=true')
     })
 
     it('uses legacy pipeline payloads when branch MR lists omit head_pipeline', async () => {
@@ -430,6 +516,132 @@ describe('gitlab client — MR operations', () => {
         cwd: '/repo',
         wslDistro: 'Ubuntu'
       })
+    })
+
+    it('hides a stale closed MR whose source branch is the repo default branch (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 7,
+            title: 'Accidental MR from main',
+            state: 'closed',
+            sha: 'stale-main-oid',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
+    })
+
+    it('hides a stuck-locked MR whose source branch is the repo default branch (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 9,
+            title: 'Wedged mid-merge MR from main',
+            state: 'locked',
+            sha: 'locked-main-oid',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      await expect(getMergeRequestForBranch('/repo', 'main')).resolves.toBeNull()
+    })
+
+    it('keeps an open MR whose source branch is the repo default branch', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 8,
+            title: 'main → release',
+            state: 'opened',
+            sha: 'abc',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main')
+      expect(mr?.number).toBe(8)
+      // Open results never consult git for the default branch (lazy resolution).
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('keeps a closed MR on a feature branch (behavior preserved)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 9,
+            title: 'Rejected work',
+            state: 'closed',
+            sha: 'def',
+            head_pipeline: { status: 'failed' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'feature/rejected')
+      expect(mr?.number).toBe(9)
+      expect(mr?.state).toBe('closed')
+    })
+
+    it('discards a closed default-branch shadow and refetches the linked MR via the fallback (#9171)', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify([
+            {
+              iid: 7,
+              title: 'Accidental MR from main',
+              state: 'closed',
+              sha: 'stale-main-oid',
+              head_pipeline: { status: 'success' }
+            }
+          ])
+        })
+        .mockResolvedValueOnce({
+          stdout: JSON.stringify({
+            iid: 42,
+            title: 'Linked MR',
+            state: 'merged',
+            pipeline: { status: 'success' }
+          })
+        })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main', 42)
+
+      expect(mr).toMatchObject({ number: 42, state: 'merged' })
+      expect(glabExecFileAsyncMock).toHaveBeenLastCalledWith(
+        ['api', 'projects/g%2Fp/merge_requests/42'],
+        { cwd: '/repo' }
+      )
+    })
+
+    it('keeps a non-open branch match on the default branch when it IS the linked MR', async () => {
+      getProjectRefMock.mockResolvedValueOnce({ host: 'gitlab.com', path: 'g/p' })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            iid: 7,
+            title: 'Linked trunk MR',
+            state: 'merged',
+            sha: 'abc',
+            head_pipeline: { status: 'success' }
+          }
+        ])
+      })
+
+      const mr = await getMergeRequestForBranch('/repo', 'main', 7)
+
+      expect(mr).toMatchObject({ number: 7, state: 'merged' })
+      // Exempted by linked-number match — no fallback refetch needed.
+      expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(1)
     })
 
     it('returns null for an empty / detached-HEAD branch arg', async () => {
@@ -699,6 +911,57 @@ describe('gitlab client — MR operations', () => {
       expect(result.error?.type).toBe('permission_denied')
       expect(result.items).toEqual([])
     })
+
+    // Why: the title carries a classifier keyword, so this also pins that a wrapped payload stays
+    // out of the substring matcher — classifying it would swap the body for "check your connection".
+    it('reports the body instead of ".map is not a function" when the API returns a non-array', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ data: [{ iid: 7, title: 'fix network timeout' }] }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.type).toBe('unknown')
+      expect(result.error?.message).toContain('fix network timeout')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    it('reports the body instead of ".map is not a function" when the cwd fallback returns a non-array', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
+      glabExecFileAsyncMock.mockResolvedValueOnce({
+        stdout: JSON.stringify({ data: [], total: 0 })
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.message).toContain('{"data":[],"total":0}')
+      expect(result.error?.message).not.toContain('is not a function')
+    })
+
+    // Why: the whole point of surfacing the body — a GitLab error envelope now
+    // classifies like any other glab failure instead of collapsing to 'unknown'.
+    it('classifies a GitLab error envelope returned on exit 0', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({ message: '403 Forbidden' }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.items).toEqual([])
+      expect(result.error?.type).toBe('permission_denied')
+    })
+
+    // Why: the sibling title matches an earlier classifier branch than the envelope does, so this
+    // fails if the payload leaks into classification instead of only the envelope's own message.
+    it('classifies an error envelope by its message, not its sibling payload', async () => {
+      glabApiWithHeadersMock.mockResolvedValueOnce({
+        body: JSON.stringify({
+          message: '404 Project Not Found',
+          data: [{ iid: 7, title: '403 forbidden in CI' }]
+        }),
+        headers: {}
+      })
+      const result = await listMergeRequests('/repo', 'opened')
+      expect(result.error?.type).toBe('not_found')
+    })
   })
 
   describe('updateMR', () => {
@@ -888,6 +1151,32 @@ describe('gitlab client — MR operations', () => {
         ['api', '--hostname', 'git.internal', 'projects/g%2Fp/jobs/99/trace'],
         {}
       )
+    })
+
+    // #7732: a job canceled before it started 404s; the Checks panel must show its
+    // benign empty state, not the issue-edit copy classifyGlabError would produce.
+    it('reports a 404 trace as an empty log rather than an error', async () => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404 Not Found'))
+
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+        ok: true,
+        trace: ''
+      })
+    })
+
+    it('keeps a missing project and a scope failure as errors, in job-log wording', async () => {
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 404: Project Not Found'))
+      await expect(getJobTrace('/repo', 99, 'upstream', 'conn-1')).resolves.toEqual({
+        ok: false,
+        error: "Could not find this job's GitLab project."
+      })
+
+      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 insufficient_scope'))
+      const forbidden = await getJobTrace('/repo', 99, 'upstream', 'conn-1')
+      expect(forbidden).toEqual({
+        ok: false,
+        error: "You don't have permission to read this job's log. Check your GitLab token scopes."
+      })
     })
 
     it('retries a job through the selected SSH GitLab host', async () => {

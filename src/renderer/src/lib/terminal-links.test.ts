@@ -5,6 +5,7 @@ import {
   columnForTerminalFileLinkTap
 } from '../../../shared/terminal-file-link-conformance'
 import {
+  extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
   isPathInsideWorktree,
   resolveTerminalFileLink,
@@ -315,5 +316,32 @@ describe('terminal path helpers', () => {
 
   it('does not resolve partial text as an OSC hyperlink target', () => {
     expect(resolveTerminalFileLinkText('open docs/README.md', '/repo')).toBeNull()
+  })
+
+  describe('plain-text file:// URIs', () => {
+    it('extracts a printed file:// URI as a file link resolving to its path', () => {
+      const line = 'Report: file:///Users/dev/orca/report.html'
+      const link = extractTerminalFileLinks(line).find(
+        (candidate) => candidate.displayText === 'file:///Users/dev/orca/report.html'
+      )
+      expect(link).toMatchObject({ pathText: '/Users/dev/orca/report.html' })
+      expect(resolveTerminalFileLink(link!, '/Users/dev/orca')).toEqual({
+        absolutePath: '/Users/dev/orca/report.html',
+        line: null,
+        column: null
+      })
+    })
+
+    it('does not also emit a bare-path link for the URI body', () => {
+      const links = extractTerminalFileLinks('file:///Users/dev/orca/report.html')
+      expect(links.map((link) => link.displayText)).toEqual(['file:///Users/dev/orca/report.html'])
+    })
+
+    it('exposes file:// URIs to the hover candidate pass as well', () => {
+      const candidates = extractTerminalFileLinkCandidates('file:///tmp/out.txt:9')
+      expect(candidates.some((link) => link.pathText === '/tmp/out.txt' && link.line === 9)).toBe(
+        true
+      )
+    })
   })
 })

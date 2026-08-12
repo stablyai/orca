@@ -5,6 +5,7 @@ const BACKSLASH_CODE_UNIT = 0x5c
 const SEMICOLON_CODE_UNIT = 0x3b
 const OSC_TITLE_COMMANDS = new Set([0x30, 0x31, 0x32])
 export const MAX_OSC_TITLE_CHARS = 1024
+export const MAX_OSC_TITLES_PER_CHUNK = 4096
 
 type OscTitleParseResult =
   | { kind: 'title'; title: string; nextIndex: number }
@@ -104,6 +105,7 @@ export function extractAllOscTitles(data: string): string[] {
   }
 
   const titles: string[] = []
+  let oldestTitleIndex = 0
   let searchStart = 0
   while (searchStart < data.length) {
     const start = data.indexOf('\x1b]', searchStart)
@@ -115,11 +117,18 @@ export function extractAllOscTitles(data: string): string[] {
       break
     }
     if (parsed.kind === 'title') {
-      titles.push(parsed.title)
+      if (titles.length < MAX_OSC_TITLES_PER_CHUNK) {
+        titles.push(parsed.title)
+      } else {
+        titles[oldestTitleIndex] = parsed.title
+        oldestTitleIndex = (oldestTitleIndex + 1) % MAX_OSC_TITLES_PER_CHUNK
+      }
       searchStart = parsed.nextIndex
       continue
     }
     searchStart = parsed.nextIndex
   }
-  return titles
+  return oldestTitleIndex === 0
+    ? titles
+    : [...titles.slice(oldestTitleIndex), ...titles.slice(0, oldestTitleIndex)]
 }

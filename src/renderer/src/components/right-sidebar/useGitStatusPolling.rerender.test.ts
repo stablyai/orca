@@ -172,6 +172,13 @@ describe('useGitStatusPolling rerender stability', () => {
     // Should trigger an immediate poll on the new worktree (total 2 calls)
     // without having to wait for the 3000ms timer.
     expect(refreshMock).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      useAppStore.setState({ activeWorktreeId: WORKTREE_ID })
+    })
+    await flushMicrotasks()
+
+    expect(refreshMock).toHaveBeenCalledTimes(3)
   })
 
   it('refreshes immediately when Source Control becomes visible', async () => {
@@ -210,7 +217,7 @@ describe('useGitStatusPolling rerender stability', () => {
     useAppStore.setState({
       repos: [{ ...repo, connectionId: 'ssh-1' }],
       sshConnectionStates: new Map([
-        ['ssh-1', { status: 'disconnected', error: null, reconnectAttempt: 0 }]
+        ['ssh-1', { targetId: 'ssh-1', status: 'disconnected', error: null, reconnectAttempt: 0 }]
       ])
     } as Partial<AppState>)
     await renderHook()
@@ -241,6 +248,42 @@ describe('useGitStatusPolling rerender stability', () => {
     expect(refreshMock.mock.calls[1]?.[0].request.reuseLineStats).toBe(true)
   })
 
+  it('keeps the activity floor when the execution host flaps for the same worktree', async () => {
+    await renderHook()
+    await flushMicrotasks()
+    // Mount refresh settles and stamps pacing for this worktree.
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    // Flap the resolved execution host back and forth. Each flip rebuilds the
+    // scheduler; pacing must survive or every flip grants an immediate run
+    // (the rc.3 storm: sustained git at the debounce floor).
+    await act(async () => {
+      useAppStore.setState({
+        worktreesByRepo: {
+          [REPO_ID]: [{ ...worktree, hostId: 'runtime:env-2' }],
+          [REPO_ID2]: [worktree2]
+        }
+      })
+    })
+    await flushMicrotasks()
+    await act(async () => {
+      useAppStore.setState({
+        worktreesByRepo: {
+          [REPO_ID]: [worktree],
+          [REPO_ID2]: [worktree2]
+        }
+      })
+    })
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(2999)
+    expect(refreshMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1)
+    await flushMicrotasks()
+    expect(refreshMock).toHaveBeenCalledTimes(2)
+  })
+
   it('aborts and rejects stale work when the execution host changes', async () => {
     let resolveFirst!: () => void
     const firstRefresh = new Promise<void>((resolve) => {
@@ -258,7 +301,10 @@ describe('useGitStatusPolling rerender stability', () => {
 
     await act(async () => {
       useAppStore.setState({
-        settings: { activeRuntimeEnvironmentId: 'env-2' } as AppState['settings']
+        worktreesByRepo: {
+          [REPO_ID]: [{ ...worktree, hostId: 'runtime:env-2' }],
+          [REPO_ID2]: [worktree2]
+        }
       })
     })
     await flushMicrotasks()

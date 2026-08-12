@@ -24,21 +24,17 @@ type PrSidebarControllerInput = {
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
-  // Head branch + SHA come from git.status (`branch`/`head`) via the review screen,
-  // not the branchCompare base ref nor worktree metadata (which carries no branch).
+  // branch/headSha come from git.status (not the branchCompare base ref nor worktree metadata, which carries no branch).
   branch: string | null
   headSha: string | null
 }
 
-// Load options for the shared PR controller. The Source Control hub chip only needs
-// phase 1 (PR + checks); phase 2 (comments/body) is heavy and should wait until the
-// Pull Request segment is actually open.
+// Load options: the hub chip needs only phase 1 (PR + checks); phase 2 (comments/body) is heavy and waits until the PR segment opens.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
 }
 
-// Identity is worktree + branch only. Head SHA advances on every commit and must not
-// wipe a ready chip/sidebar to "loading" — soft-refresh uses the new head instead.
+// Identity is worktree + branch only: headSha advances every commit and must not wipe a ready chip to "loading" (soft-refresh handles it).
 export function buildMobilePrSidebarIdentity(args: {
   worktreeId: string
   branch: string | null
@@ -48,33 +44,23 @@ export function buildMobilePrSidebarIdentity(args: {
 
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  // The dedicated PR icon is available whenever the repo has a GitHub remote —
-  // independent of whether the branch has an open PR (a no-PR branch shows an
-  // empty state rather than hiding the icon).
+  // PR icon shows for any GitHub remote, regardless of an open PR — a no-PR branch shows an empty state rather than hiding the icon.
   const [isGithubRepo, setIsGithubRepo] = useState(false)
-  // False until the probe resolves for this worktree. Consumers gate "unavailable
-  // for this provider" copy on it — isGithubRepo=false is meaningless mid-probe.
+  // False until the probe resolves — isGithubRepo=false is meaningless mid-probe, so consumers gate "unavailable" copy on this.
   const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
   const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   const loadSeqRef = useRef(0)
-  // Phase-2-only fetches use a separate sequence so they cannot cancel a concurrent
-  // phase-1 soft refresh (and vice versa) when chip bootstrap left details null.
+  // Separate seq for phase-2 fetches so they can't cancel a concurrent phase-1 soft refresh (and vice versa).
   const detailsSeqRef = useRef(0)
-  // The (seq, prNumber) of the phase-2 fetch currently in flight. The hub's
-  // fill-in effect fires as soon as phase 1 renders ready with null details —
-  // exactly when load()'s own phase 2 just started. Without this claim, every
-  // cold PR-segment open fetched the heavy details payload twice.
+  // (seq, prNumber) of the in-flight phase-2 fetch; without this claim every cold PR-segment open fetched the heavy details twice.
   const detailsInFlightRef = useRef<{ seq: number; prNumber: number } | null>(null)
   const stateIdentityRef = useRef<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
   const headShaRef = useRef(headSha)
 
-  // Repo eligibility (a GitHub remote) is independent of the branch, so the probe
-  // must not require one: a detached HEAD / mid-rebase worktree (branch === null)
-  // would otherwise never set repoProbeLoaded, stranding the PR segment on a
-  // forever spinner instead of the "Current branch unavailable" state.
+  // Probe is branch-independent (repo eligibility is): requiring a branch would strand a detached-HEAD worktree on a forever spinner.
   const probeReady = client !== null && connState === 'connected'
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
 
@@ -91,9 +77,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [client])
 
-  // Probe whether this is a GitHub repo to decide icon availability (GitHub-only).
-  // Worktree change must reset eligibility; a brief disconnect must not — otherwise
-  // the hub shows "unavailable for this provider" and hides the chip mid-session.
+  // Probe GitHub-repo eligibility for the icon; a worktree change resets it, a brief disconnect must not (else the chip hides mid-session).
   useEffect(() => {
     setIsGithubRepo(false)
     setRepoProbeLoaded(false)
@@ -112,8 +96,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         }
       })
       .catch(() => {
-        // Why: sendGithubPrRead already normalizes throws, but a cancelled
-        // unmount + any unexpected rejection must not surface as LogBox.
+        // Why: sendGithubPrRead normalizes throws, but a stray rejection on unmount must not surface as LogBox.
         if (!cancelled) {
           setIsGithubRepo(false)
           setRepoProbeLoaded(true)
@@ -133,8 +116,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       return
     }
     if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
-      // Why: ready/loading data is scoped to branch. A branch switch must not let
-      // the open panel keep rendering the previous PR as "fresh."
+      // Why: data is scoped to branch; a branch switch must not keep rendering the previous PR as "fresh."
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
@@ -152,16 +134,10 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       }
       const seq = loadSeqRef.current + 1
       loadSeqRef.current = seq
-      // In-flight phase-2 work is NOT invalidated here: this load only takes phase-2
-      // ownership when its own phase 2 actually starts (the bump below), so a load
-      // superseded at the phase-1 guard can never orphan a detailsSeq and silently
-      // discard the only details fetch. A stale ensure applying mid-phase-1 is safe —
-      // its identity/number/kind guards only let matching details through.
+      // Don't invalidate in-flight phase 2 here: it's only claimed when this load's own phase 2 starts, so a superseded phase-1 load can't orphan the details fetch.
       const previousIdentity = stateIdentityRef.current
       stateIdentityRef.current = loadIdentity
-      // Soft refresh: same branch already showing ready/none stays visible while
-      // checks re-fetch (head advanced after commit). Hard loading only on first load
-      // or after a real identity wipe.
+      // Soft refresh: same-branch ready/none stays visible while checks re-fetch; hard "loading" only on first load or identity wipe.
       const keepVisible =
         previousIdentity === loadIdentity &&
         (stateRef.current.kind === 'ready' ||
@@ -170,8 +146,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (!keepVisible) {
         setState({ kind: 'loading' })
       }
-      // Phase 1: PR + checks (fast) — the worktree linkedPR read is parallelized with
-      // forBranch inside loadPrSidebarData so a closed/merged linked PR still resolves.
+      // Phase 1: PR + checks (fast); linkedPR read runs in parallel with forBranch so a closed/merged linked PR still resolves.
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
       if (
         !shouldApplyResult(seq, loadSeqRef.current) ||
@@ -181,9 +156,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       }
       stateIdentityRef.current = loadIdentity
 
-      // Keep prior comments/body visible across phase 1 when the same PR is still open.
-      // loadPrSidebarData always returns details:null; without this, soft refresh and
-      // PR-tab refresh blank the comment tree until phase 2 finishes.
+      // Preserve prior details across phase 1 (loadPrSidebarData returns details:null) so soft/PR-tab refresh doesn't blank the comment tree.
       const priorDetails =
         next.kind === 'ready' &&
         stateRef.current.kind === 'ready' &&
@@ -213,10 +186,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       if (detailsInFlightRef.current?.seq === detailsSeq) {
         detailsInFlightRef.current = null
       }
-      // Phase-2 ownership is encoded by detailsSeq + identity + PR number alone —
-      // deliberately NOT by loadSeq: a chip-only soft refresh bumps loadSeq without
-      // bumping detailsSeq, and must not discard the in-flight details it preserved
-      // (ensure dedupes against this claim, so nothing would re-fetch them).
+      // Ownership keyed on detailsSeq (not loadSeq): a chip-only soft refresh bumps loadSeq without detailsSeq and must not discard these details.
       if (
         detailsSeq !== detailsSeqRef.current ||
         stateIdentityRef.current !== loadIdentity ||
@@ -236,11 +206,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     [buildDeps, branch, headSha, identity, worktreeId]
   )
 
-  // Phase-2 only — used when the hub opens the PR segment after a chip-only load.
-  // Uses detailsSeqRef (not loadSeqRef) so it cannot cancel a concurrent soft phase-1.
-  // Retries synthetic placeholders too: a failed phase-2 installs non-null empty
-  // details so Description/Comments leave the spinner, and without this ensure
-  // would never re-fetch on tab re-open.
+  // Phase-2-only fill-in; uses detailsSeqRef so it can't cancel a concurrent phase-1, and re-fetches non-null placeholders too.
   const ensurePrSidebarDetails = useCallback(async () => {
     const current = stateRef.current
     if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
@@ -252,8 +218,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       return
     }
     const prNumber = current.data.pr.number
-    // A live phase-2 fetch for this PR is already in flight (its claim still owns
-    // the latest details seq) — do not start a duplicate.
+    // Skip if a live phase-2 fetch for this PR already owns the latest details seq (dedupe).
     const inFlight = detailsInFlightRef.current
     if (inFlight && inFlight.prNumber === prNumber && inFlight.seq === detailsSeqRef.current) {
       return
@@ -284,18 +249,13 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     })
   }, [buildDeps, identity, worktreeId])
 
-  // Soft-refresh checks when HEAD advances on the same branch (post-commit).
-  // Also restarts an in-flight phase-1 load so a mid-flight head advance is not
-  // applied with a stale SHA (headShaRef would otherwise advance with no reload).
+  // Soft-refresh on same-branch HEAD advance; restart in-flight load so the advance isn't applied with a stale SHA.
   useEffect(() => {
     if (headShaRef.current === headSha) {
       return
     }
     headShaRef.current = headSha
-    // Identity was just wiped (branch/worktree switch): stateRef still holds the
-    // pre-wipe state in this effect flush, which would start a load flavored for
-    // the OLD surface (e.g. heavy details on the Changes tab). Let the owning
-    // surface's hidden-state effects drive the first load for the new identity.
+    // Identity just wiped: stateRef still holds stale pre-wipe state, so let the surface's hidden-state effects drive the new load.
     if (stateIdentityRef.current === null) {
       return
     }

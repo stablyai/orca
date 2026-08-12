@@ -32,7 +32,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       await editor.click()
       await orcaPage.keyboard.press('ControlOrMeta+A')
 
-      await orcaPage.keyboard.press('ControlOrMeta+Alt+N')
+      await orcaPage.keyboard.press('ControlOrMeta+Shift+A')
 
       await expect(orcaPage.getByPlaceholder('Add note for the AI')).toBeVisible({
         timeout: 5_000
@@ -76,7 +76,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       await monaco.click()
       await orcaPage.keyboard.press('ControlOrMeta+A')
 
-      await orcaPage.keyboard.press('ControlOrMeta+Alt+N')
+      await orcaPage.keyboard.press('ControlOrMeta+Shift+A')
 
       await expect(orcaPage.getByPlaceholder('Add note for the AI')).toBeVisible({
         timeout: 5_000
@@ -149,7 +149,7 @@ test.describe('Markdown add-review-note shortcut', () => {
         selection?.addRange(range)
       })
 
-      await orcaPage.keyboard.press('ControlOrMeta+Alt+N')
+      await orcaPage.keyboard.press('ControlOrMeta+Shift+A')
 
       await expect(orcaPage.getByPlaceholder('Add note for the AI')).toBeVisible({
         timeout: 5_000
@@ -174,7 +174,7 @@ test.describe('Markdown add-review-note shortcut', () => {
       const editor = await waitForRichMarkdownEditor(orcaPage)
       await editor.click()
 
-      await orcaPage.keyboard.press('ControlOrMeta+Alt+N')
+      await orcaPage.keyboard.press('ControlOrMeta+Shift+A')
 
       await expect(orcaPage.getByPlaceholder('Add note for the AI')).toHaveCount(0)
     } finally {

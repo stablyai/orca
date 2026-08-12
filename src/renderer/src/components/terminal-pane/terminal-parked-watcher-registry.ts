@@ -8,6 +8,7 @@
  * import cycle-free, mirroring how pty-dispatcher exports its handler maps.
  */
 import { discardPreHandlerPtyState } from './pty-pre-handler-buffer'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 
 export type ParkedTerminalPaneCapture = {
   ptyId: string | null
@@ -51,6 +52,21 @@ export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
 }
 
+// Why: the floating workspace is synthetic, so repo/folder surface lists never include it.
+export function terminalWatcherLiveWorkspaceIds(workspaceIds: Iterable<string>): Set<string> {
+  return new Set([...workspaceIds, FLOATING_TERMINAL_WORKTREE_ID])
+}
+
+/**
+ * Whether this tab is parked right now — the reveal remount's own mount effect
+ * runs before the host effect that disposes the watcher (child effects first),
+ * so a pane reading this at connect time can tell a park-reveal from an
+ * in-place reattach. Empty entries are pinned-close tombstones, not live parks.
+ */
+export function isTerminalTabParked(tabId: string): boolean {
+  return (parkedWatchersByTabId.get(tabId)?.disposersByPtyId.size ?? 0) > 0
+}
+
 export function disposeParkedTabWatchers(tabId: string): void {
   const entry = parkedWatchersByTabId.get(tabId)
   if (!entry) {
@@ -72,13 +88,10 @@ export function retireParkedTerminalTab(tabId: string): void {
 
 /**
  * Synchronously disposes any parked watcher subscribed to these PTYs.
- * shutdownWorktreeTerminals silences the live transports' final teardown
- * flush via unregisterPtyDataHandlers, but parked watchers ride the
- * dispatcher SIDECAR channel that call does not touch — without this, the
- * flush still marks unread and arms notification timers for a worktree that
- * is already sleeping or deleted. The tab entries are kept so a sleeping
- * parked tab does not restart watchers against its stale PTY ids; wake
- * re-mints the ids and the sync path restarts watchers then.
+ * Shutdown transactionally suspends dispatcher sidecars before teardown, then
+ * disposes their watchers only after commit. The tab entries remain so a
+ * sleeping parked tab cannot restart against stale PTY ids; wake re-mints the
+ * ids and the sync path restarts watchers then.
  */
 export function disposeParkedTerminalWatchersForPtyIds(ptyIds: readonly string[]): void {
   for (const entry of parkedWatchersByTabId.values()) {

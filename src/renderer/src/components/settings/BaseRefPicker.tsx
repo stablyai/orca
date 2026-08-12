@@ -195,14 +195,14 @@ export function BaseRefPicker({
               {translate(
                 'auto.components.settings.BaseRefPicker.a5c16712c1',
                 'Multiple remotes detected. Type a remote name (e.g.'
-              )}
+              )}{' '}
               <code>
                 {translate('auto.components.settings.BaseRefPicker.915ad97875', 'upstream')}
               </code>
               {translate(
                 'auto.components.settings.BaseRefPicker.80f7c82303',
                 ') or a full ref (e.g.'
-              )}
+              )}{' '}
               <code>
                 {translate('auto.components.settings.BaseRefPicker.b468f46726', 'upstream/main')}
               </code>

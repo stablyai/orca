@@ -1,32 +1,10 @@
-// Diagnostic bundle collection + upload (Mode 3 from
-// telemetry-error-tracking.md). The single user-initiated network path from
-// the error-tracking lane to Orca infrastructure. Every step here implements
-// a hardening requirement from §Endpoint contract — the comments name the
-// requirement number when they apply.
-//
-// Lifecycle:
-//   1. `collectBundle()` — read the last N minutes of NDJSON across the
-//      rotated family, run the redactor a second time over the merged
-//      payload (belt-and-suspenders), embed the per-bundle
-//      `bundle_submission_id`. NEVER carries `install_id` (Issue 8 in the
-//      security review).
-//   2. (renderer) — preview the bundle as plain text. User can copy or cancel.
-//      Main retains the uploadable payload so renderer cannot substitute
-//      arbitrary bytes after preview.
-//   3. `uploadBundle()` — two-step:
-//      a) POST `/diagnostics/token` → token + upload_url
-//      b) POST `<upload_url>` with `Authorization: Bearer <token>` and the
-//         collected NDJSON payload. Returns ticket ID.
-//   4. (renderer) — surface the support reference ID; offer copy/delete
-//      controls. Delete posts only the server-issued ID.
-//
-// Server-side endpoint contract is fully specified in
-// telemetry-error-tracking.md §Endpoint contract. Implementation of those
-// endpoints (token issuance, rate limit, storage, server-side redaction,
-// retention, deletion) is operational TBD — flagged as an open question to
-// the human dispatching this task. We ship the *client* of that contract
-// with all hardening invariants the client controls (content-type pinning,
-// body-size cap on upload, token-handling discipline).
+// Diagnostic bundle collection + upload (Mode 3, telemetry-error-tracking.md): the one
+// user-initiated network path from the error-tracking lane to Orca infra. The per-bundle
+// submission ID NEVER carries install_id (security-review Issue 8), and main retains the
+// uploadable payload so a compromised renderer can't substitute bytes after preview.
+// Server endpoint contract lives in telemetry-error-tracking.md §Endpoint contract; we
+// ship only the client, with the hardening invariants it controls (content-type pinning,
+// upload body-size cap, token-handling discipline).
 
 import { randomBytes } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
@@ -39,8 +17,7 @@ const DEFAULT_LOOKBACK_MINUTES = 30
 export type CollectBundleOptions = {
   readonly traceFilePath: string
   readonly maxFiles: number
-  /** Detached-daemon lifecycle log. Its rotated family is merged into the
-   *  bundle so daemon-side failures are diagnosable from a field report. */
+  /** Detached-daemon lifecycle log; its rotated family is merged in so daemon failures are diagnosable from a field report. */
   readonly daemonLogFilePath?: string
   readonly daemonLogMaxFiles?: number
   readonly lookbackMinutes?: number
@@ -52,8 +29,7 @@ export type CollectBundleOptions = {
 }
 
 export type CollectedBundle = {
-  /** 128-bit unguessable random ID, base64url. NOT the install_id —
-   *  bundles are deliberately join-incompatible with the PostHog lane. */
+  /** 128-bit unguessable base64url ID. NOT the install_id — bundles are join-incompatible with the PostHog lane. */
   readonly bundleSubmissionId: string
   /** UTF-8 NDJSON payload — header line + N redacted span lines. */
   readonly payload: string
@@ -91,11 +67,8 @@ function* readLinesNewestFirst(text: string): Iterable<string> {
 }
 
 /**
- * Read the last N minutes of NDJSON across the rotated family and produce
- * a redacted bundle payload. Caller renders this as preview text; main keeps
- * the uploadable payload and `uploadBundle()` ships only those collected
- * bytes. This keeps compromised renderer code from substituting arbitrary
- * upload content after preview.
+ * Read the last N minutes of NDJSON across the rotated family into a redacted bundle payload.
+ * Main keeps the uploadable payload so a compromised renderer can't substitute bytes after preview.
  */
 export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   const lookbackMs = (opts.lookbackMinutes ?? DEFAULT_LOOKBACK_MINUTES) * 60 * 1000
@@ -116,21 +89,11 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   const headerLine = JSON.stringify({ type: 'bundle-header', ...header })
   const lines: string[] = [headerLine]
   let spanCount = 0
-  // Running byte counter for the eventual payload. Starts with the header
-  // plus its final newline; each pushed span adds its line plus newline.
-  // Avoids re-running `lines.join('\n').length` every iteration — that's
-  // O(N²) in span count and dominates collection time for large backlogs.
+  // Track bytes incrementally to avoid an O(N²) `lines.join('\n').length` per span.
   let currentBytes = Buffer.byteLength(`${headerLine}\n`)
   const maxRecordBytes = MAX_BUNDLE_BYTES - currentBytes
 
-  // Files from listRotatedFiles are newest → oldest. Reading newest first
-  // means the cutoff filter naturally bounds our work — once we hit a span
-  // older than the cutoff in an older file we can stop entirely. We don't
-  // optimize that yet; the worst case (10 × 10 MB = 100 MB scan) takes
-  // <1 s on a modern SSD and bundles are user-initiated, not hot-path.
-  // Trace spans first (the primary payload), then the daemon lifecycle log.
-  // Daemon records carry an ISO `ts` instead of `endTimeUnixNano`; both are
-  // filtered by the same lookback below.
+  // Trace files then daemon log, each newest → oldest so the byte cap keeps the most recent spans.
   const files = [
     ...listRotatedFiles(opts.traceFilePath, opts.maxFiles),
     ...(opts.daemonLogFilePath
@@ -140,10 +103,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
   outer: for (const file of files) {
     let text: string
     try {
-      // statSync first to skip absurdly-large files defensively. The sink
-      // caps at 10 MB per file; a tampered file could theoretically be
-      // bigger, in which case we want to abort the bundle rather than
-      // panic-allocate.
+      // stat first: the sink caps at 10 MB/file, so a tampered oversize file could panic-allocate on read.
       const size = statSync(file).size
       if (size > 50 * 1024 * 1024) {
         continue
@@ -153,9 +113,7 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
       continue
     }
 
-    // NDJSON parsing — one record per line. Process each file newest-first
-    // so the size cap preserves the spans closest to the support action.
-    // Skip malformed lines silently; a crash can leave a half-line.
+    // Newest-first so the size cap preserves the most recent spans; skip malformed lines (a crash can leave a half-line).
     for (const raw of readLinesNewestFirst(text)) {
       let parsed: unknown
       try {
@@ -171,40 +129,32 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
         endTimeUnixNano?: string
         ts?: string
       }
-      // Filter by end-time, not start-time. A long-lived span started 35
-      // minutes ago but ending inside the lookback is exactly what we want
-      // in the bundle for diagnosing "session crashed at minute 32."
+      // Filter by end-time, not start-time, so long-lived spans that ended inside the lookback are still included.
       if (typeof record.endTimeUnixNano === 'string') {
         try {
           if (BigInt(record.endTimeUnixNano) < cutoffNanos) {
             continue
           }
         } catch {
-          // Non-numeric end-time — keep it; better to over-include than to
-          // drop a record we couldn't classify.
+          // Non-numeric end-time: keep it — better to over-include than drop an unclassifiable record.
         }
       } else if (typeof record.ts === 'string') {
-        // Daemon lifecycle lines timestamp with an ISO `ts`; bound them by the
-        // same lookback window. Unparseable timestamps are kept (over-include).
+        // Daemon lifecycle lines use an ISO `ts`; unparseable timestamps are kept (over-include).
         const tsMs = Date.parse(record.ts)
         if (Number.isFinite(tsMs) && tsMs < cutoffMs) {
           continue
         }
       }
 
-      // Run the redactor a SECOND TIME over the parsed shape, in server mode.
-      // This catches nested auth-bearing fields and strips product-telemetry
-      // identity keys before the user's eyes hit the preview window.
+      // Second redaction pass (server mode) catches nested auth fields and strips identity keys before preview.
       const redacted = JSON.stringify(redactValue(parsed, 'server'))
       const redactedBytes = Buffer.byteLength(redacted) + 1
       if (redactedBytes > maxRecordBytes) {
-        // One pathological record should not suppress every smaller recent
-        // span behind it. Skip records that cannot fit in an empty payload.
+        // Skip a single oversized record so it can't suppress every smaller span behind it.
         continue
       }
       if (currentBytes + redactedBytes > MAX_BUNDLE_BYTES) {
-        // Hard ceiling at the same 4 MiB the upload endpoint enforces.
-        // Check before appending so the preview can be uploaded as-is.
+        // Hard ceiling matches the upload endpoint's 4 MiB; check before appending so the preview uploads as-is.
         break outer
       }
       lines.push(redacted)
@@ -224,16 +174,9 @@ export function collectBundle(opts: CollectBundleOptions): CollectedBundle {
 
 // ── Bundle submission ID ─────────────────────────────────────────────────
 
-/**
- * 128-bit cryptographic random, URL-safe base64. Generated per bundle —
- * NOT persisted. A user submitting two bundles produces two unrelated IDs.
- * This is the primary structural mitigation for Issue 8 (bundle ↔
- * install_id correlation).
- */
+/** 128-bit URL-safe-base64 random, per-bundle and NOT persisted — mitigation for Issue 8 (bundle ↔ install_id correlation). */
 export function generateBundleSubmissionId(): string {
-  // 16 bytes = 128 bits → base64url is 22 chars (no padding). Matches the
-  // §Endpoint contract requirement that ticket IDs be unguessable and
-  // non-enumerable; we use the same shape for the submission ID.
+  // 16 bytes = 128 bits, base64url = 22 chars; unguessable/non-enumerable per §Endpoint contract.
   return randomBytes(16)
     .toString('base64')
     .replace(/\+/g, '-')

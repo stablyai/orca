@@ -23,6 +23,7 @@ import {
   mergeLegacyCommitMessageAiIntoSourceControlAi,
   type ResolvedSourceControlAiGenerationParams
 } from '../../shared/source-control-ai'
+import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import type { SourceControlAiOperation } from '../../shared/source-control-ai-types'
 import type { GitProviderStatusOptions } from '../providers/types'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
@@ -57,6 +58,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
 import { checkIgnoredPaths } from '../git/check-ignored-paths'
+import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import {
   cancelGenerateCommitMessageLocal,
   cancelGeneratePullRequestFieldsLocal,
@@ -77,9 +79,13 @@ import type {
 import { prepareLocalCommitMessageAgentEnv } from '../text-generation/commit-message-agent-environment'
 import { getPullRequestDraftContext } from '../text-generation/pull-request-context'
 import { normalizeRuntimeRelativePath } from './runtime-relative-paths'
-import { gitExecFileAsync } from '../git/runner'
+import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync } from '../git/runner'
 import type { GitRuntimeOptions } from '../git/git-runtime-options'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
+import {
+  loadPullRequestLinkedIssue,
+  type PullRequestLinkedIssueMeta
+} from '../source-control/pull-request-linked-issue'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 
 export type ResolvedRuntimeGitWorktree = Worktree & { git: GitWorktreeInfo }
@@ -160,10 +166,39 @@ export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
   getRuntimeSettings(): GlobalSettings
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
+  /**
+   * Live linked-issue read by worktree id. Resolved worktrees come from a
+   * short-TTL cache, so link/unlink would otherwise lag generation; hosts that
+   * implement this are authoritative, including the `null` unlinked answer.
+   * Return `undefined` when metadata is unavailable (store not ready) so the
+   * caller keeps the resolved worktree's cached value instead of reading it as
+   * unlinked.
+   */
+  getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
+  getWorktreeLinkedIssueMeta?(worktreeId: string): PullRequestLinkedIssueMeta | null | undefined
 }
 
 export class RuntimeGitCommands {
   constructor(private readonly host: RuntimeGitCommandHost) {}
+
+  private linkedIssueForTarget(target: RuntimeGitTarget): number | null | undefined {
+    const live = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
+    // Why: `undefined` means the host could not answer, not "unlinked".
+    return live === undefined ? target.worktree.linkedIssue : live
+  }
+
+  private linkedIssueMetaForTarget(target: RuntimeGitTarget): PullRequestLinkedIssueMeta | null {
+    const live = this.host.getWorktreeLinkedIssueMeta?.(target.worktree.id)
+    if (live !== undefined) {
+      return live
+    }
+    const liveGitHubIssue = this.host.getWorktreeLinkedIssue?.(target.worktree.id)
+    return {
+      linkedIssue: liveGitHubIssue === undefined ? target.worktree.linkedIssue : liveGitHubIssue,
+      linkedGitLabIssue: target.worktree.linkedGitLabIssue,
+      linkedWorkItem: target.worktree.linkedWorkItem
+    }
+  }
 
   async getRuntimeGitStatus(
     worktreeSelector: string,
@@ -180,9 +215,13 @@ export class RuntimeGitCommands {
         : provider.getStatus(target.worktree.path)
     }
     const gitOptions = localGitOptionsForTarget(target)
+    // Why: Git can't ignore a shared symlink under a directory-only rule, so tell
+    // status which untracked entries are Orca's own artifacts (issue #10451).
+    const sharedLinkPaths = target.repo ? getWorktreeSharedLinkPaths(target.repo) : []
+    const sharedOptions = sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {}
     return options
-      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions })
-      : getGitStatus(target.worktree.path, gitOptions)
+      ? getGitStatus(target.worktree.path, { ...options, ...gitOptions, ...sharedOptions })
+      : getGitStatus(target.worktree.path, { ...gitOptions, ...sharedOptions })
   }
 
   async getRuntimeGitSubmoduleStatus(
@@ -499,6 +538,7 @@ export class RuntimeGitCommands {
       }
       const results = await provider.getBranchDiff(target.worktree.path, compare.mergeBase, {
         includePatch: true,
+        headOid: compare.headOid,
         filePath: relativePath,
         oldPath: oldRelativePath
       })
@@ -615,6 +655,7 @@ export class RuntimeGitCommands {
       if (!context) {
         return { success: false, error: 'No staged changes to summarize.' }
       }
+      context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
       return generateCommitMessageFromContext(context, resolvedSettings.params, {
         kind: 'remote',
         cwd: target.worktree.path,
@@ -634,6 +675,7 @@ export class RuntimeGitCommands {
     if (!context) {
       return { success: false, error: 'No staged changes to summarize.' }
     }
+    context = withLinkedIssueDraftContext(context, this.linkedIssueForTarget(target))
     const localEnv = await prepareLocalCommitMessageAgentEnv(
       resolvedSettings.params.agentId,
       this.host.getCommitMessageAgentEnvironment?.(),
@@ -699,6 +741,14 @@ export class RuntimeGitCommands {
         error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
       }
     }
+    const issueMeta = this.linkedIssueMetaForTarget(target)
+    const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+      meta: issueMeta,
+      provider: input.provider,
+      repoPath: target.worktree.path,
+      connectionId: target.connectionId,
+      localGitOptions: localGitOptionsForTarget(target)
+    })
     let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
     try {
       const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -737,6 +787,12 @@ export class RuntimeGitCommands {
     }
     if (!context) {
       return { success: false, error: 'No branch changes to summarize.' }
+    }
+    const linkedIssueDetails = await linkedIssueDetailsPromise
+    context = {
+      ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+      ...(input.provider ? { provider: input.provider } : {}),
+      ...(linkedIssueDetails ? { linkedIssueDetails } : {})
     }
 
     if (target.connectionId) {
@@ -930,6 +986,7 @@ export class RuntimeGitCommands {
       }
       return provider.getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
     }
+    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
     return getRemoteFileUrl(target.worktree.path, normalizedRelativePath, line)
   }
 
@@ -945,6 +1002,7 @@ export class RuntimeGitCommands {
       }
       return provider.getRemoteCommitUrl(target.worktree.path, sha)
     }
+    await awaitWindowsHostGitEnvironmentReady({ cwd: target.worktree.path })
     return getRemoteCommitUrl(target.worktree.path, sha)
   }
 }

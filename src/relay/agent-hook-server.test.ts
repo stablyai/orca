@@ -65,10 +65,41 @@ describe('RelayAgentHookServer', () => {
       expect(envelope.connectionId).toBeNull()
       expect(envelope.payload.state).toBe('working')
       expect(envelope.payload.prompt).toBe('hi')
+      expect(envelope.claudeRunningNonAgentTask).toBe(false)
       // Why: the relay forwards body env/version so Orca's warn-once
       // protocol diagnostics and remote-location marker survive the wire.
       expect(envelope.env).toBe('remote')
       expect(envelope.version).toBe('1')
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards Claude background-work evidence with the normalized status', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      await fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          payload: {
+            hook_event_name: 'Stop',
+            background_tasks: [{ id: 'shell-1', type: 'shell', status: 'running' }]
+          }
+        })
+      })
+
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        claudeRunningNonAgentTask: true,
+        payload: { state: 'working', agentType: 'claude' }
+      })
     } finally {
       server.stop()
     }
@@ -126,6 +157,62 @@ describe('RelayAgentHookServer', () => {
       expect(forward.mock.calls[0][0].env).toBe('remote')
       expect(forward.mock.calls[0][0].version).toBe('1')
       expect(forward.mock.calls[0][0].isReplay).toBe(true)
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('forwards and replays Pi session identity as metadata-only', async () => {
+    const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/pi`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          env: 'remote',
+          version: '1',
+          payload: {
+            hook_event_name: 'session_start',
+            session_id: 'pi-session-1',
+            session_file: '/tmp/pi-session-1.jsonl'
+          }
+        })
+      })
+
+      expect(res.status).toBe(204)
+      expect(forward).toHaveBeenCalledTimes(1)
+      expect(forward.mock.calls[0][0]).toMatchObject({
+        source: 'pi',
+        paneKey: PANE_KEY,
+        providerSessionOnly: true,
+        providerSession: {
+          key: 'session_id',
+          id: 'pi-session-1',
+          transcriptPath: '/tmp/pi-session-1.jsonl'
+        }
+      })
+
+      forward.mockClear()
+      expect(server.replayCachedPayloadsForPanes()).toBe(1)
+      expect(forward).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'pi',
+          providerSessionOnly: true,
+          providerSession: expect.objectContaining({
+            transcriptPath: '/tmp/pi-session-1.jsonl'
+          }),
+          isReplay: true
+        })
+      )
     } finally {
       server.stop()
     }

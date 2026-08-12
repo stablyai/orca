@@ -24,6 +24,7 @@ import {
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
+  readDefaultSessionViewPreference,
   readSessionViewOverridesPreference,
   saveDefaultSessionView,
   updateSessionViewOverride
@@ -59,6 +60,39 @@ describe('session view preference', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:defaultSessionView', 'chat')
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
+    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
+  })
+
+  it('reports an absent default as an undecided (null) preference', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: true,
+      hasStoredValue: false
+    })
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('chat')
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: 'chat',
+      loaded: true,
+      hasStoredValue: true
+    })
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: true,
+      hasStoredValue: true
+    })
+  })
+
+  it('marks an unreadable default as not loaded so the opt-in gate can bail', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: false,
+      hasStoredValue: false
+    })
     await expect(loadDefaultSessionView()).resolves.toBe('terminal')
   })
 

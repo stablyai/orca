@@ -21,6 +21,30 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('RpcDispatcher streaming', () => {
+  it('passes pairing authority to streaming handlers', async () => {
+    const pairing = {
+      getEndpoints: vi.fn(),
+      provisionRelay: vi.fn()
+    }
+    let receivedPairing: unknown
+    const dispatcher = new RpcDispatcher({
+      runtime: stubRuntime(),
+      methods: [
+        defineStreamingMethod({
+          name: 'test.pairing-stream',
+          params: null,
+          handler: async (_params, ctx) => {
+            receivedPairing = ctx.pairing
+          }
+        })
+      ]
+    })
+
+    await dispatcher.dispatchStreaming(makeRequest('test.pairing-stream'), () => {}, { pairing })
+
+    expect(receivedPairing).toBe(pairing)
+  })
+
   it('sends initial scrollback via emit', async () => {
     const messages: string[] = []
     const dispatcher = new RpcDispatcher({

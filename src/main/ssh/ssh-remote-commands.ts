@@ -63,6 +63,19 @@ export function moveRemoteTreeCommand(
   )
 }
 
+export function promoteRemoteTreeContentsCommand(
+  host: RemoteHostPlatform,
+  sourcePath: string,
+  destinationPath: string
+): string {
+  if (!isWindowsRemoteHost(host)) {
+    return `cp -a ${shellEscape(sourcePath)}/. ${shellEscape(destinationPath)}/ && rm -rf ${shellEscape(sourcePath)}`
+  }
+  return powerShellCommand(
+    `$ErrorActionPreference = 'Stop'; Get-ChildItem -LiteralPath ${powerShellLiteral(sourcePath)} -Force -ErrorAction Stop | Copy-Item -Destination ${powerShellLiteral(destinationPath)} -Recurse -Force -ErrorAction Stop; Remove-Item -LiteralPath ${powerShellLiteral(sourcePath)} -Recurse -Force -ErrorAction Stop`
+  )
+}
+
 export function writeRemoteEmptyFileCommand(host: RemoteHostPlatform, remotePath: string): string {
   if (!isWindowsRemoteHost(host)) {
     return `touch ${shellEscape(remotePath)}`
@@ -78,12 +91,16 @@ export function probeRelayInstalledCommand(
 ): string {
   const relayJs = joinRemotePath(host, remoteRelayDir, 'relay.js')
   const relayWatcherJs = joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')
+  const relayAiVaultServiceJs = joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')
+  const managedHookRuntimeJs = joinRemotePath(host, remoteRelayDir, 'managed-hook-runtime.js')
   const installComplete = joinRemotePath(host, remoteRelayDir, '.install-complete')
   if (!isWindowsRemoteHost(host)) {
     return (
       `test -d ${shellEscape(remoteRelayDir)} ` +
       `&& test -f ${shellEscape(relayJs)} ` +
       `&& test -f ${shellEscape(relayWatcherJs)} ` +
+      `&& test -f ${shellEscape(relayAiVaultServiceJs)} ` +
+      `&& test -f ${shellEscape(managedHookRuntimeJs)} ` +
       `&& test -f ${shellEscape(installComplete)} ` +
       `&& echo OK || echo MISSING`
     )
@@ -93,23 +110,34 @@ export function probeRelayInstalledCommand(
       `$dir = ${powerShellLiteral(remoteRelayDir)}`,
       `$relay = ${powerShellLiteral(relayJs)}`,
       `$watcher = ${powerShellLiteral(relayWatcherJs)}`,
+      `$aiVaultService = ${powerShellLiteral(relayAiVaultServiceJs)}`,
+      `$managedHooks = ${powerShellLiteral(managedHookRuntimeJs)}`,
       `$complete = ${powerShellLiteral(installComplete)}`,
-      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
+      "if ((Test-Path -LiteralPath $dir -PathType Container) -and (Test-Path -LiteralPath $relay -PathType Leaf) -and (Test-Path -LiteralPath $watcher -PathType Leaf) -and (Test-Path -LiteralPath $aiVaultService -PathType Leaf) -and (Test-Path -LiteralPath $managedHooks -PathType Leaf) -and (Test-Path -LiteralPath $complete -PathType Leaf)) { 'OK' } else { 'MISSING' }"
     ].join('; ')
   )
 }
 
+export const MAX_RELAY_GC_LISTING_ENTRIES = 64
+
 export function listRelayBaseDirsCommand(host: RemoteHostPlatform, baseDir: string): string {
   if (!isWindowsRemoteHost(host)) {
-    return `ls -1 ${shellEscape(baseDir)} 2>/dev/null || true`
+    const statusPrefix = '__ORCA_RELAY_GC_FIND_STATUS__'
+    return [
+      `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
+      `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name 'relay-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /^relay-(v?[0-9]+\.[0-9]+\.[0-9]+(\+[0-9a-f]+)?)(\.gc-tombstone\.[0-9]+\.[0-9]+)?$/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+    ].join(' ')
   }
   return powerShellCommand(
     [
+      "$ErrorActionPreference = 'Stop'",
       `$base = ${powerShellLiteral(baseDir)}`,
       'if (Test-Path -LiteralPath $base -PathType Container) {',
-      'Get-ChildItem -LiteralPath $base -Directory | ForEach-Object { $_.Name }',
+      "Get-ChildItem -LiteralPath $base -Directory -Filter 'relay-*' -ErrorAction Stop | Where-Object { $_.Name -match '^relay-(v?[0-9]+\\.[0-9]+\\.[0-9]+(\\+[0-9a-f]+)?)(\\.gc-tombstone\\.[0-9]+\\.[0-9]+)?$' } | Select-Object -First " +
+        `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'
-    ].join(' ')
+    ].join('\n')
   )
 }
 

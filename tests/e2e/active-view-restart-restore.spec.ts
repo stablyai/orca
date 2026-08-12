@@ -3,11 +3,11 @@
  *
  * Reproduces the reported bug (renderer reload / relaunch always snapped back
  * to the terminal, discarding whichever top-level view — Tasks, Automations,
- * etc. — the user had open) and asserts the fix: activeView now rides the
- * PersistedUIState pipeline and is restored on the first (startup) hydration.
+ * etc. — the user had open) and asserts the fix: activeView now rides its
+ * profile preference pipeline and is restored on the first startup hydration.
  *
  * Restart-persistence lives in E2E, not a store unit test: it needs the real
- * write -> orca-data.json -> ui.get() -> hydratePersistedUI round-trip across
+ * write -> active-view.json -> ui.get() -> hydratePersistedUI round-trip across
  * two Electron launches sharing one userDataDir, then the render layer proving
  * the page actually came back — with a real repo/worktree attached so the
  * relaunch also exercises the startup worktree hydration path (which must not
@@ -15,7 +15,7 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import type { ElectronApplication, Page } from '@stablyai/playwright-test'
+import type { ElectronApplication } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
@@ -27,10 +27,6 @@ function seededRepoPathOrSkip(): string {
     : ''
   test.skip(!repoPath || !existsSync(repoPath), 'Global setup did not produce a seeded test repo')
   return repoPath
-}
-
-async function readPersistedActiveView(page: Page): Promise<string | undefined> {
-  return page.evaluate(() => window.api.ui.get().then((ui) => ui.activeView))
 }
 
 test('restores the active top-level view (Tasks) after an app restart', async (// oxlint-disable-next-line no-empty-pattern -- Playwright's second fixture arg is testInfo; the first must be an object destructure to opt out of the default fixture set.
@@ -72,12 +68,8 @@ test('restores the active top-level view (Tasks) after an app restart', async (/
     // And the terminal grid is not the active surface.
     await expect(first.page.locator('.xterm')).not.toBeVisible({ timeout: 10_000 })
 
-    // The debounced writer must flush the view to the main-process UI state
-    // before we quit, so the relaunch reads it back from disk.
-    await expect
-      .poll(async () => readPersistedActiveView(first.page), { timeout: 10_000 })
-      .toBe('tasks')
-
+    // Closing also exercises the synchronous checkpoint that covers the race
+    // where exit starts before the tiny asynchronous preference write finishes.
     await session.close(firstApp)
     firstApp = null
 

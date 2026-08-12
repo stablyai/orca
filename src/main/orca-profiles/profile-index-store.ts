@@ -8,6 +8,7 @@ import {
 } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
+import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
 import type { GlobalSettings } from '../../shared/types'
 import {
   createDefaultLocalOrcaProfile,
@@ -130,7 +131,9 @@ export function writeProfileIndex(indexPath: string, index: OrcaProfileIndex): v
   }
   const tmpPath = `${indexPath}.tmp`
   writeFileSync(tmpPath, JSON.stringify(index, null, 2), 'utf-8')
+  fsyncFileSync(tmpPath)
   renameSync(tmpPath, indexPath)
+  bestEffortFsyncDirectorySync(dirname(indexPath))
 }
 
 function copyIfPresent(source: string, target: string): void {

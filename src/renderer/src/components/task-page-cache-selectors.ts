@@ -1,12 +1,22 @@
-/* eslint-disable max-lines -- Why: TaskPage cache reconciliation helpers are
-   kept together so list refresh and drawer lookup behavior stay consistent. */
 import {
   workItemsCacheKey,
   type CacheEntry,
   type WorkItemsCacheError,
   type WorkItemsCacheSources
 } from '@/store/slices/github'
-import type { GitHubWorkItem, LinearCollectionResult, LinearIssue } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/types'
+import {
+  taskPageWorkItemKey,
+  taskPageWorkItemStatusSignature,
+  taskPageWorkItemKeyOrderSignature,
+  taskPageWorkItemPaginationBoundary
+} from './task-page-work-item-signatures'
+export {
+  findTaskPageLinearDrawerIssue,
+  findTaskPageLinearIssue,
+  reconcileTaskPageLinearIssuesAfterLandingRefresh,
+  shouldReplaceTaskPageLinearIssuesAfterRefresh
+} from './task-page-linear-cache-selectors'
 
 export type TaskPageRepoCacheInput = {
   id: string
@@ -34,9 +44,6 @@ export type TaskPageWorkItemsFetchOptions = {
 }
 
 type WorkItemsCache = Record<string, CacheEntry<GitHubWorkItem[]>>
-type LinearIssueCache = Record<string, CacheEntry<LinearIssue>>
-type LinearSearchCache = Record<string, CacheEntry<LinearIssue[]>>
-type LinearListCache = Record<string, CacheEntry<LinearCollectionResult<LinearIssue>>>
 export type TaskPageWorkItemPages = readonly (GitHubWorkItem[] | null)[]
 
 export function deriveTaskPageGitHubWorkItemsFetchOptions(
@@ -79,6 +86,40 @@ export function buildTaskPageRepoSourceState(
   })
 }
 
+export type TaskPageUnresolvedSourceRepo = {
+  repoId: string
+  sourceKey: string
+  label: string
+}
+
+/**
+ * Select the fetched repos that resolved neither an issue nor a PR GitHub source.
+ *
+ * Why: since #9660 an unresolvable source returns an empty null-source envelope
+ * instead of an unscoped search. That empty is otherwise indistinguishable from a
+ * genuine zero-result query, so surface these repos to the user. The three states
+ * are told apart purely by `sources`: present-but-both-null = unresolved (this
+ * function), a non-null side = resolved (genuine zero), `null` = not yet fetched.
+ */
+export function selectTaskPageUnresolvedSourceRepos(
+  repos: readonly { id: string; displayName?: string; path: string }[],
+  sourceState: readonly TaskPageRepoSourceState[]
+): TaskPageUnresolvedSourceRepo[] {
+  const stateByRepoId = new Map(sourceState.map((state) => [state.repoId, state]))
+  const unresolved: TaskPageUnresolvedSourceRepo[] = []
+  for (const repo of repos) {
+    const state = stateByRepoId.get(repo.id)
+    if (state?.sources && !state.sources.issues && !state.sources.prs && !state.error) {
+      unresolved.push({
+        repoId: repo.id,
+        sourceKey: state.sourceKey,
+        label: repo.displayName ?? repo.path
+      })
+    }
+  }
+  return unresolved
+}
+
 function taskPageWorkItemCacheKey(item: GitHubWorkItem): string {
   return `${item.repoId}\u0000${item.id}`
 }
@@ -113,56 +154,6 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
   })
 
   return changed ? nextPages : (pages as (GitHubWorkItem[] | null)[])
-}
-
-function taskPageWorkItemKey(item: GitHubWorkItem): string {
-  return `${item.repoId}\u0000${item.id}`
-}
-
-function sortedStrings(values: readonly string[] | undefined): string {
-  return [...(values ?? [])].sort().join('\u0000')
-}
-
-function sortedLogins(users: readonly { login: string | null | undefined }[] | undefined): string {
-  return [...(users ?? [])]
-    .map((user) => user.login ?? '')
-    .sort()
-    .join('\u0000')
-}
-
-function taskPageWorkItemStatusSignature(item: GitHubWorkItem): string {
-  return JSON.stringify([
-    item.type,
-    item.number,
-    item.title,
-    item.state,
-    item.url,
-    item.author,
-    item.branchName ?? null,
-    item.baseRefName ?? null,
-    sortedStrings(item.labels),
-    sortedLogins(item.assignees),
-    sortedLogins(item.reviewRequests),
-    item.reviewDecision ?? null,
-    item.checksSummary?.state ?? null,
-    item.checksSummary?.total ?? null,
-    item.checksSummary?.failed ?? null,
-    item.checksSummary?.pending ?? null,
-    item.mergeable ?? null,
-    item.autoMergeEnabled ?? null,
-    item.autoMergeAllowed ?? null,
-    item.mergeQueueRequired ?? null,
-    item.mergeStateStatus ?? null,
-    item.updatedAt
-  ])
-}
-
-function taskPageWorkItemKeyOrderSignature(items: readonly GitHubWorkItem[]): string {
-  return items.map(taskPageWorkItemKey).join('\u0000')
-}
-
-function taskPageWorkItemPaginationBoundary(items: readonly GitHubWorkItem[]): string | null {
-  return items.at(-1)?.updatedAt ?? null
 }
 
 export function shouldReplaceTaskPageItemsAfterRefresh(
@@ -239,66 +230,6 @@ export function reconcileTaskPagePagesAfterLandingRefresh(
   return [nextFirstPage, ...pages.slice(1)]
 }
 
-function linearIssueKey(issue: LinearIssue): string {
-  return issue.id
-}
-
-function linearIssueStatusSignature(issue: LinearIssue): string {
-  return JSON.stringify([
-    issue.identifier,
-    issue.title,
-    issue.url,
-    issue.state.name,
-    issue.state.type,
-    issue.state.color,
-    issue.team.id,
-    issue.team.name,
-    issue.team.key,
-    sortedStrings(issue.labels),
-    issue.assignee?.id ?? null,
-    issue.assignee?.displayName ?? null,
-    issue.priority,
-    issue.updatedAt
-  ])
-}
-
-export function shouldReplaceTaskPageLinearIssuesAfterRefresh(
-  currentIssues: readonly LinearIssue[],
-  refreshedIssues: readonly LinearIssue[]
-): boolean {
-  if (currentIssues.length !== refreshedIssues.length) {
-    return true
-  }
-  const currentKeys = new Set(currentIssues.map(linearIssueKey))
-  for (const issue of refreshedIssues) {
-    if (!currentKeys.has(linearIssueKey(issue))) {
-      return true
-    }
-  }
-  return false
-}
-
-export function reconcileTaskPageLinearIssuesAfterLandingRefresh(
-  currentIssues: readonly LinearIssue[],
-  refreshedIssues: readonly LinearIssue[]
-): LinearIssue[] {
-  if (shouldReplaceTaskPageLinearIssuesAfterRefresh(currentIssues, refreshedIssues)) {
-    return [...refreshedIssues]
-  }
-
-  const refreshedByKey = new Map(refreshedIssues.map((issue) => [linearIssueKey(issue), issue]))
-  let changed = false
-  const next = currentIssues.map((issue) => {
-    const refreshed = refreshedByKey.get(linearIssueKey(issue))
-    if (!refreshed || linearIssueStatusSignature(issue) === linearIssueStatusSignature(refreshed)) {
-      return issue
-    }
-    changed = true
-    return refreshed
-  })
-  return changed ? next : (currentIssues as LinearIssue[])
-}
-
 export function findTaskPageDialogWorkItem(
   workItemsCache: WorkItemsCache,
   dialogWorkItemKey: TaskPageDialogWorkItemKey
@@ -317,34 +248,3 @@ export function findTaskPageDialogWorkItem(
   }
   return null
 }
-
-export function findTaskPageLinearIssue(
-  linearIssueCache: LinearIssueCache,
-  linearSearchCache: LinearSearchCache,
-  linearListCache: LinearListCache,
-  linearIssueId: string | null
-): LinearIssue | null {
-  if (!linearIssueId) {
-    return null
-  }
-  for (const entry of Object.values(linearIssueCache)) {
-    if (entry?.data?.id === linearIssueId) {
-      return entry.data
-    }
-  }
-  for (const entry of Object.values(linearSearchCache)) {
-    const found = entry?.data?.find((issue) => issue.id === linearIssueId)
-    if (found) {
-      return found
-    }
-  }
-  for (const entry of Object.values(linearListCache)) {
-    const found = entry?.data?.items.find((issue) => issue.id === linearIssueId)
-    if (found) {
-      return found
-    }
-  }
-  return null
-}
-
-export const findTaskPageLinearDrawerIssue = findTaskPageLinearIssue

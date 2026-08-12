@@ -117,6 +117,14 @@ vi.mock('./hosted-review', () => ({
 
 import { createHostedReview } from './hosted-review-creation'
 
+import { _resetOriginGitHubApiRepositoryCache } from '../github/github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
+
 function resetMocks(): void {
   for (const mock of [
     createGitHubPullRequestMock,
@@ -155,10 +163,17 @@ function mockGitHubProvider(): void {
 // resolver claims the repo and reports the host for the gh auth probe (#8312).
 function mockGitHubEnterpriseProvider(): void {
   getProjectSlugMock.mockResolvedValue(null)
-  getRepoSlugMock.mockResolvedValue(null)
+  // Why: getRepoSlug resolves hosted identities itself now — a GHES remote
+  // comes back host-qualified instead of null + separate enterprise fallback.
+  getRepoSlugMock.mockResolvedValue({
+    owner: 'acme',
+    repo: 'orca',
+    host: 'github.acme-corp.com'
+  })
   getBitbucketRepoSlugMock.mockResolvedValue(null)
   getAzureDevOpsRepoSlugMock.mockResolvedValue(null)
   getGiteaRepoSlugMock.mockResolvedValue(null)
+  // The auth gate still keys off the enterprise resolver (authed-GHES signal).
   getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
     owner: 'acme',
     repo: 'orca',
@@ -372,7 +387,7 @@ describe('createHostedReview', () => {
       wslDistro: 'Ubuntu'
     })
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain'],
+      ['status', '--porcelain', '-z'],
       expect.objectContaining({ cwd: '/repo', wslDistro: 'Ubuntu' })
     )
     expect(getUpstreamStatusMock).toHaveBeenCalledWith('/repo', undefined, {
@@ -388,12 +403,15 @@ describe('createHostedReview', () => {
       expect.objectContaining({
         repoPath: '/repo',
         branch: 'feature',
-        localGitExecOptions: { wslDistro: 'Ubuntu' }
+        localGitExecOptions: { wslDistro: 'Ubuntu' },
+        // Why: a stale no-review answer here would leave Create enabled after a
+        // review was opened outside Orca, so eligibility takes the fast tier.
+        active: true
       })
     )
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['auth', 'status', '--hostname', 'github.com'],
-      { cwd: '/repo', wslDistro: 'Ubuntu' }
+      { cwd: '/repo', wslDistro: 'Ubuntu', host: 'github.com' }
     )
     expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
       '/repo',
@@ -578,7 +596,7 @@ describe('createHostedReview', () => {
     expect(getUpstreamStatusMock).not.toHaveBeenCalled()
     expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
       ['auth', 'status', '--hostname', 'github.com'],
-      {}
+      { host: 'github.com' }
     )
     expect(createGitHubPullRequestMock).toHaveBeenCalledWith(
       '/remote/repo',

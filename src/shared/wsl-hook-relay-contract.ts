@@ -47,7 +47,12 @@ export const WSL_HOOK_FS_METHODS = {
 /** Result envelope for every fs-bridge method. Errors travel as data (not
  *  JSON-RPC faults) so the host adapter can map POSIX errno onto the ssh2
  *  status codes the shared installer error-classifiers already understand. */
-export type WslFsFailure = { ok: false; errno: string; message: string }
+export type WslFsFailure = {
+  ok: false
+  errno: string
+  message: string
+  fileCapacity?: { observedBytes: number; maxBytes: number }
+}
 export type WslFsResult<T extends object = object> = ({ ok: true } & T) | WslFsFailure
 
 /** Where the guest relay publishes its endpoint file. Keyed by the stable

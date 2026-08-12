@@ -85,6 +85,9 @@ describe('windowed redraw tail equivalence', () => {
       expect(actual.redrawCursor, `round ${round} cursor`).toEqual(expected.redrawCursor)
       expect(actual.truncated, `round ${round} truncated`).toBe(expected.truncated)
       expect(actual.newCompleteLines, `round ${round} newLines`).toBe(expected.newCompleteLines)
+      expect(actual.newlyCompletedLines, `round ${round} completedLines`).toEqual(
+        expected.newlyCompletedLines
+      )
     }
   })
 })

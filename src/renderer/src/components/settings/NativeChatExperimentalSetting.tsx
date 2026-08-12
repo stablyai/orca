@@ -23,7 +23,7 @@ export function NativeChatExperimentalSetting({
 
   return (
     <SearchableSetting
-      title={translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Native chat')}
+      title={translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Chat UI')}
       description={translate(
         'auto.components.settings.ExperimentalPane.nativeChat.description',
         'Preview the desktop chat surface for supported agent terminal sessions.'
@@ -35,12 +35,12 @@ export function NativeChatExperimentalSetting({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 shrink space-y-0.5">
           <Label>
-            {translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Native chat')}
+            {translate('auto.components.settings.ExperimentalPane.nativeChat.title', 'Chat UI')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.ExperimentalPane.nativeChat.copy',
-              'Adds a native chat view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
+              'Adds a Chat UI view you can switch to from supported agent terminal panes. Experimental while we tune transcript fidelity, streaming, and terminal parity.'
             )}
           </p>
         </div>
@@ -48,7 +48,7 @@ export function NativeChatExperimentalSetting({
           checked={nativeChatEnabled}
           ariaLabel={translate(
             'auto.components.settings.ExperimentalPane.nativeChat.toggleLabel',
-            'Toggle native chat'
+            'Toggle Chat UI'
           )}
           onChange={() =>
             updateSettings({
@@ -85,7 +85,7 @@ export function NativeChatExperimentalSetting({
               <SelectTrigger
                 aria-label={translate(
                   'auto.components.settings.ExperimentalPane.nativeChat.defaultViewLabel',
-                  'Default native chat view'
+                  'Default Chat UI view'
                 )}
                 className="w-36"
                 size="sm"
@@ -102,7 +102,7 @@ export function NativeChatExperimentalSetting({
                 <SelectItem value="native-chat">
                   {translate(
                     'auto.components.settings.ExperimentalPane.nativeChat.defaultViewNative',
-                    'Native chat'
+                    'Chat UI'
                   )}
                 </SelectItem>
               </SelectContent>

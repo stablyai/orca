@@ -9,12 +9,13 @@ import {
   GEMINI_SILENT_WORKING,
   GEMINI_WORKING,
   HERMES_AGENT_NAME_RE,
+  QUARTER_CIRCLE_SPINNER_RE,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE_GLOBAL,
   containsAgentName,
+  containsAgentSpinnerGlyph,
   containsAny,
-  containsBrailleSpinner,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
@@ -22,6 +23,7 @@ import {
   isPiTerminalTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
+import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 
@@ -34,6 +36,7 @@ export function clearWorkingIndicators(title: string): string {
   cleaned = cleaned.replace(GEMINI_WORKING, '')
   cleaned = cleaned.replace(GEMINI_SILENT_WORKING, '')
   cleaned = cleaned.replace(BRAILLE_SPINNER_RE, '')
+  cleaned = cleaned.replace(QUARTER_CIRCLE_SPINNER_RE, '')
   if (cleaned.startsWith('. ')) {
     cleaned = cleaned.slice(2)
   }
@@ -56,16 +59,21 @@ export function createAgentStatusTracker(
 ): {
   handleTitle: (title: string) => void
   seedTitle: (title: string) => void
+  restoreLastExit: () => AgentStatus | null
   reset: () => void
 } {
   // Why: trackers restored mid-session need a last-known status without firing
   // callbacks, or a hidden working agent can miss its later idle transition.
   let lastStatus: AgentStatus | null =
     initialTitle !== undefined ? detectAgentStatusFromTitle(initialTitle) : null
+  let restorableExitStatus: AgentStatus | null = null
 
   return {
     handleTitle(title: string): void {
       const newStatus = detectAgentStatusFromTitle(title)
+      if (newStatus !== null) {
+        restorableExitStatus = null
+      }
       if (lastStatus === 'working' && newStatus !== null && newStatus !== 'working') {
         onBecameIdle(title)
       }
@@ -75,6 +83,7 @@ export function createAgentStatusTracker(
       // Why: reverting to a plain shell prompt after idle/permission means the
       // agent exited; while working it can just be a transient internal title.
       if (lastStatus !== null && lastStatus !== 'working' && newStatus === null) {
+        restorableExitStatus = lastStatus
         lastStatus = null
         onAgentExited?.()
       }
@@ -84,9 +93,19 @@ export function createAgentStatusTracker(
     },
     seedTitle(title: string): void {
       lastStatus = detectAgentStatusFromTitle(title)
+      restorableExitStatus = null
+    },
+    restoreLastExit(): AgentStatus | null {
+      const restoredStatus = lastStatus === null ? restorableExitStatus : null
+      if (restoredStatus !== null) {
+        lastStatus = restoredStatus
+      }
+      restorableExitStatus = null
+      return restoredStatus
     },
     reset(): void {
       lastStatus = null
+      restorableExitStatus = null
     }
   }
 }
@@ -142,6 +161,10 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return null
   }
 
+  if (isOpenCodeNativeTitle(title)) {
+    return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }
@@ -165,10 +188,9 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (isPiTerminalTitle(title)) {
     return 'idle'
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     return 'working'
   }
-
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)

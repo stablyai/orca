@@ -1,6 +1,11 @@
 import { basename } from '@/lib/path'
 import type { GitBranchChangeEntry, GitStatusEntry } from '../../../../shared/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import {
+  buildSourceControlTree,
+  compactSourceControlTree,
+  flattenSourceControlTree
+} from '@/components/right-sidebar/source-control-tree'
 
 export type CombinedDiffFileTreeMode = 'all' | 'uncommitted' | 'branch' | 'commit'
 export type CombinedDiffFileTreeEntry = GitStatusEntry | GitBranchChangeEntry
@@ -50,6 +55,7 @@ export function handleCombinedDiffFileTreeNavigation({
   sections,
   sectionIndexByKey,
   toggleSection,
+  loadSection,
   scrollToIndex
 }: {
   mode: CombinedDiffFileTreeMode
@@ -57,6 +63,7 @@ export function handleCombinedDiffFileTreeNavigation({
   sections: readonly { collapsed: boolean }[]
   sectionIndexByKey: ReadonlyMap<string, number>
   toggleSection: (index: number) => void
+  loadSection?: (index: number) => void
   scrollToIndex: (index: number) => void
 }): number | null {
   const index = getCombinedDiffFileTreeNavigationIndex({ mode, entry, sectionIndexByKey })
@@ -67,6 +74,7 @@ export function handleCombinedDiffFileTreeNavigation({
   if (sections[index].collapsed) {
     toggleSection(index)
   }
+  loadSection?.(index)
   scrollToIndex(index)
   return index
 }
@@ -119,4 +127,15 @@ export function getFilteredCombinedDiffFileTreeEntries({
     }
     return normalizedQuery.length === 0 || getEntrySearchText(entry).includes(normalizedQuery)
   })
+}
+
+export function getCombinedDiffBranchEntriesInTreeOrder(
+  mode: Extract<CombinedDiffFileTreeMode, 'branch' | 'commit'>,
+  entries: readonly GitBranchChangeEntry[]
+): GitBranchChangeEntry[] {
+  const area: CombinedDiffBranchTreeArea = mode === 'commit' ? 'combined-commit' : 'combined-branch'
+  const roots = compactSourceControlTree(buildSourceControlTree(area, [...entries]))
+  return flattenSourceControlTree(roots, new Set())
+    .filter((node) => node.type === 'file')
+    .map((node) => node.entry)
 }

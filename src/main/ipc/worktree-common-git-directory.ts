@@ -1,3 +1,4 @@
+import type { Stats } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import type { Repo } from '../../shared/types'
 import {
@@ -7,7 +8,7 @@ import {
 } from '../../shared/cross-platform-path'
 import type { FileStat } from '../providers/types'
 
-type GitDirectoryStat = Awaited<ReturnType<typeof stat>> | FileStat
+type GitDirectoryStat = Stats | FileStat
 
 type GitDirectoryAccess = {
   stat?: (path: string) => Promise<GitDirectoryStat>
@@ -25,7 +26,7 @@ function isFileStat(value: GitDirectoryStat): boolean {
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')
   const index = normalized.lastIndexOf('/')
-  if (index < 0) {
+  if (index === -1) {
     return '.'
   }
   if (index === 0) {

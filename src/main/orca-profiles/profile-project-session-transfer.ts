@@ -40,7 +40,8 @@ function hasTransferredSessionState(session: WorkspaceSessionState): boolean {
     Object.keys(session.openFilesByWorktree ?? {}).length > 0 ||
     Object.keys(session.browserTabsByWorktree ?? {}).length > 0 ||
     Object.keys(session.unifiedTabs ?? {}).length > 0 ||
-    Object.keys(session.tabGroups ?? {}).length > 0
+    Object.keys(session.tabGroups ?? {}).length > 0 ||
+    Object.keys(session.terminalTopologyRevisionByRepoId ?? {}).length > 0
   )
 }
 
@@ -120,6 +121,10 @@ export function extractSessionForTransfer(
     source.defaultTerminalTabsAppliedByWorktreeId,
     (value) => structuredClone(value)
   )
+  transferred.terminalTopologyRevisionByRepoId = mapOwnerRecord(
+    source.terminalTopologyRevisionByRepoId,
+    (value) => value
+  )
   transferred.terminalLayoutsByTabId = {}
   for (const tabId of copiedTerminalTabIds) {
     const layout = source.terminalLayoutsByTabId[tabId]
@@ -127,6 +132,28 @@ export function extractSessionForTransfer(
       transferred.terminalLayoutsByTabId[tabId] = structuredClone(layout)
     }
   }
+  transferred.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+    Object.entries(source.terminalPtyIncarnationsByPaneKey ?? {}).filter(([paneKey]) => {
+      const separator = paneKey.lastIndexOf(':')
+      return separator > 0 && copiedTerminalTabIds.has(paneKey.slice(0, separator))
+    })
+  )
+  transferred.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+    Object.entries(source.terminalSurfaceTombstonesByPaneKey ?? {}).flatMap(
+      ([paneKey, tombstone]) =>
+        isRepoWorktreeId(oldRepoId, tombstone.worktreeId)
+          ? [
+              [
+                paneKey,
+                {
+                  ...structuredClone(tombstone),
+                  worktreeId: rekeyWorktreeId(oldRepoId, newRepoId, tombstone.worktreeId)
+                }
+              ] as const
+            ]
+          : []
+    )
+  )
   transferred.activeWorktreeIdsOnShutdown = source.activeWorktreeIdsOnShutdown
     ?.filter((worktreeId) => isRepoWorktreeId(oldRepoId, worktreeId))
     .map((worktreeId) => rekeyWorktreeId(oldRepoId, newRepoId, worktreeId))

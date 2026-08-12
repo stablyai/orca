@@ -14,7 +14,9 @@ import { useAppStore } from '@/store'
 import { OpenInApplicationIcon } from '@/lib/open-in-app-catalog'
 import { translate } from '@/i18n/i18n'
 import { getLocalFileManagerLabel } from '@/lib/local-file-manager-label'
+import { NO_OPEN_IN_APPLICATIONS } from '@/lib/open-in-application-selection'
 import {
+  getOpenInEntryAvailability,
   getWorktreeOpenInEntries,
   openOpenInAppsSettings,
   openWorktreePath
@@ -23,6 +25,7 @@ import {
 type SourceControlEntryContextMenuProps = {
   currentWorktreeId: string
   absolutePath?: string
+  relativePath?: string
   connectionId?: string | null
   onView?: () => void
   onRevealInExplorer: (worktreeId: string, absolutePath: string) => void
@@ -33,13 +36,17 @@ type SourceControlEntryContextMenuProps = {
 export function SourceControlEntryContextMenu({
   currentWorktreeId,
   absolutePath,
+  relativePath,
   connectionId,
   onView,
   onRevealInExplorer,
   onOpenChange,
   children
 }: SourceControlEntryContextMenuProps): React.JSX.Element {
-  const openInApplications = useAppStore((s) => s.settings?.openInApplications ?? [])
+  const openInApplications = useAppStore(
+    (s) => s.settings?.openInApplications ?? NO_OPEN_IN_APPLICATIONS
+  )
+  const settings = useAppStore((s) => s.settings)
   const fileManagerLabel = getLocalFileManagerLabel()
   const openInEntries = React.useMemo(
     () => getWorktreeOpenInEntries(openInApplications, fileManagerLabel),
@@ -52,6 +59,13 @@ export function SourceControlEntryContextMenu({
     }
     void window.api.ui.writeClipboardText(absolutePath)
   }, [absolutePath])
+
+  const handleCopyRelativePath = useCallback(() => {
+    if (!relativePath) {
+      return
+    }
+    void window.api.ui.writeClipboardText(relativePath)
+  }, [relativePath])
 
   const handleRevealInOrcaExplorer = useCallback(() => {
     if (!absolutePath) {
@@ -91,6 +105,13 @@ export function SourceControlEntryContextMenu({
           <Copy className="size-3.5" />
           {translate('auto.components.right.sidebar.FileExplorerRow.b5d436aa30', 'Copy Path')}
         </ContextMenuItem>
+        <ContextMenuItem onSelect={handleCopyRelativePath} disabled={!relativePath}>
+          <Copy className="size-3.5" />
+          {translate(
+            'auto.components.right.sidebar.FileExplorerRow.66a29dde82',
+            'Copy Relative Path'
+          )}
+        </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuSub>
           <ContextMenuSubTrigger disabled={!absolutePath}>
@@ -98,22 +119,30 @@ export function SourceControlEntryContextMenu({
             {translate('auto.components.sidebar.WorktreeOpenInMenu.8009ab69a6', 'Open in')}
           </ContextMenuSubTrigger>
           <ContextMenuSubContent className="w-52">
-            {openInEntries.map((entry) => (
-              <ContextMenuItem
-                key={entry.id}
-                onSelect={() => handleOpenInExternal(entry.target, entry.command)}
-                disabled={!absolutePath}
-              >
-                {entry.target === 'file-manager' ? (
-                  <FolderOpen className="size-3.5" />
-                ) : entry.command ? (
-                  <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
-                ) : (
-                  <ExternalLink className="size-3.5" />
-                )}
-                {entry.label}
-              </ContextMenuItem>
-            ))}
+            {openInEntries.map((entry) => {
+              const availability = getOpenInEntryAvailability(entry, settings, connectionId)
+              return (
+                <ContextMenuItem
+                  key={entry.id}
+                  onSelect={() => handleOpenInExternal(entry.target, entry.command)}
+                  disabled={!absolutePath || availability.disabled}
+                >
+                  {entry.target === 'file-manager' ? (
+                    <FolderOpen className="size-3.5" />
+                  ) : entry.command ? (
+                    <OpenInApplicationIcon application={{ command: entry.command }} size={14} />
+                  ) : (
+                    <ExternalLink className="size-3.5" />
+                  )}
+                  <span className="min-w-0 truncate">{entry.label}</span>
+                  {availability.metadata ? (
+                    <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
+                      {availability.metadata}
+                    </span>
+                  ) : null}
+                </ContextMenuItem>
+              )
+            })}
             <ContextMenuSeparator />
             <ContextMenuItem onSelect={openOpenInAppsSettings}>
               {translate(

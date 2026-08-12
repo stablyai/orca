@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { WorktreeCardDetailsHover } from './WorktreeCardMeta'
+import { WorktreeCardDetailsHover, WorktreeCardMetaBadges } from './WorktreeCardMeta'
 
 vi.mock('@/components/ui/hover-card', () => ({
   HoverCard: ({ children }: { children: ReactNode }) => <>{children}</>,
@@ -239,6 +239,40 @@ describe('WorktreeCardDetailsHover', () => {
     expect(markup).toContain('https://linear.app/acme/issue/ENG-123')
     expect(markup).toContain('View on Linear')
     expect(markup).toContain('In Progress')
+  })
+
+  it('shows the Jira icon badge and linked issue details', () => {
+    const jiraIssue = {
+      identifier: 'KAN-1',
+      title: 'Test Jira card icon',
+      url: 'https://company.atlassian.net/browse/KAN-1'
+    }
+    const badgeMarkup = renderToStaticMarkup(
+      <WorktreeCardMetaBadges
+        issue={null}
+        linearIssue={null}
+        jiraIssue={jiraIssue}
+        review={null}
+        comment={null}
+      />
+    )
+    const hoverMarkup = renderToStaticMarkup(
+      <WorktreeCardDetailsHover
+        issue={null}
+        linearIssue={null}
+        jiraIssue={jiraIssue}
+        review={null}
+        comment={null}
+      >
+        <span>KAN-1</span>
+      </WorktreeCardDetailsHover>
+    )
+
+    expect(badgeMarkup).toContain('<svg')
+    expect(badgeMarkup).toContain('Linked Jira KAN-1')
+    expect(hoverMarkup).toContain('Test Jira card icon')
+    expect(hoverMarkup).toContain('View on Jira')
+    expect(hoverMarkup).toContain('https://company.atlassian.net/browse/KAN-1')
   })
 
   it('shows identifier when Linear issue URL is unavailable', () => {

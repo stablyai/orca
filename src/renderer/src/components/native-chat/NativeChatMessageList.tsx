@@ -377,6 +377,8 @@ export function NativeChatMessageList({
       >
         <div
           ref={contentRef}
+          // Why: same max width as the composer column; horizontal inset comes
+          // from the scroll container so content aligns with the composer field.
           className="mx-auto flex w-full max-w-4xl flex-col gap-5"
           // Why: `zoom` scales the chat transcript's text and layout together,
           // scoped to this container so the rest of the app is untouched. It's

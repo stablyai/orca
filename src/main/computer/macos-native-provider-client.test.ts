@@ -278,6 +278,16 @@ describe('MacOSNativeProviderClient', () => {
       code: 'invalid_argument',
       message: expect.stringContaining('Click requires')
     })
+    await expect(
+      client.action('click', {
+        app: 'TextEdit',
+        elementIndex: 0,
+        modifiers: 'CmdOrCtrl+A'
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('Click modifiers accept modifier keys only')
+    })
     await expect(client.action('typeText', { app: 'TextEdit', text: '' })).rejects.toMatchObject({
       code: 'invalid_argument',
       message: expect.stringContaining('Missing text')

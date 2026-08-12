@@ -10,9 +10,12 @@ const mocks = vi.hoisted(() => ({
   ensureAgentStartupInTerminal: vi.fn()
 }))
 
-vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace
-}))
+// Why: importOriginal keeps the real resolveStartupLaunchDraftText, so the
+// invariant test below exercises the shipped gate instead of a copy of it.
+vi.mock('@/lib/worktree-activation', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return { ...actual, activateAndRevealFolderWorkspace: mocks.activateAndRevealFolderWorkspace }
+})
 
 vi.mock('@/lib/new-workspace', async (importOriginal) => {
   const actual = await importOriginal<typeof NewWorkspaceModule>()
@@ -22,8 +25,10 @@ vi.mock('@/lib/new-workspace', async (importOriginal) => {
   }
 })
 
+import { useAppStore } from '@/store'
+import { decideInitialAgentTabViewMode } from '@/lib/native-chat-initial-view-mode'
+import { resolveStartupLaunchDraftText } from '@/lib/worktree-activation'
 import {
-  buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchPlatform,
   submitFolderWorkspaceCreate
 } from './folder-workspace-composer-submit'
@@ -221,6 +226,52 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: null,
       linkedTask: linkedWorkItem,
       createdWithAgent: 'codex'
+    })
+  })
+
+  it('creates a Jira folder workspace with its bound source context', async () => {
+    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'group-1',
+      hostId: 'runtime:folder-env' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      }
+    }
+
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem,
+      linkedTaskSourceContext,
+      note: '',
+      quickAgent: null,
+      autoRenameBranchFromWork: true,
+      agentCmdOverrides: {},
+      createFolderWorkspace,
+      onOpenChange: vi.fn()
+    })
+
+    expect(createFolderWorkspace).toHaveBeenCalledWith({
+      projectGroupId: 'group-1',
+      name: 'ORCA-123 Link Jira',
+      connectionId: null,
+      linkedTask: linkedWorkItem,
+      linkedTaskSourceContext
     })
   })
 
@@ -635,26 +686,183 @@ describe('submitFolderWorkspaceCreate', () => {
   })
 })
 
-describe('buildFolderWorkspaceLinkedStartupPlan', () => {
-  it('uses cmd quoting for configured arguments on local Windows', () => {
-    const plan = buildFolderWorkspaceLinkedStartupPlan({
-      agent: 'hermes',
-      linkedWorkItem: {
-        provider: 'github',
-        type: 'issue',
-        number: 42,
-        title: 'Restore linked quick-create',
-        url: 'https://github.com/stablyai/orca/issues/42',
-        repoId: 'repo-1'
-      },
+describe('submitFolderWorkspaceCreate native-chat launch draft', () => {
+  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+  const linkedIssue = {
+    provider: 'github' as const,
+    type: 'issue' as const,
+    number: 42,
+    title: 'Restore linked quick-create',
+    url: ISSUE_URL,
+    repoId: 'repo-1'
+  }
+
+  function seededDraftFor(tabId: string): { text: string } | undefined {
+    return useAppStore.getState().nativeChatLaunchDraftByTabId[tabId]
+  }
+
+  beforeEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
+    Object.assign(window, {
+      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
+    })
+  })
+
+  afterEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReset()
+    mocks.ensureAgentStartupInTerminal.mockReset()
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
+    Reflect.deleteProperty(window, 'api')
+    vi.restoreAllMocks()
+  })
+
+  it('mirrors a startup-paste draft into the chat composer', async () => {
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: linkedIssue,
       note: '',
+      quickAgent: 'codex',
+      autoRenameBranchFromWork: false,
       agentCmdOverrides: {},
-      agentArgs: '--provider "value with space"',
-      platform: 'win32',
-      shell: 'cmd',
-      isRemote: false
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
     })
 
-    expect(plan?.launchCommand).toBe('hermes --tui "--provider" "value with space"')
+    expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
+  })
+
+  it('mirrors an argv-prefill draft, which never lands in startupPlan.draftPrompt', async () => {
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: linkedIssue,
+      note: '',
+      quickAgent: 'claude',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
+    })
+
+    // The draft rides in on `--prefill`, so the plan carries no draftPrompt at
+    // all — keying the mirror off it would silently drop this whole branch.
+    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+    expect(startup?.draftPrompt).toBeUndefined()
+    expect(startup?.command).toContain(ISSUE_URL)
+    expect(seededDraftFor('tab-1')?.text).toBe(ISSUE_URL)
+  })
+
+  it('mirrors a multi-line draft into chat', async () => {
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: linkedIssue,
+      note: 'Reproduce on Windows first',
+      quickAgent: 'codex',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
+    })
+
+    expect(mocks.ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startup: expect.objectContaining({
+          draftPrompt: `Reproduce on Windows first\n\n${ISSUE_URL}`
+        })
+      })
+    )
+    expect(seededDraftFor('tab-1')?.text).toBe(`Reproduce on Windows first\n\n${ISSUE_URL}`)
+  })
+
+  it('does not mirror an unlinked note, which is submitted rather than drafted', async () => {
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: null,
+      note: 'Fix the flaky checkout flow',
+      quickAgent: 'codex',
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
+    })
+
+    expect(seededDraftFor('tab-1')).toBeUndefined()
+  })
+})
+
+describe('folder-workspace draft: seeded set == chat-opening set', () => {
+  const ISSUE_URL = 'https://github.com/stablyai/orca/issues/42'
+  const linkedIssue = {
+    provider: 'github' as const,
+    type: 'issue' as const,
+    number: 42,
+    title: 'Restore linked quick-create',
+    url: ISSUE_URL,
+    repoId: 'repo-1'
+  }
+
+  beforeEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
+    Object.assign(window, {
+      api: { agentTrust: { markTrusted: vi.fn().mockResolvedValue(undefined) } }
+    })
+  })
+
+  afterEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReset()
+    mocks.ensureAgentStartupInTerminal.mockReset()
+    useAppStore.setState({ nativeChatLaunchDraftByTabId: {} })
+    Reflect.deleteProperty(window, 'api')
+    vi.restoreAllMocks()
+  })
+
+  // Why: `claude` takes its draft on argv, so `startupPlan.draftPrompt` stays
+  // undefined; `codex` gets a startup paste and sets it. Both must reach the
+  // view-mode gate, and both must agree with what the composer actually holds.
+  it.each([
+    ['argv-prefill', 'claude' as const, '', true],
+    ['argv-prefill multi-line', 'claude' as const, 'Reproduce on Windows first', true],
+    ['startup-paste', 'codex' as const, '', true],
+    ['startup-paste multi-line', 'codex' as const, 'Reproduce on Windows first', true]
+  ])('%s', async (_label, quickAgent, note, expectMirrored) => {
+    await submitFolderWorkspaceCreate({
+      projectGroup: makeProjectGroup(),
+      name: '',
+      lastAutoName: '',
+      linkedWorkItem: linkedIssue,
+      note,
+      quickAgent,
+      autoRenameBranchFromWork: false,
+      agentCmdOverrides: {},
+      createFolderWorkspace: vi.fn(async () => makeFolderWorkspace()),
+      onOpenChange: vi.fn()
+    })
+
+    const startup = mocks.activateAndRevealFolderWorkspace.mock.calls[0]?.[1]?.startup
+    const seeded = useAppStore.getState().nativeChatLaunchDraftByTabId['tab-1'] != null
+    const draftText = resolveStartupLaunchDraftText(startup)
+    const opensInChat =
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: quickAgent,
+        ...(draftText != null
+          ? { promptDelivery: 'draft' as const, launchDraftText: draftText }
+          : {})
+      }) === 'chat'
+
+    // The draft always reaches the TUI, whichever way it is delivered.
+    expect(`${startup?.command ?? ''}${startup?.draftPrompt ?? ''}`).toContain(ISSUE_URL)
+    expect(seeded).toBe(expectMirrored)
+    expect(opensInChat).toBe(expectMirrored)
   })
 })

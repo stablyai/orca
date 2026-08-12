@@ -1,14 +1,25 @@
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session-resume'
+import type {
+  AgentLaunchPreferences,
+  AgentPromptDelivery
+} from '../../../../shared/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
+import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
 
 export type PtyBufferSnapshot = {
   data: string
+  /** Live state that can be restored without an alternate-screen frame. */
+  frameRestoreAnsi?: string
   cols: number
   rows: number
   seq?: number
@@ -30,6 +41,21 @@ export type PtyBufferSnapshot = {
    *  before post-snapshot live chunks — so the continuation completes it
    *  exactly as live instead of rendering literal (Bug E / #7329). */
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags the owner of this image proved at `seq`. Absent
+   *  means unknown; never rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
+}
+
+/** Metadata for one authoritative replay payload. */
+export type PtyReplayDataMeta = {
+  clearBeforeReplay?: boolean
+  pendingEscapeTailAnsi?: string
+  /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
+   *  unknown; the pane tracker must stay unproven rather than assume zero. */
+  kittyKeyboardFlags?: number
+  /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
+   *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
+  snapshotSeq?: number
 }
 
 export type LocalPtySessionMetadata = {
@@ -42,16 +68,32 @@ export type PtyConnectResult = {
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
+  /** The provider adopted an existing session rather than creating a fresh one.
+   *  Startup commands may be ignored; recovery still requires separate ownership evidence. */
+  isReattach?: boolean
   launchAgent?: TuiAgent
   launchConfig?: SleepingAgentLaunchConfig
   snapshot?: string
   snapshotCols?: number
   snapshotRows?: number
+  /** Normal-buffer history and mode preamble before an alternate-screen frame. */
+  snapshotPrefixAnsi?: string
+  /** Visual alternate-screen frame. Both fields are absent on older hosts. */
+  snapshotFrameAnsi?: string
+  /** Live state to append when omitting `snapshotFrameAnsi`. */
+  snapshotFrameRestoreAnsi?: string
+  /** Kitty keyboard flags the daemon snapshot proved, paired with the renderer-
+   *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
+   *  means unknown, never a proven inactive protocol. */
+  snapshotKittyKeyboardFlags?: number
+  snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
-  coldRestore?: { scrollback: string; cwd: string }
+  coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
   replay?: string
   startupCwdFallback?: { kind: 'worktree'; cwd: string }
+  /** Main declined an unverifiable provider-session resume and launched fresh. */
+  agentResumeUnavailable?: true
   /** Trailing partial escape the daemon emulator held mid-parse; the reattach
    *  replay writes it LAST (after the reset) so a racing live continuation
    *  completes it instead of rendering literally (#7329). */
@@ -59,16 +101,32 @@ export type PtyConnectResult = {
 }
 
 type PtyCallbacks = {
+  /** Called before an adopted PTY can publish buffered/live bytes. */
+  onReattachDetermined?: () => void
   onConnect?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
-  onReplayData?: (
-    data: string,
-    meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
-  ) => void
+  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void
+  onWriteUnavailable?: () => void
+  onRecoveryStateChange?: (state: PtyTransportRecoveryState) => void
+  onOutputPauseChanged?: (paused: boolean, supported: boolean) => void
+}
+
+export type PtyTransportRecoveryState = {
+  phase:
+    | 'connecting'
+    | 'connected'
+    | 'recovering'
+    | 'backoff'
+    | 'disconnected'
+    | 'offline'
+    | 'ended'
+    | 'disposed'
+  epoch: number
+  attempt: number
 }
 
 export type PtyTransport = {
@@ -84,10 +142,14 @@ export type PtyTransport = {
     initiallyHidden?: boolean
     command?: string
     env?: Record<string, string>
+    envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
+    /** Reject a stale restored identity before this transport can publish global PTY handlers. */
+    admitPtyId?: (ptyId: string) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -108,6 +170,8 @@ export type PtyTransport = {
   sendInputImmediate: (data: string) => boolean
   sendInputAccepted?: (data: string) => Promise<boolean>
   claimViewport?: (cols: number, rows: number) => boolean
+  /** Capability-negotiated paired-runtime delivery gate; false preserves legacy delivery. */
+  setOutputPaused?: (paused: boolean) => boolean
   resize: (
     cols: number,
     rows: number,
@@ -120,19 +184,34 @@ export type PtyTransport = {
     }
   ) => boolean
   isConnected: () => boolean
+  getRecoveryState?: () => PtyTransportRecoveryState
+  /** Starts a fresh connection epoch while preserving the authoritative remote PTY identity. */
+  retryRecovery?: () => boolean
+  /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
+  notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
   getConnectionId?: () => string | null | undefined
   /** The runtime captured by this transport; legacy remote PTY ids do not
    * encode their owner, and current worktree settings may have changed. */
   getRuntimeEnvironmentId?: () => string | null
+  /** Execution host captured at spawn; nested SSH differs from its outer runtime owner. */
+  getExecutionHostId?: () => ExecutionHostId | null
+  /** Host platform captured by the PTY owner; paired-client OS is not authoritative. */
+  getRemotePlatform?: () => NodeJS.Platform | null
   getLocalSessionMetadata?: () => LocalPtySessionMetadata | null
   /** Drop cross-chunk parser carries (partial OSC-9999 prefix). Called when a
    *  model-restore marker reports dropped bytes — a carry spanning the gap
    *  would corrupt the next live chunk. IPC transports only. */
   resetCrossChunkParserState?: () => void
   serializeBuffer?: (opts?: { scrollbackRows?: number }) => Promise<PtyBufferSnapshot | null>
+  serializeBufferOutcome?: (opts?: {
+    scrollbackRows?: number
+  }) => Promise<RemoteRuntimeSnapshotOutcome>
   preserve?: () => void
-  detach?: () => void
+  /** Hand the live PTY to a successor without process teardown. Terminal for this instance:
+   *  it also drops the transport's output processor from the pty side-effect memory census,
+   *  so a reattached one would run untracked. Create a new transport instead. */
+  detach?: (options?: { preserveExitObserver?: boolean }) => void
   destroy?: () => void | Promise<void>
 }
 
@@ -140,12 +219,19 @@ export type IpcPtyTransportOptions = {
   cwd?: string
   cwdFallback?: 'worktree'
   env?: Record<string, string>
+  envToDelete?: string[]
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
+  resumeProviderSession?: AgentProviderSessionMetadata
+  agentPrompt?: string
+  agentPromptDelivery?: AgentPromptDelivery
+  agentArgsOverride?: string | null
+  agentLaunchPreferences?: AgentLaunchPreferences
   launchToken?: string
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
+  executionHostId?: ExecutionHostId | null
   worktreeId?: string
   tabId?: string
   leafId?: string
@@ -157,6 +243,8 @@ export type IpcPtyTransportOptions = {
   onPtyExit?: (ptyId: string) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
+  /** Rebind an existing pane after its provider replaces the PTY identity. */
+  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

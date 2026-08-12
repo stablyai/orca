@@ -19,7 +19,7 @@ import RepoBadgeLabel from './RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 
 type RepoComboboxProps = {
-  repos: Repo[]
+  repos: readonly Repo[]
   value: string
   onValueChange: (repoId: string) => void
   onValueSelected?: (repoId: string) => void

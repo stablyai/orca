@@ -1,5 +1,11 @@
-import { shouldForcePushWithLeaseForUpstream } from '../../../../shared/git-upstream-status'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
+import {
+  isBehindOnlyUpstream,
+  shouldForcePushWithLeaseForUpstream
+} from '../../../../shared/git-upstream-status'
+import type {
+  HostedReviewCreationEligibility,
+  HostedReviewProvider
+} from '../../../../shared/hosted-review'
 import {
   normalizeHostedReviewBaseRef,
   normalizeHostedReviewHeadRef
@@ -8,13 +14,20 @@ import type { GitStatusEntry, GitUpstreamStatus } from '../../../../shared/types
 import { summarizeCommitFailure } from './commit-failure-summary'
 import { getStageAllPaths } from './discard-all-sequence'
 
-export type CreatePrIntentRemoteStep = 'publish' | 'push' | 'force_push' | 'blocked' | 'none'
+export type CreatePrIntentRemoteStep =
+  | 'publish'
+  | 'push'
+  | 'force_push'
+  | 'fast_forward'
+  | 'blocked'
+  | 'none'
 
 export type CreatePrIntentRunToken = {
   repoId: string
   worktreeId: string
   worktreePath: string
   branch: string
+  provider: HostedReviewProvider
   baseRef?: string | null
   startedAt: number
 }
@@ -26,6 +39,21 @@ export type CreatePrIntentCurrentTarget = {
   branch?: string | null
   baseRef?: string | null
 }
+
+type CreatePrIntentReviewFields = {
+  base: string
+  title: string
+  body: string
+  draft: boolean
+}
+
+type CreatePrIntentReviewGeneration =
+  | { success: true; fields: CreatePrIntentReviewFields }
+  | { success: false; error: string }
+
+export type CreatePrIntentGeneratedReviewFields =
+  | { ok: true; fields: CreatePrIntentReviewFields }
+  | { ok: false; error: string | null }
 
 export function createCreatePrIntentRunToken(input: Omit<CreatePrIntentRunToken, 'startedAt'>) {
   return { ...input, startedAt: Date.now() }
@@ -138,18 +166,61 @@ export function resolveCreatePrIntentRemoteStep({
     return 'push'
   }
 
-  if (
-    hostedReviewCreation.blockedReason === 'needs_sync' &&
-    shouldForcePushWithLeaseForUpstream(upstreamStatus)
-  ) {
-    return 'force_push'
-  }
-
   if (hostedReviewCreation.blockedReason === 'needs_sync') {
-    return 'blocked'
+    if (shouldForcePushWithLeaseForUpstream(upstreamStatus)) {
+      return 'force_push'
+    }
+    // Why: auto-prepare only a behind-only branch, and only via `--ff-only`.
+    // Plain sync/merge could create a merge commit if the branch diverges mid
+    // flight or the user has pull.ff=no; --ff-only enforces the no-consent-
+    // merge invariant at execution time. Genuinely diverged branches keep the
+    // explicit sync-first stop.
+    return isBehindOnlyUpstream(upstreamStatus) ? 'fast_forward' : 'blocked'
   }
 
   return 'none'
+}
+
+export function shouldAttemptCreateHostedReviewForIntent(
+  eligibility: HostedReviewCreationEligibility
+): boolean {
+  return (
+    eligibility.canCreate ||
+    // Why: `head` separates a real unavailable-lookup result from a loading
+    // placeholder, which carries the same outcome/reason pair but no branch.
+    (eligibility.reviewLookupOutcome === 'unavailable' &&
+      eligibility.blockedReason === null &&
+      Boolean(eligibility.head?.trim()))
+  )
+}
+
+export function shouldGenerateHostedReviewDetailsForIntent(
+  eligibility: HostedReviewCreationEligibility
+): boolean {
+  // Why: main rechecks an unavailable lookup immediately before creation; generate first so a recovered create never submits fallback fields.
+  return shouldAttemptCreateHostedReviewForIntent(eligibility)
+}
+
+export function resolveCreatePrIntentGeneratedReviewFields(
+  current: CreatePrIntentReviewFields,
+  generated: CreatePrIntentReviewGeneration
+): CreatePrIntentGeneratedReviewFields {
+  if (!generated.success) {
+    return { ok: false, error: generated.error }
+  }
+  if (!generated.fields.body.trim()) {
+    return { ok: false, error: null }
+  }
+  return {
+    ok: true,
+    fields: {
+      // Why: intent auto-submits, so generated details must not retarget the review without confirmation.
+      base: current.base,
+      title: generated.fields.title.trim() || current.title,
+      body: generated.fields.body,
+      draft: generated.fields.draft
+    }
+  }
 }
 
 export function getCreatePrIntentCommitFailureNoticeMessage(

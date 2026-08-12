@@ -89,6 +89,38 @@ describe('workspace cleanup removal and protection', () => {
     expect(store.getState().workspaceCleanupScan?.candidates).toEqual([])
   })
 
+  it('returns preserved branches for the cleanup batch summary', async () => {
+    const candidate = makeCandidate()
+    installWorkspaceCleanupApi(
+      vi.fn(async () => ({ scannedAt: NOW, candidates: [candidate], errors: [] }))
+    )
+    const removeWorktree = vi.fn().mockResolvedValue({
+      ok: true,
+      preservedBranch: { branchName: 'feature/cleanup', head: 'saved-head' }
+    })
+    const store = createCleanupTestStore(removeWorktree)
+    store.setState({
+      workspaceCleanupScan: { scannedAt: NOW, candidates: [candidate], errors: [] }
+    } as Partial<AppState>)
+
+    await expect(
+      store.getState().removeWorkspaceCleanupCandidates([candidate.worktreeId])
+    ).resolves.toEqual({
+      removedIds: [candidate.worktreeId],
+      failures: [],
+      preservedBranches: [
+        {
+          worktreeId: candidate.worktreeId,
+          branchName: 'feature/cleanup',
+          expectedHead: 'saved-head'
+        }
+      ]
+    })
+    expect(removeWorktree).toHaveBeenCalledWith(candidate.worktreeId, false, {
+      suppressPreservedBranchToast: true
+    })
+  })
+
   it('demotes an active suggested workspace when it was not viewed from cleanup', async () => {
     const [candidate] = await enrichWorkspaceCleanupCandidates(
       [makeCandidate()],

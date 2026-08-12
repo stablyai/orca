@@ -5,6 +5,7 @@ import {
   registerTerminalPaneRecoveryInstance,
   requestTerminalPaneRecovery
 } from './terminal-pane-recovery'
+import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
@@ -34,7 +35,7 @@ beforeEach(() => {
   vi.stubGlobal('window', {
     api: { pty: { hasPty: mocks.hasPty } }
   })
-  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
 
 afterEach(() => {
@@ -442,6 +443,56 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
   })
 
+  // A `remote:` id has no entry in main's registry, so pty:hasPty routes it to
+  // the local provider. Every answer that path can produce blocked the remount
+  // this signal exists to trigger (STA-2830); none of them is evidence.
+  describe('host-rejected input', () => {
+    for (const [label, liveness] of [
+      ['a fabricated dead answer', async () => false],
+      ['an explicit unknown', async () => null],
+      [
+        'a failed probe',
+        async () => {
+          throw new Error('ipc down')
+        }
+      ]
+    ] as [string, () => Promise<boolean | null>][]) {
+      it(`recovers even though the local probe would give ${label}`, async () => {
+        mocks.hasPty.mockImplementation(liveness)
+
+        const result = await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host',
+          requireAuthoritativeLiveness: true,
+          endpointReplaced: true
+        })
+
+        expect(result).toBe(true)
+        expect(mocks.hasPty).not.toHaveBeenCalled()
+        expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1')
+      })
+    }
+
+    it('still coalesces under the shared cooldown', async () => {
+      expect(
+        await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host'
+        })
+      ).toBe(true)
+      expect(
+        await requestTerminalPaneRecovery({
+          tabId: 'tab-1',
+          ptyId: 'remote:env-1@@terminal-1',
+          reason: 'input-rejected-by-host'
+        })
+      ).toBe(false)
+      expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('never throws when the store surface is partial (timer/callback contexts)', async () => {
     // Regression: recovery fires from stall-watch timers and write callbacks;
     // an environment with a partial store (mocked suites, teardown races) must
@@ -477,5 +528,56 @@ describe('requestTerminalPaneRecovery', () => {
       'terminal_pane_recovery_remount',
       expect.anything()
     )
+  })
+
+  // Why: quarantine suppresses real keystrokes, so arming it on a recovery that
+  // kept the same shell would eat a legitimate command (#10065 follow-up).
+  describe('input quarantine arming', () => {
+    it('arms after a replaced endpoint so the mangled line cannot be submitted', async () => {
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable',
+        endpointReplaced: true
+      })
+
+      expect(result).toBe(true)
+      expect(isTerminalInputQuarantined('tab-1')).toBe(true)
+    })
+
+    it('does not arm when the same live shell is reattached', async () => {
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable'
+      })
+
+      expect(result).toBe(true)
+      expect(isTerminalInputQuarantined('tab-1')).toBe(false)
+    })
+
+    it('does not arm for a stalled write pipeline', async () => {
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-1',
+        ptyId: 'pty-1',
+        reason: 'write-stalled'
+      })
+
+      expect(isTerminalInputQuarantined('tab-1')).toBe(false)
+    })
+
+    it('does not arm when the remount never happened', async () => {
+      mocks.remountTerminalTabForRecovery.mockReturnValue(false)
+
+      const result = await requestTerminalPaneRecovery({
+        tabId: 'tab-gone',
+        ptyId: 'pty-1',
+        reason: 'input-undeliverable',
+        endpointReplaced: true
+      })
+
+      expect(result).toBe(false)
+      expect(isTerminalInputQuarantined('tab-gone')).toBe(false)
+    })
   })
 })

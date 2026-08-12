@@ -1,11 +1,13 @@
 /* eslint-disable max-lines -- Why: filesystem authorization and git/file IPC invariants are exercised end-to-end here, so the scenarios stay together to keep the security boundary readable. */
 import path from 'node:path'
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const handlers = new Map<string, (_event: unknown, args: unknown) => Promise<unknown> | unknown>()
+const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
 const {
   handleMock,
   showSaveDialogMock,
+  showOpenDialogMock,
   fromWebContentsMock,
   trashItemMock,
   readdirMock,
@@ -40,13 +42,18 @@ const {
   discoverCommitMessageModelsRemoteMock,
   cancelGenerateCommitMessageLocalMock,
   cancelGeneratePullRequestFieldsLocalMock,
+  getPullRequestDraftContextMock,
+  resolveHostedReviewBodyForGenerationMock,
+  loadPullRequestLinkedIssueMock,
   getSshFilesystemProviderMock,
   getSshGitProviderMock,
   tryDeleteWslUncPathMock,
-  recordCrashBreadcrumbMock
+  recordCrashBreadcrumbMock,
+  promoteLocalDownloadedFolderMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   showSaveDialogMock: vi.fn(),
+  showOpenDialogMock: vi.fn(),
   fromWebContentsMock: vi.fn(),
   trashItemMock: vi.fn(),
   readdirMock: vi.fn(),
@@ -81,10 +88,14 @@ const {
   discoverCommitMessageModelsRemoteMock: vi.fn(),
   cancelGenerateCommitMessageLocalMock: vi.fn(),
   cancelGeneratePullRequestFieldsLocalMock: vi.fn(),
+  getPullRequestDraftContextMock: vi.fn(),
+  resolveHostedReviewBodyForGenerationMock: vi.fn(),
+  loadPullRequestLinkedIssueMock: vi.fn(),
   getSshFilesystemProviderMock: vi.fn(),
   getSshGitProviderMock: vi.fn(),
   tryDeleteWslUncPathMock: vi.fn(),
-  recordCrashBreadcrumbMock: vi.fn()
+  recordCrashBreadcrumbMock: vi.fn(),
+  promoteLocalDownloadedFolderMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -92,7 +103,8 @@ vi.mock('electron', () => ({
     fromWebContents: fromWebContentsMock
   },
   dialog: {
-    showSaveDialog: showSaveDialogMock
+    showSaveDialog: showSaveDialogMock,
+    showOpenDialog: showOpenDialogMock
   },
   ipcMain: {
     handle: handleMock
@@ -120,6 +132,10 @@ vi.mock('../wsl-unc-delete', () => ({
 
 vi.mock('../crash-reporting/crash-breadcrumb-store', () => ({
   recordCrashBreadcrumb: recordCrashBreadcrumbMock
+}))
+
+vi.mock('../local-downloaded-folder-promotion', () => ({
+  promoteLocalDownloadedFolder: promoteLocalDownloadedFolderMock
 }))
 
 vi.mock('../git/status', () => ({
@@ -179,6 +195,20 @@ vi.mock('../text-generation/commit-message-text-generation', () => ({
   cancelGeneratePullRequestFieldsLocal: cancelGeneratePullRequestFieldsLocalMock
 }))
 
+vi.mock('../text-generation/pull-request-context', () => ({
+  getPullRequestDraftContext: getPullRequestDraftContextMock
+}))
+
+vi.mock('../source-control/pull-request-template', () => ({
+  readHostedPullRequestTemplate: vi.fn(),
+  readHostedReviewTemplate: vi.fn(),
+  resolveHostedReviewBodyForGeneration: resolveHostedReviewBodyForGenerationMock
+}))
+
+vi.mock('../source-control/pull-request-linked-issue', () => ({
+  loadPullRequestLinkedIssue: loadPullRequestLinkedIssueMock
+}))
+
 import { registerFilesystemHandlers } from './filesystem'
 import { invalidateAuthorizedRootsCache, registerWorktreeRootsForRepo } from './filesystem-auth'
 
@@ -222,6 +252,10 @@ async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>)
 }
 
 describe('registerFilesystemHandlers', () => {
+  const folderDownloadSender = Object.assign(new EventEmitter(), {
+    isDestroyed: vi.fn(() => false)
+  })
+  const folderDownloadEvent = { sender: folderDownloadSender }
   const store = {
     getRepos: () => [
       {
@@ -238,10 +272,13 @@ describe('registerFilesystemHandlers', () => {
   }
 
   beforeEach(() => {
+    folderDownloadSender.removeAllListeners()
+    folderDownloadSender.isDestroyed.mockReset().mockReturnValue(false)
     handlers.clear()
     for (const mock of [
       handleMock,
       showSaveDialogMock,
+      showOpenDialogMock,
       fromWebContentsMock,
       trashItemMock,
       readdirMock,
@@ -272,16 +309,21 @@ describe('registerFilesystemHandlers', () => {
       resolveCommitMessageSettingsMock,
       generateCommitMessageFromContextMock,
       generatePullRequestFieldsFromContextMock,
+      getPullRequestDraftContextMock,
+      resolveHostedReviewBodyForGenerationMock,
+      loadPullRequestLinkedIssueMock,
       discoverCommitMessageModelsLocalMock,
       discoverCommitMessageModelsRemoteMock,
       cancelGenerateCommitMessageLocalMock,
       cancelGeneratePullRequestFieldsLocalMock,
       getSshFilesystemProviderMock,
       getSshGitProviderMock,
-      tryDeleteWslUncPathMock
+      tryDeleteWslUncPathMock,
+      promoteLocalDownloadedFolderMock
     ]) {
       mock.mockReset()
     }
+    loadPullRequestLinkedIssueMock.mockResolvedValue(null)
 
     handleMock.mockImplementation((channel, handler) => {
       handlers.set(channel, handler)
@@ -304,7 +346,9 @@ describe('registerFilesystemHandlers', () => {
     trashItemMock.mockResolvedValue(undefined)
     // Default: not a WSL UNC path, so deletePath falls through to shell.trashItem.
     tryDeleteWslUncPathMock.mockResolvedValue(false)
+    promoteLocalDownloadedFolderMock.mockResolvedValue(undefined)
     showSaveDialogMock.mockResolvedValue({ canceled: true })
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
     fromWebContentsMock.mockReturnValue(null)
     getSshGitProviderMock.mockReturnValue(null)
     statMock.mockResolvedValue({ size: 10, isDirectory: () => false, mtimeMs: 123 })
@@ -320,6 +364,30 @@ describe('registerFilesystemHandlers', () => {
       close: vi.fn()
     })
     lstatMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+  })
+
+  it('re-sorts SSH provider listings directories-first in natural order', async () => {
+    // Why: the remote relay may be an older build that still sorts lexicographically.
+    getSshFilesystemProviderMock.mockReturnValueOnce({
+      readDir: vi.fn().mockResolvedValue([
+        { name: '100 - b.txt', isDirectory: false, isSymlink: false },
+        { name: '9 - c.txt', isDirectory: false, isSymlink: false },
+        { name: '10 - dir', isDirectory: true, isSymlink: false },
+        { name: '99 - a.txt', isDirectory: false, isSymlink: false }
+      ])
+    })
+    registerFilesystemHandlers(store as never)
+
+    const result = (await handlers.get('fs:readDir')!(null, {
+      dirPath: '/remote/repo',
+      connectionId: 'ssh-1'
+    })) as { name: string }[]
+    expect(result.map((e) => e.name)).toEqual([
+      '10 - dir',
+      '9 - c.txt',
+      '99 - a.txt',
+      '100 - b.txt'
+    ])
   })
 
   it('returns an actionable reconnect error when the SSH filesystem provider is unavailable', async () => {
@@ -711,6 +779,246 @@ describe('registerFilesystemHandlers', () => {
     expect(rmMock).toHaveBeenCalledWith(backupPath, { force: true })
   })
 
+  it('downloads remote folders into a temporary sibling before promotion', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: false, destinationPath: path.join('/downloads', 'src') })
+
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(path.dirname(tempPath)).toBe(path.normalize('/downloads'))
+    expect(showOpenDialogMock).toHaveBeenCalledWith({
+      properties: ['openDirectory', 'createDirectory']
+    })
+    expect(provider.downloadFolder).toHaveBeenCalledWith(
+      '/remote/src',
+      tempPath,
+      expect.objectContaining({ signal: expect.anything() })
+    )
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
+    expect(promoteLocalDownloadedFolderMock).toHaveBeenCalledWith(
+      tempPath,
+      path.join('/downloads', 'src'),
+      expect.anything()
+    )
+  })
+
+  it('returns canceled remote folder downloads without transferring', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: true, filePaths: [] })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: true })
+
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+  })
+
+  it('aborts before opening the folder picker when the renderer is already destroyed', async () => {
+    const provider = {
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    folderDownloadSender.isDestroyed.mockReturnValue(true)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('window closed')
+
+    expect(showOpenDialogMock).not.toHaveBeenCalled()
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
+  })
+
+  it('opens the folder picker before SSH folder validation', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockResolvedValue(undefined)
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockImplementation(async () => {
+      expect(provider.downloadFolder).not.toHaveBeenCalled()
+      return { canceled: false, filePaths: ['/downloads'] }
+    })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual({ canceled: false, destinationPath: path.join('/downloads', 'src') })
+
+    expect(provider.downloadFolder).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects remote folder downloads when the destination folder already exists', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn()
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockResolvedValue({ isDirectory: () => true })
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Destination folder already exists')
+
+    expect(provider.downloadFolder).not.toHaveBeenCalled()
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects remote folder downloads when the remote path is not a directory', async () => {
+    const provider = {
+      downloadFolder: vi.fn().mockRejectedValue(new Error('Cannot download a file as a folder'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/file.txt',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Cannot download a file as a folder')
+
+    expect(provider.downloadFolder).toHaveBeenCalledTimes(1)
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects remote folder downloads when the SSH provider cannot transfer folders', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 })
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('Remote folder download is unavailable')
+
+    expect(showOpenDialogMock).not.toHaveBeenCalled()
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+  })
+
+  it('cleans up a temporary remote folder download when transfer fails', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+        dirPath: '/remote/src',
+        connectionId: 'ssh-1'
+      })
+    ).rejects.toThrow('transfer failed')
+
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { recursive: true, force: true })
+  })
+
+  it('logs a recursive temporary-folder cleanup failure without masking the transfer error', async () => {
+    const provider = {
+      downloadFolder: vi.fn().mockRejectedValue(new Error('transfer failed'))
+    }
+    const cleanupError = new Error('cleanup denied')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    rmMock.mockRejectedValueOnce(cleanupError)
+    registerFilesystemHandlers(store as never)
+
+    try {
+      await expect(
+        handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+          dirPath: '/remote/src',
+          connectionId: 'ssh-1'
+        })
+      ).rejects.toThrow('transfer failed')
+
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('Failed to remove temporary folder download'),
+        cleanupError
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('aborts and cleans up a remote folder download when its renderer closes', async () => {
+    const provider = {
+      stat: vi.fn().mockResolvedValue({ size: 0, type: 'directory', mtime: 123 }),
+      downloadFolder: vi.fn(
+        (_source: string, _destination: string, options?: { signal?: AbortSignal }) =>
+          new Promise<void>((_resolve, reject) => {
+            options?.signal?.addEventListener('abort', () => reject(options.signal?.reason), {
+              once: true
+            })
+          })
+      )
+    }
+    getSshFilesystemProviderMock.mockReturnValue(provider)
+    showOpenDialogMock.mockResolvedValue({ canceled: false, filePaths: ['/downloads'] })
+    statMock.mockRejectedValue(Object.assign(new Error('missing'), { code: 'ENOENT' }))
+    registerFilesystemHandlers(store as never)
+
+    const result = handlers.get('fs:downloadFolder')!(folderDownloadEvent, {
+      dirPath: '/remote/src',
+      connectionId: 'ssh-1'
+    })
+    await vi.waitFor(() => expect(provider.downloadFolder).toHaveBeenCalledTimes(1))
+    folderDownloadSender.emit('destroyed')
+
+    await expect(result).rejects.toThrow('window closed')
+    const tempPath = provider.downloadFolder.mock.calls[0][1]
+    expect(promoteLocalDownloadedFolderMock).not.toHaveBeenCalled()
+    expect(rmMock).toHaveBeenCalledWith(tempPath, { recursive: true, force: true })
+    expect(folderDownloadSender.listenerCount('destroyed')).toBe(0)
+  })
+
   it('rejects readFile when the real path escapes allowed roots', async () => {
     const linkPath = path.resolve('/workspace/repo/link.txt')
     realpathMock.mockImplementation(async (targetPath: string) => {
@@ -868,6 +1176,24 @@ describe('registerFilesystemHandlers', () => {
 
     expect(writeFileMock).not.toHaveBeenCalled()
   })
+
+  it.each([
+    ['fs:writeFile', { filePath: path.resolve('/workspace/repo/file.txt'), content: 'data' }],
+    ['fs:deletePath', { targetPath: path.resolve('/workspace/repo/file.txt') }]
+  ])(
+    'rejects %s before local mutation when the expected execution host is SSH',
+    async (channel, args) => {
+      registerFilesystemHandlers(store as never)
+
+      await expect(
+        handlers.get(channel)!(null, { ...args, expectedExecutionHostId: 'ssh:ssh-1' })
+      ).rejects.toThrow('Workspace host changed; refresh and try again')
+
+      expect(writeFileMock).not.toHaveBeenCalled()
+      expect(trashItemMock).not.toHaveBeenCalled()
+      expect(tryDeleteWslUncPathMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     { ext: 'png', mime: 'image/png', data: [0x89, 0x50, 0x4e, 0x47, 0x00] },
@@ -1082,6 +1408,32 @@ describe('registerFilesystemHandlers', () => {
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: false })
   })
 
+  it('passes configured shared links through the local status path', async () => {
+    const sharedStore = {
+      ...store,
+      getRepos: () => [
+        {
+          ...store.getRepos()[0],
+          symlinkPaths: ['node_modules']
+        }
+      ],
+      getAllWorktreeMeta: () => ({
+        [`repo-1::${WORKTREE_FEATURE_PATH}`]: {}
+      })
+    }
+    registerWorktreeRootsForRepo(sharedStore as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue({ entries: [] })
+
+    registerFilesystemHandlers(sharedStore as never)
+
+    await handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+
+    expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, {
+      includeIgnored: false,
+      sharedLinkPaths: ['node_modules']
+    })
+  })
+
   it('allows git operations on the known repo root without rebuilding the worktree cache', async () => {
     getStatusMock.mockResolvedValue({ entries: [] })
 
@@ -1116,6 +1468,30 @@ describe('registerFilesystemHandlers', () => {
 
     expect(getStatusMock).toHaveBeenCalledWith(WORKTREE_FEATURE_PATH, { includeIgnored: true })
     expect(sshProvider.getStatus).toHaveBeenCalledWith('/remote/repo', { includeIgnored: true })
+  })
+
+  it('returns capped-state metadata unchanged across local and SSH status IPC', async () => {
+    const cappedStatus = {
+      entries: [{ path: 'generated/a.ts', status: 'untracked', area: 'untracked' }],
+      conflictOperation: 'unknown',
+      didHitLimit: true,
+      statusLength: 1_001
+    }
+    registerWorktreeRootsForRepo(store as never, 'repo-1', [REPO_PATH, WORKTREE_FEATURE_PATH])
+    getStatusMock.mockResolvedValue(cappedStatus)
+    const sshProvider = { getStatus: vi.fn().mockResolvedValue(cappedStatus) }
+    getSshGitProviderMock.mockReturnValue(sshProvider)
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:status')!(null, { worktreePath: WORKTREE_FEATURE_PATH })
+    ).resolves.toEqual(cappedStatus)
+    await expect(
+      handlers.get('git:status')!(null, {
+        worktreePath: '/remote/repo',
+        connectionId: 'ssh-1'
+      })
+    ).resolves.toEqual(cappedStatus)
   })
 
   it('forwards upstream-negative-cache bypass through local and SSH git status IPC', async () => {
@@ -1754,6 +2130,233 @@ describe('registerFilesystemHandlers', () => {
     })
   })
 
+  it('enriches the local commit context with a validated worktree linked issue', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 123 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: folder-repo instances keep `::workspace:<uuid>` on the meta key while the
+  // request path is the stripped cwd. A strip-before-lookup "cleanup" would still
+  // pass plain-id tests and silently lose enrichment on second workspaces.
+  it('enriches local commit context when the worktree id carries a folder-repo workspace suffix', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const instanceId = `repo-1::${WORKTREE_FEATURE_PATH}::workspace:${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}`
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+    const getWorktreeMeta = vi.fn((id: string) =>
+      id === instanceId ? { linkedIssue: 9 } : undefined
+    )
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: instanceId
+    })
+
+    expect(getWorktreeMeta).toHaveBeenCalledWith(instanceId)
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 9 },
+      params,
+      expect.objectContaining({ kind: 'local' })
+    )
+  })
+
+  // Why: the renderer derives worktreePath from worktreeId, so a mismatched pair
+  // models an independent caller (relay/CLI/future), not a stale renderer context.
+  it('ignores an independently supplied id that does not own the requested worktree path', async () => {
+    const context = {
+      branch: 'feature/ai',
+      stagedSummary: 'M\tREADME.md',
+      stagedPatch: '+hello'
+    }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+    const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getStagedCommitContextMock.mockResolvedValue(context)
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Update' })
+
+    registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: WORKTREE_FEATURE_PATH,
+      worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+    })
+
+    expect(getWorktreeMeta).not.toHaveBeenCalled()
+    // Why: without this the assertion below passes vacuously on an early return.
+    expect(generateCommitMessageFromContextMock.mock.calls).toHaveLength(1)
+    expect(generateCommitMessageFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+      'linkedIssue'
+    )
+  })
+
+  it('enriches the SSH commit context from host meta using the remote path', async () => {
+    const context = { branch: 'main', stagedSummary: 'A\tremote.txt', stagedPatch: '+remote' }
+    const params = { agentId: 'custom', model: '', customAgentCommand: 'agent' }
+    const worktreeId = 'repo-1::/remote/repo'
+    resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+    getSshGitProviderMock.mockReturnValue({
+      getStagedCommitContext: vi.fn().mockResolvedValue(context),
+      executeCommitMessagePlan: vi.fn()
+    })
+    generateCommitMessageFromContextMock.mockResolvedValue({ success: true, message: 'Add file' })
+    const linkedStore = {
+      ...store,
+      getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+    }
+
+    registerFilesystemHandlers(linkedStore as never)
+
+    await handlers.get('git:generateCommitMessage')!(null, {
+      worktreePath: '/remote/repo',
+      worktreeId,
+      connectionId: 'conn-1'
+    })
+
+    expect(generateCommitMessageFromContextMock).toHaveBeenCalledWith(
+      { ...context, linkedIssue: 77 },
+      params,
+      expect.objectContaining({ kind: 'remote' })
+    )
+  })
+
+  describe('git:generatePullRequestFields linked issue', () => {
+    const PULL_REQUEST_CONTEXT = {
+      base: 'main',
+      branch: 'feature/ai',
+      branchChangedByPreparation: false,
+      commitSummary: 'a1b2c3d Add generation',
+      changeSummary: 'README.md | 2 +-',
+      patch: '+hello',
+      currentTitle: '',
+      currentBody: '',
+      currentDraft: false
+    }
+    const PULL_REQUEST_ARGS = { base: 'main', title: '', body: '', draft: false }
+    const params = { agentId: 'codex', model: 'gpt-5.4-mini' }
+
+    beforeEach(() => {
+      resolveCommitMessageSettingsMock.mockReturnValue({ ok: true, params })
+      resolveHostedReviewBodyForGenerationMock.mockResolvedValue('')
+      getPullRequestDraftContextMock.mockResolvedValue(PULL_REQUEST_CONTEXT)
+      generatePullRequestFieldsFromContextMock.mockResolvedValue({ success: true, fields: {} })
+    })
+
+    it('enriches the local pull-request context with a validated worktree linked issue', async () => {
+      const worktreeId = `repo-1::${WORKTREE_FEATURE_PATH}`
+      const linkedIssueDetails = {
+        provider: 'github',
+        number: 123,
+        title: 'Improve PR generation',
+        description: 'Include issue context.'
+      }
+      loadPullRequestLinkedIssueMock.mockResolvedValue(linkedIssueDetails)
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 123 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId,
+        provider: 'github'
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        {
+          ...PULL_REQUEST_CONTEXT,
+          linkedIssue: 123,
+          provider: 'github',
+          linkedIssueDetails
+        },
+        params,
+        expect.objectContaining({ kind: 'local' })
+      )
+    })
+
+    it('enriches the SSH pull-request context from host meta using the remote path', async () => {
+      const worktreeId = 'repo-1::/remote/repo'
+      getSshGitProviderMock.mockReturnValue({
+        exec: vi.fn(),
+        executeCommitMessagePlan: vi.fn()
+      })
+      const linkedStore = {
+        ...store,
+        getWorktreeMeta: (id: string) => (id === worktreeId ? { linkedIssue: 77 } : undefined)
+      }
+
+      registerFilesystemHandlers(linkedStore as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: '/remote/repo',
+        worktreeId,
+        connectionId: 'conn-1'
+      })
+
+      expect(generatePullRequestFieldsFromContextMock).toHaveBeenCalledWith(
+        { ...PULL_REQUEST_CONTEXT, linkedIssue: 77 },
+        params,
+        expect.objectContaining({ kind: 'remote' })
+      )
+    })
+
+    it('ignores a pull-request worktree id that does not own the requested path', async () => {
+      const getWorktreeMeta = vi.fn(() => ({ linkedIssue: 123 }))
+
+      registerFilesystemHandlers({ ...store, getWorktreeMeta } as never)
+
+      await handlers.get('git:generatePullRequestFields')!(null, {
+        ...PULL_REQUEST_ARGS,
+        worktreePath: WORKTREE_FEATURE_PATH,
+        worktreeId: `repo-1::${path.resolve('/workspace/repo-other')}`
+      })
+
+      expect(getWorktreeMeta).not.toHaveBeenCalled()
+      // Why: without the length guard the property assertion passes vacuously on `undefined`,
+      // so an unrelated early return would read as "enrichment correctly suppressed".
+      expect(generatePullRequestFieldsFromContextMock.mock.calls).toHaveLength(1)
+      expect(generatePullRequestFieldsFromContextMock.mock.calls[0]?.[0]).not.toHaveProperty(
+        'linkedIssue'
+      )
+    })
+  })
+
   it('returns a sanitized error when local agent account preparation fails', async () => {
     const context = {
       branch: 'feature/ai',
@@ -1859,6 +2462,111 @@ describe('registerFilesystemHandlers', () => {
       undefined,
       'npx codex'
     )
+  })
+
+  it('discovers models from an exact repo-less folder workspace root', async () => {
+    const folderPath = path.resolve('/outside-workspace/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: null
+        }
+      ]
+    }
+    discoverCommitMessageModelsLocalMock.mockResolvedValue({
+      success: true,
+      models: [{ id: 'sonnet', label: 'Sonnet' }],
+      defaultModelId: 'sonnet'
+    })
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await handlers.get('git:discoverCommitMessageModels')!(null, {
+      agentId: 'claude',
+      worktreePath: folderPath
+    })
+
+    expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+      'claude',
+      undefined,
+      undefined,
+      { cwd: folderPath }
+    )
+  })
+
+  it('does not authorize remote-only folder roots as local discovery paths', async () => {
+    const folderPath = path.resolve('/remote-only/folder-project')
+    const folderStore = {
+      ...store,
+      getFolderWorkspaces: () => [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath,
+          connectionId: 'ssh-1'
+        }
+      ]
+    }
+
+    registerFilesystemHandlers(folderStore as never)
+
+    await expect(
+      handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+    ).rejects.toThrow('Access denied')
+    expect(discoverCommitMessageModelsLocalMock).not.toHaveBeenCalled()
+  })
+
+  it('routes a repo-less WSL folder workspace discovery through its distro', async () => {
+    await withPlatform('win32', async () => {
+      const folderPath = '\\\\wsl.localhost\\Ubuntu\\home\\tester\\folder-project'
+      const prepareForClaudeLaunch = vi.fn().mockResolvedValue({
+        configDir: '\\\\wsl.localhost\\Ubuntu\\home\\tester\\.claude',
+        envPatch: { CLAUDE_CONFIG_DIR: '/home/tester/.claude' },
+        stripAuthEnv: true,
+        provenance: 'managed:account-1'
+      })
+      const folderStore = {
+        ...store,
+        getFolderWorkspaces: () => [
+          {
+            id: 'folder-1',
+            projectGroupId: 'group-1',
+            folderPath,
+            connectionId: null
+          }
+        ]
+      }
+      discoverCommitMessageModelsLocalMock.mockResolvedValue({
+        success: true,
+        models: [{ id: 'sonnet', label: 'Sonnet' }],
+        defaultModelId: 'sonnet'
+      })
+
+      registerFilesystemHandlers(folderStore as never, { prepareForClaudeLaunch })
+
+      await handlers.get('git:discoverCommitMessageModels')!(null, {
+        agentId: 'claude',
+        worktreePath: folderPath
+      })
+
+      expect(prepareForClaudeLaunch).toHaveBeenCalledWith({
+        runtime: 'wsl',
+        wslDistro: 'Ubuntu'
+      })
+      expect(discoverCommitMessageModelsLocalMock).toHaveBeenCalledWith(
+        'claude',
+        expect.objectContaining({ CLAUDE_CONFIG_DIR: '/home/tester/.claude' }),
+        undefined,
+        { cwd: path.resolve(folderPath), wslDistro: 'Ubuntu' }
+      )
+    })
   })
 
   it('routes local WSL project model discovery through the project runtime target', async () => {
@@ -2388,6 +3096,42 @@ describe('registerFilesystemHandlers', () => {
       },
       {}
     )
+  })
+
+  it('forwards the pinned head through SSH branch diff queries', async () => {
+    const result = {
+      kind: 'text',
+      originalContent: 'left',
+      modifiedContent: 'right',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    }
+    const getBranchDiff = vi.fn().mockResolvedValue([result])
+    getSshGitProviderMock.mockReturnValue({ getBranchDiff })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('git:branchDiff')!(null, {
+        worktreePath: '/home/user/project',
+        compare: {
+          baseRef: 'origin/main',
+          baseOid: 'base-oid',
+          headOid: 'head-oid',
+          mergeBase: 'merge-base-oid'
+        },
+        filePath: 'src/file.ts',
+        oldPath: 'src/old-file.ts',
+        connectionId: 'conn-1'
+      })
+    ).resolves.toEqual(result)
+
+    expect(getBranchDiff).toHaveBeenCalledWith('/home/user/project', 'merge-base-oid', {
+      includePatch: true,
+      headOid: 'head-oid',
+      filePath: 'src/file.ts',
+      oldPath: 'src/old-file.ts'
+    })
   })
 
   // Why: the original SSH Quick Open bug had two halves — relay-side policy

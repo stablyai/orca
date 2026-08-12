@@ -14,8 +14,9 @@ import { ChevronDown, ChevronUp } from 'lucide-react-native'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { colors, spacing, radii, typography } from '../theme/mobile-theme'
-import { BottomDrawer, BOTTOM_DRAWER_HIDE_DURATION_MS } from './BottomDrawer'
+import { BottomDrawer } from './BottomDrawer'
 import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
+import { useNewWorktreeDrawerNavigation } from './use-new-worktree-drawer-navigation'
 import { PickerListDrawer } from './PickerListDrawer'
 import { MobileAgentIcon } from './MobileAgentIcon'
 import { getSuggestedCreatureName } from './worktree-name-suggestion'
@@ -27,11 +28,7 @@ import {
   wasSetupHookPreviouslyApproved,
   type SetupHookTrust
 } from '../tasks/setup-hook-trust'
-import {
-  isMobileTuiAgent,
-  isMobileTuiAgentEnabled,
-  MOBILE_TUI_AGENT_LAUNCH_COMMANDS
-} from '../tasks/mobile-tui-agents'
+import { isMobileTuiAgentEnabled } from '../tasks/mobile-tui-agents'
 import type { PersistedTrustedOrcaHooks, TuiAgent } from '../../../src/shared/types'
 import type { SshConnectionState } from '../../../src/shared/ssh-types'
 import {
@@ -50,7 +47,7 @@ import {
 } from '../worktree/new-workspace-dialog-repo-selection'
 import { createBlankWorkspace } from '../tasks/blank-workspace-create'
 import { createWorkspaceFromComposerSource } from '../tasks/source-workspace-create'
-import { MOBILE_TASKS_CAPABILITY } from '../tasks/mobile-tasks-capability'
+import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
 import { normalizeWorkspaceAgent } from '../tasks/workspace-agent-selection'
 import {
   filterAvailableTaskProviders,
@@ -83,7 +80,6 @@ type SetupRunPolicy = 'ask' | 'run-by-default' | 'skip-by-default'
 type RuntimeSettings = {
   defaultTuiAgent?: TuiAgent | 'blank' | null
   disabledTuiAgents?: TuiAgent[]
-  agentCmdOverrides?: Record<string, string>
 }
 
 type RepoHooksResponse = {
@@ -110,12 +106,6 @@ type CreateOptions = {
   setupOverride?: Exclude<SetupDecision, 'inherit'>
   approvedSetupContentHash?: string
 }
-
-type NewWorktreeDrawerView = 'form' | 'transition' | 'source' | 'repo' | 'agent' | 'trust'
-
-// Why: iOS cannot reliably present a second native modal until the first drawer's
-// exit commits; one extra frame keeps transitions sequential on slower devices.
-const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
 
 function repoColor(name: string): string {
   const palette = ['#f97316', '#8b5cf6', '#06b6d4', '#ec4899', '#84cc16', '#f59e0b', '#6366f1']
@@ -196,8 +186,8 @@ function NewWorktreeModalContent({
   const [initialRepos] = useState(() => (hostId ? (getCachedRepos(hostId) as Repo[] | null) : null))
   const [repos, setRepos] = useState<Repo[]>(initialRepos ?? [])
   const [selectedRepo, setSelectedRepo] = useState<Repo | null>(null)
-  const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
-  const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { drawerView, formSheetVisible, formSheetInteractive, transitionDrawer, openSourceDrawer } =
+    useNewWorktreeDrawerNavigation(visible)
   const createInFlightRef = useRef(false)
   const setupTrustActionInFlightRef = useRef(false)
   const [selectedAgentState, setSelectedAgent] = useState<AgentOption>(AGENT_OPTIONS[0]!)
@@ -210,7 +200,10 @@ function NewWorktreeModalContent({
   const [sshConnectingTargetId, setSshConnectingTargetId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
-  const [tasksSupported, setTasksSupported] = useState(false)
+  const { tasksSupported, getWorktreeCreateCutoverSupport } = useNewWorktreeRuntimeCapabilities(
+    client,
+    visible
+  )
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [setupHookDetails, setSetupHookDetails] = useState<SetupHookDetails | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
@@ -229,29 +222,6 @@ function NewWorktreeModalContent({
     [existingWorktrees, selectedRepo]
   )
 
-  useEffect(() => {
-    return () => {
-      if (drawerTransitionTimerRef.current) {
-        clearTimeout(drawerTransitionTimerRef.current)
-      }
-    }
-  }, [])
-
-  function transitionDrawer(nextView: Exclude<NewWorktreeDrawerView, 'transition'>): void {
-    if (drawerTransitionTimerRef.current) {
-      clearTimeout(drawerTransitionTimerRef.current)
-    }
-    setDrawerView('transition')
-    drawerTransitionTimerRef.current = setTimeout(() => {
-      drawerTransitionTimerRef.current = null
-      setDrawerView(nextView)
-    }, NEW_WORKTREE_DRAWER_TRANSITION_MS)
-  }
-
-  // The Smart source picker owns the workspace name AND the linked-source
-  // selection: typing names the workspace and drives source search, and picking
-  // a source resolves the base/branch/push metadata (matching desktop). The
-  // creature-name fallback is only computed lazily at submit for a blank name.
   const composer = useMobileComposerSource({
     client,
     selectedRepoId: selectedRepo?.id ?? null,
@@ -357,11 +327,9 @@ function NewWorktreeModalContent({
           })
         }
       })
-      .catch(() => {
-        if (!stale) {
-          setRepos([])
-        }
-      })
+      // Why (F10): a dropped connection rejects this call — keep the last-good list (the content
+      // remounts with the new host's cache when the client changes) instead of emptying the picker.
+      .catch(() => undefined)
       .finally(() => {
         if (!stale) {
           setLoading(false)
@@ -373,7 +341,6 @@ function NewWorktreeModalContent({
       // linear.status timeout, which rejects rather than resolving {ok:false})
       // can't discard the already-resolved critical settings/ui results.
       const probes = Promise.allSettled([
-        client.sendRequest('status.get'),
         client.sendRequest('preflight.check'),
         client.sendRequest('linear.status')
       ])
@@ -407,16 +374,10 @@ function NewWorktreeModalContent({
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [statusRes, preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes] = await probes
       if (stale) {
         return
       }
-      // Tasks is an additive RPC surface, so older paired desktops without the
-      // capability fall back to branch + blank sources only.
-      const statusResult = okResult(statusRes)
-      const capabilities =
-        (statusResult?.result as { capabilities?: string[] } | undefined)?.capabilities ?? []
-      setTasksSupported(capabilities.includes(MOBILE_TASKS_CAPABILITY))
       const glabInstalled =
         (okResult(preflightRes)?.result as { glab?: { installed?: boolean } } | undefined)?.glab
           ?.installed === true
@@ -632,14 +593,6 @@ function NewWorktreeModalContent({
         return
       }
 
-      const command =
-        selectedAgent.id !== '__blank__'
-          ? (latestRuntimeSettings?.agentCmdOverrides?.[selectedAgent.id] ??
-            (isMobileTuiAgent(selectedAgent.id)
-              ? MOBILE_TUI_AGENT_LAUNCH_COMMANDS[selectedAgent.id]
-              : undefined))
-          : undefined
-
       // Why: blank name field — match desktop behavior by computing the
       // next available marine-creature name at submit time and passing it
       // to the server. The server's worktree.create rejects empty/invalid
@@ -692,22 +645,20 @@ function NewWorktreeModalContent({
             selection: createSelection,
             targetRepoId: selectedRepo.id,
             setupDecision,
-            agent: {
-              choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank',
-              startupCommand: command
-            },
+            agent: { choice: normalizeWorkspaceAgent(selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
-            nameIsAutoManaged: composer.isNameAutoManaged
+            nameIsAutoManaged: composer.isNameAutoManaged,
+            supportsIdempotentCutoverRetry: getWorktreeCreateCutoverSupport()
           })
         : await createBlankWorkspace({
             client,
             repoId: selectedRepo.id,
             baseName,
-            startupCommand: command,
             createdWithAgentId,
             comment: trimmedNote,
-            setupDecision
+            setupDecision,
+            supportsIdempotentCutoverRetry: getWorktreeCreateCutoverSupport()
           })
       if ('error' in result) {
         setError(result.error)
@@ -832,7 +783,7 @@ function NewWorktreeModalContent({
         }
       }}
     >
-      <BottomDrawer visible={visible && drawerView === 'form'} onClose={onClose}>
+      <BottomDrawer visible={formSheetVisible} interactive={formSheetInteractive} onClose={onClose}>
         <View style={styles.header}>
           <Text style={styles.title}>Create Workspace</Text>
           <Text style={styles.subtitle}>
@@ -878,8 +829,9 @@ function NewWorktreeModalContent({
               composer={composer}
               label={selectedRepoIsGit ? "Name or 'Create From'" : 'Workspace name'}
               disabled={sshGate.requiresConnection}
+              interactive={formSheetInteractive}
               onBeforeOpen={() => setError('')}
-              onOpenDrawer={() => transitionDrawer('source')}
+              onOpenDrawer={openSourceDrawer}
             />
 
             {composer.forkPushWarning ? (

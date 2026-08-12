@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
 import {
   ActivateTab,
@@ -10,51 +11,70 @@ import {
   UpdatePaneLayout,
   WorktreeTabSelector
 } from './session-tabs-schemas'
+import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
+import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.list',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime }) => runtime.listMobileSessionTabs(params.worktree)
+    handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) =>
+      projectSessionTabAgentStatus(
+        await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
+        clientKind,
+        clientCapabilities
+      )
   }),
   defineMethod({
     name: 'session.tabs.listAll',
     params: null,
-    handler: async (_params, { runtime }) => ({
-      snapshots: await runtime.listAllMobileSessionTabs()
+    handler: async (_params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => ({
+      snapshots: (await runtime.listAllMobileSessionTabs(pairedDeviceId)).map((snapshot) =>
+        projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+      )
     })
   }),
   defineMethod({
     name: 'session.tabs.activate',
     params: ActivateTab,
-    handler: async (params, { runtime }) =>
+    handler: async (params, { runtime, clientKind, pairedDeviceId }) =>
       runtime.activateMobileSessionTab(params.worktree, params.tabId, params.leafId, {
-        notifyClients: params.notifyClients !== false
+        notifyClients: params.notifyClients !== false,
+        clientNavigationId: pairedDeviceId,
+        ...(params.intent ? { intent: params.intent } : {}),
+        navigation: resolveRuntimeNavigationTarget({
+          navigation: params.navigation,
+          notifyClients: params.notifyClients,
+          clientKind
+        })
       })
   }),
-  defineMethod({
-    name: 'session.tabs.close',
-    params: ActivateTab,
-    handler: async (params, { runtime }) =>
-      runtime.closeMobileSessionTab(params.worktree, params.tabId)
-  }),
+  ...SESSION_TAB_CLOSE_METHODS,
   defineMethod({
     name: 'session.tabs.createTerminal',
     params: CreateTerminalTab,
-    handler: async (params, { runtime, signal }) =>
+    handler: async (params, { runtime, signal, clientKind, pairedDeviceId }) =>
       runtime.createMobileSessionTerminal(params.worktree, {
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,
         command: params.command,
         cwd: params.cwd,
         ...(params.env ? { env: params.env } : {}),
+        ...(params.envToDelete ? { envToDelete: params.envToDelete } : {}),
         startupCommandDelivery: params.startupCommandDelivery,
         agent: params.agent,
+        ...(params.agentPrompt !== undefined ? { agentPrompt: params.agentPrompt } : {}),
         ...(params.launchConfig ? { launchConfig: params.launchConfig } : {}),
         ...(params.launchToken ? { launchToken: params.launchToken } : {}),
         ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
         ...(params.viewMode ? { viewMode: params.viewMode } : {}),
         activate: params.activate,
+        select: params.select,
+        clientNavigationId: pairedDeviceId,
+        navigation: resolveRuntimeNavigationTarget({
+          navigation: params.navigation,
+          clientKind
+        }),
         clientMutationId: params.clientMutationId,
         // Why: a dead client connection must cancel the surface wait instead
         // of running down the timeout and rolling back a live tab (#7718).
@@ -115,12 +135,16 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribe',
     params: WorktreeTabSelector,
-    handler: async (params, { runtime, connectionId, requestId }, emit) => {
+    handler: async (
+      params,
+      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities },
+      emit
+    ) => {
       let subscribedWorktree: string | null = null
       let unsubscribe = (): void => {}
       let closed = false
       let initialized = false
-      const initial = await runtime.listMobileSessionTabs(params.worktree)
+      const initial = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       if (closed) {
         return
       }
@@ -143,7 +167,10 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      emit({ type: 'snapshot', ...initial })
+      emit({
+        type: 'snapshot',
+        ...projectSessionTabAgentStatus(initial, clientKind, clientCapabilities)
+      })
       initialized = true
       if (closed) {
         return
@@ -151,9 +178,12 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
 
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
         if (snapshot.worktree === subscribedWorktree) {
-          emit({ type: 'updated', ...snapshot })
+          emit({
+            type: 'updated',
+            ...projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+          })
         }
-      })
+      }, pairedDeviceId)
       if (closed) {
         unsubscribe()
       }
@@ -162,8 +192,8 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.unsubscribe',
     params: SessionTabsUnsubscribe,
-    handler: async (params, { runtime, connectionId }) => {
-      const snapshot = await runtime.listMobileSessionTabs(params.worktree)
+    handler: async (params, { runtime, connectionId, pairedDeviceId }) => {
+      const snapshot = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
       const connection = connectionId ?? 'local'
       if (params.subscriptionId) {
         runtime.cleanupSubscription(
@@ -180,7 +210,11 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineStreamingMethod({
     name: 'session.tabs.subscribeAll',
     params: null,
-    handler: async (_params, { runtime, connectionId, requestId }, emit) => {
+    handler: async (
+      _params,
+      { runtime, connectionId, requestId, pairedDeviceId, clientKind, clientCapabilities },
+      emit
+    ) => {
       let unsubscribe = (): void => {}
       let closed = false
       // Why: initial listAll errors should return one RPC error, not a leaked
@@ -205,22 +239,32 @@ export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
       if (closed) {
         return
       }
-      const snapshots = await Promise.resolve(runtime.listAllMobileSessionTabs()).catch((error) => {
+      const snapshots = await Promise.resolve(
+        runtime.listAllMobileSessionTabs(pairedDeviceId)
+      ).catch((error) => {
         runtime.cleanupSubscription(subscriptionId)
         throw error
       })
       if (closed) {
         return
       }
-      emit({ type: 'snapshots', snapshots })
+      emit({
+        type: 'snapshots',
+        snapshots: snapshots.map((snapshot) =>
+          projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+        )
+      })
       initialized = true
 
       if (closed) {
         return
       }
       unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emit({ type: 'updated', ...snapshot })
-      })
+        emit({
+          type: 'updated',
+          ...projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities)
+        })
+      }, pairedDeviceId)
     }
   }),
   defineMethod({

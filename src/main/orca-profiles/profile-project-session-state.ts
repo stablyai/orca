@@ -8,6 +8,17 @@ import {
   removeRepoWorktreeRecord
 } from './profile-project-worktree-identity'
 
+function mergeTerminalTopologyRevisions(
+  base: Record<string, number> | undefined,
+  incoming: Record<string, number> | undefined
+): Record<string, number> {
+  const merged = { ...base }
+  for (const [worktreeId, revision] of Object.entries(incoming ?? {})) {
+    merged[worktreeId] = Math.max(merged[worktreeId] ?? 0, revision)
+  }
+  return merged
+}
+
 export function mergeHostWorkspaceSessions(
   existing: Partial<Record<ExecutionHostId, WorkspaceSessionState>> | undefined,
   incoming: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
@@ -73,6 +84,18 @@ export function mergeWorkspaceSessions(
     defaultTerminalTabsAppliedByWorktreeId: {
       ...base.defaultTerminalTabsAppliedByWorktreeId,
       ...incoming.defaultTerminalTabsAppliedByWorktreeId
+    },
+    terminalPtyIncarnationsByPaneKey: {
+      ...base.terminalPtyIncarnationsByPaneKey,
+      ...incoming.terminalPtyIncarnationsByPaneKey
+    },
+    terminalTopologyRevisionByRepoId: mergeTerminalTopologyRevisions(
+      base.terminalTopologyRevisionByRepoId,
+      incoming.terminalTopologyRevisionByRepoId
+    ),
+    terminalSurfaceTombstonesByPaneKey: {
+      ...base.terminalSurfaceTombstonesByPaneKey,
+      ...incoming.terminalSurfaceTombstonesByPaneKey
     },
     activeWorktreeIdsOnShutdown: [
       ...(base.activeWorktreeIdsOnShutdown ?? []),
@@ -141,6 +164,25 @@ export function removeRepoFromWorkspaceSession(
     next.defaultTerminalTabsAppliedByWorktreeId,
     repoId
   )
+  next.terminalTopologyRevisionByRepoId = removeRepoWorktreeRecord(
+    next.terminalTopologyRevisionByRepoId,
+    repoId
+  )
+  if (next.terminalSurfaceTombstonesByPaneKey) {
+    next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
+        ([, tombstone]) => !ownerKeyBelongsToRepo(tombstone.worktreeId, repoId)
+      )
+    )
+  }
+  if (next.terminalPtyIncarnationsByPaneKey) {
+    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
+      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
+        const separator = paneKey.lastIndexOf(':')
+        return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
+      })
+    )
+  }
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {
     next.activeWorktreeId = null
   }

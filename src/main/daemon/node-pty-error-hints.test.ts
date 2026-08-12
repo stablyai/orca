@@ -50,7 +50,7 @@ describe('node-pty diagnostic error hints', () => {
 
   it('hints local wrapped spawn errors from pty allocation failures', () => {
     const message =
-      'Failed to spawn shell "/bin/zsh": node-pty: open_slave failed: EMFILE (errno 24, Too many open files) - slave=\'/dev/ttys003\' (shell: /bin/zsh, cwd: /tmp, arch: arm64, platform: darwin 25.0.0). If this persists, please file an issue.'
+      'Failed to spawn shell "/bin/zsh": node-pty: open_slave failed: EMFILE (errno 24, Too many open files) - slave=\'/dev/ttys003\' (shell: /bin/zsh, cwd: /tmp, arch: arm64, platform: darwin 25.0.0, orca: 1.4.178). If this persists, please file an issue.'
 
     expect(addNodePtyRecoveryHint(message)).toBe(`${PTY_ALLOCATION_HINT} ${message}`)
   })

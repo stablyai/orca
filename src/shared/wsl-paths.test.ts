@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { foldWslUncPathCaseInsensitiveParts, isWslUncPath, parseWslUncPath } from './wsl-paths'
+import {
+  foldWslUncPathCaseInsensitiveParts,
+  isWslUncPath,
+  parseWslUncPath,
+  toWindowsWslPath
+} from './wsl-paths'
 
 describe('wsl path helpers', () => {
   it('parses modern and legacy WSL UNC paths without platform checks', () => {
@@ -16,6 +21,16 @@ describe('wsl path helpers', () => {
   it('rejects ordinary Windows and POSIX paths', () => {
     expect(isWslUncPath('C:\\Users\\jin\\repo')).toBe(false)
     expect(isWslUncPath('/home/jin/repo')).toBe(false)
+  })
+
+  it.each([
+    ['/home/jin/repo', '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'],
+    ['/', '\\\\wsl.localhost\\Ubuntu\\'],
+    ['/mnt/c/Users/jin', 'C:\\Users\\jin'],
+    ['/MNT/c/Repo', '\\\\wsl.localhost\\Ubuntu\\MNT\\c\\Repo'],
+    ['/mnt/C/Repo', '\\\\wsl.localhost\\Ubuntu\\mnt\\C\\Repo']
+  ])('converts %s without folding case-sensitive Linux paths', (linuxPath, expected) => {
+    expect(toWindowsWslPath(linuxPath, 'Ubuntu')).toBe(expected)
   })
 })
 

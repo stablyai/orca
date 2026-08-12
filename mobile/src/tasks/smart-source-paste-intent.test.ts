@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   deriveRepoSlug,
   findRepoMatchingSlug,
   findRepoMatchingSlugForPaste,
+  lookupGitHubItemByOwnerRepo,
   resolvePasteIntent,
   type PasteRepoCandidate
 } from './smart-source-paste-intent'
@@ -12,7 +13,7 @@ describe('resolvePasteIntent', () => {
   it('classifies a GitHub issue/PR URL as a github-link', () => {
     expect(resolvePasteIntent('https://github.com/acme/widgets/pull/12')).toEqual({
       kind: 'github-link',
-      link: { slug: { owner: 'acme', repo: 'widgets' }, number: 12, type: 'pr' }
+      link: { slug: { owner: 'acme', repo: 'widgets', host: 'github.com' }, number: 12, type: 'pr' }
     })
   })
 
@@ -47,6 +48,14 @@ describe('deriveRepoSlug', () => {
     })
   })
 
+  it('preserves an Enterprise upstream host', () => {
+    expect(
+      deriveRepoSlug({
+        upstream: { owner: 'up', repo: 'stream', host: 'github.corp.example' }
+      })
+    ).toEqual({ owner: 'up', repo: 'stream', host: 'github.corp.example' })
+  })
+
   it('parses an SSH remote URL', () => {
     expect(
       deriveRepoSlug({ gitRemoteIdentity: { remoteUrl: 'git@github.com:acme/widgets.git' } })
@@ -78,6 +87,16 @@ describe('findRepoMatchingSlug', () => {
     expect(findRepoMatchingSlug(repos, { owner: 'other', repo: 'thing' })).toBeNull()
   })
 
+  it('does not match a GHES link to a same-named github.com repo', () => {
+    expect(
+      findRepoMatchingSlug(repos, {
+        owner: 'acme',
+        repo: 'widgets',
+        host: 'github.corp.example'
+      })
+    ).toBeNull()
+  })
+
   it('falls back to the host-aware repo slug RPC for SSH and enterprise repos', async () => {
     const calls: string[] = []
     const client = {
@@ -86,7 +105,10 @@ describe('findRepoMatchingSlug', () => {
         calls.push(repo)
         return {
           ok: true,
-          result: repo === 'id:b' ? { owner: 'enterprise', repo: 'widgets' } : null
+          result:
+            repo === 'id:b'
+              ? { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' }
+              : null
         }
       }
     } as unknown as RpcClient
@@ -94,7 +116,7 @@ describe('findRepoMatchingSlug', () => {
       findRepoMatchingSlugForPaste(
         client,
         repos,
-        { owner: 'enterprise', repo: 'widgets' },
+        { owner: 'enterprise', repo: 'widgets', host: 'github.corp.example' },
         new Map()
       )
     ).resolves.toMatchObject({ id: 'b' })
@@ -138,5 +160,27 @@ describe('findRepoMatchingSlug', () => {
         new Map()
       )
     ).resolves.toBeNull()
+  })
+
+  it('sends the pasted host through the exact owner/repo lookup RPC', async () => {
+    const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: null })
+    const client = { sendRequest } as unknown as RpcClient
+
+    await lookupGitHubItemByOwnerRepo(
+      client,
+      'repo-1',
+      { owner: 'acme', repo: 'widgets', host: 'github.corp.example' },
+      7,
+      'pr'
+    )
+
+    expect(sendRequest).toHaveBeenCalledWith('github.workItemByOwnerRepo', {
+      repo: 'id:repo-1',
+      owner: 'acme',
+      ownerRepo: 'widgets',
+      host: 'github.corp.example',
+      number: 7,
+      type: 'pr'
+    })
   })
 })

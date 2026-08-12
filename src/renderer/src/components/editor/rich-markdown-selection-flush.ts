@@ -30,8 +30,8 @@ export function flushPendingProseMirrorSelection(editor: Editor): void {
     return
   }
 
-  // Why: immediate Tab after a mouse click can run before ProseMirror has
-  // copied the native selection into editor state, so list commands hit stale item state.
+  // Why: immediate Tab or add-review-note after a mouse click/drag can run
+  // before ProseMirror has copied the native selection into editor state.
   observer.currentSelection?.set?.({
     anchorNode: null,
     anchorOffset: 0,

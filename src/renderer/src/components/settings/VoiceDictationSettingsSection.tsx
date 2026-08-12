@@ -1,8 +1,10 @@
 import type { VoiceSettings } from '../../../../shared/speech-types'
 import { Label } from '../ui/label'
 import { Separator } from '../ui/separator'
+import { Switch } from '../ui/switch'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
   voiceSettings: VoiceSettings
@@ -34,26 +36,17 @@ export function VoiceDictationSettingsSection({
             )}
           </p>
         </div>
-        <button
-          role="switch"
-          aria-checked={voiceSettings.enabled}
+        <Switch
+          checked={voiceSettings.enabled}
           aria-label={translate(
             'auto.components.settings.VoicePane.0121960365',
             'Enable Voice Dictation'
           )}
           aria-busy={permissionPending}
           disabled={permissionPending}
-          onClick={() => void onToggleVoiceDictation()}
-          className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full border border-transparent transition-colors ${
-            voiceSettings.enabled ? 'bg-foreground' : 'bg-muted-foreground/30'
-          } ${permissionPending ? 'cursor-wait opacity-70' : ''}`}
-        >
-          <span
-            className={`pointer-events-none block size-3.5 rounded-full bg-background shadow-sm transition-transform ${
-              voiceSettings.enabled ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
-          />
-        </button>
+          onCheckedChange={() => void onToggleVoiceDictation()}
+          className="disabled:cursor-wait disabled:opacity-70"
+        />
       </div>
 
       <Separator />
@@ -92,6 +85,13 @@ export function VoiceDictationSettingsSection({
           ))}
         </div>
       </div>
+
+      <Separator />
+
+      <VoiceMicrophoneSetting
+        voiceSettings={voiceSettings}
+        onUpdateVoiceSettings={onUpdateVoiceSettings}
+      />
 
       <Separator />
     </>

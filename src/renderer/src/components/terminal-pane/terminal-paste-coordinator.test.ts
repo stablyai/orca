@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { PASTE_PAYLOAD_CORPUS } from '../../lib/paste-payload-corpus'
-import { BRACKETED_PASTE_END, BRACKETED_PASTE_START } from './terminal-bracketed-paste'
+import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
+  normalizeTerminalPasteLineEndings
+} from './terminal-bracketed-paste'
 import { createRedactedPasteExecutionDiagnostic } from './terminal-paste-diagnostics'
 import { formatTerminalPasteExecutionError } from './terminal-paste-errors'
 import {
@@ -34,6 +38,17 @@ function terminalTarget(overrides: Partial<TerminalPasteTarget> = {}): TerminalP
     },
     ...overrides
   }
+}
+
+function bracketedChunkedPlan() {
+  return planTerminalPaste({
+    text: '0123456789abcdef',
+    source: 'keyboard',
+    target: terminalTarget(),
+    terminalBracketedPasteMode: true,
+    maxDirectBytes: 4,
+    maxChunkBytes: 4
+  })
 }
 
 function getPastePayloadCorpusText(name: string): string {
@@ -181,12 +196,14 @@ describe('terminal paste coordinator', () => {
     expect(plan.mode).toBe('chunked')
     expect(plan.runtimeKey).toBe('ssh:prod')
     expect(pasteText).not.toHaveBeenCalled()
-    expect(writePty.mock.calls.map((call) => call[0]).join('')).toBe(text)
+    expect(writePty.mock.calls.map((call) => call[0]).join('')).toBe(
+      normalizeTerminalPasteLineEndings(text)
+    )
     expect(writePty.mock.calls.length).toBeGreaterThan(1)
     expect(yieldToEventLoop).toHaveBeenCalledTimes(writePty.mock.calls.length)
   })
 
-  it('bracket-wraps large terminal-mode paste once and preserves newlines', async () => {
+  it('bracket-wraps large terminal-mode paste once with xterm newline semantics', async () => {
     const text = 'alpha\r\nbeta\nbefore\x1b[201~after'
     const plan = planTerminalPaste({
       text,
@@ -200,7 +217,7 @@ describe('terminal paste coordinator', () => {
 
     expect(chunks[0]).toBe(BRACKETED_PASTE_START)
     expect(chunks.at(-1)).toBe(BRACKETED_PASTE_END)
-    expect(chunks.slice(1, -1).join('')).toBe('alpha\r\nbeta\nbefore␛[201~after')
+    expect(chunks.slice(1, -1).join('')).toBe('alpha\rbeta\rbefore␛[201~after')
     expect(chunks.slice(1, -1).join('')).not.toContain('\x1b[201~')
   })
 
@@ -264,7 +281,7 @@ describe('terminal paste coordinator', () => {
     expect(chunkTerminalPastePlan(plan)).toEqual([...iterateTerminalPastePlanChunks(plan)])
   })
 
-  it('preserves shared corpus payloads through non-bracketed chunk planning', () => {
+  it('applies terminal newline semantics to shared corpus payloads while chunking', () => {
     for (const { hasRichText = false, name, text } of PASTE_PAYLOAD_CORPUS) {
       const plan = planTerminalPaste({
         hasRichText,
@@ -278,7 +295,7 @@ describe('terminal paste coordinator', () => {
 
       expect(plan.mode, name).toBe('chunked')
       expect(plan.payload.hasRichText, name).toBe(hasRichText)
-      expect(chunks.join(''), name).toBe(text)
+      expect(chunks.join(''), name).toBe(normalizeTerminalPasteLineEndings(text))
       expect(plan.redactedDiagnostic, name).toContain('content=redacted')
       expect(plan.redactedDiagnostic, name).toContain(`rich=${hasRichText}`)
       expect(plan.redactedDiagnostic, name).not.toContain(text)
@@ -289,7 +306,7 @@ describe('terminal paste coordinator', () => {
     }
   })
 
-  it('bracket-wraps shared non-control corpus payloads once without rewriting content', () => {
+  it('bracket-wraps shared non-control corpus payloads with terminal newline semantics', () => {
     for (const { expected, hasRichText = false, name, text } of PASTE_PAYLOAD_CORPUS) {
       if (expected.hasControlSequences) {
         continue
@@ -309,7 +326,7 @@ describe('terminal paste coordinator', () => {
       expect(plan.bracketed, name).toBe(true)
       expect(chunks[0], name).toBe(BRACKETED_PASTE_START)
       expect(chunks.at(-1), name).toBe(BRACKETED_PASTE_END)
-      expect(chunks.slice(1, -1).join(''), name).toBe(text)
+      expect(chunks.slice(1, -1).join(''), name).toBe(normalizeTerminalPasteLineEndings(text))
       expect(
         chunks.filter((chunk) => chunk === BRACKETED_PASTE_START),
         name
@@ -322,7 +339,7 @@ describe('terminal paste coordinator', () => {
     }
   })
 
-  it('preserves newline policy and literal text across terminal runtime identities', async () => {
+  it('uses xterm newline semantics across terminal runtime identities', async () => {
     const text = getPastePayloadCorpusText('mixed newline text')
 
     for (const { name, runtime } of RUNTIME_MATRIX) {
@@ -344,10 +361,12 @@ describe('terminal paste coordinator', () => {
       })
 
       expect(result.status, name).toBe('pasted')
-      expect(plan.newlinePolicy, name).toBe('preserve')
+      expect(plan.newlinePolicy, name).toBe('terminal-cr')
       expect(plan.runtimeKey, name).toBe(runtime.runtimeKey)
       expect(plan.redactedDiagnostic, name).toContain(`runtime=${runtime.runtimeKey}`)
-      expect(writePty.mock.calls.map((call) => call[0]).join(''), name).toBe(text)
+      expect(writePty.mock.calls.map((call) => call[0]).join(''), name).toBe(
+        normalizeTerminalPasteLineEndings(text)
+      )
     }
   })
 
@@ -641,6 +660,133 @@ describe('terminal paste coordinator', () => {
       BRACKETED_PASTE_START,
       BRACKETED_PASTE_END
     ])
+  })
+
+  it('closes an opened bracketed paste when a payload write is rejected', async () => {
+    const writes: string[] = []
+    const writePty = vi.fn<(data: string) => boolean>((data) => {
+      writes.push(data)
+      return data === BRACKETED_PASTE_START
+    })
+
+    const result = await executeTerminalPastePlan(bracketedChunkedPlan(), {
+      pasteText: vi.fn(),
+      writePty,
+      isTargetCurrent: () => true,
+      canContinue: () => true,
+      yieldToEventLoop: async () => {}
+    })
+
+    expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
+    expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
+  })
+
+  it('closes an opened bracketed paste when a payload write exceeds the safety timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const writes: string[] = []
+      const writePty = vi.fn((data: string) => {
+        writes.push(data)
+        return data === BRACKETED_PASTE_START ? true : new Promise<boolean>(() => {})
+      })
+
+      const execution = executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => true,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {},
+        operationTimeoutMs: 25
+      })
+      // Why: the payload write and the best-effort close each burn their own budget.
+      await vi.advanceTimersByTimeAsync(25)
+      await vi.advanceTimersByTimeAsync(25)
+
+      await expect(execution).resolves.toMatchObject({
+        status: 'cancelled',
+        reason: 'operation-timeout'
+      })
+      expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports a timed-out bracketed close on a stale target as an operation timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      let current = true
+      const writes: string[] = []
+      const writePty = vi.fn((data: string) => {
+        writes.push(data)
+        return data === BRACKETED_PASTE_END ? new Promise<boolean>(() => {}) : true
+      })
+
+      const execution = executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => current,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {
+          current = false
+        },
+        operationTimeoutMs: 25
+      })
+      await vi.advanceTimersByTimeAsync(25)
+      await vi.advanceTimersByTimeAsync(25)
+
+      await expect(execution).resolves.toMatchObject({
+        status: 'cancelled',
+        reason: 'operation-timeout'
+      })
+      expect(writes).toEqual([BRACKETED_PASTE_START, BRACKETED_PASTE_END])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('skips the bracketed close when the paste target is already gone', async () => {
+    // Why: canContinue false means the pane/PTY is unmounted, so an end marker has
+    // nowhere to land — the frame dies with the target.
+    let writable = true
+    const writes: string[] = []
+
+    const result = await executeTerminalPastePlan(bracketedChunkedPlan(), {
+      pasteText: vi.fn(),
+      writePty: (data) => {
+        writes.push(data)
+        writable = false
+        return true
+      },
+      isTargetCurrent: () => true,
+      canContinue: () => writable,
+      yieldToEventLoop: async () => {}
+    })
+
+    expect(result).toMatchObject({ status: 'cancelled', reason: 'target-disconnected' })
+    expect(writes).toEqual([BRACKETED_PASTE_START])
+  })
+
+  it('closes an opened bracketed paste when the PTY writer throws', async () => {
+    const writes: string[] = []
+    const writePty = vi.fn<(data: string) => boolean>((data) => {
+      writes.push(data)
+      if (data !== BRACKETED_PASTE_START && data !== BRACKETED_PASTE_END) {
+        throw new Error('writer gone')
+      }
+      return true
+    })
+
+    await expect(
+      executeTerminalPastePlan(bracketedChunkedPlan(), {
+        pasteText: vi.fn(),
+        writePty,
+        isTargetCurrent: () => true,
+        canContinue: () => true,
+        yieldToEventLoop: async () => {}
+      })
+    ).rejects.toThrow('writer gone')
+    expect(writes).toEqual([BRACKETED_PASTE_START, '0123', BRACKETED_PASTE_END])
   })
 
   it('rejects oversized payloads before touching xterm or the PTY', async () => {

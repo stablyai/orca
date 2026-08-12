@@ -2,7 +2,11 @@ import type { AppState } from '@/store/types'
 import type { OrcaHooks } from '../../../shared/types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { hashOrcaHookScript, type OrcaHookScriptKind } from './orca-hook-trust'
-import { checkRuntimeHooks, readRuntimeIssueCommand } from '@/runtime/runtime-hooks-client'
+import {
+  checkRuntimeHooks,
+  readRuntimeIssueCommand,
+  type IssueCommandReadResult
+} from '@/runtime/runtime-hooks-client'
 import { getRuntimeEnvironmentIdForRepo } from './repo-runtime-owner'
 import {
   getRepoExecutionHostId,
@@ -11,6 +15,8 @@ import {
 } from '../../../shared/execution-host'
 
 export type HookScriptKind = OrcaHookScriptKind
+
+const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 
 // Serialize the singleton modal callback so overlapping worktree actions cannot replace it.
 let trustPromptChain: Promise<unknown> = Promise.resolve()
@@ -70,14 +76,17 @@ function findHookRepo(state: AppState, repoId: string, hostId?: ExecutionHostId)
 function settingsForHookRepoOwner(
   state: AppState,
   repoId: string,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  runtimeOwnerEnvironmentId?: string | null
 ): AppState['settings'] {
   const parsedHost = hostId ? parseExecutionHostId(hostId) : null
-  const runtimeEnvironmentId = hostId
-    ? parsedHost?.kind === 'runtime'
-      ? parsedHost.environmentId
-      : null
-    : getRuntimeEnvironmentIdForRepo(state, repoId)
+  const runtimeEnvironmentId =
+    runtimeOwnerEnvironmentId?.trim() ||
+    (hostId
+      ? parsedHost?.kind === 'runtime'
+        ? parsedHost.environmentId
+        : null
+      : getRuntimeEnvironmentIdForRepo(state, repoId))
   // Why: hook inspection must follow the repo owner. SSH/local repos execute
   // through desktop IPC, while runtime repos may differ from the focused host.
   return state.settings
@@ -85,15 +94,147 @@ function settingsForHookRepoOwner(
     : ({ activeRuntimeEnvironmentId: runtimeEnvironmentId } as AppState['settings'])
 }
 
+function canUseRepoWideTrust(state: AppState, repoId: string): boolean {
+  const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
+  return Boolean(state.trustedOrcaHooks[repoId]?.all) && !hasDuplicateRepoId
+}
+
+async function confirmScriptContent(
+  state: AppState,
+  repoId: string,
+  scriptKind: HookScriptKind,
+  scriptContent: string,
+  hostId?: ExecutionHostId,
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+): Promise<'run' | 'skip'> {
+  if (isCancelled()) {
+    return 'skip'
+  }
+  if (canUseRepoWideTrust(state, repoId) || !scriptContent) {
+    return 'run'
+  }
+
+  const contentHash = await hashOrcaHookScript(scriptContent)
+  if (isCancelled()) {
+    return 'skip'
+  }
+  const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
+  if (existingHash === contentHash) {
+    return 'run'
+  }
+
+  const repo = findHookRepo(state, repoId, hostId)
+  const repoName = repo?.displayName ?? 'this repository'
+  const previouslyApproved = Boolean(existingHash)
+
+  return new Promise<'run' | 'skip'>((resolve) => {
+    state.openModal('confirm-orca-yaml-hooks', {
+      repoId,
+      repoName,
+      scriptKind,
+      scriptContent,
+      contentHash,
+      previouslyApproved,
+      onResolve: (decision: 'run' | 'skip') => resolve(decision)
+    })
+  })
+}
+
+function getIssueCommandTrustContent(result: IssueCommandReadResult): string {
+  if (result.source === 'local') {
+    return (result.localContent ?? '').trim()
+  }
+  if (result.source === 'shared') {
+    return (result.sharedContent ?? '').trim()
+  }
+  return ''
+}
+
+async function confirmIssueCommandReadResult(
+  state: AppState,
+  repoId: string,
+  hostId: ExecutionHostId,
+  result: IssueCommandReadResult,
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+): Promise<'run' | 'skip'> {
+  if (isCancelled()) {
+    return 'skip'
+  }
+  if (result.source === 'local') {
+    return 'run'
+  }
+  if (result.status === 'error') {
+    return 'skip'
+  }
+  return confirmScriptContent(
+    state,
+    repoId,
+    'issueCommand',
+    getIssueCommandTrustContent(result),
+    hostId,
+    isCancelled
+  )
+}
+
+export type ConfirmedRuntimeIssueCommand = {
+  result: IssueCommandReadResult
+  template: string
+  trustDecision: 'run' | 'skip'
+}
+
+export function confirmRuntimeIssueCommandRead(
+  state: AppState,
+  repoId: string,
+  hostId: ExecutionHostId,
+  result: IssueCommandReadResult,
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+): Promise<ConfirmedRuntimeIssueCommand> {
+  return enqueueTrustPrompt(async () => ({
+    result,
+    template: getIssueCommandTrustContent(result),
+    trustDecision: await confirmIssueCommandReadResult(state, repoId, hostId, result, isCancelled)
+  }))
+}
+
+export async function readAndConfirmRuntimeIssueCommand(
+  state: AppState,
+  repoId: string,
+  hostId: ExecutionHostId,
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
+): Promise<ConfirmedRuntimeIssueCommand> {
+  let result: IssueCommandReadResult
+  try {
+    result = await readRuntimeIssueCommand(
+      settingsForHookRepoOwner(state, repoId, hostId),
+      repoId,
+      hostId
+    )
+  } catch {
+    result = {
+      status: 'error',
+      localContent: null,
+      sharedContent: null,
+      effectiveContent: null,
+      localFilePath: '',
+      source: 'none'
+    }
+  }
+  return confirmRuntimeIssueCommandRead(state, repoId, hostId, result, isCancelled)
+}
+
 export async function ensureHooksConfirmed(
   state: AppState,
   repoId: string,
   scriptKind: HookScriptKind,
-  hostId?: ExecutionHostId
+  hostId?: ExecutionHostId,
+  runtimeOwnerEnvironmentId?: string | null,
+  isCancelled: () => boolean = NEVER_CANCEL_TRUST_CHECK
 ): Promise<'run' | 'skip'> {
   return enqueueTrustPrompt(async () => {
-    const hasDuplicateRepoId = state.repos.filter((repo) => repo.id === repoId).length > 1
-    if (state.trustedOrcaHooks[repoId]?.all && !(hostId && hasDuplicateRepoId)) {
+    if (isCancelled()) {
+      return 'skip'
+    }
+    if (canUseRepoWideTrust(state, repoId)) {
       return 'run'
     }
 
@@ -104,7 +245,7 @@ export async function ensureHooksConfirmed(
         // Why: hostId disambiguates duplicate repo ids on the local IPC path,
         // matching the checkRuntimeHooks call below.
         const result = await readRuntimeIssueCommand(
-          settingsForHookRepoOwner(state, repoId, hostId),
+          settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           hostId
         )
@@ -131,7 +272,7 @@ export async function ensureHooksConfirmed(
           return 'run'
         }
         const result = await checkRuntimeHooks(
-          settingsForHookRepoOwner(state, repoId, hostId),
+          settingsForHookRepoOwner(state, repoId, hostId, runtimeOwnerEnvironmentId),
           repoId,
           hostId
         )
@@ -151,32 +292,6 @@ export async function ensureHooksConfirmed(
       return 'skip'
     }
 
-    if (!scriptContent) {
-      return 'run'
-    }
-
-    const contentHash = await hashOrcaHookScript(scriptContent)
-    const existingHash = state.trustedOrcaHooks[repoId]?.[scriptKind]?.contentHash
-    if (existingHash === contentHash) {
-      return 'run'
-    }
-
-    const repo = findHookRepo(state, repoId, hostId)
-    const repoName = repo?.displayName ?? 'this repository'
-    // A non-empty existingHash that didn't match means the user approved a previous
-    // version of this script; the prompt is reappearing because orca.yaml changed.
-    const previouslyApproved = Boolean(existingHash)
-
-    return new Promise<'run' | 'skip'>((resolve) => {
-      state.openModal('confirm-orca-yaml-hooks', {
-        repoId,
-        repoName,
-        scriptKind,
-        scriptContent,
-        contentHash,
-        previouslyApproved,
-        onResolve: (decision: 'run' | 'skip') => resolve(decision)
-      })
-    })
+    return confirmScriptContent(state, repoId, scriptKind, scriptContent, hostId, isCancelled)
   })
 }

@@ -6,6 +6,7 @@ import type {
 import type { TerminalTab } from '../../../../shared/types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { getLiveEntriesFullRebuildCountForTests } from './worktree-agent-live-index-patch'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
@@ -149,6 +150,109 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     }
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([childEntry])
+  })
+
+  it('patches instead of full-rebuilding across within-state pings, and stays correct on transitions', () => {
+    const wt1Entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', prompt: 'wt1 prompt' })
+    const wt2Entry = makeEntry(PANE_KEY_2, 1000, { state: 'working', prompt: 'wt2 prompt' })
+    const baseState = {
+      tabsByWorktree: {
+        'wt-1': [makeTab('tab-1')],
+        'wt-2': [makeTab('tab-2')]
+      },
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: wt1Entry,
+        [PANE_KEY_2]: wt2Entry
+      },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+
+    // Prime the cache (one full rebuild allowed here).
+    const primedWt1 = selectLiveAgentStatusEntriesForWorktree(baseState, 'wt-1')
+    const primedWt2 = selectLiveAgentStatusEntriesForWorktree(baseState, 'wt-2')
+    const rebuildsAfterPrime = getLiveEntriesFullRebuildCountForTests()
+
+    // Simulate a burst of same-state pings: setAgentStatus mints a new map and
+    // a new entry object per ping, with only prompt/tool metadata changing.
+    let state = baseState
+    let latestWt2 = primedWt2
+    for (let ping = 0; ping < 50; ping += 1) {
+      state = {
+        ...state,
+        agentStatusByPaneKey: {
+          ...state.agentStatusByPaneKey,
+          [PANE_KEY_2]: {
+            ...wt2Entry,
+            prompt: `wt2 prompt ${ping}`,
+            toolName: 'Bash',
+            toolInput: `cmd ${ping}`,
+            updatedAt: 1000 + ping
+          }
+        }
+      }
+      const wt1 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')
+      latestWt2 = selectLiveAgentStatusEntriesForWorktree(state, 'wt-2')
+      // Unaffected worktree keeps identity; owning worktree serves the fresh entry.
+      expect(wt1).toBe(primedWt1)
+      expect(latestWt2).toHaveLength(1)
+      expect(latestWt2[0]?.prompt).toBe(`wt2 prompt ${ping}`)
+      expect(latestWt2[0]?.toolInput).toBe(`cmd ${ping}`)
+    }
+    // The O(all live agents) rebuild body never ran for within-state pings.
+    expect(getLiveEntriesFullRebuildCountForTests()).toBe(rebuildsAfterPrime)
+    expect(latestWt2).not.toBe(primedWt2)
+
+    // A real transition that changes bucketing (working -> done with the tab
+    // still present keeps the bucket; removing the entry must drop it).
+    const doneState = {
+      ...state,
+      agentStatusByPaneKey: {
+        [PANE_KEY_1]: state.agentStatusByPaneKey[PANE_KEY_1]
+      }
+    }
+    expect(selectLiveAgentStatusEntriesForWorktree(doneState, 'wt-2')).toEqual([])
+    expect(selectLiveAgentStatusEntriesForWorktree(doneState, 'wt-1')).toEqual([wt1Entry])
+    expect(getLiveEntriesFullRebuildCountForTests()).toBe(rebuildsAfterPrime + 1)
+  })
+
+  it('falls back to a full rebuild when a within-map update changes worktree attribution', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', worktreeId: 'wt-1' })
+    const state = {
+      // No tab membership: bucketing comes from entry.worktreeId attribution.
+      tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
+      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
+
+    const moved = { ...entry, worktreeId: 'wt-2' }
+    const nextState = {
+      ...state,
+      agentStatusByPaneKey: { [PANE_KEY_1]: moved }
+    }
+    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
+    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-2')).toEqual([moved])
+  })
+
+  it('falls back to a full rebuild when a live entry completes with its tab gone', () => {
+    const entry = makeEntry(PANE_KEY_1, 1000, { state: 'working', worktreeId: 'wt-1' })
+    const state = {
+      tabsByWorktree: { 'wt-1': [] },
+      agentStatusByPaneKey: { [PANE_KEY_1]: entry },
+      migrationUnsupportedByPtyId: {},
+      retainedAgentsByPaneKey: {}
+    }
+    expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
+
+    // done + tab absent must drop the row (bucket rule), not be patched in place.
+    const done = { ...entry, state: 'done' as const }
+    const nextState = {
+      ...state,
+      agentStatusByPaneKey: { [PANE_KEY_1]: done }
+    }
+    expect(selectLiveAgentStatusEntriesForWorktree(nextState, 'wt-1')).toEqual([])
   })
 
   it('does not use worktree attribution for a completed row whose tab is gone', () => {

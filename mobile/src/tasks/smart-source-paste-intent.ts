@@ -9,6 +9,7 @@ import { parseGitLabIssueOrMRLink } from '../../../src/shared/new-workspace/gitl
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
+import { githubRepoIdentityKey } from '../../../src/shared/github-repository-identity-key'
 
 // A repo the picker can switch to for a cross-repo GitHub paste. Slug is derived
 // best-effort from the repo's remote metadata.
@@ -58,11 +59,15 @@ export function resolvePasteIntent(query: string): PasteIntent {
 // Pure: derive an owner/repo slug from a repo's remote metadata so a pasted
 // cross-repo URL can be matched to a locally known repo.
 export function deriveRepoSlug(repo: {
-  upstream?: { owner: string; repo: string } | null
+  upstream?: { owner: string; repo: string; host?: string } | null
   gitRemoteIdentity?: { remoteUrl?: string; canonicalKey?: string } | null
 }): RepoSlug | null {
   if (repo.upstream?.owner && repo.upstream.repo) {
-    return { owner: repo.upstream.owner, repo: repo.upstream.repo }
+    return {
+      owner: repo.upstream.owner,
+      repo: repo.upstream.repo,
+      ...(repo.upstream.host ? { host: repo.upstream.host } : {})
+    }
   }
   const source = repo.gitRemoteIdentity?.remoteUrl ?? repo.gitRemoteIdentity?.canonicalKey ?? ''
   const match = /(?:github\.com[/:]|^)([^/\s:]+)\/([^/\s]+?)(?:\.git)?$/i.exec(source)
@@ -76,9 +81,7 @@ function slugsEqual(a: RepoSlug | null, b: RepoSlug | null): boolean {
   if (!a || !b) {
     return false
   }
-  return (
-    a.owner.toLowerCase() === b.owner.toLowerCase() && a.repo.toLowerCase() === b.repo.toLowerCase()
-  )
+  return githubRepoIdentityKey(a) === githubRepoIdentityKey(b)
 }
 
 export function findRepoMatchingSlug(
@@ -148,6 +151,7 @@ export async function lookupGitHubItemByOwnerRepo(
     repo: `id:${repoId}`,
     owner: slug.owner,
     ownerRepo: slug.repo,
+    ...(slug.host ? { host: slug.host } : {}),
     number,
     type
   })

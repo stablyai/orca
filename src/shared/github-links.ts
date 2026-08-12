@@ -6,6 +6,7 @@ const GH_ITEM_PATH_RE = /^\/([^/]+)\/([^/]+)\/(issues|pull)\/(\d+)(?:\/.*)?$/i
 export type RepoSlug = {
   owner: string
   repo: string
+  host?: string
 }
 
 export type GitHubIssueOrPRLink = {
@@ -18,7 +19,10 @@ export function buildGitHubRepoUrl(slug: RepoSlug | null | undefined): string | 
   if (!slug?.owner || !slug.repo) {
     return null
   }
-  return `https://github.com/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
+  // Why: hosted identities carry the GHES host; links must point at that
+  // server, not github.com.
+  const host = slug.host ?? 'github.com'
+  return `https://${host}/${encodeURIComponent(slug.owner)}/${encodeURIComponent(slug.repo)}`
 }
 
 function matchGitHubItemPath(url: URL): RegExpExecArray | null {
@@ -95,7 +99,11 @@ export function parseGitHubIssueOrPRLink(input: string): GitHubIssueOrPRLink | n
   }
 
   return {
-    slug: { owner: match[1], repo: match[2] },
+    // Why: the URL proves the host — GHES links must keep their server identity
+    // instead of being treated as github.com slugs.
+    // Why: GHES installations on non-default ports require the full URL host;
+    // `hostname` would silently redirect later API calls to port 443.
+    slug: { owner: match[1], repo: match[2], host: url.host },
     type: match[3].toLowerCase() === 'pull' ? 'pr' : 'issue',
     number
   }

@@ -22,7 +22,8 @@ const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string
   'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
   'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
   'heading-3': ['auto.components.editor.rich.markdown.slash.commands.30566ee962', 'Heading 3'],
-  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4']
+  'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4'],
+  'heading-5': ['auto.components.editor.rich.markdown.slash.commands.8440fa4acf', 'Heading 5']
 }
 
 function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {

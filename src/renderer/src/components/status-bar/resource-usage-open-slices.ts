@@ -4,6 +4,7 @@ import { getAllWorktreesFromState } from '../../store/selectors'
 const EMPTY_TABS_BY_WORKTREE: AppState['tabsByWorktree'] = {}
 const EMPTY_PTY_IDS_BY_TAB_ID: AppState['ptyIdsByTabId'] = {}
 const EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID: AppState['terminalLayoutsByTabId'] = {}
+const EMPTY_DEFERRED_SSH_SESSION_IDS_BY_TAB_ID: AppState['deferredSshSessionIdsByTabId'] = {}
 const EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID: AppState['runtimePaneTitlesByTabId'] = {}
 const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 const EMPTY_REPOS: AppState['repos'] = []
@@ -28,6 +29,13 @@ export function getResourceUsageTerminalLayoutsByTabId(
   open: boolean
 ): AppState['terminalLayoutsByTabId'] {
   return open ? state.terminalLayoutsByTabId : EMPTY_TERMINAL_LAYOUTS_BY_TAB_ID
+}
+
+export function getResourceUsageDeferredSshSessionIdsByTabId(
+  state: Pick<AppState, 'deferredSshSessionIdsByTabId'>,
+  open: boolean
+): AppState['deferredSshSessionIdsByTabId'] {
+  return open ? state.deferredSshSessionIdsByTabId : EMPTY_DEFERRED_SSH_SESSION_IDS_BY_TAB_ID
 }
 
 export function getResourceUsageRuntimePaneTitlesByTabId(

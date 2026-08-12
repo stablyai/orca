@@ -7,6 +7,7 @@ import {
   getAgentLabel,
   isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
+  MAX_OSC_TITLES_PER_CHUNK,
   normalizeTerminalTitle
 } from './agent-detection'
 import {
@@ -65,6 +66,19 @@ describe('OSC title extraction', () => {
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
   })
+
+  it('retains only the newest titles when one chunk contains limit +1', () => {
+    const data = Array.from(
+      { length: MAX_OSC_TITLES_PER_CHUNK + 1 },
+      (_, index) => `\x1b]0;title-${index}\x07`
+    ).join('')
+
+    const titles = extractAllOscTitles(data)
+
+    expect(titles).toHaveLength(MAX_OSC_TITLES_PER_CHUNK)
+    expect(titles[0]).toBe('title-1')
+    expect(titles.at(-1)).toBe(`title-${MAX_OSC_TITLES_PER_CHUNK}`)
+  })
 })
 
 describe('MiMo title detection', () => {
@@ -82,6 +96,55 @@ describe('MiMo title detection', () => {
     'does not classify path or hyphen false positive %s',
     (title) => {
       expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
+describe('OpenCode native title detection', () => {
+  // Why: `OC | …` names no agent token, so title-derived display and target surfaces
+  // previously dropped OpenCode panes. Runtime sends corroborate the title separately.
+  it.each(['OC | Implement the Kitty IME preview', 'tmux | OC | Implement the Kitty IME preview'])(
+    'classifies the native session title %j as title-derived idle OpenCode',
+    (title) => {
+      expect(getAgentLabel(title)).toBe('OpenCode')
+      expect(detectAgentStatusFromTitle(title)).toBe('idle')
+    }
+  )
+
+  // Why: a spinner glyph is the one status decoration OpenCode adds to the marker, and
+  // its gate runs before the marker's, so an animating frame still reads working (#8940).
+  it('reads a spinner-decorated native frame as working', () => {
+    const title = 'OC | ⠋ ask claude about this'
+    expect(getAgentLabel(title)).toBe('OpenCode')
+    expect(detectAgentStatusFromTitle(title)).toBe('working')
+  })
+
+  it.each(['OC | ✦ Gemini CLI', 'OC | ✋ review Gemini permission handling'])(
+    'does not let a Gemini glyph in OpenCode session text override identity for %j',
+    (title) => {
+      expect(getAgentLabel(title)).toBe('OpenCode')
+      expect(detectAgentStatusFromTitle(title)).toBe('idle')
+    }
+  )
+
+  // Why: the text after the marker is OpenCode's generated session summary — subject
+  // matter, not status. Routing it through the keyword gates would let an ordinary task
+  // name ("stop the flaky test") park a live pane in working/permission forever, so the
+  // marker asserts presence only. Do not "fix" these into keyword-derived statuses.
+  it.each([
+    'OC | ready to review',
+    'OC | permission prompt keeps reappearing',
+    'OC | waiting on the flaky test',
+    'OC | stop the suite from running'
+  ])('keeps the status word inside the session summary %j inert', (title) => {
+    expect(getAgentLabel(title)).toBe('OpenCode')
+    expect(detectAgentStatusFromTitle(title)).toBe('idle')
+  })
+
+  it.each(['OC |', 'OC|Build', 'oc | lowercase lookalike', 'OCTOPUS | build'])(
+    'does not treat the lookalike title %j as an agent',
+    (title) => {
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )

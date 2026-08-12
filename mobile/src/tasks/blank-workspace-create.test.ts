@@ -23,7 +23,7 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
 }
 
 describe('createBlankWorkspace', () => {
-  it('assembles exactly the params the modal historically sent, omitting empty extras', async () => {
+  it('sends no agent-launch fields for a blank workspace', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-1' } }), calls)
 
@@ -31,10 +31,10 @@ describe('createBlankWorkspace', () => {
       client,
       repoId: 'repo-1',
       baseName: 'octopus',
-      startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -43,17 +43,22 @@ describe('createBlankWorkspace', () => {
       method: 'worktree.create',
       params: {
         repo: 'id:repo-1',
-        startupCommand: undefined,
         setupDecision: 'inherit',
-        name: 'octopus'
+        name: 'octopus',
+        // Idempotency key so a create interrupted by a connection migration can be
+        // safely retried without the host spawning a duplicate worktree.
+        clientMutationId: expect.any(String)
       }
     })
     const params = calls[0]?.params as Record<string, unknown>
+    expect('startupAgent' in params).toBe(false)
     expect('createdWithAgent' in params).toBe(false)
     expect('comment' in params).toBe(false)
   })
 
-  it('includes createdWithAgent and comment only when provided', async () => {
+  it('sends startupAgent (not a pre-built command) so the host resolves launch args', async () => {
+    // Why: regression — the modal used to send a bare startupCommand ('claude')
+    // that skipped the host's default `--dangerously-skip-permissions`.
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-2' } }), calls)
 
@@ -61,20 +66,22 @@ describe('createBlankWorkspace', () => {
       client,
       repoId: 'repo-2',
       baseName: 'manatee',
-      startupCommand: 'claude',
       createdWithAgentId: 'claude',
       comment: 'spike',
-      setupDecision: 'run'
+      setupDecision: 'run',
+      supportsIdempotentCutoverRetry: true
     })
 
-    expect(calls[0]?.params).toMatchObject({
+    const params = calls[0]?.params as Record<string, unknown>
+    expect(params).toMatchObject({
       repo: 'id:repo-2',
       name: 'manatee',
-      startupCommand: 'claude',
+      startupAgent: 'claude',
       setupDecision: 'run',
       createdWithAgent: 'claude',
       comment: 'spike'
     })
+    expect('startupCommand' in params).toBe(false)
   })
 
   it('retries with a numeric suffix on a branch-collision error', async () => {
@@ -90,10 +97,10 @@ describe('createBlankWorkspace', () => {
       client,
       repoId: 'repo-1',
       baseName: 'octopus',
-      startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -115,10 +122,10 @@ describe('createBlankWorkspace', () => {
       client,
       repoId: 'repo-1',
       baseName: 'octopus',
-      startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'inherit'
+      setupDecision: 'inherit',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -133,10 +140,10 @@ describe('createBlankWorkspace', () => {
       client,
       repoId: 'repo-1',
       baseName: 'octopus',
-      startupCommand: undefined,
       createdWithAgentId: undefined,
       comment: undefined,
-      setupDecision: 'skip'
+      setupDecision: 'skip',
+      supportsIdempotentCutoverRetry: true
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })

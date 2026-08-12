@@ -19,7 +19,7 @@ export type SubmodulePlaceholderNode = {
   key: string
   submodulePath: string
   depth: number
-  state: 'loading' | 'empty' | 'error'
+  state: 'loading' | 'empty' | 'error' | 'truncated'
   message?: string
 }
 
@@ -27,7 +27,7 @@ export type RenderableSourceControlNode = SubmoduleSectionTreeNode | SubmodulePl
 
 export type SubmoduleStatusState =
   | { status: 'loading' }
-  | { status: 'loaded'; entries: GitStatusEntry[] }
+  | { status: 'loaded'; entries: GitStatusEntry[]; didHitLimit?: boolean }
   | { status: 'error'; error: string }
 
 export function getSubmoduleExpansionKey(entry: Pick<GitStatusEntry, 'area' | 'path'>): string {
@@ -176,6 +176,15 @@ export function injectExpandedSubmoduleEntries(
         entry: buildSubmoduleChildEntry(submodulePath, innerEntry, entry.area)
       })
     }
+    if (state.didHitLimit) {
+      result.push({
+        type: 'submodule-placeholder',
+        key: `submodule-truncated::${entry.area}::${submodulePath}`,
+        submodulePath,
+        depth: 1,
+        state: 'truncated'
+      })
+    }
   }
   return result
 }
@@ -261,6 +270,15 @@ export function injectExpandedSubmoduleRows(
     }
     for (const childNode of buildSubmoduleChildNodes(node, state.entries)) {
       result.push(childNode)
+    }
+    if (state.didHitLimit) {
+      result.push({
+        type: 'submodule-placeholder',
+        key: `submodule-truncated::${node.area}::${submodulePath}`,
+        submodulePath,
+        depth: node.depth + 1,
+        state: 'truncated'
+      })
     }
   }
   return result

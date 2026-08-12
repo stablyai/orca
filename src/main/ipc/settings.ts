@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence'
 import type { GlobalSettings, PersistedState } from '../../shared/types'
 import { listSystemFontFamilies } from '../system-fonts'
@@ -11,6 +11,7 @@ import { SETTINGS_CHANGED_WHITELIST, type SettingsChangedKey } from '../../share
 import type { AgentAwakeService } from '../agent-awake-service'
 import { sanitizeFloatingWorkspaceDirectorySetting } from './floating-workspace-directory'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
+import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/network-proxy'
 import { normalizeAppIconId } from '../../shared/app-icon'
@@ -22,6 +23,16 @@ import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-s
 import { prepareLocalWorktreeRootsForRepos } from '../worktree-root-preparation'
 import { scheduleCurrentWorktreeBaseDirectoryWatcherSync } from './worktree-base-directory-watcher'
 import { applyPRBotAuthorOverride } from '../../shared/pr-bot-author-overrides'
+import { resolveEnvironment } from '../../shared/runtime-environment-store'
+import { haveSameDisabledTuiAgents } from '../../shared/tui-agent-selection'
+import {
+  normalizeMobilePairingCustomAddress,
+  normalizeMobilePairingCustomAddresses
+} from '../../shared/mobile-pairing-custom-address'
+import {
+  computerAwakeSettingsForMode,
+  normalizeComputerAwakeMode
+} from '../../shared/computer-awake-mode'
 
 // Why: the whitelist is the source-of-truth for which keys we emit on. Casting
 // to a Set once at module load lets the IPC handler's per-key membership
@@ -36,6 +47,10 @@ function sanitizeRendererSettingsUpdate(args: Partial<GlobalSettings>): Partial<
   const { terminalScrollbackBytes: _legacyScrollbackBytes, ...sanitizedArgs } =
     args as LegacyTerminalScrollbackSettingsUpdate
   void _legacyScrollbackBytes
+  // Plugin consent and enablement are main-owned authority state. Renderer
+  // writes must pass the dedicated reviewed-fingerprint handlers.
+  delete sanitizedArgs.pluginConsents
+  delete sanitizedArgs.disabledPlugins
   return sanitizedArgs
 }
 
@@ -54,6 +69,18 @@ export function registerSettingsHandlers(
   store: Store,
   agentAwakeService?: AgentAwakeService
 ): void {
+  ipcMain.handle(
+    'agentAwake:getStatus',
+    () => agentAwakeService?.getStatus() ?? { mode: 'off', active: false }
+  )
+  agentAwakeService?.subscribe?.((status) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('agentAwake:changed', status)
+      }
+    }
+  })
+
   store.onSettingsChanged((updates, _settings, originWebContentsId) => {
     for (const window of BrowserWindow.getAllWindows()) {
       const isOrigin =
@@ -92,9 +119,28 @@ export function registerSettingsHandlers(
 
   ipcMain.handle('settings:set', async (event, args: Partial<GlobalSettings>) => {
     const sanitizedArgs = sanitizeRendererSettingsUpdate(args)
+    // Why: connection/navigation code receives the generic settings writer; the
+    // durable server preference has a dedicated Advanced-control boundary.
+    delete sanitizedArgs.activeRuntimeEnvironmentId
     // Why: Floating Workspace grants are trusted only when written by the
     // main-process directory picker, never by renderer-provided settings IPC.
     delete sanitizedArgs.floatingTerminalTrustedCwds
+    if ('computerAwakeMode' in sanitizedArgs) {
+      Object.assign(
+        sanitizedArgs,
+        computerAwakeSettingsForMode(
+          normalizeComputerAwakeMode(
+            sanitizedArgs.computerAwakeMode,
+            sanitizedArgs.keepComputerAwakeWhileAgentsRun
+          )
+        )
+      )
+    } else if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
+      Object.assign(
+        sanitizedArgs,
+        computerAwakeSettingsForMode(sanitizedArgs.keepComputerAwakeWhileAgentsRun ? 'auto' : 'off')
+      )
+    }
     if (typeof args.floatingTerminalCwd === 'string') {
       sanitizedArgs.floatingTerminalCwd = await sanitizeFloatingWorkspaceDirectorySetting(
         store,
@@ -125,6 +171,16 @@ export function registerSettingsHandlers(
     if ('uiLanguage' in args) {
       sanitizedArgs.uiLanguage = normalizeUiLanguage(args.uiLanguage)
     }
+    if ('mobilePairingCustomAddress' in args) {
+      sanitizedArgs.mobilePairingCustomAddress = normalizeMobilePairingCustomAddress(
+        args.mobilePairingCustomAddress
+      )
+    }
+    if ('mobilePairingCustomAddresses' in args) {
+      sanitizedArgs.mobilePairingCustomAddresses = normalizeMobilePairingCustomAddresses(
+        args.mobilePairingCustomAddresses
+      )
+    }
     if (args.theme) {
       nativeTheme.themeSource = args.theme
     }
@@ -137,17 +193,34 @@ export function registerSettingsHandlers(
       notifyListeners: true,
       originWebContentsId: event.sender.id
     })
-    if ('keepComputerAwakeWhileAgentsRun' in sanitizedArgs) {
-      agentAwakeService?.setEnabled(result.keepComputerAwakeWhileAgentsRun)
-    }
     if (
-      'agentStatusHooksEnabled' in sanitizedArgs &&
-      before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled
+      'computerAwakeMode' in sanitizedArgs ||
+      'keepComputerAwakeWhileAgentsRun' in sanitizedArgs
     ) {
+      agentAwakeService?.setMode(
+        normalizeComputerAwakeMode(result.computerAwakeMode, result.keepComputerAwakeWhileAgentsRun)
+      )
+    }
+    const hookSettingChanged =
+      ('agentStatusHooksEnabled' in sanitizedArgs &&
+        before.agentStatusHooksEnabled !== result.agentStatusHooksEnabled) ||
+      ('disabledTuiAgents' in sanitizedArgs &&
+        !haveSameDisabledTuiAgents(before.disabledTuiAgents, result.disabledTuiAgents))
+    if (hookSettingChanged) {
       try {
-        applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled)
+        await applyAgentStatusHooksEnabled(result.agentStatusHooksEnabled, result, {
+          shouldHydrateShellPath: app.isPackaged,
+          onInstallError: recordManagedHookInstallFailure,
+          shouldContinue: (agent) => {
+            const settings = store.getSettings()
+            return (
+              settings.agentStatusHooksEnabled !== false &&
+              !settings.disabledTuiAgents.includes(agent)
+            )
+          }
+        })
       } catch (error) {
-        console.warn('[settings] failed to apply agentStatusHooksEnabled:', error)
+        console.warn('[settings] failed to reconcile managed agent hooks:', error)
       }
     }
     if ('uiLanguage' in sanitizedArgs && before.uiLanguage !== result.uiLanguage) {
@@ -204,6 +277,23 @@ export function registerSettingsHandlers(
 
     return result
   })
+
+  ipcMain.handle(
+    'settings:set-active-runtime-environment-preference',
+    (event, args: { environmentId?: unknown }): GlobalSettings => {
+      const requestedEnvironmentId = args?.environmentId
+      if (requestedEnvironmentId !== null && typeof requestedEnvironmentId !== 'string') {
+        throw new Error('Invalid Active Server preference')
+      }
+      const requestedId = requestedEnvironmentId?.trim() || null
+      const environmentId =
+        requestedId === null ? null : resolveEnvironment(app.getPath('userData'), requestedId).id
+      return store.updateSettings(
+        { activeRuntimeEnvironmentId: environmentId },
+        { notifyListeners: true, originWebContentsId: event.sender.id }
+      )
+    }
+  )
 
   ipcMain.handle('settings:listFonts', () => {
     return listSystemFontFamilies()

@@ -72,7 +72,7 @@ export function BrowserSessionCookiesSection({
             {translate(
               'auto.components.settings.BrowserPane.cd47bc9622',
               'Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the'
-            )}
+            )}{' '}
             <strong>···</strong>{' '}
             {translate('auto.components.settings.BrowserPane.e4aaf8051b', 'toolbar menu.')}
           </p>

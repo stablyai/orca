@@ -1,4 +1,4 @@
-export type MobileNativeChatTerminalStreamAction = 'pause' | 'resume' | 'none'
+export type MobileNativeChatTerminalStreamAction = 'pause' | 'resume' | 'rearm' | 'none'
 
 /** Decides whether the active mobile terminal stream should run while native chat
  *  covers its WebView. Resume is allowed only once the mounted WebView is ready. */
@@ -14,7 +14,13 @@ export function resolveMobileNativeChatTerminalStreamAction(args: {
     return 'none'
   }
   if (args.showNativeChat) {
-    return !args.streamCovered ? 'pause' : 'none'
+    if (!args.streamCovered) {
+      return 'pause'
+    }
+    // Why: the covered stream IS the input lease. Anything that tore it down
+    // (terminal.list churn, a client swap, an `end` frame) would otherwise leave
+    // the composer locked forever — nothing else re-subscribes a covered handle.
+    return args.streamActive ? 'none' : 'rearm'
   }
   return (args.streamCovered || !args.streamActive) && args.webViewReady ? 'resume' : 'none'
 }
@@ -34,4 +40,12 @@ export function mobileNativeChatTerminalCapabilities(covered: boolean): {
   return covered
     ? { terminalBinaryStream: 1, mobileInputLeaseOnly: 1 }
     : { terminalBinaryStream: 1 }
+}
+
+// Why: a covered subscribe is only an input lease — carrying phone dims would make the host phone-fit a PTY native chat never renders.
+export function mobileNativeChatSubscribeViewport(
+  covered: boolean,
+  viewport: { cols: number; rows: number } | null
+): { cols: number; rows: number } | undefined {
+  return covered ? undefined : (viewport ?? undefined)
 }

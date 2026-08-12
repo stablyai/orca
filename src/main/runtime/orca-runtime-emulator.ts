@@ -249,11 +249,10 @@ export class RuntimeEmulatorCommands {
 
   async emulatorAx(params: EmulatorTargetParams): Promise<unknown> {
     const worktreeId = await this.resolveWorktreeId(params.worktree)
-    return this.requireEmulatorBridge().runCapability(
-      'accessibilityTree',
-      { device: params.device ?? params.emulator, worktreeId },
-      (backend, device) => backend.accessibilityTree!(device)
-    )
+    return this.requireEmulatorBridge().accessibilityTree({
+      device: params.device ?? params.emulator,
+      worktreeId
+    })
   }
 
   async emulatorLogcat(
@@ -321,22 +320,4 @@ export class RuntimeEmulatorCommands {
   }): Promise<unknown> {
     return this.emulatorExec(params)
   }
-}
-
-// Singleton accessor pattern (mirror requireAgentBrowserBridge).
-let emulatorBridgeInstance: EmulatorBridge | null = null
-
-export function setEmulatorBridge(bridge: EmulatorBridge | null): void {
-  emulatorBridgeInstance = bridge
-}
-
-export function getEmulatorBridge(): EmulatorBridge | null {
-  return emulatorBridgeInstance
-}
-
-export function requireEmulatorBridge(): EmulatorBridge {
-  if (!emulatorBridgeInstance) {
-    throw new EmulatorError('emulator_no_active', 'Emulator bridge not initialized')
-  }
-  return emulatorBridgeInstance
 }

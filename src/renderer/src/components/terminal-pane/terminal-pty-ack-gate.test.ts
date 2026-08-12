@@ -91,7 +91,7 @@ describe('terminal-pty-ack-gate parse-deferred crediting', () => {
     expect(ackDataMock).toHaveBeenCalledTimes(1)
   })
 
-  it('hands out the credit only once per delivery', async () => {
+  it('waits for every scheduler write produced by one delivery', async () => {
     const { deliverPtyDataWithDeferredAck, takeCurrentPtyDeliveryAckCredit } = await loadAckGate()
     let first: (() => void) | null = null
     let second: (() => void) | null = null
@@ -102,7 +102,11 @@ describe('terminal-pty-ack-gate parse-deferred crediting', () => {
     })
 
     expect(first).not.toBeNull()
-    expect(second).toBeNull()
+    expect(second).not.toBeNull()
+    first!()
+    expect(ackDataMock).not.toHaveBeenCalled()
+    second!()
+    expect(ackDataMock).toHaveBeenCalledWith('pty-a', 5, 5)
   })
 
   it('returns null outside a delivery', async () => {

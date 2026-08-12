@@ -10,12 +10,17 @@ import {
   ORCA_LINEAR_SKILL_UPDATE_COMMAND
 } from '@/lib/agent-feature-install-commands'
 
-// Why: legacy-only installs must update the installed legacy skill, while
-// fresh/canonical/both-name states should move through the canonical name.
-export function getLinearAgentSkillUpdateCommand(
+export type LinearAgentSkillUpdateTarget = {
+  skillName: typeof ORCA_LINEAR_SKILL_NAME | typeof LINEAR_TICKETS_SKILL_NAME
+  command: string
+}
+
+// Why: legacy-only installs must update and report freshness for the installed
+// legacy skill, while fresh/canonical/both-name states use the canonical name.
+export function getLinearAgentSkillUpdateTarget(
   skills: readonly DiscoveredSkill[],
   installed: boolean
-): string {
+): LinearAgentSkillUpdateTarget {
   const canonicalSkillInstalled = hasInstalledAgentSkill(skills, ORCA_LINEAR_SKILL_NAME, {
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -23,6 +28,13 @@ export function getLinearAgentSkillUpdateCommand(
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
   return !installed || canonicalSkillInstalled || !legacySkillInstalled
-    ? ORCA_LINEAR_SKILL_UPDATE_COMMAND
-    : LINEAR_TICKETS_SKILL_UPDATE_COMMAND
+    ? { skillName: ORCA_LINEAR_SKILL_NAME, command: ORCA_LINEAR_SKILL_UPDATE_COMMAND }
+    : { skillName: LINEAR_TICKETS_SKILL_NAME, command: LINEAR_TICKETS_SKILL_UPDATE_COMMAND }
+}
+
+export function getLinearAgentSkillUpdateCommand(
+  skills: readonly DiscoveredSkill[],
+  installed: boolean
+): string {
+  return getLinearAgentSkillUpdateTarget(skills, installed).command
 }

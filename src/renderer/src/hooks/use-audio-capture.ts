@@ -1,4 +1,5 @@
 import { useRef, useCallback } from 'react'
+import { openMicrophoneCaptureStream } from '@/components/dictation/microphone-devices'
 
 type BufferedAudioChunk = {
   samples: Float32Array
@@ -9,6 +10,16 @@ type BufferedAudioChunk = {
 type StartAudioCaptureOptions = {
   bufferAudio?: boolean
   sessionId?: string
+  /** null/undefined = system default input device */
+  microphoneDeviceId?: string | null
+  /** Cached label, used to re-resolve a device whose id was re-salted */
+  microphoneDeviceLabel?: string | null
+  /** Fires when the live input device disappears mid-capture */
+  onCaptureLost?: () => void
+}
+
+export type StartAudioCaptureResult = {
+  fellBackToDefaultMicrophone: boolean
 }
 
 type StopAudioCaptureOptions = {
@@ -32,8 +43,12 @@ export function useAudioCapture() {
   const bufferedAudioSecondsRef = useRef(0)
   const capturedChunkCountRef = useRef(0)
   const sessionIdRef = useRef('desktop')
+  const trackLostCleanupRef = useRef<(() => void) | null>(null)
 
   const cleanupCaptureResources = useCallback(() => {
+    trackLostCleanupRef.current?.()
+    trackLostCleanupRef.current = null
+
     processorRef.current?.disconnect()
     sourceRef.current?.disconnect()
     processorRef.current = null
@@ -84,7 +99,9 @@ export function useAudioCapture() {
   )
 
   const start = useCallback(
-    async (options: StartAudioCaptureOptions = {}) => {
+    async (
+      options: StartAudioCaptureOptions = {}
+    ): Promise<StartAudioCaptureResult | undefined> => {
       if (isCapturingRef.current) {
         return
       }
@@ -96,13 +113,13 @@ export function useAudioCapture() {
       resetBufferedAudio()
       capturedChunkCountRef.current = 0
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
+      const { stream, fellBackToDefaultMicrophone } = await openMicrophoneCaptureStream({
+        preferredDeviceId: options.microphoneDeviceId,
+        preferredDeviceLabel: options.microphoneDeviceLabel,
+        getUserMedia: (constraints) => navigator.mediaDevices.getUserMedia(constraints),
+        enumerateDevices: navigator.mediaDevices?.enumerateDevices
+          ? () => navigator.mediaDevices.enumerateDevices()
+          : undefined
       })
       if (startRequestRef.current !== startRequest) {
         stream.getTracks().forEach((track) => track.stop())
@@ -178,6 +195,24 @@ export function useAudioCapture() {
         processorRef.current = processor
         sourceRef.current = source
         isCapturingRef.current = true
+
+        // Why: unplugging the input ends the track without ending the graph — the
+        // processor keeps feeding zeros, so dictation looks live while capturing nothing.
+        const onCaptureLost = options.onCaptureLost
+        const audioTrack = stream.getAudioTracks()[0]
+        if (onCaptureLost && audioTrack) {
+          const handleTrackEnded = (): void => {
+            if (startRequestRef.current !== startRequest || !isCapturingRef.current) {
+              return
+            }
+            onCaptureLost()
+          }
+          audioTrack.addEventListener('ended', handleTrackEnded)
+          trackLostCleanupRef.current = () => {
+            audioTrack.removeEventListener('ended', handleTrackEnded)
+          }
+        }
+        return { fellBackToDefaultMicrophone }
       } catch (err) {
         processor?.disconnect()
         source?.disconnect()

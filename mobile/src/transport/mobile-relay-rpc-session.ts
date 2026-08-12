@@ -6,6 +6,8 @@ import {
 import { MobileRelayE2eeLink } from './mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
+import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
 import { isRpcResponse } from './rpc-response-shape'
 import type { RpcClient } from './rpc-client'
 import type { ConnectionState, RpcResponse } from './types'
@@ -17,7 +19,10 @@ type PendingRequest = {
 }
 
 export type MobileRelayRpcSession = RpcClient & {
-  getLeaseExpiresAt(): number | null
+  // The cell's attach-reservation deadline (~10s). Diagnostics only — never
+  // schedule anything from it; rotation keys off getResumeExpiresAt().
+  getAttachDeadlineAt(): number | null
+  getResumeExpiresAt(): number | null
   getResumeConfirmation(): DeviceResumeConfirmed | null
   getFailure(): Error | null
 }
@@ -38,7 +43,8 @@ export function connectMobileRelayRpcSession(args: {
   let state: ConnectionState = 'connecting'
   let requestCounter = 0
   let lastConnectedAt: number | null = null
-  let leaseExpiresAt: number | null = null
+  let attachDeadlineAt: number | null = null
+  let resumeExpiresAt: number | null = null
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
@@ -63,7 +69,8 @@ export function connectMobileRelayRpcSession(args: {
         fail(new Error('relay resume credential version mismatch'))
         return
       }
-      leaseExpiresAt = hello.leaseExpiresAt
+      attachDeadlineAt = hello.leaseExpiresAt
+      resumeExpiresAt = hello.resumeExpiresAt
       publishState('handshaking')
     },
     onAuthenticated: () => void confirmResume(),
@@ -74,8 +81,9 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
-      await waitForConnected(options?.timeoutMs)
-      return sendRpc(method, params, options?.timeoutMs)
+      const budget = openRpcRequestBudget(options)
+      await waitForConnected(budget.timeoutMs)
+      return sendRpc(method, params, resolvePostConnectRequestTimeout(budget, requestTimeoutMs))
     },
 
     subscribe(method, params, listener, options) {
@@ -106,7 +114,8 @@ export function connectMobileRelayRpcSession(args: {
       streams.clear()
       publishState('disconnected')
     },
-    getLeaseExpiresAt: () => leaseExpiresAt,
+    getAttachDeadlineAt: () => attachDeadlineAt,
+    getResumeExpiresAt: () => resumeExpiresAt,
     getResumeConfirmation: () => resumeConfirmation,
     getFailure: () => failure
   }
@@ -128,6 +137,7 @@ export function connectMobileRelayRpcSession(args: {
         throw new Error('relay resume confirmation missing')
       }
       resumeConfirmation = result.resumeConfirmation
+      resumeExpiresAt = result.resumeConfirmation.resumeExpiresAt
       lastConnectedAt = Date.now()
       publishState('connected')
     } catch (error) {
@@ -148,7 +158,8 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id)
-        reject(new Error(`relay RPC timed out: ${method}`))
+        // Why: the frame was written long ago — the desktop may have processed it.
+        reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
       pending.set(id, { resolve, reject, timer })
       if (!sendFrame({ id, method, params })) {
@@ -237,6 +248,13 @@ export function connectMobileRelayRpcSession(args: {
   }
 
   function rejectPending(error: Error): void {
+    if (pending.size === 0) {
+      return
+    }
+    // Why: pending entries only exist after their frame reached the authenticated
+    // link (sendFrame failures delete them synchronously), so the desktop may
+    // have processed them — mark the ambiguity for callers.
+    markRpcDeliveryUnknown(error)
     for (const request of pending.values()) {
       clearTimeout(request.timer)
       request.reject(error)

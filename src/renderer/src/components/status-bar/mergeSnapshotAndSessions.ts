@@ -69,7 +69,7 @@ function resolveSnapshotSessionLabel(
   if (parsed) {
     const tabs = ctx.tabsByWorktree[worktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === parsed.tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -94,7 +94,7 @@ function resolveDaemonSessionLabel(
   if (tabId && resolvedWorktreeId) {
     const tabs = ctx.tabsByWorktree[resolvedWorktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -142,6 +142,12 @@ export function mergeSnapshotAndSessions(
   // sessions do not appear as Resource Manager orphans before their pane mounts.
   const index = buildResourceSessionBindingIndex(ctx)
   const boundPtyIds = index.boundPtyIds
+  // Why: the daemon list is the only place agent ownership is reported. Snapshot-derived rows
+  // describe the same sessions by id, so carry it across rather than inventing an answer; a
+  // session the daemon never listed is 'unknown', not 'absent'.
+  const ownershipBySessionId = new Map(
+    daemonSessions.map((session) => [session.id, session.agentOwnership])
+  )
 
   function isRepoRemote(repoId: string): boolean {
     // Why: missing entry === we don't know about this repo (typically the
@@ -202,6 +208,7 @@ export function mergeSnapshotAndSessions(
           pid: s.pid,
           label: resolveSnapshotSessionLabel(s, wt.worktreeId, ctx),
           bound: ctx.workspaceSessionReady && boundPtyIds.has(s.sessionId),
+          agentOwnership: ownershipBySessionId.get(s.sessionId) ?? 'unknown',
           tabId,
           cpu: s.cpu,
           memory: s.memory,
@@ -289,6 +296,7 @@ export function mergeSnapshotAndSessions(
       pid: 0,
       label: resolveDaemonSessionLabel(session, worktreeId, tabId, ctx),
       bound: ctx.workspaceSessionReady && boundPtyIds.has(session.id),
+      agentOwnership: session.agentOwnership,
       tabId,
       cpu: null,
       memory: null,

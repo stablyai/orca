@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useTeamLabels, useTeamMembers, useTeamStates } from '@/hooks/useIssueMetadata'
+import { useTeamsLabels, useTeamsMembers, useTeamsStates } from '@/hooks/useIssueMetadata'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
 import {
@@ -21,14 +21,19 @@ import {
   linearIssueAttributeFilterPillLabels,
   type LinearIssueFilterSectionKey
 } from './linear-issue-attribute-filter-sections'
+import { resolveLinearIssueAttributeFilterTeamIds } from './linear-issue-attribute-filter-team-ids'
 
 type Props = {
   value: LinearIssueAttributeFilter
   onChange: (next: LinearIssueAttributeFilter) => void
+  /** `null` or `all` means no single workspace owns the facet ids. */
   workspaceId: string | null
-  isAllWorkspaces: boolean
   primaryTeam: LinearTeam | null
-  selectedTeamCount: number
+  /** Selected Linear team ids (All teams / multi-select). Empty → primary fallback. */
+  selectedTeamIds: readonly string[]
+  availableTeams: readonly LinearTeam[]
+  /** False while `availableTeams` is still the issue-scraped fallback, not the real fetch. */
+  teamsSettled: boolean
   settings?: RuntimeLinearSettings
 }
 
@@ -65,27 +70,54 @@ export default function LinearIssueAttributeFilterDropdowns({
   value,
   onChange,
   workspaceId,
-  isAllWorkspaces,
   primaryTeam,
-  selectedTeamCount,
+  selectedTeamIds,
+  availableTeams,
+  teamsSettled,
   settings
 }: Props): React.JSX.Element {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [openSection, setOpenSection] = useState<LinearIssueFilterSectionKey | null>(null)
+  const activeCount = countLinearIssueAttributeFilters(value)
+  const metadataNeeded =
+    popoverOpen ||
+    value.stateIds.length > 0 ||
+    value.labelIds.length > 0 ||
+    value.assignee?.kind === 'user'
 
-  const activeTeamId = popoverOpen && !isAllWorkspaces ? (primaryTeam?.id ?? null) : null
-  const concreteWorkspaceId =
-    popoverOpen && !isAllWorkspaces && workspaceId && workspaceId !== 'all' ? workspaceId : null
+  // Why: facet ids belong to one workspace, so an unresolved id is as unusable as `all`
+  // — both must show the picker hint rather than accept a filter that goes nowhere.
+  const scopedWorkspaceId = workspaceId && workspaceId !== 'all' ? workspaceId : null
 
-  const states = useTeamStates(activeTeamId, settings, concreteWorkspaceId)
-  const labels = useTeamLabels(activeTeamId, settings, concreteWorkspaceId)
-  const members = useTeamMembers(activeTeamId, settings, concreteWorkspaceId)
+  const activeTeamIds = useMemo(() => {
+    if (!metadataNeeded || !scopedWorkspaceId) {
+      return [] as string[]
+    }
+    return resolveLinearIssueAttributeFilterTeamIds({
+      selectedTeamIds,
+      availableTeams,
+      primaryTeamId: primaryTeam?.id ?? null
+    })
+  }, [metadataNeeded, scopedWorkspaceId, selectedTeamIds, availableTeams, primaryTeam?.id])
 
-  // Why: prune only after a successful non-empty metadata load for the same team;
+  const concreteWorkspaceId = metadataNeeded ? scopedWorkspaceId : null
+
+  // Why: multi-team / All teams must union filter options across every selected team (#8739).
+  const states = useTeamsStates(activeTeamIds, settings, concreteWorkspaceId)
+  const labels = useTeamsLabels(activeTeamIds, settings, concreteWorkspaceId)
+  const members = useTeamsMembers(activeTeamIds, settings, concreteWorkspaceId)
+
+  // Why: prune only after a successful non-empty metadata load for the same team set;
   // loading/error/empty-before-load must never clear active selections (R12).
   const pruneTeamKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!activeTeamId || !concreteWorkspaceId) {
+    if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
+      return
+    }
+    // Why: restored filters make this run at startup, when availableTeams may still be
+    // the issue-scraped subset. Metadata complete for a partial team set looks valid,
+    // so pruning there would permanently delete facets from another team (R12).
+    if (!teamsSettled) {
       return
     }
     if (states.loading || labels.loading || members.loading) {
@@ -97,7 +129,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     if (states.data.length === 0 && labels.data.length === 0 && members.data.length === 0) {
       return
     }
-    const pruneKey = `${concreteWorkspaceId}::${activeTeamId}`
+    const pruneKey = `${concreteWorkspaceId}::${activeTeamIds.join(',')}`
     if (pruneTeamKeyRef.current === pruneKey) {
       return
     }
@@ -118,8 +150,9 @@ export default function LinearIssueAttributeFilterDropdowns({
       onChange(canonicalNext)
     }
   }, [
-    activeTeamId,
+    activeTeamIds,
     concreteWorkspaceId,
+    teamsSettled,
     states.loading,
     states.error,
     states.data,
@@ -164,7 +197,6 @@ export default function LinearIssueAttributeFilterDropdowns({
     [members.data]
   )
 
-  const activeCount = countLinearIssueAttributeFilters(value)
   const pills = linearIssueAttributeFilterPillLabels({
     value,
     stateNamesById,
@@ -214,7 +246,7 @@ export default function LinearIssueAttributeFilterDropdowns({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {isAllWorkspaces ? (
+          {!scopedWorkspaceId ? (
             <div className="space-y-2 p-3 text-xs">
               <p className="font-medium text-foreground">
                 {translate(
@@ -231,15 +263,6 @@ export default function LinearIssueAttributeFilterDropdowns({
             </div>
           ) : (
             <>
-              {selectedTeamCount > 1 && primaryTeam ? (
-                <p className="border-b border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-                  {translate(
-                    'auto.components.linear-issue-attribute-filter-dropdowns.optionsFromTeam',
-                    'Options from {{team}}',
-                    { team: primaryTeam.name }
-                  )}
-                </p>
-              ) : null}
               {openSection ? (
                 <LinearIssueFilterSectionDetail
                   section={openSection}

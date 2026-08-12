@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { isMobileNativeChatTranscriptReadable } from './mobile-native-chat-eligibility'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
@@ -10,12 +11,17 @@ export function useMobileNativeChatReadability(
   client: RpcClient | null,
   worktreeId: string
 ): boolean {
+  const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
   const [state, setState] = useState<ReadabilityState>({
     client: null,
     worktreeId: '',
     readable: false
   })
   useEffect(() => {
+    // Why: the floating workspace always runs on the paired host and has no repo connection to resolve.
+    if (isFloatingWorkspace) {
+      return
+    }
     let active = true
     if (!client) {
       setState({ client, worktreeId, readable: false })
@@ -46,7 +52,10 @@ export function useMobileNativeChatReadability(
     return () => {
       active = false
     }
-  }, [client, worktreeId])
+  }, [client, isFloatingWorkspace, worktreeId])
+  if (isFloatingWorkspace) {
+    return true
+  }
   // Why: route reuse renders before its new effect resolves; never expose the
   // previous repo's readability under a different client/worktree key.
   return state.client === client && state.worktreeId === worktreeId ? state.readable : false

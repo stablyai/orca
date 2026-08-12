@@ -1,15 +1,15 @@
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
+import { isWatcherProcessFailure } from './parcel-watcher-process-failure'
 import type { WorktreeBaseWatchTarget } from './worktree-base-directory-event-filter'
 import type {
   WorktreeBasePollEvent,
-  WorktreeBaseSubscription
+  WorktreeBaseSubscription,
+  WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
-import {
-  PRIMARY_CHECKOUT_METADATA_FILES,
-  startGitCommonPolling
-} from './worktree-git-common-polling'
+import { startGitCommonPolling } from './worktree-git-common-polling'
+import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
 
 // Watches a repo's `<common>/.git/worktrees` metadata plus the primary
 // checkout's shallow branch/index files — the only paths the git-common event
@@ -26,99 +26,21 @@ import {
 // process when unsubscribe overlaps in-flight callbacks (issue #8732), and
 // root deletion via `git worktree prune` makes that overlap routine here.
 
-// Why: branch switches and commits made in the primary checkout rewrite these
-// top-level files (linked-worktree equivalents live under `worktrees/`).
-// Deliberately excludes FETCH_HEAD-style churn that carries no status change.
-async function snapshotPrimaryCheckoutMetadata(
-  commonDirPath: string
-): Promise<Map<string, number>> {
-  const mtimes = new Map<string, number>()
-  for (const name of PRIMARY_CHECKOUT_METADATA_FILES) {
-    const filePath = join(commonDirPath, name)
-    try {
-      mtimes.set(filePath, (await stat(filePath)).mtimeMs)
-    } catch {
-      // Missing file (e.g. no packed-refs yet) diffs into a create later.
-    }
-  }
-  return mtimes
-}
-
-function diffMtimeMap(
-  prev: Map<string, number>,
-  next: Map<string, number>
-): WorktreeBasePollEvent[] {
-  const events: WorktreeBasePollEvent[] = []
-  for (const [path, mtime] of next) {
-    const prevMtime = prev.get(path)
-    if (prevMtime === undefined) {
-      events.push({ type: 'create', path })
-    } else if (prevMtime !== mtime) {
-      events.push({ type: 'update', path })
-    }
-  }
-  for (const path of prev.keys()) {
-    if (!next.has(path)) {
-      events.push({ type: 'delete', path })
-    }
-  }
-  return events
-}
-
-async function startSnapshotDiffPoller(
-  takeSnapshot: () => Promise<Map<string, number>>,
-  onEvents: (events: WorktreeBasePollEvent[]) => void,
-  pollIntervalMs: number,
-  onFullScan?: () => void
-): Promise<WorktreeBaseSubscription> {
-  let disposed = false
-  let ticking = false
-  let snapshot = await takeSnapshot()
-
-  const timer = setInterval(() => {
-    if (disposed || ticking) {
-      return
-    }
-    ticking = true
-    onFullScan?.()
-    void takeSnapshot()
-      .then((next) => {
-        if (disposed) {
-          return
-        }
-        const events = diffMtimeMap(snapshot, next)
-        snapshot = next
-        if (events.length > 0) {
-          onEvents(events)
-        }
-      })
-      .catch(() => {
-        // Transient fs error: keep the previous snapshot and retry next tick.
-      })
-      .finally(() => {
-        ticking = false
-      })
-  }, pollIntervalMs)
-  timer.unref?.()
-
-  return {
-    unsubscribe: async () => {
-      disposed = true
-      clearInterval(timer)
-    }
-  }
-}
-
 async function startGitCommonNarrowWatch(
   target: WorktreeBaseWatchTarget,
   onEvents: (events: WorktreeBasePollEvent[]) => void,
-  pollIntervalMs: number
+  pollIntervalMs: number,
+  visibility: WorktreePollerWindowVisibility,
+  onFullScan?: () => void,
+  onWatchError?: (error: Error) => void
 ): Promise<WorktreeBaseSubscription> {
   const worktreesDir = join(target.path, 'worktrees')
   let disposed = false
   let subscription: WorktreeBaseSubscription | null = null
   let existenceTimer: ReturnType<typeof setInterval> | null = null
+  let pollingFallbackPromise: Promise<void> | null = null
   let subscribing = false
+  let parkedWhileHidden = false
 
   const stopExistencePoll = (): void => {
     if (existenceTimer) {
@@ -127,30 +49,91 @@ async function startGitCommonNarrowWatch(
     }
   }
 
+  const shouldUsePollingFallback = (error: unknown): boolean =>
+    isWatcherProcessFailure(error) &&
+    (error.code === 'supervisor_crash_fuse' || error.code === 'process_unavailable')
+
+  const ensurePollingFallback = (): Promise<void> => {
+    if (pollingFallbackPromise) {
+      return pollingFallbackPromise
+    }
+    stopExistencePoll()
+    const pending = startGitCommonPolling(
+      target.path,
+      onEvents,
+      pollIntervalMs,
+      visibility,
+      onFullScan,
+      false
+    ).then(async (fallback) => {
+      if (disposed || subscription) {
+        await fallback.unsubscribe()
+        return
+      }
+      subscription = fallback
+    })
+    const tracked = pending.finally(() => {
+      if (pollingFallbackPromise === tracked) {
+        pollingFallbackPromise = null
+      }
+    })
+    pollingFallbackPromise = tracked
+    return pollingFallbackPromise
+  }
+
+  const tryUpgradeToNarrowWatch = async (): Promise<void> => {
+    if (disposed || subscribing || subscription) {
+      return
+    }
+    subscribing = true
+    try {
+      const installed = await trySubscribe()
+      if (installed && !disposed) {
+        stopExistencePoll()
+        // The dir appearing means a first linked worktree was just
+        // registered; surface it so the repo's worktree list refreshes.
+        onEvents([{ type: 'create', path: worktreesDir }])
+      }
+    } finally {
+      subscribing = false
+    }
+  }
+
   const armExistencePoll = (): void => {
-    if (disposed || existenceTimer) {
+    if (disposed || existenceTimer || subscription) {
+      return
+    }
+    if (!visibility.isWindowVisible()) {
+      parkedWhileHidden = true
       return
     }
     existenceTimer = setInterval(() => {
-      if (disposed || subscribing || subscription) {
+      if (disposed) {
         return
       }
-      subscribing = true
-      void trySubscribe()
-        .then((installed) => {
-          if (installed && !disposed) {
-            stopExistencePoll()
-            // The dir appearing means a first linked worktree was just
-            // registered; surface it so the repo's worktree list refreshes.
-            onEvents([{ type: 'create', path: worktreesDir }])
-          }
-        })
-        .finally(() => {
-          subscribing = false
-        })
+      // Why: a hidden window has nothing to refresh, so stop stat'ing the dir
+      // entirely instead of burning a syscall per repo per tick in the background.
+      if (!visibility.isWindowVisible()) {
+        parkedWhileHidden = true
+        stopExistencePoll()
+        return
+      }
+      void tryUpgradeToNarrowWatch()
     }, pollIntervalMs)
     existenceTimer.unref?.()
   }
+
+  const unsubscribeVisibility = visibility.onWindowBecameVisible(() => {
+    if (disposed || !parkedWhileHidden) {
+      return
+    }
+    parkedWhileHidden = false
+    // Why: the first linked worktree may have been registered while hidden — check
+    // now (emitting the create) rather than losing it for a full interval.
+    void tryUpgradeToNarrowWatch().finally(() => {
+      armExistencePoll()
+    })
+  })
 
   const trySubscribe = async (): Promise<boolean> => {
     try {
@@ -168,7 +151,7 @@ async function startGitCommonNarrowWatch(
     // sometimes surfaced as an error, sometimes as a delete event for the
     // root. Either way: notify, drop the dead stream, and let the existence
     // poll re-arm when a future worktree add recreates the dir.
-    const teardownAndRearm = (): void => {
+    const teardown = (): void => {
       active = false
       errored = true
       const current = subscription
@@ -176,6 +159,9 @@ async function startGitCommonNarrowWatch(
       if (current) {
         void current.unsubscribe().catch(() => {})
       }
+    }
+    const teardownAndRearm = (): void => {
+      teardown()
       armExistencePoll()
     }
     try {
@@ -186,8 +172,21 @@ async function startGitCommonNarrowWatch(
             return
           }
           if (error) {
-            onEvents([{ type: 'update', path: worktreesDir }])
-            teardownAndRearm()
+            if (onWatchError) {
+              onWatchError(error)
+            } else {
+              onEvents([{ type: 'update', path: worktreesDir }])
+            }
+            if (shouldUsePollingFallback(error)) {
+              teardown()
+              void ensurePollingFallback().catch(() => {
+                if (!disposed) {
+                  armExistencePoll()
+                }
+              })
+            } else {
+              teardownAndRearm()
+            }
             return
           }
           if (events.length > 0) {
@@ -206,18 +205,27 @@ async function startGitCommonNarrowWatch(
           // resubscribe gap; report a structural change so worktrees re-sync.
           onInterruption: () => {
             if (!disposed && active) {
-              onEvents([{ type: 'update', path: worktreesDir }])
+              if (onWatchError) {
+                onWatchError(new Error('Git common watcher interrupted'))
+              } else {
+                onEvents([{ type: 'update', path: worktreesDir }])
+              }
             }
           }
         }
       )
       if (disposed || errored) {
         void sub.unsubscribe().catch(() => {})
-        return !errored
+        await pollingFallbackPromise?.catch(() => {})
+        return !errored || subscription !== null
       }
       subscription = { unsubscribe: () => sub.unsubscribe() }
       return true
-    } catch {
+    } catch (error) {
+      if (shouldUsePollingFallback(error)) {
+        await ensurePollingFallback()
+        return subscription !== null
+      }
       return false
     }
   }
@@ -232,6 +240,8 @@ async function startGitCommonNarrowWatch(
     unsubscribe: async () => {
       disposed = true
       stopExistencePoll()
+      unsubscribeVisibility()
+      await pollingFallbackPromise?.catch(() => {})
       const current = subscription
       subscription = null
       if (current) {
@@ -246,15 +256,27 @@ export async function startGitCommonWatch(
   onEvents: (events: WorktreeBasePollEvent[]) => void,
   pollIntervalMs: number,
   platform: NodeJS.Platform,
-  onFullScan?: () => void
+  visibility: WorktreePollerWindowVisibility,
+  onFullScan?: () => void,
+  getStatusRefPaths: () => readonly string[] = () => [],
+  onWatchError?: (error: Error) => void
 ): Promise<WorktreeBaseSubscription> {
   if (platform === 'darwin') {
     const [narrowWatch, primaryMetadataPoll] = await Promise.all([
-      startGitCommonNarrowWatch(target, onEvents, pollIntervalMs),
-      startSnapshotDiffPoller(
-        () => snapshotPrimaryCheckoutMetadata(target.path),
+      startGitCommonNarrowWatch(
+        target,
         onEvents,
         pollIntervalMs,
+        visibility,
+        onFullScan,
+        onWatchError
+      ),
+      startGitCommonPrimaryPolling(
+        target.path,
+        getStatusRefPaths,
+        onEvents,
+        pollIntervalMs,
+        visibility,
         onFullScan
       )
     ])
@@ -264,5 +286,13 @@ export async function startGitCommonWatch(
       }
     }
   }
-  return startGitCommonPolling(target.path, onEvents, pollIntervalMs, onFullScan)
+  return startGitCommonPolling(
+    target.path,
+    onEvents,
+    pollIntervalMs,
+    visibility,
+    onFullScan,
+    true,
+    getStatusRefPaths
+  )
 }
