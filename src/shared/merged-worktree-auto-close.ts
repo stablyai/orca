@@ -26,6 +26,7 @@ export function resolveMergedWorktreeAutoCloseGraceMs(graceMinutes: number | und
   return clamped * MS_PER_MINUTE
 }
 
+/** Why a workspace stayed. Logged verbatim, so each name reads on its own. */
 export type MergedWorktreeAutoCloseSkipReason =
   | 'main-worktree'
   | 'folder-repo'
@@ -39,6 +40,10 @@ export type MergedWorktreeAutoCloseSkipReason =
   | 'merge-check-failed'
   | 'status-check-failed'
 
+/**
+ * The fields the decision reads. Narrower than `Worktree` on purpose — the rule
+ * lives in shared code, and nothing here needs the full workspace shape.
+ */
 export type MergedWorktreeAutoCloseSubject = {
   id: string
   repoId: string
@@ -58,6 +63,7 @@ export type MergedWorktreeAutoCloseEvidence = {
   published: boolean | null
 }
 
+/** One workspace's verdict, carrying enough identity to remove it and to log it. */
 export type MergedWorktreeAutoCloseDecision = {
   worktreeId: string
   repoId: string
@@ -65,6 +71,11 @@ export type MergedWorktreeAutoCloseDecision = {
   branch: string
 } & ({ action: 'close' } | { action: 'skip'; reason: MergedWorktreeAutoCloseSkipReason })
 
+/**
+ * The owning repo's traits, resolved per workspace: `isRemoteRepo` is true both
+ * for a repo another execution host owns and for a locally-owned repo's
+ * workspace stamped to another host. Neither can be proven merged here.
+ */
 export type MergedWorktreeAutoCloseRepoContext = {
   isFolderRepo: boolean
   isRemoteRepo: boolean
@@ -110,6 +121,13 @@ export function getMergedWorktreeAutoCloseStructuralSkipReason(
   return null
 }
 
+/**
+ * The single verdict for one workspace, and the only place that says "close".
+ *
+ * Every path returns a reason, so a caller can report why a workspace stayed
+ * without re-deriving it. Unproven evidence (`null`) keeps the workspace and is
+ * reported apart from a proven "no": a failed probe is not a clean checkout.
+ */
 export function decideMergedWorktreeAutoClose(
   worktree: MergedWorktreeAutoCloseSubject,
   repo: MergedWorktreeAutoCloseRepoContext,
@@ -152,6 +170,11 @@ export function decideMergedWorktreeAutoClose(
   return { ...identity, action: 'close' }
 }
 
+/**
+ * The short branch name. `git worktree list` reports `refs/heads/x` while the
+ * config keys and merge probes want `x`, and a detached HEAD reports an empty
+ * string — which is why an empty result is the detached-HEAD test.
+ */
 export function normalizeAutoCloseBranchName(branch: string): string {
   return branch.trim().replace(/^refs\/heads\//, '')
 }

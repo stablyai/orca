@@ -18,12 +18,14 @@ export type MergedWorktreeAutoCloseRuntime = {
   ): Promise<unknown>
 }
 
+/** What one sweep did: removed, refused, and the full decision list behind both. */
 export type MergedWorktreeAutoCloseResult = {
   closed: string[]
   failed: { worktreeId: string; error: string }[]
   decisions: MergedWorktreeAutoCloseDecision[]
 }
 
+/** `now` and `scan` are seams for tests; production passes neither. */
 export type MergedWorktreeAutoCloseOptions = {
   now?: number
   signal?: AbortSignal
@@ -33,6 +35,10 @@ export type MergedWorktreeAutoCloseOptions = {
 const lastSweepAtByRepoId = new Map<string, number>()
 const sweepsInFlightByRepoId = new Map<string, Promise<MergedWorktreeAutoCloseResult>>()
 
+/**
+ * Whether this profile opted into the automation. Strict `=== true` because the
+ * setting is optional, and an absent one must not authorize a removal.
+ */
 export function isMergedWorktreeAutoCloseEnabled(store: Store): boolean {
   return store.getSettings().autoCloseMergedWorktrees === true
 }
@@ -158,6 +164,7 @@ export function scheduleMergedWorktreeAutoCloseForRepo(
     })
 }
 
+/** Clear the cooldown and in-flight maps, which outlive a single test otherwise. */
 export function _resetMergedWorktreeAutoCloseStateForTests(): void {
   lastSweepAtByRepoId.clear()
   sweepsInFlightByRepoId.clear()

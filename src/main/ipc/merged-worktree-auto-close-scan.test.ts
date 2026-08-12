@@ -76,7 +76,7 @@ function createStore(
   } as unknown as Store
 }
 
-/** A workspace found on disk gets metadata with no recorded creation time. */
+// A workspace found on disk gets metadata with no recorded creation time.
 function createStoreWithUnknownCreationTime(): Store {
   return {
     getWorktreeMeta: () => ({}),

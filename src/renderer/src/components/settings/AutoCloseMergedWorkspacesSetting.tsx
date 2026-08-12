@@ -27,6 +27,7 @@ export const AUTO_CLOSE_MERGED_WORKSPACES_KEYWORDS = [
   'grace period'
 ]
 
+/** Read through `translate` on every call so a language switch re-renders the title. */
 function getAutoCloseMergedWorkspacesTitle(): string {
   return translate(
     'auto.components.settings.GitPane.autoCloseMergedWorkspacesTitle',
@@ -34,6 +35,10 @@ function getAutoCloseMergedWorkspacesTitle(): string {
   )
 }
 
+/**
+ * The description doubles as search text, so it names every rail that keeps a
+ * workspace — a user searching "pinned" or "uncommitted" should land here.
+ */
 function getAutoCloseMergedWorkspacesDescription(): string {
   return translate(
     'auto.components.settings.GitPane.autoCloseMergedWorkspacesDescription',
@@ -41,6 +46,7 @@ function getAutoCloseMergedWorkspacesDescription(): string {
   )
 }
 
+/** Whether the settings search should reveal this row. */
 export function autoCloseMergedWorkspacesMatchesSearch(searchQuery: string): boolean {
   return matchesSettingsSearch(searchQuery, {
     title: getAutoCloseMergedWorkspacesTitle(),
@@ -49,6 +55,11 @@ export function autoCloseMergedWorkspacesMatchesSearch(searchQuery: string): boo
   })
 }
 
+/**
+ * The Git-settings row for the landed-workspace automation: the opt-in switch,
+ * and the grace window it reveals only while the automation is on — a window
+ * with nothing to delay is noise.
+ */
 export function AutoCloseMergedWorkspacesSetting({
   settings,
   updateSettings

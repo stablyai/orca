@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/types'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES } from '../../../../shared/merged-worktree-auto-close'
 import { AutoCloseMergedWorkspacesSetting } from './AutoCloseMergedWorkspacesSetting'
 
 function render(settings: GlobalSettings): string {
@@ -31,6 +32,7 @@ describe('AutoCloseMergedWorkspacesSetting', () => {
     expect(html).toContain('Wait before closing')
     expect(html).toContain('value="10"')
     expect(html).toContain('min="0"')
+    expect(html).toContain(`max="${MAX_MERGED_WORKTREE_AUTO_CLOSE_GRACE_MINUTES}"`)
   })
 
   it('shows the configured window, including zero', () => {

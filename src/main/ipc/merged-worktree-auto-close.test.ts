@@ -191,6 +191,30 @@ describe('scheduleMergedWorktreeAutoCloseForRepo', () => {
     expect(scan).toHaveBeenCalledTimes(2)
   })
 
+  it('coalesces a second request onto the sweep already running', async () => {
+    // Why: the cooldown alone does not cover a sweep that is still running, and a
+    // second sweep would fan out a duplicate Git probe per branch.
+    const store = createStore(true)
+    let release: (decisions: MergedWorktreeAutoCloseDecision[]) => void = () => {}
+    const scan = vi.fn().mockReturnValue(
+      new Promise<MergedWorktreeAutoCloseDecision[]>((resolve) => {
+        release = resolve
+      })
+    )
+
+    const first = scheduleMergedWorktreeAutoCloseForRepo(store, runtime, REPO, { now: NOW, scan })
+    // Why past the cooldown: inside it the cooldown would coalesce this on its own,
+    // and the test would pass with no in-flight guard at all.
+    const second = scheduleMergedWorktreeAutoCloseForRepo(store, runtime, REPO, {
+      now: NOW + MERGED_WORKTREE_AUTO_CLOSE_REPO_COOLDOWN_MS,
+      scan
+    })
+    release([])
+
+    expect(await second).toEqual(await first)
+    expect(scan).toHaveBeenCalledTimes(1)
+  })
+
   it('resolves null instead of rejecting when the sweep fails', async () => {
     const scan = vi.fn().mockRejectedValue(new Error('scan exploded'))
 

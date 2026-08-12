@@ -11,6 +11,11 @@ export type WorktreeBranchMergeStateOptions = {
   timeout?: number
 }
 
+/**
+ * A `git` runner in the repo's own checkout, shaped for the shared branch-cleanup
+ * helpers. The `stdin` hook is what lets those helpers pipe a diff into
+ * `patch-id`, which is how a squash merge is proven.
+ */
 function createBranchCleanupExec(repoPath: string, options: WorktreeBranchMergeStateOptions) {
   return (argv: string[], execOptions?: { stdin?: string }) =>
     gitExecFileAsync(argv, {

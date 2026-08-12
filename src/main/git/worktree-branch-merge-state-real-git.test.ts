@@ -69,7 +69,7 @@ describe('isWorktreeBranchMergedIntoBase', () => {
     await expect(isWorktreeBranchMergedIntoBase(repoPath, 'pending')).resolves.toBe(false)
   })
 
-  it('resolves null for a branch Git does not know', async () => {
+  it('reports an unknown branch as unmerged and a detached HEAD as unprovable', async () => {
     await expect(isWorktreeBranchMergedIntoBase(repoPath, 'missing')).resolves.toBe(false)
     await expect(isWorktreeBranchMergedIntoBase(repoPath, '')).resolves.toBeNull()
   })

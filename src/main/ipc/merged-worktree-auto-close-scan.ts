@@ -29,6 +29,7 @@ import { withWorkspaceCleanupTimeout } from './workspace-cleanup-scan-primitives
 /** Why bounded: the sweep runs behind a worktree list load and must never keep Git busy for it. */
 export const MERGED_WORKTREE_AUTO_CLOSE_GIT_TIMEOUT_MS = 10_000
 
+/** `signal` cancels the sweep when the list that triggered it is abandoned. */
 export type MergedWorktreeAutoCloseScanOptions = {
   now?: number
   signal?: AbortSignal
@@ -133,6 +134,13 @@ const UNREAD_MERGED_WORKTREE_AUTO_CLOSE_EVIDENCE: MergedWorktreeAutoCloseEvidenc
   published: null
 }
 
+/**
+ * Read what Git can prove about one workspace: published, merged, clean.
+ *
+ * Ordered cheapest-first and short-circuiting, because each probe costs one or
+ * more `git` processes and any single "no" already keeps the workspace. A field
+ * left null means unread, not false — the decision treats the two differently.
+ */
 async function readMergedWorktreeAutoCloseEvidence(
   repo: Repo,
   worktree: Worktree,
@@ -158,6 +166,11 @@ async function readMergedWorktreeAutoCloseEvidence(
   return { merged, clean: await readWorktreeCleanliness(repo, worktree, signal), published }
 }
 
+/**
+ * Whether the workspace has no uncommitted or untracked work. Null when the
+ * status could not be read, so a failed probe never reads as "nothing to lose".
+ * Shared link paths are excluded the same way the cleanup surfaces exclude them.
+ */
 async function readWorktreeCleanliness(
   repo: Repo,
   worktree: Worktree,
