@@ -822,69 +822,68 @@ function HostSectionHeader({
   const isDisconnected = row.health === 'disconnected'
   const detail = getHostHeaderDetail(row)
   return (
-    <div className="px-2 pt-1">
-      {/* Why: outlined card + server glyph marks hosts as machines, not mere groups. */}
-      <div
-        role="button"
-        tabIndex={0}
-        data-host-header-drag-id={row.hostId}
-        aria-expanded={!row.collapsed}
-        className={cn(
-          'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 rounded-md border px-2 text-left transition-all',
-          onDragPointerDown && 'cursor-grab active:cursor-grabbing',
-          isBlocked
-            ? 'border-destructive/40 bg-destructive/10'
-            : isDisconnected
-              ? 'border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35 text-muted-foreground'
-              : 'border-worktree-sidebar-border bg-worktree-sidebar-accent/70',
-          dragging && 'pointer-events-none opacity-0'
-        )}
-        onPointerDown={onDragPointerDown}
-        onClick={onToggle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onToggle()
-          }
-        }}
-      >
-        {isDisconnected ? (
-          <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
-        ) : (
-          <Server className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <HostHeaderHealthIcon health={row.health} />
-        {/* Why: badge hugs the label (like repo headers) instead of floating by the hover controls. */}
-        <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+    // Why: hosts read as section rows, not floating cards — full-bleed, no
+    // border/shadow; the server glyph still marks them as machines.
+    <div
+      role="button"
+      tabIndex={0}
+      data-host-header-drag-id={row.hostId}
+      aria-expanded={!row.collapsed}
+      className={cn(
+        'group/host-header flex h-8 w-full cursor-pointer items-center gap-2 px-2 text-left transition-colors',
+        onDragPointerDown && 'cursor-grab active:cursor-grabbing',
+        isBlocked
+          ? 'bg-destructive/10'
+          : isDisconnected
+            ? 'text-muted-foreground hover:bg-worktree-sidebar-accent/40'
+            : 'hover:bg-worktree-sidebar-accent/50',
+        dragging && 'pointer-events-none opacity-0'
+      )}
+      onPointerDown={onDragPointerDown}
+      onClick={onToggle}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle()
+        }
+      }}
+    >
+      {isDisconnected ? (
+        <ServerOff className="size-3.5 shrink-0 text-muted-foreground/80" />
+      ) : (
+        <Server className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      <HostHeaderHealthIcon health={row.health} />
+      {/* Why: badge hugs the label (like repo headers) instead of floating by the hover controls. */}
+      <div className="flex min-w-0 flex-1 items-baseline gap-1.5">
+        <span
+          className={cn(
+            'min-w-0 truncate text-[12px] font-semibold leading-none',
+            isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+          )}
+        >
+          {row.label}
+        </span>
+        {detail ? (
           <span
             className={cn(
-              'min-w-0 truncate text-[12px] font-semibold leading-none',
-              isDisconnected ? 'text-muted-foreground' : 'text-foreground'
+              'shrink-0 truncate text-[10px] leading-none',
+              detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
             )}
           >
-            {row.label}
+            {detail.text}
           </span>
-          {detail ? (
-            <span
-              className={cn(
-                'shrink-0 truncate text-[10px] leading-none',
-                detail.isWarning ? 'text-destructive' : 'text-muted-foreground/70'
-              )}
-            >
-              {detail.text}
-            </span>
-          ) : null}
-          <SectionMetricsBadge count={row.count} />
-        </div>
-        <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover/host-header:opacity-100">
-          <ChevronDown
-            className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
-          />
-        </div>
-        <span data-host-header-action="">
-          <HostSectionHeaderMenu row={row} />
-        </span>
+        ) : null}
+        <SectionMetricsBadge count={row.count} />
       </div>
+      <div className="flex size-4 shrink-0 items-center justify-center text-muted-foreground/60 can-hover:opacity-0 transition-opacity group-hover/host-header:opacity-100">
+        <ChevronDown
+          className={cn('size-3.5 transition-transform', row.collapsed && '-rotate-90')}
+        />
+      </div>
+      <span data-host-header-action="">
+        <HostSectionHeaderMenu row={row} />
+      </span>
     </div>
   )
 }
@@ -1000,6 +999,12 @@ function updateLatestWorktreeStatusDropTarget(
         }
       : null
 }
+
+// Why: rows inside a host section indent one step under the host row; the
+// gutter line bridges the virtualizer's 6px row gap upward so it reads as one
+// continuous section spine (left-[15px] centers under the host glyph).
+const HOST_SECTION_CHILD_ROW_CLASS =
+  "pl-4 before:absolute before:-top-1.5 before:bottom-0 before:left-[15px] before:w-px before:bg-worktree-sidebar-border before:content-['']"
 
 function getWorktreeVirtualRowTransform(start: number, previewOffset: number): string {
   const base = getVirtualRowTransform(start)
@@ -1829,6 +1834,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   )
   const firstHeaderIndex = useMemo(
     () => renderRows.findIndex((row) => row.type === 'header' || row.type === 'host-header'),
+    [renderRows]
+  )
+  // Why: everything after the first host header belongs to a host section and
+  // indents one step under its host row (globalRows always precede sections).
+  const firstHostHeaderIndex = useMemo(
+    () => renderRows.findIndex((row) => row.type === 'host-header'),
     [renderRows]
   )
   const repoHeaderSectionEndByRepoId = useMemo(
@@ -4074,6 +4085,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
             if (!row) {
               return null
             }
+            const isHostSectionChild =
+              firstHostHeaderIndex !== -1 &&
+              vItem.index > firstHostHeaderIndex &&
+              row.type !== 'host-header'
 
             if (row.type === 'host-header') {
               // Why: the host card is the outer tier; it pins above group headers (z-30 vs z-20) and stays put as they hand off.
@@ -4124,7 +4139,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               const isActiveStickyHeader = activeStickyHeaderIndexRef.current === vItem.index
               // Why: when a host card is pinned, the group tier pins flush beneath it, not at the viewport top.
               const stickyTopClass =
-                activeStickyHostIndexRef.current !== null ? 'top-[35px]' : '-top-px'
+                activeStickyHostIndexRef.current !== null ? 'top-[31px]' : '-top-px'
               const hasHeaderTopSpacing = shouldUseHeaderTopSpacing({
                 rows: renderRows,
                 index: vItem.index,
@@ -4239,7 +4254,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     hasHeaderTopSpacing && !isActiveStickyHeader && 'pt-1',
                     isActiveStickyHeader
                       ? cn('sticky z-20 bg-worktree-sidebar', stickyTopClass)
-                      : 'absolute top-0'
+                      : 'absolute top-0',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
                   )}
                   style={
                     isActiveStickyHeader
@@ -4956,7 +4972,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   className={cn(
                     'absolute left-0 right-0 top-0',
                     worktreeDragState.draggingWorktreeId !== null &&
-                      'transition-transform duration-150 ease-out will-change-transform'
+                      'transition-transform duration-150 ease-out will-change-transform',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
                   )}
                   style={{
                     transform: getWorktreeVirtualRowTransform(vItem.start, parentPreviewOffset)
@@ -4987,7 +5004,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-virtual-row-start={vItem.start}
                   data-index={vItem.index}
                   ref={measureVirtualRowElement}
-                  className="absolute left-0 right-0 top-0"
+                  className={cn(
+                    'absolute left-0 right-0 top-0',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
+                  )}
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                 >
                   <ImportedWorktreesVisibilityLine
@@ -5018,7 +5038,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-virtual-row-start={vItem.start}
                   data-index={vItem.index}
                   ref={measureVirtualRowElement}
-                  className="absolute left-0 right-0 top-0"
+                  className={cn(
+                    'absolute left-0 right-0 top-0',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
+                  )}
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                 >
                   <NewExternalWorktreesInboxLine
@@ -5047,7 +5070,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-virtual-row-start={vItem.start}
                   data-index={vItem.index}
                   ref={measureVirtualRowElement}
-                  className="absolute left-0 right-0 top-0 px-2 pb-1.5"
+                  className={cn(
+                    'absolute left-0 right-0 top-0 px-2 pb-1.5',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
+                  )}
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                 >
                   <PendingWorktreeRow creationId={row.creationId} />
@@ -5099,7 +5125,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   data-worktree-virtual-row-start={vItem.start}
                   data-index={vItem.index}
                   ref={measureVirtualRowElement}
-                  className="absolute left-0 right-0 top-0"
+                  className={cn(
+                    'absolute left-0 right-0 top-0',
+                    isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
+                  )}
                   style={{ transform: getVirtualRowTransform(vItem.start) }}
                   onClickCapture={handleWorktreeRowClickCapture}
                   onPointerDown={(event) =>
@@ -5157,7 +5186,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                 className={cn(
                   'absolute left-0 right-0 top-0',
                   worktreeDragState.draggingWorktreeId !== null &&
-                    'transition-transform duration-150 ease-out will-change-transform'
+                    'transition-transform duration-150 ease-out will-change-transform',
+                  isHostSectionChild && HOST_SECTION_CHILD_ROW_CLASS
                 )}
                 style={{
                   transform: getWorktreeVirtualRowTransform(vItem.start, itemPreviewOffset)

@@ -173,10 +173,10 @@ export function getStickyHeaderIndexes(rows: readonly RenderRow[]): number[] {
   return indexes
 }
 
-// Why: the pinned host card is h-8 (32px) inside a pt-1 (4px) wrapper; the
-// group tier pins one pixel up to sit flush beneath it. Keep in sync with
+// Why: the pinned host row is a flat h-8 (32px) full-bleed row; the group tier
+// pins one pixel up to sit flush beneath it. Keep in sync with
 // HostSectionHeader's layout.
-export const HOST_STICKY_PINNED_HEIGHT = 36
+export const HOST_STICKY_PINNED_HEIGHT = 32
 
 export type ActiveStickyIndexes = {
   /** Pinned host card (tier 1), or null outside host sections. */
