@@ -562,6 +562,11 @@ type ColdRestoreAgentResumeStartup = PendingStartupCommand & {
   useLiveEntry: boolean
   hasSleepingRecord: boolean
   sleepingRecordEntry: { paneKey: string; record: SleepingAgentSessionRecord } | null
+  // Why: only set for agents with no native session-rules injection mechanism
+  // (see hasNativeSessionRulesInjection) — buildAgentResumeStartupPlan already
+  // resolves this to the wrapped '## Agent session rules' text; PendingStartupCommand
+  // stays untouched since it is also shared by non-agent SSH startup commands.
+  draftPrompt?: string | null
 }
 
 const e2eTerminalPtyOutputDebugState: E2eTerminalPtyOutputDebugSnapshot = {
@@ -1121,6 +1126,11 @@ export function connectPanePty(
   let cleanupHiddenOutputRestoreFloodRepaint = (): void => {}
   let resetRendererOrderedSeqForPtyExit: (exitedPtyId: string) => void = () => {}
   let cleanupStartupDraftPasteTimers = (): void => {}
+  // Why: the cold-restore session-rules draft state lives inside the nested
+  // connect scope (it needs `transport`/`dataCallback`), same as the
+  // startupDraft* scanner above — bridge it out for dispose() via this
+  // reassigned reference, mirroring cleanupStartupDraftPasteTimers.
+  let disposeActiveColdRestoreDraft = (): void => {}
   let unregisterE2ePtyDataInjection = (): void => {}
   let startupInjectTimer: ReturnType<typeof setTimeout> | null = null
   let sshShellReadyFallbackTimer: ReturnType<typeof setTimeout> | null = null
@@ -4991,6 +5001,247 @@ export function connectPanePty(
     if (ownsStartupDraftPaste && !connectionId && !shouldDeliverStartupViaTerminalPaste) {
       armStartupDraftReadinessObservation()
     }
+    // Why: cold restore can happen many times over one pane's lifetime (sleep
+    // → wake → sleep → wake), unlike the single-shot startupDraft* state above
+    // which is seeded once from paneStartup. This mirrors that mechanism's
+    // shape (scanner + quiet/hard timers + delivery-claim guard) but as a
+    // per-attempt slot that gets replaced wholesale on every new attempt.
+    type ActiveColdRestoreSessionRulesDraft = {
+      prompt: string
+      agent: ResumableTuiAgent
+      launchToken: string
+      scanner: ReturnType<typeof createDraftPasteReadyScanner>
+      readinessArmed: boolean
+      // Why: the transportStreamGeneration this draft's scanner is allowed to
+      // observe/deliver under. Any later connect() (a superseding cold
+      // restore OR an unrelated reattach) bumps the generation, which
+      // invalidates this draft even if nothing explicitly reset it — closing
+      // the gap where attempt N's scanner could otherwise fire against
+      // attempt N+1's (or an unrelated reattach's) PTY stream.
+      armedGeneration: number | null
+      settled: boolean
+      quietTimer: ReturnType<typeof setTimeout> | null
+      hardTimer: ReturnType<typeof setTimeout> | null
+    }
+    let activeColdRestoreDraft: ActiveColdRestoreSessionRulesDraft | null = null
+    const getActiveColdRestoreDraftPtyId = (): string | null => {
+      const ptyId = transport.getPtyId()
+      if (
+        !ptyId ||
+        disposed ||
+        deps.paneTransportsRef.current.get(pane.id) !== transport ||
+        transport.getPtyId() !== ptyId
+      ) {
+        return null
+      }
+      return ptyId
+    }
+    const clearActiveColdRestoreDraftTimers = (draft: ActiveColdRestoreSessionRulesDraft): void => {
+      if (draft.quietTimer !== null) {
+        clearTimeout(draft.quietTimer)
+        draft.quietTimer = null
+      }
+      if (draft.hardTimer !== null) {
+        clearTimeout(draft.hardTimer)
+        draft.hardTimer = null
+      }
+    }
+    // Why: releases the delivery claim unless the draft already delivered —
+    // a delivered draft's claim stays held on purpose (nothing should retry
+    // it). Safe to call whenever an attempt is superseded, torn down, or
+    // found stale; always leaves activeColdRestoreDraft null afterward.
+    const resetActiveColdRestoreDraft = (): void => {
+      const draft = activeColdRestoreDraft
+      if (!draft) {
+        return
+      }
+      clearActiveColdRestoreDraftTimers(draft)
+      if (!draft.settled) {
+        releaseAgentStartupDeliveryAttempt({
+          worktreeId: deps.worktreeId,
+          tabId: deps.tabId,
+          launchToken: draft.launchToken
+        })
+      }
+      activeColdRestoreDraft = null
+    }
+    disposeActiveColdRestoreDraft = resetActiveColdRestoreDraft
+    const sendActiveColdRestoreDraft = (draft: ActiveColdRestoreSessionRulesDraft): void => {
+      if (draft.settled || activeColdRestoreDraft !== draft) {
+        return
+      }
+      if (draft.armedGeneration !== transportStreamGeneration) {
+        // Why: a newer connect() attempt (superseding cold restore or an
+        // unrelated reattach) owns the PTY now — never paste into it.
+        resetActiveColdRestoreDraft()
+        return
+      }
+      const ptyId = getActiveColdRestoreDraftPtyId()
+      if (!ptyId) {
+        return
+      }
+      draft.settled = true
+      clearActiveColdRestoreDraftTimers(draft)
+      const settings = getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), deps.worktreeId)
+      // Why: bracketed-paste + chunked delivery (not a single raw write) — the
+      // wrapped rules text is multi-line, and unwrapped keystrokes would let a
+      // bare `\n` submit the composer mid-paste on agents like opencode.
+      void sendAgentDraftPasteContent(settings, ptyId, draft.prompt, async (data) => {
+        const accepted = await writeTerminalPastePtyInput(transport, data)
+        if (accepted) {
+          // Why: this transport write bypasses xterm's user-input signal; keep
+          // the delivered rules from being discarded by later hibernation.
+          recordTerminalInputForHibernation()
+        }
+        return accepted
+      })
+        .catch(() => false)
+        .then((accepted) => {
+          if (!accepted && activeColdRestoreDraft === draft) {
+            // Why: delivery never reached the PTY — release the claim so a
+            // later fallback attempt (if any) is not permanently fenced off.
+            releaseAgentStartupDeliveryAttempt({
+              worktreeId: deps.worktreeId,
+              tabId: deps.tabId,
+              launchToken: draft.launchToken
+            })
+          }
+        })
+    }
+    const deliverActiveColdRestoreDraftIfAgentOwnsPty = async (
+      draft: ActiveColdRestoreSessionRulesDraft
+    ): Promise<void> => {
+      if (
+        draft.settled ||
+        activeColdRestoreDraft !== draft ||
+        draft.armedGeneration !== transportStreamGeneration
+      ) {
+        return
+      }
+      const ptyId = getActiveColdRestoreDraftPtyId()
+      if (!ptyId) {
+        return
+      }
+      const expectedProcess = TUI_AGENT_CONFIG[draft.agent]?.expectedProcess
+      if (!expectedProcess) {
+        return
+      }
+      const settings = getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), deps.worktreeId)
+      try {
+        const process = await inspectRuntimeTerminalProcess(settings, ptyId)
+        const foreground = process.foregroundProcess?.toLowerCase() ?? ''
+        if (
+          activeColdRestoreDraft === draft &&
+          getActiveColdRestoreDraftPtyId() === ptyId &&
+          isExpectedAgentProcess(foreground, expectedProcess)
+        ) {
+          sendActiveColdRestoreDraft(draft)
+        }
+      } catch {
+        // Best-effort fallback; the scanner readiness signal is the primary path.
+      }
+    }
+    const armColdRestoreDraftHardTimer = (draft: ActiveColdRestoreSessionRulesDraft): void => {
+      if (draft.settled || draft.hardTimer !== null) {
+        return
+      }
+      draft.hardTimer = setTimeout(() => {
+        draft.hardTimer = null
+        void deliverActiveColdRestoreDraftIfAgentOwnsPty(draft)
+      }, STARTUP_DRAFT_PASTE_TIMEOUT_MS)
+    }
+    const armColdRestoreDraftQuietTimer = (draft: ActiveColdRestoreSessionRulesDraft): void => {
+      if (draft.settled) {
+        return
+      }
+      if (draft.quietTimer !== null) {
+        clearTimeout(draft.quietTimer)
+      }
+      draft.quietTimer = setTimeout(() => {
+        draft.quietTimer = null
+        sendActiveColdRestoreDraft(draft)
+      }, STARTUP_DRAFT_PASTE_QUIET_MS)
+    }
+    // Why: over SSH (or any typed-command delivery), the resume command
+    // itself is submitted separately via schedulePendingStartupCommandDelivery
+    // rather than spawn argv — arming the scanner before that submission would
+    // let it fire against the bare shell prompt instead of the agent's
+    // composer. Deferred callers re-invoke this once pendingStartupCommand
+    // clears; it is a no-op otherwise (including when there is no active
+    // cold-restore draft at all).
+    const armActiveColdRestoreDraftObservationIfReady = (): void => {
+      const draft = activeColdRestoreDraft
+      if (!draft || draft.readinessArmed || draft.settled) {
+        return
+      }
+      if (pendingStartupCommand) {
+        return
+      }
+      draft.readinessArmed = true
+      draft.armedGeneration = transportStreamGeneration
+      armColdRestoreDraftHardTimer(draft)
+    }
+    const observeColdRestoreSessionRulesReadiness = (data: string): void => {
+      const draft = activeColdRestoreDraft
+      if (!draft || !draft.readinessArmed || draft.settled) {
+        return
+      }
+      if (draft.armedGeneration !== transportStreamGeneration) {
+        resetActiveColdRestoreDraft()
+        return
+      }
+      const scanned = draft.scanner.observe(data)
+      if (scanned.ready) {
+        sendActiveColdRestoreDraft(draft)
+        return
+      }
+      if (scanned.armQuietTimer) {
+        armColdRestoreDraftQuietTimer(draft)
+      }
+    }
+    // Why: the single funnel (applyColdRestoreAgentResumeStartup) arms this —
+    // see there for why re-arming the same launchToken is a no-op and how a
+    // superseding attempt tears down the old draft first.
+    const armActiveColdRestoreDraft = (startup: ColdRestoreAgentResumeStartup): void => {
+      if (activeColdRestoreDraft?.launchToken === startup.launchToken) {
+        return
+      }
+      resetActiveColdRestoreDraft()
+      const prompt =
+        typeof startup.draftPrompt === 'string' && startup.draftPrompt.trim()
+          ? startup.draftPrompt
+          : null
+      if (!prompt) {
+        return
+      }
+      // Why: reuse the same delivery-claim registry as the startupDraft
+      // mechanism above — the cold-restore launchToken is freshly generated
+      // per buildColdRestoreAgentResumeStartup() call, so it is already
+      // unique per attempt and this claim can never collide with the
+      // pane-startup draft's own claim on a different token.
+      const claimed = beginAgentStartupDeliveryAttempt({
+        worktreeId: deps.worktreeId,
+        tabId: deps.tabId,
+        launchToken: startup.launchToken
+      })
+      if (!claimed) {
+        return
+      }
+      activeColdRestoreDraft = {
+        prompt,
+        agent: startup.agent,
+        launchToken: startup.launchToken,
+        scanner: createDraftPasteReadyScanner(
+          TUI_AGENT_CONFIG[startup.agent]?.draftPasteReadySignal ??
+            'render-quiet-after-bracketed-paste'
+        ),
+        readinessArmed: false,
+        armedGeneration: null,
+        settled: false,
+        quietTimer: null,
+        hardTimer: null
+      }
+    }
     let sessionRestoredBannerShown: SessionRestoredBannerReason | null = null
     const showSessionRestoredBanner = (reason: SessionRestoredBannerReason = 'restored'): void => {
       // Why: a plain 'restored' banner must not latch out the later 'resume-unavailable'
@@ -5108,7 +5359,11 @@ export function connectPanePty(
         launchToken: coldRestoreLaunchToken,
         useLiveEntry: Boolean(useLiveEntry),
         hasSleepingRecord: Boolean(sleepingRecord),
-        sleepingRecordEntry
+        sleepingRecordEntry,
+        // Why: already resolved by buildAgentResumeStartupPlan — null for
+        // agents with a native session-rules injection mechanism (claude's
+        // --append-system-prompt, codex's -c developer_instructions=, ...).
+        draftPrompt: startupPlan.draftPrompt ?? null
       }
     }
     const applyColdRestoreAgentResumeStartup = (
@@ -5124,6 +5379,7 @@ export function connectPanePty(
         tabId: deps.tabId,
         leafId: pane.leafId
       })
+      armActiveColdRestoreDraft(startup)
       return true
     }
     const clearSleepingRecordAfterColdRestoreSpawn = (
@@ -5221,8 +5477,15 @@ export function connectPanePty(
             armStartupDraftReadinessObservation()
           } else {
             releaseUnattemptedStartupDraftPasteDelivery()
+            // Why: the resume command itself never reached the shell — the
+            // rules draft has nothing meaningful to paste into either.
+            resetActiveColdRestoreDraft()
           }
           pendingStartupCommand = null
+          // Why: this is the submission-confirmation point a deferred
+          // cold-restore draft (armed while pendingStartupCommand was still
+          // set) is waiting on — see armActiveColdRestoreDraftObservationIfReady.
+          armActiveColdRestoreDraftObservationIfReady()
         })()
       }, 50)
     }
@@ -5321,6 +5584,12 @@ export function connectPanePty(
 
       transportConnectInFlightSince = Date.now()
       const outputCallbacks = captureTransportOutputCallbacks(reportError)
+      // Why: must run after the generation bump above (so a lingering cold-restore
+      // draft armed here is scoped to THIS connect attempt, not the previous one)
+      // and after the pendingStartupCommand assignment above (so an SSH resume
+      // whose command still needs typing defers to schedulePendingStartupCommandDelivery's
+      // submission confirmation instead of racing the bare shell prompt).
+      armActiveColdRestoreDraftObservationIfReady()
       const spawnedRaw = transport.connect({
         url: '',
         cols,
@@ -7737,6 +8006,7 @@ export function connectPanePty(
         data = scanned.output
       }
       observeStartupDraftPasteReadiness(data)
+      observeColdRestoreSessionRulesReadiness(data)
       resetHiddenOutputRestoreIfPtyChanged()
       observeLiveMode2031Chunk(data)
       if (meta?.droppedOutput === true) {
@@ -8449,6 +8719,11 @@ export function connectPanePty(
           writeReplayData(connectResult.coldRestore.scrollback)
           const preparedStartup = coldRestoreStartup ?? buildColdRestoreAgentResumeStartup()
           const didPrepareResume = applyColdRestoreAgentResumeStartup(preparedStartup)
+          // Why: this reattach's connect() already resolved with the resume
+          // fully spawned (command/launchConfig/resumeProviderSession all rode
+          // the same connect() call above) — unlike startFreshSpawn's SSH path,
+          // there is no separate typed-command step to wait on here.
+          armActiveColdRestoreDraftObservationIfReady()
           if (didPrepareResume) {
             if (connectResult.agentResumeUnavailable) {
               // Why: main dropped the resume argv, so this pane is a NEW session —
@@ -9426,6 +9701,7 @@ export function connectPanePty(
       }
       cleanupStartupDraftPasteTimers()
       releaseUnattemptedStartupDraftPasteDelivery()
+      disposeActiveColdRestoreDraft()
       unregisterAgentHookTerminalLifecycle()
       clearSuppressedTitleSideEffects()
       clearPendingAgentTaskCompleteNotification()

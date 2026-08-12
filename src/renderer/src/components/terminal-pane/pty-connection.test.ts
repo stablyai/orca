@@ -10919,6 +10919,152 @@ describe('connectPanePty', () => {
     )
   })
 
+  it('never delivers a superseded cold-restore attempt draft into the next attempt shell', async () => {
+    // Regression: sleep -> wake -> sleep -> wake within one pane lifetime must not let
+    // attempt N's readiness scanner (still listening on its own captured onData closure)
+    // fire its rules paste against attempt N+1's PTY stream. The two attempts use
+    // DIFFERENT rules content (by mutating settings between them) so a leak is
+    // distinguishable from a legitimate attempt-2 delivery, not just "was anything
+    // sent" — this is what actually exercises the armedGeneration staleness guard
+    // rather than the pre-existing per-connect isCurrent() gate alone (that gate
+    // already blocks a truly stale onData closure from invoking dataCallback at
+    // all, but does nothing for a still-current closure observing a STALE draft
+    // object that a supersede failed to clear).
+    const { connectPanePty } = await import('./pty-connection')
+    const capturedDataCallbacks: ((data: string) => void)[] = []
+    const transport = createMockTransport('fresh-pty')
+    transport.connect.mockImplementation(
+      async ({ sessionId, callbacks }: { sessionId?: string; callbacks: ConnectCallbacks }) => {
+        capturedDataCallbacks.push(callbacks.onData ?? (() => {}))
+        if (sessionId) {
+          return {
+            id: 'fresh-pty',
+            coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' }
+          }
+        }
+        return 'fresh-pty'
+      }
+    )
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] },
+      settings: {
+        ...mockStoreState.settings,
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'attempt-1-rule',
+              label: 'Attempt 1 rule',
+              content: 'Attempt-one-only rule text.',
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      },
+      agentStatusByPaneKey: {},
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: 'wt-1',
+          agent: 'opencode',
+          providerSession: { key: 'session_id', id: 'opencode-session-1' },
+          prompt: 'finish the task',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    } as StoreState
+
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: 'lost-pty' },
+      consumeSuppressedPtyExit: vi.fn(() => true)
+    })
+    const binding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      deps as never
+    ) as unknown as { noteVisibilityResume: () => void }
+    await flushAsyncTicks(20)
+
+    // Attempt 1 (cold-restore via the restored-pty reattach path) is now armed
+    // and waiting for opencode's composer-ready signal on its own onData closure.
+    expect(capturedDataCallbacks.length).toBe(1)
+
+    // Simulate the just-resumed agent completing and hibernating again while
+    // hidden: a fresh sleeping record (different provider session) plus a
+    // suppressed exit arms the hibernation wake target for a SECOND attempt.
+    // The rules text also changes, so attempt 2's draft is content-distinct
+    // from attempt 1's.
+    mockStoreState = {
+      ...mockStoreState,
+      settings: {
+        ...mockStoreState.settings,
+        agentSessionRules: {
+          enabled: true,
+          rules: [
+            {
+              id: 'attempt-2-rule',
+              label: 'Attempt 2 rule',
+              content: 'Attempt-two-only rule text.',
+              enabled: true,
+              source: 'custom'
+            }
+          ],
+          seenBuiltinRuleIds: ['builtin-graphify']
+        }
+      }
+    } as StoreState
+    mockStoreState.sleepingAgentSessionsByPaneKey[paneKey] = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'opencode',
+      providerSession: { key: 'session_id', id: 'opencode-session-2' },
+      prompt: 'finish another task',
+      state: 'done',
+      capturedAt: 2,
+      updatedAt: 2,
+      origin: 'worktree-sleep'
+    }
+    mockStoreState.suppressedPtyExitIds['fresh-pty'] = true
+    deps.isVisibleRef.current = false
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as ((ptyId: string) => void) | undefined
+    onPtyExit?.('fresh-pty')
+    await flushAsyncTicks()
+
+    deps.isVisibleRef.current = true
+    binding.noteVisibilityResume()
+    await flushAsyncTicks(20)
+
+    // Attempt 2 (the hibernation wake's fresh spawn) is now armed on its own,
+    // separately captured onData closure — attempt 1's is now stale.
+    expect(capturedDataCallbacks.length).toBe(2)
+
+    // Attempt 1's stale scanner must not fire even when fed the exact ready bytes.
+    capturedDataCallbacks[0]?.('\x1b[?2004h\x1b[?25h')
+    await flushAsyncTicks()
+    expect(transport.sendInputAccepted).not.toHaveBeenCalled()
+
+    // Attempt 2's current scanner delivers ONLY attempt 2's content.
+    capturedDataCallbacks[1]?.('\x1b[?2004h\x1b[?25h')
+    await flushAsyncTicks()
+    expect(transport.sendInputAccepted).toHaveBeenCalledTimes(1)
+    expect(transport.sendInputAccepted).toHaveBeenCalledWith(
+      expect.stringContaining('Attempt-two-only rule text.')
+    )
+    expect(transport.sendInputAccepted).not.toHaveBeenCalledWith(
+      expect.stringContaining('Attempt-one-only rule text.')
+    )
+  })
+
   it('uses sleeping-record launch config for pane cold restore after settings change', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('fresh-pty')
