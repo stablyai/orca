@@ -27,7 +27,10 @@ import {
   resolveFolderWorkspaceLaunchDraft
 } from './folder-workspace-agent-startup-plan'
 
-export { buildFolderWorkspaceLinkedStartupPlan } from './folder-workspace-agent-startup-plan'
+export {
+  buildFolderWorkspaceLinkedStartupPlan,
+  resolveFolderWorkspaceLaunchDraft
+} from './folder-workspace-agent-startup-plan'
 
 type FolderWorkspaceCreateInput = {
   projectGroupId: string

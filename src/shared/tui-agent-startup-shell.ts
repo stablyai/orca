@@ -1,4 +1,6 @@
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
+import type { TuiAgentConfig } from './tui-agent-config'
+import type { SessionOptionValue } from './native-chat-session-options'
 
 // Why: fish shares POSIX word splitting, quoting and `;` chaining, so it is a
 // separate dialect only where its grammar actually diverges (env clearing).
@@ -224,4 +226,114 @@ export function planAgentCliArgsSuffix(
     ok: true,
     suffix: tokenized.tokens.map((token) => quoteStartupArg(token, shell)).join(' ')
   }
+}
+
+/** Shell dialect used for encoding session-rules delivery (flag args, file cleanup); mirrors resolveStartupShell. */
+export function resolveSessionRulesDeliveryShell(args: {
+  platform: NodeJS.Platform
+  shell?: AgentStartupShell
+  isRemote?: boolean
+}): AgentStartupShell {
+  return resolveStartupShell(args.platform, args.shell)
+}
+
+/** Whether session rules must wait until the agent is ready (delivered as a paste-and-submit follow-up)
+ * rather than being baked into the initial launch command/prompt at all — regardless of whether a native
+ * flag would otherwise apply. cmd.exe's quoting has no reliable way to carry arbitrary multi-line rules
+ * text (native flag or prepended prompt alike), so every delivery path defers there. */
+export function sessionRulesTextRequiresPostReadyDelivery(
+  text: string | null | undefined,
+  shell: AgentStartupShell
+): boolean {
+  return shell === 'cmd' && Boolean(text?.trim())
+}
+
+/** True when the agent has a confirmed native flag for session rules (text on argv, or a file path) and
+ * there is rules content to deliver, and the current shell can reliably carry it inline. False whenever
+ * sessionRulesTextRequiresPostReadyDelivery is true, even if a flag is configured — availability means
+ * "safe to use now", not just "a flag name exists". */
+export function hasNativeSessionRulesInjection(
+  config: TuiAgentConfig,
+  filePath: string | null | undefined,
+  text: string | null | undefined,
+  shell: AgentStartupShell | undefined
+): boolean {
+  if (shell && sessionRulesTextRequiresPostReadyDelivery(text, shell)) {
+    return false
+  }
+  return Boolean(
+    (config.sessionRulesTextFlag && text?.trim()) || (config.sessionRulesFileFlag && filePath)
+  )
+}
+
+/** Wrap session rules ahead of a (possibly empty) user section, under matching headers so the two are
+ * visually distinguishable once combined into a single prompt/draft string. */
+function wrapSessionRulesText(rulesText: string, userSection: string): string {
+  return `## Agent session rules\n${rulesText}\n\n## User request\n${userSection}`
+}
+
+/** Prepend session rules text ahead of the user's prompt, for agents with no native injection. */
+export function prependSessionRulesToPrompt(prompt: string, rulesText: string): string {
+  return wrapSessionRulesText(rulesText, prompt)
+}
+
+/** Build a draft prompt containing only session rules (no user prompt), for pre-filling the composer
+ * ahead of a paste-after-ready launch. Null when native injection will carry the rules instead, since
+ * the composer needs nothing extra in that case. */
+export function buildAgentSessionRulesOnlyDraft(
+  config: TuiAgentConfig,
+  filePath: string | null | undefined,
+  text: string | null | undefined,
+  shell: AgentStartupShell
+): string | null {
+  if (hasNativeSessionRulesInjection(config, filePath, text, shell) || !text?.trim()) {
+    return null
+  }
+  return wrapSessionRulesText(text, '')
+}
+
+/** Append the native session-rules flag to a launch command — text-on-argv when the agent has one
+ * (preferred, no temp file involved), else a file-path flag when that's what the agent supports. */
+export function appendSessionRulesFlag(
+  command: string,
+  config: TuiAgentConfig,
+  filePath: string | null | undefined,
+  text: string | null | undefined,
+  shell: AgentStartupShell
+): string {
+  if (config.sessionRulesTextFlag && text?.trim()) {
+    return `${command} ${config.sessionRulesTextFlag} ${quoteStartupArg(text, shell)}`
+  }
+  if (config.sessionRulesFileFlag && filePath) {
+    return `${command} ${config.sessionRulesFileFlag} ${quoteStartupArg(filePath, shell)}`
+  }
+  return command
+}
+
+/** Append the shell-appropriate cleanup for a temporary session-rules file, when one was written. */
+export function appendSessionRulesFileCleanup(
+  command: string,
+  filePath: string | null | undefined,
+  shell: AgentStartupShell
+): string {
+  if (!filePath) {
+    return command
+  }
+  const quoted = quoteStartupArg(filePath, shell)
+  const cleanup =
+    shell === 'powershell'
+      ? `Remove-Item ${quoted} -ErrorAction SilentlyContinue`
+      : shell === 'cmd'
+        ? `del ${quoted}`
+        : `rm -f ${quoted}`
+  return `${command}${commandSeparator(shell)}${cleanup}`
+}
+
+/** Project applied session options into the launch-plan shape, omitting the key entirely when empty. */
+export function appliedSessionOptionProps(
+  appliedSessionOptions: Record<string, SessionOptionValue>
+): { sessionOptions?: Record<string, SessionOptionValue> } {
+  return Object.keys(appliedSessionOptions).length > 0
+    ? { sessionOptions: appliedSessionOptions }
+    : {}
 }

@@ -44,6 +44,14 @@ export type TuiAgentConfig = {
   windowsShiftEnterEncoding?: 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
+  /** Native CLI flag that takes session rules text directly as its argument (e.g. Claude's
+   * `--append-system-prompt <text>`); preferred over sessionRulesFileFlag when both would apply, since
+   * it needs no temp file. */
+  sessionRulesTextFlag?: string
+  /** Native CLI flag that loads session rules text from a file path (e.g. `--session-rules-file <path>`).
+   * Unset for every agent today — none of this codebase's agent CLIs are confirmed to support one. Set
+   * this only once a specific agent's real flag is confirmed against its own CLI, not guessed. */
+  sessionRulesFileFlag?: string
 }
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
@@ -53,7 +61,10 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'claude',
     promptInjectionMode: 'argv',
     // Why: `claude --prefill <text>` seeds the input without submitting, avoiding the paste-after-ready race (PR https://github.com/stablyai/orca/pull/926).
-    draftPromptFlag: '--prefill'
+    draftPromptFlag: '--prefill',
+    // Why: `claude --append-system-prompt <text>` carries session rules as system instructions, kept
+    // separate from the user prompt on argv rather than mixed into a single prepended string.
+    sessionRulesTextFlag: '--append-system-prompt'
   },
   'claude-agent-teams': {
     // Why: an Orca-provided launch mode, not a separate binary; detection follows the Orca CLI.
