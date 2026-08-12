@@ -180,7 +180,10 @@ function rawEmojiFixtureFrameTailMarker(runId: string): string {
 }
 
 async function setWideRenderedTableViewport(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1480, height: 820 })
+  const isWindows = await page.evaluate(() => navigator.userAgent.includes('Windows'))
+  // Why: macOS hosted runners need extra room for font/column variance, while
+  // Windows Electron golden rendering is stable at the native-sized viewport.
+  await page.setViewportSize({ width: isWindows ? 1480 : 1760, height: 820 })
   await page.waitForTimeout(250)
   await page.evaluate(() => {
     const store = window.__store
@@ -556,6 +559,9 @@ test.describe('Terminal raw emoji table scroll restore repro', () => {
       await switchToWorktree(orcaPage, secondWorktreeId)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       await orcaPage.waitForTimeout(1_000)
+      // Why: switching back can replay hidden terminal contents immediately;
+      // make the viewport wide before restore so the table cannot wrap first.
+      await setWideRenderedTableViewport(orcaPage)
       await switchToWorktree(orcaPage, firstWorktreeId)
       // Why: activating another worktree can restore the right sidebar. This
       // golden is about terminal renderer restore at a deliberately wide width.

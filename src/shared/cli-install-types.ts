@@ -12,7 +12,8 @@ export type CliInstallStatus = {
   commandName: string
   commandPath: string | null
   pathDirectory: string | null
-  pathConfigured: boolean
+  /** Null means the persisted PATH could not be read, so callers must not offer a mutation. */
+  pathConfigured: boolean | null
   launcherPath: string | null
   installMethod: CliInstallMethod | null
   supported: boolean

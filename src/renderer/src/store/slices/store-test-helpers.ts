@@ -25,9 +25,11 @@ import { createEditorSlice } from './editor'
 import { createStatsSlice } from './stats'
 import { createMemorySlice } from './memory'
 import { createWorkspaceSpaceSlice } from './workspace-space'
-import { createClaudeUsageSlice } from './claude-usage'
-import { createCodexUsageSlice } from './codex-usage'
-import { createOpenCodeUsageSlice } from './opencode-usage'
+import {
+  createClaudeUsageSlice,
+  createCodexUsageSlice,
+  createOpenCodeUsageSlice
+} from './usage-provider-slices'
 import { createBrowserSlice } from './browser'
 import { createRateLimitSlice } from './rate-limits'
 import { createSshSlice } from './ssh'
@@ -36,6 +38,7 @@ import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
+import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import { createWorktreeNavHistorySlice } from './worktree-nav-history'
 import { createDictationSlice } from './dictation'
 import { createWorkspaceCleanupSlice } from './workspace-cleanup'
@@ -43,8 +46,12 @@ import { createRuntimeStatusSlice } from './runtime-status'
 import { createPullRequestGenerationSlice } from './pull-request-generation'
 import { createCommitMessageGenerationSlice } from './commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from './pinned-tab-close-confirm'
+import { createRecentlyClosedTabsSlice } from './recently-closed-tabs'
 import { createOrcaProfilesSlice } from './orca-profiles'
 import { createNewIssueDraftSlice } from './new-issue-draft'
+import { createTaskCreationDraftsSlice } from './task-creation-drafts'
+import { createRemoteServerUpdatesSlice } from './remote-server-updates'
+import { createTerminalQuickCommandHostsSlice } from './terminal-quick-command-hosts'
 import { translate } from '@/i18n/i18n'
 
 export const TEST_REPO = {
@@ -85,6 +92,7 @@ export function createTestStore() {
     ...createPaneForegroundAgentSlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
+    ...createRuntimeDetectedAgentsSlice(...a),
     ...createWorktreeNavHistorySlice(...a),
     ...createDictationSlice(...a),
     ...createWorkspaceCleanupSlice(...a),
@@ -92,8 +100,12 @@ export function createTestStore() {
     ...createPullRequestGenerationSlice(...a),
     ...createCommitMessageGenerationSlice(...a),
     ...createPinnedTabCloseConfirmSlice(...a),
+    ...createRecentlyClosedTabsSlice(...a),
     ...createOrcaProfilesSlice(...a),
-    ...createNewIssueDraftSlice(...a)
+    ...createNewIssueDraftSlice(...a),
+    ...createTaskCreationDraftsSlice(...a),
+    ...createRemoteServerUpdatesSlice(...a),
+    ...createTerminalQuickCommandHostsSlice(...a)
   }))
 }
 
@@ -105,7 +117,7 @@ export function seedStore(
   // so the test files can stay under the enforced max-lines limit without
   // disabling the lint rule and hiding further growth.
   store.setState({
-    repos: [TEST_REPO],
+    repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state
   })
 }
@@ -133,6 +145,17 @@ export function makeWorktree(
     lastActivityAt: 0,
     ...overrides
   }
+}
+
+export function makeRuntimeOwnedWorktree(
+  overrides: Partial<Worktree> & { id: string; repoId: string },
+  runtimeEnvironmentId = 'runtime-1'
+): Worktree {
+  return makeWorktree({
+    ...overrides,
+    hostId: overrides.hostId ?? 'local',
+    runtimeOwnerEnvironmentId: runtimeEnvironmentId
+  })
 }
 
 export function makeTab(

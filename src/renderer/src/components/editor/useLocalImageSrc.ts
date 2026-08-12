@@ -22,6 +22,7 @@ export function getLocalImageCacheKey(
   return [
     runtimeEnvironmentId,
     runtimeContext?.connectionId ?? connectionId ?? 'local',
+    runtimeContext?.expectedExternalSshTargetId ?? '',
     runtimeContext?.worktreeId ?? 'unknown-worktree',
     absolutePath
   ].join('\0')
@@ -129,7 +130,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('focus', invalidateImageCache)
 }
 
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   // Why: Vite can re-evaluate this module without a full renderer reload.
   // Disposing the module-level listener and blob URLs prevents dev-session leaks.
   import.meta.hot.dispose(disposeImageCacheModuleState)

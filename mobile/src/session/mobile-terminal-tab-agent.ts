@@ -3,7 +3,7 @@ import { resolveExplicitTerminalTitleAgentType } from '../../../src/shared/termi
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { TuiAgent } from '../../../src/shared/types'
 import { isBlankBrowserUrl } from '../browser/browser-url'
-import type { MobileSessionTab } from '../../app/h/[hostId]/session/mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-route-types'
 
 // Why: tab identity + title cleaning uses the same shared glyph/label maps as
 // desktop, so the two platforms do not drift on which titles identify agents.

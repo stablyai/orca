@@ -128,6 +128,45 @@ describe('parseAgentSessionFileCached', () => {
     expect(incremental?.totalTokens).toBe(420)
   })
 
+  it('parses an oversized record without quadratic carry copying', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')
+    // One tool result far larger than a stream chunk. Re-joining the held-over
+    // partial line per chunk copies O(record^2); the piece list joins once.
+    const recordBytes = 4 * 1024 * 1024
+    await writeFile(
+      path,
+      `${[
+        userRecord(0, 'question'),
+        assistantRecord(1, 'x'.repeat(recordBytes)),
+        assistantRecord(2, 'tail answer')
+      ].join('\n')}\n`
+    )
+
+    const originalConcat = Buffer.concat
+    let concatenatedBytes = 0
+    Buffer.concat = ((list: readonly Uint8Array[], totalLength?: number) => {
+      const joined = originalConcat(list as Uint8Array[], totalLength)
+      concatenatedBytes += joined.length
+      return joined
+    }) as typeof Buffer.concat
+    try {
+      const stats = createSessionParseStats()
+      const parsed = await parseAgentSessionFileCached(
+        await claudeCandidate(path),
+        process.platform,
+        stats
+      )
+      expect(parsed).not.toBeNull()
+    } finally {
+      Buffer.concat = originalConcat
+    }
+
+    // Linear joins the record about once; the quadratic form copied many times
+    // that, growing with the square of the record size.
+    expect(concatenatedBytes).toBeLessThan(recordBytes * 4)
+  })
+
   it('shows a trailing unterminated line without double-counting it later', async () => {
     const root = await makeTempDir()
     const path = join(root, 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee.jsonl')

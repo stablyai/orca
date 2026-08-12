@@ -19,6 +19,11 @@ export function getWorktreeDragUnitGroups(
 ): WorktreeDragUnitGroup[] {
   const groups: WorktreeDragUnitGroup[] = []
   let current: { key: string; units: WorktreeDragUnitGroup['units'] } | null = null
+  const naturalWorktreeIds = new Set(
+    rows.flatMap((row) =>
+      row.type === 'item' && row.sectionKey !== PINNED_GROUP_KEY ? [row.worktree.id] : []
+    )
+  )
 
   for (const row of rows) {
     if (row.type === 'header') {
@@ -39,7 +44,7 @@ export function getWorktreeDragUnitGroups(
     ) {
       continue
     }
-    if (row.sectionKey === PINNED_GROUP_KEY) {
+    if (row.sectionKey === PINNED_GROUP_KEY && naturalWorktreeIds.has(row.worktree.id)) {
       continue
     }
     if (!current) {

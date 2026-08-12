@@ -9,9 +9,12 @@ type CodexRuntimeAuthSync = Pick<
   'syncForCurrentSelection' | 'syncActiveWslSelectionsBeforeRestart'
 >
 type ClaudeRuntimeAuthSync = Pick<ClaudeRuntimeAuthService, 'syncForCurrentSelection'>
-type ShutdownStore = Pick<Store, 'flush'>
+type ShutdownStore = Pick<Store, 'flushPendingOrThrowAsync'>
 
-type AuthPreservationStep = 'Codex auth preservation' | 'Claude auth preservation'
+type AuthPreservationStep =
+  | 'Codex auth preservation'
+  | 'Claude auth preservation'
+  | 'Store persistence'
 
 export type AgentAuthRestartPreservationOptions = {
   codexRuntimeHome?: CodexRuntimeAuthSync | null
@@ -45,10 +48,13 @@ export async function preserveAgentAuthBeforeRestart({
     logStepTimeout('Codex auth preservation', 0)
   }
 
-  try {
-    store?.flush()
-  } catch (error) {
-    logStoreFlushFailure(error)
+  if (store) {
+    const storeRemainingMs = Math.max(0, AUTH_PRESERVATION_TIMEOUT_MS - (Date.now() - startedAt))
+    await runWithinLifecycleTimeout(
+      'Store persistence',
+      () => store.flushPendingOrThrowAsync(),
+      storeRemainingMs
+    )
   }
 }
 
@@ -107,12 +113,6 @@ function logStepFailure(step: AuthPreservationStep, error: unknown): void {
 
 function logStepTimeout(step: AuthPreservationStep, timeoutMs: number): void {
   console.warn(`[agent-auth-restart] ${step} exceeded ${timeoutMs}ms; continuing restart/update`)
-}
-
-function logStoreFlushFailure(error: unknown): void {
-  console.warn(
-    `[agent-auth-restart] Store flush failed (${describeErrorKind(error)}); continuing restart/update`
-  )
 }
 
 function describeErrorKind(error: unknown): string {

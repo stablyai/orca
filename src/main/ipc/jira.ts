@@ -1,11 +1,14 @@
 import { ipcMain } from 'electron'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
 import { _resetPreflightCache } from './preflight'
+import { JiraCancellableRequests } from './jira-cancellable-requests'
 import {
   addIssueComment,
   createIssue,
   getIssue,
+  getIssueSummary,
   getIssueComments,
+  getProjectStatusOrder,
   listAssignableUsers,
   listCreateFields,
   listIssueTypes,
@@ -25,6 +28,8 @@ import type {
 } from '../../shared/types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
+const issueSummaryRequests = new JiraCancellableRequests()
+const searchRequests = new JiraCancellableRequests()
 
 function normalizeSiteId(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined
@@ -90,7 +95,8 @@ export function registerJiraHandlers(): void {
     const result = await connect({
       siteUrl: args.siteUrl,
       email: args.email,
-      apiToken: args.apiToken
+      apiToken: args.apiToken,
+      authType: args.authType === 'server' ? 'server' : 'cloud'
     })
     if (result.ok) {
       _resetPreflightCache()
@@ -115,19 +121,32 @@ export function registerJiraHandlers(): void {
     return getStatus()
   })
 
+  ipcMain.handle('jira:readStatus', async () => {
+    return getStatus()
+  })
+
   ipcMain.handle('jira:testConnection', async (_event, args?: { siteId?: string }) => {
     return testConnection(normalizeSiteId(args?.siteId))
   })
 
   ipcMain.handle(
     'jira:searchIssues',
-    async (_event, args: { jql: string; limit?: number; siteId?: JiraSiteSelection }) => {
+    async (
+      _event,
+      args: { jql: string; limit?: number; siteId?: JiraSiteSelection; requestId?: string }
+    ) => {
       if (typeof args?.jql !== 'string') {
         return []
       }
-      return searchIssues(args.jql, clampLimit(args.limit), normalizeSiteSelection(args.siteId))
+      return searchRequests.run(args.requestId, (signal) =>
+        searchIssues(args.jql, clampLimit(args.limit), normalizeSiteSelection(args.siteId), signal)
+      )
     }
   )
+
+  ipcMain.handle('jira:cancelSearchIssues', (_event, args: { requestId?: string }) => {
+    searchRequests.cancel(args?.requestId)
+  })
 
   ipcMain.handle(
     'jira:listIssues',
@@ -147,6 +166,27 @@ export function registerJiraHandlers(): void {
       return null
     }
     return getIssue(args.key.trim(), normalizeSiteId(args.siteId))
+  })
+
+  ipcMain.handle(
+    'jira:lookupIssueSummary',
+    async (_event, args: { key: string; siteId: string; requestId?: string }) => {
+      if (
+        typeof args?.key !== 'string' ||
+        !args.key.trim() ||
+        typeof args?.siteId !== 'string' ||
+        !args.siteId.trim()
+      ) {
+        return null
+      }
+      return issueSummaryRequests.run(args.requestId, (signal) =>
+        getIssueSummary(args.key.trim(), args.siteId.trim(), signal)
+      )
+    }
+  )
+
+  ipcMain.handle('jira:cancelIssueSummary', (_event, args: { requestId?: string }) => {
+    issueSummaryRequests.cancel(args?.requestId)
   })
 
   ipcMain.handle('jira:createIssue', async (_event, args: JiraCreateIssueArgs) => {
@@ -259,4 +299,14 @@ export function registerJiraHandlers(): void {
     }
     return listTransitions(args.key.trim(), normalizeSiteId(args.siteId))
   })
+
+  ipcMain.handle(
+    'jira:getProjectStatusOrder',
+    async (_event, args: { projectKey: string; siteId?: string }) => {
+      if (typeof args?.projectKey !== 'string' || !args.projectKey.trim()) {
+        return { statusIdsByColumn: [] }
+      }
+      return getProjectStatusOrder(args.projectKey.trim(), normalizeSiteId(args.siteId))
+    }
+  )
 }

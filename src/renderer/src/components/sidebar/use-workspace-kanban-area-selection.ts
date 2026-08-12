@@ -1,18 +1,20 @@
 /* eslint-disable max-lines -- Why: marquee selection coordinates pointer capture, lane-scroll refresh, auto-scroll, preview cleanup, and final commit against one drag state. Splitting those phases would make the interaction easier to desynchronize. */
 import React, { useCallback, useEffect, useRef } from 'react'
 import {
+  getAreaSelectionCardRects,
+  type AreaSelectionCardRect
+} from './workspace-kanban-area-selection-card-rects'
+import {
   clearPreviewSelection,
   getAreaSelectionAutoScrollDelta,
   getAreaSelectionCardIds,
-  getAreaSelectionCardRects,
   getAreaSelectionRect,
   getAreaSelectionScrollContainer,
   getAreaSelectionScrollStartContentYByElement,
   isScrollbarPointerDown,
   setOverlayRect,
   shouldIgnoreAreaSelectionStart,
-  updatePreviewSelection,
-  type AreaSelectionCardRect
+  updatePreviewSelection
 } from './workspace-kanban-area-selection-dom'
 
 type AreaSelectionDragState = {
@@ -110,6 +112,20 @@ export function useWorkspaceKanbanAreaSelection({
 
     state.started = true
 
+    // Why: deferred card mount can start a marquee against empty rects; pick up
+    // virtual layout once lanes register without waiting for a scroll event.
+    if (state.cardRects.length === 0) {
+      const board = boardRef.current
+      if (board) {
+        state.boardRect = board.getBoundingClientRect()
+        state.cardRects = getAreaSelectionCardRects(board)
+        state.scrollStartContentYByElement = getAreaSelectionScrollStartContentYByElement(
+          board,
+          state.startY
+        )
+      }
+    }
+
     const viewportRect = getAreaSelectionRect(
       state.startX,
       state.startY,
@@ -153,7 +169,7 @@ export function useWorkspaceKanbanAreaSelection({
       state.additive,
       areaIds
     )
-  }, [overlayRef])
+  }, [boardRef, overlayRef])
 
   const refreshAreaSelectionMeasurements = useCallback(() => {
     const state = dragRef.current
@@ -233,6 +249,7 @@ export function useWorkspaceKanbanAreaSelection({
         window.cancelAnimationFrame(state.scrollFrameId)
         state.scrollFrameId = null
       }
+      refreshAreaSelectionMeasurements()
       flushAreaSelectionDrag()
       if (shouldCommitWorkspaceKanbanAreaSelection(state)) {
         updateSelectionForAreaRef.current(
@@ -246,7 +263,7 @@ export function useWorkspaceKanbanAreaSelection({
       dragRef.current = null
       setOverlayRect(overlayRef.current, null)
     },
-    [flushAreaSelectionDrag, overlayRef]
+    [flushAreaSelectionDrag, overlayRef, refreshAreaSelectionMeasurements]
   )
 
   const handleAreaSelectionPointerDown = useCallback(

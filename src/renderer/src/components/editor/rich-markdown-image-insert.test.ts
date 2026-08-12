@@ -8,7 +8,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: vi.fn(() => 'ssh-1')
+  getConnectionId: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({

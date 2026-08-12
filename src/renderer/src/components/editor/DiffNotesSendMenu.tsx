@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react'
+import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../shared/types'
 import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+
+// Why: a keyboard open request the menu never got to consume (e.g. the user
+// navigated away before it mounted) must not reopen the menu on a later remount.
+const OPEN_REQUEST_TTL_MS = 5000
 
 export function DiffNotesSendMenu({
   worktreeId,
@@ -16,7 +20,8 @@ export function DiffNotesSendMenu({
   triggerCount,
   actionLabel,
   iconClassName = 'size-3.5',
-  align = 'end'
+  align = 'end',
+  respondToOpenRequest = false
 }: {
   worktreeId: string
   groupId: string
@@ -29,8 +34,23 @@ export function DiffNotesSendMenu({
   actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  // When set, this menu opens in response to the store's keyboard-shortcut open
+  // request. Enable on exactly one instance per worktree to avoid double-open.
+  respondToOpenRequest?: boolean
 }): React.JSX.Element {
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
+  const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
+  const openRequestNonce =
+    respondToOpenRequest &&
+    openRequest?.worktreeId === worktreeId &&
+    Date.now() - openRequest.issuedAt < OPEN_REQUEST_TTL_MS
+      ? openRequest.nonce
+      : null
+  const handleOpenRequestHandled = useCallback(
+    () => consumeOpenRequest(worktreeId),
+    [consumeOpenRequest, worktreeId]
+  )
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
@@ -76,6 +96,8 @@ export function DiffNotesSendMenu({
       actionLabel={actionLabel}
       iconClassName={iconClassName}
       align={align}
+      openRequestNonce={openRequestNonce}
+      onOpenRequestHandled={handleOpenRequestHandled}
       onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
     />
   )

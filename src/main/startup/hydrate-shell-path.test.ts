@@ -93,6 +93,26 @@ describe('hydrateShellPath', () => {
     expect(spawnCount).toBe(2)
   })
 
+  it('continues the probe queue after a rejected hydration', async () => {
+    const rejectedSpawner = vi.fn<HydrationSpawner>(async () => {
+      throw new Error('profile failed')
+    })
+    const successfulSpawner = vi.fn<HydrationSpawner>(async () => ({
+      segments: ['/current'],
+      ok: true,
+      failureReason: 'none'
+    }))
+
+    await expect(
+      hydrateShellPath({ shellOverride: '/bin/zsh', spawner: rejectedSpawner, force: true })
+    ).rejects.toThrow('profile failed')
+    await expect(
+      hydrateShellPath({ shellOverride: '/bin/bash', spawner: successfulSpawner, force: true })
+    ).resolves.toEqual({ segments: ['/current'], ok: true, failureReason: 'none' })
+
+    expect(successfulSpawner).toHaveBeenCalledWith('/bin/bash')
+  })
+
   it('returns failureReason:no_shell when no shell is available (Windows path)', async () => {
     const result = await hydrateShellPath({
       shellOverride: null,
@@ -161,6 +181,10 @@ describe('hydrateShellPath', () => {
 
 describe('mergePathSegments', () => {
   const originalPath = process.env.PATH
+
+  beforeEach(() => {
+    _resetHydrateShellPathCache()
+  })
 
   afterEach(() => {
     if (originalPath === undefined) {

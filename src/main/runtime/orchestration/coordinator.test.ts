@@ -21,6 +21,7 @@ function createMockRuntime(): CoordinatorRuntime & {
   createdTerminalOptions: { title?: string }[]
   probeDriftCalls: string[]
   probeDriftResult: DriftResult
+  cliCommand: 'orca' | 'orca-ide'
   setProbeDrift(result: DriftResult): void
   throwProbeDrift: Error | null
 } {
@@ -36,6 +37,7 @@ function createMockRuntime(): CoordinatorRuntime & {
     createdTerminalOptions: [] as { title?: string }[],
     probeDriftCalls: [] as string[],
     probeDriftResult: null as DriftResult,
+    cliCommand: 'orca' as 'orca' | 'orca-ide',
     throwProbeDrift: null as Error | null,
     setProbeDrift(result: DriftResult): void {
       mock.probeDriftResult = result
@@ -63,6 +65,9 @@ function createMockRuntime(): CoordinatorRuntime & {
         throw mock.throwProbeDrift
       }
       return mock.probeDriftResult
+    },
+    getTerminalOrchestrationCliCommand() {
+      return mock.cliCommand
     }
   }
   return mock
@@ -76,6 +81,7 @@ function insertWorkerDone(
     from?: string
     dispatchId?: string
     filesModified?: string[]
+    senderPaneKey?: string
   }
 ): void {
   const dispatch = db.getDispatchContext(params.taskId)
@@ -83,16 +89,21 @@ function insertWorkerDone(
   if (!dispatchId) {
     throw new Error(`No dispatch for task ${params.taskId}`)
   }
+  const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
-    from: params.from ?? dispatch?.assignee_handle ?? 'term_unknown',
+    from,
     to: params.to ?? 'coord',
     subject: 'Done',
     type: 'worker_done',
     payload: JSON.stringify({
       taskId: params.taskId,
       dispatchId,
+      outcome: 'succeeded',
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
-    })
+    }),
+    senderPaneKey:
+      params.senderPaneKey ??
+      (from === dispatch?.assignee_handle ? (dispatch.assignee_pane_key ?? undefined) : undefined)
   })
 }
 
@@ -116,6 +127,7 @@ describe('Coordinator', () => {
   it('dispatches a ready task to an available terminal', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
+    runtime.cliCommand = 'orca-ide'
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
     const task = db.createTask({ spec: 'implement feature' })
@@ -142,6 +154,68 @@ describe('Coordinator', () => {
     expect(result.status).toBe('completed')
     expect(result.completedTasks).toContain(task.id)
     expect(runtime.sentMessages.length).toBeGreaterThan(0)
+    expect(runtime.sentMessages[0].text).toContain('orca-ide orchestration send')
+  })
+
+  it('records the assignee pane key when the runtime can resolve one', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withPaneLookup = Object.assign(runtime, {
+      getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
+    })
+
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withPaneLookup, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+    expect(db.getDispatchContext(task.id)?.process_incarnation).toBeNull()
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
+  it('records authenticated process authority for automatic dispatch', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withAuthority = Object.assign(runtime, {
+      getOrchestrationDispatchAuthority: (handle: string) =>
+        handle === 'term_a'
+          ? {
+              paneKey: 'tab_a:leaf_a',
+              processIncarnation: 'pty_a:incarnation-a',
+              launchTokenHash: 'launch-token-hash'
+            }
+          : null
+    })
+    const task = db.createTask({ spec: 'implement feature' })
+    const coordinator = new Coordinator(db, withAuthority, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)).toMatchObject({
+      assignee_pane_key: 'tab_a:leaf_a',
+      process_incarnation: 'pty_a:incarnation-a',
+      launch_token_hash: 'launch-token-hash'
+    })
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
   })
 
   it('records completedTasks when send reconciled worker_done before coordinator read', async () => {
@@ -155,7 +229,7 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     reconcileLifecycleMessage(db, msg)
@@ -177,7 +251,11 @@ describe('Coordinator', () => {
 
     const task = db.createTask({ spec: 'duplicate completion' })
     const dispatch = db.createDispatchContext(task.id, 'term_a')
-    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
     const first = db.insertMessage({
       from: 'term_a',
       to: 'coord',
@@ -532,7 +610,11 @@ describe('Coordinator', () => {
       to: 'coord',
       subject: 'Late done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: staleCtx.id,
+        outcome: 'succeeded'
+      })
     })
 
     const staleCoordinator = new Coordinator(db, runtime, {
@@ -570,20 +652,22 @@ describe('Coordinator', () => {
     expect(db.getDispatchContextById(activeCtx.id)?.status).toBe('completed')
   })
 
-  it('ignores worker_done sent by a terminal that does not own the dispatch', async () => {
+  it('accepts worker_done pane provenance after an assignee handle changes', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
     const logs: string[] = []
 
     const task = db.createTask({ spec: 'owned work' })
-    const ctx = db.createDispatchContext(task.id, 'term_owner')
+    const leafId = '11111111-1111-4111-8111-111111111111'
+    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
-      from: 'term_intruder',
+      from: 'term_reminted',
       to: 'coord',
-      subject: 'Spoofed done',
+      subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, outcome: 'succeeded' }),
+      senderPaneKey: `tab_after:${leafId}`
     })
 
     const coordinator = new Coordinator(db, runtime, {
@@ -592,16 +676,12 @@ describe('Coordinator', () => {
       pollIntervalMs: 20,
       onLog: (m) => logs.push(m)
     })
-    const runPromise = coordinator.run()
-    await new Promise((r) => {
-      setTimeout(r, 80)
-    })
-    coordinator.stop()
-    await runPromise
+    const result = await coordinator.run()
 
-    expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(db.getDispatchContextById(ctx.id)?.status).toBe('dispatched')
-    expect(logs.some((m) => m.includes('expected term_owner'))).toBe(true)
+    expect(result.status).toBe('completed')
+    expect(db.getTask(task.id)?.status).toBe('completed')
+    expect(db.getDispatchContextById(ctx.id)?.status).toBe('completed')
+    expect(logs.some((m) => m.includes('Task') && m.includes('completed'))).toBe(true)
   })
 
   it('can be stopped', async () => {

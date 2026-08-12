@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   _resetTracerForTests,
+  flushActiveSink,
   getActiveSpanContext,
   setActiveSink,
   startSpan,
@@ -67,6 +68,23 @@ describe('tracer — basic span lifecycle', () => {
     const r = sink.records[0] as { exit: { _tag: string; cause: string } }
     expect(r.exit._tag).toBe('Interrupted')
     expect(r.exit.cause).toBe('user-cancelled')
+  })
+
+  it('keeps forced sink flush failures from escaping crash boundaries', () => {
+    sink.flush = () => {
+      throw new Error('disk unavailable')
+    }
+
+    expect(() => flushActiveSink()).not.toThrow()
+  })
+
+  it('keeps sink handoff failures from escaping instrumented operations', async () => {
+    sink.push = () => {
+      throw new Error('trace rotation failed')
+    }
+
+    expect(() => startSpan('test').fail('boom')).not.toThrow()
+    await expect(withSpan('async-test', async () => 'result')).resolves.toBe('result')
   })
 
   it('end() is idempotent — second call is a no-op', () => {

@@ -1,25 +1,22 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshCw, TicketCheck, X } from 'lucide-react'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import { Button } from '@/components/ui/button'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
-  hasInstalledAgentSkill,
   useInstalledAgentSkillNames
 } from '@/hooks/useInstalledAgentSkills'
 import {
   LINEAR_AGENT_SKILL_NAMES,
-  LINEAR_TICKETS_SKILL_NAME,
-  LINEAR_TICKETS_SKILL_UPDATE_COMMAND,
-  ORCA_LINEAR_SKILL_NAME,
-  ORCA_LINEAR_SKILL_INSTALL_COMMAND,
-  ORCA_LINEAR_SKILL_UPDATE_COMMAND
+  ORCA_LINEAR_SKILL_INSTALL_COMMAND
 } from '@/lib/agent-feature-install-commands'
+import { getLinearAgentSkillUpdateCommand } from '@/lib/linear-agent-skill-update-command'
 import {
   ensureOrcaCliAvailableForAgentSkillTerminal,
   isOrcaCliAvailableOnPath
 } from '@/lib/agent-skill-cli-prerequisite'
+import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { cn } from '@/lib/utils'
 import {
   buildSkillCommandForRuntime,
@@ -49,8 +46,11 @@ import {
   readLocalDismissed,
   type LinearAgentSkillPromptSettings
 } from './linear-agent-skill-runtime'
-import { LinearAgentSkillSetupDialog } from './LinearAgentSkillSetupDialog'
 import { translate } from '@/i18n/i18n'
+
+const LinearAgentSkillSetupDialog = lazyWithRetry(() => import('./LinearAgentSkillSetupDialog'), {
+  reloadKey: 'linear-agent-skill-setup-dialog'
+})
 
 export const _linearAgentSkillSetupPromptInternalsForTests = {
   resetSessionReminders(): void {
@@ -109,6 +109,13 @@ export function LinearAgentSkillSetupPrompt({
   const [localDismissed, setLocalDismissed] = useState(() =>
     readLocalDismissed(localDismissStorageKey)
   )
+  const [previousDismissStorageKey, setPreviousDismissStorageKey] = useState(localDismissStorageKey)
+  // Why: dismissal is scoped to the selected runtime, so read the new key before
+  // paint rather than briefly showing the previous runtime's prompt state.
+  if (localDismissStorageKey !== previousDismissStorageKey) {
+    setPreviousDismissStorageKey(localDismissStorageKey)
+    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
+  }
   const skill = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
     enabled: linked,
     discoveryTarget: skillDiscoveryTarget,
@@ -118,31 +125,19 @@ export function LinearAgentSkillSetupPrompt({
     () => buildSkillCommandForRuntime(ORCA_LINEAR_SKILL_INSTALL_COMMAND, agentRuntime),
     [agentRuntime]
   )
-  const canonicalSkillInstalled = hasInstalledAgentSkill(skill.skills, ORCA_LINEAR_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  const legacySkillInstalled = hasInstalledAgentSkill(skill.skills, LINEAR_TICKETS_SKILL_NAME, {
-    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
-  })
-  // Why: legacy-only installs must update the installed legacy skill, while
-  // fresh/canonical/both-name states should move through the canonical name.
-  const updateCommand =
-    !skill.installed || canonicalSkillInstalled || !legacySkillInstalled
-      ? ORCA_LINEAR_SKILL_UPDATE_COMMAND
-      : LINEAR_TICKETS_SKILL_UPDATE_COMMAND
   const installedCommand = useMemo(
-    () => buildSkillCommandForRuntime(updateCommand, agentRuntime),
-    [agentRuntime, updateCommand]
+    () =>
+      buildSkillCommandForRuntime(
+        getLinearAgentSkillUpdateCommand(skill.skills, skill.installed),
+        agentRuntime
+      ),
+    [agentRuntime, skill.installed, skill.skills]
   )
   const terminalShellOverride = getLinearPromptTerminalShellOverride(
     currentPlatform,
     settings,
     agentRuntime
   )
-  useEffect(() => {
-    setLocalDismissed(readLocalDismissed(localDismissStorageKey))
-  }, [localDismissStorageKey])
-
   const writeCliStatusIfCurrent = useCallback(
     (requestIdentity: string, requestGeneration: number, write: () => void): void => {
       if (
@@ -287,70 +282,72 @@ export function LinearAgentSkillSetupPrompt({
     return null
   }
 
-  const setupDialog = (
-    <LinearAgentSkillSetupDialog
-      open={setupDialogOpen}
-      showSuccess={showSuccessModal}
-      successDescription={successDescription}
-      missingLabel={missingLabel}
-      command={command}
-      installedCommand={installedCommand}
-      terminalShellOverride={terminalShellOverride}
-      installed={skill.installed}
-      loading={showCheckingModal || cliLoading || skill.loading}
-      error={skill.error}
-      getPrerequisiteStatus={
-        agentRuntime.runtime === 'wsl'
-          ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
-          : undefined
-      }
-      onBeforeOpenTerminal={async () => {
-        const requestIdentity = setupCheckIdentity
-        const writeIfCurrent = (write: () => void): void => {
-          writeCliStatusForIdentity(requestIdentity, write)
-        }
-        const nextStatus =
+  const setupDialog = setupDialogOpen ? (
+    <Suspense fallback={null}>
+      <LinearAgentSkillSetupDialog
+        open
+        showSuccess={showSuccessModal}
+        successDescription={successDescription}
+        missingLabel={missingLabel}
+        command={command}
+        installedCommand={installedCommand}
+        terminalShellOverride={terminalShellOverride}
+        terminalRuntime={agentRuntime}
+        installed={skill.installed}
+        loading={showCheckingModal || cliLoading || skill.loading}
+        error={skill.error}
+        getPrerequisiteStatus={
           agentRuntime.runtime === 'wsl'
-            ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
-            : await ensureOrcaCliAvailableForAgentSkillTerminal({
-                onStatusChange: (nextCliStatus) => {
-                  writeIfCurrent(() => setCliStatus(nextCliStatus))
-                }
-              })
-        if (agentRuntime.runtime === 'wsl') {
-          writeIfCurrent(() => setCliStatus(nextStatus))
+            ? () => window.api.cli.getWslInstallStatus(getWslCliDistroRequest(agentRuntime))
+            : undefined
         }
-      }}
-      onRecheck={async () => {
-        if (surface === 'modal') {
-          setActiveSetupCheckIdentity(setupCheckIdentity)
-          setSetupCheckResult('checking')
-          await Promise.all([refreshCliStatus(), skill.refresh()])
-          return
-        }
-        await refreshCliStatus()
-        await skill.refresh()
-      }}
-      onOpenChange={(open) => {
-        if (open) {
-          setSetupDialogOpen(true)
-          return
-        }
-        if (showSuccessModal) {
-          closeSuccessModal()
-          return
-        }
-        if (surface === 'modal') {
-          snoozeForSession()
-          return
-        }
-        setSetupDialogOpen(false)
-      }}
-      onDismissPermanently={dismissPermanently}
-      onSnoozeForSession={snoozeForSession}
-      onDone={closeSuccessModal}
-    />
-  )
+        onBeforeOpenTerminal={async () => {
+          const requestIdentity = setupCheckIdentity
+          const writeIfCurrent = (write: () => void): void => {
+            writeCliStatusForIdentity(requestIdentity, write)
+          }
+          const nextStatus =
+            agentRuntime.runtime === 'wsl'
+              ? await ensureWslCliAvailableForAgentSkillTerminal(agentRuntime)
+              : await ensureOrcaCliAvailableForAgentSkillTerminal({
+                  onStatusChange: (nextCliStatus) => {
+                    writeIfCurrent(() => setCliStatus(nextCliStatus))
+                  }
+                })
+          if (agentRuntime.runtime === 'wsl') {
+            writeIfCurrent(() => setCliStatus(nextStatus))
+          }
+        }}
+        onRecheck={async () => {
+          if (surface === 'modal') {
+            setActiveSetupCheckIdentity(setupCheckIdentity)
+            setSetupCheckResult('checking')
+            await Promise.all([refreshCliStatus(), skill.refresh()])
+            return
+          }
+          await refreshCliStatus()
+          await skill.refresh()
+        }}
+        onOpenChange={(open) => {
+          if (open) {
+            setSetupDialogOpen(true)
+            return
+          }
+          if (showSuccessModal) {
+            closeSuccessModal()
+            return
+          }
+          if (surface === 'modal') {
+            snoozeForSession()
+            return
+          }
+          setSetupDialogOpen(false)
+        }}
+        onDismissPermanently={dismissPermanently}
+        onDone={closeSuccessModal}
+      />
+    </Suspense>
+  ) : null
 
   if (surface === 'modal') {
     return setupDialog

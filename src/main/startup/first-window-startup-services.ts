@@ -13,6 +13,7 @@ type StartupService = {
 type FirstWindowStartupServicesResult = {
   firstWindowReady: Promise<void>
   localPtyReady: Promise<void>
+  localPtyProviderReady: Promise<void>
 }
 
 export const FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS = 12_000
@@ -84,22 +85,23 @@ export function startFirstWindowStartupServices({
       clearTimeout(failOpenTimeout)
     }
   })
+  const failOpenReady = new Promise<void>((resolve) => {
+    failOpenTimeout = setTimeout(() => {
+      daemon.reportTimeout()
+      hooks.reportTimeout()
+      resolve()
+    }, LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
+  })
   const firstWindowReady = Promise.race([
     servicesSettled,
     new Promise<void>((resolve) => {
       windowTimeout = setTimeout(resolve, FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS)
     })
   ])
-  const localPtyReady = Promise.race([
-    servicesSettled,
-    new Promise<void>((resolve) => {
-      failOpenTimeout = setTimeout(() => {
-        daemon.reportTimeout()
-        hooks.reportTimeout()
-        resolve()
-      }, LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS)
-    })
-  ])
+  const localPtyReady = Promise.race([servicesSettled, failOpenReady])
+  // Why: destructive routing only needs daemon authority. A stalled optional
+  // hook server must not hold terminal close for the full fail-open window.
+  const localPtyProviderReady = Promise.race([daemon.ready, failOpenReady])
 
-  return { firstWindowReady, localPtyReady }
+  return { firstWindowReady, localPtyReady, localPtyProviderReady }
 }

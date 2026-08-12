@@ -5,28 +5,109 @@
 // activation intent here: the reconcile only follows the snapshot's active tab
 // when it matches a pending intent the client itself initiated.
 //
-// Keyed by worktree id → the host session tab id the client expects to focus.
+// Keyed by worktree id → the host session surface the client expects to focus.
 // The intent persists until a snapshot matches it (surviving racing/duplicate
 // snapshots, unlike a transient per-snapshot flag).
 
-const pendingFocusByWorktree = new Map<string, string>()
+import { webSessionIntentOwnerKey, type WebSessionIntentOwner } from './web-session-intent-owner'
+import type { AppState } from '../store/types'
 
-export function recordWebSessionFocusIntent(worktreeId: string, hostTabId: string): void {
+export type WebSessionFocusIntent = {
+  hostTabId: string
+  leafId?: string
+  expectedCurrentLocalTabId?: string | null
+}
+
+const pendingFocusByOwnerAndWorktree = new Map<string, WebSessionFocusIntent>()
+
+type WebSessionVisibleTabState = Pick<
+  AppState,
+  | 'activeBrowserTabIdByWorktree'
+  | 'activeFileIdByWorktree'
+  | 'activeTabIdByWorktree'
+  | 'activeTabType'
+  | 'activeTabTypeByWorktree'
+  | 'activeWorktreeId'
+  | 'unifiedTabsByWorktree'
+>
+
+export function resolveWebSessionVisibleTabId(
+  state: WebSessionVisibleTabState,
+  worktreeId: string,
+  tabs = state.unifiedTabsByWorktree?.[worktreeId] ?? []
+): string | null {
+  const currentType =
+    state.activeTabTypeByWorktree?.[worktreeId] ??
+    (state.activeWorktreeId === worktreeId ? state.activeTabType : null)
+  if (currentType === 'terminal') {
+    const tabId = state.activeTabIdByWorktree?.[worktreeId]
+    return tabId && tabs.some((tab) => tab.id === tabId) ? tabId : null
+  }
+  const entityId =
+    currentType === 'browser'
+      ? state.activeBrowserTabIdByWorktree?.[worktreeId]
+      : currentType === 'editor'
+        ? state.activeFileIdByWorktree?.[worktreeId]
+        : null
+  return (
+    tabs.find((tab) => tab.contentType === currentType && tab.entityId === entityId)?.id ?? null
+  )
+}
+
+function focusIntentPartitionKey(owner: WebSessionIntentOwner, worktreeId: string): string {
+  return `${webSessionIntentOwnerKey(owner)}\0${worktreeId}`
+}
+
+export function recordWebSessionFocusIntent(
+  owner: WebSessionIntentOwner,
+  worktreeId: string,
+  hostTabId: string,
+  leafId?: string,
+  expectedCurrentLocalTabId?: string | null
+): void {
   const trimmed = hostTabId.trim()
   if (!worktreeId || !trimmed) {
     return
   }
-  pendingFocusByWorktree.set(worktreeId, trimmed)
+  const trimmedLeafId = leafId?.trim()
+  pendingFocusByOwnerAndWorktree.set(focusIntentPartitionKey(owner, worktreeId), {
+    hostTabId: trimmed,
+    ...(trimmedLeafId ? { leafId: trimmedLeafId } : {}),
+    ...(expectedCurrentLocalTabId !== undefined ? { expectedCurrentLocalTabId } : {})
+  })
 }
 
-export function peekWebSessionFocusIntent(worktreeId: string): string | null {
-  return pendingFocusByWorktree.get(worktreeId) ?? null
+export function peekWebSessionFocusIntent(
+  owner: WebSessionIntentOwner,
+  worktreeId: string
+): WebSessionFocusIntent | null {
+  return pendingFocusByOwnerAndWorktree.get(focusIntentPartitionKey(owner, worktreeId)) ?? null
 }
 
-export function clearWebSessionFocusIntent(worktreeId: string): void {
-  pendingFocusByWorktree.delete(worktreeId)
+export function clearWebSessionFocusIntent(owner: WebSessionIntentOwner, worktreeId: string): void {
+  pendingFocusByOwnerAndWorktree.delete(focusIntentPartitionKey(owner, worktreeId))
+}
+
+export function clearWebSessionFocusIntentIfMatches(
+  owner: WebSessionIntentOwner,
+  worktreeId: string,
+  hostTabId: string
+): void {
+  const key = focusIntentPartitionKey(owner, worktreeId)
+  if (pendingFocusByOwnerAndWorktree.get(key)?.hostTabId === hostTabId) {
+    pendingFocusByOwnerAndWorktree.delete(key)
+  }
+}
+
+export function clearWebSessionFocusIntentsForOwner(owner: WebSessionIntentOwner): void {
+  const prefix = `${webSessionIntentOwnerKey(owner)}\0`
+  for (const key of pendingFocusByOwnerAndWorktree.keys()) {
+    if (key.startsWith(prefix)) {
+      pendingFocusByOwnerAndWorktree.delete(key)
+    }
+  }
 }
 
 export function resetWebSessionFocusIntentForTests(): void {
-  pendingFocusByWorktree.clear()
+  pendingFocusByOwnerAndWorktree.clear()
 }

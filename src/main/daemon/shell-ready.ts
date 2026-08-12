@@ -12,9 +12,11 @@ import {
 } from '../powershell-osc133-bootstrap'
 import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import {
+  getFishShellReadyInitCommand,
   getZshEnvTemplate,
   getZshFinalZdotdirRestoreBlock,
   getZshShellReadyMarkerRegistrationBlock,
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK,
   getZshStartupFileSourceBlock
 } from '../shell-templates'
 
@@ -87,6 +89,7 @@ function shellReadyWrappersExist(): boolean {
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
+${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -348,13 +351,18 @@ export function resolvePtyShellPath(env: Record<string, string>): string {
   return env.SHELL || process.env.SHELL || '/bin/zsh'
 }
 
+export function shellPathSupportsPtyStartupBarrier(shellPath: string): boolean {
+  const shellName = pathWin32.basename(basename(shellPath)).toLowerCase()
+  // Why fish: markerless, its startup command is written before fish's reader owns
+  // the PTY and the launch is lost under slow prompts like Starship (STA-3417).
+  return shellName === 'zsh' || shellName === 'bash' || shellName === 'fish'
+}
+
 export function supportsPtyStartupBarrier(env: Record<string, string>): boolean {
   if (process.platform === 'win32') {
     return false
   }
-  const resolvedShell = resolvePtyShellPath(env)
-  const shellName = pathWin32.basename(basename(resolvedShell)).toLowerCase()
-  return shellName === 'zsh' || shellName === 'bash'
+  return shellPathSupportsPtyStartupBarrier(resolvePtyShellPath(env))
 }
 
 type ShellLaunchConfig = {
@@ -378,7 +386,8 @@ function getWrappedShellLaunchConfig(
         ORCA_ORIG_ZDOTDIR: resolveOriginalZdotdir(),
         ORCA_ZSHENV_SOURCE_DIR: resolveOriginalZshenvSourceDir(),
         ZDOTDIR: join(root, 'zsh'),
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
+        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
     }
@@ -390,7 +399,8 @@ function getWrappedShellLaunchConfig(
     return {
       args: ['--rcfile', join(root, 'bash', 'rcfile')],
       env: {
-        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0'
+        ORCA_SHELL_READY_MARKER: options.emitReadyMarker ? '1' : '0',
+        ORCA_SHELL_STARTUP_IDENTITY: options.emitReadyMarker ? '1' : '0'
       },
       supportsReadyMarker: options.emitReadyMarker
     }
@@ -406,6 +416,15 @@ function getWrappedShellLaunchConfig(
       ],
       env: {},
       supportsReadyMarker: false
+    }
+  }
+
+  // Why: mirrors local-pty-shell-ready.ts; attribution-only fish stays unwrapped.
+  if (shellName === 'fish' && options.emitReadyMarker) {
+    return {
+      args: ['-l', '-C', getFishShellReadyInitCommand(SHELL_READY_MARKER)],
+      env: { ORCA_SHELL_READY_MARKER: '1' },
+      supportsReadyMarker: true
     }
   }
 

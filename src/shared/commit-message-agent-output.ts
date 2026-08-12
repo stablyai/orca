@@ -88,182 +88,110 @@ function isCommitFenceInfoCharacter(code: number): boolean {
   )
 }
 
-function stripAnsiControlSequences(value: string): string {
-  return value.replace(new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, 'g'), '')
-}
-
-const AGENT_ERROR_CODE_SCAN_LIMIT = 8192
-const ERROR_CODE_MARKER = 'error code:'
-
-// Why: agent CLIs (Codex, Claude) prefix their stdout/stderr with config
-// preamble, the echoed prompt, and hook lifecycle messages. When something
-// fails, the actionable error is buried far below all of that. This pulls
-// out the real message so the user sees something legible instead of a
-// dump of the agent's runtime state.
-export function extractAgentErrorMessage(stdout: string, stderr: string): string | null {
-  const combined = `${stdout}\n${stderr}`
-  // Pass 1: look for an `ERROR:`/`Error:` line carrying a JSON payload.
-  // Walk from the end so the most recent (and usually most meaningful)
-  // error wins when an agent prints multiple.
-  const errorPayload = findLastAgentErrorPayload(combined)
-  if (errorPayload !== null) {
-    const payload = errorPayload.trim()
-    if (payload.startsWith('{')) {
-      try {
-        const parsed = JSON.parse(payload) as {
-          message?: string
-          error?: { message?: string }
-        }
-        const inner = parsed.error?.message ?? parsed.message
-        if (typeof inner === 'string' && inner.trim().length > 0) {
-          return inner.trim()
-        }
-      } catch {
-        // Fall through to using the raw payload below.
-      }
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  const compact = extractCompactedErrorCodeTail(combined)
-  const errorCodeMatch = compact ? /\bError code:\s*\d+\s*-\s*(.+)$/i.exec(compact) : null
-  if (errorCodeMatch) {
-    const payload = errorCodeMatch[1].trim()
-    const messageMatch = /['"]message['"]\s*:\s*['"]([^'"]+)['"]/i.exec(payload)
-    if (messageMatch?.[1]?.trim()) {
-      return messageMatch[1].trim()
-    }
-    if (payload.length > 0) {
-      return payload
-    }
-  }
-
-  return null
-}
-
-function extractCompactedErrorCodeTail(combined: string): string | null {
-  const markerStart = lastIndexOfAsciiIgnoreCase(combined, ERROR_CODE_MARKER)
-  if (markerStart === -1) {
-    return null
-  }
-
-  return compactAgentErrorTail(
-    combined.slice(markerStart, markerStart + AGENT_ERROR_CODE_SCAN_LIMIT)
+export function stripAnsiControlSequences(value: string): string {
+  const esc = String.fromCharCode(27)
+  const bel = String.fromCharCode(7)
+  // CSI (colors/cursor) and OSC (titles/hyperlinks) both appear in raw CLI
+  // failure output once it is shown verbatim instead of parsed.
+  return value.replace(
+    new RegExp(
+      `${esc}(?:\\[[0-?]*[ -/]*[@-~]|\\][^${bel}${esc}\\r\\n]*(?:${bel}|${esc}\\\\))`,
+      'g'
+    ),
+    ''
   )
 }
 
-function lastIndexOfAsciiIgnoreCase(value: string, needle: string): number {
-  if (needle.length === 0 || value.length < needle.length) {
-    return -1
+function stripAnsiIfPresent(value: string): string {
+  return value.includes(String.fromCharCode(27)) ? stripAnsiControlSequences(value) : value
+}
+
+// Only the two ends of the output are read, like glancing at the first and
+// last lines of a long log.
+const FAILURE_EXCERPT_SCAN_WINDOW = 8192
+const FAILURE_EXCERPT_HEAD_LINE_COUNT = 2
+// Why: when both ends are shown, the tail gets the larger budget because most
+// CLIs print the operative error last; the head budget covers CLIs that
+// front-load it. A lone excerpt keeps the whole toast/persistence budget.
+const FAILURE_EXCERPT_HEAD_BUDGET = 100
+const FAILURE_EXCERPT_TAIL_BUDGET = 130
+const FAILURE_EXCERPT_SINGLE_BUDGET = 240
+
+// Why: agent CLIs share no error format, and per-CLI parsing rots every time a
+// vendor rewords a message. Orca deliberately does NOT interpret failure
+// output — it excerpts it positionally (first lines plus last line) so every
+// CLI's real failure text reaches the user. Callers must still sanitize the
+// excerpt before display or persistence.
+export function excerptAgentFailureOutput(stdout: string, stderr: string): string | null {
+  // stderr is where CLIs put diagnostics; stdout is the fallback for the ones
+  // that report failures inline (and often echoes the prompt, so it never
+  // overrides a non-blank stderr).
+  const source = /\S/.test(stderr) ? stderr : stdout
+  if (!/\S/.test(source)) {
+    return null
   }
-  for (let index = value.length - needle.length; index >= 0; index -= 1) {
-    if (equalsAsciiIgnoreCaseAt(value, needle, index)) {
-      return index
+
+  if (source.length <= FAILURE_EXCERPT_SCAN_WINDOW) {
+    const lines = collectExcerptLines(source, Number.POSITIVE_INFINITY)
+    if (lines.length === 0) {
+      return null
     }
-  }
-  return -1
-}
-
-function equalsAsciiIgnoreCaseAt(value: string, needle: string, index: number): boolean {
-  for (let offset = 0; offset < needle.length; offset += 1) {
-    if (
-      toAsciiLowerCode(value.charCodeAt(index + offset)) !==
-      toAsciiLowerCode(needle.charCodeAt(offset))
-    ) {
-      return false
+    if (lines.length <= FAILURE_EXCERPT_HEAD_LINE_COUNT + 1) {
+      return truncateExcerptPart(lines.join(' '), FAILURE_EXCERPT_SINGLE_BUDGET)
     }
-  }
-  return true
-}
-
-function compactAgentErrorTail(value: string): string {
-  let compact = ''
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (code === 13 || code === 10) {
-      if (code === 13 && value.charCodeAt(index + 1) === 10) {
-        index += 1
-      }
-      const next = findNextNonWhitespaceCode(value, index + 1)
-      if (shouldDropWrappedLineBreak(compact.charCodeAt(compact.length - 1), next)) {
-        index = next.index - 1
-        continue
-      }
-      if (compact.length > 0 && compact.charCodeAt(compact.length - 1) !== 32) {
-        compact += ' '
-      }
-      index = next.index - 1
-      continue
-    }
-    if (isAsciiWhitespace(code)) {
-      if (compact.length > 0 && compact.charCodeAt(compact.length - 1) !== 32) {
-        compact += ' '
-      }
-      continue
-    }
-    compact += value[index]
-  }
-  return compact.trim()
-}
-
-function findNextNonWhitespaceCode(value: string, start: number): { code: number; index: number } {
-  for (let index = start; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (!isAsciiWhitespace(code)) {
-      return { code, index }
-    }
-  }
-  return { code: Number.NaN, index: value.length }
-}
-
-function shouldDropWrappedLineBreak(previous: number, next: { code: number }): boolean {
-  return isAsciiLetter(previous) && (isAsciiLetter(next.code) || next.code === 95)
-}
-
-function isAsciiWhitespace(code: number): boolean {
-  return code === 9 || code === 10 || code === 11 || code === 12 || code === 13 || code === 32
-}
-
-function isAsciiLetter(code: number): boolean {
-  const lower = toAsciiLowerCode(code)
-  return lower >= 97 && lower <= 122
-}
-
-function toAsciiLowerCode(code: number): number {
-  return code >= 65 && code <= 90 ? code + 32 : code
-}
-
-function findLastAgentErrorPayload(combined: string): string | null {
-  let lineEnd = combined.length
-
-  for (let index = combined.length - 1; index >= -1; index--) {
-    if (index >= 0) {
-      const code = combined.charCodeAt(index)
-      if (code !== 10 && code !== 13) {
-        continue
-      }
-      if (code === 10 && index > 0 && combined.charCodeAt(index - 1) === 13) {
-        continue
-      }
-    }
-
-    // Why: agent logs can include paste-sized echoed prompts. Error lines are
-    // short diagnostics, so bound per-line ANSI stripping before matching.
-    const rawLine = combined.slice(
-      index + 1,
-      Math.min(lineEnd, index + 1 + AGENT_ERROR_CODE_SCAN_LIMIT)
+    return composeTwoEndExcerpt(
+      lines.slice(0, FAILURE_EXCERPT_HEAD_LINE_COUNT),
+      lines.at(-1) ?? null
     )
-    const line = rawLine.includes(String.fromCharCode(27))
-      ? stripAnsiControlSequences(rawLine)
-      : rawLine
-    const match = /^\s*(?:ERROR|Error(?:\s+during\s+[^:]+)?)\s*:\s*(.+)$/i.exec(line)
-    if (match?.[1]) {
-      return match[1]
-    }
-    lineEnd = index > 0 && combined.charCodeAt(index - 1) === 13 ? index - 1 : index
   }
 
-  return null
+  const headLines = collectExcerptLines(
+    source.slice(0, FAILURE_EXCERPT_SCAN_WINDOW),
+    FAILURE_EXCERPT_HEAD_LINE_COUNT
+  )
+  const tailLine =
+    collectExcerptLinesFromEnd(source.slice(source.length - FAILURE_EXCERPT_SCAN_WINDOW), 1)[0] ??
+    null
+  if (headLines.length === 0) {
+    return tailLine ? truncateExcerptPart(tailLine, FAILURE_EXCERPT_SINGLE_BUDGET) : null
+  }
+  return composeTwoEndExcerpt(headLines, tailLine)
+}
+
+function composeTwoEndExcerpt(headLines: string[], tailLine: string | null): string {
+  const headPart = truncateExcerptPart(headLines.join(' '), FAILURE_EXCERPT_HEAD_BUDGET)
+  // Repeated lines (spinner/retry frames) would otherwise show twice.
+  if (tailLine === null || headLines.includes(tailLine)) {
+    return headPart
+  }
+  return `${headPart} … ${truncateExcerptPart(tailLine, FAILURE_EXCERPT_TAIL_BUDGET)}`
+}
+
+function truncateExcerptPart(value: string, budget: number): string {
+  return value.length > budget ? `${value.slice(0, budget).trimEnd()}…` : value
+}
+
+function collectExcerptLines(text: string, max: number): string[] {
+  // Bare `\r` is a boundary too: progress bars redraw with carriage returns.
+  const lines = text.split(/\r\n|\r|\n/)
+  const collected: string[] = []
+  for (let index = 0; index < lines.length && collected.length < max; index += 1) {
+    const line = stripAnsiIfPresent(lines[index]).trim()
+    if (line.length > 0) {
+      collected.push(line)
+    }
+  }
+  return collected
+}
+
+function collectExcerptLinesFromEnd(text: string, max: number): string[] {
+  const lines = text.split(/\r\n|\r|\n/)
+  const collected: string[] = []
+  for (let index = lines.length - 1; index >= 0 && collected.length < max; index -= 1) {
+    const line = stripAnsiIfPresent(lines[index]).trim()
+    if (line.length > 0) {
+      collected.push(line)
+    }
+  }
+  return collected
 }

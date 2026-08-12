@@ -2,6 +2,24 @@ const { existsSync } = require('node:fs')
 const { spawnSync } = require('node:child_process')
 const { join } = require('node:path')
 
+// Why: `asarUnpack` in config/electron-builder.config.cjs lists
+// out/main/daemon-entry.js on every platform, and the packaged daemon fork
+// (src/main/daemon/daemon-init.ts) resolves exactly this unpacked path. A
+// missing entry means the package layout regressed, so the check throws
+// instead of skipping — a silent skip false-passed exactly the layout bug
+// this gate exists to catch.
+function assertPackagedDaemonEntryExists(resourcesDir) {
+  const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
+  if (!existsSync(entryPath)) {
+    throw new Error(
+      `[verify-packaged-daemon-entry] missing unpacked daemon entry at ${entryPath} — ` +
+        `asarUnpack expects out/main/daemon-entry.js on every platform, so the packaged ` +
+        `daemon cannot be forked from this layout`
+    )
+  }
+  return entryPath
+}
+
 // Why: v1.4.129-rc.1 shipped a terminal daemon that could not load (an electron
 // `require` leaked into its bundle) while every build check passed. This boots
 // the PACKAGED daemon-entry under plain Node against the asar-unpacked layout,
@@ -14,13 +32,7 @@ const { join } = require('node:path')
 // <appOutDir>/resources elsewhere). execPath defaults to the packaging Node.
 function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   const execPath = options.execPath || process.execPath
-  const entryPath = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'daemon-entry.js')
-  if (!existsSync(entryPath)) {
-    // Why: some targets/layouts do not unpack here; skip rather than fail so
-    // the hook stays safe across platforms it has not verified.
-    console.log(`[verify-packaged-daemon-entry] skipped — no unpacked entry at ${entryPath}`)
-    return
-  }
+  const entryPath = assertPackagedDaemonEntryExists(resourcesDir)
 
   const result = spawnSync(execPath, [entryPath], { encoding: 'utf8', timeout: 10_000 })
   if (result.error) {
@@ -43,4 +55,4 @@ function verifyPackagedDaemonEntryBoots(resourcesDir, options = {}) {
   console.log('[verify-packaged-daemon-entry] OK — packaged daemon-entry loads under plain Node')
 }
 
-module.exports = { verifyPackagedDaemonEntryBoots }
+module.exports = { assertPackagedDaemonEntryExists, verifyPackagedDaemonEntryBoots }

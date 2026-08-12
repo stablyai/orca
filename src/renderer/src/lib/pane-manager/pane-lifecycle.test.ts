@@ -7,6 +7,7 @@ import {
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
 import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
+import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
   DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
@@ -45,6 +46,7 @@ function createPane(): ManagedPaneInternal {
       loadAddon: vi.fn(),
       attachCustomWheelEventHandler: vi.fn(),
       refresh: vi.fn(),
+      cols: 80,
       rows: 24
     } as never,
     container: {} as never,
@@ -56,7 +58,8 @@ function createPane(): ManagedPaneInternal {
     webglDisabledAfterContextLoss: false,
     hasComplexScriptOutput: false,
     fitAddon: {
-      fit: vi.fn()
+      fit: vi.fn(),
+      proposeDimensions: vi.fn(() => ({ cols: 80, rows: 23 }))
     } as never,
     fitResizeObserver: null,
     pendingObservedFitRafId: null,
@@ -111,7 +114,7 @@ describe('buildDefaultTerminalOptions', () => {
     expect(normalizeTerminalFastScrollSensitivity(25)).toBe(20)
   })
 
-  it('enables xterm contrast correction for low-contrast CLI colors', () => {
+  it('defaults minimumContrastRatio to the light-background value (applyTerminalAppearance re-gates it)', () => {
     expect(buildDefaultTerminalOptions().minimumContrastRatio).toBe(4.5)
   })
 
@@ -147,6 +150,25 @@ describe('buildDefaultTerminalOptions', () => {
     }
 
     expect(merged.vtExtensions?.kittyKeyboard).toBe(false)
+  })
+
+  it('keeps kitty keyboard when a local Windows ConPTY pane is launching Grok', () => {
+    // Why: Grok needs KKP for Ctrl+Enter interject / Shift+Enter newline; the
+    // ConPTY withhold must not win when launchAgent (or tuiAgent) is grok.
+    const merged = {
+      ...buildDefaultTerminalOptions(),
+      ...buildTerminalKeyboardProtocolOptions({
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        osRelease: '10.0.26100',
+        connectionId: null,
+        cwd: 'C:\\repo',
+        shellOverride: 'powershell.exe',
+        executionHostId: 'local',
+        tuiAgent: 'grok'
+      })
+    }
+
+    expect(merged.vtExtensions?.kittyKeyboard).toBe(true)
   })
 
   it('keeps the advertised kitty keyboard default for SSH and macOS/Linux panes', () => {
@@ -408,6 +430,19 @@ describe('attachLigatures', () => {
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
     expect(pane.ligaturesAddon).not.toBeNull()
   })
+
+  it('defers a retained WebGL rebuild while hidden', () => {
+    const pane = createPane()
+    const retainedAddon = { dispose: vi.fn() } as never
+    pane.webglAddon = retainedAddon
+    pane.webglAttachmentDeferred = true
+
+    attachLigatures(pane)
+
+    expect(pane.webglAddon).toBe(retainedAddon)
+    expect(pane.webglRebuildDeferred).toBe(true)
+    expect(pane.terminal.refresh).not.toHaveBeenCalled()
+  })
 })
 
 describe('openTerminal — addon and provider wiring', () => {
@@ -493,6 +528,7 @@ describe('openTerminal — addon and provider wiring', () => {
         }
       }),
       attachCustomWheelEventHandler: vi.fn(),
+      onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
       write: vi.fn(() => {
         events.push('write')
       }),
@@ -503,6 +539,12 @@ describe('openTerminal — addon and provider wiring', () => {
       }),
       deregisterCharacterJoiner: vi.fn((joinerId: number) => {
         events.push(`deregisterCharacterJoiner:${joinerId}`)
+      }),
+      clearSelection: vi.fn(() => {
+        events.push('clearSelection')
+      }),
+      dispose: vi.fn(() => {
+        events.push('dispose')
       }),
       unicode: unicodeProxy,
       buffer: { active: { cursorX: 0, cursorY: 0 } }
@@ -566,22 +608,71 @@ describe('openTerminal — addon and provider wiring', () => {
     expect(events.indexOf('open')).toBeLessThan(loadUnicodeIdx)
   })
 
-  // Why: terminal.dispose() does not deregister character joiners, so the
-  // pane lifecycle must — this locks the register/deregister pairing that
-  // makes Arabic/RTL shaping (#5262) actually reach a real terminal.
-  it('registers the Arabic shaping joiner on open and deregisters it on dispose', () => {
+  // Why: ordinary panes must avoid xterm's full-grid character-joiner scan,
+  // while the first RTL write still registers before xterm parses the text.
+  it('registers Arabic shaping lazily and deregisters it on dispose', () => {
     const { pane, events } = createOpenTerminalHarness()
 
     openTerminal(pane)
 
-    expect(events).toContain('registerCharacterJoiner')
-    expect(events.indexOf('open')).toBeLessThan(events.indexOf('registerCharacterJoiner'))
+    expect(events).not.toContain('registerCharacterJoiner')
     expect(pane.arabicShapingJoinerCleanup).toBeTypeOf('function')
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
+    expect(events).toContain('registerCharacterJoiner')
 
     disposePane(pane, new Map([[pane.id, pane]]))
 
     expect(events).toContain('deregisterCharacterJoiner:3')
     expect(pane.arabicShapingJoinerCleanup).toBeNull()
+  })
+
+  it('clears selection before disposing a remounted pane', () => {
+    const { pane, events } = createOpenTerminalHarness()
+    openTerminal(pane)
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+
+    expect(events.indexOf('clearSelection')).toBeLessThan(events.indexOf('dispose'))
+  })
+
+  // Why: a link streamed under a stationary pointer must re-linkify on the next
+  // move; openTerminal wires the hover-cache reset and disposePane must detach it.
+  it('installs the streamed-output linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+
+    openTerminal(pane)
+    const disposable = pane.linkifierHoverResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(pane.terminal.onWriteParsed).toHaveBeenCalledTimes(1)
+
+    const disposeSpy = vi.spyOn(disposable!, 'dispose')
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+    expect(pane.linkifierHoverResetDisposable).toBeNull()
+  })
+
+  it('installs the mouseleave linkifier hover reset and disposes it', () => {
+    const { pane } = createOpenTerminalHarness()
+    const addEventListener = vi.fn()
+    const removeEventListener = vi.fn()
+    const screen = {
+      addEventListener,
+      removeEventListener
+    } as unknown as HTMLElement
+    vi.mocked(pane.terminal.element!.querySelector).mockReturnValueOnce(screen)
+
+    openTerminal(pane)
+    const disposable = pane.linkifierMouseLeaveResetDisposable
+    expect(disposable?.dispose).toBeTypeOf('function')
+    expect(addEventListener).toHaveBeenCalledWith('mouseleave', expect.any(Function))
+    const mouseLeaveHandler = addEventListener.mock.calls.find(
+      ([eventName]) => eventName === 'mouseleave'
+    )?.[1]
+    expect(mouseLeaveHandler).toBeTypeOf('function')
+
+    disposePane(pane, new Map([[pane.id, pane]]))
+    expect(removeEventListener).toHaveBeenCalledWith('mouseleave', mouseLeaveHandler)
+    expect(pane.linkifierMouseLeaveResetDisposable).toBeNull()
   })
 
   // Why: the DOM renderer misrenders joined spans (per-character
@@ -591,6 +682,7 @@ describe('openTerminal — addon and provider wiring', () => {
     const { pane, getRegisteredJoinHandler } = createOpenTerminalHarness()
 
     openTerminal(pane)
+    ensureArabicShapingJoinerForText(pane.terminal, 'مرحبا')
     const handler = getRegisteredJoinHandler()!
 
     expect(pane.webglAddon).toBeNull()

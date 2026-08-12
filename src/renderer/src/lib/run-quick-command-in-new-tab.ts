@@ -11,6 +11,7 @@ import type { TerminalQuickCommand } from '../../../shared/types'
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
   worktreeId: string
+  historyId?: string
   /** Tab group the user clicked from. Keeps the spawned terminal in the
    *  pane the user initiated from when available. */
   groupId?: string | null
@@ -47,7 +48,8 @@ function resolveQuickCommandGroupId(
 export function runQuickCommandInNewTab({
   command,
   worktreeId,
-  groupId
+  groupId,
+  historyId = command.id
 }: RunQuickCommandInNewTabArgs): { tabId: string } | null {
   const targetGroupId = groupId ?? undefined
   if (isTerminalAgentQuickCommand(command)) {
@@ -65,7 +67,7 @@ export function runQuickCommandInNewTab({
     if (result?.tabId) {
       const launchedGroupId = resolveQuickCommandGroupId(worktreeId, result.tabId, groupId)
       if (launchedGroupId) {
-        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, command.id)
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
       return { tabId: result.tabId }
     }
@@ -113,7 +115,7 @@ export function runQuickCommandInNewTab({
 
   const launchedGroupId = resolveQuickCommandGroupId(worktreeId, tab.id, groupId)
   if (launchedGroupId) {
-    fresh.setRecentQuickCommandForGroup(launchedGroupId, command.id)
+    fresh.setRecentQuickCommandForGroup(launchedGroupId, historyId)
   }
 
   return { tabId: tab.id }

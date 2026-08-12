@@ -123,9 +123,7 @@ describe('Orca cloud profile service session refresh', () => {
     safeStorageMock.encryptString.mockReset()
     safeStorageMock.isEncryptionAvailable.mockReset()
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf-8'))
-    safeStorageMock.encryptString.mockImplementation((value: string) =>
-      Buffer.from(value, 'utf-8')
-    )
+    safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value, 'utf-8'))
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     vi.unstubAllEnvs()
     vi.stubEnv('ORCA_CLOUD_API_URL', '')

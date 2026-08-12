@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { KeybindingActionId } from '../../../../shared/keybindings'
 import {
   SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES,
+  buildShortcutGlobalSearchMatcher,
   isShortcutLocalSearchQueryTooLarge,
   matchesShortcutLocalSearch,
   normalizeShortcutLocalSearchQuery,
@@ -50,6 +51,40 @@ describe('ShortcutFilterRail search helpers', () => {
     expect(query.length).toBe(SHORTCUT_LOCAL_SEARCH_QUERY_MAX_BYTES)
     expect(isShortcutLocalSearchQueryTooLarge(query)).toBe(true)
     expect(normalizeShortcutLocalSearchQuery(query)).toBeNull()
+  })
+
+  it('narrows rows when the global settings query matches specific rows', () => {
+    const settingsRow = createShortcutRow()
+    const worktreeRow: ShortcutRowModel = {
+      ...createShortcutRow(),
+      item: {
+        ...createShortcutRow().item,
+        id: 'worktree.create' as KeybindingActionId,
+        title: 'Create worktree',
+        searchKeywords: ['worktree', 'create']
+      }
+    }
+
+    const matcher = buildShortcutGlobalSearchMatcher([settingsRow, worktreeRow], 'worktree')
+
+    expect(matcher(settingsRow)).toBe(false)
+    expect(matcher(worktreeRow)).toBe(true)
+  })
+
+  it('keeps every row visible on a pane-title-only global query', () => {
+    const rows = [createShortcutRow()]
+
+    // Mirrors sidebar search selecting the pane with a query that matches only
+    // pane-level metadata (e.g. a localized pane title) and no row metadata.
+    const matcher = buildShortcutGlobalSearchMatcher(rows, '단축키')
+
+    expect(matcher(rows[0])).toBe(true)
+  })
+
+  it('keeps every row visible when the global query is empty', () => {
+    const rows = [createShortcutRow()]
+
+    expect(buildShortcutGlobalSearchMatcher(rows, '')(rows[0])).toBe(true)
   })
 
   it('rejects oversized pasted shortcut searches before reading row metadata', () => {

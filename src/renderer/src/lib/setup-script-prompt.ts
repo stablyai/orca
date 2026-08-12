@@ -4,6 +4,7 @@ import type { SetupScriptImportCandidate } from '../../../shared/setup-script-im
 import type { Repo, RepoHookSettings } from '../../../shared/types'
 import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
+import { hasEffectiveSetupCommand } from './setup-script-status'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'
 
@@ -69,25 +70,6 @@ export async function inspectSetupScriptPromptState({
   }
 }
 
-export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boolean {
-  const localSetup = repo.hookSettings?.scripts?.setup?.trim()
-  const sharedSetup = hooksResult.hooks?.scripts?.setup?.trim()
-  const rawPolicy = repo.hookSettings?.commandSourcePolicy
-  const sourcePolicy = resolveHookCommandSourcePolicy(rawPolicy, {
-    hasLocalScript: Boolean(localSetup)
-  })
-
-  if (sourcePolicy === 'local-only') {
-    return Boolean(localSetup)
-  }
-
-  if (sourcePolicy === 'run-both') {
-    return Boolean(sharedSetup || localSetup)
-  }
-
-  return Boolean(sharedSetup)
-}
-
 export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boolean {
   const localSetup = repo.hookSettings?.scripts?.setup?.trim()
   return (
@@ -97,25 +79,45 @@ export function ignoresSharedSetupScripts(repo: Pick<Repo, 'hookSettings'>): boo
   )
 }
 
-export function getSetupScriptPromptDismissalKey(repoId: string): string {
-  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoId}`
+export function getSetupScriptPromptDismissalKey(repoHostIdentity: string): string {
+  return `${SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX}${repoHostIdentity}`
 }
 
 export function isSetupScriptPromptDismissed(
-  repoId: string,
+  repoHostIdentity: string,
   dismissedEntries: readonly string[]
 ): boolean {
-  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoId))
+  return dismissedEntries.includes(getSetupScriptPromptDismissalKey(repoHostIdentity))
 }
 
 export function filterSetupScriptPromptDismissalsToValidRepos(
   value: unknown,
-  validRepoIds: Set<string>
+  validRepoHostIdentities: Set<string>
 ): string[] {
-  return sanitizeSetupScriptPromptDismissals(value).filter((entry) => {
-    const repoId = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
-    return validRepoIds.has(repoId)
-  })
+  const unambiguousIdentityByRepoId = new Map<string, string | null>()
+  for (const identity of validRepoHostIdentities) {
+    const separatorIndex = identity.indexOf('\0')
+    const repoId = separatorIndex !== -1 ? identity.slice(separatorIndex + 1) : identity
+    unambiguousIdentityByRepoId.set(
+      repoId,
+      unambiguousIdentityByRepoId.has(repoId) ? null : identity
+    )
+  }
+
+  const next: string[] = []
+  for (const entry of sanitizeSetupScriptPromptDismissals(value)) {
+    const repoHostIdentity = entry.slice(SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX.length)
+    const validIdentity = validRepoHostIdentities.has(repoHostIdentity)
+      ? repoHostIdentity
+      : unambiguousIdentityByRepoId.get(repoHostIdentity)
+    if (validIdentity) {
+      const validEntry = getSetupScriptPromptDismissalKey(validIdentity)
+      if (!next.includes(validEntry)) {
+        next.push(validEntry)
+      }
+    }
+  }
+  return next
 }
 
 export function sanitizeSetupScriptPromptDismissals(value: unknown): string[] {

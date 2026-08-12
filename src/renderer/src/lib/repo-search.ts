@@ -38,7 +38,7 @@ function matchScore(repo: Repo, query: string): number | null {
   return null
 }
 
-export function searchRepos(repos: Repo[], rawQuery: string): Repo[] {
+export function searchRepos(repos: readonly Repo[], rawQuery: string): readonly Repo[] {
   if (isRepoSearchQueryTooLarge(rawQuery)) {
     return []
   }

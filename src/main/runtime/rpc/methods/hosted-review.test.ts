@@ -49,6 +49,28 @@ describe('hosted review RPC methods', () => {
     })
   })
 
+  it('carries a selected-worktree claim through to the runtime', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    await dispatcher.dispatch(
+      makeRequest('hostedReview.forBranch', {
+        repo: '/repo',
+        branch: 'feature/selected',
+        active: true
+      })
+    )
+
+    // Why: without this the mobile PR sidebar would sit on the card-list pacing
+    // and take a no-review interval to notice a PR opened elsewhere (#11532).
+    expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
+      expect.objectContaining({ active: true })
+    )
+  })
+
   it('dispatches creation eligibility requests to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -58,6 +80,7 @@ describe('hosted review RPC methods', () => {
         canCreate: true,
         blockedReason: null,
         nextAction: null,
+        reviewLookupOutcome: 'not_found',
         defaultBaseRef: 'main',
         head: 'feature/create-pr',
         title: 'Create PR'
@@ -138,5 +161,40 @@ describe('hosted review RPC methods', () => {
       ok: true,
       result: { ok: true, number: 51 }
     })
+  })
+
+  it('dispatches stacked creation through a distinct runtime method', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createStackedHostedReview: vi.fn().mockResolvedValue({
+        ok: true,
+        number: 52,
+        url: 'https://github.com/acme/orca/pull/52',
+        stackNumber: 60,
+        parentReview: { number: 51, url: 'https://github.com/acme/orca/pull/51' }
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: HOSTED_REVIEW_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('hostedReview.createStacked', {
+        repo: 'repo-1',
+        worktree: 'path:/worktrees/child',
+        provider: 'github',
+        base: 'stack/parent',
+        head: 'stack/child',
+        title: 'Child'
+      })
+    )
+
+    expect(runtime.createStackedHostedReview).toHaveBeenCalledWith({
+      repoSelector: 'repo-1',
+      worktreeSelector: 'path:/worktrees/child',
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child'
+    })
+    expect(response).toMatchObject({ ok: true, result: { ok: true, stackNumber: 60 } })
   })
 })

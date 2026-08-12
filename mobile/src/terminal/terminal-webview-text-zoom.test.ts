@@ -10,6 +10,10 @@ const terminalHtmlSource = readFileSync(
   new URL('./terminal-webview-html.ts', import.meta.url),
   'utf8'
 )
+const terminalWebglRecoverySource = readFileSync(
+  new URL('./terminal-webview-webgl-recovery-injected.ts', import.meta.url),
+  'utf8'
+)
 
 function extractStatusDotNormalizer() {
   const declarationStart = terminalHtmlSource.indexOf('  var CLAUDE_STATUS_DOT =')
@@ -148,12 +152,12 @@ describe('TerminalWebView text zoom', () => {
 
   it('uses the bundled WebGL-capable xterm stack and platform-safe font fallbacks', () => {
     expect(terminalHtmlSource).not.toContain('cdn.jsdelivr.net')
-    expect(terminalHtmlSource).toContain('window.WebglAddon.WebglAddon')
+    expect(terminalWebglRecoverySource).toContain('window.WebglAddon.WebglAddon')
     expect(terminalHtmlSource).toContain('function isIOSWebView()')
     expect(terminalHtmlSource).toContain('fontFamily: terminalFontFamily')
     expect(terminalHtmlSource).toContain("fontWeight: '300'")
     expect(terminalHtmlSource).toContain("fontWeightBold: '500'")
-    expect(terminalHtmlSource).toContain('new window.WebglAddon.WebglAddon()')
+    expect(terminalWebglRecoverySource).toContain('new window.WebglAddon.WebglAddon()')
   })
 
   const IOS_IPHONE_NAVIGATOR = {

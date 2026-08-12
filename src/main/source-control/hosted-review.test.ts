@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { getHostedReviewForBranch } from './hosted-review'
+import { __resetHostedReviewBranchCacheForTests } from './hosted-review-branch-cache'
 
 const {
   getProjectSlugMock,
@@ -27,34 +29,45 @@ const {
 vi.mock('../gitlab/client', () => ({
   getProjectSlug: getProjectSlugMock,
   getMergeRequestForBranch: getMergeRequestForBranchMock,
+  // Why: forge-provider resolves branch reviews via the OrThrow variant so
+  // lookup failures surface as unavailable instead of "no PR found".
+  getMergeRequestForBranchOrThrow: getMergeRequestForBranchMock,
   getMergeRequest: vi.fn()
 }))
 
 vi.mock('../github/client', () => ({
   getRepoSlug: getRepoSlugMock,
   getPRForBranchOutcome: getPRForBranchOutcomeMock,
+  getGitHubPRLookupRateLimitBlock: vi.fn(async () => null),
   createGitHubPullRequest: vi.fn()
 }))
 
 vi.mock('../bitbucket/client', () => ({
   getBitbucketRepoSlug: getBitbucketRepoSlugMock,
   getBitbucketPullRequestForBranch: getBitbucketPullRequestForBranchMock,
+  // Why: forge-provider resolves branch reviews via the OrThrow variant so
+  // lookup failures surface as unavailable instead of "no PR found".
+  getBitbucketPullRequestForBranchOrThrow: getBitbucketPullRequestForBranchMock,
   getBitbucketPullRequest: vi.fn()
 }))
 
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: getAzureDevOpsPullRequestForBranchMock,
+  // Why: forge-provider resolves branch reviews via the OrThrow variant so
+  // lookup failures surface as unavailable instead of "no PR found".
+  getAzureDevOpsPullRequestForBranchOrThrow: getAzureDevOpsPullRequestForBranchMock,
   getAzureDevOpsPullRequest: vi.fn()
 }))
 
 vi.mock('../gitea/client', () => ({
   getGiteaRepoSlug: getGiteaRepoSlugMock,
   getGiteaPullRequestForBranch: getGiteaPullRequestForBranchMock,
+  // Why: forge-provider resolves branch reviews via the OrThrow variant so
+  // lookup failures surface as unavailable instead of "no PR found".
+  getGiteaPullRequestForBranchOrThrow: getGiteaPullRequestForBranchMock,
   getGiteaPullRequest: vi.fn()
 }))
-
-import { getHostedReviewForBranch } from './hosted-review'
 
 describe('getHostedReviewForBranch', () => {
   beforeEach(() => {
@@ -68,6 +81,9 @@ describe('getHostedReviewForBranch', () => {
     getAzureDevOpsPullRequestForBranchMock.mockReset()
     getGiteaRepoSlugMock.mockReset()
     getGiteaPullRequestForBranchMock.mockReset()
+    // The branch cache is process-wide, so one test's answer would otherwise
+    // satisfy the next one's lookup.
+    __resetHostedReviewBranchCacheForTests()
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {

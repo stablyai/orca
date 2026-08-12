@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  configureLazyArabicShapingJoiner,
+  ensureArabicShapingJoinerForText,
   findRtlJoinRanges,
   isStrongRtlCodePoint,
   registerArabicShapingJoiner
@@ -246,5 +248,77 @@ describe('registerArabicShapingJoiner', () => {
 
     webglLive = true
     expect(handler('مرحبا')).toEqual([[0, 5]])
+  })
+})
+
+describe('configureLazyArabicShapingJoiner', () => {
+  function createLazyHost() {
+    const events: string[] = []
+    let handler: ((text: string) => [number, number][]) | null = null
+    const terminal = {
+      registerCharacterJoiner(nextHandler: (text: string) => [number, number][]): number {
+        events.push('register')
+        handler = nextHandler
+        return 11
+      },
+      deregisterCharacterJoiner(joinerId: number): void {
+        events.push(`deregister:${joinerId}`)
+      }
+    }
+    return { events, terminal, getHandler: () => handler }
+  }
+
+  it('does not register for ordinary terminal output', () => {
+    const host = createLazyHost()
+    const cleanup = configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'ASCII, 中文, and emoji 😀')
+
+    expect(host.events).toEqual([])
+    expect(host.getHandler()).toBeNull()
+    cleanup()
+    expect(host.events).toEqual([])
+  })
+
+  it('registers once before the first RTL write and cleans it up', () => {
+    const host = createLazyHost()
+    const cleanup = configureLazyArabicShapingJoiner(host.terminal, () => true)
+
+    ensureArabicShapingJoinerForText(host.terminal, 'مرحبا')
+    ensureArabicShapingJoinerForText(host.terminal, 'שלום')
+
+    expect(host.events).toEqual(['register'])
+    expect(host.getHandler()!('مرحبا')).toEqual([[0, 5]])
+    cleanup()
+    expect(host.events).toEqual(['register', 'deregister:11'])
+  })
+
+  it('recognizes a supplementary-plane RTL code point split across writes', () => {
+    const host = createLazyHost()
+    configureLazyArabicShapingJoiner(host.terminal, () => true)
+    const adlam = String.fromCodePoint(0x1e900)
+
+    ensureArabicShapingJoinerForText(host.terminal, adlam.charAt(0))
+    expect(host.events).toEqual([])
+    ensureArabicShapingJoinerForText(host.terminal, adlam.charAt(1))
+
+    expect(host.events).toEqual(['register'])
+  })
+
+  it('contains a registration failure and does not retry every write', () => {
+    let attempts = 0
+    const terminal = {
+      registerCharacterJoiner(): number {
+        attempts++
+        throw new Error('terminal disposed')
+      },
+      deregisterCharacterJoiner(): void {}
+    }
+    configureLazyArabicShapingJoiner(terminal, () => true)
+
+    expect(() => ensureArabicShapingJoinerForText(terminal, 'مرحبا')).not.toThrow()
+    expect(() => ensureArabicShapingJoinerForText(terminal, 'שלום')).not.toThrow()
+
+    expect(attempts).toBe(1)
   })
 })

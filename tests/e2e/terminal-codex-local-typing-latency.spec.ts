@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import { randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -13,18 +13,45 @@ import {
   analyzeRasterCursorCells,
   type TerminalRasterProbeTarget
 } from './terminal-cursor-raster-probe'
+import {
+  collectCodexEchoLatencyReport,
+  formatDistribution,
+  installCodexEchoLatencyProbe,
+  summarizeLatencies
+} from './codex-composer-echo-latency-probe'
 
-const CODEX_READY_RE = /Ask Codex|OpenAI/i
+// Why: only the live composer draws this status bar. Banner text like "OpenAI's
+// command-line coding agent" also renders on the sign-in screen, and the
+// serialized buffer interleaves ANSI codes through the banner glyphs.
+const CODEX_COMPOSER_READY_RE = /Context \d+% used/i
+const CODEX_SIGN_IN_RE = /Sign in with ChatGPT|Sign in to|press Enter to log in/i
 const CODEX_TRUST_PROMPT_RE = /Do you trust|trust this folder|Trust this/i
 const CODEX_UPDATE_PROMPT_RE = /update available|install update|Skip for now/i
-const MAX_MEDIAN_KEY_LATENCY_MS = 150
-const MAX_WORST_KEY_LATENCY_MS = 500
+// Why lowercase ASCII only: digits/punctuation trigger the composer's slash and
+// file-mention popups, which redraw the whole pane and skew later keystrokes.
+const TYPING_ALPHABET = 'abcdefghijklmnopqrstuvwxyz'
+const TOTAL_KEYSTROKES = 60
+// Why: the first keystrokes pay one-time costs (composer first-paint, WebGL
+// atlas fill), so they measure startup rather than steady-state typing.
+const WARMUP_KEYSTROKES = 10
+const KEYSTROKE_INTERVAL_MS = 60
+const TERMINAL_DUMP_CHARS = 4_000
+// Why these budgets: ~20 local runs put p50 in a tight 21.5-22.6ms band with a
+// unimodal per-key distribution and rare isolated spikes to ~90ms. p50 gates the
+// steady state at ~1.6x observed; the tail budgets absorb those spikes so only a
+// sustained shift fails. A plain-shell control on this same probe reads p50 2ms,
+// so the ~22ms is Codex composer redraw cost, not harness overhead.
+const MAX_P50_ECHO_LATENCY_MS = 35
+const MAX_P95_ECHO_LATENCY_MS = 80
+const MAX_WORST_ECHO_LATENCY_MS = 150
 
 type CodexCursorBlinkSample = {
   elapsedMs: number
   paintedCursorCellCount: number
 }
 
+// Why the focus assert: a run that types into an unfocused pane records zero
+// echoes and would otherwise fail as an opaque "sample count" mismatch.
 async function focusActiveTerminalInput(page: Page): Promise<void> {
   await page.evaluate(() => {
     const state = window.__store?.getState()
@@ -43,6 +70,11 @@ async function focusActiveTerminalInput(page: Page): Promise<void> {
     }
     pane.terminal.focus()
     textarea.focus()
+    if (document.activeElement !== textarea) {
+      throw new Error(
+        'Terminal helper textarea did not take focus; keystrokes would not reach Codex'
+      )
+    }
   })
 }
 
@@ -121,10 +153,10 @@ async function sampleCursorBlink(page: Page): Promise<CodexCursorBlinkSample[]> 
 }
 
 async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
-  const deadline = Date.now() + 15_000
+  const deadline = Date.now() + 20_000
   while (Date.now() < deadline) {
-    const content = await getTerminalContent(page, 12_000)
-    if (CODEX_READY_RE.test(content) && !CODEX_TRUST_PROMPT_RE.test(content)) {
+    const content = await getTerminalContent(page, TERMINAL_DUMP_CHARS)
+    if (CODEX_COMPOSER_READY_RE.test(content)) {
       return
     }
     if (CODEX_TRUST_PROMPT_RE.test(content)) {
@@ -142,29 +174,23 @@ async function dismissCodexPromptsIfPresent(page: Page): Promise<void> {
   }
 }
 
-async function waitForCodexReady(page: Page): Promise<void> {
-  await expect
-    .poll(async () => CODEX_READY_RE.test(await getTerminalContent(page, 12_000)), {
-      timeout: 45_000,
-      message: 'Codex TUI did not render'
-    })
-    .toBe(true)
-}
-
-async function waitForPromptText(page: Page, text: string): Promise<number> {
-  const start = performance.now()
-  while (performance.now() - start < MAX_WORST_KEY_LATENCY_MS) {
-    if ((await getTerminalContent(page, 12_000)).includes(text)) {
-      return performance.now() - start
+// Why the dump: a run that "went ready" on the sign-in screen produced garbage
+// numbers silently before; failures must show what the pane actually rendered.
+async function waitForCodexComposer(page: Page): Promise<string> {
+  const deadline = Date.now() + 60_000
+  let lastContent = ''
+  while (Date.now() < deadline) {
+    lastContent = await getTerminalContent(page, TERMINAL_DUMP_CHARS)
+    const readyMarker = CODEX_COMPOSER_READY_RE.exec(lastContent)
+    if (readyMarker) {
+      return readyMarker[0]
     }
-    await page.waitForTimeout(5)
+    await page.waitForTimeout(250)
   }
-  throw new Error(`Codex prompt did not show ${text}`)
-}
-
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b)
-  return sorted[Math.floor(sorted.length / 2)] ?? 0
+  const reason = CODEX_SIGN_IN_RE.test(lastContent)
+    ? 'Codex stopped on the sign-in screen — CODEX_HOME auth was not visible to the TUI'
+    : 'Codex never reached the composer'
+  throw new Error(`${reason}\n--- terminal tail ---\n${lastContent.slice(-1_500)}\n--- end ---`)
 }
 
 test.describe('local Codex terminal typing latency', () => {
@@ -175,45 +201,71 @@ test.describe('local Codex terminal typing latency', () => {
     )
     test.skip(process.platform === 'win32', 'local Codex command is POSIX-shell oriented')
 
+    const homeDir = process.env.HOME ?? ''
+    const codexSource = path.join(homeDir, 'projects', 'codex')
+    // Why: the E2E profile runs an isolated HOME with a managed CODEX_HOME that
+    // has no auth.json, so an unpinned launch lands on the sign-in screen.
+    const realCodexHome = path.join(homeDir, '.codex')
+    test.skip(
+      !existsSync(path.join(realCodexHome, 'auth.json')),
+      'Codex auth.json is missing; the TUI would render the sign-in screen instead of a composer'
+    )
+    test.skip(!existsSync(codexSource), 'local Codex checkout is missing')
+
     await waitForSessionReady(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
     await waitForActiveTerminalManager(orcaPage, 30_000)
 
     const ptyId = await waitForActivePanePtyId(orcaPage)
-    const codexSource = path.join(process.env.HOME ?? '', 'projects', 'codex')
     const launchCommand =
-      `cd ${JSON.stringify(codexSource)} && ` +
+      `cd ${JSON.stringify(codexSource)} && CODEX_HOME=${JSON.stringify(realCodexHome)} ` +
       'codex --dangerously-bypass-approvals-and-sandbox --dangerously-bypass-hook-trust\r'
 
     try {
       await sendToTerminal(orcaPage, ptyId, launchCommand)
       await dismissCodexPromptsIfPresent(orcaPage)
-      await waitForCodexReady(orcaPage)
+      const composerMarker = await waitForCodexComposer(orcaPage)
+      testInfo.annotations.push({
+        type: 'codex-composer-ready-marker',
+        description: composerMarker
+      })
       await focusActiveTerminalInput(orcaPage)
       await forceCursorProbeTheme(orcaPage)
       const blinkSamples = await sampleCursorBlink(orcaPage)
+      await focusActiveTerminalInput(orcaPage)
 
-      const runId = randomUUID().replaceAll('-', '').slice(0, 8)
-      const prompt = `orca_codex_latency_${runId}`
-      const latencies: number[] = []
-      let typed = ''
-      for (const char of prompt) {
-        typed += char
-        const start = performance.now()
+      const typed = Array.from(
+        { length: TOTAL_KEYSTROKES },
+        (_value, index) => TYPING_ALPHABET[index % TYPING_ALPHABET.length]
+      ).join('')
+      await installCodexEchoLatencyProbe(orcaPage, typed)
+      for (const char of typed) {
         await orcaPage.keyboard.type(char)
-        await waitForPromptText(orcaPage, typed)
-        latencies.push(performance.now() - start)
+        // Why: spacing keys past one frame keeps each sample an isolated echo
+        // instead of measuring a burst the scheduler coalesced into one write.
+        await orcaPage.waitForTimeout(KEYSTROKE_INTERVAL_MS)
       }
+      // Why: the last keystroke's echo can still be in flight when typing ends.
+      await orcaPage.waitForTimeout(1_000)
+      const report = await collectCodexEchoLatencyReport(orcaPage)
 
-      const medianLatency = median(latencies)
-      const worstLatency = Math.max(...latencies)
-      testInfo.annotations.push({
-        type: 'codex-local-typing-latency',
-        description: `median=${medianLatency.toFixed(1)}ms worst=${worstLatency.toFixed(
-          1
-        )}ms samples=${latencies.map((value) => value.toFixed(1)).join(',')}`
-      })
+      const measured = report.samples.filter((sample) => sample.index >= WARMUP_KEYSTROKES)
+      const parseLatencies = measured.map((sample) => sample.keyToParseMs)
+      const renderLatencies = measured
+        .map((sample) => sample.keyToRenderMs)
+        .filter((value): value is number => value !== null)
+      const echo = summarizeLatencies(parseLatencies)
+      const painted = summarizeLatencies(renderLatencies)
+
+      const summary =
+        `${formatDistribution('echo(key->parse)', echo)} | ` +
+        `${formatDistribution('paint(key->render)', painted)} | ` +
+        `keys=${report.keysObserved} parseEvents=${report.parseEvents}`
+      testInfo.annotations.push({ type: 'codex-local-typing-latency', description: summary })
+      // Why stdout too: annotations are invisible in the default list reporter,
+      // and these numbers are the whole point of the run.
+      console.log(`[codex-typing-latency] ready="${composerMarker}" ${summary}`)
       testInfo.annotations.push({
         type: 'codex-local-cursor-blink',
         description: blinkSamples
@@ -223,8 +275,12 @@ test.describe('local Codex terminal typing latency', () => {
 
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount > 0)).toBe(true)
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount === 0)).toBe(true)
-      expect(medianLatency).toBeLessThan(MAX_MEDIAN_KEY_LATENCY_MS)
-      expect(worstLatency).toBeLessThan(MAX_WORST_KEY_LATENCY_MS)
+      // Why: a dropped keystroke means the composer stopped echoing, which the
+      // latency percentiles alone would silently hide.
+      expect(report.samples.length).toBe(TOTAL_KEYSTROKES)
+      expect(echo.p50).toBeLessThan(MAX_P50_ECHO_LATENCY_MS)
+      expect(echo.p95).toBeLessThan(MAX_P95_ECHO_LATENCY_MS)
+      expect(echo.max).toBeLessThan(MAX_WORST_ECHO_LATENCY_MS)
     } finally {
       await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
     }

@@ -6,6 +6,7 @@ import type {
   LinearIssueTaskUpdateRequest
 } from './linear-agent-access'
 import type { LinearInlineMedia } from './linear-inline-media'
+import type { LinearIssueActivityEntry } from './linear-issue-activity'
 
 export type LinearIssueSummary = {
   id: string
@@ -71,6 +72,8 @@ export type LinearIssueAttachment = {
 export type LinearIssueRelation = {
   id: string
   type?: string | null
+  direction: 'outbound' | 'inbound'
+  relationship: 'blocks' | 'blockedBy' | 'relatedTo' | 'duplicateOf' | 'duplicatedBy' | 'similar'
   relatedIssue?: Pick<LinearIssueSummary, 'id' | 'identifier' | 'title' | 'url'> | null
 }
 
@@ -88,6 +91,7 @@ export type LinearIssueContextResult = {
   children?: LinearIssueChildNode[]
   attachments?: LinearIssueAttachment[]
   relations?: LinearIssueRelation[]
+  activity?: LinearIssueActivityEntry[]
   inlineMedia?: LinearInlineMedia[]
   meta: {
     requested: {
@@ -140,7 +144,7 @@ export type LinearSearchResult = {
   issues: LinearSearchIssueSummary[]
   meta: {
     query: string
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
     limitReached: boolean
@@ -174,7 +178,7 @@ export type LinearTeamSummary = {
 export type LinearTeamListResult = {
   teams: LinearTeamSummary[]
   meta: {
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     returned: number
     partial: boolean
     workspaceErrors: {
@@ -207,7 +211,7 @@ export type LinearIssueListResult = {
   issues: LinearSearchIssueSummary[]
   meta: {
     filter: LinearIssueListFilter
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     team?: LinearTeamSummary
     limit: number
     returned: number
@@ -238,7 +242,7 @@ export type LinearProjectListResult = {
   projects: LinearAgentProjectSummary[]
   meta: {
     query?: string
-    workspaceId?: string | 'all'
+    workspaceId?: (string & {}) | 'all'
     limit: number
     returned: number
     hasMore: boolean
@@ -308,4 +312,14 @@ export type LinearCreateResult = {
     labelIds?: string[] | null
   }
   meta: { workspaceId: string; writeId: string; deduplicated: boolean }
+}
+
+export type LinearSaveIssueResult = {
+  issue: LinearCreateResult['issue']
+  meta: {
+    workspaceId: string
+    created: boolean
+    writeId?: string
+    deduplicated?: boolean
+  }
 }

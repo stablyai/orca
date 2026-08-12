@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { getAppImageCliArgs, maybeRedirectAppImageCliLaunch } from './appimage-cli-redirect'
 
-const commandNames = ['status', 'terminal']
+const commandNames = ['serve', 'status', 'terminal']
 
 describe('AppImage CLI redirect', () => {
   it('detects direct AppImage CLI commands', () => {
@@ -53,6 +53,34 @@ describe('AppImage CLI redirect', () => {
     ).toBeNull()
   })
 
+  it('routes no-sandbox serve launches through the CLI', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--no-sandbox', 'serve', '--port', '6768'],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['serve', '--port', '6768'])
+  })
+
+  it('removes no-sandbox before forwarding CLI help', () => {
+    expect(
+      getAppImageCliArgs(
+        ['AppRun', '--no-sandbox', 'serve', '--help'],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['serve', '--help'])
+  })
+
   it('spawns the unpacked CLI entrypoint with Electron node mode', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
     const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
@@ -88,5 +116,32 @@ describe('AppImage CLI redirect', () => {
     const spawnOptions = spawn.mock.calls[0]?.[2] as { env: NodeJS.ProcessEnv } | undefined
     expect(spawnOptions?.env).not.toHaveProperty('NODE_OPTIONS')
     expect(spawnOptions?.env).not.toHaveProperty('NODE_REPL_EXTERNAL_MODULE')
+  })
+
+  it('forwards an explicit no-sandbox choice to the serve child', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
+    const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+    await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
+    await writeFile(cliEntryPath, '', 'utf8')
+    const spawn = vi.fn((..._args: unknown[]) => ({ status: 0 }))
+
+    maybeRedirectAppImageCliLaunch({
+      argv: ['orca-linux.AppImage', '--no-sandbox', 'serve'],
+      env: { APPIMAGE: '/opt/orca/orca-linux.AppImage' },
+      platform: 'linux',
+      isPackaged: true,
+      resourcesPath: root,
+      execPath: '/opt/orca/orca-ide',
+      commandNames,
+      spawn: spawn as never
+    })
+
+    expect(spawn).toHaveBeenCalledWith(
+      '/opt/orca/orca-ide',
+      [cliEntryPath, 'serve'],
+      expect.objectContaining({
+        env: expect.objectContaining({ ORCA_APPIMAGE_NO_SANDBOX: '1' })
+      })
+    )
   })
 })

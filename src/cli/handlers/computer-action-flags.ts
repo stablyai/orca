@@ -1,4 +1,5 @@
 import {
+  computerUseClickModifiersValidationMessage,
   computerUseHotkeyValidationMessage,
   computerUsePressKeyValidationMessage
 } from '../../shared/computer-use-key-spec'
@@ -60,16 +61,26 @@ export function getComputerClickActionFlags(flags: Map<string, string | boolean>
   y?: number
   clickCount?: number
   mouseButton?: string
+  modifiers?: string
 } {
+  const rawModifiers = flags.get('modifiers')
+  const modifiers = typeof rawModifiers === 'string' ? rawModifiers : undefined
   const result = {
     elementIndex: getOptionalNonNegativeIntegerFlag(flags, 'element-index'),
     x: getOptionalNumberFlag(flags, 'x'),
     y: getOptionalNumberFlag(flags, 'y'),
     clickCount: getOptionalPositiveIntegerFlag(flags, 'click-count'),
-    mouseButton: getOptionalStringFlag(flags, 'mouse-button')
+    mouseButton: getOptionalStringFlag(flags, 'mouse-button'),
+    modifiers
   }
   validateElementOrCoordinates('Click', result.elementIndex, result.x, result.y)
   validateMouseButton(result.mouseButton)
+  if (modifiers !== undefined) {
+    const message = computerUseClickModifiersValidationMessage(modifiers)
+    if (message) {
+      throw new RuntimeClientError('invalid_argument', message)
+    }
+  }
   return result
 }
 

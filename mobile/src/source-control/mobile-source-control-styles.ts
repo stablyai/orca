@@ -92,6 +92,7 @@ const baseStyles = StyleSheet.create({
   },
   countRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: spacing.md,
     marginTop: spacing.sm
   },
@@ -99,29 +100,43 @@ const baseStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
+  // Separate line under counts — keeps Abort inside the card on narrow phones.
   conflictRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%'
   },
   conflictText: {
     color: colors.statusAmber,
     fontSize: typography.metaSize,
     textTransform: 'capitalize'
   },
+  // Match bulk-action hit target so Abort reads as a real control, not a chip.
   abortButton: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
+    minHeight: 32,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
     borderRadius: radii.button,
     borderWidth: 1,
-    borderColor: colors.statusAmber
+    borderColor: colors.statusAmber,
+    backgroundColor: colors.bgRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0
   },
   abortPressed: {
-    backgroundColor: colors.bgRaised
+    opacity: 0.75
+  },
+  abortButtonDisabled: {
+    opacity: 0.45
   },
   abortText: {
     color: colors.statusAmber,
-    fontSize: typography.metaSize,
+    fontSize: typography.bodySize,
     fontWeight: '600',
     textTransform: 'capitalize'
   },
@@ -192,11 +207,10 @@ const baseStyles = StyleSheet.create({
     fontWeight: '600'
   },
   createPrBlock: {
-    marginTop: spacing.md,
-    gap: spacing.xs
+    marginTop: spacing.md
   },
   createPrButton: {
-    minHeight: 42,
+    height: 42,
     borderRadius: radii.button,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
@@ -221,10 +235,12 @@ const baseStyles = StyleSheet.create({
   createPrButtonTextDisabled: {
     color: colors.textSecondary
   },
-  createPrHint: {
-    color: colors.textMuted,
+  createPrButtonHint: {
     fontSize: typography.metaSize,
-    lineHeight: 16
+    fontWeight: '600',
+    lineHeight: 16,
+    textAlign: 'center',
+    flexShrink: 1
   }
 })
 

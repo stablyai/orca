@@ -1,6 +1,8 @@
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 
+import { antigravityFixture } from './session-scanner-antigravity-fixtures'
 import { codexFixture } from './session-scanner-codex-fixtures'
+import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
 
 // Line builders for the incremental-parse differential tests: each agent gets
 // a seed transcript, an appended continuation, and a truncated rewrite, all in
@@ -286,6 +288,8 @@ export function allIncrementalAgentFixtures(): IncrementalAgentFixture[] {
     openclawFixture(),
     piFixture(),
     ompFixture(),
-    geminiJsonlFixture()
+    primeAgentFixture(),
+    geminiJsonlFixture(),
+    antigravityFixture()
   ]
 }

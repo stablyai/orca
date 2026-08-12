@@ -1,5 +1,7 @@
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor'
+import { areLocalWindowsWslPathAliases } from '../../../../shared/cross-platform-path'
+import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
 import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
@@ -20,6 +22,10 @@ export type EditorPathMutationTarget = {
   worktreePath: string
   relativePath: string
   runtimeEnvironmentId?: string | null
+  allowLocalWindowsWslAliases?: true
+  indexedOpenFiles?: {
+    matches: (openFiles: OpenFile[]) => OpenFile[]
+  }
 }
 
 export type EditorSaveQuiesceTarget = { fileId: string } | EditorPathMutationTarget
@@ -49,6 +55,10 @@ export type EditorRequestFileCloseDetail = {
   fileId: string
 }
 
+export type EditorRequestCmdSaveDetail = {
+  fileId: string
+}
+
 export function isExternalReloadableEditorTab(file: OpenFile): boolean {
   return (
     file.mode === 'edit' ||
@@ -70,6 +80,11 @@ export function isWorkingTreeCombinedDiffTab(file: OpenFile): boolean {
 }
 
 export function canAutoSaveOpenFile(file: OpenFile): boolean {
+  // Why: read-only tabs (AI Vault View Log) must never autosave — writing an
+  // agent-owned transcript can corrupt the provider's resume history.
+  if (file.readOnly === true) {
+    return false
+  }
   // Why: single-file editors and one-file unstaged diffs have an unambiguous
   // write target. Combined diff and conflict-review tabs can represent multiple
   // paths, so autosave must stay out of those surfaces until they have their
@@ -82,9 +97,20 @@ export function canAutoSaveOpenFile(file: OpenFile): boolean {
 // baseline is still unverified (the conflict may simply not be marked YET).
 // One predicate so the save-queue gate and the timer scheduler cannot drift.
 export function isAutosaveSuspendedForFile(
-  file: Pick<OpenFile, 'externalMutation' | 'pendingDiskBaselineVerification'>
+  file: Pick<
+    OpenFile,
+    | 'externalMutation'
+    | 'pendingDiskBaselineVerification'
+    | 'pendingLiveDiskVerification'
+    | 'pendingOwnerMigration'
+  >
 ): boolean {
-  return file.externalMutation === 'changed' || file.pendingDiskBaselineVerification === true
+  return (
+    file.externalMutation === 'changed' ||
+    file.pendingDiskBaselineVerification === true ||
+    file.pendingLiveDiskVerification === true ||
+    file.pendingOwnerMigration === true
+  )
 }
 
 export function normalizeAutoSaveDelayMs(value: unknown): number {
@@ -104,8 +130,11 @@ export function getOpenFilesForExternalFileChange(
   openFiles: OpenFile[],
   target: EditorPathMutationTarget
 ): OpenFile[] {
+  if (target.indexedOpenFiles) {
+    return target.indexedOpenFiles.matches(openFiles)
+  }
   const absolutePath = joinPath(target.worktreePath, target.relativePath)
-  const hasRuntimeOwnerFilter = Object.prototype.hasOwnProperty.call(target, 'runtimeEnvironmentId')
+  const hasRuntimeOwnerFilter = Object.hasOwn(target, 'runtimeEnvironmentId')
   const targetRuntimeOwner = target.runtimeEnvironmentId?.trim() || null
   return openFiles.filter((file) => {
     if (file.worktreeId !== target.worktreeId) {
@@ -118,7 +147,12 @@ export function getOpenFilesForExternalFileChange(
       return false
     }
     if (file.mode === 'edit' || file.mode === 'markdown-preview') {
-      return file.filePath === absolutePath
+      return (
+        file.filePath === absolutePath ||
+        (target.allowLocalWindowsWslAliases === true &&
+          isLocalWindowsDesktopClient() &&
+          areLocalWindowsWslPathAliases(file.filePath, absolutePath))
+      )
     }
     if (file.mode === 'diff') {
       return (

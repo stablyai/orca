@@ -1,18 +1,24 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: quick-open file lists are fetched over local or SSH runtime IPC, so loading/error/results track the request lifecycle. */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { Worktree } from '../../../shared/types'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import { getConnectionIdFromState } from '@/lib/connection-context'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { cancelRuntimeFileList, listRuntimeFiles } from '@/runtime/runtime-file-client'
 import { useAppStore } from '@/store'
 import { useWorktreesForRepo } from '@/store/selectors'
+import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer-types'
+import {
+  getFileExplorerOperationOwnerFromState,
+  getFileExplorerOwnerUnresolvedMessage,
+  getFileExplorerOperationRoute
+} from '@/components/right-sidebar/file-explorer-operation-owner'
 
 export type RuntimeFileListState = {
   files: string[]
   loading: boolean
   loadError: string | null
+  operationOwner?: FileExplorerOperationOwner
 }
 
 export function cleanRuntimeFileListError(error: unknown): string {
@@ -106,6 +112,9 @@ export function useRuntimeFileListForWorktree({
   const [files, setFiles] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [listedOperationOwner, setListedOperationOwner] = useState<FileExplorerOperationOwner>({
+    kind: 'unresolved'
+  })
   const lastRequestKeyRef = useRef('')
 
   const target = useMemo(
@@ -114,9 +123,28 @@ export function useRuntimeFileListForWorktree({
   )
   const { excludeRequest } = target
 
-  const connectionId = useAppStore(
-    (state) => getConnectionIdFromState(state, worktreeId) ?? undefined
+  const operationOwnerState = useAppStore(
+    useShallow((state) => ({
+      settings: state.settings,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo,
+      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey
+    }))
   )
+  const operationOwner = useMemo(
+    () => getFileExplorerOperationOwnerFromState(operationOwnerState, worktreeId),
+    [operationOwnerState, worktreeId]
+  )
+  const operationOwnerKey = JSON.stringify(operationOwner)
+  const operationOwnerRef = useRef(operationOwner)
+  operationOwnerRef.current = operationOwner
+  const operationRoute = getFileExplorerOperationRoute(operationOwner)
+  const operationRouteAvailable = operationRoute !== null
+  const connectionId = operationRoute?.connectionId
+  const runtimeEnvironmentId = operationRoute?.settings.activeRuntimeEnvironmentId ?? null
   const activeTargetStatus = useAppStore((state) =>
     connectionId ? state.sshConnectionStates.get(connectionId)?.status : undefined
   )
@@ -126,19 +154,21 @@ export function useRuntimeFileListForWorktree({
     activeTargetStatus === 'reconnecting'
   const requestKey = useMemo(
     () =>
-      `${worktreePath ?? ''}\n${connectionId ?? ''}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
-    [activeTargetStatus, connectionId, excludeRequest.key, worktreePath]
+      `${worktreePath ?? ''}\n${operationOwnerKey}\n${excludeRequest.key}\n${activeTargetStatus ?? ''}`,
+    [activeTargetStatus, excludeRequest.key, operationOwnerKey, worktreePath]
   )
 
   useEffect(() => {
     if (!enabled) {
       setLoading(false)
+      setListedOperationOwner({ kind: 'unresolved' })
       return
     }
 
-    if (!target.canList || !worktreeId || !worktreePath) {
+    if (!target.canList || !worktreeId || !worktreePath || !operationRouteAvailable) {
       setFiles([])
-      setLoadError(null)
+      setListedOperationOwner({ kind: 'unresolved' })
+      setLoadError(operationRouteAvailable ? null : getFileExplorerOwnerUnresolvedMessage())
       setLoading(false)
       return
     }
@@ -154,10 +184,9 @@ export function useRuntimeFileListForWorktree({
 
     const excludePaths = excludeRequest.paths.length > 0 ? excludeRequest.paths : undefined
     const requestToken = createBrowserUuid()
+    const requestOperationOwner = operationOwnerRef.current
     const requestContext = {
-      // Why: Quick Open lists files for the selected workspace. It must
-      // follow that workspace's owner host, not the globally focused host.
-      settings: getSettingsForWorktreeRuntimeOwner(useAppStore.getState(), worktreeId),
+      settings: { activeRuntimeEnvironmentId: runtimeEnvironmentId },
       worktreeId,
       worktreePath,
       connectionId
@@ -171,6 +200,7 @@ export function useRuntimeFileListForWorktree({
       .then((result) => {
         if (!cancelled) {
           setFiles(result)
+          setListedOperationOwner(requestOperationOwner)
         }
       })
       .catch((error) => {
@@ -193,7 +223,23 @@ export function useRuntimeFileListForWorktree({
       // 30s timeout ("Could not load files for this workspace").
       cancelRuntimeFileList(requestContext, requestToken)
     }
-  }, [connectionId, enabled, excludeRequest, requestKey, target.canList, worktreeId, worktreePath])
+  }, [
+    enabled,
+    excludeRequest,
+    connectionId,
+    operationOwnerKey,
+    operationRouteAvailable,
+    requestKey,
+    runtimeEnvironmentId,
+    target.canList,
+    worktreeId,
+    worktreePath
+  ])
 
-  return { files, loading: loading || connectionPending, loadError }
+  return {
+    files,
+    loading: loading || connectionPending,
+    loadError,
+    operationOwner: listedOperationOwner
+  }
 }

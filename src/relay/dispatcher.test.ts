@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
-import { RelayDispatcher } from './dispatcher'
+import { RelayDispatcher, type SinkWriteSettlement } from './dispatcher'
+import { relayWriterControlReserve } from './dispatcher-writer-admission'
 import {
   encodeJsonRpcFrame,
   encodeKeepAliveFrame,
@@ -201,6 +202,23 @@ describe('RelayDispatcher', () => {
     expect(socketWritten).toHaveLength(1)
   })
 
+  it('targets terminal ownership notifications to one attached client', () => {
+    const firstWritten: Buffer[] = []
+    const secondWritten: Buffer[] = []
+    const firstId = dispatcher.attachClient((data) => {
+      firstWritten.push(Buffer.from(data))
+    })
+    dispatcher.attachClient((data) => {
+      secondWritten.push(Buffer.from(data))
+    })
+
+    dispatcher.notifyClient(firstId, 'fs.watchFailed', { watchId: 7 })
+
+    expect(written).toHaveLength(0)
+    expect(firstWritten).toHaveLength(1)
+    expect(secondWritten).toHaveLength(0)
+  })
+
   it('forwards relay-originated requests to an owning socket client instead of the caller', async () => {
     dispatcher.invalidateClient()
     const ownerWritten: Buffer[] = []
@@ -393,7 +411,182 @@ describe('RelayDispatcher', () => {
 
     dispatcher.invalidateClient()
 
-    expect(listener).toHaveBeenCalledWith(1)
+    // Why the cause is asserted: an unqualified invalidate is the relay's own decision, and only a
+    // caller that watched the peer's transport end may report 'peer-closed'.
+    expect(listener).toHaveBeenCalledWith(1, 'local')
+  })
+
+  it('detaches the primary client when its write throws (frame lost, trigger reconnect)', () => {
+    // Regression: a primary-client write throw dropped the frame (possibly
+    // pty.data/pty.exit) with no resend AND without notifying detach, so the
+    // owning Orca's reconnect + PTY-reattach path never engaged until the ~20s
+    // keepalive timeout — output/pane-death were silently lost in the meantime.
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher((data) => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+      written.push(Buffer.from(data))
+    })
+    try {
+      const detachListener = vi.fn()
+      detachDispatcher.onClientDetached(detachListener)
+
+      // A frame the owning Orca must not silently miss (e.g. a pane exit).
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      // Fix: the write failure detaches the primary so the reconnect/reattach
+      // machinery runs promptly instead of waiting for keepalive timeout.
+      // Why 'local': a throwing sink is this relay's write failing, not observed proof the peer left.
+      expect(detachListener).toHaveBeenCalledWith(1, 'local')
+
+      // Recovery: a reconnecting socket swaps the write via setWrite; the client
+      // is usable again and later frames flow to the new sink.
+      throwOnWrite = false
+      const recovered: Buffer[] = []
+      detachDispatcher.setWrite((data) => {
+        recovered.push(Buffer.from(data))
+      })
+      detachDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
+      expect(recovered.length).toBeGreaterThan(0)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
+  it('aborts in-flight primary requests when a client write throws', () => {
+    let throwOnWrite = false
+    const detachDispatcher = new RelayDispatcher(() => {
+      if (throwOnWrite) {
+        throw new Error('socket closed')
+      }
+    })
+    let requestSignal: AbortSignal | undefined
+    try {
+      detachDispatcher.onRequest('slow.method', async (_params, context) => {
+        requestSignal = context.signal
+        await new Promise<void>((resolve) => {
+          context.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      })
+      detachDispatcher.feed(
+        encodeJsonRpcFrame({ jsonrpc: '2.0', id: 9, method: 'slow.method' }, 1, 0)
+      )
+
+      expect(requestSignal?.aborted).toBe(false)
+      throwOnWrite = true
+      detachDispatcher.notify('pty.exit', { id: 'pty-1', code: 0 })
+
+      expect(requestSignal?.aborted).toBe(true)
+    } finally {
+      detachDispatcher.dispose()
+    }
+  })
+
+  it('preserves broadcast order when synchronous settlement re-enters production', () => {
+    const primary: string[] = []
+    const secondary: string[] = []
+    const readData = (frame: Buffer): string => {
+      const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+      return String(message.params?.data)
+    }
+    const orderedDispatcher = new RelayDispatcher((frame) => {
+      primary.push(readData(frame))
+      return true
+    })
+    orderedDispatcher.attachClient((frame) => {
+      secondary.push(readData(frame))
+      return true
+    })
+    let reentered = false
+    orderedDispatcher.onLegacyPtyCapacity(() => {
+      if (reentered) {
+        return
+      }
+      reentered = true
+      orderedDispatcher.tryNotifyPtyData({ id: 'pty-2', data: 'second' })
+    })
+
+    try {
+      expect(orderedDispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'first' })).toBe(true)
+      expect(primary).toEqual(['first', 'second'])
+      expect(secondary).toEqual(['first', 'second'])
+    } finally {
+      orderedDispatcher.dispose()
+    }
+  })
+
+  it('does not retry accepted clients when a later broadcast member closes reentrantly', () => {
+    const primary: string[] = []
+    const secondary: string[] = []
+    let secondaryId = 0
+    const readData = (frame: Buffer): string => {
+      const message = JSON.parse(decodeFirstFrame(frame).payload.toString()) as JsonRpcNotification
+      return String(message.params?.data)
+    }
+    const dispatcher = new RelayDispatcher((frame) => {
+      primary.push(readData(frame))
+      if (secondaryId !== 0) {
+        dispatcher.detachClient(secondaryId)
+      }
+      return true
+    })
+    secondaryId = dispatcher.attachClient((frame) => {
+      secondary.push(readData(frame))
+      return true
+    })
+
+    try {
+      expect(dispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'once' })).toBe(true)
+      expect(primary).toEqual(['once'])
+      expect(secondary).toEqual([])
+    } finally {
+      dispatcher.dispose()
+    }
+  })
+
+  it('keeps a saturated legacy primary as required backpressure', () => {
+    const callbacks: ((result: SinkWriteSettlement) => void)[] = []
+    const legacyDispatcher = new RelayDispatcher(
+      (_data, settle) => {
+        callbacks.push(settle)
+        return false
+      },
+      {
+        supportsWriteCallback: true,
+        writableLength: () => 128 * 1024,
+        writableHighWaterMark: () => 4 * 1024 * 1024
+      }
+    )
+    const detached = vi.fn()
+    legacyDispatcher.onClientDetached(detached)
+    const payload = 'x'.repeat(128 * 1024)
+    let admitted = 0
+
+    try {
+      while (
+        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
+          id: 'pty-1',
+          data: payload
+        })
+      ) {
+        admitted++
+      }
+
+      expect(admitted).toBeGreaterThan(0)
+      expect(admitted).toBeLessThan(20)
+      expect(callbacks).toHaveLength(1)
+      expect(detached).not.toHaveBeenCalled()
+      expect(
+        legacyDispatcher.tryNotifyPtyDataToMatchingClients(() => true, {
+          id: 'pty-1',
+          data: payload
+        })
+      ).toBe(false)
+    } finally {
+      legacyDispatcher.dispose()
+    }
   })
 
   describe('notifyBulk (bulk lane backpressure)', () => {
@@ -422,7 +615,12 @@ describe('RelayDispatcher', () => {
           frames.push(Buffer.from(data))
           return false
         },
-        { waitWriteDrain: (cb) => drainWaiters.add(cb) }
+        {
+          waitWriteDrain: (callback) => {
+            drainWaiters.add(callback)
+            return () => drainWaiters.delete(callback)
+          }
+        }
       )
       try {
         let firstSettled = false
@@ -449,14 +647,20 @@ describe('RelayDispatcher', () => {
       }
     })
 
-    it('interactive notify() frames are not gated behind a stalled bulk lane', async () => {
+    it('does not write an interactive frame around a saturated bulk write', async () => {
       const frames: Buffer[] = []
+      const drainWaiters = new Set<() => void>()
       const bulkDispatcher = new RelayDispatcher(
         (data) => {
           frames.push(Buffer.from(data))
           return false
         },
-        { waitWriteDrain: () => {} }
+        {
+          waitWriteDrain: (callback) => {
+            drainWaiters.add(callback)
+            return () => drainWaiters.delete(callback)
+          }
+        }
       )
       try {
         void bulkDispatcher.notifyBulk('bulk.event', { seq: 0 })
@@ -465,7 +669,13 @@ describe('RelayDispatcher', () => {
         expect(frames).toHaveLength(1)
 
         bulkDispatcher.notify('pty.data', { id: 'pty-1', data: 'x' })
-        expect(frames).toHaveLength(2)
+        expect(frames).toHaveLength(1)
+        for (const callback of Array.from(drainWaiters)) {
+          drainWaiters.delete(callback)
+          callback()
+        }
+        await vi.advanceTimersByTimeAsync(0)
+        expect(frames.length).toBeGreaterThanOrEqual(2)
         const msg = JSON.parse(
           decodeFirstFrame(frames[1]).payload.toString()
         ) as JsonRpcNotification
@@ -507,6 +717,200 @@ describe('RelayDispatcher', () => {
         expect(secondaryFrames).toHaveLength(1)
       } finally {
         bulkDispatcher.dispose()
+      }
+    })
+  })
+
+  describe('legacy PTY chunk sizing', () => {
+    type DispatcherInternals = {
+      primaryClient: object
+      estimateFrameBytes: (msg: JsonRpcNotification) => number
+      prepareFrame: (msg: JsonRpcNotification) => object
+      enqueueFrame: (
+        client: object,
+        msg: JsonRpcNotification,
+        lane: string,
+        onSettled?: (result: SinkWriteSettlement) => void
+      ) => boolean
+      enqueuePreparedFrame: (
+        client: object,
+        frame: object,
+        lane: string,
+        onSettled?: (result: SinkWriteSettlement) => void
+      ) => boolean
+    }
+
+    // Pre-optimization sizing loop, kept verbatim for differential verification.
+    function referenceMaxChars(
+      capacities: number[],
+      params: Record<string, unknown>,
+      data: string,
+      limit: number
+    ): number {
+      if (capacities.length === 0) {
+        return Math.min(data.length, limit)
+      }
+      let low = 0
+      let high = Math.min(data.length, limit)
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2)
+        const msg: JsonRpcNotification = {
+          jsonrpc: '2.0',
+          method: 'pty.data',
+          params: { ...params, data: data.slice(0, mid) }
+        }
+        const bytes = encodeJsonRpcFrame(msg, 0, 0).length
+        if (capacities.every((capacity) => bytes <= capacity)) {
+          low = mid
+        } else {
+          high = mid - 1
+        }
+      }
+      return low
+    }
+
+    function makeDispatcher(highWaterMarks: number[]): {
+      sized: RelayDispatcher
+      capacities: number[]
+    } {
+      const [primaryHwm, ...rest] = highWaterMarks
+      const sized = new RelayDispatcher(() => true, {
+        writableHighWaterMark: () => primaryHwm,
+        writableLength: () => 0
+      })
+      for (const hwm of rest) {
+        sized.attachClient(() => true, {
+          writableHighWaterMark: () => hwm,
+          writableLength: () => 0
+        })
+      }
+      return {
+        sized,
+        capacities: highWaterMarks.map((hwm) => Math.max(0, hwm - relayWriterControlReserve(hwm)))
+      }
+    }
+
+    function mulberry32(seed: number): () => number {
+      let a = seed
+      return () => {
+        a = (a + 0x6d2b79f5) | 0
+        let t = Math.imul(a ^ (a >>> 15), 1 | a)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+      }
+    }
+
+    // Multi-byte UTF-8, astral pairs, lone surrogates, controls, quotes, and backslashes.
+    const alphabet = 'aZ9 "\\\n\r\t éß€中𝄞😀𐀀�'
+
+    it('matches the pre-optimization sizing loop across randomized inputs', () => {
+      const random = mulberry32(0xc0ffee)
+      const hwmChoices = [1030, 1100, 1250, 1400, 2048, 1024 * 1024]
+      for (let trial = 0; trial < 300; trial++) {
+        const length = Math.floor(random() * 240)
+        let data = ''
+        for (let i = 0; i < length; i++) {
+          data += alphabet[Math.floor(random() * alphabet.length)]
+        }
+        const clientCount = 1 + Math.floor(random() * 2)
+        const hwms = Array.from(
+          { length: clientCount },
+          () => hwmChoices[Math.floor(random() * hwmChoices.length)]
+        )
+        const params = { id: `pty-${trial}`, seq: trial }
+        const { sized, capacities } = makeDispatcher(hwms)
+        try {
+          for (const limit of [0, 1, Math.floor(length / 2), length, length + 17]) {
+            expect(sized.maxLegacyPtyDataChars(params, data, limit)).toBe(
+              referenceMaxChars(capacities, params, data, limit)
+            )
+          }
+          expect(sized.maxLegacyPtyDataChars(params, data)).toBe(
+            referenceMaxChars(capacities, params, data, data.length)
+          )
+        } finally {
+          sized.dispose()
+        }
+      }
+    })
+
+    it('sizes a chunk that fits every client with a single frame encode', () => {
+      const { sized } = makeDispatcher([1024 * 1024])
+      try {
+        const spy = vi.spyOn(sized as unknown as DispatcherInternals, 'estimateFrameBytes')
+        const data = 'x'.repeat(16 * 1024)
+        expect(sized.maxLegacyPtyDataChars({ id: 'pty-1' }, data)).toBe(data.length)
+        expect(spy).toHaveBeenCalledTimes(1)
+      } finally {
+        sized.dispose()
+      }
+    })
+
+    it('publishes PTY data with a single frame preparation', () => {
+      const frames: Buffer[] = []
+      const publisher = new RelayDispatcher((data) => {
+        frames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        const spy = vi.spyOn(publisher as unknown as DispatcherInternals, 'prepareFrame')
+        expect(publisher.tryNotifyPtyData({ id: 'pty-1', data: 'hello' })).toBe(true)
+        expect(frames).toHaveLength(1)
+        expect(spy).toHaveBeenCalledTimes(1)
+      } finally {
+        publisher.dispose()
+      }
+    })
+
+    it('a prepared enqueue matches the composition wrapper', () => {
+      const frames: Buffer[] = []
+      const publisher = new RelayDispatcher((data) => {
+        frames.push(Buffer.from(data))
+        return true
+      })
+      try {
+        const internals = publisher as unknown as DispatcherInternals
+        const msg: JsonRpcNotification = {
+          jsonrpc: '2.0',
+          method: 'pty.data',
+          params: { id: 'pty-1', data: 'héllo "𝄞"\\\n\uD800' }
+        }
+        expect(internals.enqueueFrame(internals.primaryClient, msg, 'ordinary')).toBe(true)
+        expect(
+          internals.enqueuePreparedFrame(
+            internals.primaryClient,
+            internals.prepareFrame(msg),
+            'ordinary'
+          )
+        ).toBe(true)
+        expect(frames).toHaveLength(2)
+        expect(
+          decodeFirstFrame(frames[1]).payload.equals(decodeFirstFrame(frames[0]).payload)
+        ).toBe(true)
+      } finally {
+        publisher.dispose()
+      }
+    })
+
+    it('a prepared enqueue rejects identically to the composition wrapper', () => {
+      const { sized } = makeDispatcher([1030])
+      try {
+        const internals = sized as unknown as DispatcherInternals
+        const msg: JsonRpcNotification = {
+          jsonrpc: '2.0',
+          method: 'pty.data',
+          params: { id: 'pty-1', data: 'x'.repeat(512) }
+        }
+        expect(internals.enqueueFrame(internals.primaryClient, msg, 'ordinary')).toBe(false)
+        expect(
+          internals.enqueuePreparedFrame(
+            internals.primaryClient,
+            internals.prepareFrame(msg),
+            'ordinary'
+          )
+        ).toBe(false)
+      } finally {
+        sized.dispose()
       }
     })
   })

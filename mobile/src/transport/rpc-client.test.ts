@@ -618,28 +618,42 @@ describe('mobile rpc-client connection timeout', () => {
       return { client, socket }
     }
 
-    it('repro: a parked reconnect loop never retries on its own', async () => {
+    // Why 520_000ms: the 12 fast attempts cost Σ(RECONNECT_DELAYS) 360.5s of
+    // backoff plus 13 × 12s connect timeouts ≈ 516.5s, so 520s lands just
+    // past the give-up cap with the first trickle timer armed.
+    const PAST_GIVE_UP_CAP_MS = 520_000
+
+    it('keeps trickle-retrying after the give-up cap instead of parking', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       openAndAuthenticate(mockSockets[0]!)
       mockSockets[0]!.close()
 
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
       expect(client.getState()).toBe('reconnecting')
-      expect(client.getReconnectAttempt()).toBe(12)
+      expect(client.getReconnectAttempt()).toBeGreaterThanOrEqual(12)
 
-      // Stuck: arbitrary additional time produces no further attempts.
+      // A wedged VPN produces no revival nudge (issue #7824) — the loop must
+      // keep dialing on its own at the 90s trickle cadence.
       const socketsBefore = mockSockets.length
-      await vi.advanceTimersByTimeAsync(600_000)
-      expect(mockSockets.length).toBe(socketsBefore)
+      await vi.advanceTimersByTimeAsync(102_000)
+      expect(mockSockets.length).toBeGreaterThan(socketsBefore)
+
+      // Once the tunnel heals, a trickle dial restores the session without
+      // any user action. 75s lands inside the next dial's 12s connect window
+      // (the prior dial failed mid-advance above, re-arming the 90s timer).
+      await vi.advanceTimersByTimeAsync(75_000)
+      openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
 
       client.close()
     })
 
-    it('restarts a parked reconnect loop on foreground', async () => {
+    it('restarts a backed-off reconnect loop on foreground without waiting out the trickle', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       openAndAuthenticate(mockSockets[0]!)
       mockSockets[0]!.close()
-      await vi.runAllTimersAsync()
+      await vi.advanceTimersByTimeAsync(PAST_GIVE_UP_CAP_MS)
       expect(client.getReconnectAttempt()).toBe(12)
 
       const socketsBefore = mockSockets.length
@@ -693,6 +707,47 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
+    it('reconnects when the half-open socket omits its close callback', async () => {
+      const client = connect('ws://desktop.invalid', 'token', 'server-key')
+      const socket = mockSockets[0]!
+      openAndAuthenticate(socket)
+      socket.emitCloseOnClose = false
+
+      client.notifyForeground()
+      await vi.advanceTimersByTimeAsync(8_000)
+
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+      socket.onclose?.()
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      openAndAuthenticate(mockSockets[1]!)
+      expect(client.getState()).toBe('connected')
+      expect(client.getReconnectAttempt()).toBe(0)
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(mockSockets).toHaveLength(2)
+
+      client.close()
+    })
+
+    it('coalesces repeated foreground probes while one probe is pending', async () => {
+      const client = connectAuthenticated().client
+      const socket = mockSockets[0]!
+      client.notifyForeground()
+      client.notifyForeground()
+      client.notifyForeground()
+      expect(sentRequests(socket, 'status.get')).toHaveLength(1)
+      await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).toHaveBeenCalledTimes(1)
+      expect(client.getState()).toBe('reconnecting')
+
+      await vi.advanceTimersByTimeAsync(500)
+      expect(mockSockets).toHaveLength(2)
+      client.close()
+    })
     it('keeps a healthy connection when the foreground probe is answered', async () => {
       const { client, socket } = connectAuthenticated()
 
@@ -861,9 +916,11 @@ describe('mobile rpc-client connection timeout', () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
       // Three consecutive handshake rejections (AUTH_RETRY_BUDGET = 3).
+      // Why 1_000: failed handshakes grow the backoff since issue #10119 —
+      // cycle 2 waits RECONNECT_DELAYS[1].
       for (let i = 0; i < 3; i++) {
         if (i > 0) {
-          await vi.advanceTimersByTimeAsync(500)
+          await vi.advanceTimersByTimeAsync(1_000)
         }
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
@@ -880,16 +937,17 @@ describe('mobile rpc-client connection timeout', () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
 
       // Two rejections, then a clean connect resets the budget...
+      // Why 1_000: failed handshakes grow the backoff since issue #10119.
       for (let i = 0; i < 2; i++) {
         if (i > 0) {
-          await vi.advanceTimersByTimeAsync(500)
+          await vi.advanceTimersByTimeAsync(1_000)
         }
         const socket = mockSockets[mockSockets.length - 1]!
         socket.open()
         socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
         socket.receive('encrypted:{"type":"e2ee_error","error":{"code":"unauthorized"}}')
       }
-      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(1_000)
       authenticate(mockSockets[mockSockets.length - 1]!)
       expect(client.getState()).toBe('connected')
 
@@ -921,7 +979,7 @@ describe('mobile rpc-client connection timeout', () => {
       () => null,
       (error: Error) => error
     )
-    await vi.runAllTimersAsync()
+    await vi.advanceTimersByTimeAsync(520_000)
 
     expect(client.getState()).toBe('reconnecting')
     expect(client.getReconnectAttempt()).toBe(12)

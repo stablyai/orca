@@ -62,6 +62,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: '/home/user',
+      pathFlavor: 'posix',
       entries: [
         { name: 'src', isDirectory: true },
         { name: 'notes file.txt', isDirectory: false },
@@ -93,6 +94,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: "/tmp/it's here",
+      pathFlavor: 'posix',
       entries: []
     })
     expect(exec).toHaveBeenCalledWith("cd '/tmp/it'\\''s here' && pwd && command ls -1Ap")
@@ -128,6 +130,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users/alice',
+      pathFlavor: 'win32',
       entries: [
         { name: 'Desktop', isDirectory: true },
         { name: 'notes.txt', isDirectory: false }
@@ -148,6 +151,40 @@ describe('registerSshBrowseHandler', () => {
     // resolvedPath must be emitted with forward slashes so the renderer's
     // parentPath/joinPath (which only split on `/`) keep working on Windows.
     expect(script).toContain("Write-Output ($resolved -replace '\\\\', '/')")
+  })
+
+  it('lists Windows drive roots when an SSH picker browses the host root', async () => {
+    const posixChannel = createMockChannel()
+    const windowsChannel = createMockChannel()
+    const exec = vi.fn().mockResolvedValueOnce(posixChannel).mockResolvedValueOnce(windowsChannel)
+    const getConnectionManager = () => ({
+      getConnection: () => ({ exec })
+    })
+    registerSshBrowseHandler(getConnectionManager as never)
+
+    const resultPromise = handler(null, { targetId: 'ssh-1', dirPath: '/' })
+    await Promise.resolve()
+    posixChannel.stderr.emit('data', Buffer.from('"exec" is not recognized'))
+    posixChannel.emit('exit', 1)
+    posixChannel.emit('close')
+    await vi.waitFor(() => {
+      expect(windowsChannel.listenerCount('close')).toBe(1)
+    })
+    windowsChannel.emit('data', Buffer.from('/\r\nC:\\/\r\nM:\\/\r\n'))
+    windowsChannel.emit('exit', 0)
+    windowsChannel.emit('close')
+
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: '/',
+      pathFlavor: 'win32',
+      entries: [
+        { name: 'C:\\', isDirectory: true },
+        { name: 'M:\\', isDirectory: true }
+      ]
+    })
+    const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
+    expect(script).toContain('Get-PSDrive -PSProvider FileSystem')
+    expect(script).not.toContain('Set-Location')
   })
 
   it('falls back for a non-English cmd.exe reject (exit 1, localized stderr)', async () => {
@@ -182,6 +219,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: 'C:/Users',
+      pathFlavor: 'win32',
       entries: [{ name: 'Admin', isDirectory: true }]
     })
     expect(exec).toHaveBeenCalledTimes(2)
@@ -213,6 +251,7 @@ describe('registerSshBrowseHandler', () => {
 
     await expect(resultPromise).resolves.toEqual({
       resolvedPath: "C:/O'Brien",
+      pathFlavor: 'win32',
       entries: []
     })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
@@ -241,7 +280,11 @@ describe('registerSshBrowseHandler', () => {
     windowsChannel.emit('exit', 0)
     windowsChannel.emit('close')
 
-    await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users/alice', entries: [] })
+    await expect(resultPromise).resolves.toEqual({
+      resolvedPath: 'C:/Users/alice',
+      entries: [],
+      pathFlavor: 'win32'
+    })
     const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
     // ~ must expand to $HOME, not be passed literally to Set-Location.
     expect(script).toContain('$dir = $HOME')
@@ -279,7 +322,11 @@ describe('registerSshBrowseHandler', () => {
       windowsChannel.emit('exit', 0)
       windowsChannel.emit('close')
 
-      await expect(resultPromise).resolves.toEqual({ resolvedPath: 'C:/Users', entries: [] })
+      await expect(resultPromise).resolves.toEqual({
+        resolvedPath: 'C:/Users',
+        entries: [],
+        pathFlavor: 'win32'
+      })
       const script = decodeEncodedCommand(exec.mock.calls[1]?.[0] ?? '')
       expect(script).toContain(expected)
     }

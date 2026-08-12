@@ -6,11 +6,14 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { buildSetupRunnerCommand } from '../../../shared/setup-runner-command'
+import {
+  buildSetupRunnerCommand,
+  getSetupRunnerCommandPlatformForPath
+} from '../../../shared/setup-runner-command'
 import type {
   TerminalLayoutSnapshot,
   Worktree,
@@ -119,9 +122,11 @@ function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: stri
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
+  // Why: background setup tabs can launch later, so they must reuse the same shell chosen when the runner was written.
   return buildSetupRunnerCommand(
     setup.runnerScriptPath,
-    isWindowsAbsolutePathLike(setup.runnerScriptPath) ? 'windows' : 'posix'
+    getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
+    setup.shell
   )
 }
 
@@ -177,8 +182,17 @@ async function createBackgroundTab(args: {
       env: args.launch.env
     })
   } catch (error) {
-    store.closeTab(tab.id, { recordInteraction: false })
+    store.closeTab(tab.id, { recordInteraction: false, reason: 'cleanup' })
     throw error
+  }
+  if (
+    await retireUnownedTerminal({
+      owner: { tabId: tab.id },
+      ptyId,
+      runtimeTarget: { kind: 'local' }
+    })
+  ) {
+    throw new Error('The terminal tab was closed before its session finished starting.')
   }
   store.updateTabPtyId(tab.id, ptyId)
   store.setTabLayout(tab.id, singlePaneLayoutSnapshot(leafId, ptyId))
@@ -203,6 +217,15 @@ async function addSetupSplit(args: {
     command: buildSetupCommand(args.setup),
     env: args.setup.envVars
   })
+  if (
+    await retireUnownedTerminal({
+      owner: { tabId: args.tab.tabId },
+      ptyId: setupPtyId,
+      runtimeTarget: { kind: 'local' }
+    })
+  ) {
+    return
+  }
   store.updateTabPtyId(args.tab.tabId, setupPtyId)
   store.setTabLayout(
     args.tab.tabId,

@@ -200,7 +200,7 @@ export async function setupTerminal(page, repoPath, logPhase) {
       return pane?.container?.dataset?.ptyId ?? null
     })
   )
-  logPhase('setup.pty-bound', `ptyId=${ptyId}`)
+  logPhase('setup.pty-bound', `ptyId=${String(ptyId)}`)
   return ptyId
 }
 

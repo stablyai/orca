@@ -219,6 +219,44 @@ describe('splitWorkspaceSessionByHost', () => {
 
     expect(slices[RUNTIME_A]?.sleepingAgentSessionsByPaneKey).toHaveProperty('pane-a')
   })
+
+  it('routes terminal incarnation authority with its owning surface', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'a-wt': [makeTab('tab-a', 'a-wt')] },
+      terminalPtyIncarnationsByPaneKey: { 'tab-a:leaf-a': 'inc-a' },
+      terminalSurfaceTombstonesByPaneKey: {
+        'tab-b:leaf-b': {
+          worktreeId: 'b-wt',
+          parentTabId: 'tab-b',
+          leafId: 'leaf-b',
+          ptyId: 'pty-b',
+          incarnationId: 'inc-b',
+          retiredAt: 1
+        }
+      }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    expect(slices[RUNTIME_A]?.terminalPtyIncarnationsByPaneKey).toEqual({
+      'tab-a:leaf-a': 'inc-a'
+    })
+    expect(slices[RUNTIME_B]?.terminalSurfaceTombstonesByPaneKey).toHaveProperty('tab-b:leaf-b')
+  })
+
+  it('does not send host-private topology authority through renderer partitions', () => {
+    const state: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { 'a-wt': [makeTab('tab-a', 'a-wt')] },
+      terminalTopologyRevisionByRepoId: { 'a-repo': 7 }
+    }
+
+    const slices = splitWorkspaceSessionByHost(state, ownerByPrefix())
+
+    expect(slices[LOCAL_EXECUTION_HOST_ID]?.terminalTopologyRevisionByRepoId).toBeUndefined()
+    expect(slices[RUNTIME_A]?.terminalTopologyRevisionByRepoId).toBeUndefined()
+  })
 })
 
 describe('mergeWorkspaceSessionsFromHosts', () => {
@@ -255,6 +293,21 @@ describe('mergeWorkspaceSessionsFromHosts', () => {
     const merged = mergeWorkspaceSessionsFromHosts({})
     expect(merged.tabsByWorktree).toBeUndefined()
     expect(() => mergeWorkspaceSessionsFromHosts({ [RUNTIME_A]: undefined })).not.toThrow()
+  })
+
+  it('does not merge host-private topology authority into unified renderer state', () => {
+    const merged = mergeWorkspaceSessionsFromHosts({
+      [LOCAL_EXECUTION_HOST_ID]: {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 3 }
+      },
+      [RUNTIME_A]: {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 9 }
+      }
+    })
+
+    expect(merged.terminalTopologyRevisionByRepoId).toBeUndefined()
   })
 })
 

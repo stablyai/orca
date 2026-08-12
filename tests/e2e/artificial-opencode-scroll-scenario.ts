@@ -12,7 +12,8 @@ import {
   getResponsiveScrollPath,
   type ScrollAttemptMeasurement
 } from './artificial-opencode-scroll-measurement'
-import { sendToTerminal, waitForTerminalOutput } from './helpers/terminal'
+import { runNodeScriptInTerminal } from './helpers/run-node-script-in-terminal'
+import { waitForTerminalOutput } from './helpers/terminal'
 
 export { getResponsiveScrollPath }
 
@@ -50,8 +51,16 @@ export async function seedActiveTerminalScrollback(
     `for (let i = 0; i < 420; i++) console.log('OPENCODE_SCROLL_${runId}_' + i)`,
     `console.log('${marker}')`
   ].join(';')
-  await sendToTerminal(page, ptyId, `node -e ${JSON.stringify(script)}\r`)
-  await waitForTerminalOutput(page, marker, 10_000)
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  const staged = await runNodeScriptInTerminal(page, ptyId, script, {
+    prefix: 'orca-opencode-scroll-seed'
+  })
+  try {
+    await waitForTerminalOutput(page, marker, 10_000)
+  } finally {
+    // Why: the ready marker proves node already loaded the script.
+    staged.cleanup()
+  }
   await scrollActiveTerminalToBottom(page)
 }
 

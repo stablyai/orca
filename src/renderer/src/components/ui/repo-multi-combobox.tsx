@@ -16,7 +16,7 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { translate } from '@/i18n/i18n'
 
 type RepoMultiComboboxProps = {
-  repos: Repo[]
+  repos: readonly Repo[]
   /** Currently selected repo ids. The component enforces `selected.size >= 1`
    *  by disabling the last-selected checkbox. */
   selected: ReadonlySet<string>
@@ -32,7 +32,10 @@ type RepoMultiComboboxProps = {
   triggerClassName?: string
 }
 
-function renderTriggerLabel(repos: Repo[], selected: ReadonlySet<string>): React.JSX.Element {
+function renderTriggerLabel(
+  repos: readonly Repo[],
+  selected: ReadonlySet<string>
+): React.JSX.Element {
   if (repos.length === 0) {
     return (
       <span className="text-muted-foreground">

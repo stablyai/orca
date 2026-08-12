@@ -381,7 +381,7 @@ export function ReviewNotesAnimatedVisual(props: { reducedMotion: boolean }): JS
         </button>
         <div className="ravs-popover" data-note-popover>
           <div className="ravs-pop-label">
-            {translate('auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94', 'Line')}
+            {translate('auto.components.feature.wall.ReviewNotesAnimatedVisual.a7a89d8f94', 'Line')}{' '}
             <span data-pop-line>?</span>
           </div>
           <div className="ravs-pop-input" data-pop-input />

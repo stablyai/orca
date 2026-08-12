@@ -28,7 +28,13 @@ function resultWith(overrides: Partial<LinearIssueContextResult>): LinearIssueCo
     meta: {
       requested: {
         current: false,
-        include: { comments: true, children: true, attachments: false, relations: false },
+        include: {
+          comments: true,
+          children: true,
+          attachments: false,
+          relations: false,
+          activity: false
+        },
         depth: 3
       },
       resolved: {

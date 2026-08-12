@@ -173,6 +173,9 @@ export function createRemoteRuntimeViewportBatcher(
       clearTimeout(timer)
       timer = null
     }
+    // Why: also drop the queued viewport so a later flush()/reuse can't emit a
+    // stale resize after the batcher was cleared on teardown/resubscribe.
+    pending = null
   }
 
   const flush = (): void => {

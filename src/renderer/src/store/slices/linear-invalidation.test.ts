@@ -16,6 +16,7 @@ vi.mock('@/runtime/runtime-linear-client', () => ({
   linearDisconnect: vi.fn(),
   linearDisconnectWorkspace: vi.fn(),
   linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
+  isLinearIssueAttributeFilterUnsupportedError: () => false,
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
   linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
@@ -104,7 +105,7 @@ describe('createLinearSlice invalidation', () => {
     store.setState({
       linearStatus: { connected: true, viewer: null, selectedWorkspaceId: 'workspace-1' },
       linearListCache: {
-        'workspace-1::list::all::36': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
+        'workspace-1::list::all::36::': { data: { items: [issue('LIST')] }, fetchedAt: Date.now() }
       }
     })
     linearSearchIssues.mockResolvedValueOnce([issue('SEARCH')])
@@ -161,7 +162,7 @@ describe('createLinearSlice invalidation', () => {
         'workspace-1::search::issue::20': { data: [issue('issue-id')], fetchedAt: Date.now() }
       },
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('issue-id')], hasMore: false },
           fetchedAt: Date.now()
         }
@@ -197,7 +198,7 @@ describe('createLinearSlice invalidation', () => {
         'workspace-1::issue-1': { data: issue('issue-1'), fetchedAt: Date.now() }
       },
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('LIN-CACHED')] },
           fetchedAt: Date.now()
         }
@@ -259,7 +260,7 @@ describe('createLinearSlice invalidation', () => {
     store.setState({
       linearStatus: status('workspace-1', 'Old Org'),
       linearListCache: {
-        'workspace-1::list::all::36': {
+        'workspace-1::list::all::36::': {
           data: { items: [issue('LIN-CACHED')] },
           fetchedAt: Date.now()
         }
@@ -306,7 +307,9 @@ describe('createLinearSlice invalidation', () => {
     linearListIssues.mockRejectedValueOnce(new Error('401 unauthorized'))
     linearStatus.mockResolvedValueOnce(status('workspace-2', 'Beta'))
 
-    await expect(store.getState().listLinearIssues('all', 36, { force: true })).resolves.toEqual({
+    await expect(
+      store.getState().listLinearIssues({ kind: 'list', filter: 'all', limit: 36 }, { force: true })
+    ).resolves.toEqual({
       items: []
     })
     expect(store.getState().linearStatus.connected).toBe(true)

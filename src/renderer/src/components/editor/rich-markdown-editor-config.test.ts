@@ -1,13 +1,15 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { DocLinkMenuState } from './rich-markdown-commands'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import {
   createRichMarkdownEditorConfig,
   type EditorConfigParams
 } from './rich-markdown-editor-config'
 import type { SlashMenuState } from './rich-markdown-slash-commands'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
+import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 
 function ref<T>(current: T): MutableRefObject<T> {
   return { current }
@@ -25,7 +27,15 @@ function getSpellcheckAttribute(config: ReturnType<typeof createRichMarkdownEdit
 }
 
 function createConfigParams(overrides: Partial<EditorConfigParams> = {}): EditorConfigParams {
+  const codec = createRichMarkdownEditorCodec()
   return {
+    codec,
+    htmlSuperscriptLinkContext: createRichMarkdownHtmlSuperscriptLinkContext({
+      sourceFilePath: '/repo/README.md',
+      worktreeId: 'worktree-1',
+      worktreeRoot: '/repo',
+      sourceOwner: { kind: 'local' }
+    }),
     content: '',
     filePath: '/repo/README.md',
     worktreeId: 'worktree-1',
@@ -38,6 +48,9 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     rootRef: ref<HTMLDivElement | null>(null),
     editorRef: ref<Editor | null>(null),
     lastCommittedMarkdownRef: ref(''),
+    originalSourceRef: ref(''),
+    baseCanonicalRef: ref(''),
+    reconcileRoundTripRef: ref<(markdown: string) => string | null>(() => null),
     onContentChangeRef: ref(vi.fn()),
     onDirtyStateHintRef: ref(vi.fn()),
     onSaveRef: ref(vi.fn()),
@@ -60,6 +73,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     markdownSourceLineOffsetRef: ref(0),
     flushPendingSerialization: vi.fn(),
     openSearchRef: ref(vi.fn()),
+    openAnnotationPopoverRef: ref(vi.fn()),
     syncAnnotationTarget: vi.fn(),
     clearAnnotationTarget: vi.fn(),
     scrollRichMarkdownReviewNoteCardIntoView: vi.fn(),
@@ -74,6 +88,10 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
 }
 
 describe('createRichMarkdownEditorConfig', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('disables browser spellcheck when the rich Markdown setting is off', () => {
     const config = createRichMarkdownEditorConfig(
       createConfigParams({ richMarkdownSpellcheckEnabled: false })
@@ -86,5 +104,23 @@ describe('createRichMarkdownEditorConfig', () => {
     const config = createRichMarkdownEditorConfig(createConfigParams())
 
     expect(getSpellcheckAttribute(config)).toBe('true')
+  })
+
+  it('flushes pending serialization when the rich editor blurs', () => {
+    const setMarkdownEditorFocused = vi.fn()
+    vi.stubGlobal('window', {
+      api: { ui: { setMarkdownEditorFocused } }
+    })
+    const flushPendingSerialization = vi.fn()
+    const clearAnnotationTarget = vi.fn()
+    const config = createRichMarkdownEditorConfig(
+      createConfigParams({ clearAnnotationTarget, flushPendingSerialization })
+    )
+
+    config.onBlur?.({} as never)
+
+    expect(setMarkdownEditorFocused).toHaveBeenCalledWith(false)
+    expect(clearAnnotationTarget).toHaveBeenCalledOnce()
+    expect(flushPendingSerialization).toHaveBeenCalledOnce()
   })
 })

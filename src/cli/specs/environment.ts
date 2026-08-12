@@ -23,6 +23,7 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['environment', 'rm'],
+    destructive: true,
     summary: 'Remove one saved Orca runtime environment',
     usage: 'orca environment rm --environment <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS]

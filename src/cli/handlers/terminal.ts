@@ -45,7 +45,8 @@ const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
-    terminal: await getTerminalHandle(flags, cwd, client)
+    terminal: await getTerminalHandle(flags, cwd, client),
+    navigation: 'host'
   })
   printResult(result, json, formatTerminalFocus)
 }
@@ -54,7 +55,9 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
   'terminal list': async ({ flags, client, cwd, json }) => {
     const result = await client.call<RuntimeTerminalListResult>('terminal.list', {
       worktree: await getOptionalWorktreeSelector(flags, 'worktree', cwd, client),
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
+      // Why: agent JSON calls dominate; topology stays available through an explicit opt-in.
+      includeVisualLayouts: !json || flags.has('include-visual-layouts')
     })
     printResult(result, json, formatTerminalList)
   },
@@ -147,12 +150,11 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
     })
     printResult(result, json, formatTerminalCreate)
   },
-  // Why: `focus` and `switch` are aliases — register the same handler under
-  // both keys so the dispatch table stays a plain command-path lookup.
-  'terminal focus': terminalFocusHandler,
+  // `focus` resolves to this canonical path via CommandSpec.aliases before dispatch.
   'terminal switch': terminalFocusHandler,
   'terminal close': async ({ flags, client, cwd, json }) => {
-    const result = await client.call<{ close: RuntimeTerminalClose }>('terminal.close', {
+    const method = flags.get('tab') === true ? 'terminal.closeTab' : 'terminal.close'
+    const result = await client.call<{ close: RuntimeTerminalClose }>(method, {
       terminal: await getTerminalHandle(flags, cwd, client)
     })
     printResult(result, json, formatTerminalClose)

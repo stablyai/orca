@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { getRemoteHostPlatform, joinRemotePath } from './ssh-remote-platform'
+import {
+  assertSafeRemotePathSegment,
+  getRemoteHostPlatform,
+  joinRemotePath
+} from './ssh-remote-platform'
 import { detectRemoteHostPlatform } from './ssh-remote-platform-detection'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import type { SshConnection } from './ssh-connection'
@@ -33,9 +37,50 @@ describe('joinRemotePath', () => {
   })
 })
 
+describe('assertSafeRemotePathSegment', () => {
+  it('accepts ordinary names under both path flavors', () => {
+    expect(() => assertSafeRemotePathSegment('report copy.txt', 'posix')).not.toThrow()
+    expect(() => assertSafeRemotePathSegment('report copy.txt', 'windows')).not.toThrow()
+  })
+
+  it.each(['.', '..', '../secret', 'child/name', 'nul\0byte'])(
+    'rejects invalid segment %j under both path flavors',
+    (segment) => {
+      expect(() => assertSafeRemotePathSegment(segment, 'posix')).toThrow(
+        'Unsafe remote path segment'
+      )
+      expect(() => assertSafeRemotePathSegment(segment, 'windows')).toThrow(
+        'Unsafe remote path segment'
+      )
+    }
+  )
+
+  it('preserves valid POSIX names that Windows would reinterpret', () => {
+    expect(() => assertSafeRemotePathSegment('notes\\2026\nfinal.txt', 'posix')).not.toThrow()
+  })
+
+  it.each([
+    '..\\..\\.ssh\\orca_drop',
+    'report.txt:orca',
+    'question?.txt',
+    'trailing.',
+    'trailing ',
+    'NUL',
+    'con.txt',
+    'CONIN$',
+    'CLOCK$.log',
+    'COM1.log',
+    'LPT¹'
+  ])('rejects Win32-special segment %j', (segment) => {
+    expect(() => assertSafeRemotePathSegment(segment, 'windows')).toThrow(
+      'Unsafe remote path segment'
+    )
+  })
+})
+
 describe('detectRemoteHostPlatform', () => {
   it('uses uname when the remote is POSIX', async () => {
-    vi.mocked(execCommand).mockResolvedValueOnce('Darwin arm64')
+    vi.mocked(execCommand).mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Darwin arm64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'darwin-arm64',
@@ -46,7 +91,7 @@ describe('detectRemoteHostPlatform', () => {
   it('falls back to PowerShell when uname is unavailable on Windows', async () => {
     vi.mocked(execCommand)
       .mockRejectedValueOnce(new Error('uname not recognized'))
-      .mockResolvedValueOnce('Windows AMD64')
+      .mockResolvedValueOnce('__ORCA_REMOTE_PLATFORM__ Windows AMD64')
 
     await expect(detectRemoteHostPlatform(conn)).resolves.toMatchObject({
       relayPlatform: 'win32-x64',
@@ -59,5 +104,6 @@ describe('detectRemoteHostPlatform', () => {
     expect(script).toContain('$arch = $env:PROCESSOR_ARCHITECTURE')
     expect(script).toContain('try { $runtimeArch =')
     expect(script).toContain('catch {}')
+    expect(script).toContain('Write-Output ("`n__ORCA_REMOTE_PLATFORM__ Windows " + $arch)')
   })
 })

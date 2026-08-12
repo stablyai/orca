@@ -9,6 +9,8 @@ import type { AgentStartedTelemetry } from '@/lib/worktree-activation'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../shared/types'
+import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -16,6 +18,7 @@ export type OnboardingFolderAgentStartup = {
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
+  sessionOptions?: Record<string, SessionOptionValue>
   telemetry: AgentStartedTelemetry
 }
 
@@ -27,7 +30,8 @@ function getClientPlatform(): NodeJS.Platform {
 }
 
 export function buildOnboardingFolderAgentStartup(
-  settings: GlobalSettings | null
+  settings: GlobalSettings | null,
+  nativeChatTranscriptIsLocalReadable = true
 ): OnboardingFolderAgentStartup | undefined {
   const agent = settings?.defaultTuiAgent
   if (
@@ -45,6 +49,10 @@ export function buildOnboardingFolderAgentStartup(
     cmdOverrides: settings.agentCmdOverrides ?? {},
     agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
     agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
+      agent,
+      nativeChatTranscriptIsLocalReadable
+    }),
     platform: getClientPlatform(),
     allowEmptyPromptLaunch: true
   })
@@ -57,6 +65,7 @@ export function buildOnboardingFolderAgentStartup(
     ...(startupPlan.env ? { env: startupPlan.env } : {}),
     launchConfig: startupPlan.launchConfig,
     launchAgent: agent,
+    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
     ...(startupPlan.startupCommandDelivery
       ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
       : {}),
@@ -83,10 +92,11 @@ export function shouldSeedFolderAgentAfterDismissedOnboarding(
 export function buildDismissedOnboardingFolderAgentStartup(
   settings: GlobalSettings | null,
   onboarding: OnboardingState | null,
-  hasExistingProject: boolean
+  hasExistingProject: boolean,
+  nativeChatTranscriptIsLocalReadable = true
 ): OnboardingFolderAgentStartup | undefined {
   if (!shouldSeedFolderAgentAfterDismissedOnboarding(onboarding, hasExistingProject)) {
     return undefined
   }
-  return buildOnboardingFolderAgentStartup(settings)
+  return buildOnboardingFolderAgentStartup(settings, nativeChatTranscriptIsLocalReadable)
 }

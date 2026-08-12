@@ -36,4 +36,11 @@ export type GhAuthDiagnostic = {
    * that the user could fall back to by unsetting the env var.
    */
   hasKeyringFallback: boolean
+  /**
+   * The GitHub host the caller needs credentials for (e.g. a GHES origin).
+   * Null when the probe ran without host context.
+   */
+  requiredHost: string | null
+  /** Whether gh has any account for `requiredHost`; null without host context. */
+  requiredHostAuthenticated: boolean | null
 }

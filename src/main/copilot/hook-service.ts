@@ -12,15 +12,18 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
+  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
+import { buildPosixHookPayloadCapture } from '../agent-hooks/hook-stdin-contract'
 
 // Why: Copilot's user-level hook files can use VS Code-compatible PascalCase
 // names, which match the event vocabulary already normalized by Orca's hook
@@ -61,14 +64,11 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
-function quotePowerShellPath(path: string): string {
-  return `'${path.replaceAll("'", "''")}'`
-}
-
 function getManagedCommand(scriptPath: string, eventName: string): string {
-  return process.platform === 'win32'
-    ? `$env:ORCA_COPILOT_HOOK_EVENT = '${eventName}'; powershell.exe -NoProfile -ExecutionPolicy Bypass -File ${quotePowerShellPath(scriptPath)}`
-    : wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  if (process.platform !== 'win32') {
+    return wrapPosixHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
+  }
+  return wrapWindowsHookCommand(scriptPath, { ORCA_COPILOT_HOOK_EVENT: eventName })
 }
 
 function getManagedHookDefinition(command: string): HookDefinition {
@@ -129,6 +129,9 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
       '    }',
       '  } catch {}',
       '}',
+      // Why (#11549 class): missing Orca context means a user-wide hook fired outside an
+      // Orca pane. ReadToEnd blocks forever if that caller abandons the pipe, so the guard
+      // must run before the hook owns stdin; the payload would be discarded anyway.
       'if (-not $env:ORCA_AGENT_HOOK_PORT -or -not $env:ORCA_AGENT_HOOK_TOKEN -or -not $env:ORCA_PANE_KEY) { exit 0 }',
       '$inputData = [Console]::In.ReadToEnd()',
       'if ([string]::IsNullOrWhiteSpace($inputData)) { exit 0 }',
@@ -154,16 +157,13 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     "printf '{}\\n'",
+    ...buildPosixHookPayloadCapture(),
     // Why: Copilot consumes stdout for some hooks, so stdout is emitted before
     // endpoint refresh, stdin parsing, or the network POST can fail.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
-    '  exit 0',
-    'fi',
-    'payload=$(cat)',
-    'if [ -z "$payload" ]; then',
     '  exit 0',
     'fi',
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
@@ -187,6 +187,10 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
 }
 
 export class CopilotHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()

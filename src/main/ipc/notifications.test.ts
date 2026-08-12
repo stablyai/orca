@@ -15,6 +15,7 @@ const {
   notificationCtorMock,
   notificationIsSupportedMock,
   getAllWindowsMock,
+  getTrustedUIRendererWindowMock,
   shellOpenExternalMock
 } = vi.hoisted(() => {
   const removeHandlerMock = vi.fn()
@@ -35,6 +36,7 @@ const {
   })
   const notificationIsSupportedMock = vi.fn(() => true)
   const getAllWindowsMock = vi.fn(() => [])
+  const getTrustedUIRendererWindowMock = vi.fn()
   const shellOpenExternalMock = vi.fn()
   return {
     removeHandlerMock,
@@ -47,6 +49,7 @@ const {
     notificationCtorMock,
     notificationIsSupportedMock,
     getAllWindowsMock,
+    getTrustedUIRendererWindowMock,
     shellOpenExternalMock
   }
 })
@@ -79,6 +82,10 @@ const { readAuthorizationStatusMock } = vi.hoisted(() => ({
 
 vi.mock('./notification-authorization-status', () => ({
   readNotificationAuthorizationStatus: readAuthorizationStatusMock
+}))
+
+vi.mock('./ui', () => ({
+  getTrustedUIRendererWindow: getTrustedUIRendererWindowMock
 }))
 
 // Why: notifications.ts pulls in the tray module (for the minimized attention
@@ -121,6 +128,8 @@ describe('registerNotificationHandlers', () => {
     readAuthorizationStatusMock.mockResolvedValue(null)
     getAllWindowsMock.mockReset()
     getAllWindowsMock.mockReturnValue([])
+    getTrustedUIRendererWindowMock.mockReset()
+    getTrustedUIRendererWindowMock.mockReturnValue(null)
     shellOpenExternalMock.mockClear()
     setTrayAttentionMock.mockClear()
   })
@@ -452,20 +461,32 @@ describe('registerNotificationHandlers', () => {
     }
   })
 
-  it('focuses the originating terminal pane when a notification with paneKey is clicked', async () => {
+  it('focuses the originating terminal pane in the main window when a dashboard popout is open', async () => {
+    const popoutSend = vi.fn()
+    const popoutFocus = vi.fn()
     const webContentsSend = vi.fn()
     const restore = vi.fn()
+    const show = vi.fn()
     const focus = vi.fn()
-    getAllWindowsMock.mockReturnValue([
-      {
-        isDestroyed: () => false,
-        isFocused: () => false,
-        isMinimized: () => true,
-        restore,
-        focus,
-        webContents: { send: webContentsSend }
-      } as never
-    ])
+    const popoutWindow = {
+      isDestroyed: () => false,
+      isFocused: () => true,
+      isMinimized: () => false,
+      restore: vi.fn(),
+      focus: popoutFocus,
+      webContents: { send: popoutSend }
+    }
+    const mainWindow = {
+      isDestroyed: () => false,
+      isFocused: () => false,
+      isMinimized: () => true,
+      restore,
+      show,
+      focus,
+      webContents: { send: webContentsSend }
+    }
+    getAllWindowsMock.mockReturnValue([popoutWindow, mainWindow] as never)
+    getTrustedUIRendererWindowMock.mockReturnValue(mainWindow)
     registerNotificationHandlers({
       getSettings: () => ({
         notifications: {
@@ -486,8 +507,12 @@ describe('registerNotificationHandlers', () => {
 
     getNotificationEventHandler('click')()
 
+    expect(getTrustedUIRendererWindowMock).toHaveBeenCalledTimes(1)
     expect(restore).toHaveBeenCalledTimes(1)
+    expect(show).toHaveBeenCalledTimes(1)
     expect(focus).toHaveBeenCalledTimes(1)
+    expect(popoutFocus).not.toHaveBeenCalled()
+    expect(popoutSend).not.toHaveBeenCalled()
     expect(vi.getTimerCount()).toBe(0)
     expect(notificationRemoveListenerMock).toHaveBeenCalledWith('click', expect.any(Function))
     expect(webContentsSend).toHaveBeenCalledWith('ui:activateWorktree', {
@@ -899,7 +924,7 @@ describe('registerNotificationHandlers', () => {
     expect(dispatchMobileNotification).not.toHaveBeenCalled()
   })
 
-  it('does not dispatch mobile notifications for focused active-worktree notifications', async () => {
+  it('dispatches one mobile notification when the active worktree is focused on desktop', async () => {
     getAllWindowsMock.mockReturnValue([
       {
         isDestroyed: () => false,
@@ -922,17 +947,25 @@ describe('registerNotificationHandlers', () => {
     )
 
     const handler = getDispatchHandler()
-    expect(
-      await handler(
-        {},
-        { source: 'agent-task-complete', worktreeId: 'repo::wt1', isActiveWorktree: true }
-      )
-    ).toEqual({
+    const focusedNotification = {
+      source: 'agent-task-complete' as const,
+      worktreeId: 'repo::wt1',
+      isActiveWorktree: true
+    }
+    expect(await handler({}, focusedNotification)).toEqual({
+      delivered: false,
+      reason: 'suppressed-focus'
+    })
+    expect(await handler({}, focusedNotification)).toEqual({
       delivered: false,
       reason: 'suppressed-focus'
     })
 
-    expect(dispatchMobileNotification).not.toHaveBeenCalled()
+    expect(dispatchMobileNotification).toHaveBeenCalledTimes(1)
+    expect(dispatchMobileNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ source: 'agent-task-complete', worktreeId: 'repo::wt1' })
+    )
+    expect(notificationCtorMock).not.toHaveBeenCalled()
   })
 
   it('does not dispatch mobile notifications for cooldown-suppressed bursts', async () => {

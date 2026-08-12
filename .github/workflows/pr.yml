@@ -8,74 +8,67 @@ on:
       - reopened
       - ready_for_review
 
+concurrency:
+  group: pr-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  verify:
+  static_analysis:
+    name: static analysis
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3 zsh
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
         with:
-          node-version-file: package.json
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      # Why: pnpm's bundled node-gyp ships gyp_main.py without execute
-      # permission, which breaks native module builds (e.g. node-pty's
-      # postinstall) with "/bin/sh: gyp_main.py: Permission denied".
-      # Pin the fallback to the lockfile's node-gyp version so CI stays
-      # reproducible while forcing pnpm to bypass its broken bundled copy.
-      # Gate on runner.os == 'Linux' to match release.yml — the
-      # npm-global path layout this step assumes is POSIX-shaped, and the
-      # failure has only been observed on Linux runners. Today this job
-      # pins runs-on: ubuntu-latest so the guard is a no-op, but it
-      # prevents a silent break if a Windows/macOS matrix is added later.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Prepare dependency install
-        run: |
-          if [ -e node_modules ]; then
-            ls -ld node_modules
-            rm -rf node_modules
-          fi
-
-      - name: Install dependencies
-        # Why: pnpm 10.24's frozen headless fast path can fail on fresh Ubuntu
-        # runners while creating the root node_modules. Use the normal resolver
-        # path, then verify package metadata stayed unchanged.
-        run: |
-          pnpm install --no-frozen-lockfile --prefer-frozen-lockfile=false
-          git diff --exit-code package.json pnpm-lock.yaml
+      - uses: ./.github/actions/install-node-dependencies
 
       - name: Lint
         run: pnpm exec oxlint --format github
 
-      - name: Check styled scrollbars
-        run: pnpm check:styled-scrollbars
+      - name: Enforce focused code-quality plugins
+        run: pnpm run audit:code-quality:native
+
+      - name: Enforce type-aware code-quality baseline
+        run: pnpm run audit:code-quality:type-aware
+
+      - name: Enforce changed-code quality
+        run: pnpm run check:code-quality:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Enforce React Doctor on changed lines
+        run: pnpm run check:react-doctor:changed -- "${{ github.event.pull_request.base.sha }}"
+
+      - name: Check Zustand selector fan-out budget
+        run: pnpm run check:zustand-selector-fanout
 
       - name: Check reliability gate manifest
         run: pnpm run check:reliability-gates
 
-      # Why: oxlint fails any file over max-lines that is NOT suppressed, so this
-      # ratchet forbids ADDING a new suppression (inline disable or mobile max
-      # bump). Existing oversized files are grandfathered in
-      # config/max-lines-baseline.txt, which may only shrink — new bypasses fail
-      # here with a clear message instead of silently growing the debt.
-      - name: Enforce max-lines ratchet (no new bypasses)
+      - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
+
+      - name: Verify bundled skill guides
+        run: pnpm run verify:bundled-skill-guides
+
+      - name: Verify skill freshness manifest
+        run: pnpm run verify:skill-bundle-manifest
+
+      - name: Verify localization catalog
+        run: pnpm run verify:localization-catalog
+
+      # Why: extraction writes sorted evidence to an isolated temporary path,
+      # so feature PRs need one normalized AST pass rather than a three-OS matrix.
+      - name: Verify localization extraction
+        run: pnpm run verify:localization-extraction
+
+      - name: Verify localization coverage
+        run: pnpm run verify:localization-coverage
 
       # Why: project-owned type declarations must live in .ts so tsc
       # actually checks them. TypeScript's skipLibCheck: true (inherited
@@ -100,28 +93,450 @@ jobs:
       - name: Verify macOS entitlements
         run: pnpm verify:macos-entitlements
 
-      - name: Typecheck
-        run: pnpm typecheck
+  root_directory_guard:
+    name: root directory guard
+    runs-on: ubuntu-latest
 
-      # Why: postinstall rebuilds better-sqlite3 for Electron's ABI via
-      # @electron/rebuild, but vitest runs under system Node.js. Rebuild
-      # it for Node so orchestration tests can load the native module.
-      - name: Rebuild better-sqlite3 for Node
-        run: pnpm rebuild better-sqlite3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
-      # Why: install intentionally blocks Electron's package postinstall, but
-      # some unit tests import `electron` under Node and require path.txt.
+      - name: Reject new root-level files and folders
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
+
+  typecheck:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - run: pnpm typecheck
+
+  git_compatibility:
+    name: Git compatibility
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Verify Git binary compatibility matrix
+        run: |
+          pids=()
+          (
+            archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
+            source="$RUNNER_TEMP/git-2.25.5"
+            curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+            echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+              | sha256sum --check
+            mkdir -p "$source"
+            tar -xzf "$archive" -C "$source" --strip-components=1
+            make -C "$source" -j"$(nproc)" \
+              NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+            ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
+              pnpm exec vitest run --config config/vitest.config.ts \
+              src/shared/git-binary-compatibility.test.ts
+          ) &
+          pids+=("$!")
+
+          for spec in \
+            "alpine/git:edge-2.38.1|2.38.1" \
+            "alpine/git:v2.49.1|2.49.1"; do
+            (
+              image="${spec%%|*}"
+              version="${spec#*|}"
+              ORCA_GIT_COMPAT_IMAGE="$image" ORCA_GIT_COMPAT_VERSION="$version" \
+                pnpm exec vitest run --config config/vitest.config.ts \
+                src/shared/git-binary-compatibility.test.ts
+            ) &
+            pids+=("$!")
+          done
+
+          status=0
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+  shell_contracts:
+    name: shell contracts
+    runs-on: ubuntu-latest
+    env:
+      # Why: the suites below gate their live fish tests on the binary, which is
+      # right on a developer machine and wrong here — this job is a required check
+      # and its fish lane is the only end-to-end guard for #9993, so a skip would
+      # report green with nothing exercised. Turns those skips into failures.
+      ORCA_REQUIRE_FISH: '1'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why fish: shell-ready.test.ts gates its live fish test on the binary being
+      # present, so without this the fish barrier is only covered by config-shape
+      # assertions and never actually exercised.
+      # Why release-4: DECSET 2031 arming lives in the fish 4.0 Rust tty_handoff, and
+      # fish-color-scheme-child-stdin.node-pty.test.ts (#9993) needs it. Noble ships
+      # 3.7, so the PPA is what makes that lane real.
+      - name: Install zsh and fish
+        run: |
+          # Why the update/PPA/fish steps are tolerant: a repo the runner image already
+          # ships can lack a Release file for this suite, and a failed add-apt-repository
+          # still leaves its list entry behind — either makes `apt-get update` exit
+          # non-zero and would red this required check over something unrelated to the
+          # PR. Every fish outcome is judged by the version gate below instead, so only
+          # the zsh install (which has no such gate) stays fatal here.
+          sudo apt-get update || true
+          # Why retry only here: adding the PPA is the network-flaky step, and the
+          # version gate below is fatal, so a transient Launchpad blip would
+          # otherwise red a required check on PRs unrelated to shells.
+          for attempt in 1 2 3; do
+            sudo add-apt-repository -y ppa:fish-shell/release-4 && break
+            echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
+            sudo add-apt-repository -y -r ppa:fish-shell/release-4 || true
+            sleep 5
+          done
+          sudo apt-get update || true
+          # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
+          # first install command in this step to prove the lane really installs them.
+          sudo apt-get install -y zsh fish
+
+      # Separate from the install so the failure names the contract, not an apt error.
+      # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
+      # instead of after a full dependency install.
+      - name: Require fish 4+
+        run: |
+          version="$(fish --version 2>/dev/null || true)"
+          major="${version##*version }"
+          major="${major%%.*}"
+          case "$major" in '' | *[!0-9]*) major=0 ;; esac
+          echo "${version:-<fish not installed>}"
+          if [ "$major" -lt 4 ]; then
+            echo "::error::shell contracts needs fish 4+ (DECSET 2031 arming, #9993) but got '${version:-none}'. Fix the ppa:fish-shell/release-4 install rather than letting the fish lane skip." >&2
+            exit 1
+          fi
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      - name: Test real shell contracts
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=1 \
+            src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
+            src/main/daemon/shell-ready.test.ts \
+            src/main/daemon/node-pty-fd-leak.test.ts \
+            src/main/providers/local-pty-shell-ready.test.ts \
+            src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/shared/posix-command-path-lookup.test.ts
+
+  test:
+    name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shard_total: [16]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: ${{ matrix.node }}
+
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
 
-      - name: Test
-        run: pnpm test
+      - name: Test shard
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
+            --exclude=src/main/daemon/shell-ready.test.ts \
+            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready.test.ts \
+            --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
-      - name: Build unpacked app
-        run: pnpm build:unpack
+  cross-version-wire:
+    name: cross-version wire compatibility
+    runs-on: ubuntu-latest
 
-      # Why: the packaged CLI runs outside Electron's asar integration, so
-      # bare runtime imports must be present in the package itself. Run from a
-      # temp copy so Node cannot mask missing package deps with repo node_modules.
+    steps:
+      # Why fetch-depth 0: the harness extracts the newest release tag to skew
+      # current code against it. The default shallow clone has no tags, which is
+      # why this cannot ride along in the sharded `test` job.
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+
+      # A path filter that matches nothing exits 1 ("No test files found"), so this
+      # lane cannot report success while running zero tests.
+      - name: Old/new client and server terminal journey
+        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+
+  managed_hook_node18:
+    name: managed hooks on Node 18
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build relay companions
+        run: pnpm run build:relay
+
+      - name: Setup Node 18 runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: '18'
+
+      - name: Smoke managed-hook companions
+        run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-builder-linux-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-linux-
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
+      - name: Build package inputs
+        run: |
+          status=0
+          pnpm run build:cli || status=1
+
+          scripts=(build:relay build:electron-vite:parallel)
+          pids=()
+          for script in "${scripts[@]}"; do
+            pnpm run "$script" &
+            pids+=("$!")
+          done
+
+          for pid in "${pids[@]}"; do
+            wait "$pid" || status=1
+          done
+          exit "$status"
+
+      - name: Project web client from renderer build
+        run: pnpm run build:web-from-renderer
+
+      - name: Build native components
+        run: pnpm run build:native
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/linux-unpacked
+
+      - name: Smoke packaged hang watchdog worker
+        run: xvfb-run --auto-servernum node config/scripts/smoke-packaged-hang-watchdog-worker.mjs --app-dir=dist/linux-unpacked
+
+  package_windows:
+    name: package (windows)
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          cache: pnpm
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-windows-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            electron-builder-windows-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test Windows PowerShell CLI boundary
+        run: pnpm exec vitest run --config config/vitest.config.ts src/main/cli/wsl-cli-powershell-boundary.test.ts
+
+      - name: Build package inputs
+        run: pnpm run build:release
+
+      - name: Prepare Electron native runtime
+        run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
+
+      - name: Package unpacked app
+        env:
+          ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
+        run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
+
+      - name: Smoke packaged CLI
+        run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+  # Why: PR E2E is advisory and only validates changed specs; scheduled and
+  # release runs retain full-suite coverage.
+  e2e-paths:
+    name: detect changed e2e specs
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft != true
+    # Why: detector only needs to read the checkout; do not inherit repo defaults.
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+      test_files: ${{ steps.filter.outputs.test_files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Filter changed E2E specs
+        id: filter
+        run: |
+          set -euo pipefail
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+          CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
+          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
+          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          if [ "$TEST_FILES_JSON" != '[]' ]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            echo "Changed E2E specs: $TEST_FILES_JSON"
+          else
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+            echo "No changed E2E specs"
+          fi
+
+  e2e:
+    name: e2e
+    needs: e2e-paths
+    if: needs.e2e-paths.outputs.should_run == 'true'
+    # Why: reusable e2e.yml only checkouts, builds, and uploads artifacts.
+    permissions:
+      contents: read
+    uses: ./.github/workflows/e2e.yml
+    with:
+      test_files: ${{ needs.e2e-paths.outputs.test_files }}
+
+  verify:
+    if: always()
+    needs:
+      - static_analysis
+      - root_directory_guard
+      - typecheck
+      - git_compatibility
+      - shell_contracts
+      - test
+      - managed_hook_node18
+      - package
+      - package_windows
+    runs-on: ubuntu-latest
+
+    steps:
+      # Why: e2e is deliberately absent from needs. The suite is currently red on
+      # main (every scheduled run), so gating merges on it would block any PR that
+      # touches tests/e2e/** — including the ones fixing the suite. Until it is
+      # green the job runs and reports for E2E-path PRs without blocking. To flip
+      # it on: add `e2e` to needs, add E2E to the env below, and require
+      # `"$E2E" = success || skipped` after the loop — skipped is the normal
+      # result for a path-filtered job and must keep passing, so it has to be
+      # checked outside the loop or it would excuse the jobs above.
+      - name: Require successful checks
+        env:
+          STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
+          TYPECHECK: ${{ needs.typecheck.result }}
+          GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
+          TEST: ${{ needs.test.result }}
+          MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
+          PACKAGE: ${{ needs.package.result }}
+          PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
+        run: |
+          for result in \
+            "$STATIC_ANALYSIS" \
+            "$ROOT_DIRECTORY_GUARD" \
+            "$TYPECHECK" \
+            "$GIT_COMPATIBILITY" \
+            "$SHELL_CONTRACTS" \
+            "$TEST" \
+            "$MANAGED_HOOK_NODE18" \
+            "$PACKAGE" \
+            "$PACKAGE_WINDOWS"; do
+            if [ "$result" != "success" ]; then
+              exit 1
+            fi
+          done

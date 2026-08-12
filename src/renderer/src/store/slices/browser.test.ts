@@ -1,7 +1,7 @@
 /* eslint-disable max-lines -- Why: browser slice behavior shares one mocked store harness; splitting only the tests would duplicate more setup than it saves. */
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { createBrowserSlice } from './browser'
+import { createBrowserSlice, isLocalBrowserPageOwner } from './browser'
 import type { AppState } from '../types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -64,6 +64,18 @@ function createTestStore() {
 
 function settingsWithRuntime(id: string): AppState['settings'] {
   return { activeRuntimeEnvironmentId: id } as AppState['settings']
+}
+
+function runtimeStatuses(capabilities: string[]): AppState['runtimeStatusByEnvironmentId'] {
+  return new Map([
+    [
+      'env-1',
+      {
+        status: { capabilities },
+        checkedAt: 1
+      }
+    ]
+  ]) as AppState['runtimeStatusByEnvironmentId']
 }
 
 function seedUnifiedBrowserTab(
@@ -164,6 +176,21 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
+  it('opens a local sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
+  })
+
   it('clears page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
@@ -178,6 +205,64 @@ describe('createBrowserSlice annotations', () => {
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('can commit a navigation URL without hiding an active recovery error', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const recoveryError = {
+      code: -720,
+      description: 'Recovery is still pending',
+      validatedUrl: 'https://example.com'
+    }
+
+    store.getState().updateBrowserPageState(pageId, { loadError: recoveryError })
+    store
+      .getState()
+      .setBrowserPageUrl(pageId, 'https://example.com/committed', { preserveLoadError: true })
+
+    const page = store.getState().browserPagesByWorkspace[tab.id]?.find(({ id }) => id === pageId)
+    expect(page).toMatchObject({
+      url: 'https://example.com/committed',
+      loadError: recoveryError
+    })
+  })
+
+  it('keeps certificate challenges transient across navigation, success, and close', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://localhost:3443/')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const failure = {
+      challengeId: 'challenge-1',
+      browserPageId: pageId,
+      errorCode: -202,
+      error: 'ERR_CERT_AUTHORITY_INVALID',
+      origin: 'https://localhost:3443',
+      displayHost: 'localhost:3443',
+      canProceed: true,
+      observedAt: 123
+    }
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toEqual(failure)
+
+    store.getState().setBrowserPageUrl(pageId, 'https://localhost:3443/next')
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    store.getState().updateBrowserPageState(pageId, { loadError: null })
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
+
+    store.getState().setBrowserPageCertificateFailure(pageId, failure)
+    store.getState().closeBrowserTab(tab.id)
+    expect(store.getState().browserCertificateFailuresByPageId[pageId]).toBeUndefined()
   })
 
   it('creates inactive browser unified tabs without stealing the visible tab', () => {
@@ -475,6 +560,35 @@ describe('createBrowserSlice runtime guard', () => {
     runtimeEnvironmentCall.mockResolvedValue({ id: 'rpc-1', ok: true, result: {} })
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('rejects direct client-local materialization in the web client', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+
+    expect(() => store.getState().createBrowserTab('wt-1', 'about:blank')).toThrow(
+      'must be created by a capable paired runtime'
+    )
+    expect(store.getState().browserTabsByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+  })
+
+  it('rejects direct remote materialization without the provider capability', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+    store.setState({ runtimeStatusByEnvironmentId: runtimeStatuses([]) })
+
+    expect(() =>
+      store.getState().createBrowserTab('wt-1', 'about:blank', {
+        browserRuntimeEnvironmentId: 'env-1'
+      })
+    ).toThrow('paired runtime does not support browser streaming')
+    expect(store.getState().browserTabsByWorktree['wt-1']).toBeUndefined()
+    expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
+  })
+
   it('fetches browser profiles from the active runtime environment', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -527,6 +641,37 @@ describe('createBrowserSlice runtime guard', () => {
     ])
   })
 
+  it('forwards profile UA options to the active runtime environment', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'remote-google',
+      scope: 'isolated' as const,
+      partition: 'persist:remote-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-create',
+      ok: true,
+      result: { profile },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ settings: settingsWithRuntime('env-1') })
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileCreate',
+      params: { scope: 'isolated', label: 'Google', userAgentMode: 'native' },
+      timeoutMs: 15_000
+    })
+  })
+
   it('keeps browser profile lists separate per host', async () => {
     const store = createTestStore()
     runtimeEnvironmentCall.mockResolvedValueOnce({
@@ -567,6 +712,159 @@ describe('createBrowserSlice runtime guard', () => {
     )
     expect(store.getState().browserSessionProfilesByHostId.local?.[0]?.id).toBe('local-default')
     expect(store.getState().browserSessionProfiles[0]?.id).toBe('local-default')
+  })
+
+  it('routes browser settings per client without changing the durable Active Server', async () => {
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      const { selector, method } = request as RuntimeEnvironmentCallRequest & { selector: string }
+      return Promise.resolve({
+        id: `${selector}-${method}`,
+        ok: true,
+        result:
+          method === 'browser.profileList'
+            ? {
+                profiles: [
+                  {
+                    id: `${selector}-default`,
+                    scope: 'default',
+                    partition: `persist:${selector}`,
+                    label: `${selector} Default`,
+                    source: null
+                  }
+                ]
+              }
+            : { browsers: [] },
+        _meta: { runtimeId: `runtime-${selector}` }
+      })
+    })
+    const firstClient = createTestStore()
+    const secondClient = createTestStore()
+
+    void firstClient.getState().setBrowserSessionHostId('runtime:windows-2')
+    void secondClient.getState().setBrowserSessionHostId('runtime:linux-3')
+
+    await vi.waitFor(() => {
+      expect(firstClient.getState().browserSessionProfiles[0]?.id).toBe('windows-2-default')
+      expect(secondClient.getState().browserSessionProfiles[0]?.id).toBe('linux-3-default')
+    })
+    expect(firstClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
+    expect(secondClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
+
+    const restartedClient = createTestStore()
+    expect(restartedClient.getState().browserSessionHostIdOverride).toBeNull()
+    expect(restartedClient.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
+  })
+
+  it('does not let a slower server response overwrite the newly selected host', async () => {
+    let resolveWindowsProfiles: ((value: unknown) => void) | undefined
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      const { selector, method } = request as RuntimeEnvironmentCallRequest & {
+        selector: string
+      }
+      if (method !== 'browser.profileList') {
+        return Promise.resolve({
+          id: `${selector}-${method}`,
+          ok: true,
+          result: { browsers: [] },
+          _meta: { runtimeId: `runtime-${selector}` }
+        })
+      }
+      if (selector === 'windows-2') {
+        return new Promise((resolve) => {
+          resolveWindowsProfiles = resolve
+        })
+      }
+      return Promise.resolve({
+        id: 'linux-profiles',
+        ok: true,
+        result: {
+          profiles: [
+            {
+              id: 'linux-default',
+              scope: 'default',
+              partition: 'persist:linux',
+              label: 'Linux Default',
+              source: null
+            }
+          ]
+        },
+        _meta: { runtimeId: 'runtime-linux' }
+      })
+    })
+    const store = createTestStore()
+
+    void store.getState().setBrowserSessionHostId('runtime:windows-2')
+    void store.getState().setBrowserSessionHostId('runtime:linux-3')
+    await vi.waitFor(() =>
+      expect(store.getState().browserSessionProfiles[0]?.id).toBe('linux-default')
+    )
+    resolveWindowsProfiles?.({
+      id: 'windows-profiles',
+      ok: true,
+      result: {
+        profiles: [
+          {
+            id: 'windows-default',
+            scope: 'default',
+            partition: 'persist:windows',
+            label: 'Windows Default',
+            source: null
+          }
+        ]
+      },
+      _meta: { runtimeId: 'runtime-windows' }
+    })
+    await vi.waitFor(() =>
+      expect(store.getState().browserSessionProfilesByHostId['runtime:windows-2']?.[0]?.id).toBe(
+        'windows-default'
+      )
+    )
+
+    expect(store.getState().browserSessionHostIdOverride).toBe('runtime:linux-3')
+    expect(store.getState().browserSessionProfiles[0]?.id).toBe('linux-default')
+    expect(store.getState().settings?.activeRuntimeEnvironmentId).toBeNull()
+  })
+
+  it('does not let an import completion refresh or overwrite a newly selected host', async () => {
+    let resolveImport: ((value: unknown) => void) | undefined
+    runtimeEnvironmentCall.mockImplementation((request: RuntimeEnvironmentCallRequest) => {
+      const { selector, method } = request as RuntimeEnvironmentCallRequest & { selector: string }
+      if (selector === 'windows-2' && method === 'browser.profileImportFromBrowser') {
+        return new Promise((resolve) => {
+          resolveImport = resolve
+        })
+      }
+      return Promise.resolve({
+        id: `${selector}-${method}`,
+        ok: true,
+        result: method === 'browser.profileList' ? { profiles: [] } : { browsers: [] },
+        _meta: { runtimeId: `runtime-${selector}` }
+      })
+    })
+    const store = createTestStore()
+    store.setState({ browserSessionHostIdOverride: 'runtime:windows-2' })
+
+    const importing = store
+      .getState()
+      .importCookiesFromBrowser('windows-profile', 'chrome', 'Default')
+    await vi.waitFor(() => expect(resolveImport).toBeDefined())
+    await store.getState().setBrowserSessionHostId('runtime:linux-3')
+    const callsBeforeCompletion = runtimeEnvironmentCall.mock.calls.length
+    resolveImport?.({
+      id: 'windows-import',
+      ok: true,
+      result: {
+        ok: true,
+        profileId: 'windows-profile',
+        summary: { totalCookies: 2, importedCookies: 2, skippedCookies: 0, domains: [] }
+      },
+      _meta: { runtimeId: 'runtime-windows' }
+    })
+
+    await expect(importing).resolves.toMatchObject({ ok: true, profileId: 'windows-profile' })
+    expect(store.getState().browserSessionHostIdOverride).toBe('runtime:linux-3')
+    expect(store.getState().browserSessionImportState).toBeNull()
+    expect(runtimeEnvironmentCall.mock.calls).toHaveLength(callsBeforeCompletion)
   })
 
   it('uses the target worktree host default profile when creating a browser tab', () => {
@@ -619,6 +917,42 @@ describe('createBrowserSlice runtime guard', () => {
     expect(tab.sessionProfileId).toBe('remote-default')
   })
 
+  it('routes browser bridge ownership from the workspace instead of Active Server', () => {
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'windows-2' } as AppState['settings'],
+      repos: [
+        {
+          id: 'local-repo',
+          path: '/local',
+          displayName: 'Local',
+          badgeColor: '#000000',
+          addedAt: 1,
+          connectionId: null,
+          executionHostId: 'local'
+        },
+        {
+          id: 'remote-repo',
+          path: '/remote',
+          displayName: 'Remote',
+          badgeColor: '#000000',
+          addedAt: 2,
+          connectionId: null,
+          executionHostId: 'runtime:windows-2'
+        }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: 'local-wt', repoId: 'local-repo' }] as never,
+        'remote-repo': [{ id: 'remote-wt', repoId: 'remote-repo' }] as never
+      }
+    })
+
+    expect(isLocalBrowserPageOwner(store.getState(), 'local-wt', undefined)).toBe(true)
+    expect(isLocalBrowserPageOwner(store.getState(), 'remote-wt', undefined)).toBe(false)
+    expect(isLocalBrowserPageOwner(store.getState(), 'local-wt', 'windows-2')).toBe(false)
+    expect(isLocalBrowserPageOwner(store.getState(), 'remote-wt', null)).toBe(true)
+  })
+
   it('stores a runtime-resolved browser partition without a renderer profile mirror', () => {
     const store = createTestStore()
     store.setState({ browserSessionProfiles: [] })
@@ -663,6 +997,7 @@ describe('createBrowserSlice runtime guard', () => {
     store.setState({
       activeWorktreeId: 'wt-remote',
       settings: { activeRuntimeEnvironmentId: null } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
       browserDefaultUrl: 'about:blank',
       repos: [
         {
@@ -713,6 +1048,33 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
+  it('uses the desktop client browser when a remote npm host cannot stream', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    const tab = store.getState().browserTabsByWorktree['wt-remote']?.[0]
+    const page = tab ? store.getState().browserPagesByWorkspace[tab.id]?.[0] : undefined
+    expect(page?.browserRuntimeEnvironmentId).toBeNull()
+    expect(store.getState().createUnifiedTab).toHaveBeenCalled()
+  })
+
   it('does not create a local fallback tab when remote browser creation fails', async () => {
     const store = createTestStore()
     // Why: a remote-owned workspace must stay remote-owned. If the remote host
@@ -721,10 +1083,23 @@ describe('createBrowserSlice runtime guard', () => {
     createWebRuntimeSessionBrowserTabMock.mockResolvedValueOnce(false)
     store.setState({
       activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
     })
 
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+    await expect(store.getState().openNewBrowserTabInActiveWorkspace('group-1')).rejects.toThrow(
+      'The paired runtime could not create a managed browser tab.'
+    )
 
     expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
       worktreeId: 'wt-remote',
@@ -740,15 +1115,121 @@ describe('createBrowserSlice runtime guard', () => {
     )
   })
 
+  it('opens a remote sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      environmentId: 'env-1',
+      url: 'https://accounts.google.com/',
+      profileId: 'profile-1'
+    })
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+  })
+
+  it('opens a local desktop sign-in tab when the remote host cannot stream browsers', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    expect(store.getState().browserTabsByWorktree['wt-remote']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
+  })
+
+  it('rejects a paired-web sign-in tab when the remote host cannot stream browsers', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(false)
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+  })
+
   it('does not create a local fallback tab when remote browser creation throws', async () => {
     const store = createTestStore()
     createWebRuntimeSessionBrowserTabMock.mockRejectedValueOnce(new Error('remote down'))
     store.setState({
       activeWorktreeId: 'wt-remote',
-      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings']
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
     })
 
-    await store.getState().openNewBrowserTabInActiveWorkspace('group-1')
+    await expect(store.getState().openNewBrowserTabInActiveWorkspace('group-1')).rejects.toThrow(
+      'remote down'
+    )
 
     expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
     expect(store.getState().createUnifiedTab).not.toHaveBeenCalled()
@@ -792,6 +1273,30 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('forwards profile UA options to local browser IPC', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'local-google',
+      scope: 'isolated' as const,
+      partition: 'persist:local-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    mockApi.browser.sessionCreateProfile.mockResolvedValueOnce(profile)
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(mockApi.browser.sessionCreateProfile).toHaveBeenCalledWith({
+      scope: 'isolated',
+      label: 'Google',
+      userAgentMode: 'native'
+    })
   })
 
   it('does not notify the local browser manager when selecting tabs under runtime', () => {

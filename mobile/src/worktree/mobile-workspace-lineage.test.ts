@@ -25,11 +25,18 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
 
 describe('applyMobileWorkspaceLineage', () => {
   it('places visible children directly under their parent', () => {
-    const parent = worktree({ worktreeId: 'parent', displayName: 'parent' })
+    const parent = worktree({
+      worktreeId: 'parent',
+      displayName: 'parent',
+      worktreeInstanceId: 'parent-instance'
+    })
     const child = worktree({
       worktreeId: 'child',
       displayName: 'child',
-      parentWorktreeId: 'parent'
+      parentWorktreeId: 'parent',
+      worktreeInstanceId: 'child-instance',
+      lineageWorktreeInstanceId: 'child-instance',
+      parentWorktreeInstanceId: 'parent-instance'
     })
 
     const rows = applyMobileWorkspaceLineage([child, parent])
@@ -59,6 +66,31 @@ describe('applyMobileWorkspaceLineage', () => {
     expect(rows.map((row) => row.worktreeId)).toEqual(['parent'])
     expect(rows[0]?.lineageChildCount).toBe(1)
     expect(rows[0]?.lineageCollapsed).toBe(true)
+  })
+
+  it('keeps legacy host lineage nesting when instance ids are unavailable', () => {
+    const parent = worktree({ worktreeId: 'parent' })
+    const child = worktree({ worktreeId: 'child', parentWorktreeId: 'parent' })
+
+    const rows = applyMobileWorkspaceLineage([child, parent])
+
+    expect(rows.map((row) => row.worktreeId)).toEqual(['parent', 'child'])
+  })
+
+  it('does not nest stale lineage when instance ids no longer match', () => {
+    const parent = worktree({ worktreeId: 'parent', worktreeInstanceId: 'new-parent-instance' })
+    const child = worktree({
+      worktreeId: 'child',
+      parentWorktreeId: 'parent',
+      worktreeInstanceId: 'child-instance',
+      lineageWorktreeInstanceId: 'child-instance',
+      parentWorktreeInstanceId: 'old-parent-instance'
+    })
+
+    const rows = applyMobileWorkspaceLineage([child, parent])
+
+    expect(rows.map((row) => row.worktreeId)).toEqual(['child', 'parent'])
+    expect(rows.map((row) => row.lineageDepth)).toEqual([0, 0])
   })
 
   it('keeps rows visible when lineage is cyclic', () => {

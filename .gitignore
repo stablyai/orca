@@ -44,9 +44,15 @@ package-lock.json
 *~
 
 # OS
+# Keep these in step with isOsMetadataSkillEntryName (skill-package-identity.ts): both disk
+# walkers skip a plain file with one of these names, the git-tree producer does not, and
+# ignoring them here is what keeps `git add -A` from committing a stray one.
 *.stackdump
 .DS_Store
+._*
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
 # Lint/cache
 .oxlintcache
@@ -60,8 +66,11 @@ pnpm-debug.log*
 # Coverage
 coverage/
 
+# Prod release scan output (accidental adds)
+prod-release-scan-*.md
+
 # Benchmark run output
-/tools/benchmarks/results/*.json
+/tests/tools/benchmarks/results/*.json
 /.bench-fixtures/
 
 # Temp
@@ -74,20 +83,27 @@ design-docs/
 # Machine-local agent hook endpoint files may contain auth tokens.
 /agent-hooks/
 
-# Local-only design/planning docs (not checked in).
-# Durable docs must live in one of the allow-listed locations below.
+# Local-only design/planning docs (not checked in), including most of docs/reference/.
+# Durable docs that should be tracked must live in one of the allow-listed
+# locations below (assets, readme, STYLEGUIDE, mobile terminal shortcut bar,
+# and the tracked reference docs linked from AGENTS.md / README.md).
 docs/**
 !docs/
 !docs/assets/
 !docs/assets/**
 !docs/readme/
 !docs/readme/**
-!docs/reference/
-!docs/reference/**
-# Keep generated React perf scan ledgers local; durable docs still use docs/reference.
-docs/reference/react-performance-audit.md
 !docs/STYLEGUIDE.md
+!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
+!docs/reference/
+!docs/reference/git-compatibility.md
+!docs/reference/headless-linux-server.md
+!docs/reference/linux-glibc-compatibility.md
+!docs/reference/relay-grace-time-reconfiguration.md
+!docs/reference/remote-wire-compatibility.md
+!docs/reference/renderer-agent-status-performance.md
+!docs/reference/windows-setup-shell.md
 
 # Stably CLI (only docs/ are tracked)
 .stably/*
@@ -97,9 +113,9 @@ docs/reference/react-performance-audit.md
 validation-screenshots/
 .stably-browser
 
-# PR verification evidence screenshots are referenced from notes but should not
-# be committed.
-notes/artifacts/
+# Local scratch notes and PR evidence screenshots (not part of the product).
+/notes/
+/pr-evidence/
 
 # Playwright
 test-results/
@@ -119,3 +135,9 @@ src/renderer/src/i18n/locales/.zh-catalog-cache.json
 src/renderer/src/i18n/locales/.ko-catalog-cache.json
 src/renderer/src/i18n/locales/.ja-catalog-cache.json
 src/renderer/src/i18n/locales/.es-catalog-cache.json
+
+# Bench result JSONs are working artifacts
+tests/tools/benchmarks/results/terminal-pipeline-*.json
+
+# Old release trees the cross-version wire harness extracts on demand
+tests/e2e/.cross-version-checkouts/

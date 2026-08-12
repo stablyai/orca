@@ -88,12 +88,16 @@ describe('CopilotHookService', () => {
     expect(firstPromptHook.type).toBe('command')
     expect(firstPromptHook.timeoutSec).toBe(5)
     if (process.platform === 'win32') {
-      expect(firstPromptHook.powershell).toContain('agent-hooks')
-      expect(firstPromptHook.powershell).toContain('copilot-hook.ps1')
-      expect(firstPromptHook.powershell).toContain('ORCA_COPILOT_HOOK_EVENT')
-      expect(firstPromptHook.powershell).toContain('UserPromptSubmit')
+      const powershell = firstPromptHook.powershell as string
+      expect(powershell).toContain('-EncodedCommand')
+      const encoded = powershell.match(/ -EncodedCommand (\S+)$/)?.[1]
+      const decoded = Buffer.from(encoded!, 'base64').toString('utf16le')
+      expect(decoded).toContain('agent-hooks')
+      expect(decoded).toContain('copilot-hook.ps1')
+      expect(decoded).toContain("$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'")
     } else {
-      expect(firstPromptHook.bash).toContain('if [ -x ')
+      expect(firstPromptHook.bash).toContain('if [ -f ')
+      expect(firstPromptHook.bash).toContain('] && [ -x ')
       expect(firstPromptHook.bash).toContain('.orca/agent-hooks/copilot-hook.sh')
       expect(firstPromptHook.bash).toContain("ORCA_COPILOT_HOOK_EVENT='UserPromptSubmit'")
     }

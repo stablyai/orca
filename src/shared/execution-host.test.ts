@@ -5,6 +5,7 @@ import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId,
+  getWorktreeExecutionHostId,
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -85,6 +86,20 @@ describe('execution host identity', () => {
   it('derives repo ownership from SSH connection ids', () => {
     expect(getRepoExecutionHostId({ connectionId: null })).toBe(LOCAL_EXECUTION_HOST_ID)
     expect(getRepoExecutionHostId({ connectionId: 'ssh-target-1' })).toBe('ssh:ssh-target-1')
+  })
+
+  it('prefers explicit worktree ownership before repo and focused-host fallbacks', () => {
+    expect(
+      getWorktreeExecutionHostId(
+        { hostId: 'runtime:workspace-owner' },
+        { connectionId: 'repo-owner' },
+        'runtime:focused-host'
+      )
+    ).toBe('runtime:workspace-owner')
+    expect(
+      getWorktreeExecutionHostId({}, { connectionId: 'repo-owner' }, 'runtime:focused-host')
+    ).toBe('ssh:repo-owner')
+    expect(getWorktreeExecutionHostId({}, {}, 'runtime:focused-host')).toBe('runtime:focused-host')
   })
 
   it('derives focused host compatibility from active runtime settings', () => {

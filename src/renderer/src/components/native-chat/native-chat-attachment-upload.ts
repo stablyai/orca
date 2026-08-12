@@ -14,10 +14,20 @@ import {
   findTerminalTabWorktreeId,
   resolveNativeChatFileLinkContext
 } from './native-chat-file-link'
+import {
+  captureDirectSshMutationExpectation,
+  type DirectSshMutationExpectation
+} from '@/lib/ssh-mutation-expectation'
+
+export type NativeChatSshAttachmentOwner = DirectSshMutationExpectation & {
+  kind: 'ssh'
+  connectionId: string
+  worktreePath: string
+}
 
 export type NativeChatAttachmentOwner =
   | { kind: 'local' }
-  | { kind: 'ssh'; connectionId: string; worktreePath: string }
+  | NativeChatSshAttachmentOwner
   /** Runtime-owned (`remote:`) panes keep the composer's existing
    *  local-attachment block; runtime upload support is a separate seam. */
   | { kind: 'runtime' }
@@ -33,6 +43,7 @@ type NativeChatAttachmentOwnerState = Pick<
   | 'projectGroups'
   | 'repos'
   | 'settings'
+  | 'sshConnectionStates'
   | 'tabsByWorktree'
   | 'worktreesByRepo'
 >
@@ -61,7 +72,12 @@ export function resolveNativeChatAttachmentOwner(
   if (!worktreePath) {
     return { kind: 'not-ready' }
   }
-  return { kind: 'ssh', connectionId, worktreePath }
+  return {
+    kind: 'ssh',
+    connectionId,
+    worktreePath,
+    ...captureDirectSshMutationExpectation(state, connectionId)
+  }
 }
 
 export function nativeChatWorktreeNotReadyNotice(): string {
@@ -79,20 +95,23 @@ export function nativeChatWorktreeNotReadyNotice(): string {
  */
 export async function uploadNativeChatAttachmentPaths(
   paths: string[],
-  owner: { connectionId: string; worktreePath: string }
+  owner: NativeChatSshAttachmentOwner
 ): Promise<string[] | null> {
   const pending = toast.loading(
     translate(
       'components.native-chat.composer.uploadingAttachments',
-      'Uploading {{value0}} file{{value1}} to remote…',
-      { value0: paths.length, value1: paths.length === 1 ? '' : 's' }
+      'Uploading {{value0}} file(s) to remote…',
+      { value0: paths.length }
     )
   )
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths,
       worktreePath: owner.worktreePath,
-      connectionId: owner.connectionId
+      connectionId: owner.connectionId,
+      expectedExecutionHostId: owner.expectedExecutionHostId,
+      expectedSshTargetId: owner.expectedSshTargetId,
+      expectedSshConnectionGeneration: owner.expectedSshConnectionGeneration
     })
     reportTerminalDropUploadSkipsAndFailures(skipped, failed)
     return resolvedPaths

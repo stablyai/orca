@@ -1,11 +1,31 @@
-import { isQuickOpenQueryTooLarge, prepareQuickOpenFiles } from '../quick-open-search'
+import { getPreparedQuickOpenFiles, isQuickOpenQueryTooLarge } from '../quick-open-search'
 import type { RuntimeFileListState } from '../quick-open-file-list'
 import { translate } from '@/i18n/i18n'
+import { DEFAULT_SEARCH_ENGINE, type SearchEngine } from '../../../../shared/browser-url'
 import { findExistingFileMatches, isLikelyNewFileIntent } from './tab-create-entry-file-matches'
-import { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
+import {
+  isTabEntryAbsolutePathLike,
+  type TabEntryLocalPlatform,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
 import { classifyExplicitUrl, classifyHostUrl } from './tab-create-entry-url-classification'
 
-export { validateNewTabEntryRelativePath } from './tab-create-entry-path-validation'
+export {
+  isTabEntryAbsolutePathLike,
+  validateNewTabEntryAbsolutePath,
+  validateNewTabEntryRelativePath
+} from './tab-create-entry-path-validation'
+
+export type TabEntryOptionsContext = {
+  allowAbsolutePaths?: boolean
+  localPlatform?: TabEntryLocalPlatform
+  searchEngine?: SearchEngine
+}
+
+export const TAB_ENTRY_ABSOLUTE_PATH_REMOTE_BLOCKED_MESSAGE =
+  'Absolute paths require a local workspace.'
 
 export type TabEntryClassification =
   | { kind: 'empty'; message: string }
@@ -16,7 +36,9 @@ export type TabEntryClassification =
       relativePath: string
     }
   | { kind: 'host-url'; url: string }
+  | { kind: 'search'; engine: SearchEngine; query: string }
   | { kind: 'new-file'; relativePath: string }
+  | { kind: 'absolute-file'; filePath: string }
   | { kind: 'blocked'; message: string }
 
 export type TabEntryActionClassification = Exclude<
@@ -29,155 +51,219 @@ export type TabEntryOption = {
   id: string
 }
 
-export function classifyTabEntryQuery(
-  query: string,
-  fileList: RuntimeFileListState
-): TabEntryClassification {
-  return (
-    getTabEntryOptions(query, fileList, 1)[0]?.classification ?? {
+function tabEntryActionOptionId(classification: TabEntryActionClassification): string {
+  switch (classification.kind) {
+    case 'existing-file':
+    case 'new-file':
+      return `${classification.kind}:${classification.relativePath}`
+    case 'absolute-file':
+      return `${classification.kind}:${classification.filePath}`
+    case 'explicit-url':
+    case 'host-url':
+      return `${classification.kind}:${classification.url}`
+    case 'search':
+      return `search:${classification.query}`
+  }
+}
+
+function emptyOption(): TabEntryOption {
+  return {
+    id: 'empty',
+    classification: {
       kind: 'empty',
       message: translate(
-        'auto.components.tab.bar.tab.create.entry.classifier.5553b283ce',
-        'Enter a URL or file path.'
+        'auto.components.tab.bar.tab.create.entry.classifier.c41f8d20b7',
+        'Search open tabs, files, URLs, agents…'
       )
     }
+  }
+}
+
+function blockedOption(id: string, message: string): TabEntryOption {
+  return { id, classification: { kind: 'blocked', message } }
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function invalidPathOption(error: unknown): TabEntryOption {
+  return blockedOption('invalid-path', errorMessage(error))
+}
+
+function fileListStatusOption(fileList: RuntimeFileListState): TabEntryOption | null {
+  if (fileList.loading) {
+    return blockedOption(
+      'loading',
+      translate(
+        'auto.components.tab.bar.tab.create.entry.classifier.097a982ee0',
+        'Loading files...'
+      )
+    )
+  }
+  return fileList.loadError ? blockedOption('load-error', fileList.loadError) : null
+}
+
+function clampActionLimit(limit: number): number {
+  return Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0
+}
+
+function toOptions(
+  classifications: TabEntryActionClassification[],
+  limit: number,
+  status?: TabEntryOption | null
+): TabEntryOption[] {
+  const options: TabEntryOption[] = classifications
+    .slice(0, clampActionLimit(limit))
+    .map((classification) => ({
+      id: tabEntryActionOptionId(classification),
+      classification
+    }))
+  if (status) {
+    options.push(status)
+  }
+  return options
+}
+
+export function classifyTabEntryQuery(
+  query: string,
+  fileList: RuntimeFileListState,
+  context: TabEntryOptionsContext = {}
+): TabEntryClassification {
+  return (
+    getTabEntryOptions(query, fileList, 1, context)[0]?.classification ??
+    emptyOption().classification
   )
 }
 
 export function getTabEntryOptions(
   query: string,
   fileList: RuntimeFileListState,
-  limit = 4
+  limit = 4,
+  context: TabEntryOptionsContext = {}
 ): TabEntryOption[] {
   if (isQuickOpenQueryTooLarge(query)) {
     return [
-      {
-        id: 'query-too-large',
-        classification: {
-          kind: 'blocked',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.queryTooLarge',
-            'Search text is too large.'
-          )
-        }
-      }
+      blockedOption(
+        'query-too-large',
+        translate(
+          'auto.components.tab.bar.tab.create.entry.classifier.queryTooLarge',
+          'Search text is too large.'
+        )
+      )
     ]
   }
 
-  const trimmed = query.trim()
+  const parsedSearch = parseForcedSearchQuery(query)
+  const trimmed = parsedSearch.query
+  const engine = context.searchEngine ?? DEFAULT_SEARCH_ENGINE
+  const search: TabEntryActionClassification = { kind: 'search', engine, query: trimmed }
+  if (parsedSearch.forced) {
+    return trimmed ? toOptions([search], limit) : [emptyOption()]
+  }
   if (!trimmed) {
-    return [
-      {
-        id: 'empty',
-        classification: {
-          kind: 'empty',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.5a9c83c04b',
-            'Open any file, URL, agent, ...'
+    return [emptyOption()]
+  }
+
+  if (isTabEntryAbsolutePathLike(trimmed)) {
+    if (!context.allowAbsolutePaths) {
+      return [
+        blockedOption(
+          'absolute-path-blocked',
+          translate(
+            'auto.components.tab.bar.tab.create.entry.classifier.absolutePathRemoteBlocked',
+            'Absolute paths require a local workspace.'
           )
-        }
-      }
-    ]
+        )
+      ]
+    }
+    try {
+      const filePath = validateNewTabEntryAbsolutePath(trimmed, context.localPlatform)
+      return toOptions([{ kind: 'absolute-file', filePath }], limit)
+    } catch (error) {
+      return [blockedOption('invalid-absolute-path', errorMessage(error))]
+    }
   }
 
   const explicitUrl = classifyExplicitUrl(trimmed)
   if (explicitUrl) {
-    return [
-      {
-        id: explicitUrl.kind === 'blocked' ? 'invalid-url' : `url:${explicitUrl.url}`,
-        classification: explicitUrl
-      }
-    ]
+    return explicitUrl.kind === 'blocked'
+      ? [blockedOption('invalid-url', explicitUrl.message)]
+      : toOptions([explicitUrl], limit)
   }
 
-  if (fileList.loading) {
-    return [
-      {
-        id: 'loading',
-        classification: {
-          kind: 'blocked',
-          message: translate(
-            'auto.components.tab.bar.tab.create.entry.classifier.097a982ee0',
-            'Loading files...'
-          )
-        }
-      }
-    ]
+  const hostUrl = classifyHostUrl(trimmed)
+  let newFile: TabEntryActionClassification | null = null
+  let pathError: unknown = null
+  try {
+    newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
+  } catch (error) {
+    pathError = error
   }
-  if (fileList.loadError) {
-    return [{ id: 'load-error', classification: { kind: 'blocked', message: fileList.loadError } }]
+
+  const fileStatus = fileListStatusOption(fileList)
+  if (fileStatus) {
+    if (hostUrl?.kind === 'blocked') {
+      return [fileStatus]
+    }
+    if (hostUrl?.kind === 'host-url') {
+      return toOptions([hostUrl], limit, fileStatus)
+    }
+    // Why: path-shaped text waits on the scan whether or not it is creatable, so
+    // "src/" reports the scan instead of flashing a path error it will not keep.
+    if (isLikelyNewFileIntent(trimmed)) {
+      return [fileStatus]
+    }
+    if (pathError) {
+      return [invalidPathOption(pathError)]
+    }
+    return toOptions([search], limit, fileStatus)
   }
+
+  const actionLimit = clampActionLimit(limit)
   const existingFiles = findExistingFileMatches(
     trimmed,
-    prepareQuickOpenFiles(fileList.files),
-    Math.max(limit, 1)
+    getPreparedQuickOpenFiles(fileList.files),
+    Math.max(actionLimit, 1)
   )
   const exactExistingFiles = existingFiles.filter((file) => file.matchKind !== 'fuzzy')
   const fuzzyExistingFiles = existingFiles.filter((file) => file.matchKind === 'fuzzy')
 
-  let newFile: TabEntryActionClassification | null = null
-  try {
-    newFile = { kind: 'new-file', relativePath: validateNewTabEntryRelativePath(trimmed) }
-  } catch {
-    newFile = null
-  }
-
-  const hostUrl = classifyHostUrl(trimmed)
-
-  const options: TabEntryActionClassification[] = []
   if (exactExistingFiles.length > 0) {
-    options.push(...exactExistingFiles)
-    if (hostUrl) {
+    const options: TabEntryActionClassification[] = [...exactExistingFiles]
+    if (hostUrl?.kind === 'host-url') {
       options.push(hostUrl)
+    } else if (!hostUrl && newFile) {
+      options.push(search)
     }
-  } else if (hostUrl) {
-    options.push(hostUrl)
-    options.push(...fuzzyExistingFiles)
-  } else if (newFile && isLikelyNewFileIntent(trimmed)) {
-    options.push(newFile, ...fuzzyExistingFiles)
-  } else {
-    options.push(...fuzzyExistingFiles)
-    if (newFile) {
-      options.push(newFile)
-    }
+    return toOptions(options, actionLimit)
   }
-
-  if (options.length > 0) {
-    return options.slice(0, limit).map((classification) => ({
-      id:
-        classification.kind === 'existing-file'
-          ? `${classification.kind}:${classification.relativePath}`
-          : classification.kind === 'new-file'
-            ? `${classification.kind}:${classification.relativePath}`
-            : `${classification.kind}:${classification.url}`,
-      classification
-    }))
+  if (hostUrl?.kind === 'blocked') {
+    return [blockedOption('invalid-url', hostUrl.message)]
   }
-
-  try {
-    validateNewTabEntryRelativePath(trimmed)
-  } catch (error) {
-    return [
-      {
-        id: 'invalid-path',
-        classification: {
-          kind: 'blocked',
-          message: error instanceof Error ? error.message : String(error)
-        }
-      }
-    ]
+  if (hostUrl?.kind === 'host-url') {
+    return toOptions([hostUrl, ...fuzzyExistingFiles], actionLimit)
   }
-
-  return [
-    {
-      id: 'blocked',
-      classification: {
-        kind: 'blocked',
-        message: translate(
-          'auto.components.tab.bar.tab.create.entry.classifier.42e6262ae9',
-          'No action available.'
-        )
-      }
-    }
-  ]
+  if (pathError || !newFile) {
+    // Why: an unusable path is still a live quick-open prefix — "src/" cannot be
+    // created, but it matches real files, and dropping them turns every typed
+    // separator into an error row mid-keystroke.
+    return fuzzyExistingFiles.length > 0
+      ? toOptions(fuzzyExistingFiles, actionLimit)
+      : [invalidPathOption(pathError)]
+  }
+  if (isLikelyNewFileIntent(trimmed)) {
+    return toOptions([newFile, search, ...fuzzyExistingFiles], actionLimit)
+  }
+  if (/\s/.test(trimmed)) {
+    return toOptions([search, ...fuzzyExistingFiles, newFile], actionLimit)
+  }
+  // Why: a single token is still a quick-open attempt ("btn" → Button.tsx), so
+  // only phrases promote web search over fuzzy matches. Fuzzy matching is a
+  // subsequence scan that fills every slot in a real repo, so hold one back —
+  // otherwise search silently disappears from the list it should always offer.
+  return toOptions(
+    [...fuzzyExistingFiles.slice(0, Math.max(actionLimit - 1, 1)), search, newFile],
+    actionLimit
+  )
 }

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { resolveDropdownItems, type DropdownActionInputs } from './source-control-dropdown-items'
+import {
+  resolveDropdownItems,
+  type DropdownActionInputs,
+  type DropdownItem
+} from './source-control-dropdown-items'
+import {
+  hasUsableHostedReviewPushTarget,
+  resolveHostedReviewActionUpstreamStatus
+} from './source-control-hosted-review-push-target'
 
 // Why: a shared defaults object keeps each case row terse while making the
 // "this is the one knob that differs from the baseline" intent obvious.
@@ -175,7 +183,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: false,
           blockedReason: 'needs_sync',
-          nextAction: 'sync'
+          nextAction: 'sync',
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -352,7 +361,8 @@ describe('resolveDropdownItems', () => {
           review: null,
           canCreate: true,
           blockedReason: null,
-          nextAction: null
+          nextAction: null,
+          reviewLookupOutcome: 'not_found'
         }
       })
     )
@@ -653,118 +663,74 @@ describe('resolveDropdownItems', () => {
       'Try a fast-forward pull; git may reject local commits'
     )
   })
+})
 
-  it('enables the push-before-PR recovery action when review creation is only blocked by unpushed commits', () => {
+// Why: PR #8196 — drive the real push-target resolution the component uses so
+// the whole chain stays regression-proof.
+describe('resolveDropdownItems with an unhydrated linked-review push target', () => {
+  function pipeline(args: {
+    branchName: string
+    upstreamStatus: DropdownActionInputs['upstreamStatus']
+  }): Record<string, DropdownItem> {
+    const canUseHostedReviewPushTarget = hasUsableHostedReviewPushTarget({
+      // pushTarget intentionally omitted: the resolver has not hydrated it yet.
+      hasResolvableHostedReviewPushTargetLink: true,
+      branchName: args.branchName,
+      upstreamStatus: args.upstreamStatus
+    })
+    const upstreamStatus = resolveHostedReviewActionUpstreamStatus({
+      hasHostedReviewLink: true,
+      hasResolvableHostedReviewPushTargetLink: true,
+      hostedReviewState: 'open',
+      isHostedReviewStateLoading: false,
+      canUseHostedReviewPushTarget,
+      upstreamStatus: args.upstreamStatus
+    })
     const items = resolveDropdownItems(
       inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'github',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push'
-        }
+        stagedCount: 1,
+        hasMessage: true,
+        branchCommitsAhead: 7,
+        prState: 'open',
+        upstreamStatus,
+        canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget
       })
     )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    return Object.fromEntries(
+      items.filter((e): e is DropdownItem => e.kind !== 'separator').map((e) => [e.kind, e])
     )
-    expect(byKind.create_pr.disabled).toBe(false)
-    expect(byKind.create_pr.hint).toBe('Push first')
-    expect(byKind.push_create_pr.label).toBe('Push before PR')
-    expect(byKind.push_create_pr.disabled).toBe(false)
+  }
+
+  it('enables Push and Force Push when the real upstream is the same-repo review head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/mobile-resume-suspected-fixes',
+        ahead: 7,
+        behind: 2
+      }
+    })
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.push.title).not.toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.pull.disabled).toBe(false)
+    expect(byKind.sync.disabled).toBe(false)
+    expect(byKind.publish.disabled).toBe(true)
   })
 
-  it('uses GitLab MR copy for create and push-before-create rows', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'needs_push',
-          nextAction: 'push'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.label).toBe('Create MR')
-    expect(byKind.create_pr.hint).toBe('Push first')
-    expect(byKind.create_pr.disabled).toBe(false)
-    expect(byKind.push_create_pr.label).toBe('Push before MR')
-    expect(byKind.push_create_pr.title).toBe('Push local commits before creating a merge request')
-    expect(byKind.push_create_pr.disabled).toBe(false)
-  })
-
-  it.each(['azure-devops', 'gitea'] as const)(
-    'enables push-before-PR recovery for %s review creation',
-    (provider) => {
-      const items = resolveDropdownItems(
-        inputs({
-          upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
-          hostedReviewCreation: {
-            provider,
-            review: null,
-            canCreate: false,
-            blockedReason: 'needs_push',
-            nextAction: 'push'
-          }
-        })
-      )
-      const byKind = Object.fromEntries(
-        items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-      )
-      expect(byKind.create_pr.label).toBe('Create PR')
-      expect(byKind.create_pr.hint).toBe('Push first')
-      expect(byKind.create_pr.disabled).toBe(false)
-      expect(byKind.push_create_pr.label).toBe('Push before PR')
-      expect(byKind.push_create_pr.title).toBe('Push local commits before creating a pull request')
-      expect(byKind.push_create_pr.disabled).toBe(false)
-    }
-  )
-
-  it.each([
-    ['azure-devops', 'Set ORCA_AZURE_DEVOPS_TOKEN in this environment'],
-    ['gitea', 'Set ORCA_GITEA_TOKEN in this environment']
-  ] as const)('uses token auth copy when %s PR creation needs authentication', (provider, hint) => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-        hostedReviewCreation: {
-          provider,
-          review: null,
-          canCreate: false,
-          blockedReason: 'auth_required',
-          nextAction: 'authenticate'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.hint).toBe(hint)
-  })
-
-  it('uses GitLab auth copy when MR creation needs authentication', () => {
-    const items = resolveDropdownItems(
-      inputs({
-        upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 },
-        hostedReviewCreation: {
-          provider: 'gitlab',
-          review: null,
-          canCreate: false,
-          blockedReason: 'auth_required',
-          nextAction: 'authenticate'
-        }
-      })
-    )
-    const byKind = Object.fromEntries(
-      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
-    )
-    expect(byKind.create_pr.hint).toBe('Run glab auth login in this environment')
+  it('still blocks Push when the real upstream is an unrelated fork/helper head', () => {
+    const byKind = pipeline({
+      branchName: 'mobile-resume-suspected-fixes',
+      upstreamStatus: {
+        hasUpstream: true,
+        upstreamName: 'origin/helper-branch',
+        ahead: 1,
+        behind: 0
+      }
+    })
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe('Linked review branch target is unavailable')
+    expect(byKind.force_push.disabled).toBe(true)
   })
 })

@@ -33,19 +33,19 @@ describe('dispatchWorkItem', () => {
       type: 'bogus' as unknown as 'issue' | 'pr'
     }
     await dispatchWorkItem(bogus, repo, fn)
-    expect(fn).toHaveBeenCalledWith('/r', 42, undefined, null, undefined)
+    expect(fn).toHaveBeenCalledWith('/r', 42, undefined, null, undefined, undefined)
   })
 
   it('passes valid issue type through', async () => {
     const fn = vi.fn().mockResolvedValue(null)
     await dispatchWorkItem({ repoPath: '/r', number: 42, type: 'issue' }, repo, fn)
-    expect(fn).toHaveBeenCalledWith('/r', 42, 'issue', null, undefined)
+    expect(fn).toHaveBeenCalledWith('/r', 42, 'issue', null, undefined, undefined)
   })
 
   it('passes valid pr type through', async () => {
     const fn = vi.fn().mockResolvedValue(null)
     await dispatchWorkItem({ repoPath: '/r', number: 42, type: 'pr' }, repo, fn)
-    expect(fn).toHaveBeenCalledWith('/r', 42, 'pr', null, undefined)
+    expect(fn).toHaveBeenCalledWith('/r', 42, 'pr', null, undefined, undefined)
   })
 
   it('passes SSH connection context through', async () => {
@@ -55,6 +55,33 @@ describe('dispatchWorkItem', () => {
       { path: '/remote/repo', connectionId: 'ssh-1' },
       fn
     )
-    expect(fn).toHaveBeenCalledWith('/remote/repo', 42, 'issue', 'ssh-1', undefined)
+    expect(fn).toHaveBeenCalledWith('/remote/repo', 42, 'issue', 'ssh-1', undefined, undefined)
+  })
+
+  it('pins the repo issue source preference for open-by-number', async () => {
+    const fn = vi.fn().mockResolvedValue(null)
+    await dispatchWorkItem(
+      { repoPath: '/r', number: 42, type: 'pr' },
+      { path: '/r', connectionId: null, issueSourcePreference: 'origin' },
+      fn,
+      { wslDistro: 'Ubuntu' }
+    )
+    expect(fn).toHaveBeenCalledWith('/r', 42, 'pr', null, { wslDistro: 'Ubuntu' }, 'origin')
+  })
+
+  it('leaves upstream and auto preferences on the multi-candidate probe', async () => {
+    const fn = vi.fn().mockResolvedValue(null)
+    await dispatchWorkItem(
+      { repoPath: '/r', number: 7, type: 'pr' },
+      { path: '/r', connectionId: null, issueSourcePreference: 'upstream' },
+      fn
+    )
+    await dispatchWorkItem(
+      { repoPath: '/r', number: 7, type: 'pr' },
+      { path: '/r', connectionId: null, issueSourcePreference: 'auto' },
+      fn
+    )
+    expect(fn).toHaveBeenNthCalledWith(1, '/r', 7, 'pr', null, undefined, 'upstream')
+    expect(fn).toHaveBeenNthCalledWith(2, '/r', 7, 'pr', null, undefined, 'auto')
   })
 })

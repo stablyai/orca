@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act } from 'react'
+import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { createElement } from 'react'
 import type { NativeChatAttachmentOwner } from './native-chat-attachment-upload'
 
 const mocks = vi.hoisted(() => ({
@@ -121,7 +120,10 @@ function imagePasteEvent(): {
 const sshOwner: NativeChatAttachmentOwner = {
   kind: 'ssh',
   connectionId: 'conn-1',
-  worktreePath: '/remote/wt'
+  worktreePath: '/remote/wt',
+  expectedExecutionHostId: 'ssh:conn-1',
+  expectedSshTargetId: 'conn-1',
+  expectedSshConnectionGeneration: 4
 }
 
 afterEach(() => {

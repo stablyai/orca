@@ -5,6 +5,7 @@ import {
   terminalOscColorQuerySlotsForBody,
   type TerminalOscColorQuerySlot
 } from '../../../../shared/terminal-osc-color-reply'
+import { guardParserHandler } from './terminal-parser-handler-guard'
 
 export const DEFAULT_DA1_RESPONSE = '\x1b[?1;2c'
 export const CONPTY_DA1_RESPONSE = '\x1b[?61;4c'
@@ -118,37 +119,46 @@ export function installTerminalCapabilityReplyHandlers(
   deps: TerminalCapabilityRepliesDeps
 ): IDisposable {
   const disposables = [
-    deps.parser.registerCsiHandler({ final: 'c' }, (params) => {
-      if (!isPrimaryDeviceAttributesQuery(params)) {
-        return false
-      }
-      // Why: restored scrollback may contain old DA1 queries; answering those
-      // into the fresh shell recreates the stray-input leak this handler fixes.
-      if (!deps.isReplaying()) {
-        deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
-      }
-      return true
-    }),
-    deps.parser.registerOscHandler(10, (data) => {
-      const slots = terminalOscColorQuerySlotsForBody(10, data.trim())
-      if (!slots) {
-        return false
-      }
-      if (deps.isReplaying()) {
+    deps.parser.registerCsiHandler(
+      { final: 'c' },
+      guardParserHandler('csi-da1', (params) => {
+        if (!isPrimaryDeviceAttributesQuery(params)) {
+          return false
+        }
+        // Why: restored scrollback may contain old DA1 queries; answering those
+        // into the fresh shell recreates the stray-input leak this handler fixes.
+        if (!deps.isReplaying()) {
+          deps.sendInput(deps.da1Response ?? DEFAULT_DA1_RESPONSE)
+        }
         return true
-      }
-      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
-    }),
-    deps.parser.registerOscHandler(11, (data) => {
-      const slots = terminalOscColorQuerySlotsForBody(11, data.trim())
-      if (!slots) {
-        return false
-      }
-      if (deps.isReplaying()) {
-        return true
-      }
-      return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
-    })
+      })
+    ),
+    deps.parser.registerOscHandler(
+      10,
+      guardParserHandler('osc-10-color-query', (data) => {
+        const slots = terminalOscColorQuerySlotsForBody(10, data.trim())
+        if (!slots) {
+          return false
+        }
+        if (deps.isReplaying()) {
+          return true
+        }
+        return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+      })
+    ),
+    deps.parser.registerOscHandler(
+      11,
+      guardParserHandler('osc-11-color-query', (data) => {
+        const slots = terminalOscColorQuerySlotsForBody(11, data.trim())
+        if (!slots) {
+          return false
+        }
+        if (deps.isReplaying()) {
+          return true
+        }
+        return sendTerminalOscColorQueryRepliesForSlots(slots, deps.terminal, deps.sendInput)
+      })
+    )
   ]
 
   return {

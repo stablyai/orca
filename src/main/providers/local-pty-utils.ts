@@ -1,11 +1,14 @@
-import { basename, join } from 'node:path'
+import { basename, isAbsolute, join } from 'node:path'
 import { existsSync, accessSync, statSync, chmodSync, constants as fsConstants } from 'node:fs'
+import { release } from 'node:os'
 import type * as pty from 'node-pty'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { wslUncDirectoryExists } from '../wsl'
 import { wrapShellSpawnForMacosTccAttribution } from './macos-tcc-login-shell'
 
 let didEnsureSpawnHelperExecutable = false
+
+const UNIX_SHELL_FALLBACKS = ['/bin/zsh', '/bin/bash', '/bin/sh'] as const
 
 function toUnpackedAsarPath(candidate: string): string {
   return candidate
@@ -47,6 +50,25 @@ export function getShellValidationError(shellPath: string): string | null {
 }
 
 /**
+ * Resolves an absolute Unix shell before node-pty forks. Bare commands and
+ * relative paths stay untouched so execvp can resolve them against PATH or cwd.
+ */
+export function resolveUnixShellPath(shellPath: string): string {
+  if (!isAbsolute(shellPath)) {
+    return shellPath
+  }
+  const candidates = [
+    shellPath,
+    ...UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
+  ]
+  const resolved = candidates.find((candidate) => getShellValidationError(candidate) === null)
+  if (resolved) {
+    return resolved
+  }
+  throw new Error(`No executable Unix shell found (tried: ${candidates.join(', ')})`)
+}
+
+/**
  * Ensure the node-pty spawn-helper binary has the executable bit set.
  *
  * Why: when Electron packages the app via asar, the native spawn-helper
@@ -78,10 +100,26 @@ export function ensureNodePtySpawnHelperExecutable(): void {
   }
 }
 
+function formatLocalPtyEnvironmentDiag(extra: Record<string, string> = {}): string {
+  const systemVersion =
+    (process as NodeJS.Process & { getSystemVersion?: () => string }).getSystemVersion?.() ||
+    release()
+  const parts = {
+    ...extra,
+    arch: process.arch,
+    platform: `${process.platform} ${systemVersion}`,
+    orca: process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
+  }
+  return Object.entries(parts)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(', ')
+}
+
 function throwMissingWorkingDirectory(cwd: string): never {
   throw new Error(
     `Working directory "${cwd}" does not exist. ` +
-      `It may have been deleted or is on an unmounted volume.`
+      `It may have been deleted or is on an unmounted volume ` +
+      `(${formatLocalPtyEnvironmentDiag({ cwd })}).`
   )
 }
 
@@ -252,7 +290,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
 
   // Try fallback shells on Unix
   if (process.platform !== 'win32') {
-    const fallbackShells = ['/bin/zsh', '/bin/bash', '/bin/sh'].filter((s) => s !== shellPath)
+    const fallbackShells = UNIX_SHELL_FALLBACKS.filter((candidate) => candidate !== shellPath)
     for (const fallback of fallbackShells) {
       if (getShellValidationError(fallback)) {
         continue
@@ -284,12 +322,7 @@ export function spawnShellWithFallback(params: ShellSpawnParams): ShellSpawnResu
     }
   }
 
-  const diag = [
-    `shell: ${shellPath}`,
-    `cwd: ${cwd}`,
-    `arch: ${process.arch}`,
-    `platform: ${process.platform} ${process.getSystemVersion?.() ?? ''}`
-  ].join(', ')
+  const diag = formatLocalPtyEnvironmentDiag({ shell: shellPath, cwd })
   throw new Error(
     `Failed to spawn shell "${shellPath}": ${primaryError ?? 'unknown error'} (${diag}). ` +
       `If this persists, please file an issue.`

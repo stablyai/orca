@@ -103,13 +103,17 @@ describe('readPRForBranch', () => {
     const parsed = readPRForBranch({
       number: 3,
       state: 'open',
-      prRepo: { owner: 'forkOwner', repo: 'forkRepo' },
+      prRepo: { owner: 'forkOwner', repo: 'forkRepo', host: 'github.acme.test' },
       mergeMethodSettings: {
         defaultMethod: 'squash',
         allowedMethods: { merge: false, squash: true, rebase: true }
       }
     })
-    expect(parsed?.prRepo).toEqual({ owner: 'forkOwner', repo: 'forkRepo' })
+    expect(parsed?.prRepo).toEqual({
+      owner: 'forkOwner',
+      repo: 'forkRepo',
+      host: 'github.acme.test'
+    })
     expect(parsed?.mergeMethodSettings).toEqual({
       defaultMethod: 'squash',
       allowedMethods: { merge: false, squash: true, rebase: true }
@@ -170,6 +174,23 @@ describe('readWorkItemDetails', () => {
       }
     })
     expect(parsed?.item.latestReviews).toEqual([{ login: 'ok', state: null, avatarUrl: null }])
+  })
+
+  it('accepts raw gh latestReviews author.login nesting', () => {
+    const parsed = readWorkItemDetails({
+      item: {
+        id: 'n',
+        type: 'pr',
+        number: 1,
+        state: 'open',
+        latestReviews: [
+          { author: { login: 'coderabbitai', avatarUrl: 'https://a' }, state: 'COMMENTED' }
+        ]
+      }
+    })
+    expect(parsed?.item.latestReviews).toEqual([
+      { login: 'coderabbitai', state: 'COMMENTED', avatarUrl: 'https://a' }
+    ])
   })
 
   it('returns null when item is unparseable', () => {
@@ -249,7 +270,7 @@ describe('readAssignableUsers', () => {
 })
 
 describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
-  const fork = { owner: 'forkOwner', repo: 'forkRepo' }
+  const fork = { owner: 'forkOwner', repo: 'forkRepo', host: 'github.acme.test' }
 
   it('reuses mobileRepoSelectorFromWorktreeId for the repo selector', () => {
     const params = buildGithubPrParams('github.prChecks', WORKTREE_ID, { prNumber: 1 })
@@ -261,9 +282,20 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
     for (const method of [
       'github.prChecks',
       'github.prCheckDetails',
+      'github.rerunPRChecks',
+      'github.resolveReviewThread',
+      'github.setPRFileViewed',
+      'github.updatePRState',
+      'github.requestPRReviewers',
+      'github.removePRReviewers',
       'github.mergePR',
       'github.setPRAutoMerge',
-      'github.prComments'
+      'github.updatePRTitle',
+      'github.prComments',
+      'github.prFileContents',
+      'github.addPRReviewComment',
+      'github.addIssueComment',
+      'github.addPRReviewCommentReply'
     ]) {
       const params = buildGithubPrParams(method, WORKTREE_ID, { prNumber: 1 }, { prRepo: fork })
       expect(params.prRepo).toEqual(fork)
@@ -271,13 +303,7 @@ describe('buildGithubPrParams — method-aware prRepo / headSha', () => {
   })
 
   it('omits prRepo for methods that reject it', () => {
-    for (const method of [
-      'github.updatePRState',
-      'github.requestPRReviewers',
-      'github.removePRReviewers',
-      'github.listAssignableUsers',
-      'github.rerunPRChecks'
-    ]) {
+    for (const method of ['github.repoSlug', 'github.prForBranch', 'github.listAssignableUsers']) {
       const params = buildGithubPrParams(method, WORKTREE_ID, { prNumber: 1 }, { prRepo: fork })
       expect('prRepo' in params).toBe(false)
     }
@@ -327,13 +353,49 @@ describe('fetch wrappers', () => {
   })
 
   it('fetchPRForBranch threads linkedPRNumber as authoritative resolver', async () => {
-    const { client, sendRequest } = mockClient(okResponse({ number: 4, state: 'open' }))
+    const { client, sendRequest } = mockClient(
+      okResponse({
+        kind: 'found',
+        pr: { number: 4, state: 'merged' },
+        fetchedAt: 1
+      })
+    )
     const out = await fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat', linkedPRNumber: 4 })
     expect(out.ok).toBe(true)
+    expect(out.ok && out.result).toMatchObject({ number: 4, state: 'merged' })
     const [method, params] = sendRequest.mock.calls[0]!
     expect(method).toBe('github.prForBranch')
     expect(params).toMatchObject({ branch: 'feat', linkedPRNumber: 4 })
     expect('prRepo' in (params as object)).toBe(false)
+  })
+
+  it('fetchPRForBranch preserves legacy flat responses', async () => {
+    const { client } = mockClient(okResponse({ number: 4, state: 'open' }))
+    const out = await fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })
+    expect(out.ok && out.result).toMatchObject({ number: 4, state: 'open' })
+  })
+
+  it('fetchPRForBranch maps a classified no-pr response to null', async () => {
+    const { client } = mockClient(okResponse({ kind: 'no-pr', fetchedAt: 1 }))
+    await expect(fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })).resolves.toEqual({
+      ok: true,
+      result: null
+    })
+  })
+
+  it('fetchPRForBranch propagates classified upstream errors', async () => {
+    const { client } = mockClient(
+      okResponse({
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'network unavailable',
+        fetchedAt: 1
+      })
+    )
+    await expect(fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })).resolves.toEqual({
+      ok: false,
+      error: 'network unavailable'
+    })
   })
 
   it('fetchPRChecks forwards headSha + prRepo', async () => {
@@ -363,12 +425,15 @@ describe('fetch wrappers', () => {
     expect('headSha' in (params as object)).toBe(false)
   })
 
-  it('fetchGithubRepoSlug returns the slug for a github repo, null otherwise', async () => {
+  it('fetchGithubRepoSlug preserves an Enterprise host, and returns null otherwise', async () => {
     const found = await fetchGithubRepoSlug(
-      mockClient(okResponse({ owner: 'o', repo: 'r' })).client,
+      mockClient(okResponse({ owner: 'o', repo: 'r', host: 'github.acme.test' })).client,
       WORKTREE_ID
     )
-    expect(found).toEqual({ ok: true, result: { owner: 'o', repo: 'r' } })
+    expect(found).toEqual({
+      ok: true,
+      result: { owner: 'o', repo: 'r', host: 'github.acme.test' }
+    })
     const none = await fetchGithubRepoSlug(mockClient(okResponse(null)).client, WORKTREE_ID)
     expect(none).toEqual({ ok: true, result: null })
   })

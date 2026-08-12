@@ -1,5 +1,9 @@
 import type { Store } from '../persistence'
-import type { RemovedSshTargetTombstone, SshTarget } from '../../shared/ssh-types'
+import type {
+  RemovedSshTargetTombstone,
+  SshRepoReadoption,
+  SshTarget
+} from '../../shared/ssh-types'
 
 /**
  * Re-adoption of workspaces orphaned when an SSH target was removed.
@@ -56,14 +60,18 @@ function tombstoneMatches(tombstone: RemovedSshTargetTombstone, target: Identity
 /**
  * Re-point orphaned repos/worktrees onto `newTarget` if a removed target with
  * the same host identity is tombstoned. Consumes the matching tombstone(s).
- * Returns the number of repos re-adopted (0 when there was nothing to adopt).
+ * Returns exact repo/target migrations so the renderer can discard only rows
+ * proven to be stale after its per-host catalog merge.
  */
-export function readoptOrphanedWorkspacesForTarget(store: Store, newTarget: SshTarget): number {
+export function readoptOrphanedWorkspacesForTarget(
+  store: Store,
+  newTarget: SshTarget
+): SshRepoReadoption[] {
   const tombstones = store.getRemovedSshTargetTombstones()
   if (tombstones.length === 0) {
-    return 0
+    return []
   }
-  let readopted = 0
+  const readoptions: SshRepoReadoption[] = []
   for (const tombstone of tombstones) {
     // Why: a re-added target can't share the id of one that still exists, but
     // guard anyway so we never re-point a live target onto itself.
@@ -74,12 +82,15 @@ export function readoptOrphanedWorkspacesForTarget(store: Store, newTarget: SshT
     if (!tombstoneMatches(tombstone, newTarget)) {
       continue
     }
-    readopted += store.reassignSshTargetId(tombstone.oldTargetId, newTarget.id)
+    const repoIds = store.reassignSshTargetId(tombstone.oldTargetId, newTarget.id)
+    if (repoIds.length > 0) {
+      readoptions.push({ oldTargetId: tombstone.oldTargetId, newTargetId: newTarget.id, repoIds })
+    }
     // Consume the tombstone whether or not it re-pointed anything: the host has
     // returned, so the record has served its purpose.
     store.removeRemovedSshTargetTombstone(tombstone.oldTargetId)
   }
-  return readopted
+  return readoptions
 }
 
 /** Build a tombstone from a target about to be removed. */

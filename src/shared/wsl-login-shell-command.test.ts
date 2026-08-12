@@ -1,4 +1,7 @@
 import { execFileSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   buildWslInteractiveLoginShellCommand,
@@ -63,6 +66,61 @@ describe('wsl login shell command helpers', () => {
     expect(command).toContain('exec /bin/sh -lc')
     expect(command).toContain("printf '\\''hello'\\''")
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'resolves env-node launchers from the current login-shell PATH on every run',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-wsl-login-codex-'))
+      const tools = join(root, 'tools')
+      const loginBin = join(root, 'login')
+      const v1Bin = join(root, 'nvm-v1')
+      const v2Bin = join(root, 'nvm-v2')
+      mkdirSync(tools)
+      mkdirSync(loginBin)
+      mkdirSync(v1Bin)
+      mkdirSync(v2Bin)
+      const loginShell = join(loginBin, 'bash')
+      writeFileSync(
+        join(tools, 'getent'),
+        `#!/bin/sh\nprintf '%s\\n' "user:x:1000:1000::/home/user:$ORCA_TEST_LOGIN_SHELL"\n`
+      )
+      writeFileSync(
+        loginShell,
+        '#!/bin/sh\nexport PATH="$ORCA_TEST_CODEX_BIN:/usr/bin:/bin"\nexec /bin/sh -c "$2"\n'
+      )
+      for (const [bin, label] of [
+        [v1Bin, 'v1'],
+        [v2Bin, 'v2']
+      ] as const) {
+        writeFileSync(join(bin, 'codex'), '#!/usr/bin/env node\n')
+        writeFileSync(join(bin, 'node'), `#!/bin/sh\nprintf '%s' '${label}'\n`)
+        chmodSync(join(bin, 'codex'), 0o755)
+        chmodSync(join(bin, 'node'), 0o755)
+      }
+      chmodSync(join(tools, 'getent'), 0o755)
+      chmodSync(loginShell, 0o755)
+
+      const command = buildWslLoginShellCommand('exec codex')
+      const run = (codexBin: string): string =>
+        execFileSync('/bin/sh', ['-c', command], {
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            PATH: `${tools}:/usr/bin:/bin`,
+            ORCA_TEST_LOGIN_SHELL: loginShell,
+            ORCA_TEST_CODEX_BIN: codexBin
+          }
+        })
+
+      try {
+        expect(run(v1Bin)).toBe('v1')
+        // The old launcher remains executable; current PATH precedence wins.
+        expect(run(v2Bin)).toBe('v2')
+      } finally {
+        rmSync(root, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('preserves command-scoped environment variables through the outer WSL shell', () => {
     const command = buildWslLoginShellCommand('HISTFILE=/tmp/orca-history printf "$HISTFILE"')

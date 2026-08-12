@@ -80,6 +80,7 @@ function runStatusHelper(helperPath: string): Promise<NotificationAuthorizationS
           case 'not-determined':
             resolve('not-determined')
             return
+          case undefined:
           default:
             resolve('unknown')
         }

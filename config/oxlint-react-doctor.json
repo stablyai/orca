@@ -12,9 +12,18 @@
   },
   "jsPlugins": [{ "name": "react-doctor", "specifier": "oxlint-plugin-react-doctor" }],
   "rules": {
+    "react-doctor/effect-needs-cleanup": "warn",
+    "react-doctor/no-array-index-as-key": "warn",
     "react-doctor/no-adjust-state-on-prop-change": "warn",
+    "react-doctor/no-create-store-in-render": "warn",
     "react-doctor/no-derived-state-effect": "warn",
-    "react-doctor/no-initialize-state": "warn"
+    "react-doctor/no-initialize-state": "warn",
+    "react-doctor/no-side-effect-in-state-updater-function": "warn",
+    "react-doctor/no-unstable-nested-components": "warn",
+    "react-doctor/zustand-no-fresh-selector-result": "warn",
+    "react-doctor/zustand-no-get-during-initialization": "warn",
+    "react-doctor/zustand-no-mutating-state": "warn",
+    "react-doctor/zustand-no-whole-store-destructure": "warn"
   },
   "ignorePatterns": ["**/node_modules", "**/dist", "**/out"]
 }

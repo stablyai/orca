@@ -653,4 +653,51 @@ describe('notes send agent targets', () => {
       })
     ])
   })
+
+  // Why: OpenCode publishes `OC | <session>` and no status word, so a hookless
+  // OpenCode pane used to be invisible in the send menu no matter how live it was.
+  it('lists a manual OpenCode pane by its native session title', () => {
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        tabsByWorktree: { [WORKTREE_ID]: [tab(MANUAL_TAB_ID, { title: 'Terminal 2' })] },
+        terminalLayoutsByTabId: { [MANUAL_TAB_ID]: leafLayout(LEAF_B, 'pty-b') },
+        runtimePaneTitlesByTabId: { [MANUAL_TAB_ID]: { 1: 'OC | Ad hoc build' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      {
+        paneKey: makePaneKey(MANUAL_TAB_ID, LEAF_B),
+        tabId: MANUAL_TAB_ID,
+        leafId: LEAF_B,
+        agentType: 'opencode',
+        tabTitle: 'Terminal 2',
+        status: 'eligible'
+      }
+    ])
+  })
+
+  it('promotes a stale OpenCode status row from the native title hint', () => {
+    const paneKey = makePaneKey(LAUNCH_TAB_ID, LEAF_A)
+    const targets = deriveNotesSendAgentTargets(
+      state({
+        agentStatusByPaneKey: {
+          [paneKey]: entry(paneKey, 'done', OLD_STATUS_UPDATED_AT, { agentType: 'opencode' })
+        },
+        tabsByWorktree: {
+          [WORKTREE_ID]: [tab(LAUNCH_TAB_ID, { title: 'Terminal 1', launchAgent: 'opencode' })]
+        },
+        terminalLayoutsByTabId: { [LAUNCH_TAB_ID]: leafLayout(LEAF_A, 'pty-a') },
+        runtimePaneTitlesByTabId: { [LAUNCH_TAB_ID]: { 1: 'OC | Ad hoc build' } }
+      }),
+      WORKTREE_ID,
+      NOW
+    )
+
+    expect(targets).toEqual([
+      expect.objectContaining({ paneKey, agentType: 'opencode', status: 'eligible' })
+    ])
+  })
 })

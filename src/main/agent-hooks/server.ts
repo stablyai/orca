@@ -1,15 +1,5 @@
 /* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
-// Why: this module is the Orca-main-process adapter for the shared
-// agent-hook listener pipeline (`src/shared/agent-hook-listener.ts`). The
-// listener internals (request parsing, payload normalization, endpoint-file
-// writing, validation) live in `shared/` so the relay can host the same
-// pipeline on the remote without dragging Electron in. This file owns:
-//   - the loopback HTTP socket + bearer-token auth
-//   - the IPC fanout (setListener / lastStatusByPaneKey replay)
-//   - the `ingestRemote` entry point that bypasses HTTP for relay-forwarded
-//     events (see docs/design/agent-status-over-ssh.md §5)
-//   - the on-disk last-status cache (`last-status.json`) that survives
-//     Orca restart so retained dashboard rows reappear on relaunch
+// Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron; parsing that drifts back into this file stops applying to SSH panes.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -22,23 +12,51 @@ import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
+  clearClaudeAnsweredQuestionWait,
   createHookListenerState,
   getEndpointFileName,
+  hasCodexTranscriptSubagents,
   hasPendingAgentResultText,
   HOOK_REQUEST_SLOWLORIS_MS,
+  markClaudeLeadTurnInterrupted,
+  markCodexLeadTurnInterrupted,
   MAX_PANE_KEY_LEN,
+  movePaneCacheState,
+  canAcceptClaudeCompactTransition,
+  normalizeClaudePromptId,
   normalizeHookPayload,
   parseFormEncodedBody,
   readRequestBody,
+  reapRestoredClaudeSubagentsForDeadPane,
+  reconcileRemoteCodexState,
+  resolveCachedClaudeCompactOwnership,
   resolveHookSource,
+  preparePendingGrokResultDiscovery,
+  seedClaudeSubagentRosterFromSnapshots,
+  seedCodexStateFromSnapshot,
   warnOnHookEnvOrVersionMismatch,
   writeEndpointFile,
   type AgentHookEventPayload,
   type HookListenerState
 } from '../../shared/agent-hook-listener'
-import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import {
+  claudeRosterHasRestoredSnapshotSubagent,
+  claudeRosterHasWorkingSubagent,
+  claudeRosterToSnapshots
+} from '../../shared/claude-subagent-roster'
+import {
+  isAgentHookSource,
+  restoreShedStatusFields,
+  type AgentHookSource
+} from '../../shared/agent-hook-relay'
+import {
+  CLAUDE_STATUSLINE_PATHNAME,
+  parseClaudeStatusLineBody,
+  type ClaudeStatusLineRateLimits
+} from '../../shared/claude-statusline-rate-limits'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusClearIpcPayload,
   type AgentStatusIpcPayload,
   type AgentType,
   type AgentStatusState,
@@ -53,23 +71,50 @@ import {
   isAgentInterruptInputIntent,
   type AgentInterruptInferenceRequest
 } from '../../shared/agent-interrupt-intent'
+import {
+  isAskUserQuestionTool,
+  type AgentQuestionAnsweredInferenceRequest
+} from '../../shared/agent-question-answered-intent'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import type { LegacyPaneKeyAliasEntry } from '../../shared/types'
-import { normalizeAgentProviderSession } from '../../shared/agent-session-resume'
+import {
+  getAgentResumeArgv,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata
+} from '../../shared/agent-session-resume'
+import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
 
 export type { AgentHookSource }
 
-// Why: server-process-only enrichment of the shared event payload. The shared
-// listener emits `AgentHookEventPayload` (the bare event shape). For
-// persistence and the dashboard's "did the agent transition since I last
-// looked?" comparison, we attach `receivedAt` (when the latest event arrived
-// for this pane) and `stateStartedAt` (when the current state first appeared).
-// Stored in `state.lastStatusByPaneKey` via assignability — `AgentHookEventPayload`
-// is the declared map value, and the extra fields ride along untouched because
-// the shared module only writes/clears, never reads.
+// Why: server-side enrichment — receivedAt = latest event arrival, stateStartedAt = when the current state first appeared; extra fields ride the shared map untouched (it only writes/clears).
 type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   receivedAt: number
   stateStartedAt: number
+  /** Stamped at hydrate for nonterminal states; never persisted (hydrate re-stamps) and cleared by any accepted live event replacing the entry. */
+  restoredUnconfirmed?: true
+  /** User-hidden resume identity retained solely for destructive liveness checks. */
+  retainedForLiveness?: true
+}
+
+type NormalizedLocalHook = {
+  event: AgentHookEventPayload | null
+  onAccepted?: () => void
+}
+
+type PersistedAgentHookEventPayload = Omit<
+  EnrichedAgentHookEventPayload,
+  'claudeRunningNonAgentTask' | 'launchToken' | 'promptInteractionKey' | 'restoredUnconfirmed'
+> & {
+  launchTokenHash?: string
+}
+
+type PersistedAgentHookAuthorityCommitment = {
+  paneKey: string
+  launchTokenHash: string
+  connectionId: string | null
+  tabId?: string
+  worktreeId?: string
+  observedAt: number
 }
 
 export type AgentHookStatusChangeEntry = {
@@ -78,56 +123,65 @@ export type AgentHookStatusChangeEntry = {
   observedInCurrentRuntime: boolean
 }
 
+export type AgentHookProviderSessionIdentity = {
+  paneKey: string
+  sessionId: string
+  transcriptPath?: string
+  worktreeId?: string
+}
+
+export type AgentHookAuthorityEvidence = Readonly<{
+  paneKey: string
+  launchTokenHash: string
+  connectionId: string | null
+  tabId?: string
+  worktreeId?: string
+  observedAt: number
+}>
+
+export type AgentHookAuthorityAttestation = Readonly<{
+  paneKey: string
+  source: 'current_hook' | 'hydrated_commitment'
+}>
+
 type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
-type PaneStatusClearListener = (paneKey: string) => void
+type ProviderSessionChangeListener = (providerSessions: AgentHookProviderSessionIdentity[]) => void
+type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void
 type PaneKeyAliasEntry = {
   stablePaneKey: string
   ptyId: string | null
   updatedAt: number
+  authorityVerified: boolean
 }
 
-// Why: name of the on-disk cache that survives Orca restart. Lives next to
-// the endpoint file in userData/agent-hooks/ so all hook-server-owned cross-
-// restart artifacts stay co-located.
+// Why: co-located with the endpoint file in userData/agent-hooks/ so hook-server cross-restart artifacts stay together.
 const LAST_STATUS_FILE_NAME = 'last-status.json'
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
+const CODEX_SUBAGENT_POLL_MS = 1_000
 const INTERRUPTED_DONE_LATE_WORKING_SUPPRESSION_MS = 15_000
 
-// Why: starts at 2 (not 1) because pre-merge dev iterations of this branch
-// wrote a v1 shape with no receivedAt / stateStartedAt. Bumping to 2 means a
-// developer who upgrades from an in-flight branch sees an empty hydration
-// once instead of partially-typed legacy entries. New file format; never
-// shipped to users at v1. A mismatched version is treated as a corrupt file
-// (silent empty hydration).
+// Why: starts at 2 — pre-merge v1 lacked receivedAt/stateStartedAt (never shipped); a mismatched version hydrates empty (treated as corrupt).
 const LAST_STATUS_FILE_VERSION = 2
 
-// Why: trailing-edge debounce so a burst of hook events from a multi-agent
-// run produces one disk write instead of N. The latency budget matches other
-// hook-server batching; quit-time uses flushStatusPersistSync() for the
-// guaranteed final flush.
+// Why: trailing-edge debounce so a burst of hook events yields one disk write, not N; quit-time flushStatusPersistSync() guarantees the final flush.
 const STATUS_PERSIST_DEBOUNCE_MS = 250
 const TOOL_PROGRESS_HOOK_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'PostToolUseFailure'])
 const AGENT_PROMPT_SENT_AGENT_KINDS = new Set<AgentKind>(AGENT_KIND_VALUES)
 
-// Why: bound the on-disk file's growth across many sessions. PTY-teardown
-// eviction handles closed panes, but daemon-restored PTYs that never re-attach
-// and crash-recovery paths where teardown never fires can leave entries
-// pinned forever. 7 days matches the user-visible "still relevant?" horizon —
-// older entries have almost certainly been resolved or abandoned and should
-// not resurrect on hydrate.
+// Why: bound file growth from PTYs that never re-attach; 7 days is the "still relevant?" horizon beyond which entries shouldn't resurrect on hydrate.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
-// Why: closed-tab suppression only needs to cover recently closed tabs — a
-// status event for a long-closed tab cannot arrive once its process/hooks are
-// gone. Bound the set so it can't grow one entry per tab close for the whole
-// session (it is otherwise only cleared at app quit).
+// Why: a long-closed tab can't receive status events; bound the set so it can't grow one entry per close for the whole session.
 export const CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
+export const CLOSED_AGENT_STATUS_PANE_KEYS_MAX = 1024
+export const PANE_KEY_ALIASES_MAX = 1024
 
 type LastStatusFile = {
   version: number
-  entries: Record<string, EnrichedAgentHookEventPayload>
+  entries: Record<string, PersistedAgentHookEventPayload>
+  authorityCommitments?: Record<string, PersistedAgentHookAuthorityCommitment>
 }
 
 type AgentPromptSentDedupeEntry = {
@@ -158,10 +212,36 @@ function equivalentInterruptAgentType(
   return normalizedActual === normalizedBaseline
 }
 
-// Why: paneKey is `${tabId}:${leafUuid}` — validate the durable leaf suffix
-// at write/hydrate time so legacy numeric rows fail closed.
+// Why: validate the durable `${tabId}:${leafUuid}` leaf suffix at write/hydrate so legacy numeric rows fail closed.
 export function isValidPaneKey(value: unknown): value is string {
-  return typeof value === 'string' && parsePaneKey(value) !== null
+  return (
+    typeof value === 'string' && value.length <= MAX_PANE_KEY_LEN && parsePaneKey(value) !== null
+  )
+}
+
+function dropHydratedIdleClaudeSubagents(
+  payload: ParsedAgentStatusPayload
+): ParsedAgentStatusPayload {
+  if (
+    payload.agentType !== 'claude' ||
+    !payload.subagents?.some((subagent) => subagent.state === 'idle')
+  ) {
+    return payload
+  }
+  const activeSubagents = payload.subagents.filter((subagent) => subagent.state !== 'idle')
+  // Why: an idle teammate's liveness can't be proven across a restart (its TeammateIdle confirmation is in-memory); prune so a dead pile can't resurrect — a live teammate re-earns its row via SubagentStart.
+  return {
+    ...payload,
+    subagents: activeSubagents.length > 0 ? activeSubagents : undefined
+  }
+}
+
+// Why: remote metadata-only rows are currently a Pi contract; user-dismissed rows use an internal persisted marker instead.
+function isValidPiProviderSessionOnly(
+  providerSession: AgentProviderSessionMetadata | undefined,
+  agentType: AgentType | undefined
+): boolean {
+  return Boolean(providerSession && agentType === 'pi' && getAgentResumeArgv('pi', providerSession))
 }
 
 function sanitizeHydratedEntry(
@@ -183,9 +263,7 @@ function sanitizeHydratedEntry(
   if (tabId !== undefined && (typeof tabId !== 'string' || tabId.length === 0)) {
     return null
   }
-  // Why: paneKey is `${tabId}:${leafUuid}`; a stored entry whose tabId field
-  // diverges from the key's tab segment is corruption (renamer bug, manual
-  // edit, future shape drift). Drop instead of hydrating an inconsistent row.
+  // Why: a stored tabId that diverges from the paneKey's tab segment is corruption; drop instead of hydrating an inconsistent row.
   if (typeof tabId === 'string' && tabId !== parsedPaneKey.tabId) {
     return null
   }
@@ -205,8 +283,7 @@ function sanitizeHydratedEntry(
   ) {
     return null
   }
-  // Why: connectionId is allowed to be null (local) or string (relay). Any
-  // other shape is rejected so the post-merge typed surface stays honest.
+  // Why: connectionId is null (local) or string (relay); any other shape is rejected to keep the typed surface honest.
   const connectionIdRaw = record.connectionId
   let connectionId: string | null
   if (connectionIdRaw === null || connectionIdRaw === undefined) {
@@ -220,22 +297,103 @@ function sanitizeHydratedEntry(
   if (!payload) {
     return null
   }
+  const providerSession = normalizeAgentProviderSession(record.providerSession) ?? undefined
+  const providerSessionOnly = record.providerSessionOnly === true
+  const retainedForLiveness = record.retainedForLiveness === true
+  const validRetainedIdentity = Boolean(
+    retainedForLiveness && providerSession && payload.agentType && payload.agentType !== 'unknown'
+  )
+  if (
+    providerSessionOnly &&
+    !isValidPiProviderSessionOnly(providerSession, payload.agentType) &&
+    !validRetainedIdentity
+  ) {
+    return null
+  }
+  const source = isAgentHookSource(record.source) ? record.source : undefined
+  const providerPromptId =
+    source === 'claude' ? normalizeClaudePromptId(record.providerPromptId) : undefined
+  const compactTrigger =
+    source === 'claude' && (record.compactTrigger === 'manual' || record.compactTrigger === 'auto')
+      ? record.compactTrigger
+      : undefined
   return {
     paneKey,
-    launchToken: typeof record.launchToken === 'string' ? record.launchToken : undefined,
+    source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
     worktreeId: typeof worktreeId === 'string' ? worktreeId : undefined,
     connectionId,
     hasExplicitPrompt: record.hasExplicitPrompt === true ? true : undefined,
     hookEventName: typeof record.hookEventName === 'string' ? record.hookEventName : undefined,
+    providerPromptId,
+    compactTrigger,
     toolUseId: typeof record.toolUseId === 'string' ? record.toolUseId : undefined,
     toolAgentId: typeof record.toolAgentId === 'string' ? record.toolAgentId : undefined,
     toolAgentType: typeof record.toolAgentType === 'string' ? record.toolAgentType : undefined,
-    providerSession: normalizeAgentProviderSession(record.providerSession) ?? undefined,
+    providerSession,
+    providerSessionOnly: providerSessionOnly ? true : undefined,
+    retainedForLiveness: retainedForLiveness ? true : undefined,
     payload,
     receivedAt,
     stateStartedAt
   }
+}
+
+function readPersistedLaunchTokenHash(rawEntry: unknown): string | null {
+  if (typeof rawEntry !== 'object' || rawEntry === null) {
+    return null
+  }
+  const record = rawEntry as Record<string, unknown>
+  const launchTokenHash =
+    typeof record.launchTokenHash === 'string' ? record.launchTokenHash.trim() : ''
+  if (/^[a-f0-9]{64}$/.test(launchTokenHash)) {
+    return launchTokenHash
+  }
+  const legacyLaunchToken = typeof record.launchToken === 'string' ? record.launchToken.trim() : ''
+  return legacyLaunchToken ? createHash('sha256').update(legacyLaunchToken).digest('hex') : null
+}
+
+function sanitizePersistedAuthorityCommitment(
+  paneKey: string,
+  value: unknown
+): AgentHookAuthorityEvidence | null {
+  if (!isValidPaneKey(paneKey) || typeof value !== 'object' || value === null) {
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const launchTokenHash =
+    typeof record.launchTokenHash === 'string' ? record.launchTokenHash.trim() : ''
+  const connectionId = record.connectionId
+  const observedAt = record.observedAt
+  if (
+    !/^[a-f0-9]{64}$/.test(launchTokenHash) ||
+    (connectionId !== null && typeof connectionId !== 'string') ||
+    typeof observedAt !== 'number' ||
+    !Number.isFinite(observedAt)
+  ) {
+    return null
+  }
+  return Object.freeze({
+    paneKey,
+    launchTokenHash,
+    connectionId,
+    ...(typeof record.tabId === 'string' ? { tabId: record.tabId } : {}),
+    ...(typeof record.worktreeId === 'string' ? { worktreeId: record.worktreeId } : {}),
+    observedAt
+  })
+}
+
+function authorityCommitmentsMatch(
+  left: AgentHookAuthorityEvidence,
+  right: AgentHookAuthorityEvidence
+): boolean {
+  return (
+    left.paneKey === right.paneKey &&
+    left.launchTokenHash === right.launchTokenHash &&
+    left.connectionId === right.connectionId &&
+    left.tabId === right.tabId &&
+    left.worktreeId === right.worktreeId
+  )
 }
 
 function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentStatusIpcPayload {
@@ -248,10 +406,14 @@ function toAgentStatusIpcPayload(entry: EnrichedAgentHookEventPayload): AgentSta
     receivedAt: entry.receivedAt,
     stateStartedAt: entry.stateStartedAt,
     ...(entry.providerSession ? { providerSession: entry.providerSession } : {}),
+    ...(entry.providerSessionOnly ? { providerSessionOnly: true } : {}),
+    ...(entry.promptInteractionKey ? { promptInteractionKey: entry.promptInteractionKey } : {}),
+    ...(entry.restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
     ...entry.payload
   }
 }
 
+// Why: OSC never carries model/children; omit both so an equivalent OSC ping preserves the hook-cached identity graph.
 function equivalentParsedAgentStatusPayload(
   a: ParsedAgentStatusPayload,
   b: ParsedAgentStatusPayload
@@ -264,7 +426,10 @@ function equivalentParsedAgentStatusPayload(
     a.toolInput === b.toolInput &&
     a.interactivePrompt === b.interactivePrompt &&
     a.lastAssistantMessage === b.lastAssistantMessage &&
-    a.interrupted === b.interrupted
+    a.interrupted === b.interrupted &&
+    // Why: a session-boundary done must never be deduped against a cached real done —
+    // the flag has to reach receivers deterministically (STA-3386).
+    a.sessionBoundary === b.sessionBoundary
   )
 }
 
@@ -286,8 +451,7 @@ function isToolProgressWorkingAfterInterrupt(next: AgentHookEventPayload): boole
   if (next.payload.agentType !== 'claude') {
     return false
   }
-  // Why: a same-prompt retry is another UserPromptSubmit, while late Claude
-  // progress after Ctrl+C arrives as tool lifecycle work for the old turn.
+  // Why: a same-prompt retry is another UserPromptSubmit, while late post-Ctrl+C progress arrives as tool lifecycle work.
   return next.hookEventName !== undefined && TOOL_PROGRESS_HOOK_EVENTS.has(next.hookEventName)
 }
 
@@ -304,9 +468,13 @@ function shouldKeepClaudePermissionVisible(
   previous: EnrichedAgentHookEventPayload | undefined,
   next: AgentHookEventPayload
 ): boolean {
+  if (previous?.restoredUnconfirmed) {
+    return false
+  }
   if (
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'waiting' ||
+    previous.hookEventName !== 'PermissionRequest' ||
     next.payload.agentType !== 'claude' ||
     next.payload.state !== 'working'
   ) {
@@ -318,9 +486,10 @@ function shouldKeepClaudePermissionVisible(
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
     return false
   }
-  // Why: Claude can run subagents concurrently in one pane. Keep permission
-  // sticky unless the next hook has a source-level execution id that the
-  // PermissionRequest event itself does not expose.
+  // Why: only real permission requests stay sticky; newer Claude reports AskUserQuestion as a PermissionRequest, so tool name (not event) decides.
+  if (isAskUserQuestionTool(previous.payload.toolName)) {
+    return false
+  }
   return true
 }
 
@@ -363,10 +532,7 @@ function isClaudePermissionResumingApprovedTool(
     (next.hookEventName === 'PreToolUse' || next.hookEventName === 'PostToolUse') &&
     nextToolUseId !== undefined &&
     !hasConflictingToolUseId &&
-    // Why: subagents can share `agent_type`; a concrete agent id is the
-    // strongest available signal that the permission owner resumed execution.
-    // Claude's approval path omits identity but preserves the original
-    // tool_use_id on PostToolUse, so that exact id is also a safe clear signal.
+    // Why: subagents share agent_type, so a concrete agent id (or the preserved PostToolUse tool_use_id) is the safest resume signal.
     (hasMatchingConcreteAgentId || hasSameExplicitAgentType || hasMatchingToolUseId) &&
     sameToolName &&
     (sameKnownToolInput || sameUnknownInputFromConcreteAgent || sameUnknownInputFromToolUseId)
@@ -378,6 +544,7 @@ function shouldInheritClaudeToolUseIdForPermission(
   next: AgentHookEventPayload
 ): boolean {
   if (
+    previous?.restoredUnconfirmed ||
     previous?.payload.agentType !== 'claude' ||
     previous.payload.state !== 'working' ||
     previous.hookEventName !== 'PreToolUse' ||
@@ -420,8 +587,7 @@ function attachClaudePermissionToolUseId(
   }
   return {
     ...next,
-    // Why: Claude emits PermissionRequest without tool_use_id, then reports the
-    // approved command as PostToolUse with the original PreToolUse id.
+    // Why: Claude emits PermissionRequest without tool_use_id, then PostToolUse carries the original PreToolUse id.
     toolUseId: inheritedToolUseId
   }
 }
@@ -430,43 +596,45 @@ export class AgentHookServer {
   private server: ReturnType<typeof createServer> | null = null
   private port = 0
   private token = ''
-  // Why: identifies this Orca instance so hook scripts can stamp requests and
-  // the server can detect dev vs. prod cross-talk. Set at start() from the
-  // caller's knowledge of whether this is a packaged build.
+  // Why: identifies this Orca instance so the server can detect dev vs. prod cross-talk; set at start() from packaged-build knowledge.
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
+  private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
+  private paneStatusClearListeners = new Set<PaneStatusClearListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
-  // Why: directory that holds the on-disk endpoint file. Set via start()'s
-  // `userDataPath` option so the class has no direct Electron dependency
-  // (keeps it mockable in the vitest node environment).
+  private providerSessionChangeListeners = new Set<ProviderSessionChangeListener>()
+  // Why: setListener is a single slot owned by the main-window fanout; the
+  // plugin event bus (and future consumers) need an additive subscription
+  // that also works in headless serve, where no window listener exists.
+  private enrichedStatusListeners = new Set<(payload: EnrichedAgentHookEventPayload) => void>()
+  // Why: set via start()'s userDataPath so the class has no direct Electron dependency (mockable in vitest node env).
   private endpointDir: string | null = null
   private endpointFilePathCache: string | null = null
   private endpointFileWritten = false
-  // Why: per-instance caches (warn-once Sets, lastPrompt/lastTool/lastStatus
-  // by paneKey). Held on the instance instead of as module-level Maps so
-  // tests can spin up multiple servers without state cross-contamination.
+  // Why: per-instance (not module-level) so tests can spin up multiple servers without state cross-contamination.
   private state: HookListenerState = createHookListenerState()
-  // Why: hydrated last-status rows are useful UI continuity, but they are not
-  // evidence of live agent work in this main-process runtime.
+  // Why: hydrated rows give UI continuity but aren't evidence of live agent work in this runtime.
   private runtimeObservedStatusPaneKeys = new Set<string>()
+  private hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
+  private hydratedLaunchTokenHashByPaneKey = new Map<string, string>()
+  private persistedAuthorityCommitmentsByPaneKey = new Map<string, AgentHookAuthorityEvidence>()
+  private revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
+  private currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   private legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
   private paneKeyAliasPersistenceListener: PaneKeyAliasPersistenceListener | null = null
-  // Why: full path to the on-disk last-status cache. Set in start() from
-  // userDataPath. Null when the server runs without a userDataPath (e.g.
-  // tests that skip the userDataPath option) — in that case, persistence is
-  // a no-op and only in-memory replay applies.
+  // Why: on-disk last-status cache path; null without a userDataPath (tests), where persistence is a no-op and only in-memory replay applies.
   private lastStatusFilePath: string | null = null
-  // Why: trailing-edge debounce timer. Captured per-instance so multiple
-  // server instances in the same process (tests) don't share state.
+  // Why: trailing-edge debounce timer, per-instance so test servers in one process don't share state.
   private statusPersistTimer: ReturnType<typeof setTimeout> | null = null
   private assistantMessageRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  private codexSubagentPollTimers = new Map<string, ReturnType<typeof setTimeout>>()
   private promptSentDedupeByPaneKey = new Map<string, AgentPromptSentDedupeEntry>()
   private promptSentHashSalt = randomBytes(16).toString('hex')
   private closedAgentStatusTabIds = new Set<string>()
-  // Why: identity check — skip writes when the JSON-stringified contents
-  // exactly match the last successful disk write. Cheap protection against
-  // re-firing trailing timers when nothing changed.
+  private closedAgentStatusPaneKeys = new Set<string>()
+  private connectionTimestampWatermarkById = new Map<string, number>()
+  // Why: skip disk writes when the JSON exactly matches the last write; guards against re-firing trailing timers when nothing changed.
   private lastWrittenJson: string | null = null
 
   setListener(listener: ((payload: EnrichedAgentHookEventPayload) => void) | null): void {
@@ -474,20 +642,22 @@ export class AgentHookServer {
     if (!listener) {
       return
     }
-    // Why: replay is best-effort per pane so one throwing listener call can't
-    // starve subsequent panes from being replayed.
+    // Why: replay is best-effort per pane so one throwing listener can't starve the rest.
     for (const payload of this.state.lastStatusByPaneKey.values()) {
       try {
-        // Why: cache values are stored as enriched payloads (with receivedAt /
-        // stateStartedAt). The map's declared element type from the shared
-        // listener is the bare AgentHookEventPayload because the shared module
-        // never reads from this map; only this class does, and only enriched
-        // values are ever inserted.
+        // Why: cache always holds enriched payloads; the map's declared type is the bare shape only because the shared module never reads it.
         listener({ ...(payload as EnrichedAgentHookEventPayload), isReplay: true })
       } catch (err) {
         console.error('[agent-hooks] replay listener threw', err)
       }
     }
+  }
+
+  // Why: statusline posts carry live Claude usage windows, not agent status; they feed RateLimitService directly.
+  setClaudeStatusLineListener(
+    listener: ((event: ClaudeStatusLineRateLimits) => void) | null
+  ): void {
+    this.onClaudeStatusLine = listener
   }
 
   subscribeStatusChanges(listener: StatusChangeListener): () => void {
@@ -497,18 +667,111 @@ export class AgentHookServer {
     }
   }
 
+  subscribeProviderSessionChanges(listener: ProviderSessionChangeListener): () => void {
+    this.providerSessionChangeListeners.add(listener)
+    return () => {
+      this.providerSessionChangeListeners.delete(listener)
+    }
+  }
+
+  /** Multi-subscriber tap on every enriched status change (no replay). */
+  subscribeEnrichedStatus(listener: (payload: EnrichedAgentHookEventPayload) => void): () => void {
+    this.enrichedStatusListeners.add(listener)
+    return () => {
+      this.enrichedStatusListeners.delete(listener)
+    }
+  }
+
   setPaneStatusClearListener(listener: PaneStatusClearListener | null): void {
     this.onPaneStatusCleared = listener
   }
 
-  /** Snapshot of the current cached statuses, in the IPC-shaped form the
-   *  renderer consumes. Used by the `agentStatus:getSnapshot` IPC after
-   *  workspace tabs have hydrated, so the dashboard catches up on any
-   *  hook events that fired during startup. */
+  /** Multi-subscriber tap on pane status clears. Unlike `setPaneStatusClearListener`
+   *  (a single slot the main window owns and drops on close) this survives window
+   *  teardown and exists at all under headless serve, which never opens one. */
+  subscribePaneStatusClear(listener: PaneStatusClearListener): () => void {
+    this.paneStatusClearListeners.add(listener)
+    return () => {
+      this.paneStatusClearListeners.delete(listener)
+    }
+  }
+
+  private emitPaneStatusCleared(clear: AgentStatusClearIpcPayload): void {
+    this.onPaneStatusCleared?.(clear)
+    for (const listener of this.paneStatusClearListeners) {
+      // Why: callers are pane/connection teardown paths; one throwing subscriber must
+      // not strand the rest, matching every other fan-out here.
+      try {
+        listener(clear)
+      } catch (err) {
+        console.error('[agent-hooks] pane-status-clear listener threw', err)
+      }
+    }
+  }
+
+  /** Snapshot of cached statuses in IPC shape. Used by `agentStatus:getSnapshot` after tabs hydrate so the
+   *  dashboard catches up on hook events that fired during startup. */
   getStatusSnapshot(): AgentStatusIpcPayload[] {
     return Array.from(this.state.lastStatusByPaneKey.values(), (entry) =>
       toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)
     )
+  }
+
+  /** Provider-session identities, including Pi's metadata-only rows. */
+  getProviderSessionIdentities(): AgentHookProviderSessionIdentity[] {
+    return this.buildStatusChangeNotification().providerSessions
+  }
+
+  getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
+    const entry = this.state.lastStatusByPaneKey.get(paneKey)
+    return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
+  }
+
+  getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {
+    return this.hydratedAuthorityCommitments
+  }
+
+  getCurrentAuthorityObservations(): readonly AgentHookAuthorityEvidence[] {
+    return Object.freeze(
+      Array.from(this.currentAuthorityObservations.values(), (entry) => Object.freeze({ ...entry }))
+    )
+  }
+
+  attestCompatibilityAuthority(candidate: {
+    paneKey: string
+    launchTokenHash: string
+    connectionId: string | null
+    terminalProvenance: 'current_runtime' | 'restored'
+  }): AgentHookAuthorityAttestation | null {
+    const paneKey = this.resolvePaneKeyAlias(candidate.paneKey)
+    const matchesCandidate = (entry: AgentHookAuthorityEvidence): boolean =>
+      entry.launchTokenHash === candidate.launchTokenHash &&
+      entry.connectionId === candidate.connectionId
+    const commitments = this.hydratedAuthorityCommitments.filter(
+      (entry) => matchesCandidate(entry) && !this.revokedHydratedAuthorityCommitments.has(entry)
+    )
+    const current = Array.from(this.currentAuthorityObservations.values())
+    const observations = current.filter(matchesCandidate)
+    const paneObservations = current.filter(
+      (entry) => this.resolvePaneKeyAlias(entry.paneKey) === paneKey
+    )
+    const hasUniqueCurrentObservation =
+      observations.length === 1 &&
+      paneObservations.length === 1 &&
+      this.resolvePaneKeyAlias(observations[0]!.paneKey) === paneKey
+    if (candidate.terminalProvenance === 'current_runtime') {
+      return hasUniqueCurrentObservation ? Object.freeze({ paneKey, source: 'current_hook' }) : null
+    }
+    if (commitments.length !== 1 || this.resolvePaneKeyAlias(commitments[0]!.paneKey) !== paneKey) {
+      return null
+    }
+    if (observations.length === 0 && paneObservations.length === 0) {
+      return Object.freeze({ paneKey, source: 'hydrated_commitment' })
+    }
+    if (!hasUniqueCurrentObservation) {
+      return null
+    }
+    return Object.freeze({ paneKey, source: 'current_hook' })
   }
 
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
@@ -524,16 +787,20 @@ export class AgentHookServer {
     if (!existing) {
       return false
     }
+    if (existing.providerSessionOnly) {
+      return false
+    }
+    // Why: inference must not fabricate a `done` onto a row whose `working` was never confirmed this runtime.
+    if (existing.restoredUnconfirmed) {
+      return false
+    }
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
-    // Why: Droid's Ctrl+C does not interrupt the current turn; repeated Ctrl+C
-    // exits the CLI, which is handled by process/PTY lifecycle cleanup.
+    // Why: Droid's Ctrl+C exits the CLI (handled by PTY lifecycle) rather than interrupting the current turn.
     if (agentType === 'droid' && request.intent === 'ctrl-c') {
       return false
     }
-    // Why: these agents use the first Escape as a TUI/editor cancel. A single
-    // Escape can leave the turn running, so only a deliberate double Escape
-    // may infer an interrupted turn.
+    // Why: these agents use the first Escape as a TUI cancel that can leave the turn running; only a double Escape infers an interrupt.
     if (
       (agentType === 'opencode' || agentType === 'copilot') &&
       request.intent === 'plain-escape' &&
@@ -541,9 +808,15 @@ export class AgentHookServer {
     ) {
       return false
     }
-    // Why: input-intent inference is a fallback for a missing final hook. A strict
-    // baseline match keeps a delayed timer from overwriting any newer hook,
-    // including same-millisecond prompt or agent identity changes.
+    const dismissesClaudeQuestion =
+      agentType === 'claude' &&
+      request.intent === 'plain-escape' &&
+      payload.state === 'waiting' &&
+      isAskUserQuestionTool(payload.toolName)
+    if (dismissesClaudeQuestion) {
+      return this.inferQuestionAnswered(request)
+    }
+    // Why: inference is a fallback for a missing final hook; a strict baseline match keeps a delayed timer from clobbering any newer hook.
     if (
       payload.state !== 'working' ||
       !equivalentInterruptAgentType(agentType, request.baselineAgentType) ||
@@ -554,7 +827,26 @@ export class AgentHookServer {
     ) {
       return false
     }
+    // Why: a 'working' pane can be child-driven; Ctrl+C doesn't stop background children, so inferring done would retire live child rows.
+    if (payload.subagents?.some((subagent) => subagent.state !== 'idle')) {
+      return false
+    }
+    // Why: Escape/Ctrl+C at Claude's idle prompt does not stop provider-owned shells or session crons.
+    if (
+      agentType === 'claude' &&
+      (this.state.claudeRunningNonAgentTaskPaneKeys.has(existing.paneKey) ||
+        this.state.claudeActiveSessionCronPaneKeys.has(existing.paneKey))
+    ) {
+      return false
+    }
 
+    // Why: keep the Claude lead-turn record in sync, or a later child event re-emits the stale 'working' state and resurrects the cancelled pane.
+    if (agentType === 'claude') {
+      markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+    }
+    if (agentType === 'codex') {
+      markCodexLeadTurnInterrupted(this.state, existing.paneKey)
+    }
     const inferred = this.applyNormalizedStatus({
       paneKey: existing.paneKey,
       tabId: existing.tabId,
@@ -565,7 +857,10 @@ export class AgentHookServer {
         state: 'done',
         prompt: payload.prompt,
         agentType,
-        interrupted: true
+        ...(payload.model ? { model: payload.model } : {}),
+        interrupted: true,
+        // Why: idle children are display state; dropping them on an inferred interrupt blanks rows a later hook would restore.
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
     console.debug('[agent-hooks] inferred interrupted agent status', {
@@ -576,34 +871,118 @@ export class AgentHookServer {
     return true
   }
 
-  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
-    return Array.from(this.state.lastStatusByPaneKey.entries(), ([paneKey, entry]) => {
-      const enriched = entry as EnrichedAgentHookEventPayload
-      return {
-        state: enriched.payload.state,
-        receivedAt: enriched.receivedAt,
-        observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+  /** Guarded fallback for the hook Claude omits after answering or dismissing AskUserQuestion. */
+  inferQuestionAnswered(request: AgentQuestionAnsweredInferenceRequest): boolean {
+    if (!isValidPaneKey(request.paneKey)) {
+      return false
+    }
+    const existing = this.state.lastStatusByPaneKey.get(request.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return false
+    }
+    // Why: inference must not fabricate a transition onto a row whose state was never confirmed this runtime.
+    if (existing.restoredUnconfirmed) {
+      return false
+    }
+    const payload = existing.payload
+    // Why: only Claude's interactive question clears on typed input — tool name (not hook event) discriminates; real permission waits stay sticky.
+    if (
+      payload.agentType !== 'claude' ||
+      payload.state !== 'waiting' ||
+      !isAskUserQuestionTool(payload.toolName)
+    ) {
+      return false
+    }
+    if (
+      payload.agentType !== request.baselineAgentType ||
+      payload.prompt !== request.baselinePrompt ||
+      existing.receivedAt !== request.baselineUpdatedAt ||
+      existing.stateStartedAt !== request.baselineStateStartedAt ||
+      Date.now() - existing.receivedAt > AGENT_STATUS_STALE_AFTER_MS
+    ) {
+      return false
+    }
+    // Why: sync the listener's lead-turn record too, or a later child event re-emits the stale waiting state and resurrects the card.
+    const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
+    const inferred = this.applyNormalizedStatus({
+      paneKey: existing.paneKey,
+      tabId: existing.tabId,
+      worktreeId: existing.worktreeId,
+      connectionId: existing.connectionId,
+      providerSession: existing.providerSession,
+      payload: {
+        state: restored.state,
+        prompt: payload.prompt,
+        agentType: payload.agentType,
+        ...(restored.state === 'done' && restored.interrupted ? { interrupted: true } : {}),
+        ...(payload.subagents ? { subagents: payload.subagents } : {})
       }
     })
+    console.debug('[agent-hooks] inferred resolved question status', {
+      paneKey: inferred.paneKey,
+      state: inferred.payload.state
+    })
+    return true
+  }
+
+  getStatusChangeSnapshot(): AgentHookStatusChangeEntry[] {
+    return this.buildStatusChangeNotification().statuses
+  }
+
+  private buildStatusChangeNotification(): {
+    statuses: AgentHookStatusChangeEntry[]
+    providerSessions: AgentHookProviderSessionIdentity[]
+  } {
+    const statuses: AgentHookStatusChangeEntry[] = []
+    const providerSessions: AgentHookProviderSessionIdentity[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      if (enriched.providerSession) {
+        providerSessions.push({
+          paneKey,
+          sessionId: enriched.providerSession.id,
+          ...(enriched.providerSession.transcriptPath
+            ? { transcriptPath: enriched.providerSession.transcriptPath }
+            : {}),
+          ...(enriched.worktreeId ? { worktreeId: enriched.worktreeId } : {})
+        })
+      }
+      if (!enriched.providerSessionOnly) {
+        statuses.push({
+          state: enriched.payload.state,
+          receivedAt: enriched.receivedAt,
+          observedInCurrentRuntime: this.runtimeObservedStatusPaneKeys.has(paneKey)
+        })
+      }
+    }
+    return { statuses, providerSessions }
   }
 
   private notifyStatusChangeListeners(): void {
-    if (this.statusChangeListeners.size === 0) {
+    if (this.statusChangeListeners.size === 0 && this.providerSessionChangeListeners.size === 0) {
       return
     }
-    const snapshot = this.getStatusChangeSnapshot()
+    const { statuses, providerSessions } = this.buildStatusChangeNotification()
     for (const listener of this.statusChangeListeners) {
       try {
-        listener(snapshot)
+        listener(statuses)
       } catch (err) {
         console.error('[agent-hooks] status-change listener threw', err)
+      }
+    }
+    for (const listener of this.providerSessionChangeListeners) {
+      try {
+        listener(providerSessions)
+      } catch (err) {
+        console.error('[agent-hooks] provider-session listener threw', err)
       }
     }
   }
 
   private markTabClosedForAgentStatus(tabId: string): void {
-    // Delete-then-add keeps recently closed tabs most-recent so eviction only
-    // sheds the oldest ids, which can no longer receive status events.
+    // Delete-then-add keeps recently closed tabs most-recent so eviction sheds only the oldest ids.
     this.closedAgentStatusTabIds.delete(tabId)
     this.closedAgentStatusTabIds.add(tabId)
     while (this.closedAgentStatusTabIds.size > CLOSED_AGENT_STATUS_TAB_IDS_MAX) {
@@ -615,12 +994,45 @@ export class AgentHookServer {
     }
   }
 
-  private shouldSuppressClosedTabStatus(paneKey: string): boolean {
-    const tabId = parsePaneKey(paneKey)?.tabId
-    if (!tabId) {
-      return false
+  private getAgentStatusDisposition(
+    paneKey: string,
+    event?: { hookEventName?: string; isReplay?: boolean }
+  ): 'accept' | 'restart' | 'suppress' {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const paneRetired =
+      this.closedAgentStatusPaneKeys.has(paneKey) ||
+      this.closedAgentStatusPaneKeys.has(ownerPaneKey)
+    const tabId = parsePaneKey(ownerPaneKey)?.tabId
+    if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
+      return 'suppress'
     }
-    return this.closedAgentStatusTabIds.has(tabId)
+    if (!paneRetired) {
+      return 'accept'
+    }
+    // Why: command completion retires launch authority but leaves its shell pane reusable.
+    // A live SessionStart proves a new agent process owns the retired pane just like a
+    // fresh prompt does — without it, a session resumed in a reused pane stays rowless (STA-3386).
+    if (
+      (event?.hookEventName === 'UserPromptSubmit' || event?.hookEventName === 'SessionStart') &&
+      event.isReplay !== true
+    ) {
+      this.closedAgentStatusPaneKeys.delete(paneKey)
+      this.closedAgentStatusPaneKeys.delete(ownerPaneKey)
+      return 'restart'
+    }
+    return 'suppress'
+  }
+
+  private markPaneClosedForAgentStatus(paneKey: string): void {
+    this.closedAgentStatusPaneKeys.delete(paneKey)
+    this.closedAgentStatusPaneKeys.add(paneKey)
+    while (this.closedAgentStatusPaneKeys.size > CLOSED_AGENT_STATUS_PANE_KEYS_MAX) {
+      const oldest = this.closedAgentStatusPaneKeys.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      this.closedAgentStatusPaneKeys.delete(oldest)
+    }
   }
 
   private attachStatusTiming(
@@ -630,8 +1042,22 @@ export class AgentHookServer {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
+    const commandCodeNewTurn =
+      previous !== undefined &&
+      isCommandCodeNewTurnWhileWorking({
+        agentType: payload.payload.agentType,
+        previousState: previous.payload.state,
+        incomingState: payload.payload.state,
+        previousPrompt: previous.payload.prompt,
+        incomingPrompt: payload.payload.prompt,
+        hasExplicitPrompt: payload.hasExplicitPrompt,
+        previousPromptInteractionKey: previous.promptInteractionKey,
+        incomingPromptInteractionKey: payload.promptInteractionKey
+      })
     const stateStartedAt =
-      previous && previous.payload.state === payload.payload.state ? previous.stateStartedAt : now
+      previous && previous.payload.state === payload.payload.state && !commandCodeNewTurn
+        ? previous.stateStartedAt
+        : now
     return {
       ...payload,
       receivedAt: now,
@@ -696,8 +1122,7 @@ export class AgentHookServer {
       promptInteractionKey
     })
     try {
-      // Why: hooks prove the user submitted a turn, but do not know which UI
-      // launched the terminal; keep attribution low-cardinality and conservative.
+      // Why: hooks prove a turn was submitted but not which UI launched the terminal; keep attribution low-cardinality.
       track('agent_prompt_sent', {
         agent_kind: agentKind,
         launch_source: 'unknown',
@@ -709,38 +1134,103 @@ export class AgentHookServer {
     }
   }
 
-  private applyNormalizedStatus(payload: AgentHookEventPayload): EnrichedAgentHookEventPayload {
+  private applyNormalizedStatus(
+    payload: AgentHookEventPayload,
+    onAccepted?: () => void
+  ): EnrichedAgentHookEventPayload {
     const previous = this.state.lastStatusByPaneKey.get(payload.paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
-    const now = Date.now()
+    const connectionClearWatermark = payload.connectionId
+      ? this.connectionTimestampWatermarkById.get(payload.connectionId)
+      : undefined
+    // Why: renderer ordering rejects older rows; live evidence must sort after reconnect clears and restored rows across clock rollback.
+    const restoredStatusWatermark = previous?.restoredUnconfirmed ? previous.receivedAt : undefined
+    const now = Math.max(
+      Date.now(),
+      (connectionClearWatermark ?? -1) + 1,
+      (restoredStatusWatermark ?? -1) + 1
+    )
+    if (payload.connectionId) {
+      this.connectionTimestampWatermarkById.set(payload.connectionId, now)
+    }
+    if (payload.providerSessionOnly) {
+      // Why: identity-only rows survive replay but must not emit prompt telemetry or a fabricated status.
+      onAccepted?.()
+      const enriched = this.attachStatusTiming(payload, now)
+      this.clearAssistantMessageRetry(enriched.paneKey)
+      this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
+      this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.emitEnrichedStatus(enriched)
+      return enriched
+    }
+    const stateReconciledPayload =
+      payload.connectionId && payload.payload.agentType === 'codex' && payload.hookEventName
+        ? {
+            ...payload,
+            payload: reconcileRemoteCodexState(
+              this.state,
+              payload.paneKey,
+              payload.hookEventName,
+              payload.toolAgentId,
+              payload.payload,
+              previous?.payload
+            )
+          }
+        : payload
+    const previousCodexRoot =
+      stateReconciledPayload.payload.agentType === 'codex' &&
+      stateReconciledPayload.toolAgentId &&
+      previous?.payload.agentType === 'codex'
+        ? previous
+        : undefined
+    const preservedProviderSession = !stateReconciledPayload.providerSession
+      ? previousCodexRoot?.providerSession
+      : undefined
+    const preservedRootModel = !stateReconciledPayload.payload.model
+      ? previousCodexRoot?.payload.model
+      : undefined
+    // Why: an SSH relay restart forgets root-only fields; child hooks must not erase durable resume/model identity.
+    const rootContextPreservingPayload =
+      preservedProviderSession || preservedRootModel
+        ? {
+            ...stateReconciledPayload,
+            ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+            payload: preservedRootModel
+              ? { ...stateReconciledPayload.payload, model: preservedRootModel }
+              : stateReconciledPayload.payload
+          }
+        : stateReconciledPayload
     const identity = resolveAgentStatusIdentity({
       existing: previous
         ? {
             agentType: previous.payload.agentType,
             state: previous.payload.state,
-            updatedAt: previous.receivedAt
+            updatedAt: previous.receivedAt,
+            restoredUnconfirmed: previous.restoredUnconfirmed
           }
         : undefined,
-      incoming: payload.payload.agentType,
+      incoming: rootContextPreservingPayload.payload.agentType,
       now
     })
     if (
       previous &&
       shouldSuppressInheritedTerminalStatus({
         inheritedFromActivePane: identity.inheritedFromActivePane,
-        incomingState: payload.payload.state
+        incomingState: rootContextPreservingPayload.payload.state
       })
     ) {
       return previous
     }
     const identityResolvedPayload =
-      identity.agentType === payload.payload.agentType
-        ? payload
+      identity.agentType === rootContextPreservingPayload.payload.agentType
+        ? rootContextPreservingPayload
         : {
-            ...payload,
+            ...rootContextPreservingPayload,
             payload: {
-              ...payload.payload,
+              ...rootContextPreservingPayload.payload,
               agentType: identity.agentType
             }
           }
@@ -748,8 +1238,7 @@ export class AgentHookServer {
     if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
       return previous
     }
-    // Why: some TUIs can emit a delayed tool/working hook after Ctrl+C already
-    // stopped the turn. Do not let that stale same-turn event resurrect the row.
+    // Why: some TUIs emit a delayed tool/working hook after Ctrl+C stopped the turn; don't let it resurrect the row.
     if (
       previous?.payload.state === 'done' &&
       previous.payload.interrupted === true &&
@@ -779,16 +1268,31 @@ export class AgentHookServer {
     ) {
       this.clearAssistantMessageRetry(effectivePayload.paneKey)
     }
+    onAccepted?.()
     if (!identity.inheritedFromActivePane) {
       this.maybeTrackAgentPromptSent(effectivePayload, previous)
     }
-    const enriched = this.attachStatusTiming(effectivePayload, now)
+    const cachedPayload = resolveCachedClaudeCompactOwnership(previous, effectivePayload)
+    const enriched = this.attachStatusTiming(cachedPayload, now)
     this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     this.state.lastStatusByPaneKey.set(enriched.paneKey, enriched)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
-    this.onAgentStatus?.(enriched)
+    this.emitEnrichedStatus(enriched)
     return enriched
+  }
+
+  // Why: every status emit must reach plugins too, so a new early-return path
+  // upstream cannot silently leave the plugin tap behind the main-window fanout.
+  private emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void {
+    this.onAgentStatus?.(enriched)
+    for (const listener of this.enrichedStatusListeners) {
+      try {
+        listener(enriched)
+      } catch (err) {
+        console.error('[agent-hooks] enriched status listener threw', err)
+      }
+    }
   }
 
   private clearAssistantMessageRetry(paneKey: string): void {
@@ -800,11 +1304,55 @@ export class AgentHookServer {
     this.assistantMessageRetryTimers.delete(paneKey)
   }
 
+  private clearCodexSubagentPoll(paneKey: string): void {
+    const timer = this.codexSubagentPollTimers.get(paneKey)
+    if (!timer) {
+      return
+    }
+    clearTimeout(timer)
+    this.codexSubagentPollTimers.delete(paneKey)
+  }
+
+  private scheduleCodexSubagentPoll(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload
+  ): void {
+    // Why: a nested non-codex CLI inherits ORCA_PANE_KEY, so clearing here would silently end a live codex poll.
+    if (source !== 'codex') {
+      return
+    }
+    this.clearCodexSubagentPoll(original.paneKey)
+    if (!hasCodexTranscriptSubagents(this.state, original.paneKey)) {
+      return
+    }
+    const timer = setTimeout(() => {
+      this.codexSubagentPollTimers.delete(original.paneKey)
+      const current = this.state.lastStatusByPaneKey.get(original.paneKey)
+      if (!this.server || current !== original) {
+        return
+      }
+      const normalized = normalizeHookPayload(this.state, source, body, this.env)
+      if (!normalized) {
+        return
+      }
+      const subagentsChanged =
+        JSON.stringify(normalized.payload.subagents) !== JSON.stringify(original.payload.subagents)
+      const next = subagentsChanged ? this.applyNormalizedStatus(normalized) : original
+      this.scheduleCodexSubagentPoll(source, body, next)
+    }, CODEX_SUBAGENT_POLL_MS)
+    this.codexSubagentPollTimers.set(original.paneKey, timer)
+    if (typeof timer.unref === 'function') {
+      timer.unref()
+    }
+  }
+
   private scheduleAssistantMessageRetry(
     source: AgentHookSource,
     body: unknown,
     original: EnrichedAgentHookEventPayload,
-    attempt = 1
+    attempt = 1,
+    discoveryReady = false
   ): void {
     if (
       original.payload.lastAssistantMessage ||
@@ -814,28 +1362,26 @@ export class AgentHookServer {
       return
     }
     this.clearAssistantMessageRetry(original.paneKey)
+    if (!discoveryReady) {
+      const discovery = preparePendingGrokResultDiscovery(source, body)
+      if (discovery) {
+        // Why: slug-group discovery can outlive the bounded flush timers; its completion must drive the first retry deterministically.
+        void discovery
+          .then(() => {
+            if (this.server) {
+              this.applyAssistantMessageRetry(source, body, original, 1, true)
+            }
+          })
+          .catch((err) => {
+            console.error('[agent-hooks] Grok result discovery failed:', err)
+          })
+        return
+      }
+    }
     const timer = setTimeout(() => {
       try {
         this.assistantMessageRetryTimers.delete(original.paneKey)
-        const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
-          | EnrichedAgentHookEventPayload
-          | undefined
-        if (
-          !current ||
-          current.payload.agentType !== original.payload.agentType ||
-          current.payload.prompt !== original.payload.prompt ||
-          current.payload.lastAssistantMessage
-        ) {
-          return
-        }
-        const normalized = normalizeHookPayload(this.state, source, body, this.env)
-        if (!normalized?.payload.lastAssistantMessage) {
-          this.scheduleAssistantMessageRetry(source, body, original, attempt + 1)
-          return
-        }
-        // Why: some agents POST Stop before their transcript/chat-history line
-        // is flushed. Retry from a timer so the hook request returns immediately.
-        this.applyNormalizedStatus(normalized)
+        this.applyAssistantMessageRetry(source, body, original, attempt + 1, discoveryReady)
       } catch (err) {
         console.error('[agent-hooks] assistant message retry failed:', err)
       }
@@ -844,6 +1390,34 @@ export class AgentHookServer {
     if (typeof timer.unref === 'function') {
       timer.unref()
     }
+  }
+
+  private applyAssistantMessageRetry(
+    source: AgentHookSource,
+    body: unknown,
+    original: EnrichedAgentHookEventPayload,
+    nextAttempt: number,
+    requireExactOriginal: boolean
+  ): void {
+    const current = this.state.lastStatusByPaneKey.get(original.paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (
+      !current ||
+      (requireExactOriginal && current !== original) ||
+      current.payload.agentType !== original.payload.agentType ||
+      current.payload.prompt !== original.payload.prompt ||
+      current.payload.lastAssistantMessage
+    ) {
+      return
+    }
+    const normalized = this.normalizeLocalHookPayload(source, body)
+    if (!normalized.event?.payload.lastAssistantMessage) {
+      this.scheduleAssistantMessageRetry(source, body, original, nextAttempt, requireExactOriginal)
+      return
+    }
+    // Why: some agents POST Stop before their transcript line is flushed; discovery is event-driven, later content retries stay timed.
+    this.applyNormalizedStatus(normalized.event, normalized.onAccepted)
   }
 
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
@@ -869,15 +1443,65 @@ export class AgentHookServer {
     this.paneKeyAliasPersistenceListener?.(this.getPersistedPaneKeyAliases())
   }
 
+  private boundPaneKeyAliases(): void {
+    while (this.legacyPaneKeyAliases.size > PANE_KEY_ALIASES_MAX) {
+      // Why: renderer-originated aliases are untrusted; insertion-order eviction bounds memory and per-message cleanup.
+      const oldestKey = this.legacyPaneKeyAliases.keys().next().value
+      if (!oldestKey) {
+        break
+      }
+      this.legacyPaneKeyAliases.delete(oldestKey)
+    }
+  }
+
+  private getPhysicalPaneKeyForAuthority(paneKey: string, ptyId?: string): string {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    let fallbackPaneKey = paneKey
+    for (const [physicalPaneKey, entry] of this.legacyPaneKeyAliases) {
+      if (
+        entry.stablePaneKey === ownerPaneKey &&
+        (!ptyId || !entry.ptyId || entry.ptyId === ptyId)
+      ) {
+        if (entry.authorityVerified) {
+          return physicalPaneKey
+        }
+        fallbackPaneKey = physicalPaneKey
+      }
+    }
+    return fallbackPaneKey
+  }
+
+  canTransferPaneAuthority(
+    fromPaneKey: string,
+    ptyId: string | undefined,
+    ownsPty: (physicalPaneKey: string, ptyId: string) => boolean
+  ): boolean {
+    if (!isValidPaneKey(fromPaneKey)) {
+      return false
+    }
+    const ownerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
+    const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    const alias = this.legacyPaneKeyAliases.get(physicalPaneKey)
+    if (ptyId) {
+      return Boolean(
+        (alias?.authorityVerified && alias.ptyId === ptyId) ||
+        ownsPty(physicalPaneKey, ptyId) ||
+        (ownerPaneKey !== physicalPaneKey && ownsPty(ownerPaneKey, ptyId))
+      )
+    }
+    // Why: hook status is renderer evidence, not PTY ownership; ID-less moves are safe only after a verified transfer minted an alias.
+    return alias?.authorityVerified === true
+  }
+
   registerPaneKeyAlias(
     legacyPaneKey: string,
     stablePaneKey: string,
     ptyId?: string,
     updatedAt = Date.now(),
-    options?: { overwriteExisting?: boolean }
+    options?: { overwriteExisting?: boolean; authorityVerified?: boolean }
   ): void {
     const legacy = parseLegacyNumericPaneKey(legacyPaneKey)
-    const stable = parsePaneKey(stablePaneKey)
+    const stable = isValidPaneKey(stablePaneKey) ? parsePaneKey(stablePaneKey) : null
     if (!legacy || !stable || legacy.tabId !== stable.tabId) {
       return
     }
@@ -889,21 +1513,141 @@ export class AgentHookServer {
       typeof ptyId === 'string' && ptyId.trim().length > 0 ? ptyId.trim() : existing?.ptyId
     const normalizedUpdatedAt =
       Number.isFinite(updatedAt) && updatedAt > 0 ? updatedAt : (existing?.updatedAt ?? Date.now())
+    const authorityVerified = options?.authorityVerified ?? false
     if (
       existing &&
       existing.stablePaneKey === stablePaneKey &&
       existing.ptyId === (normalizedPtyId ?? null) &&
-      existing.updatedAt === normalizedUpdatedAt
+      existing.updatedAt === normalizedUpdatedAt &&
+      existing.authorityVerified === authorityVerified
     ) {
       return
     }
     this.legacyPaneKeyAliases.set(legacy.paneKey, {
       stablePaneKey,
       ptyId: normalizedPtyId ?? null,
-      updatedAt: normalizedUpdatedAt
+      updatedAt: normalizedUpdatedAt,
+      authorityVerified
     })
+    this.boundPaneKeyAliases()
     if (normalizedPtyId) {
       this.notifyPaneKeyAliasPersistenceListener()
+    }
+  }
+
+  transferPaneAuthority(
+    fromPaneKey: string,
+    toPaneKey: string,
+    ptyId?: string,
+    updatedAt = Date.now(),
+    options?: { authorityVerified?: boolean }
+  ): void {
+    if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
+      return
+    }
+    const previousOwnerPaneKey = this.resolvePaneKeyAlias(fromPaneKey)
+    const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
+    const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
+    const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
+    const hadStatus = this.state.lastStatusByPaneKey.has(previousOwnerPaneKey)
+    movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
+    const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (movedStatus) {
+      const owner = parsePaneKey(toPaneKey)
+      this.state.lastStatusByPaneKey.set(toPaneKey, {
+        ...movedStatus,
+        paneKey: toPaneKey,
+        tabId: owner?.tabId
+      })
+    }
+    const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
+    if (hydratedLaunchTokenHash) {
+      this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
+      this.hydratedLaunchTokenHashByPaneKey.set(toPaneKey, hydratedLaunchTokenHash)
+    }
+    const persistedAuthority = this.persistedAuthorityCommitmentsByPaneKey.get(previousOwnerPaneKey)
+    if (persistedAuthority) {
+      const owner = parsePaneKey(toPaneKey)
+      this.persistedAuthorityCommitmentsByPaneKey.delete(previousOwnerPaneKey)
+      this.persistedAuthorityCommitmentsByPaneKey.set(
+        toPaneKey,
+        Object.freeze({
+          ...persistedAuthority,
+          paneKey: toPaneKey,
+          ...(owner?.tabId ? { tabId: owner.tabId } : {})
+        })
+      )
+    }
+    if (this.runtimeObservedStatusPaneKeys.delete(previousOwnerPaneKey)) {
+      this.runtimeObservedStatusPaneKeys.add(toPaneKey)
+    }
+    const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
+    if (authorityObservation) {
+      const owner = parsePaneKey(toPaneKey)
+      this.currentAuthorityObservations.delete(previousOwnerPaneKey)
+      this.currentAuthorityObservations.set(
+        toPaneKey,
+        Object.freeze({
+          ...authorityObservation,
+          paneKey: toPaneKey,
+          tabId: owner?.tabId
+        })
+      )
+    }
+    const promptDedupe = this.promptSentDedupeByPaneKey.get(previousOwnerPaneKey)
+    if (promptDedupe !== undefined) {
+      this.promptSentDedupeByPaneKey.delete(previousOwnerPaneKey)
+      this.promptSentDedupeByPaneKey.set(toPaneKey, promptDedupe)
+    }
+    this.clearAssistantMessageRetry(previousOwnerPaneKey)
+    this.clearCodexSubagentPoll(previousOwnerPaneKey)
+    // Why: the live process keeps posting the physical source key after detach; persist a chain-safe mapping to the current owner.
+    this.legacyPaneKeyAliases.set(physicalPaneKey, {
+      stablePaneKey: toPaneKey,
+      ptyId: normalizedPtyId,
+      updatedAt,
+      authorityVerified: options?.authorityVerified ?? true
+    })
+    this.boundPaneKeyAliases()
+    this.closedAgentStatusPaneKeys.delete(toPaneKey)
+    this.notifyPaneKeyAliasPersistenceListener()
+    if (hadStatus || persistedAuthority) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+  }
+
+  retirePaneAuthority(paneKey: string): void {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const paneKeys = new Set([paneKey, ownerPaneKey])
+    let aliasChanged = false
+    for (const [physicalPaneKey, entry] of this.legacyPaneKeyAliases) {
+      if (physicalPaneKey === paneKey || entry.stablePaneKey === ownerPaneKey) {
+        this.legacyPaneKeyAliases.delete(physicalPaneKey)
+        paneKeys.add(physicalPaneKey)
+        paneKeys.add(entry.stablePaneKey)
+        aliasChanged = true
+      }
+    }
+    const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
+    const hadStatus = [...paneKeys].some((key) => this.state.lastStatusByPaneKey.has(key))
+    for (const key of paneKeys) {
+      this.markPaneClosedForAgentStatus(key)
+      this.clearAssistantMessageRetry(key)
+      this.clearCodexSubagentPoll(key)
+      clearPaneCacheState(this.state, key)
+      this.runtimeObservedStatusPaneKeys.delete(key)
+      this.currentAuthorityObservations.delete(key)
+      this.promptSentDedupeByPaneKey.delete(key)
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    if (hadStatus || authorityChanged) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
     }
   }
 
@@ -916,21 +1660,28 @@ export class AgentHookServer {
     const clearedStatusPaneKeys = new Set<string>()
     for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
       if (entry.ptyId === ptyId) {
-        this.legacyPaneKeyAliases.delete(legacyPaneKey)
-        clearPaneCacheState(this.state, legacyPaneKey)
-        this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         const shouldClearStablePaneKey =
           options?.shouldClearStablePaneKey?.(entry.stablePaneKey) ?? true
+        const revokedPaneKeys = new Set([legacyPaneKey])
+        if (shouldClearStablePaneKey) {
+          revokedPaneKeys.add(entry.stablePaneKey)
+        }
+        if (this.revokeHydratedAuthorityForPaneKeys(revokedPaneKeys)) {
+          statusChanged = true
+        }
+        this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        clearPaneCacheState(this.state, legacyPaneKey)
+        this.currentAuthorityObservations.delete(legacyPaneKey)
+        this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         if (shouldClearStablePaneKey && this.state.lastStatusByPaneKey.has(entry.stablePaneKey)) {
           statusChanged = true
           clearedStatusPaneKeys.add(entry.stablePaneKey)
         }
         if (shouldClearStablePaneKey) {
-          // Why: after hydrate, legacy rows are stored under the stable key. If
-          // this PTY is later proven dead before ptyPaneKey is rebuilt, alias
-          // cleanup is the only path that can evict that retained status.
+          // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
           clearPaneCacheState(this.state, entry.stablePaneKey)
           this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
+          this.currentAuthorityObservations.delete(entry.stablePaneKey)
           this.promptSentDedupeByPaneKey.delete(entry.stablePaneKey)
         }
         aliasChanged = true
@@ -943,13 +1694,34 @@ export class AgentHookServer {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
       for (const paneKey of clearedStatusPaneKeys) {
-        this.onPaneStatusCleared?.(paneKey)
+        this.emitPaneStatusCleared({ paneKey })
       }
     }
   }
 
   private resolvePaneKeyAlias(paneKey: string): string {
     return this.legacyPaneKeyAliases.get(paneKey)?.stablePaneKey ?? paneKey
+  }
+
+  private revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean {
+    let changed = false
+    for (const commitment of this.hydratedAuthorityCommitments) {
+      if (
+        paneKeys.has(commitment.paneKey) ||
+        paneKeys.has(this.resolvePaneKeyAlias(commitment.paneKey))
+      ) {
+        this.revokedHydratedAuthorityCommitments.add(commitment)
+        changed = true
+      }
+    }
+    for (const paneKey of paneKeys) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      changed = this.hydratedLaunchTokenHashByPaneKey.delete(paneKey) || changed
+      changed = this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey) || changed
+      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(paneKey) || changed
+      changed = this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey) || changed
+    }
+    return changed
   }
 
   private normalizeHookBodyPaneKeyAlias(body: unknown): unknown {
@@ -962,10 +1734,50 @@ export class AgentHookServer {
     if (!stablePaneKey) {
       return body
     }
-    // Why: pre-migration live shells keep posting their immutable numeric
-    // ORCA_PANE_KEY. The reattach path proves the UUID leaf once, then this
-    // bridge lets hook caches and renderer state use only the stable key.
-    return { ...record, paneKey: stablePaneKey }
+    // Why: detached shells keep posting the immutable physical pane key; normalize pane and tab identity to the current owner.
+    return { ...record, paneKey: stablePaneKey, tabId: parsePaneKey(stablePaneKey)?.tabId }
+  }
+
+  private normalizeLocalHookPayload(source: AgentHookSource, body: unknown): NormalizedLocalHook {
+    if (source !== 'claude' || typeof body !== 'object' || body === null) {
+      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+    }
+    const rawPaneKey = (body as Record<string, unknown>).paneKey
+    const paneKey = typeof rawPaneKey === 'string' ? rawPaneKey.trim() : ''
+    if (!paneKey) {
+      return { event: normalizeHookPayload(this.state, source, body, this.env) }
+    }
+    const previousRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const previousActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    const event = normalizeHookPayload(this.state, source, body, this.env)
+    const nextRunningTask = this.state.claudeRunningNonAgentTaskPaneKeys.has(paneKey)
+    const nextActiveCron = this.state.claudeActiveSessionCronPaneKeys.has(paneKey)
+    this.setClaudeBackgroundEvidence(paneKey, previousRunningTask, previousActiveCron)
+    if (!event || event.paneKey !== paneKey) {
+      return { event }
+    }
+    // Why: nested CLIs may inherit the pane key; only accepted statuses may mutate its background-work gate.
+    return {
+      event,
+      onAccepted: () => this.setClaudeBackgroundEvidence(paneKey, nextRunningTask, nextActiveCron)
+    }
+  }
+
+  private setClaudeBackgroundEvidence(
+    paneKey: string,
+    hasRunningTask: boolean,
+    hasActiveCron: boolean
+  ): void {
+    if (hasRunningTask) {
+      this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+    } else {
+      this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+    }
+    if (hasActiveCron) {
+      this.state.claudeActiveSessionCronPaneKeys.add(paneKey)
+    } else {
+      this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+    }
   }
 
   ingestTerminalStatus(event: {
@@ -975,7 +1787,8 @@ export class AgentHookServer {
     connectionId?: string | null
     payload: ParsedAgentStatusPayload
   }): void {
-    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
+    const physicalPaneKey = event.paneKey.trim()
+    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
@@ -984,12 +1797,17 @@ export class AgentHookServer {
     if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
       return
     }
-    const tabId =
+    const reportedTabId =
       event.tabId !== undefined && event.tabId.trim().length > 0 ? event.tabId.trim() : undefined
-    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+    if (
+      paneKey === physicalPaneKey &&
+      reportedTabId !== undefined &&
+      reportedTabId !== parsedPaneKey.tabId
+    ) {
       return
     }
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
     const worktreeId =
@@ -1004,6 +1822,7 @@ export class AgentHookServer {
       | EnrichedAgentHookEventPayload
       | undefined
     if (
+      !previous?.restoredUnconfirmed &&
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
@@ -1011,26 +1830,36 @@ export class AgentHookServer {
     ) {
       return
     }
-    // Why: OSC terminal status is a runtime/model observation, not a hook
-    // prompt boundary. Keep prompt-sent telemetry tied to native hooks.
+    // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
+    // never evidence that the session ended — yet overwriting the row dropped the cached identity.
+    // That erased it from persisted rows (lost across restart) and from headless `orca serve`, which
+    // serves these rows to mobile directly instead of the renderer store, blanking Chat UI (#10630).
+    // A new turn after `done` still starts clean so a reused pane cannot inherit a finished session.
+    // Why: mirror resolveAgentStatusIdentity, which treats a literal 'unknown' exactly like an
+    // omitted type — an OSC ping that names no agent makes no claim about the pane's identity, so
+    // it must not be read as a mismatch and strip the session the renderer would have kept.
+    const claimedAgentType =
+      event.payload.agentType && event.payload.agentType !== 'unknown'
+        ? event.payload.agentType
+        : undefined
+    const preservedProviderSession =
+      previous?.providerSession &&
+      (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
+      (previous.payload.state !== 'done' || event.payload.state === 'done')
+        ? previous.providerSession
+        : undefined
+    // Why: OSC status is a runtime observation, not a prompt boundary; keep prompt-sent telemetry tied to native hooks.
     this.applyNormalizedStatus({
       paneKey,
       tabId,
       worktreeId,
       connectionId,
+      ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
       payload: event.payload
     })
   }
 
-  /** Ingest a payload that arrived over the relay JSON-RPC channel rather
-   *  than the local HTTP server. `connectionId` is the SshChannelMultiplexer
-   *  identity Orca holds (the wire envelope carries connectionId: null and
-   *  Orca stamps the real value here). The relay has already normalized the
-   *  payload via the shared listener module, but main is still the SSH trust
-   *  boundary: re-run the canonical status normalizer before caching or
-   *  persisting anything. The `env`/`version` fields are forwarded verbatim
-   *  from the agent CLI's POST body on the remote and validated here so the
-   *  warn-once diagnostics fire for real cross-build mismatches. */
+  /** Ingest a payload from the relay JSON-RPC channel (not the local HTTP server); connectionId is stamped here. Main is still the SSH trust boundary, so re-run the canonical normalizer before caching. */
   ingestRemote(
     envelope: {
       paneKey: string
@@ -1042,18 +1871,23 @@ export class AgentHookServer {
       hasExplicitPrompt?: boolean
       promptInteractionKey?: string
       hookEventName?: string
+      source?: unknown
+      providerPromptId?: unknown
+      compactTrigger?: unknown
       toolUseId?: string
       toolAgentId?: string
       toolAgentType?: string
       providerSession?: unknown
+      providerSessionOnly?: unknown
       isReplay?: boolean
+      /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+      shedFields?: unknown
+      claudeRunningNonAgentTask?: unknown
       payload: unknown
     },
     connectionId: string
   ): void {
-    // Why: signature says non-empty, but the wire crosses a trust boundary —
-    // re-check at runtime (and trim) so a whitespace-only or empty
-    // connectionId can't poison caches.
+    // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
     if (typeof connectionId !== 'string') {
       return
     }
@@ -1064,10 +1898,9 @@ export class AgentHookServer {
     if (!envelope || typeof envelope.paneKey !== 'string') {
       return
     }
-    // Why: match the listener's HTTP path — `normalizeHookPayload` trims and
-    // length-caps paneKey before caching, so the cache key here must follow
-    // the same rule or remote-vs-local events for the same pane would diverge.
-    const paneKey = this.resolvePaneKeyAlias(envelope.paneKey.trim())
+    // Why: trim paneKey to match the HTTP path, else remote-vs-local events for one pane diverge.
+    const physicalPaneKey = envelope.paneKey.trim()
+    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
@@ -1085,26 +1918,41 @@ export class AgentHookServer {
     if (envelope.worktreeId !== undefined && typeof envelope.worktreeId !== 'string') {
       return
     }
-    // Why: mirror the HTTP path's `readStringField` behavior — trim and treat
-    // empty-after-trim as undefined rather than letting a literal "" leak
-    // into the event.
-    const tabId =
+    // Why: mirror the HTTP path's readStringField — trim and treat empty-after-trim as undefined.
+    const reportedTabId =
       envelope.tabId !== undefined && envelope.tabId.trim().length > 0
         ? envelope.tabId.trim()
         : undefined
-    if (tabId !== undefined && tabId !== parsedPaneKey.tabId) {
+    if (
+      paneKey === physicalPaneKey &&
+      reportedTabId !== undefined &&
+      reportedTabId !== parsedPaneKey.tabId
+    ) {
       return
     }
-    if (this.shouldSuppressClosedTabStatus(paneKey)) {
+    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    const hookEventName =
+      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
+        ? envelope.hookEventName.trim()
+        : undefined
+    const source = isAgentHookSource(envelope.source) ? envelope.source : undefined
+    const providerPromptId =
+      source === 'claude' ? normalizeClaudePromptId(envelope.providerPromptId) : undefined
+    const compactTrigger =
+      source === 'claude' &&
+      (envelope.compactTrigger === 'manual' || envelope.compactTrigger === 'auto')
+        ? envelope.compactTrigger
+        : undefined
+    const statusDisposition = this.getAgentStatusDisposition(paneKey, {
+      hookEventName,
+      isReplay: envelope.isReplay === true
+    })
+    if (statusDisposition === 'suppress') {
       return
     }
     const worktreeId =
       envelope.worktreeId !== undefined && envelope.worktreeId.trim().length > 0
         ? envelope.worktreeId.trim()
-        : undefined
-    const hookEventName =
-      typeof envelope.hookEventName === 'string' && envelope.hookEventName.trim().length > 0
-        ? envelope.hookEventName.trim()
         : undefined
     const promptInteractionKey =
       typeof envelope.promptInteractionKey === 'string' &&
@@ -1124,19 +1972,68 @@ export class AgentHookServer {
         ? envelope.toolAgentType.trim()
         : undefined
     const providerSession = normalizeAgentProviderSession(envelope.providerSession) ?? undefined
-    // Why: the relay is across a trust boundary; re-run the canonical
-    // normalizer on the inner payload so prompt/agentType/toolName/toolInput
-    // length caps, embedded-newline collapse, and the `interrupted`-only-on-
-    // done invariant are enforced here too. Returns null on malformed input
-    // (including invalid state), which subsumes the prior explicit state
-    // check.
-    const normalizedPayload = normalizeAgentStatusPayload(envelope.payload)
-    if (!normalizedPayload) {
+    // Why: relay crosses a trust boundary — re-run the canonical normalizer to enforce caps/invariants (returns null on malformed).
+    const validatedPayload = normalizeAgentStatusPayload(envelope.payload)
+    if (!validatedPayload) {
       return
     }
-    // Why: run the same warn-once diagnostics the HTTP path runs (cross-build
-    // version mismatch, dev-vs-prod env mismatch). Use `this.env` as the
-    // expected env so the messages match what the local server produces.
+    // Why: restore a shed roster only when its digest and turn identity still match the cache.
+    let normalizedPayload = restoreShedStatusFields(
+      validatedPayload,
+      envelope.shedFields,
+      this.state.lastStatusByPaneKey.get(paneKey)?.payload
+    )
+    const previousStatus = this.state.lastStatusByPaneKey.get(paneKey)
+    if (hookEventName === 'PreCompact' || hookEventName === 'PostCompact') {
+      if (
+        source !== 'claude' ||
+        compactTrigger === undefined ||
+        normalizedPayload.agentType !== source
+      ) {
+        return
+      }
+      if (
+        hookEventName === 'PreCompact' &&
+        envelope.isReplay === true &&
+        (previousStatus?.hookEventName !== 'PreCompact' ||
+          previousStatus.compactTrigger !== compactTrigger ||
+          previousStatus.providerPromptId !== providerPromptId)
+      ) {
+        return
+      }
+      if (
+        !canAcceptClaudeCompactTransition(previousStatus, {
+          source,
+          connectionId: trimmedConnectionId,
+          hookEventName,
+          providerPromptId,
+          compactTrigger,
+          providerSession
+        })
+      ) {
+        return
+      }
+    }
+    if (
+      source === 'claude' &&
+      compactTrigger !== undefined &&
+      normalizedPayload.prompt.length === 0 &&
+      previousStatus?.payload.prompt
+    ) {
+      normalizedPayload = { ...normalizedPayload, prompt: previousStatus.payload.prompt }
+    }
+    if (
+      envelope.providerSessionOnly === true &&
+      !isValidPiProviderSessionOnly(providerSession, normalizedPayload.agentType)
+    ) {
+      return
+    }
+    const applyClaudeBackgroundWork =
+      normalizedPayload.agentType === 'claude' &&
+      typeof envelope.claudeRunningNonAgentTask === 'boolean' &&
+      // Why: reconnect replay may seed a restarted listener, but cannot override any observation made by this runtime.
+      (envelope.isReplay !== true || !this.runtimeObservedStatusPaneKeys.has(paneKey))
+    // Why: run the HTTP path's warn-once version/env-mismatch diagnostics with this.env as expected.
     warnOnHookEnvOrVersionMismatch(this.state, {
       version: envelope.version,
       env: envelope.env,
@@ -1144,21 +2041,41 @@ export class AgentHookServer {
     })
     const event: AgentHookEventPayload = {
       paneKey,
-      launchToken: envelope.launchToken,
+      source,
+      launchToken: statusDisposition === 'restart' ? undefined : envelope.launchToken,
       tabId,
       worktreeId,
       connectionId: trimmedConnectionId,
       hasExplicitPrompt: envelope.hasExplicitPrompt === true ? true : undefined,
       promptInteractionKey,
       hookEventName,
+      providerPromptId,
+      compactTrigger,
       toolUseId,
       toolAgentId,
       toolAgentType,
       providerSession,
+      providerSessionOnly: envelope.providerSessionOnly === true ? true : undefined,
       isReplay: envelope.isReplay === true ? true : undefined,
+      claudeRunningNonAgentTask:
+        typeof envelope.claudeRunningNonAgentTask === 'boolean'
+          ? envelope.claudeRunningNonAgentTask
+          : undefined,
       payload: normalizedPayload
     }
-    this.applyNormalizedStatus(event)
+    this.recordCurrentAuthorityObservation(event)
+    this.applyNormalizedStatus(
+      event,
+      applyClaudeBackgroundWork
+        ? () => {
+            if (envelope.claudeRunningNonAgentTask) {
+              this.state.claudeRunningNonAgentTaskPaneKeys.add(paneKey)
+            } else {
+              this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+            }
+          }
+        : undefined
+    )
   }
 
   async start(options?: {
@@ -1174,9 +2091,7 @@ export class AgentHookServer {
       this.env = options.env
     }
     if (options?.userDataPath) {
-      // Why: dev builds share one userData path, so callers can namespace the
-      // endpoint file by dev instance while packaged builds keep the stable path
-      // that lets long-lived PTYs reconnect after app restart.
+      // Why: dev builds share one userData path; namespace per instance while packaged keeps the stable path for PTY reconnect.
       this.endpointDir = options.endpointNamespace
         ? join(options.userDataPath, 'agent-hooks', options.endpointNamespace)
         : join(options.userDataPath, 'agent-hooks')
@@ -1186,14 +2101,12 @@ export class AgentHookServer {
     this.token = randomUUID()
     this.endpointFileWritten = false
     this.lastWrittenJson = null
-    // Why: hydrate before binding the HTTP listener so any new hook POST
-    // (which goes through state.lastStatusByPaneKey.set) runs against an
-    // already-populated map. The renderer later pulls this map as a snapshot
-    // after workspace tabs are hydrated.
+    // Why: hydrate before binding the listener so an early hook POST runs against a populated map.
     if (this.lastStatusFilePath) {
       this.hydrateLastStatusFromDisk()
     }
-    this.server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    this.captureHydratedAuthorityCommitments()
+    const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
         res.end()
@@ -1206,9 +2119,7 @@ export class AgentHookServer {
         return
       }
 
-      // Why: bound request time so a slow/stalled client cannot hold a socket
-      // open indefinitely (slowloris-style). The hook endpoints are local and
-      // should complete in well under a second.
+      // Why: bound request time so a stalled client can't hold a socket open (slowloris).
       req.setTimeout(HOOK_REQUEST_SLOWLORIS_MS, () => {
         req.destroy()
       })
@@ -1216,6 +2127,15 @@ export class AgentHookServer {
       try {
         const body = await readRequestBody(req)
         const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
+        if (pathname === CLAUDE_STATUSLINE_PATHNAME) {
+          const statusLineEvent = parseClaudeStatusLineBody(body)
+          if (statusLineEvent) {
+            this.onClaudeStatusLine?.(statusLineEvent)
+          }
+          res.writeHead(204)
+          res.end()
+          return
+        }
         const source = resolveHookSource(pathname)
         if (!source) {
           res.writeHead(404)
@@ -1225,26 +2145,39 @@ export class AgentHookServer {
 
         trackEmptyPaneKeyHook(body)
         const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
-        const normalized = normalizeHookPayload(this.state, source, aliasedBody, this.env)
-        if (normalized && !this.shouldSuppressClosedTabStatus(normalized.paneKey)) {
-          const enriched = this.applyNormalizedStatus(normalized)
+        const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
+        const statusDisposition = normalized.event
+          ? this.getAgentStatusDisposition(normalized.event.paneKey, {
+              hookEventName: normalized.event.hookEventName,
+              isReplay: normalized.event.isReplay
+            })
+          : 'suppress'
+        if (normalized.event && statusDisposition !== 'suppress') {
+          const event =
+            statusDisposition === 'restart'
+              ? { ...normalized.event, launchToken: undefined }
+              : normalized.event
+          this.recordCurrentAuthorityObservation(event)
+          const enriched = this.applyNormalizedStatus(event, normalized.onAccepted)
           this.scheduleAssistantMessageRetry(source, aliasedBody, enriched)
+          this.scheduleCodexSubagentPoll(source, aliasedBody, enriched)
         }
 
         res.writeHead(204)
         res.end()
       } catch {
-        // Why: agent hooks must fail open. The receiver returns success for
-        // malformed payloads so a newer or broken hook never blocks the agent.
+        // Why: fail open — return success on malformed payloads so a broken hook never blocks the agent.
         res.writeHead(204)
         res.end()
       }
+    }
+    // Why: node ignores a returned promise, so the handler must settle it itself; handleRequest never rejects.
+    this.server = createServer((req, res) => {
+      void handleRequest(req, res)
     })
 
     await new Promise<void>((resolve, reject) => {
-      // Why: swap the startup error handler on success so a later runtime
-      // error (e.g. EADDRINUSE during rebind, socket errors) doesn't reject
-      // an already-settled promise or crash the main process as unhandled.
+      // Why: swap the startup reject-handler for a logging one so a later runtime 'error' can't crash main as an unhandled event.
       const onStartupError = (err: Error): void => {
         this.server?.off('listening', onListening)
         reject(err)
@@ -1267,11 +2200,7 @@ export class AgentHookServer {
   }
 
   stop(): void {
-    // Why: flush any pending debounced write to disk BEFORE we clear the
-    // in-memory map. Quit-time state must be captured even if the trailing
-    // timer was scheduled but had not yet fired; otherwise a multi-agent
-    // run that ended its last hook event <250 ms before quit would lose
-    // that final delta on relaunch.
+    // Why: flush the pending debounced write before clearing the map, else a hook <250ms before quit is lost on relaunch.
     this.flushStatusPersistSync()
     this.server?.close()
     this.server = null
@@ -1284,43 +2213,128 @@ export class AgentHookServer {
       clearTimeout(timer)
     }
     this.assistantMessageRetryTimers.clear()
-    // Why: intentionally do NOT delete the endpoint file on stop(). A stale
-    // file points at a dead port, which matches the fail-open policy. Unlink
-    // would introduce a TOCTOU race vs. a concurrent Orca instance.
+    for (const timer of this.codexSubagentPollTimers.values()) {
+      clearTimeout(timer)
+    }
+    this.codexSubagentPollTimers.clear()
+    // Why: don't unlink the endpoint file — a stale file matches fail-open and avoids a TOCTOU race with a concurrent Orca.
     this.endpointDir = null
     this.endpointFilePathCache = null
     this.endpointFileWritten = false
     this.lastStatusFilePath = null
     this.lastWrittenJson = null
     this.runtimeObservedStatusPaneKeys.clear()
+    this.hydratedAuthorityCommitments = Object.freeze([])
+    this.hydratedLaunchTokenHashByPaneKey.clear()
+    this.persistedAuthorityCommitmentsByPaneKey.clear()
+    this.revokedHydratedAuthorityCommitments = new WeakSet()
+    this.currentAuthorityObservations.clear()
     this.promptSentDedupeByPaneKey.clear()
     this.closedAgentStatusTabIds.clear()
+    this.closedAgentStatusPaneKeys.clear()
+    this.connectionTimestampWatermarkById.clear()
     this.legacyPaneKeyAliases.clear()
     clearAllListenerCaches(this.state)
     this.notifyStatusChangeListeners()
   }
 
-  /** Why: invoked from the renderer-driven agentStatus:drop IPC when a user
-   *  dismisses a still-active pane's status row. We must NOT wipe
-   *  lastPromptByPaneKey or lastToolByPaneKey here — the pane's agent may
-   *  still be alive, and the next hook event would otherwise arrive with an
-   *  empty prompt and missing tool snapshot until a fresh UserPromptSubmit
-   *  lands. clearPaneState (which wipes all three caches) is the right shape
-   *  only for PTY-teardown. */
+  /** Drop only the status row (user dismissal); do NOT wipe prompt/tool caches since the pane's agent may still be alive. Use clearPaneState for PTY-teardown. */
   dropStatusEntry(paneKey: string): void {
-    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-    if (!this.state.lastStatusByPaneKey.has(resolvedPaneKey)) {
+    const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+    if (!deleted) {
       return
     }
-    const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey)
-    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
-    this.clearAssistantMessageRetry(resolvedPaneKey)
-    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
-    if (existing?.payload.state === 'done') {
-      this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
+    if (
+      deleted.providerSession &&
+      deleted.payload.agentType &&
+      deleted.payload.agentType !== 'unknown'
+    ) {
+      const retained: EnrichedAgentHookEventPayload = {
+        ...deleted,
+        providerSessionOnly: true,
+        retainedForLiveness: true
+      }
+      this.state.lastStatusByPaneKey.set(deleted.paneKey, retained)
     }
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
+  }
+
+  /** Clear statuses proven to belong to one lost SSH transport. */
+  clearStatusEntriesForConnection(connectionId: string): void {
+    const normalizedConnectionId = connectionId.trim()
+    if (normalizedConnectionId.length === 0) {
+      return
+    }
+    const clearedAt = Math.max(
+      Date.now(),
+      (this.connectionTimestampWatermarkById.get(normalizedConnectionId) ?? -1) + 1
+    )
+    this.connectionTimestampWatermarkById.set(normalizedConnectionId, clearedAt)
+    let statusChanged = false
+    for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
+      const entry = rawEntry as EnrichedAgentHookEventPayload
+      // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
+      if (entry.connectionId !== normalizedConnectionId) {
+        continue
+      }
+      const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })
+      if (deleted) {
+        statusChanged = true
+        if (deleted.payload.agentType === 'codex') {
+          // Why: a replacement remote process may reuse the pane; don't merge it with the lost connection's children.
+          this.state.codexSubagentRosterByPaneKey.delete(paneKey)
+          this.state.codexLeadStateByPaneKey.delete(paneKey)
+        } else if (deleted.payload.agentType === 'claude') {
+          this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
+          this.state.claudeLeadStateByPaneKey.delete(paneKey)
+          this.state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
+          this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
+        }
+      }
+    }
+    for (const [paneKey, evidence] of this.currentAuthorityObservations) {
+      if (evidence.connectionId === normalizedConnectionId) {
+        this.currentAuthorityObservations.delete(paneKey)
+      }
+    }
+    if (statusChanged) {
+      // Why: persist/notify once — one disconnect can own many panes.
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+    // Why: always send the cutoff even with no matched entry — another host may have overwritten this pane's row.
+    this.emitPaneStatusCleared({
+      transient: true,
+      connectionId: normalizedConnectionId,
+      clearedAt
+    })
+  }
+
+  private deleteStatusEntry(
+    paneKey: string,
+    options?: { preserveAuthority?: boolean }
+  ): EnrichedAgentHookEventPayload | null {
+    const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const existing = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    if (!existing) {
+      return null
+    }
+    this.state.lastStatusByPaneKey.delete(resolvedPaneKey)
+    if (!options?.preserveAuthority) {
+      this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
+      this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+    }
+    this.clearAssistantMessageRetry(resolvedPaneKey)
+    this.clearCodexSubagentPoll(resolvedPaneKey)
+    this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
+    this.currentAuthorityObservations.delete(resolvedPaneKey)
+    if (existing.payload.state === 'done') {
+      this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
+    }
+    return existing
   }
 
   dropStatusEntriesByTabPrefix(tabId: string): void {
@@ -1361,19 +2375,25 @@ export class AgentHookServer {
         paneKeysToClear.add(paneKey)
       }
     }
+    for (const commitment of this.hydratedAuthorityCommitments) {
+      if (paneCacheKeyMatchesTab(commitment.paneKey, tabId)) {
+        paneKeysToClear.add(commitment.paneKey)
+      }
+    }
 
     let aliasChanged = false
     for (const [legacyPaneKey, entry] of this.legacyPaneKeyAliases) {
-      if (
-        paneCacheKeyMatchesTab(legacyPaneKey, tabId) ||
-        paneCacheKeyMatchesTab(entry.stablePaneKey, tabId)
-      ) {
+      const ownerMatches = paneCacheKeyMatchesTab(entry.stablePaneKey, tabId)
+      if (ownerMatches) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
         paneKeysToClear.add(legacyPaneKey)
         paneKeysToClear.add(entry.stablePaneKey)
+        this.markPaneClosedForAgentStatus(legacyPaneKey)
+        this.markPaneClosedForAgentStatus(entry.stablePaneKey)
         aliasChanged = true
       }
     }
+    const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeysToClear)
 
     let statusChanged = false
     for (const paneKey of paneKeysToClear) {
@@ -1381,14 +2401,16 @@ export class AgentHookServer {
         statusChanged = true
       }
       this.clearAssistantMessageRetry(paneKey)
+      this.clearCodexSubagentPoll(paneKey)
       clearPaneCacheState(this.state, paneKey)
       this.runtimeObservedStatusPaneKeys.delete(paneKey)
+      this.currentAuthorityObservations.delete(paneKey)
       this.promptSentDedupeByPaneKey.delete(paneKey)
     }
     if (aliasChanged) {
       this.notifyPaneKeyAliasPersistenceListener()
     }
-    if (statusChanged) {
+    if (statusChanged || authorityChanged) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
     }
@@ -1396,32 +2418,125 @@ export class AgentHookServer {
 
   clearPaneState(paneKey: string): void {
     const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-    // Why: only schedule a write when we actually evicted a status entry —
-    // dropping prompt/tool caches for a pane that never produced a hook
-    // event does not change the on-disk file, and skipping the write avoids
-    // re-stat'ing on every dead-pane teardown.
+    const paneKeys = new Set([paneKey, resolvedPaneKey])
+    // Why: only persist when a status entry was actually evicted; dropping prompt/tool caches doesn't change the file.
     const hadStatus = this.state.lastStatusByPaneKey.has(resolvedPaneKey)
     this.clearAssistantMessageRetry(resolvedPaneKey)
+    this.clearCodexSubagentPoll(resolvedPaneKey)
     clearPaneCacheState(this.state, resolvedPaneKey)
+    this.currentAuthorityObservations.delete(resolvedPaneKey)
     this.promptSentDedupeByPaneKey.delete(resolvedPaneKey)
     let clearedAlias = false
     for (const [legacyPaneKey, stablePaneKey] of this.legacyPaneKeyAliases) {
       if (stablePaneKey.stablePaneKey === resolvedPaneKey) {
         this.legacyPaneKeyAliases.delete(legacyPaneKey)
+        paneKeys.add(legacyPaneKey)
+        paneKeys.add(stablePaneKey.stablePaneKey)
         clearPaneCacheState(this.state, legacyPaneKey)
+        this.currentAuthorityObservations.delete(legacyPaneKey)
         this.promptSentDedupeByPaneKey.delete(legacyPaneKey)
         clearedAlias = true
       }
     }
+    const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
     if (clearedAlias) {
       this.notifyPaneKeyAliasPersistenceListener()
     }
-    if (hadStatus) {
+    if (hadStatus || authorityChanged) {
       this.runtimeObservedStatusPaneKeys.delete(resolvedPaneKey)
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()
-      this.onPaneStatusCleared?.(resolvedPaneKey)
+      this.emitPaneStatusCleared({ paneKey: resolvedPaneKey })
     }
+  }
+
+  /** Second reap path for restored Claude subagent rows: drop the ones whose pane
+   *  has no live local agent process behind it any more. A PTY that dies while Orca
+   *  is down never runs the teardown that clears pane state, so hydrate rebuilds a
+   *  roster nothing can ever retire — the inventory reap needs the parent to emit a
+   *  complete `background_tasks` list and an idle parent never does. The row then
+   *  gates the pane 'working' for the rest of its life and hibernation, which
+   *  requires 'done', can never reclaim the agent's heap.
+   *
+   *  Both the execution host and relay binding must prove local ownership before
+   *  targeted PTY liveness is consulted. Panes that reported in this runtime are
+   *  also skipped. Returns the number of panes changed. */
+  async reapRestoredClaudeSubagentsWithoutLiveAgent(
+    isLocalExecutionHost: (worktreeId: string | undefined) => boolean,
+    isLocalPaneAgentLive: (paneKey: string) => Promise<boolean>,
+    isLocalPaneLivenessEvidenceCurrent: (paneKey: string) => boolean
+  ): Promise<number> {
+    const candidates: { paneKey: string; entry: EnrichedAgentHookEventPayload }[] = []
+    for (const [paneKey, entry] of this.state.lastStatusByPaneKey) {
+      const enriched = entry as EnrichedAgentHookEventPayload
+      if (
+        enriched.payload.agentType === 'claude' &&
+        enriched.connectionId === null &&
+        isLocalExecutionHost(enriched.worktreeId) &&
+        claudeRosterHasRestoredSnapshotSubagent(
+          this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+        ) &&
+        !this.runtimeObservedStatusPaneKeys.has(paneKey)
+      ) {
+        candidates.push({ paneKey, entry: enriched })
+      }
+    }
+    const liveness = await Promise.all(
+      candidates.map(async (candidate) => {
+        try {
+          return await isLocalPaneAgentLive(candidate.paneKey)
+        } catch {
+          return true
+        }
+      })
+    )
+    let changedPanes = 0
+    for (const [index, candidate] of candidates.entries()) {
+      const { paneKey, entry: enriched } = candidate
+      if (
+        liveness[index] ||
+        !isLocalPaneLivenessEvidenceCurrent(paneKey) ||
+        this.state.lastStatusByPaneKey.get(paneKey) !== enriched ||
+        this.runtimeObservedStatusPaneKeys.has(paneKey) ||
+        !isLocalExecutionHost(enriched.worktreeId)
+      ) {
+        continue
+      }
+      if (!reapRestoredClaudeSubagentsForDeadPane(this.state, paneKey)) {
+        continue
+      }
+      changedPanes += 1
+      const roster = this.state.claudeSubagentRosterByPaneKey.get(paneKey)
+      const subagents = claudeRosterToSnapshots(roster)
+      // Why: the pane's persisted 'working' was the child gate holding a finished
+      // lead open (subagent events never set lead state). With the last working row
+      // gone and no process left to report, 'done' is the only truthful state — and
+      // the one hibernation needs once this pane's agent is restored.
+      const state =
+        enriched.payload.state === 'working' && !claudeRosterHasWorkingSubagent(roster)
+          ? 'done'
+          : enriched.payload.state
+      const stateChanged = state !== enriched.payload.state
+      const reconciledAt = stateChanged
+        ? Math.max(Date.now(), enriched.receivedAt + 1)
+        : enriched.receivedAt
+      // Why: a reconciled `done` is process-probe-verified, not hydrated guesswork — carrying
+      // restoredUnconfirmed onto it would make freshness gates suppress a legitimate completion.
+      const { restoredUnconfirmed, ...reconciledBase } = enriched
+      const reconciled: EnrichedAgentHookEventPayload = {
+        ...reconciledBase,
+        ...(state !== 'done' && restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+        receivedAt: reconciledAt,
+        stateStartedAt: stateChanged ? reconciledAt : enriched.stateStartedAt,
+        payload: { ...enriched.payload, state, subagents }
+      }
+      this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+    }
+    if (changedPanes > 0) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+    }
+    return changedPanes
   }
 
   buildPtyEnv(): Record<string, string> {
@@ -1435,9 +2550,7 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_ENV: this.env,
       ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
     }
-    // Why: managed hooks source this file at invocation time. Packaged builds
-    // use a stable file for restart handoff; dev callers pass a per-instance
-    // namespace so parallel `pnpm dev` runs do not steal each other's hooks.
+    // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
       env.ORCA_AGENT_HOOK_ENDPOINT = this.endpointFilePathCache
     }
@@ -1471,17 +2584,15 @@ export class AgentHookServer {
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: defensive — keeps hydrate idempotent against repeated start()
-    // calls; production callers always have an empty map here, but a future
-    // re-start path must not silently merge prior-session state.
+    // Why: keep hydrate idempotent so a future re-start path can't merge prior-session state.
     this.state.lastStatusByPaneKey.clear()
+    this.hydratedLaunchTokenHashByPaneKey.clear()
+    this.persistedAuthorityCommitmentsByPaneKey.clear()
     let raw: string
     try {
       raw = readFileSync(this.lastStatusFilePath, 'utf8')
     } catch (err) {
-      // Why: missing file is the common case (first launch).
-      // Other errors (EACCES, etc.) degrade to empty hydration with a single
-      // warn so the dashboard renders normally.
+      // Why: missing file is normal (first launch); other errors degrade to empty hydration + one warn.
       if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
         console.warn('[agent-hooks] failed to read last-status file:', err)
       }
@@ -1514,10 +2625,9 @@ export class AgentHookServer {
     }
     let hydrated = 0
     let dropped = 0
-    // Why: bound disk growth — drop anything older than HYDRATE_MAX_AGE_MS so
-    // entries from worktrees archived weeks ago do not pile up forever. Use
-    // Date.now() once to keep the cutoff consistent across all entries this
-    // tick.
+    let prunedLegacyClaudeSubagents = 0
+    let scrubbedLegacyLaunchTokens = 0
+    // Why: drop entries older than HYDRATE_MAX_AGE_MS to bound disk growth (one Date.now() for a consistent cutoff).
     const ttlCutoff = Date.now() - HYDRATE_MAX_AGE_MS
     for (const [paneKey, rawEntry] of Object.entries(entries)) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
@@ -1527,45 +2637,175 @@ export class AgentHookServer {
           : { ...(rawEntry as Record<string, unknown>), paneKey: resolvedPaneKey }
       const entry = sanitizeHydratedEntry(resolvedPaneKey, rawResolvedEntry)
       if (entry && entry.receivedAt >= ttlCutoff) {
+        const launchTokenHash = readPersistedLaunchTokenHash(rawResolvedEntry)
+        if (launchTokenHash) {
+          this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, launchTokenHash)
+          const evidence = this.toAuthorityEvidence(entry, launchTokenHash)
+          if (evidence) {
+            this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, evidence)
+          }
+        }
+        if (
+          typeof rawResolvedEntry === 'object' &&
+          rawResolvedEntry !== null &&
+          typeof (rawResolvedEntry as Record<string, unknown>).launchToken === 'string'
+        ) {
+          scrubbedLegacyLaunchTokens += 1
+        }
+        const hydratedPayload = dropHydratedIdleClaudeSubagents(entry.payload)
+        if (hydratedPayload !== entry.payload) {
+          prunedLegacyClaudeSubagents +=
+            (entry.payload.subagents?.length ?? 0) - (hydratedPayload.subagents?.length ?? 0)
+          entry.payload = hydratedPayload
+        }
+        if (entry.payload.state !== 'done') {
+          // Why: the terminal transition may have fired while no receiver was up; restore as unconfirmed, never as live truth.
+          entry.restoredUnconfirmed = true
+        }
         this.state.lastStatusByPaneKey.set(resolvedPaneKey, entry)
+        if (entry.connectionId) {
+          // Why: a restart can see an earlier wall clock; seed ordering so new events stay after disk state.
+          const previousWatermark = this.connectionTimestampWatermarkById.get(entry.connectionId)
+          this.connectionTimestampWatermarkById.set(
+            entry.connectionId,
+            Math.max(previousWatermark ?? -1, entry.receivedAt)
+          )
+        }
+        // Why: restore live child hierarchy immediately; provider-specific reconciliation reaps stale seeds.
+        if (entry.payload.agentType === 'codex') {
+          seedCodexStateFromSnapshot(this.state, resolvedPaneKey, entry.payload)
+        } else if (entry.payload.agentType === 'claude' && entry.payload.subagents) {
+          seedClaudeSubagentRosterFromSnapshots(
+            this.state,
+            resolvedPaneKey,
+            entry.payload.subagents
+          )
+        }
         hydrated += 1
       } else {
         dropped += 1
       }
+    }
+    for (const [paneKey, rawCommitment] of Object.entries(file.authorityCommitments ?? {})) {
+      const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      const commitment = sanitizePersistedAuthorityCommitment(resolvedPaneKey, rawCommitment)
+      if (!commitment || commitment.observedAt < ttlCutoff) {
+        dropped += 1
+        continue
+      }
+      const existing = this.persistedAuthorityCommitmentsByPaneKey.get(resolvedPaneKey)
+      if (existing && !authorityCommitmentsMatch(existing, commitment)) {
+        this.persistedAuthorityCommitmentsByPaneKey.delete(resolvedPaneKey)
+        this.hydratedLaunchTokenHashByPaneKey.delete(resolvedPaneKey)
+        dropped += 1
+        continue
+      }
+      this.persistedAuthorityCommitmentsByPaneKey.set(resolvedPaneKey, commitment)
+      this.hydratedLaunchTokenHashByPaneKey.set(resolvedPaneKey, commitment.launchTokenHash)
     }
     if (dropped > 0) {
       console.warn(
         `[agent-hooks] last-status hydrate dropped ${dropped} entries (kept ${hydrated})`
       )
     }
-    if (hydrated > 0 && dropped === 0) {
-      // Why: prime from the raw on-disk bytes (not a re-serialization) so the
-      // dedup is robust against future shape drift in serializeStatusFile.
-      // Only prime when hydration was lossless — if entries were dropped
-      // during sanitize, the in-memory map diverges from the on-disk bytes.
-      this.lastWrittenJson = raw
-    } else if (dropped > 0) {
-      // Why: clean the stale on-disk file now so a user who has not run an
-      // agent in 8+ days does not re-drop the same entries on every cold
-      // boot. Synchronous variant is safe at start time and avoids
-      // unref'd-timer-during-quit edge cases.
+    if (dropped > 0 || prunedLegacyClaudeSubagents > 0 || scrubbedLegacyLaunchTokens > 0) {
+      // Why: persist load-time pruning and bearer scrubbing once.
       this.runStatusPersist()
+    } else if (hydrated > 0) {
+      // Why: prime dedup from raw bytes (not re-serialized) only when hydration was lossless.
+      this.lastWrittenJson = raw
     }
   }
 
+  private captureHydratedAuthorityCommitments(): void {
+    this.revokedHydratedAuthorityCommitments = new WeakSet()
+    for (const entry of this.state.lastStatusByPaneKey.values()) {
+      const evidence = this.toAuthorityEvidence(
+        entry as EnrichedAgentHookEventPayload,
+        this.hydratedLaunchTokenHashByPaneKey.get(entry.paneKey)
+      )
+      if (evidence && !this.persistedAuthorityCommitmentsByPaneKey.has(entry.paneKey)) {
+        this.persistedAuthorityCommitmentsByPaneKey.set(entry.paneKey, evidence)
+      }
+    }
+    this.hydratedAuthorityCommitments = Object.freeze(
+      Array.from(this.persistedAuthorityCommitmentsByPaneKey.values())
+    )
+  }
+
+  private recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void {
+    const evidence = this.toAuthorityEvidence(payload)
+    if (evidence) {
+      this.currentAuthorityObservations.set(evidence.paneKey, evidence)
+      this.persistedAuthorityCommitmentsByPaneKey.set(evidence.paneKey, evidence)
+      this.hydratedLaunchTokenHashByPaneKey.set(evidence.paneKey, evidence.launchTokenHash)
+    }
+  }
+
+  private toAuthorityEvidence(
+    payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
+    launchTokenHashOverride?: string
+  ): AgentHookAuthorityEvidence | null {
+    const launchToken = payload.launchToken?.trim()
+    const launchTokenHash =
+      launchTokenHashOverride ??
+      (launchToken ? createHash('sha256').update(launchToken).digest('hex') : null)
+    if (!launchTokenHash) {
+      return null
+    }
+    return Object.freeze({
+      paneKey: payload.paneKey,
+      launchTokenHash,
+      connectionId: payload.connectionId,
+      ...(payload.tabId ? { tabId: payload.tabId } : {}),
+      ...(payload.worktreeId ? { worktreeId: payload.worktreeId } : {}),
+      observedAt: 'receivedAt' in payload ? payload.receivedAt : Date.now()
+    })
+  }
+
   private serializeStatusFile(): string {
-    const entries: Record<string, EnrichedAgentHookEventPayload> = {}
+    const entries: Record<string, PersistedAgentHookEventPayload> = {}
+    const authorityCommitments: Record<string, PersistedAgentHookAuthorityCommitment> = {}
+    const conflictedCommitments = new Set<string>()
+    for (const [paneKey, commitment] of this.persistedAuthorityCommitmentsByPaneKey) {
+      authorityCommitments[paneKey] = { ...commitment }
+    }
     for (const [paneKey, payload] of this.state.lastStatusByPaneKey) {
-      // Why: defensive — never persist invalid keys even if they slipped
-      // into the in-memory map somehow. Same invariant the hydrate path
-      // enforces.
+      // Why: never persist invalid keys (matches the hydrate-path invariant).
       if (!isValidPaneKey(paneKey)) {
         continue
       }
-      const { promptInteractionKey: _promptInteractionKey, ...persistedPayload } = payload
-      entries[paneKey] = persistedPayload as EnrichedAgentHookEventPayload
+      const {
+        claudeRunningNonAgentTask: _claudeRunningNonAgentTask,
+        promptInteractionKey: _promptInteractionKey,
+        // Why: never persisted — hydrate re-stamps it, so a stored copy could only drift.
+        restoredUnconfirmed: _restoredUnconfirmed,
+        launchToken,
+        ...persistedPayload
+      } = payload as EnrichedAgentHookEventPayload
+      const launchTokenHash = launchToken?.trim()
+        ? createHash('sha256').update(launchToken.trim()).digest('hex')
+        : this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      entries[paneKey] = {
+        ...persistedPayload,
+        ...(launchTokenHash ? { launchTokenHash } : {})
+      }
+      const commitment = this.toAuthorityEvidence(payload, launchTokenHash)
+      if (commitment && !conflictedCommitments.has(paneKey)) {
+        const existing = authorityCommitments[paneKey]
+        if (existing && !authorityCommitmentsMatch(existing, commitment)) {
+          delete authorityCommitments[paneKey]
+          conflictedCommitments.add(paneKey)
+        } else {
+          authorityCommitments[paneKey] = { ...commitment }
+        }
+      }
     }
-    const file: LastStatusFile = { version: LAST_STATUS_FILE_VERSION, entries }
+    const file: LastStatusFile = {
+      version: LAST_STATUS_FILE_VERSION,
+      entries,
+      authorityCommitments
+    }
     return JSON.stringify(file)
   }
 
@@ -1573,8 +2813,7 @@ export class AgentHookServer {
     if (!this.lastStatusFilePath) {
       return
     }
-    // Why: each call resets the timer; the disk write fires
-    // STATUS_PERSIST_DEBOUNCE_MS after the LAST event in the burst.
+    // Why: reset the timer each call so the write fires only after the last event in a burst.
     if (this.statusPersistTimer) {
       clearTimeout(this.statusPersistTimer)
     }
@@ -1582,9 +2821,7 @@ export class AgentHookServer {
       this.statusPersistTimer = null
       this.runStatusPersist()
     }, STATUS_PERSIST_DEBOUNCE_MS)
-    // Why: don't keep the event loop alive just for a status flush — quit
-    // already triggers flushStatusPersistSync(). On Node 12+ unref() is a
-    // no-op when called on an already-unref'd timer.
+    // Why: don't keep the event loop alive just for a status flush — quit already flushes sync.
     if (typeof this.statusPersistTimer.unref === 'function') {
       this.statusPersistTimer.unref()
     }
@@ -1636,10 +2873,7 @@ export class AgentHookServer {
     }
   }
 
-  /** Test-only accessor for the per-instance listener state. The `_internals`
-   *  shim needs to reach this without exposing `state` on the public surface
-   *  to renderer/main callers. AGENTS.md disallows `as unknown as X` escapes,
-   *  so we expose a narrow getter rather than casting the private field. */
+  /** Test-only accessor for the per-instance listener state (narrow getter avoids an `as unknown` cast). */
   _getStateForTests(): HookListenerState {
     return this.state
   }
@@ -1647,14 +2881,17 @@ export class AgentHookServer {
   _resetPromptSentDedupeForTests(): void {
     this.promptSentDedupeByPaneKey.clear()
   }
+
+  _resetConnectionTimestampWatermarksForTests(): void {
+    this.connectionTimestampWatermarkById.clear()
+  }
 }
 
 export const agentHookServer = new AgentHookServer()
 
 // Why: exported for test coverage of the per-agent field extractors.
 export const _internals = {
-  // Why: bind the test-helper to the singleton's state so existing tests keep
-  // exercising the same caches the live server uses.
+  // Why: bind the test-helper to the singleton's state so tests exercise the live caches.
   normalizeHookPayload: (
     source: AgentHookSource,
     body: unknown,
@@ -1665,5 +2902,6 @@ export const _internals = {
   resetCachesForTests: (): void => {
     clearAllListenerCaches(agentHookServer._getStateForTests())
     agentHookServer._resetPromptSentDedupeForTests()
+    agentHookServer._resetConnectionTimestampWatermarksForTests()
   }
 }

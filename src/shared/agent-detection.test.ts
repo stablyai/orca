@@ -5,7 +5,9 @@ import {
   extractAllOscTitles,
   extractLastOscTitle,
   getAgentLabel,
+  isCursorAgentTitle,
   MAX_OSC_TITLE_CHARS,
+  MAX_OSC_TITLES_PER_CHUNK,
   normalizeTerminalTitle
 } from './agent-detection'
 import {
@@ -14,6 +16,7 @@ import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner
 } from './agent-title-owner'
+import { SYNTHETIC_AGENT_TITLE_PROFILES } from './synthetic-agent-title'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -63,6 +66,19 @@ describe('OSC title extraction', () => {
     expect(extracted?.endsWith('b'.repeat(MAX_OSC_TITLE_CHARS / 2))).toBe(true)
     expect(extractAllOscTitles(data)).toEqual([extracted])
   })
+
+  it('retains only the newest titles when one chunk contains limit +1', () => {
+    const data = Array.from(
+      { length: MAX_OSC_TITLES_PER_CHUNK + 1 },
+      (_, index) => `\x1b]0;title-${index}\x07`
+    ).join('')
+
+    const titles = extractAllOscTitles(data)
+
+    expect(titles).toHaveLength(MAX_OSC_TITLES_PER_CHUNK)
+    expect(titles[0]).toBe('title-1')
+    expect(titles.at(-1)).toBe(`title-${MAX_OSC_TITLES_PER_CHUNK}`)
+  })
 })
 
 describe('MiMo title detection', () => {
@@ -80,6 +96,55 @@ describe('MiMo title detection', () => {
     'does not classify path or hyphen false positive %s',
     (title) => {
       expect(getAgentLabel(title)).toBeNull()
+      expect(detectAgentStatusFromTitle(title)).toBeNull()
+    }
+  )
+})
+
+describe('OpenCode native title detection', () => {
+  // Why: `OC | …` names no agent token, so title-derived display and target surfaces
+  // previously dropped OpenCode panes. Runtime sends corroborate the title separately.
+  it.each(['OC | Implement the Kitty IME preview', 'tmux | OC | Implement the Kitty IME preview'])(
+    'classifies the native session title %j as title-derived idle OpenCode',
+    (title) => {
+      expect(getAgentLabel(title)).toBe('OpenCode')
+      expect(detectAgentStatusFromTitle(title)).toBe('idle')
+    }
+  )
+
+  // Why: a spinner glyph is the one status decoration OpenCode adds to the marker, and
+  // its gate runs before the marker's, so an animating frame still reads working (#8940).
+  it('reads a spinner-decorated native frame as working', () => {
+    const title = 'OC | ⠋ ask claude about this'
+    expect(getAgentLabel(title)).toBe('OpenCode')
+    expect(detectAgentStatusFromTitle(title)).toBe('working')
+  })
+
+  it.each(['OC | ✦ Gemini CLI', 'OC | ✋ review Gemini permission handling'])(
+    'does not let a Gemini glyph in OpenCode session text override identity for %j',
+    (title) => {
+      expect(getAgentLabel(title)).toBe('OpenCode')
+      expect(detectAgentStatusFromTitle(title)).toBe('idle')
+    }
+  )
+
+  // Why: the text after the marker is OpenCode's generated session summary — subject
+  // matter, not status. Routing it through the keyword gates would let an ordinary task
+  // name ("stop the flaky test") park a live pane in working/permission forever, so the
+  // marker asserts presence only. Do not "fix" these into keyword-derived statuses.
+  it.each([
+    'OC | ready to review',
+    'OC | permission prompt keeps reappearing',
+    'OC | waiting on the flaky test',
+    'OC | stop the suite from running'
+  ])('keeps the status word inside the session summary %j inert', (title) => {
+    expect(getAgentLabel(title)).toBe('OpenCode')
+    expect(detectAgentStatusFromTitle(title)).toBe('idle')
+  })
+
+  it.each(['OC |', 'OC|Build', 'oc | lowercase lookalike', 'OCTOPUS | build'])(
+    'does not treat the lookalike title %j as an agent',
+    (title) => {
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )
@@ -118,13 +183,26 @@ describe('Pi-compatible title detection', () => {
     ['π: tmp', 'omp', 'OMP ready'],
     ['\u280b π: tmp', 'omp', '\u280b OMP'],
     ['\u280b π - tmp', 'omp', '\u280b OMP'],
-    ['\u280b OMP', 'pi', '\u280b Pi']
+    ['\u280b OMP', 'pi', '\u280b Pi'],
+    ['lucky-echidna | \u283c π - Diagnose Orca terminal title flicker - test', 'omp', '\u280b OMP'],
+    ['lucky-echidna | Pi ready', 'omp', 'OMP ready'],
+    ['Codex | Pi ready', 'omp', 'OMP ready'],
+    // Why: the wrapped whole reads as a braille Claude title, but the re-ownable
+    // synthetic pane suffix must still win.
+    ['lucky-echidna | ⠋ OMP', 'omp', '⠋ OMP'],
+    ['lucky-echidna | \u283c π - Diagnose | test', 'omp', '\u280b OMP']
   ] as const)('normalizes %s to the authoritative %s owner', (title, owner, expectedTitle) => {
     expect(normalizeCompatibleAgentTitleForOwner(title, owner)).toBe(expectedTitle)
   })
 
   it('preserves Pi-compatible custom titles and unrelated owners', () => {
     expect(normalizeCompatibleAgentTitleForOwner('Fix pi bugs', 'omp')).toBe('Fix pi bugs')
+    // Why: a wrapped title with no re-ownable identity in any " | " segment
+    // passes through untouched instead of collapsing to the owner label.
+    expect(normalizeCompatibleAgentTitleForOwner('lucky-echidna | Fix pi bugs', 'omp')).toBe(
+      'lucky-echidna | Fix pi bugs'
+    )
+    expect(normalizeCompatibleAgentTitleForOwner('xxPi ready', 'omp')).toBe('xxPi ready')
     expect(normalizeCompatibleAgentTitleForOwner('\u280b Pi', 'codex')).toBe('\u280b Pi')
   })
 
@@ -163,4 +241,51 @@ describe('Pi-compatible title detection', () => {
       expect(detectAgentStatusFromTitle(title)).toBeNull()
     }
   )
+})
+
+describe('Cursor agent title identity', () => {
+  // Why: the accepted vocabulary is the set of labels Orca actually synthesizes for Cursor.
+  // Pin it to that profile so renaming a label there cannot silently drop @cursor to zero
+  // recipients (and desync the auto-Enter suppression that shares this predicate).
+  it('accepts every label Orca synthesizes for Cursor', () => {
+    const profile = SYNTHETIC_AGENT_TITLE_PROFILES.cursor
+
+    for (const label of [
+      profile.workingLabel,
+      `⠋ ${profile.workingLabel}`,
+      profile.idleLabel,
+      profile.permissionLabel
+    ]) {
+      expect(isCursorAgentTitle(label)).toBe(true)
+    }
+  })
+
+  it.each([
+    'Cursor Agent',
+    '  cursor agent  ',
+    '⠋ Cursor Agent',
+    '⣿ Cursor Agent',
+    'Cursor ready',
+    'Cursor - action required'
+  ])('accepts the native or Orca-synthesized Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(true)
+  })
+
+  // Why: "cursor" is ordinary editor vocabulary in another agent's task-summary title,
+  // so a whole-token name match is not Cursor identity.
+  it.each([
+    '⠋ fix the text cursor blink',
+    '✳ Fix the text cursor blink',
+    '. fix cursor position',
+    '* cursor rendering done',
+    'Terminal Cursor and Orca slows down',
+    'cursor-agent',
+    'cursor.exe',
+    '~/cursor-rules',
+    '',
+    null,
+    undefined
+  ])('rejects the non-Cursor title %j', (title) => {
+    expect(isCursorAgentTitle(title)).toBe(false)
+  })
 })

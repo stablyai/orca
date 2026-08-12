@@ -10,6 +10,7 @@ import type { DiffContent, FileContent } from './editor-panel-content-types'
 const mocks = vi.hoisted(() => ({
   readRuntimeFileContent: vi.fn(),
   getRuntimeGitDiff: vi.fn(),
+  getRuntimeGitBranchDiff: vi.fn(),
   getConnectionId: vi.fn(),
   getConnectionIdForFile: vi.fn(),
   isWorktreeConnectionResolved: vi.fn(() => true),
@@ -28,7 +29,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 
 vi.mock('@/runtime/runtime-git-client', () => ({
-  getRuntimeGitBranchDiff: vi.fn(),
+  getRuntimeGitBranchDiff: mocks.getRuntimeGitBranchDiff,
   getRuntimeGitCommitDiff: vi.fn(),
   getRuntimeGitDiff: mocks.getRuntimeGitDiff,
   getRuntimeGitScope: vi.fn(() => null)
@@ -38,6 +39,10 @@ vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId,
   getConnectionIdForFile: mocks.getConnectionIdForFile,
   isWorktreeConnectionResolved: mocks.isWorktreeConnectionResolved
+}))
+
+vi.mock('@/lib/runtime-workspace-file-route', () => ({
+  findWorkspaceFileRoute: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({
@@ -86,6 +91,10 @@ type ProbeProps = {
   gitStatusByWorktree?: Record<string, GitStatusEntry[]>
 }
 
+const authorizeExternalPath = vi.fn()
+// Why: opening any liveTail tab arms useLocalLogTail's change subscription.
+const onLocalLogTailChanged = vi.fn(() => () => {})
+const fsApi = { authorizeExternalPath, onLocalLogTailChanged }
 let latestFileContents: Record<string, FileContent> = {}
 let latestDiffContents: Record<string, DiffContent> = {}
 let latestReloadContent: (file: OpenFile) => void = () => {}
@@ -100,7 +109,7 @@ function HookProbe({
     activeFile,
     isChangesMode: false,
     openFiles,
-    gitStatusByWorktree,
+    gitStatusEntries: activeFile ? gitStatusByWorktree[activeFile.worktreeId] : undefined,
     editorViewMode: {}
   })
   latestFileContents = state.fileContents
@@ -129,8 +138,13 @@ describe('useEditorPanelContentState', () => {
   beforeEach(() => {
     latestFileContents = {}
     latestDiffContents = {}
+    authorizeExternalPath.mockReset()
+    authorizeExternalPath.mockResolvedValue(undefined)
+    onLocalLogTailChanged.mockClear()
+    ;(window as unknown as { api: unknown }).api = { fs: fsApi }
     mocks.readRuntimeFileContent.mockReset()
     mocks.getRuntimeGitDiff.mockReset()
+    mocks.getRuntimeGitBranchDiff.mockReset()
     mocks.getConnectionId.mockReset()
     mocks.getConnectionId.mockReturnValue(undefined)
     mocks.getConnectionIdForFile.mockReset()
@@ -184,6 +198,236 @@ describe('useEditorPanelContentState', () => {
         relativePath: 'api/src/file.ts',
         worktreeId: 'folder:folder-workspace-1',
         connectionId: 'ssh-1'
+      })
+    )
+  })
+
+  it('loads an external SSH-host image when the tab is pinned to that target', async () => {
+    const activeFile = createOpenFile({
+      id: '/tmp/ssh-preview.png',
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'repo-ssh::/home/user/project',
+      externalSshTargetId: 'ssh-1'
+    } as never)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.readRuntimeFileContent.mockResolvedValue({
+      content: 'base64-image',
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png'
+    })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.isImage).toBe(true))
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/tmp/ssh-preview.png',
+        relativePath: '/tmp/ssh-preview.png',
+        worktreeId: 'repo-ssh::/home/user/project',
+        connectionId: 'ssh-1',
+        expectedExternalSshTargetId: 'ssh-1'
+      })
+    )
+  })
+
+  it('loads an unstamped external SSH-host tab through the resolved connection', async () => {
+    const activeFile = createOpenFile({
+      id: '/work/reports/audit.md',
+      filePath: '/work/reports/audit.md',
+      relativePath: '/work/reports/audit.md',
+      worktreeId: 'repo-ssh::/work/demo-project'
+    })
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# remote', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# remote'))
+    // Why: the client-local grant must not be requested for a remote-owned path.
+    expect(authorizeExternalPath).not.toHaveBeenCalled()
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '/work/reports/audit.md',
+        connectionId: 'ssh-1',
+        expectedExternalSshTargetId: undefined
+      })
+    )
+  })
+
+  it('keeps a client-local live-tail log tab on the client inside an SSH workspace', async () => {
+    const logPath = '/Users/me/.codex/sessions/session.jsonl'
+    const worktreeId = 'repo-ssh::/work/demo-project'
+    const externalTab = { id: logPath, filePath: logPath, relativePath: logPath, worktreeId }
+    const activeFile = createOpenFile({ ...externalTab, readOnly: true, liveTail: true })
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'log line', isBinary: false })
+
+    container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('log line'))
+    // Why: AI Vault only surfaces client-local logs, so the worktree's SSH target must
+    // not capture this read — it stays a granted client-local path.
+    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: logPath })
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: undefined, includeLocalLogMetadata: true })
+    )
+  })
+
+  it('re-authorizes a client-local external tab before reading it', async () => {
+    const activeFile = createOpenFile({
+      id: '/Users/me/notes/audit.md',
+      filePath: '/Users/me/notes/audit.md',
+      relativePath: '/Users/me/notes/audit.md',
+      worktreeId: 'repo-local::/Users/me/project'
+    })
+    mocks.getConnectionIdForFile.mockReturnValue(undefined)
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: '# local', isBinary: false })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('# local'))
+    expect(authorizeExternalPath).toHaveBeenCalledWith({ targetPath: '/Users/me/notes/audit.md' })
+  })
+
+  it('rejects an unstamped external tab in a remote runtime workspace', async () => {
+    const activeFile = createOpenFile({
+      id: '/work/reports/audit.md',
+      filePath: '/work/reports/audit.md',
+      relativePath: '/work/reports/audit.md',
+      worktreeId: 'repo-runtime::/work/demo-project'
+    })
+    mocks.getConnectionIdForFile.mockReturnValue(undefined)
+    mocks.getState.mockReturnValue({
+      settings: { activeRuntimeEnvironmentId: 'runtime-1' },
+      openFiles: [],
+      setLastKnownDiskSignature: vi.fn()
+    })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(latestFileContents[activeFile.id]?.loadError).toBe(
+        'External local files are not available for remote workspaces.'
+      )
+    )
+    expect(mocks.readRuntimeFileContent).not.toHaveBeenCalled()
+  })
+
+  it('rejects an external SSH-host tab after its target owner changes', async () => {
+    const activeFile = createOpenFile({
+      id: '/tmp/ssh-preview.png',
+      filePath: '/tmp/ssh-preview.png',
+      relativePath: '/tmp/ssh-preview.png',
+      worktreeId: 'repo-ssh::/home/user/project',
+      externalSshTargetId: 'ssh-original'
+    } as never)
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-replacement')
+    mocks.readRuntimeFileContent.mockRejectedValue(
+      new Error('External SSH files are not available after the workspace host changes.')
+    )
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(latestFileContents[activeFile.id]?.loadError).toBe(
+        'External SSH files are not available after the workspace host changes.'
+      )
+    )
+    expect(mocks.readRuntimeFileContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'ssh-replacement',
+        expectedExternalSshTargetId: 'ssh-original'
+      })
+    )
+  })
+
+  it('loads folder workspace branch diffs through the path-specific SSH connection', async () => {
+    const activeFile = createOpenFile({
+      id: 'branch-diff',
+      filePath: '/home/neil/platform/api/src/file.ts',
+      relativePath: 'api/src/file.ts',
+      worktreeId: 'folder:folder-workspace-1',
+      mode: 'diff',
+      diffSource: 'branch',
+      branchCompare: {
+        baseRef: 'main',
+        compareRef: 'feature',
+        compareVersion: 'feature',
+        baseOid: 'base',
+        headOid: 'head',
+        mergeBase: 'merge-base'
+      }
+    })
+    mocks.getConnectionIdForFile.mockReturnValue('ssh-1')
+    mocks.getRuntimeGitBranchDiff.mockResolvedValue({
+      kind: 'text',
+      originalContent: 'old',
+      modifiedContent: 'remote branch diff',
+      originalIsBinary: false,
+      modifiedIsBinary: false
+    })
+
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    await act(async () => {
+      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+    })
+
+    await vi.waitFor(() =>
+      expect(latestDiffContents[activeFile.id]?.modifiedContent).toBe('remote branch diff')
+    )
+    expect(mocks.getConnectionIdForFile).toHaveBeenCalledWith(
+      'folder:folder-workspace-1',
+      '/home/neil/platform/api/src/file.ts'
+    )
+    expect(mocks.getRuntimeGitBranchDiff).toHaveBeenCalledWith(
+      expect.objectContaining({
+        worktreeId: 'folder:folder-workspace-1',
+        worktreePath: '/home/neil/platform',
+        connectionId: 'ssh-1'
+      }),
+      expect.objectContaining({
+        compare: expect.objectContaining({ headOid: 'head', mergeBase: 'merge-base' }),
+        filePath: 'api/src/file.ts'
       })
     )
   })

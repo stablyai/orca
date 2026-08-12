@@ -1,5 +1,6 @@
 import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { translate } from '@/i18n/i18n'
 import type { SparsePresetDirectoryParseResult } from '@/lib/sparse-preset-draft'
 
@@ -34,7 +35,10 @@ export function SparseCheckoutPresetDraftForm({
   onSave
 }: SparseCheckoutPresetDraftFormProps): React.JSX.Element {
   return (
+    // Why: bg-popover matches the opaque surface the cmdk list (Command root) paints, so the draft
+    // form doesn't show the translucent PopoverContent through it while the list looks solid.
     <form
+      className="rounded-md bg-popover text-popover-foreground"
       onSubmit={(event) => {
         event.preventDefault()
         onSave()
@@ -56,22 +60,20 @@ export function SparseCheckoutPresetDraftForm({
           >
             {translate('auto.components.sparse.SparseCheckoutPresetSelect.b3a500c623', 'Name')}
           </label>
-          <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
-            <input
-              id="sparse-preset-name"
-              ref={setNameInputNode}
-              value={draft.name}
-              onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
-              placeholder={translate(
-                'auto.components.sparse.SparseCheckoutPresetSelect.064c1e2d12',
-                'Renderer UI'
-              )}
-              maxLength={80}
-              autoComplete="off"
-              spellCheck={false}
-              className="h-8 w-full bg-transparent text-xs text-foreground outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground"
-            />
-          </div>
+          <Input
+            id="sparse-preset-name"
+            ref={setNameInputNode}
+            value={draft.name}
+            onChange={(event) => onDraftChange({ ...draft, name: event.target.value })}
+            placeholder={translate(
+              'auto.components.sparse.SparseCheckoutPresetSelect.064c1e2d12',
+              'Renderer UI'
+            )}
+            maxLength={80}
+            autoComplete="off"
+            spellCheck={false}
+            className="h-8 text-xs"
+          />
         </div>
         <div className="space-y-1">
           <label
@@ -83,20 +85,20 @@ export function SparseCheckoutPresetDraftForm({
               'Directories'
             )}
           </label>
-          <div className="rounded-md border border-border/70 bg-muted/20 px-2.5 py-1.5 shadow-xs transition focus-within:border-ring/70 focus-within:ring-1 focus-within:ring-ring/30">
-            <textarea
-              id="sparse-preset-directories"
-              value={draft.directoriesText}
-              onChange={(event) => onDraftChange({ ...draft, directoriesText: event.target.value })}
-              placeholder={translate(
-                'auto.components.sparse.SparseCheckoutPresetSelect.ddbcaef7be',
-                'src/renderer packages/ui'
-              )}
-              rows={3}
-              spellCheck={false}
-              className="max-h-28 w-full min-w-0 resize-none bg-transparent font-mono text-xs leading-5 text-foreground outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground"
-            />
-          </div>
+          {/* Why: match the app's canonical textarea (composer Note field) — border-input +
+              standard focus ring — instead of a one-off wrapper. font-mono since these are paths. */}
+          <textarea
+            id="sparse-preset-directories"
+            value={draft.directoriesText}
+            onChange={(event) => onDraftChange({ ...draft, directoriesText: event.target.value })}
+            placeholder={translate(
+              'auto.components.sparse.SparseCheckoutPresetSelect.ddbcaef7be',
+              'src/renderer packages/ui'
+            )}
+            rows={3}
+            spellCheck={false}
+            className="max-h-28 w-full min-w-0 resize-none rounded-md border border-input bg-transparent px-3 py-1.5 font-mono text-xs leading-5 shadow-xs transition-[color,box-shadow] outline-none selection:bg-primary selection:text-primary-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          />
         </div>
       </div>
       <div className="flex min-h-11 items-center justify-between gap-3 border-t border-border px-3 py-2">

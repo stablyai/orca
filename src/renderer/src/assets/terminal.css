@@ -6,6 +6,11 @@
   position: relative;
 }
 
+/* Shared tooltip geometry for every terminal link provider. */
+:root {
+  --orca-terminal-link-tooltip-height: 25px;
+}
+
 /* Ensure pane manager root fills its absolutely-positioned container */
 .pane-manager-root {
   width: 100% !important;
@@ -36,8 +41,8 @@
    the install terminals inside centered setup modals), that black layer
    anti-aliases into a faint 1px line above/below the themed .xterm. Match
    xterm's own selector so this also covers terminals mounted outside the pane
-   manager, and let the themed .xterm background show through; our scrollbar is
-   already custom-styled below. */
+   manager, and let the themed .xterm background show through; the viewport
+   reuses the canonical editor scrollbar rules in main.css. */
 .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
 }
@@ -321,8 +326,14 @@
   left: 8px;
   z-index: 5;
   height: var(--orca-pane-title-height);
-  display: flex;
-  align-items: center;
+  /* Why: block + line-height (not flex) so the single line can ellipsize like
+     .pane-title-text — an overflowing banner would wrap onto the terminal grid. */
+  display: block;
+  line-height: var(--orca-pane-title-height);
+  max-width: calc(100% - 16px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--orca-pane-title-fg);
@@ -491,6 +502,7 @@
    so Ghostty-imported window-padding-x/y can be applied without inline styles.
    The fallback 4px preserves the legacy default. */
 .xterm-container {
+  box-sizing: border-box;
   position: relative;
   width: calc(100% - var(--pane-padding-x, 4px));
   height: calc(100% - var(--pane-padding-y, 4px));
@@ -505,4 +517,31 @@
 .pane[data-has-title] .xterm-container {
   margin-top: var(--orca-pane-title-height);
   height: calc(100% - var(--orca-pane-title-height)); /* match margin-top */
+}
+
+/* Ghostty-style URL hover: glued to the pane's true bottom-left corner. */
+.pane-link-tooltip {
+  position: absolute;
+  box-sizing: border-box;
+  bottom: 0;
+  left: 0;
+  z-index: 40;
+  margin: 0;
+  /* Square on the window corner so the chrome itself has no inset gap. */
+  border-radius: 0 4px 0 0;
+  border: 1px solid rgba(63, 63, 70, 0.6);
+  border-bottom: none;
+  border-left: none;
+  padding: 4px 8px;
+  height: var(--orca-terminal-link-tooltip-height);
+  line-height: 15px;
+  max-width: 80%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 11px;
+  font-family: inherit;
+  color: #a1a1aa;
+  background: rgba(24, 24, 27, 0.85);
 }

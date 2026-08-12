@@ -45,6 +45,8 @@ type Params = {
   setCreatedPrUrl: (next: string | null) => void
   setCreatedPrWarning: (next: string | null) => void
   recordCommitFailure: RecordMobileCommitFailure
+  // Hub override: switch to the History segment instead of pushing the route.
+  onOpenHistory?: () => void
 }
 
 // All git workflow + action-sheet runners for the source-control panel. Split
@@ -78,7 +80,8 @@ export function useMobileSourceControlRunners(params: Params) {
     setShowBranchPicker,
     setCreatedPrUrl,
     setCreatedPrWarning,
-    recordCommitFailure
+    recordCommitFailure,
+    onOpenHistory
   } = params
 
   const runGitWorkflow = useCallback(
@@ -248,14 +251,24 @@ export function useMobileSourceControlRunners(params: Params) {
 
   const openHistory = useCallback(() => {
     setShowActionSheet(false)
-    if (hostId && worktreeId) {
-      router.push(
-        `/h/${hostId}/history/${encodeURIComponent(worktreeId)}` as Parameters<
-          typeof router.push
-        >[0]
-      )
+    // Inside the hub, History is a segment — switch to it rather than pushing a
+    // route. Fallback pushes the hub with `tab=history` (not the redirecting
+    // /history route) so deep links land in one hop.
+    if (onOpenHistory) {
+      onOpenHistory()
+      return
     }
-  }, [hostId, router, setShowActionSheet, worktreeId])
+    if (hostId && worktreeId) {
+      router.push({
+        pathname: '/h/[hostId]/source-control/[worktreeId]',
+        params: {
+          hostId,
+          worktreeId,
+          tab: 'history'
+        }
+      } as Parameters<typeof router.push>[0])
+    }
+  }, [hostId, onOpenHistory, router, setShowActionSheet, worktreeId])
 
   // Switch to a local branch, then reload status.
   const checkoutBranch = useCallback(

@@ -1,17 +1,15 @@
-/* eslint-disable max-lines -- Why: this file groups all repos IPC handler
-tests (addRemote, getBaseRefDefault envelope, searchBaseRefs SSH relay) so
-fixture setup and mock plumbing can be shared. Splitting by line count would
-duplicate the hoisted mocks and the `../git/repo` partial-real/partial-stub
-setup. */
+/* eslint-disable max-lines -- groups all repos IPC handler tests so shared fixture setup and hoisted mocks aren't duplicated */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type * as GitRunner from '../git/runner'
 import type * as RepoModule from '../git/repo'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 
 const {
   handleMock,
@@ -19,6 +17,8 @@ const {
   mockGitProvider,
   mockFilesystemProvider,
   mockMultiplexer,
+  gitExecFileAsyncMock,
+  gitSpawnAfterWindowsEnvironmentReadyMock,
   gitSpawnMock,
   listWorktreeGraphMock,
   invalidateAuthorizedRootsCacheMock,
@@ -70,6 +70,8 @@ const {
     notify: vi.fn()
   },
   gitSpawnMock: vi.fn(),
+  gitSpawnAfterWindowsEnvironmentReadyMock: vi.fn(),
+  gitExecFileAsyncMock: vi.fn(),
   listWorktreeGraphMock: vi.fn(),
   invalidateAuthorizedRootsCacheMock: vi.fn(),
   prepareLocalWorktreeRootForRepoMock: vi.fn()
@@ -84,10 +86,7 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../git/repo', async () => {
-  // Why: pull real implementations of pure helpers so SSH parity tests
-  // exercise the actual probe list and query sanitizer, not frozen copies.
-  // Drift in DEFAULT_BASE_REF_PROBES or normalizeRefSearchQuery now surfaces
-  // as test failure, not silent test-passes against stale behavior.
+  // Why: use real pure helpers so SSH parity tests catch drift in DEFAULT_BASE_REF_PROBES / normalizeRefSearchQuery.
   const actual = await vi.importActual<typeof RepoModule>('../git/repo')
   return {
     ...actual,
@@ -101,9 +100,14 @@ vi.mock('../git/repo', async () => {
   }
 })
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: vi.fn(),
-  gitSpawn: gitSpawnMock
+vi.mock('../git/runner', async () => ({
+  // Why: keep the real env builders so the clone regression test (#7652) asserts real markers, not a mock echoing itself.
+  ...(await vi.importActual<typeof GitRunner>('../git/runner')),
+  gitExecFileAsync: gitExecFileAsyncMock,
+  gitExecFileAsyncBuffer: vi.fn(),
+  gitStreamStdout: vi.fn(),
+  gitSpawn: gitSpawnMock,
+  gitSpawnAfterWindowsEnvironmentReady: gitSpawnAfterWindowsEnvironmentReadyMock
 }))
 
 vi.mock('../git/worktree', () => ({
@@ -119,6 +123,7 @@ vi.mock('../worktree-root-preparation', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
+  getSshGitProviderGeneration: () => 0,
   getSshGitProvider: vi.fn().mockImplementation((id: string) => {
     if (id === 'conn-1') {
       return mockGitProvider
@@ -146,6 +151,18 @@ vi.mock('./ssh', () => ({
 }))
 
 import { registerRepoHandlers } from './repos'
+import { clearSubmodulePathsCacheForTests, listSubmodulePaths } from '../git/status'
+import { toSshExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshProviderAuthority,
+  resetSshProviderAuthorities,
+  rotateSshProviderAuthority
+} from '../ssh/ssh-provider-authority'
+
+beforeEach(() => {
+  clearGitCapabilityStateForTests()
+  resetSshProviderAuthorities()
+})
 
 describe('projectGroups IPC validation', () => {
   const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
@@ -201,6 +218,128 @@ describe('projectGroups IPC validation', () => {
     ).toThrow('invalid_project_group_create_args')
 
     expect(mockStore.createProjectGroup).not.toHaveBeenCalled()
+  })
+
+  it('returns an immutable repo catalog for exactly one execution host', async () => {
+    const localRepo = {
+      id: 'duplicate',
+      path: '/local/repo',
+      displayName: 'local',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    const sshRepo = {
+      id: 'duplicate',
+      path: '/remote/repo',
+      displayName: 'remote',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const runtimeRepo = {
+      id: 'duplicate',
+      path: '/runtime/repo',
+      displayName: 'runtime',
+      badgeColor: '#000',
+      addedAt: 0,
+      executionHostId: 'runtime:environment-a'
+    }
+    mockStore.getRepos.mockReturnValue([localRepo, sshRepo, runtimeRepo])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({
+      authoritative: true,
+      authority: {
+        kind: 'direct-ssh',
+        executionHostId: 'ssh:conn-1',
+        targetId: 'conn-1'
+      },
+      repos: [sshRepo]
+    })
+
+    const local = await handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: 'local'
+    })
+    expect(local).toMatchObject({ authoritative: true, repos: [localRepo] })
+    expect((local as { repos: object[] }).repos[0]).not.toBe(localRepo)
+  })
+
+  it('rejects repo catalogs whose execution host contradicts their SSH connection', async () => {
+    const baseRepo = {
+      id: 'repo-1',
+      path: '/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: 'local'
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'local'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    mockStore.getRepos.mockReturnValue([
+      {
+        ...baseRepo,
+        connectionId: 'conn-1',
+        executionHostId: toSshExecutionHostId('conn-2')
+      }
+    ])
+
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: getSshProviderAuthority('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+  })
+
+  it('rejects runtime, partial, mismatched, and stale catalog authority', async () => {
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: 'runtime:environment-a'
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1')
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+    await expect(
+      handlers.get('repos:listForExecutionHost')!(null, {
+        executionHostId: toSshExecutionHostId('conn-1'),
+        expectedAuthority: {
+          ...getSshProviderAuthority('other-target'),
+          targetId: 'other-target'
+        }
+      })
+    ).resolves.toMatchObject({ authoritative: false, reason: 'rejected' })
+
+    const expectedAuthority = getSshProviderAuthority('conn-1')
+    const pending = handlers.get('repos:listForExecutionHost')!(null, {
+      executionHostId: toSshExecutionHostId('conn-1'),
+      expectedAuthority
+    })
+    rotateSshProviderAuthority('conn-1')
+    await expect(pending).resolves.toMatchObject({ authoritative: false, reason: 'stale' })
   })
 
   it('rejects malformed local project group update arguments before persistence', () => {
@@ -979,6 +1118,7 @@ describe('repos:addRemote', () => {
     })
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.addRepo.mockReset()
+    mockStore.removeProject.mockReset()
     mockStore.getSshTarget.mockReset()
     mockStore.updateRepo.mockReset()
     mockGitProvider.isGitRepoAsync.mockReset()
@@ -1006,11 +1146,13 @@ describe('repos:addRemote', () => {
     mockMultiplexer.request.mockReset()
     mockMultiplexer.notify.mockReset()
     gitSpawnMock.mockReset()
+    gitExecFileAsyncMock.mockReset().mockResolvedValue({ stdout: '', stderr: '' })
+    clearSubmodulePathsCacheForTests()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = new EventEmitter() as EventEmitter & { stderr: EventEmitter }
       proc.stderr = new EventEmitter()
-      queueMicrotask(() => proc.emit('close', 0, null))
+      setImmediate(() => proc.emit('close', 0, null))
       return proc
     })
     mockWindow.webContents.send.mockReset()
@@ -1710,11 +1852,14 @@ describe('repos:add + repos:clone', () => {
     mockStore.updateProjectHostSetup.mockReset()
     mockWindow.webContents.send.mockReset()
     gitSpawnMock.mockReset()
+    gitSpawnAfterWindowsEnvironmentReadyMock
+      .mockReset()
+      .mockImplementation(async (...args) => gitSpawnMock(...args))
     invalidateAuthorizedRootsCacheMock.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
     gitSpawnMock.mockImplementation(() => {
       const proc = createMockCloneProcess()
-      queueMicrotask(() => proc.emit('close', 0, null))
+      setImmediate(() => proc.emit('close', 0, null))
       return proc
     })
 
@@ -1873,6 +2018,131 @@ describe('repos:add + repos:clone', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
+  it('preserves the selected Enterprise host when aligning an existing folder', async () => {
+    const existing = {
+      id: 'repo-setup-enterprise',
+      path: '/tmp/from-setup-enterprise',
+      displayName: 'from-setup-enterprise',
+      kind: 'git',
+      badgeColor: '#22c55e'
+    }
+    const existingProject = { id: 'repo:repo-setup-enterprise', displayName: 'Existing' }
+    const selectedProject = {
+      id: 'github:github.acme-corp.com/acme/orca',
+      displayName: 'Enterprise project',
+      providerIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    }
+    const setup = {
+      id: existing.id,
+      projectId: existingProject.id,
+      repoId: existing.id,
+      hostId: 'local',
+      path: existing.path,
+      displayName: existing.displayName,
+      setupState: 'ready',
+      setupMethod: 'legacy-repo'
+    }
+    let updatedRepo = existing
+    mockStore.getRepos.mockReturnValue([existing])
+    mockStore.getProjects.mockReturnValue([existingProject, selectedProject])
+    mockStore.getProjectHostSetups.mockReturnValue([setup])
+    mockStore.updateRepo.mockImplementation((_repoId, updates) => {
+      updatedRepo = { ...updatedRepo, ...updates }
+      return updatedRepo
+    })
+
+    await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: selectedProject.id,
+      hostId: 'local',
+      path: existing.path,
+      kind: 'git',
+      setupMethod: 'imported-existing-folder'
+    })
+
+    expect(mockStore.updateRepo).toHaveBeenNthCalledWith(1, existing.id, {
+      upstream: {
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme-corp.com'
+      }
+    })
+  })
+
+  it('sets up a folder when the selected project exists only on another host', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+    mockStore.updateRepo.mockImplementation((id, updates) => {
+      const repo = added.find((entry) => entry.id === id)
+      if (!repo) {
+        return null
+      }
+      Object.assign(repo, updates)
+      return { ...repo }
+    })
+    mockStore.getProjects.mockImplementation(() => {
+      const repo = added.find((entry) => 'upstream' in entry)
+      return repo
+        ? [
+            {
+              id: 'github:github.acme.test/acme/orca',
+              displayName: 'Orca',
+              providerIdentity: {
+                provider: 'github',
+                owner: 'acme',
+                repo: 'orca',
+                host: 'github.acme.test'
+              }
+            }
+          ]
+        : []
+    })
+
+    const result = await handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+      projectId: 'github:github.acme.test/acme/orca',
+      projectProviderIdentity: {
+        provider: 'github',
+        owner: 'acme',
+        repo: 'orca',
+        host: 'github.acme.test'
+      },
+      hostId: 'local',
+      path: '/tmp/orca-local',
+      kind: 'git'
+    })
+
+    expect(added[0]?.upstream).toEqual({
+      owner: 'acme',
+      repo: 'orca',
+      host: 'github.acme.test'
+    })
+    expect(result).toHaveProperty('project.id', 'github:github.acme.test/acme/orca')
+  })
+
+  it('rolls back a new repo when the supplied identity does not match the project', async () => {
+    const added: Record<string, unknown>[] = []
+    mockStore.getRepos.mockImplementation(() => added)
+    mockStore.addRepo.mockImplementation((repo: Record<string, unknown>) => added.push(repo))
+
+    await expect(
+      handlers.get('projectHostSetups:setupExistingFolder')!(null, {
+        projectId: 'github:acme/orca',
+        projectProviderIdentity: { provider: 'github', owner: 'other', repo: 'orca' },
+        hostId: 'local',
+        path: '/tmp/mismatched-project',
+        kind: 'git'
+      })
+    ).rejects.toThrow('Imported folder does not match the selected project identity.')
+
+    expect(mockStore.removeProject).toHaveBeenCalledWith(added[0]?.id)
+    expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
+  })
+
   it('prepares and invalidates roots when repos:update changes worktree base path', () => {
     const updated = {
       id: 'repo-update-root',
@@ -1962,6 +2232,41 @@ describe('repos:add + repos:clone', () => {
     )
     expect(result).toHaveProperty('badgeColor', DEFAULT_REPO_BADGE_COLOR)
     expect(result).toHaveProperty('externalWorktreeVisibility', 'hide')
+  })
+
+  it('drops a same-path negative submodule cache before a local clone', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    let cloned = false
+    gitExecFileAsyncMock.mockImplementation((args: string[]) =>
+      Promise.resolve({
+        stdout:
+          args[0] === 'config' && args.includes('.gitmodules') && cloned
+            ? 'submodule.lib.path vendor/lib\n'
+            : '',
+        stderr: ''
+      })
+    )
+    gitSpawnMock.mockImplementationOnce(() => {
+      const proc = createMockCloneProcess()
+      setImmediate(() => {
+        cloned = true
+        proc.emit('close', 0, null)
+      })
+      return proc
+    })
+
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual([])
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+    await expect(listSubmodulePaths(clonePath)).resolves.toEqual(['vendor/lib'])
+
+    const configReads = gitExecFileAsyncMock.mock.calls.filter(
+      ([args]) => args[0] === 'config' && args.includes('.gitmodules')
+    )
+    expect(configReads).toHaveLength(2)
   })
 
   it('preserves existing badgeColor when repos:clone upgrades folder->git after dedupe', async () => {
@@ -2067,8 +2372,106 @@ describe('repos:add + repos:clone', () => {
     expect(result).toHaveProperty('path', join(destination, 'orca'))
   })
 
+  it('clones with the non-interactive credential guard so Git Credential Manager cannot pop its OAuth window (#7652)', async () => {
+    const destination = await createTempRoot()
+
+    await handlers.get('repos:clone')!(null, {
+      url: 'https://example.com/orca.git',
+      destination
+    })
+
+    // Without this env, a clone needing auth makes Git Credential Manager pop and loop its OAuth window on Windows.
+    expect(gitSpawnMock).toHaveBeenCalledWith(
+      ['clone', '--progress', '--', 'https://example.com/orca.git', join(destination, 'orca')],
+      expect.objectContaining({
+        env: expect.objectContaining({
+          GIT_TERMINAL_PROMPT: '0',
+          GCM_INTERACTIVE: 'never'
+        })
+      })
+    )
+  })
+
   it('treats cloneAbort with no active clone as a no-op', async () => {
     await expect(handlers.get('repos:cloneAbort')!(null, undefined)).resolves.toBeUndefined()
+  })
+
+  it('cancels a local clone before Git starts when environment readiness is pending', async () => {
+    const destination = await createTempRoot()
+    const clonePath = join(destination, 'orca')
+    gitSpawnAfterWindowsEnvironmentReadyMock.mockImplementation(
+      (_args: string[], options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          if (options.signal?.aborted) {
+            abort()
+          } else {
+            options.signal?.addEventListener('abort', abort, { once: true })
+          }
+        })
+    )
+
+    const clonePromise = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/orca.git',
+        destination
+      })
+    )
+    const rejection = expect(clonePromise).rejects.toThrow('Clone failed')
+    await waitForAssertion(() =>
+      expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledOnce()
+    )
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+    await rejection
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(existsSync(clonePath)).toBe(false)
+  })
+
+  it('cancels every concurrent local clone waiting for environment readiness', async () => {
+    const firstDestination = await createTempRoot()
+    const secondDestination = await createTempRoot()
+    gitSpawnAfterWindowsEnvironmentReadyMock.mockImplementation(
+      (_args: string[], options: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          const abort = (): void => {
+            reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' }))
+          }
+          if (options.signal?.aborted) {
+            abort()
+          } else {
+            options.signal?.addEventListener('abort', abort, { once: true })
+          }
+        })
+    )
+
+    const firstClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/first.git',
+        destination: firstDestination
+      })
+    )
+    const secondClone = Promise.resolve(
+      handlers.get('repos:clone')!(null, {
+        url: 'https://example.com/second.git',
+        destination: secondDestination
+      })
+    )
+    const firstRejection = expect(firstClone).rejects.toThrow('Clone failed')
+    const secondRejection = expect(secondClone).rejects.toThrow('Clone failed')
+    await waitForAssertion(() =>
+      expect(gitSpawnAfterWindowsEnvironmentReadyMock).toHaveBeenCalledTimes(2)
+    )
+
+    await handlers.get('repos:cloneAbort')!(null, undefined)
+
+    await Promise.all([firstRejection, secondRejection])
+    expect(gitSpawnMock).not.toHaveBeenCalled()
+    expect(existsSync(join(firstDestination, 'first'))).toBe(false)
+    expect(existsSync(join(secondDestination, 'second'))).toBe(false)
   })
 
   it('does not remove an existing target directory when aborting a pending clone', async () => {
@@ -2363,9 +2766,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     mockStore.getRepos.mockReset().mockReturnValue([])
     mockStore.getRepo.mockReset()
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
-    // Reset exec to default: later SSH tests replace this with custom mocks, and
-    // without this reset any future test added to this block would inherit the
-    // last test's exec mock — latent fragility we guard against here.
+    // Reset exec so a newly added test doesn't inherit the previous test's exec mock.
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
     registerRepoHandlers(mockWindow as never, mockStore as never)
   })
@@ -2407,10 +2808,7 @@ describe('repos:getBaseRefDefault envelope', () => {
     expect(result.remoteCount).toBe(1)
   })
 
-  // Why: the SSH handler resolves default-ref and remote-count in parallel
-  // (Promise.all) so the order of calls into provider.exec is not stable.
-  // Dispatch on argv instead of `mockResolvedValueOnce` chains so tests remain
-  // independent of which Promise in the Promise.all resolves first.
+  // Why: the handler resolves default-ref and remote-count in parallel, so dispatch on argv (not call order) to stay stable.
   type ExecResponse = { stdout: string; stderr: string }
   type ExecRule = {
     matches: (argv: string[]) => boolean
@@ -2441,8 +2839,7 @@ describe('repos:getBaseRefDefault envelope', () => {
           matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
-        // The origin/HEAD target is verified before it is trusted, so the
-        // symbolic-ref result must also resolve via rev-parse.
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
           matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.resolve({ stdout: '', stderr: '' })
@@ -2477,8 +2874,7 @@ describe('repos:getBaseRefDefault envelope', () => {
           matches: isSymbolicRef,
           respond: () => Promise.resolve({ stdout: 'refs/remotes/origin/main\n', stderr: '' })
         },
-        // The origin/HEAD target is verified before it is trusted, so the
-        // symbolic-ref result must also resolve via rev-parse.
+        // origin/HEAD is verified before trusted, so it must also resolve via rev-parse.
         {
           matches: isRevParseFor('refs/remotes/origin/main'),
           respond: () => Promise.resolve({ stdout: '', stderr: '' })
@@ -2502,8 +2898,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: default detection must be independent of remote-count lookup.
-    // A failing count falls back to 0, but the default still resolves.
+    // Why: default detection is independent of remote-count; a failing count falls back to 0 while the default still resolves.
     expect(result.defaultBaseRef).toBe('origin/main')
     expect(result.remoteCount).toBe(0)
   })
@@ -2542,9 +2937,7 @@ describe('repos:getBaseRefDefault envelope', () => {
       remoteCount: number
     }
 
-    // Why: when symbolic-ref fails, the probe chain should find
-    // refs/remotes/origin/master and return 'origin/master', matching
-    // the local path's getDefaultBaseRefAsync behavior.
+    // Why: when symbolic-ref fails, the probe chain resolves origin/master, matching the local path.
     expect(result.defaultBaseRef).toBe('origin/master')
     expect(result.remoteCount).toBe(1)
   })
@@ -2637,8 +3030,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '***'
     })
 
-    // Why: normalizeRefSearchQuery still strips glob metacharacters before
-    // building argv; the resulting empty query now intentionally lists refs.
+    // Why: glob metacharacters are stripped, so the empty query intentionally lists refs.
     const [argv] = mockGitProvider.exec.mock.calls.find(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )!
@@ -2698,22 +3090,26 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: '',
       limit: 1
     })
+    const repeatedResult = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: '',
+      limit: 1
+    })
 
     expect(result).toEqual(['origin/main'])
+    expect(repeatedResult).toEqual(['origin/main'])
     const forEachRefCalls = mockGitProvider.exec.mock.calls.filter(
       (call) => (call[0] as string[])[0] === 'for-each-ref'
     )
-    expect(forEachRefCalls).toHaveLength(2)
+    expect(forEachRefCalls).toHaveLength(3)
     expect(forEachRefCalls[0][0]).toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
     expect(forEachRefCalls[1][0]).toContain('--count=104')
+    expect(forEachRefCalls[2][0]).not.toContain('--exclude=refs/remotes/**/HEAD')
   })
 
   it('sends the widened `**` argv so all remotes and slash-named branches are discoverable', async () => {
-    // Why: this is the core issue-624 behavior — the SSH path must glob all
-    // remotes, not just origin. The `**` globs additionally span ref segments
-    // so slash-named branches (`user/feature`) are found by a single-word
-    // query; a single `*` would not cross `/`.
+    // Why: SSH globs all remotes and `**` crosses `/` so slash-named branches match a single-word query (issue #624).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -2741,11 +3137,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
   })
 
   it('sends segmented argv for display-format queries like `upstream/main`', async () => {
-    // Why: guards against the SSH path drifting from the local path for
-    // multi-segment queries. The picker shows results as `<remote>/<branch>`
-    // and users retype that format; if the SSH argv reverts to a single
-    // `*<q>*` glob containing the literal `/`, SSH users silently see no
-    // matches for valid refs — the same shape of bug as issue #624.
+    // Why: a single `*<q>*` glob with a literal `/` makes SSH multi-segment queries silently match nothing (issue #624 shape).
     mockGitProvider.exec = vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
 
     mockStore.getRepo.mockReturnValue({
@@ -2768,18 +3160,14 @@ describe('repos:searchBaseRefs SSH relay', () => {
     expect(segmentedArgv).toContain('refs/heads/*upstream*/*main*')
     expect(branchRootArgv).toContain('refs/remotes/*/upstream/main*')
     expect(branchRootArgv).toContain('refs/heads/upstream/main*')
-    // Regression guard: the literal slash must never appear inside a
-    // single segmented glob (would be `refs/remotes/*upstream/main*`),
-    // which fnmatch cannot match because `*` doesn't cross `/`.
+    // Regression guard: a literal slash must never appear inside a single segmented glob (`*` doesn't cross `/`).
     expect(segmentedArgv).not.toContain('refs/remotes/*upstream/main*/*')
     expect(segmentedArgv).not.toContain('refs/remotes/*/*upstream/main*')
     expect(mockGitProvider.exec).toHaveBeenCalledWith(['remote'], '/remote/repo')
   })
 
   it('parses NUL-delimited stdout and filters <remote>/HEAD pseudo-refs', async () => {
-    // Why: exercises the shared parseAndFilterSearchRefs pipeline end-to-end
-    // on the SSH path — confirms the HEAD filter works for any remote (not
-    // just origin) when results come from the relay.
+    // Why: confirms the HEAD filter works for any remote, not just origin, on the SSH path.
     const stdout = [
       'refs/remotes/origin/main\0origin/main',
       'refs/remotes/upstream/main\0upstream/main',
@@ -2820,9 +3208,7 @@ describe('repos:searchBaseRefs SSH relay', () => {
       query: 'main'
     })
 
-    // Why: transport failure must fall back to an empty result set — mirrors
-    // the local path's catch, so SSH users see "no matches" instead of a
-    // crashed picker when the relay drops.
+    // Why: transport failure falls back to an empty result set so the picker doesn't crash.
     expect(result).toEqual([])
   })
 

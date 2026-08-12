@@ -1,11 +1,45 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as NodeFs from 'node:fs'
 
-const { sessionFromPartitionMock, dialogShowOpenDialogMock } = vi.hoisted(() => ({
+const {
+  appGetPathMock,
+  copyFileSyncMock,
+  execFileSyncMock,
+  sessionFromPartitionMock,
+  dialogShowOpenDialogMock,
+  setPendingCookieImportMock,
+  clearPendingCookieImportMock
+} = vi.hoisted(() => ({
+  appGetPathMock: vi.fn(),
+  copyFileSyncMock: vi.fn(),
+  execFileSyncMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
-  dialogShowOpenDialogMock: vi.fn()
+  dialogShowOpenDialogMock: vi.fn(),
+  setPendingCookieImportMock: vi.fn(),
+  clearPendingCookieImportMock: vi.fn()
 }))
 
+vi.mock('./browser-session-registry', () => ({
+  browserSessionRegistry: {
+    setPendingCookieImport: setPendingCookieImportMock,
+    clearPendingCookieImport: clearPendingCookieImportMock
+  }
+}))
+
+vi.mock('node:child_process', () => ({ execFileSync: execFileSyncMock }))
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFs>()
+  return {
+    ...actual,
+    copyFileSync: (...args: Parameters<typeof actual.copyFileSync>) => {
+      copyFileSyncMock(...args)
+      return actual.copyFileSync(...args)
+    }
+  }
+})
+
 vi.mock('electron', () => ({
+  app: { getPath: appGetPathMock },
   BrowserWindow: { fromWebContents: vi.fn() },
   dialog: { showOpenDialog: dialogShowOpenDialogMock },
   session: { fromPartition: sessionFromPartitionMock }
@@ -20,9 +54,33 @@ import {
   type ChromiumCookieColumnInfo,
   type DetectedBrowser
 } from './browser-cookie-import'
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import {
+  createChromiumCookieTestDatabase,
+  encryptMacChromiumCookie
+} from './browser-cookie-import-test-database'
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync
+} from 'node:fs'
+import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
+
+function chromeBrowser(cookiesPath: string): DetectedBrowser {
+  return {
+    family: 'chrome',
+    label: 'Google Chrome',
+    cookiesPath,
+    keychainService: 'Chrome Safe Storage',
+    keychainAccount: 'Chrome',
+    profiles: [{ name: 'Default', directory: 'Default' }],
+    selectedProfile: 'Default'
+  }
+}
 
 const LARGE_SAFARI_COOKIE_COUNT = 150_000
 
@@ -101,14 +159,22 @@ function buildExpiredSafariCookie(index: number): Buffer {
 
 describe('importCookiesFromFile', () => {
   let tmpDir: string
+  let cookiesGetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-test-'))
+    cookiesGetMock = vi.fn().mockResolvedValue([])
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
-      cookies: { set: cookiesSetMock }
+      cookies: {
+        get: cookiesGetMock,
+        remove: cookiesRemoveMock,
+        set: cookiesSetMock
+      }
     })
   })
 
@@ -162,6 +228,35 @@ describe('importCookiesFromFile', () => {
     expect(firstCall.domain).toBe('.github.com')
     expect(firstCall.secure).toBe(true)
     expect(firstCall.sameSite).toBe('lax')
+  })
+
+  it('sets __Host- cookies host-only so Chromium does not reject them', async () => {
+    const filePath = writeCookieFile([
+      {
+        domain: 'github.com',
+        name: '__Host-user_session_same_site',
+        value: 'sess',
+        path: '/account',
+        secure: true,
+        httpOnly: true,
+        sameSite: 'lax'
+      },
+      { domain: '.github.com', name: '_gh_sess', value: 'abc', path: '/settings', secure: true }
+    ])
+
+    const result = await importCookiesFromFile(filePath, 'persist:test')
+    expect(result.ok).toBe(true)
+
+    const hostCall = cookiesSetMock.mock.calls
+      .map((c) => c[0])
+      .find((c) => c.name === '__Host-user_session_same_site')
+    // __Host- prefix requires no Domain attribute and path=/, or Chromium drops it.
+    expect(hostCall).not.toHaveProperty('domain')
+    expect(hostCall.path).toBe('/')
+
+    const normalCall = cookiesSetMock.mock.calls.map((c) => c[0]).find((c) => c.name === '_gh_sess')
+    expect(normalCall.domain).toBe('.github.com')
+    expect(normalCall.path).toBe('/settings')
   })
 
   it('rejects non-JSON files', async () => {
@@ -274,7 +369,7 @@ describe('importCookiesFromFile', () => {
     expect(cookiesSetMock.mock.calls[2][0].url).toBe('http://nodot.com/')
   })
 
-  it('counts cookies that fail to set', async () => {
+  it('rolls back replacement when a cookie fails to set', async () => {
     cookiesSetMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
 
     const filePath = writeCookieFile([
@@ -283,12 +378,8 @@ describe('importCookiesFromFile', () => {
     ])
 
     const result = await importCookiesFromFile(filePath, 'persist:test')
-    expect(result.ok).toBe(true)
-    if (!result.ok) {
-      return
-    }
-    expect(result.summary.importedCookies).toBe(1)
-    expect(result.summary.skippedCookies).toBe(1)
+    expect(result.ok).toBe(false)
+    expect(cookiesRemoveMock).toHaveBeenCalledWith('http://a.com/', 'ok')
   })
 })
 
@@ -324,6 +415,366 @@ describe('importCookiesFromBrowser Safari', () => {
 
     expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
     expect(cookiesSetMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('importCookiesFromBrowser Chromium', () => {
+  let tmpDir: string
+  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookiesRemoveMock: ReturnType<typeof vi.fn>
+  let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
+  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let setUserAgentMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    tmpDir = mkdtempSync(join(tmpdir(), 'orca-chromium-cookie-test-'))
+    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
+    cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
+    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    setUserAgentMock = vi.fn()
+    appGetPathMock.mockReset()
+    appGetPathMock.mockReturnValue(join(tmpDir, 'userData'))
+    copyFileSyncMock.mockClear()
+    setPendingCookieImportMock.mockClear()
+    clearPendingCookieImportMock.mockClear()
+    execFileSyncMock.mockReset()
+    execFileSyncMock.mockImplementation(() => {
+      throw new Error('OS credential commands are unavailable in this test')
+    })
+    sessionFromPartitionMock.mockReset()
+    sessionFromPartitionMock.mockReturnValue({
+      cookies: {
+        get: vi.fn().mockResolvedValue([]),
+        set: cookiesSetMock,
+        remove: cookiesRemoveMock,
+        flushStore: cookiesFlushStoreMock
+      },
+      clearStorageData: clearStorageDataMock,
+      setUserAgent: setUserAgentMock
+    })
+  })
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true })
+  })
+
+  it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    // Why: keeping the writer open leaves the committed row in WAL, matching a
+    // running Chromium profile whose latest auth cookies are not checkpointed.
+    const sourceDb = createChromiumCookieTestDatabase(
+      sourceCookiesPath,
+      [{ name: 'sid', value: 'source-value' }],
+      { journalMode: 'wal' }
+    )
+    createChromiumCookieTestDatabase(targetCookiesPath, [
+      { name: 'old', value: 'target-value' }
+    ]).close()
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    execFileSyncMock.mockImplementation((command: string) => {
+      if (command === 'defaults') {
+        return '120.0.6099.71\n'
+      }
+      throw new Error(`Unexpected command: ${command}`)
+    })
+    try {
+      expect(existsSync(`${sourceCookiesPath}-wal`)).toBe(true)
+      const sourceFilesBefore = ['', '-wal', '-shm'].map((suffix) =>
+        readFileSync(sourceCookiesPath + suffix)
+      )
+
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: '.example.com',
+          name: 'sid',
+          value: 'source-value'
+        })
+      )
+      expect(execFileSyncMock.mock.calls.some(([command]) => command === 'security')).toBe(false)
+      expect(execFileSyncMock.mock.calls.some(([command]) => command === 'defaults')).toBe(false)
+      expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
+        true
+      )
+      expect(
+        copyFileSyncMock.mock.calls.some(([source]) => source === `${sourceCookiesPath}-wal`)
+      ).toBe(true)
+      expect(
+        ['', '-wal', '-shm'].map((suffix) => readFileSync(sourceCookiesPath + suffix))
+      ).toEqual(sourceFilesBefore)
+      expect(cookiesRemoveMock).not.toHaveBeenCalled()
+      expect(clearStorageDataMock).not.toHaveBeenCalled()
+      // Why: STA-3514 — imports must never impersonate the source browser; the
+      // session keeps the engine UA the registry set at startup.
+      expect(setUserAgentMock).not.toHaveBeenCalled()
+    } finally {
+      platformSpy.mockRestore()
+      sourceDb.close()
+    }
+  })
+
+  it('uses the OS key for encrypted Chromium rows', async () => {
+    const password = 'test-password'
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      {
+        name: 'sid',
+        value: '',
+        encryptedValue: encryptMacChromiumCookie('encrypted-value', password)
+      }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+    execFileSyncMock.mockImplementation((command: string) => {
+      if (command === 'security') {
+        return `${password}\n`
+      }
+      throw new Error(`Unexpected command: ${command}`)
+    })
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(execFileSyncMock).toHaveBeenCalledWith(
+        'security',
+        expect.any(Array),
+        expect.any(Object)
+      )
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'sid', value: 'encrypted-value' })
+      )
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it('removes staging data when the OS key is unavailable', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: '', encryptedValue: Buffer.from('v10-encrypted') }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(false)
+      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: #9355 — staging only backs the cold-restart replay, so an AV/EDR handle that blocks
+  // the staging copy must degrade that fallback, not abort an import the memory path can serve.
+  it('still imports in-memory when the target database copy fails', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+    // The staging copy runs before the source snapshot, so the first copy is the staging one.
+    copyFileSyncMock.mockImplementationOnce((_source: string, destination: string) => {
+      writeFileSync(destination, 'partial cookie database')
+      const error = new Error('EBUSY: resource busy or locked, copyfile') as NodeJS.ErrnoException
+      error.code = 'EBUSY'
+      throw error
+    })
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'sid', value: 'source-value' })
+      )
+      // The partial staging file is still discarded, so no stale DB replays on cold start.
+      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: #9355 — the staged file is also named "Cookies", so the same transient handle can make
+  // opening it throw. That was fatal too, and the count must stay truthful without a staging DB.
+  it('still imports in-memory when the staging database cannot be opened', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    mkdirSync(dirname(targetCookiesPath), { recursive: true })
+    // A live partition DB that copies fine but is not openable as SQLite.
+    writeFileSync(targetCookiesPath, 'not a sqlite database')
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'sid', value: 'source-value' })
+      )
+      // The summary counts importable cookies, not staged rows.
+      expect(result.ok && result.summary?.importedCookies).toBe(1)
+      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: #9355 — registering a staged path that was never written would make the next cold start
+  // replay a missing or partial DB over the live partition.
+  it('never registers a restart replay when staging is unavailable', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    mkdirSync(dirname(targetCookiesPath), { recursive: true })
+    writeFileSync(targetCookiesPath, 'not a sqlite database')
+    // Forces the restart fallback to be the only way these cookies could ever land.
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(setPendingCookieImportMock).not.toHaveBeenCalled()
+      // An older staged DB must not survive an import that already rewrote the live session.
+      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
+      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+      // Why: the jar was cleared and nothing replaced it, so this must not read as a clean success.
+      expect(result.ok && result.summary?.warning).toEqual({
+        code: 'restart-fallback-unavailable',
+        loadedCookies: 0,
+        failedCookies: 1
+      })
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: #9355 — a staging write that fails mid-transaction must disable the restart fallback
+  // rather than abort an import whose in-memory half still works.
+  it('still imports in-memory when a staging insert fails', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    const targetDb = createChromiumCookieTestDatabase(targetCookiesPath, [])
+    // Rejects every staged row the way a corrupt index or disk error would.
+    targetDb.exec(
+      `CREATE TRIGGER reject_insert BEFORE INSERT ON cookies
+       BEGIN SELECT RAISE(ABORT, 'staging write failed'); END`
+    )
+    targetDb.close()
+    // Why: without a memory failure, memoryFailed === 0 would suppress registration on its own and
+    // the assertion below would pass even if the insert failure never disabled staging.
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(cookiesSetMock).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'sid', value: 'source-value' })
+      )
+      expect(setPendingCookieImportMock).not.toHaveBeenCalled()
+      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
+      expect(readdirSync(join(tmpDir, 'userData', 'cookie-import-staging'))).toEqual([])
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: #9355 — a successful in-memory import must retire any older staged replay, or the next
+  // cold start will overwrite the live session with a stale snapshot.
+  it('clears a stale staged replay after an import that fully succeeds in memory', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(setPendingCookieImportMock).not.toHaveBeenCalled()
+      expect(clearPendingCookieImportMock).toHaveBeenCalledWith('persist:test')
+      // A fully in-memory import needs no restart, so it must not warn.
+      expect(result.ok && result.summary?.warning).toBeUndefined()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  // Why: the staged path is the restart fallback's only input, so a working staging DB must register it.
+  it('registers the staged database when cookies need a restart', async () => {
+    const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
+    const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
+    createChromiumCookieTestDatabase(sourceCookiesPath, [
+      { name: 'sid', value: 'source-value' }
+    ]).close()
+    createChromiumCookieTestDatabase(targetCookiesPath, []).close()
+    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
+    try {
+      const result = await importCookiesFromBrowser(
+        chromeBrowser(sourceCookiesPath),
+        'persist:test'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(setPendingCookieImportMock).toHaveBeenCalledTimes(1)
+      const [partition, stagedPath] = setPendingCookieImportMock.mock.calls[0]
+      expect(partition).toBe('persist:test')
+      expect(existsSync(stagedPath as string)).toBe(true)
+    } finally {
+      platformSpy.mockRestore()
+    }
   })
 })
 

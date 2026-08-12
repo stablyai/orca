@@ -33,13 +33,15 @@ beforeAll(() => {
 })
 
 import {
-  buildFontFamily,
   buildPostReplayLiveAgentReattachReset,
   POST_REPLAY_LIVE_AGENT_REATTACH_RESET,
   POST_REPLAY_MODE_RESET,
   replayPayloadEndsWithCursorHidden,
   RESET_KITTY_KEYBOARD_PROTOCOL,
-  RESET_TERMINAL_CURSOR_STYLE,
+  RESET_TERMINAL_CURSOR_STYLE
+} from '../../../../shared/terminal-mode-reset-profiles'
+import {
+  buildFontFamily,
   restoreScrollbackBuffers,
   serializePaneTree,
   serializeTerminalLayout,
@@ -440,7 +442,8 @@ describe('restoreScrollbackBuffers', () => {
       }
     }
     const manager = {
-      getPanes: vi.fn(() => [pane])
+      getPanes: vi.fn(() => [pane]),
+      hasWebglRenderer: vi.fn(() => true)
     }
     const replayingPanesRef = { current: new Map<number, number>() }
     const restoredViewportBlankingPanesRef = { current: new Set<number>() }
@@ -454,6 +457,7 @@ describe('restoreScrollbackBuffers', () => {
     )
 
     expect(writes).toEqual(['restored output', '\r\n', POST_REPLAY_MODE_RESET])
+    expect(manager.hasWebglRenderer).toHaveBeenCalledWith(1)
     expect(restoredViewportBlankingPanesRef.current.has(1)).toBe(true)
     expect(replayingPanesRef.current.size).toBe(0)
   })

@@ -1,12 +1,12 @@
 import path from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { callMock, remoteMock } = vi.hoisted(() => ({
   callMock: vi.fn(),
   remoteMock: vi.fn(() => false)
 }))
 
-vi.mock('../runtime-client', () => {
+vi.mock('../runtime-client', async () => {
   class RuntimeClient {
     readonly isRemote: boolean
     call = callMock
@@ -18,35 +18,20 @@ vi.mock('../runtime-client', () => {
     }
   }
 
-  class RuntimeClientError extends Error {
-    readonly code: string
-
-    constructor(code: string, message: string) {
-      super(message)
-      this.code = code
-    }
-  }
-
-  class RuntimeRpcFailureError extends RuntimeClientError {
-    readonly response: unknown
-
-    constructor(response: unknown) {
-      super('runtime_error', 'runtime_error')
-      this.response = response
-    }
-  }
-
-  return {
-    RuntimeClient,
-    RuntimeClientError,
-    RuntimeRpcFailureError
-  }
+  // Why: re-export the REAL error classes; format.ts narrows with `instanceof`
+  // against ./runtime/types, so a look-alike would collapse every CLI error
+  // code into the generic `runtime_error` shape.
+  const { RuntimeClientError, RuntimeRpcFailureError } = await import('../runtime/types.js')
+  return { RuntimeClient, RuntimeClientError, RuntimeRpcFailureError }
 })
 
 import { main } from '../index'
 import { okFixture, queueFixtures } from '../test-fixtures'
 
 describe('orca emulator CLI handlers', () => {
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+
   beforeEach(() => {
     vi.restoreAllMocks()
     callMock.mockReset()
@@ -54,6 +39,19 @@ describe('orca emulator CLI handlers', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     process.exitCode = undefined
+  })
+
+  afterEach(() => {
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
   })
 
   it('resolves relative APK paths before calling the runtime', async () => {
@@ -87,6 +85,46 @@ describe('orca emulator CLI handlers', () => {
     expect(callMock).toHaveBeenCalledWith(
       'emulator.attach',
       { device: 'device-1', worktree: undefined, focus: false },
+      { timeoutMs: 180_000 }
+    )
+  })
+
+  it('uses the folder workspace exported by the current Orca terminal', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    delete process.env.ORCA_WORKTREE_ID
+    callMock.mockResolvedValue(
+      okFixture('req_attach', {
+        attached: true,
+        info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
+      })
+    )
+
+    await main(['emulator', 'attach', 'device-1'], '/folder/project')
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith(
+      'emulator.attach',
+      { device: 'device-1', worktree: 'folder:folder-1', focus: false },
+      { timeoutMs: 180_000 }
+    )
+  })
+
+  it('uses the current git worktree exported by the Orca terminal', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:stale-parent'
+    process.env.ORCA_WORKTREE_ID = 'repo-1::/repo/project '
+    callMock.mockResolvedValue(
+      okFixture('req_attach', {
+        attached: true,
+        info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
+      })
+    )
+
+    await main(['emulator', 'attach', 'device-1'], '/repo/project')
+
+    expect(callMock).toHaveBeenCalledOnce()
+    expect(callMock).toHaveBeenCalledWith(
+      'emulator.attach',
+      { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
       { timeoutMs: 180_000 }
     )
   })

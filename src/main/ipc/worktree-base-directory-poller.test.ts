@@ -1,10 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
+  createWorktreePollerWindowVisibility,
   startWorktreeBaseDirectoryPoller,
-  type WorktreeBasePollEvent
+  WORKTREE_BASE_BACKSTOP_TICKS,
+  type WorktreeBasePollEvent,
+  type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
 import type {
   WorktreeBaseRepoWatchConfig,
@@ -12,6 +16,37 @@ import type {
 } from './worktree-base-directory-event-filter'
 
 const POLL_MS = 25
+
+type VisibilityHarness = {
+  source: WorktreePollerWindowVisibility
+  hide: () => void
+  show: () => void
+}
+
+function createVisibilityHarness(initiallyVisible = true): VisibilityHarness {
+  let visible = initiallyVisible
+  let listener: (() => void) | null = null
+  return {
+    source: {
+      isWindowVisible: () => visible,
+      onWindowBecameVisible: (nextListener) => {
+        listener = nextListener
+        return () => {
+          if (listener === nextListener) {
+            listener = null
+          }
+        }
+      }
+    },
+    hide: () => {
+      visible = false
+    },
+    show: () => {
+      visible = true
+      listener?.()
+    }
+  }
+}
 
 function makeTarget(
   kind: 'base' | 'git-common',
@@ -171,7 +206,193 @@ describe('worktree base directory poller', () => {
     expect(fullScans.length).toBeGreaterThan(0)
   })
 
-  it('reports git-common worktrees metadata adds, updates, and removals via polling', async () => {
+  it('retires stale marker probes while preserving backstop detection and path reuse', async () => {
+    const root = await makeRoot()
+    const ordinaryFolder = join(root, 'ordinary-folder')
+    const markerPath = join(ordinaryFolder, '.git')
+    await mkdir(ordinaryFolder)
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    let fullScans = 0
+    let pendingMarkerProbes = 0
+    let writeMarkerOnNextProbe = false
+    const pendingMarkerMaxTicks = WORKTREE_BASE_BACKSTOP_TICKS * 2
+    const markerCreationTick = pendingMarkerMaxTicks * 2 + WORKTREE_BASE_BACKSTOP_TICKS * 4
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        pendingMarkerMaxTicks,
+        onFullScan: () => {
+          fullScans += 1
+          if (fullScans * WORKTREE_BASE_BACKSTOP_TICKS === markerCreationTick) {
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        },
+        onPendingMarkerProbe: (path) => {
+          pendingMarkerProbes += 1
+          if (writeMarkerOnNextProbe && path === markerPath) {
+            writeMarkerOnNextProbe = false
+            writeFileSync(markerPath, 'gitdir: elsewhere')
+          }
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === markerPath)
+    )
+
+    await rm(ordinaryFolder, { recursive: true })
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'delete' && event.path === ordinaryFolder)
+    )
+    writeMarkerOnNextProbe = true
+    await mkdir(ordinaryFolder)
+    const events = await waitForEvents(
+      received,
+      (flat) =>
+        flat.filter((event) => event.type === 'create' && event.path === markerPath).length === 2
+    )
+
+    expect(pendingMarkerProbes).toBeLessThanOrEqual(pendingMarkerMaxTicks)
+    expect(
+      events.filter((event) => event.type === 'create' && event.path === markerPath)
+    ).toHaveLength(2)
+  })
+
+  it('rescans on the next tick when a write races an in-flight full scan', async () => {
+    const root = await makeRoot()
+    const worktree = join(root, 'raced')
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    const snapshotTicks: number[] = []
+    let raced = false
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        onSnapshotTaken: (tick) => {
+          snapshotTicks.push(tick)
+          if (raced) {
+            return
+          }
+          raced = true
+          mkdirSync(worktree)
+          writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere')
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+
+    // A write landing after a scan's listings must leave the gate stale, so the
+    // next tick rescans instead of deferring the create to the backstop.
+    expect(snapshotTicks.slice(0, 2)).toEqual([
+      WORKTREE_BASE_BACKSTOP_TICKS,
+      WORKTREE_BASE_BACKSTOP_TICKS + 1
+    ])
+  })
+
+  it('parks base scans while hidden and losslessly detects changes on resume', async () => {
+    const root = await makeRoot()
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const fullScans: number[] = []
+    const target = makeTarget('base', root)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: POLL_MS,
+        visibility: visibility.source,
+        onFullScan: () => fullScans.push(Date.now())
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    visibility.hide()
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    const worktree = join(root, 'added-while-hidden')
+    await mkdir(worktree)
+    await writeFile(join(worktree, '.git'), 'gitdir: elsewhere')
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+
+    expect(received.flat()).toHaveLength(0)
+    expect(fullScans).toHaveLength(0)
+
+    visibility.show()
+    expect(fullScans).toHaveLength(1)
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+  })
+
+  it('keeps polling without a main window', async () => {
+    const root = await makeRoot()
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    const visibility = createWorktreePollerWindowVisibility(() => null)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, visibility }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    const worktree = join(root, 'headless-add')
+    await mkdir(worktree)
+    await writeFile(join(worktree, '.git'), 'gitdir: elsewhere')
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+    expect(visibility.isWindowVisible()).toBe(true)
+  })
+
+  it('treats a destroyed window as absent instead of parking forever', () => {
+    const visibility = createWorktreePollerWindowVisibility(() => ({ isDestroyed: () => true }))
+    expect(visibility.isWindowVisible()).toBe(true)
+  })
+
+  it('keeps polling a live window that has never been shown (E2E headless)', () => {
+    // ORCA_E2E_HEADLESS keeps a live BrowserWindow that is never shown; no show/restore
+    // signal is coming to resume a parked poller, so a never-shown window must keep polling.
+    const visibility = createWorktreePollerWindowVisibility(() => ({
+      isDestroyed: () => false,
+      isVisible: () => false,
+      isMinimized: () => false
+    }))
+    expect(visibility.isWindowVisible()).toBe(true)
+    expect(visibility.isWindowVisible()).toBe(true)
+  })
+
+  it('parks only after the window has been shown at least once', () => {
+    let visible = true
+    const visibility = createWorktreePollerWindowVisibility(() => ({
+      isDestroyed: () => false,
+      isVisible: () => visible,
+      isMinimized: () => false
+    }))
+    // Shown at least once: a later reveal will fire the visibility signal to resume.
+    expect(visibility.isWindowVisible()).toBe(true)
+    // Now hidden — a previously-shown window parks (its show/restore will resume it).
+    visible = false
+    expect(visibility.isWindowVisible()).toBe(false)
+  })
+
+  it('reports git-common entry creates, allowlisted leaf updates, and removals via polling', async () => {
     const commonDir = await makeRoot()
     const received: WorktreeBasePollEvent[][] = []
     const target = makeTarget('git-common', commonDir)
@@ -190,17 +411,122 @@ describe('worktree base directory poller', () => {
       flat.some((event) => event.type === 'create' && event.path === entry)
     )
 
-    // HEAD/gitdir metadata writes land as new files in the entry dir, which
-    // bumps the entry dir mtime the poller compares.
     await new Promise((resolve) => setTimeout(resolve, 10))
     await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
     await waitForEvents(received, (flat) =>
-      flat.some((event) => event.type === 'update' && event.path === entry)
+      flat.some((event) => event.type === 'create' && event.path === join(entry, 'HEAD'))
+    )
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(entry, 'index'), 'status')
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(entry, 'index'))
     )
 
     await rm(entry, { recursive: true })
     await waitForEvents(received, (flat) =>
       flat.some((event) => event.type === 'delete' && event.path === entry)
+    )
+  })
+
+  it('detects an in-place linked HEAD rewrite that leaves the entry directory signature unchanged', async () => {
+    const commonDir = await makeRoot()
+    const entry = join(commonDir, 'worktrees', 'external-head')
+    await mkdir(entry, { recursive: true })
+    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/main')
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, platform: 'linux' }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    // Why: rewriting an existing HEAD in place changes only the file's own metadata, never the
+    // parent entry directory's mtime/ctime/ino/size — so HEAD (like the other structural leaves)
+    // must be re-stat'd every tick, not gated behind the entry-dir signature.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(entry, 'HEAD'), 'ref: refs/heads/next')
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'update' && event.path === join(entry, 'HEAD'))
+    )
+  })
+
+  it('reports linked HEAD reflog appends that bump no watched leaf or entry dir', async () => {
+    const commonDir = await makeRoot()
+    const entry = join(commonDir, 'worktrees', 'external-amend')
+    await mkdir(join(entry, 'logs'), { recursive: true })
+    await writeFile(join(entry, 'logs', 'HEAD'), 'baseline\n')
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, platform: 'linux' }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    // commit --amend appends to the reflog inside logs/ — the entry dir mtime
+    // never moves, so the leaf must be stat'd directly.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(entry, 'logs', 'HEAD'), 'baseline\namended\n')
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'update' && event.path === join(entry, 'logs', 'HEAD'))
+    )
+  })
+
+  it('surfaces in-place index rewrites through the backstop re-stat', async () => {
+    const commonDir = await makeRoot()
+    const entry = join(commonDir, 'worktrees', 'external-inplace')
+    await mkdir(entry, { recursive: true })
+    await writeFile(join(entry, 'index'), 'index-v1')
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, platform: 'linux' }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    // An in-place rewrite leaves the entry-dir signature untouched, so only
+    // the periodic ungated re-stat can observe it.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(entry, 'index'), 'index-v2-longer')
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'update' && event.path === join(entry, 'index'))
+    )
+  })
+
+  it('reports primary-checkout HEAD reflog appends via polling', async () => {
+    const commonDir = await makeRoot()
+    await mkdir(join(commonDir, 'logs'), { recursive: true })
+    await writeFile(join(commonDir, 'logs', 'HEAD'), 'baseline\n')
+
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      { pollIntervalMs: POLL_MS, platform: 'linux' }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await writeFile(join(commonDir, 'logs', 'HEAD'), 'baseline\namended\n')
+    await waitForEvents(received, (flat) =>
+      flat.some(
+        (event) => event.type === 'update' && event.path === join(commonDir, 'logs', 'HEAD')
+      )
     )
   })
 
@@ -229,6 +555,42 @@ describe('worktree base directory poller', () => {
     await waitForEvents(received, (flat) =>
       flat.some((event) => event.type === 'update' && event.path === headFile)
     )
+  })
+
+  it('detects a primary HEAD move immediately after resuming', async () => {
+    const commonDir = await makeRoot()
+    const headFile = join(commonDir, 'HEAD')
+    await writeFile(headFile, 'ref: refs/heads/main')
+    const visibility = createVisibilityHarness()
+    const received: WorktreeBasePollEvent[][] = []
+    const fullScans: number[] = []
+    const target = makeTarget('git-common', commonDir)
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: POLL_MS,
+        platform: 'linux',
+        visibility: visibility.source,
+        onFullScan: () => fullScans.push(Date.now())
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    visibility.hide()
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+    await writeFile(headFile, 'ref: refs/heads/feature')
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS * 2))
+
+    expect(received.flat()).toHaveLength(0)
+    expect(fullScans).toHaveLength(0)
+
+    visibility.show()
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'update' && event.path === headFile)
+    )
+    expect(fullScans).toHaveLength(1)
   })
 
   it('emits deletes for all known worktrees when the root vanishes', async () => {

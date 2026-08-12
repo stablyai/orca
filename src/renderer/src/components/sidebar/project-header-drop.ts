@@ -28,16 +28,6 @@ export function getProjectHeaderDragBucketKey(
   return repo.projectGroupId ? `group:${repo.projectGroupId}` : 'ungrouped'
 }
 
-export function getSidebarOrderedRepoHeaderIds(rows: readonly Row[]): string[] {
-  const ids: string[] = []
-  for (const row of rows) {
-    if (row.type === 'header' && row.repo) {
-      ids.push(row.repo.id)
-    }
-  }
-  return ids
-}
-
 export function getSidebarOrderedRepoHeaderIdsByBucket(
   rows: readonly Row[]
 ): Map<ProjectHeaderDragBucketKey, string[]> {
@@ -52,6 +42,20 @@ export function getSidebarOrderedRepoHeaderIdsByBucket(
     buckets.set(bucketKey, list)
   }
   return buckets
+}
+
+export function getLogicalRepoOrderRankById(
+  orderedRepoIds: readonly string[]
+): Map<string, number> {
+  const rankById = new Map<string, number>()
+  orderedRepoIds.forEach((repoId, index) => {
+    // Why: paired hosts can contribute the same logical project ID; its merged
+    // header must anchor to the first occurrence instead of whichever host loaded last.
+    if (!rankById.has(repoId)) {
+      rankById.set(repoId, index)
+    }
+  })
+  return rankById
 }
 
 export function getProjectGroupOrderForSidebarDrop(args: {
@@ -184,6 +188,7 @@ export function computeProjectHeaderDropPreview(args: {
   scrollTop: number
   rects: readonly ProjectHeaderDragRect[]
   sidebarRepoHeaderIds: readonly string[]
+  contentBottom?: number
 }): ProjectHeaderDropPreview | null {
   const { rects, sidebarRepoHeaderIds } = args
   return computeWorktreeSidebarHeaderDropPreview({
@@ -192,7 +197,8 @@ export function computeProjectHeaderDropPreview(args: {
     scrollTop: args.scrollTop,
     rects,
     headerCount: sidebarRepoHeaderIds.length,
-    getId: (rect) => rect.repoId
+    getId: (rect) => rect.repoId,
+    contentBottom: args.contentBottom
   })
 }
 
@@ -201,16 +207,20 @@ export function applyAllRepoInsertAt(
   draggedRepoId: string,
   insertAt: number
 ): string[] | null {
-  const fromIndex = allRepoIds.indexOf(draggedRepoId)
-  if (fromIndex === -1 || insertAt < 0 || insertAt > allRepoIds.length) {
+  if (!allRepoIds.includes(draggedRepoId) || insertAt < 0 || insertAt > allRepoIds.length) {
     return null
   }
-  const next = allRepoIds.slice()
-  next.splice(fromIndex, 1)
-  const adjustedInsertAt = insertAt > fromIndex ? insertAt - 1 : insertAt
-  if (adjustedInsertAt === fromIndex) {
+  // Why: one merged header controls every host-qualified occurrence; moving
+  // them together prevents a drag from persisting a cross-host split project.
+  const draggedBlock = allRepoIds.filter((repoId) => repoId === draggedRepoId)
+  const removedBeforeInsert = allRepoIds
+    .slice(0, insertAt)
+    .filter((repoId) => repoId === draggedRepoId).length
+  const adjustedInsertAt = insertAt - removedBeforeInsert
+  const next = allRepoIds.filter((repoId) => repoId !== draggedRepoId)
+  next.splice(adjustedInsertAt, 0, ...draggedBlock)
+  if (next.every((repoId, index) => repoId === allRepoIds[index])) {
     return null
   }
-  next.splice(adjustedInsertAt, 0, draggedRepoId)
   return next
 }

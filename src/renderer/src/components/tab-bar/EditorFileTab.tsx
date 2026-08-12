@@ -37,10 +37,14 @@ export default function EditorFileTab({
   isActive,
   isPinned,
   hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
   statusByRelativePath,
   onActivate,
   onClose,
+  onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onCloseAll,
   onMakePermanent,
   onTogglePin,
@@ -52,10 +56,14 @@ export default function EditorFileTab({
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
+  tabCount: number
   statusByRelativePath: Map<string, GitFileStatus>
   onActivate: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseToRight: () => void
+  onCloseToLeft: () => void
   onCloseAll: () => void
   onMakePermanent?: () => void
   onTogglePin: () => void
@@ -109,8 +117,10 @@ export default function EditorFileTab({
   // user's intent. This flag suppresses the trailing blur-commit.
   const renameCancelledRef = useRef(false)
   // Only on-disk edit tabs are renameable. Diff, conflict-review, and
-  // combined/virtual views don't point at a single concrete file we can safely rename.
-  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict
+  // combined/virtual views don't point at a single concrete file we can safely
+  // rename. Read-only tabs (AI Vault View Log) also stay unrenameable — rename
+  // would rewrite the agent-owned artifact's backing path.
+  const canRename = file.mode === 'edit' && !file.diffSource && !file.conflict && !file.readOnly
 
   const openRenameInput = (): void => {
     if (!canRename) {
@@ -402,6 +412,8 @@ export default function EditorFileTab({
         isPinned={isPinned}
         isRenaming={isRenaming}
         hasTabsToRight={hasTabsToRight}
+        hasTabsToLeft={hasTabsToLeft}
+        tabCount={tabCount}
         canRename={canRename}
         canShowMarkdownPreview={canShowMarkdownPreview}
         resolvedLanguage={resolvedLanguage}
@@ -412,8 +424,10 @@ export default function EditorFileTab({
         onOpenRenameInput={openRenameInput}
         onTogglePin={onTogglePin}
         onClose={onClose}
+        onCloseOthers={onCloseOthers}
         onCloseAll={onCloseAll}
         onCloseToRight={onCloseToRight}
+        onCloseToLeft={onCloseToLeft}
         onOpenMarkdownPreview={openMarkdownPreview}
       />
     </>

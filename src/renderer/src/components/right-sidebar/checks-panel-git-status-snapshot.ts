@@ -13,6 +13,10 @@ export type ChecksPanelGitStatusContextInput = {
   runtimeEnvironmentId: string | null
   repoConnectionId: string | null
   pushTarget: GitPushTarget | null | undefined
+  // Local execution host variant (`wsl:{distro}` vs `host`) so a Windows-host
+  // result never authorizes a WSL context (or another distro), and vice versa.
+  // Null for SSH/runtime contexts, which are already scoped by their host ids.
+  localExecutionScope?: string | null
 }
 
 export type ChecksPanelGitStatusSnapshot = {
@@ -60,6 +64,7 @@ export function buildChecksPanelGitStatusContextKey(
     linkedGiteaPR: input.linkedGiteaPR ?? null,
     runtimeEnvironmentId: input.runtimeEnvironmentId ?? '',
     repoConnectionId: input.repoConnectionId ?? '',
+    localExecutionScope: input.localExecutionScope ?? null,
     pushTarget: input.pushTarget
       ? {
           remoteName: input.pushTarget.remoteName,

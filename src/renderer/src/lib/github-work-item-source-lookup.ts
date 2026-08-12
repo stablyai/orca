@@ -18,6 +18,7 @@ type GitHubWorkItemLookupArgs = {
 type GitHubWorkItemByOwnerRepoLookupArgs = GitHubWorkItemLookupArgs & {
   owner: string
   repo: string
+  host?: string
   type: 'issue' | 'pr'
 }
 
@@ -71,6 +72,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
             repo: runtimeRepoId(args),
             owner: args.owner,
             ownerRepo: args.repo,
+            ...(args.host ? { host: args.host } : {}),
             number: args.number,
             type: args.type
           },
@@ -81,6 +83,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           repoId: args.repoId,
           owner: args.owner,
           repo: args.repo,
+          ...(args.host ? { host: args.host } : {}),
           number: args.number,
           type: args.type
         })

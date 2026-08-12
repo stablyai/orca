@@ -1,8 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type {
-  OrcaCloudCapabilities,
-  OrcaCloudOrgSummary
-} from '../../shared/orca-profiles'
+import type { OrcaCloudCapabilities, OrcaCloudOrgSummary } from '../../shared/orca-profiles'
 import type { OrcaCloudSessionExchangeResponse } from './profile-cloud-session-exchange'
 
 const DEV_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000

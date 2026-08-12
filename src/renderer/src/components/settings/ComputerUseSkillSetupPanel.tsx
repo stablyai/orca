@@ -59,6 +59,7 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
       terminalAriaLabel="Computer Use skill install terminal"
       terminalWorktreeId="settings-computer-use-skill-terminal"
       terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+      terminalRuntime={activeSkillRuntime.agentRuntime}
       installed={computerUseSkillDetected}
       loading={computerUseSkillLoading}
       error={activeSkillRuntime.installDisabledReason ?? computerUseSkillError}
@@ -79,6 +80,9 @@ export function ComputerUseSkillSetupPanel(): React.JSX.Element {
           : ensureOrcaCliAvailableForAgentSkillTerminal())
       }}
       onRecheck={refreshComputerUseSkill}
+      freshnessSkillName={
+        activeSkillRuntime.canUseLocalSkillFreshness ? COMPUTER_USE_SKILL_NAME : undefined
+      }
     />
   )
 }

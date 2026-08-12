@@ -16,6 +16,7 @@ function makeState(overrides: Partial<AppState> = {}): AppState {
     activeBrowserTabIdByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    browserCertificateFailuresByPageId: {},
     openFiles: [],
     editorDrafts: {},
     activeTabId: null,

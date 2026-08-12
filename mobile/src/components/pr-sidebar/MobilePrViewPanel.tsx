@@ -1,15 +1,11 @@
-import { useEffect } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
-import { ChevronLeft, ExternalLink, X } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { StyleSheet, View } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { colors } from '../../theme/mobile-theme'
 import type { ConnectionState } from '../../transport/types'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
-import { useMobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
+import type { MobilePrSidebarController } from '../../session/use-mobile-pr-sidebar-controller'
 import { MobilePRSidebar } from '../MobilePRSidebar'
-import { openMobilePrUrl } from '../MobilePrComposeSheet'
 
 type Props = {
   client: RpcClient | null
@@ -20,13 +16,13 @@ type Props = {
   gitStatus: MobileGitStatusResult | null
   isGithubRepo?: boolean
   branchContextLoaded?: boolean
-  // Embedded (docked) drops the full-screen SafeAreaView chrome and shows a close
-  // affordance; the dock column owns the safe-area insets. Full-screen otherwise.
-  embedded?: boolean
-  onRequestClose?: () => void
+  controller: MobilePrSidebarController
 }
 
-export function MobilePrViewPanel({
+// Chromeless PR sidebar body for the source-control hub's Pull Request segment.
+// The hub owns the header, segmented control, load triggers, and the shared
+// controller (one fetch feeds both the branch-card chip and this body).
+export function MobilePrViewPanelBody({
   client,
   connState,
   worktreeId,
@@ -35,32 +31,10 @@ export function MobilePrViewPanel({
   gitStatus,
   isGithubRepo = true,
   branchContextLoaded = true,
-  embedded = false,
-  onRequestClose
+  controller
 }: Props) {
-  const router = useRouter()
   const insets = useSafeAreaInsets()
-  const controller = useMobilePrSidebarController({
-    client,
-    connState,
-    worktreeId,
-    branch,
-    headSha
-  })
 
-  // A docked/full-screen PR panel is always visible — there is no drawer to open,
-  // so trigger the load directly once context is ready rather than gating on the
-  // showPRSidebar overlay flag (KTD4).
-  const prSidebarKind = controller.prSidebarState.kind
-  const refetch = controller.refetchPRSidebar
-  useEffect(() => {
-    if (branch && isGithubRepo && prSidebarKind === 'hidden') {
-      refetch()
-    }
-  }, [branch, isGithubRepo, prSidebarKind, refetch])
-
-  // Embedded: the dock column applies the bottom inset; full-screen relies on its own
-  // SafeAreaView (edges top only), so content must clear the home indicator itself.
   const sidebarState = !branchContextLoaded
     ? ({ kind: 'loading' } as const)
     : !isGithubRepo
@@ -74,86 +48,24 @@ export function MobilePrViewPanel({
             message: 'Current branch unavailable.'
           } as const)
         : controller.prSidebarState
-  // Why: open-on-host lives in the chrome so the PR URL is always flush-right of
-  // the screen title, even when the body is scrolled past the PR header.
-  const prUrl =
-    sidebarState.kind === 'ready' && sidebarState.data.pr.url ? sidebarState.data.pr.url : null
-  const prNumber = sidebarState.kind === 'ready' ? sidebarState.data.pr.number : null
-  const openPr = prUrl ? () => openMobilePrUrl(prUrl) : undefined
-  const openPrControl = openPr ? (
-    <Pressable
-      style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-      onPress={openPr}
-      hitSlop={8}
-      accessibilityRole="link"
-      accessibilityLabel={
-        prNumber != null
-          ? `Open pull request #${prNumber} on the web`
-          : 'Open pull request on the web'
-      }
-    >
-      <ExternalLink size={18} color={colors.textSecondary} strokeWidth={2.2} />
-    </Pressable>
-  ) : null
-  const sidebar = (
-    <MobilePRSidebar
-      state={sidebarState}
-      onRetry={controller.retryPRSidebar}
-      refetch={controller.refetchPRSidebar}
-      client={client}
-      connState={connState}
-      worktreeId={worktreeId}
-      gitBranch={branch}
-      gitStatus={gitStatus}
-      headSha={headSha}
-      bottomInset={insets.bottom}
-    />
-  )
-
-  if (embedded) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.topBar}>
-            <Pressable
-              style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-              onPress={onRequestClose}
-              hitSlop={8}
-              accessibilityLabel="Close pull request panel"
-            >
-              <X size={20} color={colors.textSecondary} strokeWidth={2.2} />
-            </Pressable>
-            <Text style={styles.title} numberOfLines={1}>
-              Pull Request
-            </Text>
-            {openPrControl}
-          </View>
-        </View>
-        {sidebar}
-      </View>
-    )
-  }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <View style={styles.topBar}>
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={() => router.back()}
-            hitSlop={8}
-            accessibilityLabel="Back to session"
-          >
-            <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <Text style={styles.title} numberOfLines={1}>
-            Pull Request
-          </Text>
-          {openPrControl}
-        </View>
-      </View>
-      {sidebar}
-    </SafeAreaView>
+    <View style={styles.container}>
+      <MobilePRSidebar
+        state={sidebarState}
+        onRetry={controller.retryPRSidebar}
+        refetch={controller.refetchPRSidebar}
+        client={client}
+        connState={connState}
+        worktreeId={worktreeId}
+        gitBranch={branch}
+        gitStatus={gitStatus}
+        headSha={headSha}
+        bottomInset={insets.bottom}
+        // Hub header already hosts open-on-web while this segment is active.
+        showOpenOnWeb={false}
+      />
+    </View>
   )
 }
 
@@ -161,34 +73,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
-  },
-  header: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle
-  },
-  topBar: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md
-  },
-  iconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  iconButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  title: {
-    flex: 1,
-    minWidth: 0,
-    color: colors.textPrimary,
-    fontSize: typography.titleSize,
-    fontWeight: '600'
   }
 })

@@ -58,6 +58,7 @@ describe('check-terminal-perf-report-budgets', () => {
         'frames=180',
         'median=2.9ms',
         'worst=5.9ms',
+        'revisit=42.0ms',
         'maxTimerDrift=12.1ms',
         'scroll=149.9ms',
         'restore=642.0ms',
@@ -82,6 +83,7 @@ describe('check-terminal-perf-report-budgets', () => {
         'frames=60',
         'median=76.0ms',
         'worst=301.0ms',
+        'revisit=301.0ms',
         'maxTimerDrift=151.0ms',
         'scroll=151.0ms',
         'restore=1001.0ms',
@@ -96,12 +98,48 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('median typing latency 76ms exceeded budget 75ms')
     expect(result.stderr).toContain('worst typing latency 301ms exceeded budget 300ms')
+    expect(result.stderr).toContain('revisit latency 301ms exceeded budget 300ms')
     expect(result.stderr).toContain('timer drift 151ms exceeded budget 150ms')
     expect(result.stderr).toContain('scroll latency 151ms exceeded budget 150ms')
     expect(result.stderr).toContain('restore latency 1001ms exceeded budget 1000ms')
     expect(result.stderr).toContain('renderer queued chars 2097153 exceeded budget 2097152')
     expect(result.stderr).toContain('renderer peak queued chars 2097153 exceeded budget 2097152')
     expect(result.stderr).toContain('renderer dropped backlogs 1 exceeded budget 0')
+  })
+
+  // Why: covers every isUnderLoadTimerDriftScenario branch (two exact + two
+  // prefix matches) so a predicate regression cannot silently re-apply the
+  // unloaded 150ms ceiling to multi-pane redraw rows.
+  it.each([
+    'opencode-same-workspace-typing',
+    'opencode-cross-workspace-typing',
+    'opencode-scale-same-workspace-50',
+    'opencode-scale-cross-workspace-50'
+  ])('applies the under-load timer-drift budget to %s', (scenario) => {
+    const passPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=1510.0ms'].join(
+        ' '
+      ),
+      scenario
+    )
+
+    const passOutput = execFileSync(process.execPath, [scriptPath, passPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+    expect(passOutput).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  it('fails multi-pane redraw scenarios that exceed the under-load timer-drift budget', () => {
+    const failPath = writeReport(
+      ['panes=50', 'frames=60', 'median=12.0ms', 'worst=40.0ms', 'maxTimerDrift=2501.0ms'].join(
+        ' '
+      ),
+      'opencode-cross-workspace-typing'
+    )
+    const failResult = runChecker(failPath)
+    expect(failResult.status).toBe(1)
+    expect(failResult.stderr).toContain('timer drift 2501ms exceeded budget 2500ms')
   })
 
   it('fails malformed metric values instead of treating them as absent', () => {
@@ -114,6 +152,31 @@ describe('check-terminal-perf-report-budgets', () => {
     expect(result.stderr).toContain('worst value "abcms" is malformed')
     expect(result.stderr).toContain('rendererQueuedChars value "wat" is malformed')
     expect(result.stderr).toContain('no recognized budget metrics found')
+  })
+
+  it('accepts revisit-only marker rows as budgeted perf evidence', () => {
+    const reportPath = writeReport('panes=19 revisit=25.7ms heldAckChars=2097184')
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
+  })
+
+  it('accepts parked-memory rows that carry only heap and view-count metrics', () => {
+    const reportPath = writeReport(
+      'panes=8 parkedTabs=8 heapUsedMB=87.8 liveTerminals=1 livePaneManagers=1',
+      'opencode-parked-memory'
+    )
+
+    const output = execFileSync(process.execPath, [scriptPath, reportPath], {
+      cwd: process.cwd(),
+      encoding: 'utf8'
+    })
+
+    expect(output).toContain('Terminal perf budget check passed for 1 annotation row(s).')
   })
 
   it('fails OpenCode annotation rows that contain no budget metrics', () => {

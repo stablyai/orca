@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildAiVaultResumeCommand } from './ai-vault-types'
+import { buildAiVaultResumeCommand } from './ai-vault-resume-command'
 
 describe('buildAiVaultResumeCommand', () => {
-  it('wraps Windows cwd changes in cmd so PowerShell and cmd launch the same resume command', () => {
+  it('uses Antigravity conversation ids instead of Gemini resume flags', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'antigravity',
+        sessionId: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        cwd: '/repo/app',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/repo/app' && agy --conversation 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'")
+  })
+
+  it('builds a self-contained cmd wrapper when no live shell is known', () => {
     expect(
       buildAiVaultResumeCommand({
         agent: 'codex',
@@ -12,6 +23,36 @@ describe('buildAiVaultResumeCommand', () => {
         platform: 'win32'
       })
     ).toBe('cmd /d /s /c "cd /d ""C:\\Users\\Ada Lovelace\\repo"" && codex resume ""session-1"""')
+  })
+
+  it('builds a direct queued command for a live cmd shell', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'omp',
+        sessionId: 'session-one',
+        resumeFilePath: 'C:\\Users\\Ada Lovelace\\.omp\\sessions\\A&B session one.jsonl',
+        cwd: 'C:\\Users\\Ada Lovelace\\A&B repo',
+        platform: 'win32',
+        shell: 'cmd'
+      })
+    ).toBe(
+      'cd /d "C:\\Users\\Ada Lovelace\\A&B repo" && omp --resume "C:\\Users\\Ada Lovelace\\.omp\\sessions\\A&B session one.jsonl"'
+    )
+  })
+
+  it('emits no CODEX_HOME stamp for real-home canonical sessions', () => {
+    // Backfilled sessions dedupe to the real-home row (codexHome null); their
+    // resume must run against the user's own ~/.codex, never the frozen
+    // managed home whose auth.json stops refreshing after the flip.
+    const command = buildAiVaultResumeCommand({
+      agent: 'codex',
+      sessionId: 'session-1',
+      cwd: '/repo/app',
+      platform: 'darwin',
+      codexHome: null
+    })
+    expect(command).toBe("cd '/repo/app' && codex resume 'session-1'")
+    expect(command).not.toContain('CODEX_HOME')
   })
 
   it('carries non-default Codex homes in copied resume commands', () => {
@@ -80,5 +121,32 @@ describe('buildAiVaultResumeCommand', () => {
         platform: 'darwin'
       })
     ).toBe("cd '/Users/ada/repo' && omp --resume '019f27cd-4268-7000-96e7-62f42a55c144'")
+  })
+
+  it('resumes Prime Agent by absolute transcript path like OMP', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath:
+          '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl',
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe(
+      "cd '/Users/ada/repo' && prime-agent --resume '/Users/ada/.prime/agent/sessions/dddddddd-eeee-4fff-8aaa-111111111111.jsonl'"
+    )
+  })
+
+  it('falls back to the session id when no Prime Agent transcript path is known', () => {
+    expect(
+      buildAiVaultResumeCommand({
+        agent: 'prime-agent',
+        sessionId: 'dddddddd-eeee-4fff-8aaa-111111111111',
+        resumeFilePath: null,
+        cwd: '/Users/ada/repo',
+        platform: 'darwin'
+      })
+    ).toBe("cd '/Users/ada/repo' && prime-agent --resume 'dddddddd-eeee-4fff-8aaa-111111111111'")
   })
 })

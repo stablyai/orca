@@ -6,3 +6,9 @@
 /config/scripts/run-internal-dev-setup.mjs text eol=lf
 /config/scripts/verify-cli-bin.mjs text eol=lf
 /config/scripts/verify-release-required-assets.mjs text eol=lf
+/skill-guides/*.md text eol=lf
+/skill-stubs/*.md text eol=lf
+/skills/*/SKILL.md text eol=lf
+/src/cli/bundled-skill-guides.ts text eol=lf
+# Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
+/resources/plugins/** text eol=lf

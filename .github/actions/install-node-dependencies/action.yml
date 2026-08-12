@@ -1,0 +1,80 @@
+name: Install Node dependencies
+description: Installs the Node toolchain and repository dependencies for Linux CI jobs.
+
+inputs:
+  native-runtime:
+    description: Native runtime to prepare after the script-free install (none, node, or electron).
+    required: false
+    default: none
+  node-version:
+    description: Node.js version override; defaults to the version declared in package.json.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    # setup-node needs pnpm on PATH to locate and restore its store.
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v6
+      with:
+        run_install: false
+
+    - name: Setup Node.js
+      if: inputs.node-version == ''
+      uses: actions/setup-node@v6
+      with:
+        node-version-file: package.json
+        cache: pnpm
+
+    - name: Setup requested Node.js
+      if: inputs.node-version != ''
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+
+    - name: Validate native runtime
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: |
+        case "$NATIVE_RUNTIME" in
+          none|node|electron) ;;
+          *)
+            echo "::error::native-runtime must be none, node, or electron"
+            exit 2
+            ;;
+        esac
+
+    # pnpm's bundled gyp_main.py is not executable on fresh Linux runners.
+    - name: Use external node-gyp
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      run: |
+        npm install -g node-gyp@11.5.0
+        echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+
+    - name: Prepare dependency install
+      shell: bash
+      run: |
+        if [ -e node_modules ]; then
+          ls -ld node_modules
+          rm -rf node_modules
+        fi
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        pnpm install \
+          --no-frozen-lockfile \
+          --prefer-frozen-lockfile=false \
+          --ignore-scripts
+        git diff --exit-code package.json pnpm-lock.yaml
+
+    - name: Prepare native runtime
+      if: inputs.native-runtime != 'none'
+      shell: bash
+      env:
+        NATIVE_RUNTIME: ${{ inputs.native-runtime }}
+      run: node config/scripts/ensure-native-runtime.mjs --runtime="$NATIVE_RUNTIME"

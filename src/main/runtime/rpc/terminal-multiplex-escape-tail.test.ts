@@ -53,6 +53,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         getTerminalSize: vi.fn().mockReturnValue({ cols: 80, rows: 24 }),
         getMobileDisplayMode: vi.fn().mockReturnValue('auto'),
         getLayout: vi.fn().mockReturnValue({ seq: 1 }),
+        registerRemoteTerminalViewSubscriber: vi.fn(() => () => {}),
         subscribeToTerminalData: vi.fn().mockReturnValue(vi.fn()),
         subscribeToTerminalResize: vi.fn().mockReturnValue(vi.fn()),
         subscribeToFitOverrideChanges: vi.fn().mockReturnValue(vi.fn()),
@@ -70,14 +71,19 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
         waitForTerminal: vi.fn(() => new Promise<RuntimeTerminalWait>(() => {})),
         updateDesktopViewport: vi.fn().mockResolvedValue(true)
       })
-      const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+      const dispatcher = new RpcDispatcher({
+        runtime,
+        methods: TERMINAL_METHODS
+      })
 
       const dispatchPromise = dispatcher.dispatchStreaming(
         makeRequest('terminal.multiplex', {}),
         (msg) => messages.push(msg),
         {
           connectionId: 'conn-1',
-          sendBinary: (bytes) => binaryFrames.push(bytes),
+          sendBinary: (bytes) => {
+            binaryFrames.push(bytes)
+          },
           registerBinaryStreamHandler: (streamId, handler) => {
             handlers.set(streamId, handler)
             return () => handlers.delete(streamId)

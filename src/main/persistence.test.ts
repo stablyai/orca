@@ -1,6 +1,4 @@
-/* eslint-disable max-lines -- Why: this persistence suite keeps defaulting,
-migration, mutation, and flush behavior in one file so schema changes are
-reviewed against the full storage contract instead of being scattered. */
+/* eslint-disable max-lines -- Why: one file keeps the full storage contract (defaults, migration, mutation, flush) reviewable together. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   writeFileSync,
@@ -21,6 +19,7 @@ import type {
   ProjectGroup,
   ProjectHostSetup,
   Repo,
+  GlobalSettings,
   TerminalPaneLayoutNode,
   TerminalTab,
   WorktreeLineage,
@@ -41,13 +40,12 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../shared/execut
 import { SshConnectionStore } from './ssh/ssh-connection-store'
 import { setSourceControlActionDefault } from '../shared/source-control-ai-actions'
 import { LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
+import { closeTerminalTabInWorkspaceSession } from '../shared/workspace-session-terminal-tab-close'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 const testState = { dir: '' }
 
-// Stub the ~/.ssh/config parser so the SSH-import integration test below drives
-// the real Store (real normalizeSshTarget + disk round-trip) with deterministic
-// config hosts instead of the operator's actual ~/.ssh/config.
+// Stub the ~/.ssh/config parser so the SSH-import test drives the real Store with deterministic hosts, not the operator's actual ~/.ssh/config.
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
   sshConfigHostsToTargetsMock: vi.fn()
@@ -337,6 +335,127 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
+    const store = await createStore()
+    const ledger = {
+      version: 1 as const,
+      attempts: [
+        {
+          idempotencyKey: '11111111-1111-4111-8111-111111111111',
+          expectedScope: {
+            target: { runtime: 'host' as const, wslDistro: null },
+            accountId: 'account-host',
+            accountRevision: 42,
+            offerRevision: 'v1:offer'
+          },
+          state: 'providerPending' as const
+        }
+      ]
+    }
+
+    store.replaceCodexResetCreditAttemptLedgerAndFlush(ledger)
+    const firstRead = store.getCodexResetCreditAttemptLedger()
+    firstRead.attempts.splice(0, 1)
+
+    expect(store.getCodexResetCreditAttemptLedger()).toEqual(ledger)
+    expect((readDataFile() as PersistedState).codexResetCreditAttemptLedger).toEqual(ledger)
+  })
+
+  it('rolls the in-memory Codex reset ledger back when its sync flush fails', async () => {
+    const store = await createStore()
+    const before = store.getCodexResetCreditAttemptLedger()
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.replaceCodexResetCreditAttemptLedgerAndFlush({
+        version: 1,
+        attempts: [
+          {
+            idempotencyKey: '11111111-1111-4111-8111-111111111111',
+            expectedScope: {
+              target: { runtime: 'host', wslDistro: null },
+              accountId: 'account-host',
+              accountRevision: 42,
+              offerRevision: 'v1:offer'
+            },
+            state: 'providerPending'
+          }
+        ]
+      })
+    ).toThrow('disk full')
+
+    expect(store.getCodexResetCreditAttemptLedger()).toEqual(before)
+  })
+
+  it('preserves a corrupt Codex reset ledger as a fail-closed read error', async () => {
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      codexResetCreditAttemptLedger: {
+        version: 1,
+        attempts: [{ state: 'providerPending' }]
+      }
+    })
+
+    const store = await createStore()
+    expect(() => store.getCodexResetCreditAttemptLedger()).toThrow(
+      'Codex reset-credit attempt ledger is corrupt'
+    )
+  })
+
+  it('does not restore a terminal tab after its durable close flush returns', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-1::/tmp/worktree-1'
+    const tabId = 'terminal-1'
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeWorktreeId: worktreeId,
+      activeTabId: tabId,
+      tabsByWorktree: {
+        [worktreeId]: [
+          {
+            id: tabId,
+            ptyId: 'pty-1',
+            worktreeId,
+            title: 'Terminal',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      activeTabIdByWorktree: { [worktreeId]: tabId },
+      defaultTerminalTabsAppliedByWorktreeId: { [worktreeId]: true }
+    }
+    store.setWorkspaceSession(session)
+    store.flushOrThrow()
+
+    const closed = closeTerminalTabInWorkspaceSession(
+      store.getWorkspaceSession(),
+      worktreeId,
+      tabId
+    )
+    store.setWorkspaceSession(closed.session)
+    store.flushOrThrow()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+    expect(reloaded.getWorkspaceSession().terminalLayoutsByTabId[tabId]).toBeUndefined()
+    expect(
+      reloaded.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[worktreeId]
+    ).toBe(true)
+  })
+
   it('loads state from an explicit profile data file path', async () => {
     const profileDataDirectory = join(testState.dir, 'profiles', 'local-default')
     const profileDataFile = join(profileDataDirectory, 'orca-data.json')
@@ -499,6 +618,59 @@ describe('Store', () => {
     })
   })
 
+  it('migrates the legacy host account-runtime default to auto once', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        localAccountRuntime: 'host'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().localAccountRuntime).toBe('auto')
+    expect(store.getSettings().localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
+    store.flush()
+    const persisted = (readDataFile() as PersistedState).settings
+    expect(persisted.localAccountRuntime).toBe('auto')
+    expect(persisted.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
+  })
+
+  it('preserves an explicit WSL account-runtime pin through the migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        localAccountRuntime: 'wsl',
+        localAccountWslDistro: 'Ubuntu'
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().localAccountRuntime).toBe('wsl')
+    expect(store.getSettings().localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
+  })
+
+  it('does not re-flip an explicit host pin chosen after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        localAccountRuntime: 'host',
+        localAccountRuntimeDefaultedToAutoForAllUsers: true
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().localAccountRuntime).toBe('host')
+  })
+
   it('returns default settings when no data file exists', async () => {
     const store = await createStore()
     const settings = store.getSettings()
@@ -515,6 +687,8 @@ describe('Store', () => {
     expect(settings.terminalScrollSensitivity).toBe(1.15)
     expect(settings.terminalFastScrollSensitivity).toBe(5)
     expect(settings.terminalTuiScrollSensitivity).toBe(1)
+    expect(settings.localAccountRuntime).toBe('auto')
+    expect(settings.localAccountRuntimeDefaultedToAutoForAllUsers).toBe(true)
     expect(settings.terminalTuiScrollSensitivityDefaultedToOne).toBe(true)
     expect(settings.terminalUseSeparateLightTheme).toBe(true)
     expect(settings.rightSidebarOpenByDefault).toBe(true)
@@ -527,12 +701,26 @@ describe('Store', () => {
     expect(settings.experimentalActivity).toBe(false)
     expect(settings.experimentalActivityDefaultedOffForAllUsers).toBe(true)
     expect(settings.experimentalTerminalAttention).toBe(false)
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
+    expect(settings.experimentalNewWorktreeCardStyle).toBe(false)
     expect(settings.floatingTerminalEnabled).toBe(true)
     expect(settings.floatingTerminalDefaultedForAllUsers).toBe(true)
     expect(settings.notifications.customSoundPath).toBeNull()
     expect(settings.notifications.customSoundVolume).toBe(100)
     expect(settings.notifications.suppressWhenFocused).toBe(true)
+  })
+
+  it('repairs a persisted terminal line height outside xterm bounds', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      settings: { ...persisted.settings, terminalLineHeight: 0.85 }
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().terminalLineHeight).toBe(1)
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalLineHeight).toBe(1)
   })
 
   it('returns default UI state when no data file exists', async () => {
@@ -548,6 +736,50 @@ describe('Store', () => {
     expect(ui.setupGuideSidebarDismissed).toBe(false)
     expect(ui.setupGuideBrowserMilestoneMigrated).toBe(true)
     expect(ui.setupGuideBrowserMilestoneLegacyComplete).toBe(false)
+    // Why: brand-new profiles never saw remaining-as-default.
+    expect(ui.usagePercentageDisplayChangeNoticeDismissed).toBe(true)
+  })
+
+  it('surfaces the usage percentage display change notice for upgraded profiles', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        // Why: omit the notice key so load resolves eligibility for existing profiles.
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(false)
+  })
+
+  it('keeps the usage percentage display change notice dismissed when remaining was chosen', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    writeDataFile({
+      ...persisted,
+      onboarding: {
+        ...persisted.onboarding,
+        closedAt: 1,
+        outcome: 'completed'
+      },
+      ui: {
+        ...persisted.ui,
+        usagePercentageDisplay: 'remaining',
+        usagePercentageDisplayChangeNoticeDismissed: undefined
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getUI().usagePercentageDisplayChangeNoticeDismissed).toBe(true)
   })
 
   it('defaults minimizeToTrayOnClose to false when unset', async () => {
@@ -578,16 +810,105 @@ describe('Store', () => {
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
   })
 
+  it('persists native chat session options with per-model isolation', async () => {
+    const store = await createStore()
+    store.updateSettings({
+      nativeChatSessionOptions: {
+        claude: {
+          model: 'opus',
+          valuesByModel: {
+            opus: { effort: 'xhigh', fastMode: true },
+            sonnet: { effort: 'medium' }
+          }
+        }
+      }
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getSettings().nativeChatSessionOptions?.claude).toEqual({
+      model: 'opus',
+      valuesByModel: {
+        opus: { effort: 'xhigh', fastMode: true },
+        sonnet: { effort: 'medium' }
+      }
+    })
+  })
+
   it('coerces non-boolean minimizeToTrayOnClose payloads to a strict boolean', async () => {
     const store = await createStore()
-    // Why: a renderer-supplied non-bool must never persist as a truthy non-bool
-    // that would later read as "tray-minimize on".
+    // Why: a renderer-supplied non-bool must never persist as truthy and later read as "tray-minimize on".
     store.updateSettings({ minimizeToTrayOnClose: 'true' as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: 1 as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
     store.updateSettings({ minimizeToTrayOnClose: null as unknown as boolean })
     expect(store.getSettings().minimizeToTrayOnClose).toBe(false)
+  })
+
+  it('defaults the menu bar icon on regardless of platform', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+
+    await withPlatform('linux', async () => {
+      const store = await createStore()
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('enables the menu bar icon when an existing macOS profile has no stored value', async () => {
+    await withPlatform('darwin', async () => {
+      const persisted = getDefaultPersistedState(testState.dir)
+      delete (persisted.settings as Partial<GlobalSettings>).showMenuBarIcon
+      writeDataFile(persisted)
+
+      const store = await createStore()
+
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('persists an explicit macOS menu bar opt-out', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: false })
+      store.flush()
+
+      expect((readDataFile() as PersistedState).settings.showMenuBarIcon).toBe(false)
+      expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
+    })
+  })
+
+  it('normalizes menu bar icon writes to a strict boolean', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: 'true' as unknown as boolean })
+      expect(store.getSettings().showMenuBarIcon).toBe(false)
+      store.updateSettings({ showMenuBarIcon: true })
+      expect(store.getSettings().showMenuBarIcon).toBe(true)
+    })
+  })
+
+  it('round-trips a macOS menu bar opt-out through a non-mac host unchanged', async () => {
+    await withPlatform('darwin', async () => {
+      const store = await createStore()
+      store.updateSettings({ showMenuBarIcon: false })
+      store.flush()
+    })
+
+    // Why: a profile opened on another OS must not rewrite the mac-only preference on flush.
+    await withPlatform('win32', async () => {
+      const store = await createStore()
+      store.updateSettings({ minimizeToTrayOnClose: true })
+      store.flush()
+      expect((readDataFile() as PersistedState).settings.showMenuBarIcon).toBe(false)
+    })
+
+    await withPlatform('darwin', async () => {
+      expect((await createStore()).getSettings().showMenuBarIcon).toBe(false)
+    })
   })
 
   it('defaults trayMinimizeNoticeShown to false and persists it strictly', async () => {
@@ -618,10 +939,7 @@ describe('Store', () => {
   })
 
   it('persists the existing-user onboarding backfill back to disk', async () => {
-    // Why: the upgrade-cohort backfill is derived at load; this asserts the
-    // backfilled onboarding+gate state round-trips through a write intact (the
-    // load-time scheduleSave that triggers it without a manual flush is wired
-    // via loadNeedsSave at the no-onboarding-block branch).
+    // Why: the upgrade-cohort backfill is derived at load; assert it round-trips through a write intact (load-time scheduleSave via loadNeedsSave, no manual flush).
     writeDataFile({
       schemaVersion: 1,
       ui: {}
@@ -658,7 +976,7 @@ describe('Store', () => {
     expect(store.getUI().setupGuideSidebarDismissed).toBe(false)
   })
 
-  it('defaults new worktree card style on while onboarding is open', async () => {
+  it('keeps new worktree card style off while onboarding is open', async () => {
     writeDataFile({
       settings: {},
       onboarding: {
@@ -673,7 +991,7 @@ describe('Store', () => {
 
     const store = await createStore()
 
-    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
   })
 
   it('preserves explicit new worktree card style opt-out while onboarding is open', async () => {
@@ -694,6 +1012,20 @@ describe('Store', () => {
     const store = await createStore()
 
     expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(false)
+  })
+
+  it('preserves explicit new worktree card style opt-in on load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      settings: {
+        experimentalNewWorktreeCardStyle: true
+      },
+      ui: {}
+    })
+
+    const store = await createStore()
+
+    expect(store.getSettings().experimentalNewWorktreeCardStyle).toBe(true)
   })
 
   it('keeps new worktree card style off for existing users backfilled as completed', async () => {
@@ -770,9 +1102,7 @@ describe('Store', () => {
   })
 
   it('recovers a close timestamp when closed onboarding omits the closedAt key', async () => {
-    // Why: a persisted block missing `closedAt` entirely (vs an explicit null)
-    // must still stay closed via outcome recovery, guarding the
-    // `'closedAt' in raw` sanitizer branch separately from the null case.
+    // Why: a block missing `closedAt` entirely (vs explicit null) must still stay closed via outcome recovery, guarding the `'closedAt' in raw` branch.
     writeDataFile({
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -790,9 +1120,7 @@ describe('Store', () => {
   })
 
   it('does not mutate gate fields for a consistent closed-onboarding existing user', async () => {
-    // Why: the gate must be idempotent. A user already persisted as
-    // closed+completed must round-trip unchanged — the backfill path must not
-    // fire and stomp the real closedAt with a fresh Date.now() each launch.
+    // Why: the gate must be idempotent — a closed+completed user round-trips unchanged, and the backfill must not stomp closedAt with a fresh Date.now().
     const consistent = {
       onboarding: {
         flowVersion: ONBOARDING_FLOW_VERSION,
@@ -1025,8 +1353,7 @@ describe('Store', () => {
   // ── 2. Load from existing valid file ─────────────────────────────────
 
   it('reads repos from an existing data file', async () => {
-    // Why: hydration must serve the persisted username without spawning
-    // git/gh (issue #7225); resolution happens in background enrichment.
+    // Why: hydration serves the persisted username without spawning git/gh (issue #7225); resolution happens in background enrichment.
     const repo = makeRepo({ gitUsername: 'testuser' })
     writeDataFile({
       schemaVersion: 1,
@@ -1167,8 +1494,7 @@ describe('Store', () => {
       source: 'ssh-config'
     })
 
-    // normalizeSshTarget must not strip `source` on update, and the new port
-    // must take effect — this is the persistence-layer guard for #4684 item #1.
+    // normalizeSshTarget must not strip `source` on update and the new port must take effect (persistence-layer guard for #4684 item #1).
     const updated = store.updateSshTarget('ssh-src-1', { port: 2222, source: 'ssh-config' })
     expect(updated?.port).toBe(2222)
     expect(updated?.source).toBe('ssh-config')
@@ -1222,6 +1548,26 @@ describe('Store', () => {
     expect(updatedTarget).not.toHaveProperty('systemSshConnectionReuse')
   })
 
+  it('drops retired per-target SSH terminal source-credit selections', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-source-credit-on',
+      label: 'Noisy build host',
+      host: 'build.example.com',
+      port: 22,
+      username: 'dev',
+      experimentalPtySourceCreditV1: true
+    } as never)
+
+    expect(store.getSshTarget('ssh-source-credit-on')).not.toHaveProperty(
+      'experimentalPtySourceCreditV1'
+    )
+    store.flush()
+    const persisted = readDataFile() as { sshTargets?: Record<string, unknown>[] }
+    const target = persisted.sshTargets?.find((entry) => entry.id === 'ssh-source-credit-on')
+    expect(target).not.toHaveProperty('experimentalPtySourceCreditV1')
+  })
+
   it('upserts ~/.ssh/config through the real store: rotated port updates in place and persists', async () => {
     loadUserSshConfigMock.mockReturnValue([{ host: 'cluster' }])
     const candidate = (port: number, id: string) => [
@@ -1237,18 +1583,14 @@ describe('Store', () => {
     expect(inserted).toHaveLength(1)
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
-
-    // Rotated port: the upsert must update the SAME target in place — and the
-    // real normalizeSshTarget must keep `source` and not falsely re-derive
-    // configHost into a permanently-dirty state.
+    // Rotated port: upsert updates the same target in place and normalizeSshTarget must keep `source` (no false re-derive into a permanently-dirty state).
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
     const changed = sshStore.importFromSshConfig()
     expect(changed).toHaveLength(1)
     expect(changed[0]?.port).toBe(2222)
     expect(changed[0]?.source).toBe('ssh-config')
 
-    // A third identical sync is a no-op (dirty-check against the real persisted
-    // fields) — proving repeated auto-sync on every pane open writes nothing.
+    // A third identical sync is a no-op — repeated auto-sync on every pane open writes nothing.
     expect(sshStore.importFromSshConfig()).toHaveLength(0)
 
     // Exactly one cluster target on disk with the rotated port and source kept.
@@ -1669,6 +2011,124 @@ describe('Store', () => {
     })
     expect(migratedRun?.runContext).toEqual(migratedAutomation?.runContext)
     expect(migratedRun?.sourceContext).toEqual(migratedAutomation?.sourceContext)
+  })
+
+  it('shrinks an oversized automationRuns file on load without any later mutation', async () => {
+    const seed = await createStore()
+    seed.addRepo(
+      makeRepo({
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        connectionId: 'builder'
+      })
+    )
+    const automation = seed.createAutomation({
+      name: 'Every minute',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    seed.createAutomationRun(automation, new Date('2026-05-13T09:00:00Z').getTime())
+    seed.flush()
+
+    // Why: a second load+flush settles the one-shot UI migration flags first, so they (not the prune) don't mark the store dirty.
+    const warm = await createStore()
+    warm.flush()
+
+    const persisted = readDataFile() as { automationRuns: Record<string, unknown>[] }
+    const template = persisted.automationRuns[0]
+    persisted.automationRuns = Array.from({ length: 250 }, (_, i) => {
+      const legacy: Record<string, unknown> = {
+        ...template,
+        id: `legacy-run-${i}`,
+        // Only final runs are evictable; the real-world blowup was skipped_precheck rows.
+        status: 'skipped_precheck',
+        createdAt: 1_000 + i,
+        scheduledFor: 1_000 + i
+      }
+      // Legacy files predate runNumber; backfill must run BEFORE the prune so survivors keep their true ordinals.
+      delete legacy.runNumber
+      return legacy
+    })
+    writeDataFile(persisted)
+
+    vi.useFakeTimers()
+    try {
+      const reloaded = await createStore()
+      expect(reloaded.listAutomationRuns(automation.id)).toHaveLength(100)
+
+      // The load-path prune must mark state dirty on its own; nothing else here saves.
+      vi.advanceTimersByTime(1000)
+      await reloaded.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const healed = readDataFile() as { automationRuns: Record<string, unknown>[] }
+    expect(healed.automationRuns).toHaveLength(100)
+    expect(healed.automationRuns.at(-1)?.id).toBe('legacy-run-249')
+    // Survivors carry their true lifetime ordinals (151..250), not restarted ones.
+    expect(healed.automationRuns[0]?.runNumber).toBe(151)
+    expect(healed.automationRuns.at(-1)?.runNumber).toBe(250)
+  })
+
+  it('does not strand an in-flight run whose completion lands after the retention cap', async () => {
+    const store = await createStore()
+    store.addRepo(
+      makeRepo({
+        upstream: { owner: 'stablyai', repo: 'orca' },
+        connectionId: 'builder'
+      })
+    )
+    const automation = store.createAutomation({
+      name: 'Every minute',
+      prompt: 'Run checks',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'new_per_run',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-13T00:00:00Z').getTime()
+    })
+    const base = new Date('2026-05-13T09:00:00Z').getTime()
+    const inFlight = store.createAutomationRun(automation, base)
+    store.updateAutomationRun({
+      runId: inFlight.id,
+      status: 'dispatched',
+      workspaceId: null,
+      error: null
+    })
+
+    // 120 later runs reach a final status while the first one is still dispatched.
+    let firstCompletedId = ''
+    for (let i = 1; i <= 120; i++) {
+      const later = store.createAutomationRun(automation, base + i * 60_000)
+      firstCompletedId ||= later.id
+      store.updateAutomationRun({
+        runId: later.id,
+        status: 'completed',
+        workspaceId: null,
+        error: null
+      })
+    }
+
+    // The late completion must still find its row.
+    const completed = store.updateAutomationRun({
+      runId: inFlight.id,
+      status: 'completed',
+      workspaceId: null,
+      error: null
+    })
+    expect(completed.id).toBe(inFlight.id)
+
+    const runs = store.listAutomationRuns(automation.id)
+    expect(runs.some((run) => run.id === inFlight.id)).toBe(true)
+    // Store can briefly hold cap+2: the last-created run finalizes after its creation-time prune, and the late completion lands without a prune of its own.
+    expect(runs.some((run) => run.id === firstCompletedId)).toBe(false)
+    expect(runs.length).toBeLessThanOrEqual(102)
   })
 
   it('persists automation precheck config and run results', async () => {
@@ -2169,7 +2629,7 @@ describe('Store', () => {
     })
     expect(persisted.settings.sourceControlAi.actions.branchName).toEqual({
       agentId: 'claude',
-      commandInputTemplate: '{basePrompt}\n\nRollback commit prompt'
+      commandInputTemplate: 'Rollback commit prompt\n\n{basePrompt}'
     })
   })
 
@@ -2429,6 +2889,151 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().floatingTerminalEnabled).toBe(false)
     expect(store.getSettings().floatingTerminalDefaultedForAllUsers).toBe(true)
+  })
+
+  it('migrates the legacy OSC 52 clipboard disabled default to enabled', async () => {
+    // Why this migration exists: the old off default was persisted for every
+    // profile, so without the one-shot flip #10567 would only fix new installs.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(true)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('persists the OSC 52 clipboard migration stamp back to disk', async () => {
+    // Why round-trip a store first: on a bare legacy profile ~30 other migrations also
+    // set loadNeedsSave, so the save happens regardless and this migration's own dirty
+    // flag goes untested. Re-loading a profile the new build already wrote leaves OSC 52
+    // as the only unmigrated key — which is exactly the upgrade case that matters.
+    // Why no flush(): flush() writes unconditionally, so only the debounced load-path
+    // save proves this migration marked the state dirty by itself.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const migrated = await createStore()
+    migrated.flush()
+
+    const settled = readDataFile() as { settings: Record<string, unknown> }
+    settled.settings.terminalAllowOsc52Clipboard = false
+    delete settled.settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers
+    writeDataFile(settled)
+
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      // Why over-advance: the debounce is exactly 1000ms, so an exact-fit advance turns a
+      // future debounce raise into a confusing no-write instead of a loud failure.
+      vi.advanceTimersByTime(5000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const persisted = readDataFile() as {
+      settings?: {
+        terminalAllowOsc52Clipboard?: boolean
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
+      }
+    }
+
+    expect(persisted.settings?.terminalAllowOsc52Clipboard).toBe(true)
+    expect(persisted.settings?.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('preserves a post-migration OSC 52 clipboard opt-out', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {
+        terminalAllowOsc52Clipboard: false,
+        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
+      },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getSettings().terminalAllowOsc52Clipboard).toBe(false)
+    expect(store.getSettings().terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
+  })
+
+  it('arms the one-shot notice when the OSC 52 flip overrides a persisted off', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+  })
+
+  it('leaves the OSC 52 notice disarmed for a profile with no persisted value', async () => {
+    // Why: the notice explains an overridden choice; a fresh profile made no choice.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
+  })
+
+  it('keeps the OSC 52 notice armed on disk until the renderer clears it', async () => {
+    // Why the disk assertion: the flip happens during load, before any window exists, and
+    // once the settings stamp lands the arming predicate is false forever — so the on-disk
+    // ui flag is the only thing that survives a crash before the toast renders.
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalAllowOsc52Clipboard: false },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const armed = await createStore()
+    armed.flush()
+    const armedOnDisk = readDataFile() as {
+      ui?: { osc52ClipboardDefaultOnNoticePending?: boolean }
+    }
+    expect(armedOnDisk.ui?.osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().osc52ClipboardDefaultOnNoticePending).toBe(true)
+
+    reloaded.updateUI({ osc52ClipboardDefaultOnNoticePending: false })
+    reloaded.flush()
+    const cleared = await createStore()
+    // Why re-check after the stamp: a cleared notice must not be resurrected by a later load.
+    expect(cleared.getUI().osc52ClipboardDefaultOnNoticePending).toBe(false)
   })
 
   it('migrates the legacy Linux primary-selection default to enabled', async () => {
@@ -3048,6 +3653,78 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('r2::/other')!.displayName).toBe('other')
   })
 
+  it('does not retain topology authority for historically removed repos', async () => {
+    const store = await createStore()
+
+    for (let index = 0; index < 25; index += 1) {
+      const repoId = `removed-${index}`
+      store.addRepo(makeRepo({ id: repoId, path: `/repo-${index}` }))
+      store.setWorkspaceSession({
+        ...store.getWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { [repoId]: 1 }
+      })
+      store.removeProject(repoId)
+    }
+
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId).toEqual({})
+  })
+
+  it('removeProject prunes the repo worktrees from workspace session state', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+    store.addRepo(makeRepo({ id: 'r2', path: '/repo2' }))
+
+    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+    store.setWorktreeMeta('r2::/other', { displayName: 'other' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 111, 'r2::/other': 222 }
+    })
+
+    store.removeProject('r1')
+
+    const session = store.getWorkspaceSession()
+    expect(session.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
+    expect(session.lastVisitedAtByWorktreeId?.['r2::/other']).toBe(222)
+  })
+
+  it('removeProject prunes the repo worktrees from per-host workspace session partitions', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'r1' }))
+
+    store.setWorktreeMeta('r1::/path/wt1', { displayName: 'wt1' })
+
+    const hostId = 'ssh:host-a'
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'r1::/path/wt1': 333 }
+      },
+      hostId
+    )
+
+    store.removeProject('r1')
+
+    const hostSession = store.getWorkspaceSession(hostId)
+    expect(hostSession.lastVisitedAtByWorktreeId?.['r1::/path/wt1']).toBeUndefined()
+  })
+
+  it('lists only persisted workspace-session host partitions', async () => {
+    const store = await createStore()
+    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
+
+    store.getWorkspaceSession('ssh:not-persisted')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'ssh:ssh-a')
+    store.setWorkspaceSession(getDefaultWorkspaceSession(), 'runtime:environment-a')
+
+    expect(store.getWorkspaceSessionHostIds()).toEqual([
+      'local',
+      'ssh:ssh-a',
+      'runtime:environment-a'
+    ])
+  })
+
   it('removeProject removes the derived project host setup compatibility record', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'r1' }))
@@ -3123,6 +3800,188 @@ describe('Store', () => {
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
   })
 
+  it('removeProjectForHost keeps the surviving host session for a shared repo id + path', async () => {
+    const store = await createStore()
+    // Same repo id AND same path on both local and an SSH host, so the owner key
+    // `shared::/repo` is identical across hosts. The host-scoped prune must only
+    // touch the removed host's session partition.
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+
+    store.removeProjectForHost('shared', 'ssh:ssh-a')
+
+    // The removed SSH host's session is pruned; the surviving local session stays.
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBe(111)
+  })
+
+  it('removeProjectForHost on the local host keeps a surviving SSH host session', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+
+    store.removeProjectForHost('shared', 'local')
+
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBeUndefined()
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBe(222)
+  })
+
+  it('removeProjectForHost prunes only the removed host when a third host also shares the owner key', async () => {
+    const store = await createStore()
+    // Same repo id + path on local and two SSH hosts, so the owner key
+    // `shared::/repo` is identical across all three. Removing one non-local host
+    // must prune only that host's partition and leave both the local session and
+    // the other surviving SSH host intact.
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-b',
+        executionHostId: 'ssh:ssh-b'
+      })
+    )
+    store.setWorktreeMeta('shared::/repo', { displayName: 'local', hostId: 'local' })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { 'shared::/repo': 111 }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 222 }
+      },
+      'ssh:ssh-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        lastVisitedAtByWorktreeId: { 'shared::/repo': 333 }
+      },
+      'ssh:ssh-b'
+    )
+
+    store.removeProjectForHost('shared', 'ssh:ssh-a')
+
+    // Only the removed host's partition is pruned; local and the other SSH host survive.
+    expect(
+      store.getWorkspaceSession('ssh:ssh-a').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['shared::/repo']).toBe(111)
+    expect(
+      store.getWorkspaceSession('ssh:ssh-b').lastVisitedAtByWorktreeId?.['shared::/repo']
+    ).toBe(333)
+  })
+
+  it('reorderReposForHost independently reorders local and SSH rows with shared ids', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/shared' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/ssh/shared',
+        connectionId: 'target'
+      })
+    )
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-two',
+        path: '/ssh/two',
+        connectionId: 'target'
+      })
+    )
+
+    expect(store.reorderReposForHost(['local-two', 'shared'], 'local')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/shared',
+      '/local/shared',
+      '/ssh/two'
+    ])
+
+    expect(store.reorderReposForHost(['ssh-two', 'shared'], 'ssh:target')).toBe(true)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual([
+      '/local/two',
+      '/ssh/two',
+      '/local/shared',
+      '/ssh/shared'
+    ])
+  })
+
+  it('reorderReposForHost rejects stale or duplicate host permutations without mutation', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'local-one', path: '/local/one' }))
+    store.addRepo(makeRepo({ id: 'local-two', path: '/local/two' }))
+    store.addRepo(
+      makeRepo({
+        id: 'ssh-one',
+        path: '/ssh/one',
+        connectionId: 'target',
+        executionHostId: 'ssh:target'
+      })
+    )
+    const originalPaths = store.getRepos().map((repo) => repo.path)
+
+    expect(store.reorderReposForHost(['local-two'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['local-one', 'local-one'], 'local')).toBe(false)
+    expect(store.reorderReposForHost(['missing', 'local-two'], 'local')).toBe(false)
+    expect(store.getRepos().map((repo) => repo.path)).toEqual(originalPaths)
+  })
+
   it('removeProjectForHost prunes the SSH host meta (tagged hostId) for a shared id', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
@@ -3139,8 +3998,7 @@ describe('Store', () => {
       displayName: 'remote-wt',
       hostId: 'ssh:ssh-old'
     })
-    // A hostId-less meta under the same id is treated as local and left behind
-    // (conservative: never deletes the wrong host's meta).
+    // A hostId-less meta is treated as local and left behind (never delete the wrong host's meta).
     store.setWorktreeMeta('shared::/local/repo/wt', { displayName: 'local-wt' })
 
     store.removeProjectForHost('shared', 'ssh:ssh-old')
@@ -3167,9 +4025,9 @@ describe('Store', () => {
     store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old', executionHostId: 'ssh:ssh-old' }))
     store.setWorktreeMeta('r1::/repo/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['r1'])
     const repo = store.getRepo('r1')!
     expect(repo.connectionId).toBe('ssh-new')
     expect(repo.executionHostId).toBe('ssh:ssh-new')
@@ -3188,9 +4046,9 @@ describe('Store', () => {
       })
     )
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['ssh-repo'])
     expect(store.getRepo('local-repo')!.connectionId).toBeUndefined()
     expect(store.getRepo('ssh-repo')!.connectionId).toBe('ssh-new')
   })
@@ -3200,9 +4058,9 @@ describe('Store', () => {
     // SSH repos created via addRemoteRepoFromPath leave executionHostId unset.
     store.addRepo(makeRepo({ id: 'r1', connectionId: 'ssh-old' }))
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
 
-    expect(count).toBe(1)
+    expect(repoIds).toEqual(['r1'])
     const repo = store.getRepo('r1')!
     expect(repo.connectionId).toBe('ssh-new')
     // Must not stamp an executionHostId where there wasn't one.
@@ -3211,12 +4069,11 @@ describe('Store', () => {
 
   it('reassignSshTargetId persists a worktree-meta-only re-point (no matching repo)', async () => {
     const store = await createStore()
-    // A meta on the old SSH host with no corresponding repo row — the re-point
-    // must still be saved, not left in memory only.
+    // A meta on the old SSH host with no repo row — the re-point must still be persisted, not memory-only.
     store.setWorktreeMeta('r1::/remote/wt', { displayName: 'wt', hostId: 'ssh:ssh-old' })
 
-    const count = store.reassignSshTargetId('ssh-old', 'ssh-new')
-    expect(count).toBe(0) // no repo matched
+    const repoIds = store.reassignSshTargetId('ssh-old', 'ssh-new')
+    expect(repoIds).toEqual([]) // no repo matched
     store.flush()
 
     const reloaded = await createStore()
@@ -3322,8 +4179,7 @@ describe('Store', () => {
       setupMethod: 'provisioned'
     })
 
-    // Meta-only re-adoption (no repo pinned to the old id) must still migrate
-    // the provisioned setup, or new worktrees would be born on a dead host id.
+    // Meta-only re-adoption must still migrate the provisioned setup, or new worktrees would be born on a dead host id.
     store.reassignSshTargetId('ssh-old', 'ssh-new')
 
     const setups = store.getProjectHostSetups()
@@ -3367,6 +4223,27 @@ describe('Store', () => {
     expect(updated).not.toBeNull()
     expect(updated!.displayName).toBe('renamed')
     expect(store.getRepo('r1')!.displayName).toBe('renamed')
+  })
+
+  it('updateRepo targets one host when repo ids collide', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/local/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/remote/repo',
+        connectionId: 'server',
+        executionHostId: 'ssh:server'
+      })
+    )
+
+    const updated = store.updateRepo('shared', { displayName: 'Remote renamed' }, 'ssh:server')
+
+    expect(updated?.path).toBe('/remote/repo')
+    expect(store.getRepos().filter((repo) => repo.id === 'shared')).toMatchObject([
+      { path: '/local/repo', displayName: 'test' },
+      { path: '/remote/repo', displayName: 'Remote renamed' }
+    ])
   })
 
   it('updateRepo keeps project host setup compatibility records in sync', async () => {
@@ -3709,12 +4586,72 @@ describe('Store', () => {
     expect(reloaded.getRepo('r1')!.upstream).toBeNull()
   })
 
+  it('updateRepo persists the resolved no-usable-remote identity marker', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      gitRemoteIdentity: {
+        canonicalKey: 'gitlab.example.com/team/orca',
+        remoteName: 'origin',
+        remoteUrl: 'git@gitlab.example.com:team/orca.git'
+      }
+    })
+    expect(updated!.gitRemoteIdentity).toEqual({
+      canonicalKey: 'gitlab.example.com/team/orca',
+      remoteName: 'origin',
+      remoteUrl: 'git@gitlab.example.com:team/orca.git'
+    })
+
+    store.updateRepo('r1', { gitRemoteIdentity: null })
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.gitRemoteIdentity).toBeNull()
+  })
+
   it('getRepo does not expose invalid persisted repo upstream metadata', async () => {
     const store = await createStore()
     store.addRepo(makeRepo({ upstream: { owner: '', repo: 42 } as never }))
 
     expect(store.getRepo('r1')!.upstream).toBeUndefined()
     expect(store.getRepos()[0]!.upstream).toBeUndefined()
+  })
+
+  it('keeps the upstream host across reloads so it is never re-inferred from origin', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo())
+
+    const updated = store.updateRepo('r1', {
+      upstream: { owner: ' acme ', repo: ' widgets ', host: ' GHE.example:8443 ' }
+    })
+    expect(updated!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+
+    store.flush()
+    const reloaded = await createStore()
+    expect(reloaded.getRepo('r1')!.upstream).toEqual({
+      owner: 'acme',
+      repo: 'widgets',
+      host: 'GHE.example:8443'
+    })
+  })
+
+  it('leaves a hostless persisted upstream hostless rather than inventing one', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'stablyai', repo: 'orca' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    expect(store.getRepo('r1')!.upstream).not.toHaveProperty('host')
+  })
+
+  it('drops a blank upstream host instead of persisting an empty string', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ upstream: { owner: 'acme', repo: 'widgets', host: '   ' } }))
+
+    expect(store.getRepo('r1')!.upstream).toEqual({ owner: 'acme', repo: 'widgets' })
   })
 
   it('updateRepo returns null for nonexistent id', async () => {
@@ -3776,9 +4713,7 @@ describe('Store', () => {
     store.addRepo(makeRepo({ issueSourcePreference: 'origin' }))
     expect(store.getRepo('r1')!.issueSourcePreference).toBe('origin')
 
-    // Why: passing the key with value `undefined` must clear the preference.
-    // Plain `Object.assign` skips undefined values, so without the explicit
-    // delete branch in updateRepo, the persisted record would keep 'origin'.
+    // Why: `Object.assign` skips undefined, so updateRepo needs an explicit delete branch or the key with value undefined wouldn't clear.
     store.updateRepo('r1', { issueSourcePreference: undefined })
     expect(store.getRepo('r1')!.issueSourcePreference).toBeUndefined()
 
@@ -3945,6 +4880,146 @@ describe('Store', () => {
     expect(updated.comment).toBe('updated')
   })
 
+  it('persists paired Jira linked-item metadata and drops mismatched source context', async () => {
+    const store = await createStore()
+    const linkedWorkItem = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    store.setWorktreeMeta('wt-jira', { linkedWorkItem, linkedTaskSourceContext })
+    store.flush()
+    const restored = await createStore()
+
+    expect(restored.getWorktreeMeta('wt-jira')).toMatchObject({
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
+    expect(
+      restored.setWorktreeMeta('wt-jira', {
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
+      }).linkedTaskSourceContext
+    ).toBeNull()
+    expect(
+      restored.setWorktreeMeta('wt-jira', {
+        linkedTaskSourceContext: {
+          ...linkedTaskSourceContext,
+          providerIdentity: {
+            ...linkedTaskSourceContext.providerIdentity,
+            projectKey: 'OTHER'
+          }
+        }
+      }).linkedTaskSourceContext
+    ).toBeNull()
+  })
+
+  it('discards malformed persisted task-source metadata without aborting store load', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {
+        'wt-malformed': {
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          },
+          linkedTaskSourceContext: {
+            kind: 'task-source',
+            provider: 'jira',
+            projectId: 'project-1',
+            hostId: 'local',
+            accountLabel: 44,
+            providerIdentity: {
+              provider: 'jira',
+              siteId: 'site-1',
+              siteUrl: 'https://company.atlassian.net',
+              projectKey: 'ORCA'
+            }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorktreeMeta('wt-malformed')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-malformed')?.linkedTaskSourceContext).toBeNull()
+  })
+
+  it('drops corrupt worktreeMeta entries while still normalizing valid siblings', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeLineageById: { 'r1::/tmp/wt': { parentWorktreeId: 'wt-sibling' } },
+      workspaceLineageByChildKey: {
+        'worktree:r1::/tmp/wt': { parentWorkspaceKey: 'worktree:wt-sibling' }
+      },
+      worktreeMeta: {
+        'r1::/tmp/wt': null,
+        'r1::/tmp/scalar': 5,
+        'wt-sibling': {
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'ORCA-123 Link Jira',
+            url: 'https://company.atlassian.net/browse/ORCA-123',
+            jiraIdentifier: 'ORCA-123'
+          },
+          linkedTaskSourceContext: {
+            kind: 'task-source',
+            provider: 'jira',
+            projectId: 'project-1',
+            hostId: 'local',
+            accountLabel: 44,
+            providerIdentity: {
+              provider: 'jira',
+              siteId: 'site-1',
+              siteUrl: 'https://company.atlassian.net',
+              projectKey: 'ORCA'
+            }
+          }
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    expect(store.getWorktreeMeta('wt-sibling')?.linkedWorkItem?.jiraIdentifier).toBe('ORCA-123')
+    expect(store.getWorktreeMeta('wt-sibling')?.linkedTaskSourceContext).toBeNull()
+    // Corrupt entries must not survive: gcStaleWorktreeMeta keeps timestamp-less keys, and downstream
+    // consumers deref worktreeMeta values unguarded (also keeps a rollback to an older build loadable).
+    expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/wt')
+    expect(store.getAllWorktreeMeta()).not.toHaveProperty('r1::/tmp/scalar')
+    expect(store.getWorktreeLineage('r1::/tmp/wt')).toBeUndefined()
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/wt')
+    expect(persisted.worktreeMeta).not.toHaveProperty('r1::/tmp/scalar')
+    expect(persisted.workspaceLineageByChildKey).not.toHaveProperty('worktree:r1::/tmp/wt')
+  })
+
   it('creates and updates folder workspaces from folder-backed project groups', async () => {
     const store = await createStore()
     const group = store.createProjectGroup({
@@ -3969,7 +5044,19 @@ describe('Store', () => {
     const updated = store.updateFolderWorkspace(workspace.id, {
       comment: 'Coordinate api and web',
       isPinned: true,
-      lastActivityAt: 123
+      lastActivityAt: 123,
+      diffComments: [
+        {
+          id: 'note-1',
+          worktreeId: folderWorkspaceKey(workspace.id),
+          filePath: 'README.md',
+          source: 'markdown',
+          lineNumber: 1,
+          body: 'Review this paragraph',
+          createdAt: 100,
+          side: 'modified'
+        }
+      ]
     })
 
     expect(workspace.folderPath).toBe('/workspace/platform')
@@ -3981,9 +5068,63 @@ describe('Store', () => {
       linkedTask,
       comment: 'Coordinate api and web',
       isPinned: true,
-      lastActivityAt: 123
+      lastActivityAt: 123,
+      diffComments: [expect.objectContaining({ id: 'note-1', body: 'Review this paragraph' })]
     })
     expect(store.getFolderWorkspaces()).toHaveLength(1)
+    store.flush()
+
+    const restored = await createStore()
+    expect(restored.getFolderWorkspace(workspace.id)?.diffComments).toEqual([
+      expect.objectContaining({ id: 'note-1', body: 'Review this paragraph' })
+    ])
+  })
+
+  it('round-trips Jira item and source context for repo-less folder workspaces', async () => {
+    const store = await createStore()
+    const group = store.createProjectGroup({
+      name: 'Platform',
+      parentPath: '/workspace/platform',
+      createdFrom: 'folder-scan'
+    })
+    const linkedTask = {
+      provider: 'jira' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: 'ORCA-123 Link Jira',
+      url: 'https://company.atlassian.net/browse/ORCA-123',
+      jiraIdentifier: 'ORCA-123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'jira' as const,
+      projectId: group.id,
+      hostId: 'runtime:folder-env' as const,
+      repoId: null,
+      providerIdentity: {
+        provider: 'jira' as const,
+        siteId: 'site-1',
+        siteUrl: 'https://company.atlassian.net',
+        projectKey: 'ORCA'
+      },
+      accountLabel: 'ada@example.com'
+    }
+
+    const workspace = store.createFolderWorkspace({
+      projectGroupId: group.id,
+      linkedTask,
+      linkedTaskSourceContext
+    })
+    store.flush()
+    const restored = await createStore()
+
+    expect(restored.getFolderWorkspaces()).toContainEqual(
+      expect.objectContaining({
+        id: workspace.id,
+        linkedTask,
+        linkedTaskSourceContext: expect.objectContaining(linkedTaskSourceContext)
+      })
+    )
   })
 
   it('rejects folder workspace creation for non-folder-backed project groups', async () => {
@@ -4283,6 +5424,80 @@ describe('Store', () => {
     expect(updated.branchPrefix).toBe('git-username')
   })
 
+  it('normalizes bot-author overrides on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        prBotAuthorOverrides: [' GretelFlux ', 'gretelflux', 42, '', 'another-bot']
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().prBotAuthorOverrides).toEqual(['another-bot', 'gretelflux'])
+
+    const oversized = Array.from(
+      { length: 600 },
+      (_, index) => ` bot-${String(index).padStart(4, '0')} `
+    )
+    const updated = store.updateSettings({ prBotAuthorOverrides: oversized })
+
+    expect(updated.prBotAuthorOverrides).toHaveLength(500)
+    expect(updated.prBotAuthorOverrides[0]).toBe('bot-0000')
+    expect(updated.prBotAuthorOverrides[499]).toBe('bot-0499')
+  })
+
+  it('normalizes custom mobile pairing addresses on load and every settings write', async () => {
+    writeDataFile({
+      settings: {
+        mobilePairingCustomAddress: 'host:99999',
+        mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+      }
+    })
+    const store = await createStore()
+
+    expect(store.getSettings().mobilePairingCustomAddress).toBeNull()
+    expect(store.getSettings().mobilePairingCustomAddresses).toEqual(['first.example:6768'])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: GlobalSettings }).settings?.mobilePairingCustomAddress
+    ).toBeNull()
+
+    const updated = store.updateSettings({
+      mobilePairingCustomAddress: ' 100.126.117.25:6768 '
+    })
+    expect(updated.mobilePairingCustomAddress).toBe('100.126.117.25:6768')
+    expect(updated.mobilePairingCustomAddresses).toEqual([
+      'first.example:6768',
+      '100.126.117.25:6768'
+    ])
+    store.flush()
+    expect(
+      (readDataFile() as { settings?: GlobalSettings }).settings?.mobilePairingCustomAddress
+    ).toBe('100.126.117.25:6768')
+
+    expect(
+      store.updateSettings({ mobilePairingCustomAddress: 42 as never }).mobilePairingCustomAddress
+    ).toBeNull()
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddresses: [' second.example ', 'host:99999', 'second.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['second.example'])
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddress: 'active.example:6768',
+        mobilePairingCustomAddresses: ['second.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['second.example', 'active.example:6768'])
+
+    expect(
+      store.updateSettings({
+        mobilePairingCustomAddresses: ['third.example']
+      }).mobilePairingCustomAddresses
+    ).toEqual(['third.example', 'active.example:6768'])
+  })
+
   it('notifies settings listeners with changed keys only', async () => {
     const store = await createStore()
     const listener = vi.fn()
@@ -4423,6 +5638,42 @@ describe('Store', () => {
     const persisted = readDataFile() as { settings?: Record<string, unknown> }
     expect(persisted.settings?.terminalScrollbackRows).toBe(50_000)
     expect(persisted.settings).not.toHaveProperty('terminalScrollbackBytes')
+  })
+
+  it('normalizes terminal cursor style before persistence and listener broadcasts', async () => {
+    const store = await createStore()
+    store.updateSettings({ terminalCursorStyle: 'underline' })
+    const listener = vi.fn()
+    store.onSettingsChanged(listener)
+
+    const invalid = store.updateSettings(
+      { terminalCursorStyle: 'beam' as never },
+      { notifyListeners: true }
+    )
+
+    expect(invalid.terminalCursorStyle).toBe('block')
+    expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
+    expect(listener).toHaveBeenCalledWith(
+      {
+        terminalCursorStyle: 'block'
+      },
+      expect.objectContaining({ terminalCursorStyle: 'block' }),
+      undefined
+    )
+
+    const valid = store.updateSettings(
+      { terminalCursorStyle: 'underline' },
+      { notifyListeners: true }
+    )
+    expect(valid.terminalCursorStyle).toBe('underline')
+    expect(listener).toHaveBeenLastCalledWith(
+      { terminalCursorStyle: 'underline' },
+      expect.objectContaining({ terminalCursorStyle: 'underline' }),
+      undefined
+    )
+
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalCursorStyle).toBe('underline')
   })
 
   it('normalizes disabled TUI agents on load and update', async () => {
@@ -4810,8 +6061,7 @@ describe('Store', () => {
   })
 
   // ── Content-hash write skipping ────────────────────────────────────
-  // Why inode comparison: every real write is a tmp+rename, which allocates a
-  // new inode. An unchanged inode proves no write happened.
+  // Why inode comparison: every real write is a tmp+rename (new inode), so an unchanged inode proves no write happened.
 
   it('skips the disk write when a mutation burst nets out to already-persisted state', async () => {
     vi.useFakeTimers()
@@ -4854,8 +6104,7 @@ describe('Store', () => {
     vi.useFakeTimers()
     try {
       const store = await createStore()
-      // Mutations every 500ms keep resetting the 1s trailing debounce; the
-      // 5s max-wait must force a write anyway.
+      // Mutations every 500ms reset the 1s debounce; the 5s max-wait must force a write anyway.
       let width = 400
       for (let i = 0; i < 11; i++) {
         store.updateUI({ sidebarWidth: width++ })
@@ -4909,8 +6158,7 @@ describe('Store', () => {
     store.persistPtyBinding(binding)
     const inoBefore = statSync(dataFile()).ino
 
-    // The warm-restart re-bind storm: every restored terminal re-asserts an
-    // identical binding with a sync flush. Identical state must not rewrite.
+    // Warm-restart re-bind storm: an identical binding re-asserted with a sync flush must not rewrite.
     store.persistPtyBinding(binding)
 
     expect(statSync(dataFile()).ino).toBe(inoBefore)
@@ -4996,10 +6244,12 @@ describe('Store', () => {
     })
   })
 
-  it('tolerates a null worktreeMeta map in the durable file', async () => {
-    writeDataFile({ worktreeMeta: null })
+  it.each([null, [], 5])('repairs a corrupt worktreeMeta map (%#)', async (worktreeMeta) => {
+    writeDataFile({ worktreeMeta })
     const store = await createStore()
     expect(store.getAllWorktreeMeta()).toEqual({})
+    store.flush()
+    expect((readDataFile() as PersistedState).worktreeMeta).toEqual({})
   })
 
   // ── GitHub cache sidecar ───────────────────────────────────────────
@@ -5083,6 +6333,25 @@ describe('Store', () => {
     expect(ui.dismissedUpdateVersion).toBeNull()
   })
 
+  it('round-trips and normalizes the host-qualified manual repo order', async () => {
+    const store = await createStore()
+    store.updateUI({
+      manualRepoOrder: [
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'bogus', repoId: 'ignored' },
+        { hostId: 'runtime:node-b', repoId: 'shared' },
+        { hostId: 'local', repoId: 'alpha' }
+      ] as never
+    })
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getUI().manualRepoOrder).toEqual([
+      { hostId: 'runtime:node-b', repoId: 'shared' },
+      { hostId: 'local', repoId: 'alpha' }
+    ])
+  })
+
   it('updateUI persists sanitized per-worktree dotfile visibility', async () => {
     const store = await createStore()
     store.updateUI({
@@ -5136,6 +6405,22 @@ describe('Store', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('writes compact JSON (no pretty-print indentation) that round-trips via JSON.parse', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'compact-repo', path: '/compact/repo' }))
+    store.updateUI({ sidebarWidth: 321 })
+    store.flush()
+
+    const raw = readFileSync(dataFile(), 'utf-8')
+    // Compact payload: no newline-plus-indentation from JSON.stringify(_, null, 2).
+    expect(raw).not.toMatch(/\n\s+"/)
+    const parsed = JSON.parse(raw) as PersistedState
+    expect(parsed.repos).toContainEqual(
+      expect.objectContaining({ id: 'compact-repo', path: '/compact/repo' })
+    )
+    expect(parsed.ui.sidebarWidth).toBe(321)
   })
 
   it('migrates missing rightSidebarOpen from the legacy default setting', async () => {
@@ -5604,6 +6889,81 @@ describe('Store', () => {
     expect(reloaded.getUI().browserKagiSessionLink).toBe(sessionLink)
   })
 
+  it('durably encrypts SSH PTY consumer ownership for process restart recovery', async () => {
+    const store = await createStore()
+    store.setGitHubCache({ pr: { 'o/r#1': { fetchedAt: 1 } as never }, issue: {} })
+    await store.upsertSshPtyConsumerRecovery({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease',
+      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+    })
+
+    const persisted = readDataFile() as {
+      sshPtyConsumerRecoveries: { ownerLease: string }[]
+    }
+    expect(persisted.sshPtyConsumerRecoveries[0]?.ownerLease).not.toBe('secret-owner-lease')
+    expect(existsSync(join(testState.dir, 'orca-github-cache.json'))).toBe(false)
+
+    const reloaded = await createStore()
+    expect(reloaded.getSshPtyConsumerRecovery('ssh-1')).toEqual({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease',
+      outputFlowControl: { version: 1, windowSu: 256 * 1024 }
+    })
+  })
+
+  it('drops decrypted SSH PTY owner leases that exceed the relay protocol bound', async () => {
+    const oversizedLease = 'x'.repeat(513)
+    writeDataFile({
+      ...getDefaultPersistedState(testState.dir),
+      sshPtyConsumerRecoveries: [
+        {
+          targetId: 'ssh-1',
+          clientInstanceId: 'client-1',
+          serverBuildId: 'relay-build-1',
+          clientGeneration: 3,
+          ownerGeneration: 5,
+          ownerLease: Buffer.from(`encrypted:${oversizedLease}`, 'utf-8').toString('base64')
+        }
+      ]
+    })
+
+    const store = await createStore()
+
+    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+  })
+
+  it('removes persisted SSH PTY consumer ownership with its target', async () => {
+    const store = await createStore()
+    store.addSshTarget({
+      id: 'ssh-1',
+      label: 'SSH 1',
+      host: 'example.test',
+      port: 22,
+      username: 'orca'
+    })
+    await store.upsertSshPtyConsumerRecovery({
+      targetId: 'ssh-1',
+      clientInstanceId: 'client-1',
+      serverBuildId: 'relay-build-1',
+      clientGeneration: 3,
+      ownerGeneration: 5,
+      ownerLease: 'secret-owner-lease'
+    })
+
+    store.removeSshTarget('ssh-1')
+
+    expect(store.getSshPtyConsumerRecovery('ssh-1')).toBeNull()
+  })
+
   it('keeps plaintext Kagi session links readable for migration from older builds', async () => {
     const sessionLink = 'https://kagi.com/search?token=secret'
     writeDataFile({
@@ -5667,9 +7027,7 @@ describe('Store', () => {
   })
 
   it('uses recent as the default sort for a fresh install (no persisted sortBy)', async () => {
-    // Why: the legacy-recent→smart migration must gate on the *raw* persisted
-    // value, not the normalized default. Otherwise, changing the default sort
-    // to 'recent' would cause every fresh install to be mis-migrated to 'smart'.
+    // Why: the legacy-recent→smart migration must gate on the raw persisted value, not the normalized default, or fresh installs get mis-migrated to 'smart'.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -5700,6 +7058,46 @@ describe('Store', () => {
 
     store.updateUI({ syncTaskStatusFromWorkspaceBoard: true })
     expect(store.getUI().syncTaskStatusFromWorkspaceBoard).toBe(true)
+  })
+
+  it('preserves workflows above 20 statuses across load, write, and restart', async () => {
+    const imported = Array.from({ length: 21 }, (_, index) => ({
+      id: `state-${index + 1}`,
+      label: `State ${index + 1}`
+    })).toReversed()
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: { workspaceStatuses: imported },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+
+    const store = await createStore()
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      imported.map((status) => status.id)
+    )
+
+    const authored = Array.from({ length: 64 }, (_, index) => ({
+      id: `final-${String(index + 1).padStart(3, '0')}`,
+      label: `Final ${index + 1}`
+    })).toReversed()
+    store.updateUI({ workspaceStatuses: authored })
+    store.flush()
+
+    expect(store.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
+    expect(
+      (readDataFile() as PersistedState).ui.workspaceStatuses?.map((status) => status.id)
+    ).toEqual(authored.map((status) => status.id))
+
+    const restarted = await createStore()
+    expect(restarted.getUI().workspaceStatuses?.map((status) => status.id)).toEqual(
+      authored.map((status) => status.id)
+    )
   })
 
   it('repairs the known-bad reordered default workspace statuses once on load', async () => {
@@ -5848,11 +7246,7 @@ describe('Store', () => {
   // ── terminalMacOptionAsAlt migration (issue #903) ───────────────────
 
   it('migrates legacy "true" terminalMacOptionAsAlt to "auto" on first load', async () => {
-    // Why: before the 'auto' mode shipped, 'true' was the global default.
-    // A persisted 'true' on an un-migrated install is indistinguishable
-    // from an explicit choice, so we flip to 'auto' and let detection pick
-    // the right value per keyboard layout. Non-US users stop losing their
-    // @ / € / [ ] characters.
+    // Why: legacy 'true' (old default) is indistinguishable from an explicit choice; flip un-migrated installs to 'auto' so non-US layouts keep @ / € / [ ].
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -5865,6 +7259,65 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(true)
+  })
+
+  it('migrates inherited right-click paste to each platform default once', async () => {
+    for (const [platform, expected] of [
+      ['win32', true],
+      ['darwin', false],
+      ['linux', false]
+    ] as const) {
+      await withPlatform(platform, async () => {
+        writeDataFile({
+          schemaVersion: 1,
+          repos: [],
+          worktreeMeta: {},
+          settings: { terminalRightClickToPaste: true },
+          ui: {},
+          githubCache: { pr: {}, issue: {} },
+          workspaceSession: {}
+        })
+        const store = await createStore()
+        expect(store.getSettings().terminalRightClickToPaste).toBe(expected)
+        expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+      })
+    }
+  })
+
+  it('preserves an explicit Windows right-click paste opt-out during migration', async () => {
+    await withPlatform('win32', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: { terminalRightClickToPaste: false },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(false)
+      expect(store.getSettings().terminalRightClickToPasteDefaultedForPlatform).toBe(true)
+    })
+  })
+
+  it('preserves right-click paste choices after the platform migration', async () => {
+    await withPlatform('darwin', async () => {
+      writeDataFile({
+        schemaVersion: 1,
+        repos: [],
+        worktreeMeta: {},
+        settings: {
+          terminalRightClickToPaste: true,
+          terminalRightClickToPasteDefaultedForPlatform: true
+        },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      })
+      const store = await createStore()
+      expect(store.getSettings().terminalRightClickToPaste).toBe(true)
+    })
   })
 
   it('migrates inherited terminal bar cursor defaults to block on first load', async () => {
@@ -5895,6 +7348,22 @@ describe('Store', () => {
     const store = await createStore()
     expect(store.getSettings().terminalCursorStyle).toBe('bar')
     expect(store.getSettings().terminalCursorStyleDefaultedToBlock).toBe(true)
+  })
+
+  it('replaces an invalid persisted terminal cursor choice after migration', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { terminalCursorStyle: 'beam', terminalCursorStyleDefaultedToBlock: true },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().terminalCursorStyle).toBe('block')
+    store.flush()
+    expect((readDataFile() as PersistedState).settings.terminalCursorStyle).toBe('block')
   })
 
   it('preserves explicit "false" terminalMacOptionAsAlt through migration', async () => {
@@ -5929,8 +7398,7 @@ describe('Store', () => {
   })
 
   it('respects already-migrated settings with explicit "true"', async () => {
-    // After migration, if a user deliberately picks 'Both' in the UI,
-    // their choice is preserved on subsequent launches.
+    // A deliberate 'true' ('Both') choice post-migration is preserved on later launches.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -5946,21 +7414,15 @@ describe('Store', () => {
   })
 
   it('fresh install defaults terminalMacOptionAsAlt to "auto" and marks migrated', async () => {
-    // No data file at all: auto is the new default; migration is considered
-    // complete since there's nothing legacy to migrate.
+    // No data file: 'auto' is the new default and migration is complete (nothing legacy to migrate).
     const store = await createStore()
     expect(store.getSettings().terminalMacOptionAsAlt).toBe('auto')
-    // Fresh install: default is migrated=false (nothing loaded, so the
-    // migration code didn't run). On first persisted write, the flag stays
-    // false, which is fine — next load with legacy 'true' would still
-    // migrate correctly. Only loaded files flip the flag.
+    // Fresh install: migrated stays false (migration code never ran); a later load with legacy 'true' still migrates correctly.
     expect(store.getSettings().terminalMacOptionAsAltMigrated).toBe(false)
   })
 
   it('missing terminalMacOptionAsAlt in persisted file defaults to "auto" and flags migrated', async () => {
-    // Existing file predates the setting entirely. Treat like upgrade from
-    // pre-Option-as-Alt Orca: land on 'auto' and mark migrated so we don't
-    // re-examine.
+    // Existing file predates the setting: land on 'auto' and mark migrated so we don't re-examine.
     writeDataFile({
       schemaVersion: 1,
       repos: [],
@@ -6065,6 +7527,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -6101,6 +7564,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'comment',
       'ports',
@@ -6128,8 +7592,10 @@ describe('Store', () => {
       'unread',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'automation',
+      'cli',
       'comment',
       'ports',
       'inline-agents'
@@ -6159,6 +7625,7 @@ describe('Store', () => {
       'ci',
       'issue',
       'linear-issue',
+      'jira-issue',
       'pr',
       'ports',
       'inline-agents'
@@ -6175,7 +7642,8 @@ describe('Store', () => {
       ui: {
         worktreeCardProperties: ['status', 'pr'],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -6234,7 +7702,8 @@ describe('Store', () => {
           'ports'
         ],
         _inlineAgentsDefaultedForAllUsers: true,
-        _expandedWorktreeCardPropertiesDefaulted: true
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
       },
       githubCache: { pr: {}, issue: {} },
       workspaceSession: {}
@@ -6253,6 +7722,107 @@ describe('Store', () => {
     ])
     expect(store.getUI().worktreeCardProperties).not.toContain('branch')
     expect(store.getUI().worktreeCardProperties).not.toContain('inline-agents')
+  })
+
+  it('backfills jira-issue once for profiles stamped before it joined the defaults', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: [
+          'status',
+          'unread',
+          'issue',
+          'linear-issue',
+          'pr',
+          'ports',
+          'inline-agents'
+        ],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'jira-issue',
+      'pr',
+      'ports',
+      'inline-agents'
+    ])
+    expect(
+      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
+    ).toHaveLength(1)
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('preserves a deliberate jira-issue removal after the backfill has run', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: {
+        worktreeCardProperties: ['status', 'unread', 'issue', 'linear-issue', 'pr'],
+        _inlineAgentsDefaultedForAllUsers: true,
+        _expandedWorktreeCardPropertiesDefaulted: true,
+        _jiraIssueWorktreeCardPropertyDefaulted: true
+      },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).toEqual([
+      'status',
+      'unread',
+      'issue',
+      'linear-issue',
+      'pr'
+    ])
+    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
+  })
+
+  it('leaves fresh default profiles with a single jira-issue entry', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(
+      store.getUI().worktreeCardProperties?.filter((property) => property === 'jira-issue')
+    ).toHaveLength(1)
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
+  })
+
+  it('skips the jira-issue backfill when card properties are malformed', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { compactWorktreeCards: false },
+      ui: { worktreeCardProperties: 'not-an-array' },
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+
+    expect(store.getUI().worktreeCardProperties).not.toContain('jira-issue')
+    expect(store.getUI()._jiraIssueWorktreeCardPropertyDefaulted).toBe(true)
   })
 
   it('uses the compact preset when card properties are missing in compact mode', async () => {
@@ -7081,6 +8651,44 @@ describe('Store', () => {
     }
   })
 
+  it('restores cross-tab pane authority aliases before hook ingestion', async () => {
+    const physicalPaneKey = makePaneKey('tab-source', TEST_LEAF_1)
+    const ownerPaneKey = makePaneKey('tab-target', TEST_LEAF_2)
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: {},
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      legacyPaneKeyAliasEntries: [
+        {
+          ptyId: 'pty-detached',
+          legacyPaneKey: physicalPaneKey,
+          stablePaneKey: ownerPaneKey,
+          updatedAt: 10
+        }
+      ]
+    })
+
+    await createStore()
+    const { agentHookServer } = await import('./agent-hooks/server')
+    agentHookServer.ingestTerminalStatus({
+      paneKey: physicalPaneKey,
+      tabId: 'tab-source',
+      worktreeId: 'wt1',
+      payload: { state: 'working', prompt: 'detached after restart' }
+    })
+
+    expect(agentHookServer.getStatusSnapshot()).toEqual([
+      expect.objectContaining({
+        paneKey: ownerPaneKey,
+        tabId: 'tab-target',
+        prompt: 'detached after restart'
+      })
+    ])
+  })
+
   it('persists fallback aliases when a legacy split layout has no PTY leaf bindings', async () => {
     writeDataFile({
       schemaVersion: 1,
@@ -7461,6 +9069,453 @@ describe('Store', () => {
     })
   })
 
+  it('admits a fresh host spawn after retirement while rejecting an older renderer topology', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+
+    const admitted = structuredClone(store.getWorkspaceSession())
+    expect(admitted.terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+    expect(admitted.tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+
+    store.setWorkspaceSession({
+      ...admitted,
+      tabsByWorktree: {
+        ...admitted.tabsByWorktree,
+        wt1: admitted.tabsByWorktree.wt1.map((tab) => ({
+          ...tab,
+          title: 'Fresh title',
+          sortOrder: 7
+        }))
+      },
+      terminalLayoutsByTabId: {
+        ...admitted.terminalLayoutsByTabId,
+        'fresh-tab': {
+          ...admitted.terminalLayoutsByTabId['fresh-tab'],
+          titlesByLeafId: { [TEST_LEAF_1]: 'Fresh pane title' }
+        }
+      }
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1[0]).toMatchObject({
+      id: 'fresh-tab',
+      ptyId: 'fresh-pty',
+      title: 'Fresh title',
+      sortOrder: 7
+    })
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId['fresh-tab'].titlesByLeafId).toEqual({
+      [TEST_LEAF_1]: 'Fresh pane title'
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [
+          {
+            id: 'retired-tab',
+            worktreeId: 'wt1',
+            title: 'Retired',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            ptyId: 'retired-pty'
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'retired-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_2 },
+          activeLeafId: TEST_LEAF_2,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_2]: 'retired-pty' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`retired-tab:${TEST_LEAF_2}`]: 'retired-incarnation'
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    const afterStaleWrite = store.getWorkspaceSession()
+    expect(afterStaleWrite.tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+    expect(afterStaleWrite.terminalLayoutsByTabId['retired-tab']).toBeUndefined()
+    expect(
+      afterStaleWrite.terminalPtyIncarnationsByPaneKey?.[`retired-tab:${TEST_LEAF_2}`]
+    ).toBeUndefined()
+  })
+
+  it('reconciles only the incarnation of an unchanged durable PTY binding', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe('inc-live')
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-live'
+    )
+  })
+
+  it('admits a split binding only while the exact source still owns its layout leaf', async () => {
+    for (const hostId of [undefined, 'ssh:ssh-1']) {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-source' })]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_1 },
+              activeLeafId: TEST_LEAF_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-source' }
+            }
+          }
+        },
+        hostId
+      )
+      const staleRendererSession = structuredClone(store.getWorkspaceSession(hostId))
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'different-target-tab',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-split',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'tab1',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(false)
+      expect(
+        store
+          .getWorkspaceSession(hostId)
+          .tabsByWorktree.wt1.some((tab) => tab.id === 'different-target-tab')
+      ).toBe(false)
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt-canonical',
+            tabId: 'tab1',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-split',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'tab1',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(true)
+      const admitted = store.getWorkspaceSession(hostId)
+      expect(admitted.terminalTopologyRevisionByRepoId?.wt1).toBe(1)
+      expect(admitted.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toMatchObject({
+        [TEST_LEAF_1]: 'pty-source',
+        [TEST_LEAF_2]: 'pty-split'
+      })
+
+      store.setWorkspaceSession(staleRendererSession, hostId)
+      expect(
+        store.getWorkspaceSession(hostId).terminalLayoutsByTabId.tab1.ptyIdsByLeafId
+      ).toMatchObject({
+        [TEST_LEAF_1]: 'pty-source',
+        [TEST_LEAF_2]: 'pty-split'
+      })
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'rejected-tab',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-rejected',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'missing-source-tab',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(false)
+      expect(
+        store
+          .getWorkspaceSession(hostId)
+          .tabsByWorktree.wt1.some((tab) => tab.id === 'rejected-tab')
+      ).toBe(false)
+      expect(
+        store.getWorkspaceSession(hostId).terminalLayoutsByTabId['rejected-tab']
+      ).toBeUndefined()
+    }
+  })
+
+  it('rejects a split source incarnation mismatch', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-source' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-source' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [`tab1:${TEST_LEAF_1}`]: 'persisted-incarnation' }
+    })
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_2,
+        ptyId: 'pty-split',
+        expectedSourceBinding: {
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-source',
+          incarnationId: 'different-incarnation'
+        }
+      })
+    ).toBe(false)
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.root).toEqual({
+      type: 'leaf',
+      leafId: TEST_LEAF_1
+    })
+  })
+
+  it('rejects competing PTY and incarnation changes during reconciliation', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-current' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-current' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-current' }
+    })
+
+    for (const competing of [
+      { ptyId: 'pty-replaced', expectedIncarnationId: 'inc-current' },
+      { ptyId: 'pty-current', expectedIncarnationId: 'inc-replaced' }
+    ]) {
+      expect(
+        store.persistPtyBinding({
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: competing.ptyId,
+          incarnationId: 'inc-live',
+          expectedBinding: {
+            ptyId: competing.ptyId,
+            incarnationId: competing.expectedIncarnationId
+          }
+        })
+      ).toBe(false)
+    }
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-current'
+    )
+  })
+
+  it('reconciles only the requested execution-host partition', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf' as const, leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    }
+    store.setWorkspaceSession(structuredClone(session), 'local')
+    store.setWorkspaceSession(structuredClone(session), 'ssh:ssh-1')
+
+    expect(
+      store.persistPtyBinding(
+        {
+          worktreeId: 'wt1',
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-1',
+          incarnationId: 'inc-remote-live',
+          expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+        },
+        'ssh:ssh-1'
+      )
+    ).toBe(true)
+
+    expect(store.getWorkspaceSession('local').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
+    expect(store.getWorkspaceSession('ssh:ssh-1').terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-remote-live'
+    )
+  })
+
+  it.each([
+    { label: 'local', hostId: undefined },
+    { label: 'SSH', hostId: 'ssh:ssh-1' }
+  ])(
+    'preserves a reconciled incarnation across a renderer snapshot ($label)',
+    async ({ hostId }) => {
+      const store = await createStore()
+      const paneKey = `tab1:${TEST_LEAF_1}`
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_1 },
+              activeLeafId: TEST_LEAF_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+            }
+          },
+          terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+        },
+        hostId
+      )
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'tab1',
+            leafId: TEST_LEAF_1,
+            ptyId: 'pty-1',
+            incarnationId: 'inc-live',
+            expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+          },
+          hostId
+        )
+      ).toBe(true)
+
+      const rendererSnapshot = structuredClone(store.getWorkspaceSession(hostId))
+      delete rendererSnapshot.terminalPtyIncarnationsByPaneKey
+      delete rendererSnapshot.terminalTopologyRevisionByRepoId
+      store.setWorkspaceSession(rendererSnapshot, hostId)
+
+      expect(store.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+      const reloaded = await createStore()
+      expect(reloaded.getWorkspaceSession(hostId).terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+        'inc-live'
+      )
+    }
+  )
+
+  it('rolls back incarnation reconciliation when the durability barrier fails', async () => {
+    const store = await createStore()
+    const paneKey = `tab1:${TEST_LEAF_1}`
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-stale' }
+    })
+    vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk full')
+    })
+
+    expect(() =>
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'pty-1',
+        incarnationId: 'inc-live',
+        expectedBinding: { ptyId: 'pty-1', incarnationId: 'inc-stale' }
+      })
+    ).toThrow('disk full')
+    expect(store.getWorkspaceSession().terminalPtyIncarnationsByPaneKey?.[paneKey]).toBe(
+      'inc-stale'
+    )
+  })
+
   it('adds a missing split leaf to the durable root when a new pane spawns before layout debounce', async () => {
     const store = await createStore()
     store.setWorkspaceSession({
@@ -7516,6 +9571,227 @@ describe('Store', () => {
       [TEST_LEAF_1]: 'pty-1',
       [TEST_LEAF_2]: 'pty-2'
     })
+  })
+
+  it('advances host topology when a live spawn adds a split leaf after retirement', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-1' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
+        }
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'tab1',
+      leafId: TEST_LEAF_2,
+      ptyId: 'pty-2'
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(session.terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+    expect(session.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toEqual({
+      [TEST_LEAF_1]: 'pty-1',
+      [TEST_LEAF_2]: 'pty-2'
+    })
+  })
+
+  it('keeps worktree deletion authoritative against stale writes and later same-path reuse', async () => {
+    const store = await createStore()
+    store.setWorktreeMeta('wt1', { displayName: 'Worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'old-tab', worktreeId: 'wt1', ptyId: 'old-pty' })]
+      },
+      terminalLayoutsByTabId: {
+        'old-tab': {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'old-pty' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: {
+        [`old-tab:${TEST_LEAF_1}`]: 'old-incarnation'
+      },
+      terminalTopologyRevisionByRepoId: { wt1: 1 }
+    })
+    const stale = structuredClone(store.getWorkspaceSession())
+
+    store.removeWorktreeMeta('wt1')
+
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toBeUndefined()
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId['old-tab']).toBeUndefined()
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.wt1).toBe(2)
+
+    store.setWorkspaceSession(stale)
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([])
+
+    store.persistPtyBinding({
+      worktreeId: 'wt1',
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_2,
+      ptyId: 'fresh-pty',
+      incarnationId: 'fresh-incarnation'
+    })
+    expect(store.getWorkspaceSession().tabsByWorktree.wt1).toEqual([
+      expect.objectContaining({ id: 'fresh-tab', ptyId: 'fresh-pty' })
+    ])
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.wt1).toBe(3)
+  })
+
+  it('fences a delayed terminal snapshot after an empty worktree is deleted', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/empty-worktree'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Empty worktree' })
+    const stale = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'late-tab', worktreeId, ptyId: 'late-pty' })]
+      }
+    }
+
+    store.removeWorktreeMeta(worktreeId)
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(1)
+
+    store.setWorkspaceSession(stale)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toEqual([])
+  })
+
+  it('advances deletion authority when only a legacy retirement fence existed', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/legacy-tombstone'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Legacy worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      terminalSurfaceTombstonesByPaneKey: {
+        'old-tab:old-leaf': {
+          worktreeId,
+          parentTabId: 'old-tab',
+          leafId: 'old-leaf',
+          ptyId: 'old-pty',
+          incarnationId: 'old-incarnation',
+          retiredAt: 1
+        }
+      }
+    })
+    const revisionBeforeDelete =
+      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo ?? 0
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(
+      revisionBeforeDelete + 1
+    )
+  })
+
+  it('enforces one repo epoch across siblings and admits a fresh sibling spawn', async () => {
+    const store = await createStore()
+    const worktreeA = 'repo::/worktree-a'
+    const worktreeB = 'repo::/worktree-b'
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeA]: [makeTerminalTab({ id: 'tab-a', worktreeId: worktreeA, ptyId: 'pty-a' })],
+        [worktreeB]: [makeTerminalTab({ id: 'tab-b', worktreeId: worktreeB, ptyId: 'pty-b' })]
+      },
+      terminalTopologyRevisionByRepoId: { repo: 1 }
+    })
+
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeB]: [makeTerminalTab({ id: 'stale-tab', worktreeId: worktreeB })]
+      }
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeA]?.[0]?.id).toBe('tab-a')
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeB]?.[0]?.id).toBe('tab-b')
+
+    store.persistPtyBinding({
+      worktreeId: worktreeB,
+      tabId: 'fresh-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'fresh-pty'
+    })
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeB].map((tab) => tab.id)).toEqual([
+      'tab-b',
+      'fresh-tab'
+    ])
+    expect(store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.repo).toBe(2)
+  })
+
+  it('keeps one deletion watermark for many historical worktrees in the same repo', async () => {
+    const store = await createStore()
+
+    for (let index = 0; index < 25; index += 1) {
+      const worktreeId = `repo::/worktree-${index}`
+      store.setWorktreeMeta(worktreeId, { displayName: `Worktree ${index}` })
+      store.persistPtyBinding({
+        worktreeId,
+        tabId: `tab-${index}`,
+        leafId: TEST_LEAF_1,
+        ptyId: `pty-${index}`
+      })
+      store.removeWorktreeMeta(worktreeId)
+    }
+
+    const session = store.getWorkspaceSession()
+    expect(Object.keys(session.terminalTopologyRevisionByRepoId ?? {})).toEqual(['repo'])
+    expect(session.tabsByWorktree).toEqual({})
+  })
+
+  it('does not remove colliding worktree ids from other execution-host partitions', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo::/same-path'
+    store.setWorktreeMeta(worktreeId, { displayName: 'Local worktree' })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'local-tab', worktreeId })]
+      }
+    })
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'remote-a-tab', worktreeId })]
+        }
+      },
+      'runtime:env-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'remote-b-tab', worktreeId })]
+        }
+      },
+      'runtime:env-b'
+    )
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession().tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'remote-a-tab'
+    )
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'remote-b-tab'
+    )
   })
 
   it('preserves a sync-persisted UUID root when a stale empty layout write arrives', async () => {
@@ -8817,6 +11093,110 @@ describe('Store', () => {
 
   // ── Live Claude PTY session ids (STA-1246) ─────────────────────────
 
+  describe('mobileClientTabSelectionsByDeviceId', () => {
+    it('persists device tab selections across reloads and drops malformed payloads', async () => {
+      const store = await createStore()
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'repo-1::/tmp/wt': { activeTabId: 'tab-1', activeGroupId: 'g1', activeTabIdByGroupId: {} }
+        }
+      })
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']?.['repo-1::/tmp/wt']).toEqual({
+        activeTabId: 'tab-1',
+        activeGroupId: 'g1',
+        activeTabIdByGroupId: {}
+      })
+
+      writeDataFile({ mobileClientTabSelectionsByDeviceId: { 'device-a': 'corrupt' } })
+      const corrupted = await createStore()
+      expect(corrupted.getMobileClientTabSelections()).toEqual({})
+    })
+
+    it('prunes selections for a removed repo worktree', async () => {
+      const store = await createStore()
+      store.addRepo(makeRepo())
+      store.setMobileClientTabSelections({
+        'device-a': {
+          'r1::/tmp/wt': {
+            activeTabId: 'tab-1',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          'other-repo::/tmp/wt': {
+            activeTabId: 'tab-2',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeProject('r1')
+      store.flush()
+
+      expect(store.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()['device-a']).toEqual({
+        'other-repo::/tmp/wt': {
+          activeTabId: 'tab-2',
+          activeGroupId: null,
+          activeTabIdByGroupId: {}
+        }
+      })
+    })
+
+    it('prunes selections when a folder workspace is removed directly or with its group', async () => {
+      const store = await createStore()
+      const directGroup = store.createProjectGroup({
+        name: 'Direct',
+        parentPath: '/tmp/direct',
+        createdFrom: 'manual'
+      })
+      const directWorkspace = store.createFolderWorkspace({
+        projectGroupId: directGroup.id,
+        name: 'Direct workspace'
+      })
+      const cascadeGroup = store.createProjectGroup({
+        name: 'Cascade',
+        parentPath: '/tmp/cascade',
+        createdFrom: 'manual'
+      })
+      const cascadeWorkspace = store.createFolderWorkspace({
+        projectGroupId: cascadeGroup.id,
+        name: 'Cascade workspace'
+      })
+      store.setMobileClientTabSelections({
+        'device-a': {
+          [folderWorkspaceKey(directWorkspace.id)]: {
+            activeTabId: 'tab-direct',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          },
+          [folderWorkspaceKey(cascadeWorkspace.id)]: {
+            activeTabId: 'tab-cascade',
+            activeGroupId: null,
+            activeTabIdByGroupId: {}
+          }
+        }
+      })
+
+      store.removeFolderWorkspace(directWorkspace.id)
+      store.deleteProjectGroup(cascadeGroup.id)
+      store.flush()
+
+      const reloaded = await createStore()
+      expect(reloaded.getMobileClientTabSelections()).toEqual({})
+    })
+  })
+
   describe('claudeLivePtySessionIds', () => {
     it('persists added ids across reloads and removes them durably', async () => {
       const store = await createStore()
@@ -9180,12 +11560,7 @@ describe('Store', () => {
   })
 
   // ── Telemetry cohort migration ─────────────────────────────────────
-  //
-  // The migration keys on `existsSync(dataFile)` rather than field-based
-  // inference because the `telemetry` field is new in this release: keying
-  // on its presence would misclassify every pre-telemetry install as fresh,
-  // silently flipping existing users to default-on and violating the social
-  // contract they installed Orca under.
+  // Why: keys on `existsSync(dataFile)`, not the new `telemetry` field, so pre-telemetry installs aren't misclassified as fresh and flipped default-on.
 
   it('classifies a truly fresh install as new-user cohort (file absent → optedIn=true)', async () => {
     // No data file written — truly fresh install of the telemetry release.
@@ -9223,10 +11598,7 @@ describe('Store', () => {
   })
 
   it('still classifies as existing-user cohort when the data file is corrupt', async () => {
-    // Load-bearing: `fileExistedOnLoad` stays true even when the parse
-    // throws, so the corrupt-file catch path must also apply the migration.
-    // Otherwise a user whose `orca-data.json` got corrupted would be
-    // silently opted in as if they were a fresh install.
+    // Load-bearing: the corrupt-file catch path keeps `fileExistedOnLoad` true so a corrupted install isn't silently opted in as fresh.
     mkdirSync(testState.dir, { recursive: true })
     writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
     const store = await createStore()
@@ -9262,6 +11634,60 @@ describe('Store', () => {
       installId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
       existedBeforeTelemetryRelease: false
     })
+  })
+})
+
+describe('Store.migrateTabSwitchKeybindings', () => {
+  // Freezes the tab-switch cohort on first load, keying on `fileExistedOnLoad` (not field presence) so the verdict survives later launches.
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('marks a truly fresh install done so it adopts the new defaults', async () => {
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
+  })
+
+  it('marks a pre-existing install pending so the legacy chords get seeded', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('treats a corrupt data file as a pre-existing install', async () => {
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('pending')
+  })
+
+  it('preserves an already-frozen cohort on subsequent launches', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { tabSwitchKeybindingSeed: 'done' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    // Existing file, cohort already 'done' — must not flip to 'pending' just because the file exists.
+    expect(store.getSettings().tabSwitchKeybindingSeed).toBe('done')
   })
 })
 
@@ -9325,6 +11751,7 @@ describe('Store.migrateWorktreeIdentity', () => {
       activeGroupIdByWorktree: { [OLD]: 'group1' },
       lastVisitedAtByWorktreeId: { [OLD]: 123 },
       defaultTerminalTabsAppliedByWorktreeId: { [OLD]: true },
+      terminalTopologyRevisionByRepoId: { repo1: 4 },
       sleepingAgentSessionsByPaneKey: {
         'tab1:leaf': {
           paneKey: 'tab1:leaf',
@@ -9347,7 +11774,18 @@ describe('Store.migrateWorktreeIdentity', () => {
         activeWorkspaceKey: OLD_WORKSPACE_KEY,
         activeWorktreeId: OLD,
         tabsByWorktree: { [OLD]: [makeTerminalTab({ id: 'host-tab', worktreeId: OLD })] },
-        terminalLayoutsByTabId: {}
+        terminalLayoutsByTabId: {},
+        terminalTopologyRevisionByRepoId: { repo1: 8 },
+        terminalSurfaceTombstonesByPaneKey: {
+          'host-tab:leaf': {
+            worktreeId: OLD,
+            parentTabId: 'host-tab',
+            leafId: 'leaf',
+            ptyId: 'host-pty',
+            incarnationId: 'host-incarnation',
+            retiredAt: 1
+          }
+        }
       },
       'runtime:env-a'
     )
@@ -9391,12 +11829,15 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(session.activeGroupIdByWorktree?.[NEW]).toBe('group1')
     expect(session.lastVisitedAtByWorktreeId?.[NEW]).toBe(123)
     expect(session.defaultTerminalTabsAppliedByWorktreeId?.[NEW]).toBe(true)
+    expect(session.terminalTopologyRevisionByRepoId?.repo1).toBe(4)
     expect(session.sleepingAgentSessionsByPaneKey?.['tab1:leaf']?.worktreeId).toBe(NEW)
 
     const hostSession = store.getWorkspaceSession('runtime:env-a')
     expect(hostSession.tabsByWorktree[OLD]).toBeUndefined()
     expect(hostSession.tabsByWorktree[NEW]?.[0]?.worktreeId).toBe(NEW)
     expect(hostSession.activeWorkspaceKey).toBe(NEW_WORKSPACE_KEY)
+    expect(hostSession.terminalTopologyRevisionByRepoId?.repo1).toBe(9)
+    expect(hostSession.terminalSurfaceTombstonesByPaneKey).toEqual({})
   })
 
   it('rewrites parentWorktreeId back-references in other lineage entries', async () => {
@@ -9411,6 +11852,22 @@ describe('Store.migrateWorktreeIdentity', () => {
     store.migrateWorktreeIdentity(OLD, NEW)
 
     expect(store.getWorktreeLineage(CHILD)?.parentWorktreeId).toBe(NEW)
+  })
+
+  it('moves persisted mobile selections across reloads', async () => {
+    const store = await createStore()
+    store.setMobileClientTabSelections({
+      'device-a': {
+        [OLD]: { activeTabId: 'tab-1', activeGroupId: null, activeTabIdByGroupId: {} }
+      }
+    })
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+    store.flush()
+
+    expect(store.getMobileClientTabSelections()['device-a']?.[OLD]).toBeUndefined()
+    const reloaded = await createStore()
+    expect(reloaded.getMobileClientTabSelections()['device-a']?.[NEW]?.activeTabId).toBe('tab-1')
   })
 
   it('accumulates prior ids across chained renames', async () => {
@@ -9442,6 +11899,35 @@ describe('Store host-partitioned workspace sessions', () => {
   const makeHostSession = (activeRepoId: string): WorkspaceSessionState => ({
     ...getDefaultWorkspaceSession(),
     activeRepoId
+  })
+
+  const makeBoundHostSession = (ptyId: string | null): WorkspaceSessionState => ({
+    ...getDefaultWorkspaceSession(),
+    activeRepoId: 'repo-1',
+    activeWorktreeId: 'repo-1::/worktree',
+    activeTabId: 'tab-1',
+    tabsByWorktree: {
+      'repo-1::/worktree': [
+        {
+          id: 'tab-1',
+          worktreeId: 'repo-1::/worktree',
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 0,
+          createdAt: 1,
+          ptyId
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      'tab-1': {
+        root: { type: 'leaf', leafId: TEST_LEAF_1 },
+        activeLeafId: TEST_LEAF_1,
+        expandedLeafId: null,
+        ptyIdsByLeafId: ptyId ? { [TEST_LEAF_1]: ptyId } : {}
+      }
+    }
   })
 
   it('migrates a legacy workspaceSession blob into the local partition', async () => {
@@ -9543,6 +12029,123 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(store.getWorkspaceSession('local').activeRepoId).toBe('repo-local')
   })
 
+  it('preserves and enforces equal repo-id topology authority independently per host', async () => {
+    const store = await createStore()
+    const worktreeId = 'duplicate::/worktree'
+    const staleTabs = {
+      [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId, ptyId: 'stale-pty' })]
+    }
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        terminalTopologyRevisionByRepoId: { duplicate: 2 }
+      },
+      'runtime:env-a'
+    )
+    store.setWorkspaceSession(
+      {
+        ...getDefaultWorkspaceSession(),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'live-tab', worktreeId, ptyId: 'live-pty' })]
+        },
+        terminalTopologyRevisionByRepoId: { duplicate: 7 }
+      },
+      'runtime:env-b'
+    )
+
+    store.setWorkspaceSession(
+      { ...getDefaultWorkspaceSession(), tabsByWorktree: staleTabs },
+      'runtime:env-a'
+    )
+    store.patchWorkspaceSession({ tabsByWorktree: staleTabs }, 'runtime:env-a')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toEqual([])
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalTopologyRevisionByRepoId?.duplicate
+    ).toBe(2)
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]?.[0]?.id).toBe(
+      'live-tab'
+    )
+    expect(
+      store.getWorkspaceSession('runtime:env-b').terminalTopologyRevisionByRepoId?.duplicate
+    ).toBe(7)
+  })
+
+  it('persists an SSH PTY binding only in the SSH host partition', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+
+    store.persistPtyBinding(
+      {
+        worktreeId: 'repo-1::/worktree',
+        tabId: 'tab-1',
+        leafId: TEST_LEAF_1,
+        ptyId: 'ssh:ssh-1@@remote-pty'
+      },
+      'ssh:ssh-1'
+    )
+
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBe('ssh:ssh-1@@remote-pty')
+    expect(
+      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+  })
+
+  it('rolls back a failed SSH PTY binding flush in the SSH host partition', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession(makeBoundHostSession(null), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(null), 'ssh:ssh-1')
+    const flush = vi.spyOn(store, 'flushOrThrow').mockImplementationOnce(() => {
+      throw new Error('disk unavailable')
+    })
+
+    expect(() =>
+      store.persistPtyBinding(
+        {
+          worktreeId: 'repo-1::/worktree',
+          tabId: 'tab-1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'ssh:ssh-1@@remote-pty'
+        },
+        'ssh:ssh-1'
+      )
+    ).toThrow('disk unavailable')
+    flush.mockRestore()
+
+    expect(
+      store.getWorkspaceSession('ssh:ssh-1').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+    expect(
+      store.getWorkspaceSession('local').tabsByWorktree['repo-1::/worktree'][0]?.ptyId
+    ).toBeNull()
+  })
+
+  it('clears expired SSH PTY bindings from the SSH partition and legacy local copy', async () => {
+    const store = await createStore()
+    const ptyId = 'ssh:ssh-1@@remote-pty'
+    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'local')
+    store.setWorkspaceSession(makeBoundHostSession(ptyId), 'ssh:ssh-1')
+    store.upsertSshRemotePtyLease({
+      targetId: 'ssh-1',
+      ptyId: 'remote-pty',
+      worktreeId: 'repo-1::/worktree',
+      tabId: 'tab-1',
+      leafId: TEST_LEAF_1,
+      state: 'attached'
+    })
+
+    store.markSshRemotePtyLease('ssh-1', ptyId, 'expired')
+
+    for (const hostId of ['local', 'ssh:ssh-1']) {
+      const session = store.getWorkspaceSession(hostId)
+      expect(session.tabsByWorktree['repo-1::/worktree'][0]?.ptyId).toBeNull()
+      expect(session.terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({})
+    }
+  })
+
   it('defaults an omitted hostId to the local partition', async () => {
     const store = await createStore()
     store.setWorkspaceSession(makeHostSession('repo-a'), 'runtime:env-a')
@@ -9562,21 +12165,368 @@ describe('Store host-partitioned workspace sessions', () => {
     expect(reloaded.getWorkspaceSession('runtime:env-a').activeRepoId).toBe('repo-a')
   })
 
-  it('drops a corrupt host partition to defaults without failing the others', async () => {
+  it('removes one orphaned worktree with a host-scoped topology fence', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      activeWorktreeId: worktreeId,
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      },
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
+    }
+    store.setWorkspaceSession(session, 'local')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+
+    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.flush()
+
+    const reloaded = await createStore()
+    expect(reloaded.getWorkspaceSession('runtime:env-a')).toMatchObject({
+      tabsByWorktree: {},
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 4 }
+    })
+    expect(reloaded.getWorkspaceSession('runtime:env-b')).toMatchObject({
+      activeWorktreeId: worktreeId,
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 3 }
+    })
+    // The local blob is a co-owner surface for every remote host, since the renderer parks state
+    // there whenever worktree ownership is unresolved; leaving it behind leaks the removed worktree.
+    expect(reloaded.getWorkspaceSession('local')).toMatchObject({
+      tabsByWorktree: {},
+      activeWorktreeId: null,
+      activeWorktreeIdsOnShutdown: [],
+      lastVisitedAtByWorktreeId: {},
+      terminalTopologyRevisionByRepoId: { 'repo-gone': 4 }
+    })
+  })
+
+  it('uses persisted worktree ownership when removing metadata', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'local')
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    store.removeWorktreeMeta(worktreeId)
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    // Only the owning host's partition and the local blob it may spill into are cleaned; a same-id
+    // worktree on another host is a different workspace and must survive.
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]).toHaveLength(1)
+    expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  it('cleans both surfaces that hold an ssh-owned worktree', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-ssh::/srv/stale'
+    const makeSession = (): ReturnType<typeof makeHostSession> => ({
+      ...makeHostSession('repo-ssh'),
+      activeWorktreeId: worktreeId,
+      lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    })
+    // The renderer persists SSH workspaces in the local blob; the main process writes their
+    // terminal state to the host's own `ssh:*` partition. Removal must clear both.
+    store.setWorkspaceSession(makeSession(), 'local')
+    store.setWorkspaceSession(makeSession(), 'ssh:conn-1')
+    store.setWorktreeMeta(worktreeId, { hostId: 'ssh:conn-1' })
+
+    store.removeWorktreeMeta(worktreeId, 'ssh:conn-1')
+
+    for (const hostId of ['local', 'ssh:conn-1'] as const) {
+      expect(store.getWorkspaceSession(hostId)).toMatchObject({
+        tabsByWorktree: {},
+        activeWorktreeId: null,
+        lastVisitedAtByWorktreeId: {},
+        terminalTopologyRevisionByRepoId: { 'repo-ssh': 1 }
+      })
+    }
+  })
+
+  it('does not bump the topology fence in a partition that never held the worktree', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-split::/workspace/stale'
+    const otherWorktreeId = 'repo-split::/workspace/live'
+    // Why this matters: the fence is keyed by repo, so a bump here would make every later write
+    // for repo-split rebase onto main's copy and silently drop the live worktree's unsaved tabs.
+    store.setWorkspaceSession(
+      {
+        ...makeHostSession('repo-split'),
+        tabsByWorktree: {
+          [otherWorktreeId]: [makeTerminalTab({ id: 'live-tab', worktreeId: otherWorktreeId })]
+        }
+      },
+      'local'
+    )
+    store.setWorkspaceSession(
+      {
+        ...makeHostSession('repo-split'),
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+        }
+      },
+      'runtime:env-a'
+    )
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    store.removeWorktreeMeta(worktreeId, 'local')
+
+    expect(
+      store.getWorkspaceSession('runtime:env-a').terminalTopologyRevisionByRepoId?.['repo-split']
+    ).toBe(1)
+    expect(
+      store.getWorkspaceSession('local').terminalTopologyRevisionByRepoId?.['repo-split']
+    ).toBeUndefined()
+    expect(store.getWorkspaceSession('local').tabsByWorktree[otherWorktreeId]).toHaveLength(1)
+  })
+
+  it('trusts persisted ownership over a stale caller hostId', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-split::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-split'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'runtime:env-b')
+    store.setWorktreeMeta(worktreeId, { hostId: 'runtime:env-a' })
+
+    // A caller's hostId comes from live routing and can go stale mid-removal; the same
+    // repoId::path can name a live worktree on env-b, whose tabs must survive.
+    store.removeWorktreeMeta(worktreeId, 'runtime:env-b')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('runtime:env-b').tabsByWorktree[worktreeId]).toHaveLength(1)
+  })
+
+  it('falls back to the caller hostId only when no ownership was recorded', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const session = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+    store.setWorkspaceSession(session, 'runtime:env-a')
+    store.setWorkspaceSession(session, 'local')
+
+    store.removeWorktreeMeta(worktreeId, 'runtime:env-a')
+
+    expect(store.getWorkspaceSession('runtime:env-a').tabsByWorktree[worktreeId]).toBeUndefined()
+    expect(store.getWorkspaceSession('local').tabsByWorktree[worktreeId]).toBeUndefined()
+  })
+
+  // Trade-off: the fence is repo-wide, so claiming authority over a partition main never wrote would
+  // rebase every sibling worktree of that repo onto an empty copy. A delayed write wins here instead.
+  it('does not fence a delayed session write when its host partition was never persisted', async () => {
+    const store = await createStore()
+    const worktreeId = 'repo-gone::/workspace/stale'
+    const delayedSession = {
+      ...makeHostSession('repo-gone'),
+      tabsByWorktree: {
+        [worktreeId]: [makeTerminalTab({ id: 'stale-tab', worktreeId })]
+      }
+    }
+
+    store.removeWorkspaceSessionStateForWorktree(worktreeId, 'runtime:env-a')
+    store.setWorkspaceSession(delayedSession, 'runtime:env-a')
+
+    const session = store.getWorkspaceSession('runtime:env-a')
+    expect(session.tabsByWorktree[worktreeId]?.[0]?.id).toBe('stale-tab')
+    expect(session.terminalTopologyRevisionByRepoId?.['repo-gone']).toBeUndefined()
+  })
+
+  it('resets only the corrupt required field of a host partition, not the partition', async () => {
+    const worktreeId = 'repo-1::/worktree'
     writeDataFile({
       schemaVersion: 1,
       workspaceSessionsByHostId: {
         'runtime:good': makeHostSession('good-repo'),
         // activeRepoId must be string|null; a number fails the zod parse.
-        'runtime:bad': { ...makeHostSession('x'), activeRepoId: 123 }
+        'runtime:bad': {
+          ...makeHostSession('x'),
+          activeRepoId: 123,
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'bad-host-tab', worktreeId })] }
+        }
       }
     })
 
     const store = await createStore()
 
     expect(store.getWorkspaceSession('runtime:good').activeRepoId).toBe('good-repo')
-    // Bad partition collapses to defaults rather than poisoning the map.
+    // The unsalvageable field falls back to its default; the partition's tabs survive.
     expect(store.getWorkspaceSession('runtime:bad').activeRepoId).toBeNull()
+    expect(
+      store.getWorkspaceSession('runtime:bad').tabsByWorktree[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['bad-host-tab'])
+  })
+
+  it('keeps every other worktree when the local session has a corrupt required field', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    writeDataFile({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        // A projected/truncated write can leave a top-level field the wrong type;
+        // that must not cost every worktree's tabs the way a full reset did.
+        activeTabId: 42,
+        tabsByWorktree: {
+          [worktreeId]: [makeTerminalTab({ id: 'local-keep', worktreeId })]
+        }
+      }
+    })
+
+    const store = await createStore()
+
+    const session = store.getWorkspaceSession('local')
+    expect(session.activeTabId).toBeNull()
+    expect(session.tabsByWorktree[worktreeId]?.map((tab) => tab.id)).toEqual(['local-keep'])
+  })
+
+  type PersistedSessionsFile = {
+    workspaceSession?: {
+      tabsByWorktree?: Record<string, { id: string }[]>
+      sleepingAgentSessionsByPaneKey?: Record<string, unknown>
+    }
+    workspaceSessionsByHostId?: Record<
+      string,
+      { tabsByWorktree?: Record<string, { id: string }[]> }
+    >
+  }
+
+  // Why: flush() writes whatever the state hash says is dirty, so it passes even
+  // when nothing scheduled a save — it cannot see the repair write at all. Loading
+  // once first canonicalizes the profile (a second load of a canonical file
+  // schedules nothing), so a later rewrite proves the salvage scheduled it.
+  async function loadAndAwaitScheduledSave(): Promise<void> {
+    vi.useFakeTimers()
+    try {
+      const store = await createStore()
+      vi.advanceTimersByTime(10_000)
+      await store.waitForPendingWrite()
+    } finally {
+      vi.useRealTimers()
+    }
+  }
+
+  async function canonicalize(fixture: Record<string, unknown>): Promise<PersistedSessionsFile> {
+    writeDataFile(fixture)
+    await loadAndAwaitScheduledSave()
+    const canonical = readFileSync(dataFile(), 'utf-8')
+    // Why: the save assertions below are only meaningful if a clean load schedules
+    // nothing. Prove that here rather than assume it — a future migration that
+    // dirtied every load would otherwise leave those tests silently vacuous.
+    await loadAndAwaitScheduledSave()
+    expect(readFileSync(dataFile(), 'utf-8')).toBe(canonical)
+    return JSON.parse(canonical) as PersistedSessionsFile
+  }
+
+  it('schedules a save for a salvaged local session instead of re-salvaging every launch', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'tab-keep', worktreeId })] }
+      }
+    })
+    const tabs = profile.workspaceSession?.tabsByWorktree?.[worktreeId]
+    expect(tabs).toBeDefined()
+    tabs!.push({ id: 'tab-corrupt' })
+    writeDataFile(profile)
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      await loadAndAwaitScheduledSave()
+      expect(warn).toHaveBeenCalledWith(
+        '[persistence] Salvaged workspace session; dropped corrupt entries:',
+        { count: 1, fields: ['tabsByWorktree'], detailsTruncated: false }
+      )
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(worktreeId)
+    } finally {
+      warn.mockRestore()
+    }
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual([
+      'tab-keep'
+    ])
+  })
+
+  it('schedules a save for salvaged host partitions', async () => {
+    const worktreeId = 'repo-1::/worktree'
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSessionsByHostId: {
+        'runtime:env-a': {
+          ...makeHostSession('runtime-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'runtime-keep', worktreeId })] }
+        },
+        'ssh:target-b': {
+          ...makeHostSession('ssh-repo'),
+          tabsByWorktree: { [worktreeId]: [makeTerminalTab({ id: 'ssh-keep', worktreeId })] }
+        }
+      }
+    })
+    const partitions = profile.workspaceSessionsByHostId
+    const runtimeTabs = partitions?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]
+    const sshTabs = partitions?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]
+    expect(runtimeTabs).toBeDefined()
+    expect(sshTabs).toBeDefined()
+    runtimeTabs!.push({ id: 'runtime-corrupt' })
+    sshTabs!.push({ id: 'ssh-corrupt' })
+    const mutablePartitions = partitions as Record<string, unknown>
+    mutablePartitions['runtime:broken'] = 'not a session'
+    writeDataFile(profile)
+    await loadAndAwaitScheduledSave()
+
+    const persisted = (readDataFile() as PersistedSessionsFile).workspaceSessionsByHostId
+    expect(
+      persisted?.['runtime:env-a']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)
+    ).toEqual(['runtime-keep'])
+    expect(persisted?.['ssh:target-b']?.tabsByWorktree?.[worktreeId]?.map((tab) => tab.id)).toEqual(
+      ['ssh-keep']
+    )
+    expect(persisted).not.toHaveProperty('runtime:broken')
+  })
+
+  it('writes back sleeping-agent records dropped during salvage', async () => {
+    const profile = await canonicalize({
+      schemaVersion: 1,
+      workspaceSession: {
+        ...makeHostSession('local-repo'),
+        sleepingAgentSessionsByPaneKey: {}
+      }
+    })
+    profile.workspaceSession!.sleepingAgentSessionsByPaneKey = {
+      'tab-bad:leaf': { paneKey: 'different:leaf' }
+    }
+    writeDataFile(profile)
+
+    await loadAndAwaitScheduledSave()
+
+    const persisted = readDataFile() as PersistedSessionsFile
+    expect(persisted.workspaceSession?.sleepingAgentSessionsByPaneKey).toBeUndefined()
   })
 })
 
@@ -9589,9 +12539,7 @@ describe('Store native-chat tab viewMode persistence', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  // Why: a tab persisted in 'chat' must restore to 'chat' (R1), and a tab
-  // persisted before the field existed must default to 'terminal' — i.e. the
-  // field is absent on restore — so older sessions stay backward-compatible.
+  // Why: tabs persisted before viewMode existed default to 'terminal' so older sessions stay backward-compatible.
   it('round-trips viewMode for unified tabs and defaults legacy tabs to terminal', async () => {
     const WORKTREE = 'repo1::/worktree'
     writeDataFile({

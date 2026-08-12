@@ -194,7 +194,7 @@ function normalizeOperationRecord<T>(
   }
   const normalized: Partial<Record<SourceControlAiOperation, T>> = {}
   for (const operation of SOURCE_CONTROL_AI_OPERATIONS) {
-    if (!Object.prototype.hasOwnProperty.call(value, operation)) {
+    if (!Object.hasOwn(value, operation)) {
       continue
     }
     const normalizedValue = normalizeValue(value[operation])
@@ -214,7 +214,7 @@ function normalizeActionRecord<T>(
   }
   const normalized: Partial<Record<SourceControlActionId, T>> = {}
   for (const actionId of SOURCE_CONTROL_ACTION_IDS) {
-    if (!Object.prototype.hasOwnProperty.call(value, actionId)) {
+    if (!Object.hasOwn(value, actionId)) {
       continue
     }
     const normalizedValue = normalizeValue(value[actionId])
@@ -296,13 +296,15 @@ export function normalizeRepoSourceControlAiOverrides(
   const migratedActionOverrides = { ...actionOverrides }
   for (const operation of SOURCE_CONTROL_TEXT_ACTION_IDS) {
     const instruction = instructionsByOperation?.[operation]
+    const existingTemplate = migratedActionOverrides[operation]?.commandInputTemplate
     if (
       typeof instruction === 'string' &&
-      migratedActionOverrides[operation]?.commandInputTemplate === undefined
+      (existingTemplate === undefined ||
+        isLegacyBranchInstructionTemplate(operation, instruction, existingTemplate))
     ) {
       migratedActionOverrides[operation] = {
         ...migratedActionOverrides[operation],
-        commandInputTemplate: commandTemplateFromInstruction(instruction)
+        commandInputTemplate: commandTemplateFromOperationInstruction(operation, instruction)
       }
     }
   }
@@ -322,6 +324,35 @@ function commandTemplateFromInstruction(instruction: string | null | undefined):
     return '{basePrompt}'
   }
   return ['{basePrompt}', '', trimmed].join('\n')
+}
+
+function commandTemplateFromOperationInstruction(
+  operation: SourceControlAiOperation,
+  instruction: string | null | undefined
+): string {
+  const trimmed = instruction?.trim()
+  if (!trimmed) {
+    return '{basePrompt}'
+  }
+  // Why: branch naming instructions define naming style, so they must precede
+  // the general built-in prompt. Other operations retain their released order.
+  return operation === 'branchName'
+    ? [trimmed, '', '{basePrompt}'].join('\n')
+    : commandTemplateFromInstruction(trimmed)
+}
+
+function isLegacyBranchInstructionTemplate(
+  operation: SourceControlAiOperation,
+  instruction: string | null | undefined,
+  template: string | null | undefined
+): boolean {
+  // Why: reorder only the exact template older settings derived automatically;
+  // a user-authored command template remains authoritative.
+  return (
+    operation === 'branchName' &&
+    Boolean(instruction?.trim()) &&
+    template === commandTemplateFromInstruction(instruction)
+  )
 }
 
 function actionRecipeFromLegacyCommitMessageAi(legacy: CommitMessageAiSettings): {
@@ -357,7 +388,7 @@ function legacyPromptFromCommandTemplate(
 function hasActionAgentRecipe(recipe: {
   agentId?: TuiAgent | CustomAgentId | null
 }): recipe is { agentId: TuiAgent | CustomAgentId | null } {
-  return Object.prototype.hasOwnProperty.call(recipe, 'agentId')
+  return Object.hasOwn(recipe, 'agentId')
 }
 
 function legacyCommitMessageCoreChanges(
@@ -400,7 +431,10 @@ function shouldImportLegacyBranchPrompt(
   projectedLegacy: CommitMessageAiSettings
 ): boolean {
   const branchRecipe = readSourceControlActionDefault(base.actions, 'branchName')
-  const projectedTemplate = commandTemplateFromInstruction(projectedLegacy.customPrompt)
+  const projectedTemplate = commandTemplateFromOperationInstruction(
+    'branchName',
+    projectedLegacy.customPrompt
+  )
   return (
     branchRecipe.commandInputTemplate === undefined ||
     branchRecipe.commandInputTemplate ===
@@ -473,7 +507,13 @@ export function sourceControlAiSettingsFromLegacy(
     actions: {
       ...defaults.actions,
       commitMessage: legacyActionRecipe,
-      branchName: legacyActionRecipe
+      branchName: {
+        ...legacyActionRecipe,
+        commandInputTemplate: commandTemplateFromOperationInstruction(
+          'branchName',
+          legacy.customPrompt
+        )
+      }
     }
   }
 }
@@ -501,7 +541,7 @@ function mergeLegacyModelSelectionDelta<T>(
   let changed = false
   const keys = new Set([...Object.keys(legacy ?? {}), ...Object.keys(projected ?? {})])
   for (const key of keys) {
-    const legacyHasKey = Object.prototype.hasOwnProperty.call(legacy ?? {}, key)
+    const legacyHasKey = Object.hasOwn(legacy ?? {}, key)
     const legacyValue = legacy?.[key]
     if (JSON.stringify(projected?.[key]) === JSON.stringify(legacyValue)) {
       continue
@@ -640,7 +680,12 @@ export function mergeLegacyCommitMessageAiIntoSourceControlAi(
                     ? applyLegacyAgentToActionRecipe(base.actions?.branchName, legacy.agentId)
                     : base.actions?.branchName),
                   ...(shouldMergeBranchPrompt
-                    ? { commandInputTemplate: legacyActionRecipe.commandInputTemplate }
+                    ? {
+                        commandInputTemplate: commandTemplateFromOperationInstruction(
+                          'branchName',
+                          legacy.customPrompt
+                        )
+                      }
                     : {})
                 }
               }
@@ -693,15 +738,21 @@ export function normalizeSourceControlAiSettings(
       const existing = readSourceControlActionDefault(normalizedActions, actionId)
       const instruction = base.instructionsByOperation?.[actionId]
       const legacyInstruction = actionId === 'commitMessage' ? legacy?.customPrompt : undefined
+      const resolvedInstruction = instruction ?? legacyInstruction
       const instructionTemplate =
         instruction || legacyInstruction
-          ? commandTemplateFromInstruction(instruction ?? legacyInstruction)
+          ? commandTemplateFromOperationInstruction(actionId, resolvedInstruction)
           : undefined
       const shouldApplyInstructionTemplate =
         instructionTemplate !== undefined &&
         (existing.commandInputTemplate === undefined ||
           existing.commandInputTemplate ===
-            DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId])
+            DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES[actionId] ||
+          isLegacyBranchInstructionTemplate(
+            actionId,
+            resolvedInstruction,
+            existing.commandInputTemplate
+          ))
       return [
         actionId,
         {
@@ -943,7 +994,7 @@ function hasOwnInstruction(
   instructions: Partial<Record<SourceControlAiOperation, string | null>> | null | undefined,
   operation: SourceControlAiOperation
 ): boolean {
-  return Object.prototype.hasOwnProperty.call(instructions ?? {}, operation)
+  return Object.hasOwn(instructions ?? {}, operation)
 }
 
 function readRepoInstructionOverride(
@@ -1048,7 +1099,7 @@ function resolveActionRecipeForTextOperation(
   )
   const fallbackTemplate =
     repoInstruction !== undefined
-      ? commandTemplateFromInstruction(repoInstruction)
+      ? commandTemplateFromOperationInstruction(operation, repoInstruction)
       : resolveSourceControlActionCommandTemplate(source.actions, operation)
   const repoTemplate =
     typeof repoRecipe?.commandInputTemplate === 'string'

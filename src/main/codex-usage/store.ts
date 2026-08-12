@@ -1,13 +1,11 @@
-/* eslint-disable max-lines -- Why: this store owns Codex analytics persistence, scan policy, and renderer query semantics. Keeping them together prevents the Codex range/scope rules from drifting away from the scanner’s event model. */
+/* eslint-disable max-lines -- Why: Codex pricing, range, scope, breakdown, and automation-attribution policies remain one cohesive store. */
 import { app } from 'electron'
-import { dirname, join } from 'node:path'
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type {
   CodexUsageBreakdownKind,
   CodexUsageBreakdownRow,
   CodexUsageDailyPoint,
   CodexUsageRange,
-  CodexUsageScanState,
   CodexUsageScope,
   CodexUsageSessionRow,
   CodexUsageSnapshot,
@@ -15,12 +13,12 @@ import type {
 } from '../../shared/codex-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations-types'
 import type { Store } from '../persistence'
-import { loadKnownUsageWorktreesByRepo, type UsageWorktreeRef } from '../usage-worktree-metadata'
 import type { CodexUsagePersistedState } from './types'
-import { createWorktreeRefs, scanCodexUsageFiles } from './scanner'
+import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
+import { getLocalUsageDay, getUsageRangeCutoff } from '../usage/usage-calendar-range'
+import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
 
-const SCHEMA_VERSION = 3
-const STALE_MS = 5 * 60_000
+const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
 const AUTOMATION_ATTRIBUTION_WINDOW_MS = 5 * 60_000
 
 let _codexUsageFile: string | null = null
@@ -87,6 +85,30 @@ const MODEL_PRICING: Record<string, CodexModelPricing> = {
     inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
     cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
     outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-sol': {
+    input: 5,
+    cachedInput: 0.5,
+    output: 30,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 10 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 1 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 45 }]
+  },
+  'gpt-5.6-terra': {
+    input: 2.5,
+    cachedInput: 0.25,
+    output: 15,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 5 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.5 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 22.5 }]
+  },
+  'gpt-5.6-luna': {
+    input: 1,
+    cachedInput: 0.1,
+    output: 6,
+    inputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 2 }],
+    cachedInputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 0.2 }],
+    outputTiers: [{ threshold: LONG_CONTEXT_THRESHOLD_TOKENS, price: 9 }]
   }
 }
 
@@ -225,6 +247,21 @@ function normalizeModelForPricing(model: string | null): string | null {
   if (normalized === 'gpt-5.5' || normalized.startsWith('gpt-5.5-')) {
     return 'gpt-5.5'
   }
+  if (normalized === 'gpt-5.6-sol' || normalized.startsWith('gpt-5.6-sol-')) {
+    return 'gpt-5.6-sol'
+  }
+  if (normalized === 'gpt-5.6-terra' || normalized.startsWith('gpt-5.6-terra-')) {
+    return 'gpt-5.6-terra'
+  }
+  if (normalized === 'gpt-5.6-luna' || normalized.startsWith('gpt-5.6-luna-')) {
+    return 'gpt-5.6-luna'
+  }
+  // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
+  // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
+  // cheaper variant.
+  if (normalized === 'gpt-5.6') {
+    return 'gpt-5.6-sol'
+  }
   return null
 }
 
@@ -267,31 +304,6 @@ function estimateCostUsd(
   )
 }
 
-function getRangeCutoff(range: CodexUsageRange): string | null {
-  if (range === 'all') {
-    return null
-  }
-  const days = range === '7d' ? 7 : range === '30d' ? 30 : 90
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  now.setDate(now.getDate() - (days - 1))
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function getLocalDay(timestamp: string): string | null {
-  const parsed = new Date(timestamp)
-  if (Number.isNaN(parsed.getTime())) {
-    return null
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  const day = String(parsed.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
 type ScopedCodexUsageModelRow = {
   modelKey: string
   modelLabel: string
@@ -304,76 +316,21 @@ type ScopedCodexUsageModelRow = {
   totalTokens: number
 }
 
-function getWorktreeFingerprint(worktreesByRepo: Map<string, UsageWorktreeRef[]>): string {
-  const rows = [...worktreesByRepo.entries()]
-    .flatMap(([repoId, worktrees]) =>
-      worktrees.map((worktree) =>
-        JSON.stringify({
-          repoId,
-          worktreeId: worktree.worktreeId,
-          path: worktree.path,
-          displayName: worktree.displayName
-        })
-      )
-    )
-    .sort()
-  return JSON.stringify(rows)
-}
-
-export class CodexUsageStore {
-  private state: CodexUsagePersistedState
-  private readonly store: Store
-  private scanPromise: Promise<void> | null = null
-
-  constructor(store: Store) {
-    this.store = store
-    this.state = this.load()
-  }
-
-  private load(): CodexUsagePersistedState {
-    try {
-      const usageFile = getCodexUsageFile()
-      if (!existsSync(usageFile)) {
-        return getDefaultState()
-      }
-      const parsed = JSON.parse(readFileSync(usageFile, 'utf-8')) as CodexUsagePersistedState
-      return normalizePersistedState({
-        ...getDefaultState(),
-        ...parsed,
-        scanState: {
-          ...getDefaultState().scanState,
-          ...parsed.scanState
-        }
-      })
-    } catch (error) {
-      console.error('[codex-usage] Failed to load persisted state, starting fresh:', error)
-      return getDefaultState()
-    }
-  }
-
-  private writeToDisk(): void {
-    const usageFile = getCodexUsageFile()
-    const dir = dirname(usageFile)
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-    const tmpFile = `${usageFile}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
-    writeFileSync(tmpFile, JSON.stringify(this.state), 'utf-8')
-    renameSync(tmpFile, usageFile)
-  }
-
-  async setEnabled(enabled: boolean): Promise<CodexUsageScanState> {
-    this.state.scanState.enabled = enabled
-    this.writeToDisk()
-    return this.getScanState()
-  }
-
-  getScanState(): CodexUsageScanState {
-    return {
-      ...this.state.scanState,
-      isScanning: this.scanPromise !== null,
-      hasAnyCodexData: this.state.sessions.length > 0 || this.state.dailyAggregates.length > 0
-    }
+export class CodexUsageStore extends UsageProviderStoreLifecycle<
+  'processedFiles',
+  CodexUsagePersistedState,
+  'hasAnyCodexData'
+> {
+  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
+    super(store, {
+      logTag: '[codex-usage]',
+      resolveCacheFile: getCodexUsageFile,
+      createDefaultState: getDefaultState,
+      normalizeState: normalizePersistedState,
+      sourceKey: 'processedFiles',
+      dataPresenceKey: 'hasAnyCodexData',
+      scan: codexUsageProvider.scan
+    })
   }
 
   getSnapshot(
@@ -389,58 +346,6 @@ export class CodexUsageStore {
       projectBreakdown: this.buildBreakdown(scope, range, 'project'),
       recentSessions: this.buildRecentSessions(scope, range, recentSessionLimit)
     }
-  }
-
-  async refresh(force = false): Promise<CodexUsageScanState> {
-    if (!this.state.scanState.enabled) {
-      return this.getScanState()
-    }
-    const currentWorktreeFingerprint = await this.getCurrentWorktreeFingerprint()
-    if (!force && this.state.scanState.lastScanCompletedAt) {
-      const ageMs = Date.now() - this.state.scanState.lastScanCompletedAt
-      if (ageMs < STALE_MS && this.state.worktreeFingerprint === currentWorktreeFingerprint) {
-        return this.getScanState()
-      }
-    }
-    await this.runScan()
-    return this.getScanState()
-  }
-
-  private async runScan(): Promise<void> {
-    if (this.scanPromise) {
-      await this.scanPromise
-      return
-    }
-
-    this.state.scanState.lastScanStartedAt = Date.now()
-    this.state.scanState.lastScanError = null
-    // Why: start-only writes rewrite the full usage cache before scan results change.
-
-    this.scanPromise = (async () => {
-      try {
-        const repos = this.store.getRepos()
-        const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-        const worktreeFingerprint = getWorktreeFingerprint(worktreesByRepo)
-        const result = await scanCodexUsageFiles(
-          createWorktreeRefs(repos, worktreesByRepo),
-          this.state.worktreeFingerprint === worktreeFingerprint ? this.state.processedFiles : []
-        )
-        this.state.processedFiles = result.processedFiles
-        this.state.sessions = result.sessions
-        this.state.dailyAggregates = result.dailyAggregates
-        this.state.worktreeFingerprint = worktreeFingerprint
-        this.state.scanState.lastScanCompletedAt = Date.now()
-        this.state.scanState.lastScanError = null
-        this.writeToDisk()
-      } catch (error) {
-        this.state.scanState.lastScanError = error instanceof Error ? error.message : String(error)
-        this.writeToDisk()
-      } finally {
-        this.scanPromise = null
-      }
-    })()
-
-    await this.scanPromise
   }
 
   async getSummary(scope: CodexUsageScope, range: CodexUsageRange): Promise<CodexUsageSummary> {
@@ -842,7 +747,7 @@ export class CodexUsageStore {
   }
 
   private getFilteredDaily(scope: CodexUsageScope, range: CodexUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.dailyAggregates.filter((entry) => {
       if (cutoff && entry.day < cutoff) {
         return false
@@ -855,9 +760,9 @@ export class CodexUsageStore {
   }
 
   private getFilteredSessions(scope: CodexUsageScope, range: CodexUsageRange) {
-    const cutoff = getRangeCutoff(range)
+    const cutoff = getUsageRangeCutoff(range)
     return this.state.sessions.filter((session) => {
-      const day = getLocalDay(session.lastTimestamp)
+      const day = getLocalUsageDay(session.lastTimestamp)
       if (!day) {
         return false
       }
@@ -928,11 +833,5 @@ export class CodexUsageStore {
     return (
       Boolean(lastScanError) || lastScanCompletedAt === null || lastScanCompletedAt < completedAt
     )
-  }
-
-  private async getCurrentWorktreeFingerprint(): Promise<string> {
-    const repos = this.store.getRepos()
-    const worktreesByRepo = loadKnownUsageWorktreesByRepo(this.store, repos)
-    return getWorktreeFingerprint(worktreesByRepo)
   }
 }

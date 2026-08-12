@@ -1,5 +1,6 @@
 import {
   AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus,
   type AgentStatusState,
   type AgentType
 } from './agent-status-types'
@@ -8,6 +9,7 @@ type ExistingAgentIdentity = {
   agentType?: AgentType
   state: AgentStatusState
   updatedAt: number
+  restoredUnconfirmed?: boolean
 }
 
 type AgentIdentityResolution = {
@@ -36,7 +38,7 @@ function isActiveExistingIdentity(
   now: number,
   staleAfterMs: number
 ): boolean {
-  return existing.state !== 'done' && now - existing.updatedAt <= staleAfterMs
+  return isFreshNonDoneAgentStatus(existing, now, staleAfterMs)
 }
 
 export function resolveAgentStatusIdentity(args: {

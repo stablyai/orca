@@ -32,7 +32,8 @@ const baseSession: AiVaultSession = {
   previewMessages: [],
   queuedMessageCount: 0,
   subagentTranscriptCount: 0,
-  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'"
+  resumeCommand: "cd '/Users/ada/repo/app' && claude --resume 'session-1'",
+  subagent: null
 }
 
 describe('filterAiVaultSessions', () => {
@@ -663,7 +664,7 @@ describe('groupAiVaultSessions', () => {
     ]
 
     expect(groupAiVaultSessions(sessions, 'folder')).toEqual([
-      { key: '/users/ada/repo/app', label: 'repo/app', sessions }
+      { key: 'folder:/Users/ada/repo/app', label: 'repo/app', sessions }
     ])
     expect(groupAiVaultSessions(sessions, 'agent').map((group) => group.label)).toEqual([
       'Claude',
@@ -694,7 +695,7 @@ describe('groupAiVaultSessions', () => {
 
   it('falls back to folder grouping when project metadata is unavailable', () => {
     expect(groupAiVaultSessions([baseSession], 'project')).toEqual([
-      { key: '/users/ada/repo/app', label: 'repo/app', sessions: [baseSession] }
+      { key: 'folder:/Users/ada/repo/app', label: 'repo/app', sessions: [baseSession] }
     ])
   })
 })

@@ -26,6 +26,10 @@ export function resolveProvisionalHostedReviewProvider(input: {
   linkedBitbucketPR?: number | null
   linkedAzureDevOpsPR?: number | null
   linkedGiteaPR?: number | null
+  // Provider inferred from the repo's remote URL host; used before the GitHub
+  // default so a GitLab (etc.) repo with no linked review still gets its own
+  // review copy while a probe is loading or after it fails.
+  remoteInferredProvider?: HostedReviewProvider | null
 }): HostedReviewProvider {
   if (input.hostedReview?.provider && supportsHostedReviewCreation(input.hostedReview.provider)) {
     return input.hostedReview.provider
@@ -49,19 +53,10 @@ export function resolveProvisionalHostedReviewProvider(input: {
   if (input.linkedGitHubPR != null || input.fallbackGitHubPR != null) {
     return 'github'
   }
-  return 'github'
-}
-
-export function buildLoadingHostedReviewCreationEligibility(
-  provider: HostedReviewProvider
-): HostedReviewCreationEligibility {
-  return {
-    provider,
-    review: null,
-    canCreate: false,
-    blockedReason: null,
-    nextAction: null
+  if (input.remoteInferredProvider && supportsHostedReviewCreation(input.remoteInferredProvider)) {
+    return input.remoteInferredProvider
   }
+  return 'github'
 }
 
 function shouldOfferCreatePrHeaderChrome(
@@ -180,6 +175,7 @@ export function resolveDisabledCreatePrHeaderAction(
       case 'existing_review':
       case 'fork_head_unsupported':
       case 'unsupported_provider':
+      case 'base_not_on_remote':
       case null:
         title = translate(
           'auto.components.right.sidebar.source.control.primary.action.f0c6e2a581',
@@ -311,11 +307,7 @@ export function resolveCreatePrHeaderAction(inputs: PrimaryActionInputs): Primar
     return createPrIntent
   }
 
-  // Why: blocked notices are only for states the preparation intent cannot
-  // safely resolve, such as auth/default-branch/unsafe sync blockers.
-  if (canClickBlockedCreateReviewReason(inputs.hostedReviewCreation?.blockedReason)) {
-    return resolveDisabledCreatePrHeaderAction(inputs)
-  }
-
+  // Why: any remaining blocked state (including create-time-only base_not_on_remote)
+  // falls back to the disabled header action with its explanatory title.
   return resolveDisabledCreatePrHeaderAction(inputs)
 }

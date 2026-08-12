@@ -92,6 +92,8 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 import type { WorkspaceSessionState } from '../../../../shared/types'
+import type { SshProviderEpoch } from '../../../../shared/ssh-types'
+import type { DirectSshPaneRetryAttemptId } from './direct-ssh-terminal-recovery-types'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultWorkspaceSession
@@ -139,9 +141,7 @@ describe('hydrateWorkspaceSession', () => {
 
     store.getState().hydrateWorkspaceSession(session)
 
-    // Why: ptyIdsByLeafId contains daemon session IDs that survive restart.
-    // reconnectPersistedTerminals uses them to reattach each split-pane
-    // leaf to its specific daemon session.
+    // Why: ptyIdsByLeafId holds daemon session IDs that survive restart, letting each split-pane leaf reattach to its own session.
     expect(store.getState().terminalLayoutsByTabId['tab-1']).toEqual({
       ...makeLayout(),
       ptyIdsByLeafId: { 'pane:1': 'daemon-session-1' },
@@ -194,6 +194,36 @@ describe('hydrateWorkspaceSession', () => {
         id: worktreeId,
         hostId: 'runtime:env-1'
       })
+    ])
+  })
+
+  it('strips the synthetic workspace suffix from folder-workspace instance placeholders', () => {
+    const store = createTestStore()
+    const workspaceUuid = '123e4567-e89b-12d3-a456-426614174000'
+    const worktreeId = `folder-repo::/home/user::workspace:${workspaceUuid}`
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'folder-repo',
+      activeWorktreeId: worktreeId,
+      activeTabId: 'folder-tab',
+      activeWorktreeIdsOnShutdown: [worktreeId],
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'folder-tab', worktreeId, ptyId: 'folder-session' })]
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      runtimeHostIdByWorkspaceSessionKey: {
+        [worktreeWorkspaceKey(worktreeId)]: 'runtime:env-1'
+      }
+    })
+
+    // Why: id keeps the ::workspace:<uuid> suffix, but path/displayName must resolve to the real folder so callers don't spawn against a missing cwd.
+    expect(store.getState().worktreesByRepo['folder-repo']).toEqual([
+      expect.objectContaining({ id: worktreeId, path: '/home/user', displayName: 'user' })
+    ])
+    expect(store.getState().repos).toEqual([
+      expect.objectContaining({ id: 'folder-repo', path: '/home/user' })
     ])
   })
 
@@ -335,8 +365,7 @@ describe('hydrateWorkspaceSession', () => {
 
     store.getState().hydrateWorkspaceSession(session)
 
-    // Why: restart can preserve scrollback for an exited pane while live siblings
-    // reattach. Keyboard focus must land on a PTY-backed pane, not the dead leaf.
+    // Why: restart can preserve scrollback for an exited pane, so focus must land on a live PTY-backed pane, not the dead leaf.
     expect(store.getState().terminalLayoutsByTabId['tab-1']?.activeLeafId).toBe(liveLeftLeafId)
   })
 
@@ -409,8 +438,7 @@ describe('hydrateWorkspaceSession', () => {
     await store.getState().reconnectPersistedTerminals()
     unsubscribe()
 
-    // Why: startup restores every daemon wake hint, but subscribers should see
-    // one ready-state transition instead of one update per restored tab.
+    // Why: startup restores every daemon wake hint, but subscribers should see one ready-state transition, not one update per restored tab.
     expect(updateCount).toBe(1)
     expect(store.getState().workspaceSessionReady).toBe(true)
     expect(store.getState().ptyIdsByTabId).toMatchObject({
@@ -426,11 +454,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('stashes deferred SSH session ids for worktrees not yet in worktreesByRepo', async () => {
-    // Why: at cold start SSH worktrees are absent from worktreesByRepo (relay
-    // discovery needs the connection). The deferred stash must fall back to
-    // the repo id embedded in the composite worktree id — otherwise restored
-    // SSH panes fresh-spawn into a missing PTY provider and strand an
-    // "SSH connection is not active" toast.
+    // Why: at cold start SSH worktrees aren't in worktreesByRepo, so the stash must fall back to the repo id embedded in the composite worktree id — else restored panes strand an "SSH connection is not active" toast.
     const store = createTestStore()
     const worktreeId = 'repo1::/home/user/remote-project'
     const sshSessionId = 'ssh:ssh-target-1@@pty-7'
@@ -457,6 +481,54 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().deferredSshSessionIdsByTabId).toMatchObject({
       'tab-1': sshSessionId
     })
+  })
+
+  it('stops deferring a session once its SSH target is known-absent, but keeps deferring present targets', async () => {
+    // #9911: a repo can outlive its SSH target (removed out of band). Once the
+    // authoritative target list has loaded, its persisted session is dead — don't
+    // re-defer it. A stranded deferred id reads as liveness in the orphan sweep, so
+    // after a later missing-target pane mount clears ptyIdsByTabId it would pin the
+    // dead tab forever. A present (merely disconnected) target must still defer.
+    const store = createTestStore()
+    const goneWt = 'repo-gone::/home/user/remote-gone'
+    const liveWt = 'repo-live::/home/user/remote-live'
+    seedStore(store, {
+      repos: [
+        { ...TEST_REPO, id: 'repo-gone', connectionId: 'ssh-target-removed' },
+        { ...TEST_REPO, id: 'repo-live', connectionId: 'ssh-target-present' }
+      ],
+      worktreesByRepo: {},
+      // Authoritative target list is loaded and lists only the present target.
+      sshTargetsHydrated: true,
+      sshTargetLabels: new Map([['ssh-target-present', 'Present']])
+    })
+
+    const session: WorkspaceSessionState = {
+      activeRepoId: 'repo-live',
+      activeWorktreeId: liveWt,
+      activeTabId: 'tab-live',
+      tabsByWorktree: {
+        [goneWt]: [makeTab({ id: 'tab-gone', worktreeId: goneWt, ptyId: null })],
+        [liveWt]: [makeTab({ id: 'tab-live', worktreeId: liveWt, ptyId: null })]
+      },
+      terminalLayoutsByTabId: {},
+      activeWorktreeIdsOnShutdown: [goneWt, liveWt],
+      remoteSessionIdsByTabId: {
+        'tab-gone': 'ssh:ssh-target-removed@@pty-7',
+        'tab-live': 'ssh:ssh-target-present@@pty-8'
+      }
+    }
+
+    store.getState().hydrateWorkspaceSession(session)
+    await store.getState().reconnectPersistedTerminals()
+
+    // Removed target: no stranded deferred/pending reconnect evidence.
+    expect(store.getState().deferredSshSessionIdsByTabId['tab-gone']).toBeUndefined()
+    expect(store.getState().pendingReconnectPtyIdByTabId['tab-gone']).toBeUndefined()
+    // Present-but-disconnected target: still deferred for a normal reconnect.
+    expect(store.getState().deferredSshSessionIdsByTabId['tab-live']).toBe(
+      'ssh:ssh-target-present@@pty-8'
+    )
   })
 
   it('resets persisted agent titles to the fallback label on hydration', () => {
@@ -515,11 +587,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('seeds worktree nav history with the restored active worktree', () => {
-    // Why: without seeding, the first sidebar click after startup becomes the
-    // only history entry, so Back stays disabled until the user clicks a
-    // second worktree. Seeding here ensures the restored worktree is already
-    // at index 0 so the very first user-driven switch has a prior entry to
-    // go Back to.
+    // Why: seeding the restored worktree at index 0 gives the first user switch a prior entry, so Back isn't disabled until a second click.
     const store = createTestStore()
     const worktreeId = 'repo1::/wt-1'
     seedStore(store, {
@@ -575,10 +643,7 @@ describe('hydrateWorkspaceSession', () => {
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: {} })
 
-    // Why: pre-seed non-default stale values so the assertions below can only
-    // pass if hydration actively overwrites the fields. Without this, the
-    // slice's default `[]` / `-1` would satisfy the expectations even if
-    // hydrateWorkspaceSession never touched nav history in this branch.
+    // Why: pre-seed stale values so the assertions can only pass if hydration actively overwrites nav history in this branch.
     store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
 
     const session: WorkspaceSessionState = {
@@ -596,17 +661,11 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('drops invalid restored worktree from nav history seed', () => {
-    // Why: hydrateWorkspaceSession validates activeWorktreeId against the
-    // current worktreesByRepo and sets it to null when stale. The history
-    // seed must follow that validation, not the raw session field — otherwise
-    // a deleted worktree would sit at history[0] and fail activation on Back.
+    // Why: the history seed must follow the validated activeWorktreeId (nulled when stale), or a deleted worktree sits at history[0] and fails Back.
     const store = createTestStore()
     seedStore(store, { worktreesByRepo: { repo1: [] } })
 
-    // Why: pre-seed non-default stale values so the assertions below can only
-    // pass if hydration actively overwrites the fields. Without this, the
-    // slice's default `[]` / `-1` would satisfy the expectations even if
-    // hydrateWorkspaceSession never cleared nav history for an invalid worktree.
+    // Why: pre-seed stale values so the assertions can only pass if hydration actively clears nav history for the invalid worktree.
     store.setState({ worktreeNavHistory: ['stale-a', 'stale-b'], worktreeNavHistoryIndex: 1 })
 
     const session: WorkspaceSessionState = {
@@ -625,11 +684,7 @@ describe('hydrateWorkspaceSession', () => {
   })
 
   it('records a subsequent visit on top of the hydration seed so Back is enabled after the first click', () => {
-    // Why: pins down the PR's user-visible contract — after hydration seeds
-    // the restored worktree at index 0, the very first sidebar click appends
-    // a new entry at index 1, which is what makes Back enabled immediately.
-    // Without the seed, the first click would produce a single-entry history
-    // and Back would stay disabled until a second click.
+    // Why: the hydration seed at index 0 lets the first sidebar click enable Back immediately (without it, Back needs a second click).
     const store = createTestStore()
     const wt1 = 'repo1::/wt-1'
     const wt2 = 'repo1::/wt-2'
@@ -657,14 +712,161 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().worktreeNavHistoryIndex).toBe(1)
     expect(canGoBackWorktreeHistory(store.getState())).toBe(true)
   })
+
+  it('hydrates and reconnects one SSH target without mutating unrelated state', async () => {
+    const store = createTestStore()
+    const targetWorktreeId = 'repo-a::/target'
+    const siblingWorktreeId = 'repo-b::/sibling'
+    const localWorktreeId = 'repo-local::/local'
+    const runtimeWorktreeId = 'repo-runtime::/runtime'
+    const folderWorktreeId = folderWorkspaceKey('folder-1')
+    const targetTab = makeTab({ id: 'tab-target', worktreeId: targetWorktreeId, ptyId: null })
+    const deletedTargetTab = makeTab({ id: 'tab-target-deleted', worktreeId: targetWorktreeId })
+    const siblingTab = makeTab({
+      id: 'tab-sibling',
+      worktreeId: siblingWorktreeId,
+      ptyId: 'ssh:target-b@@pty-b'
+    })
+    const runtimeTab = makeTab({
+      id: 'tab-runtime',
+      worktreeId: runtimeWorktreeId,
+      ptyId: 'runtime:env@@pty-runtime'
+    })
+    const localTab = makeTab({ id: 'tab-local', worktreeId: localWorktreeId, ptyId: null })
+    const folderTab = makeTab({ id: 'tab-folder', worktreeId: folderWorktreeId, ptyId: null })
+    const siblingTabs = [siblingTab]
+    const runtimeTabs = [runtimeTab]
+    const [localTabs, folderTabs] = [[localTab], [folderTab]]
+    const runtimeOwners = { [runtimeWorktreeId]: 'runtime:env' as const }
+    const authority = {
+      targetId: 'target-a',
+      providerEpoch: 'epoch-a' as SshProviderEpoch,
+      connectionGeneration: 7
+    }
+    const ledgerTabs = [targetTab, deletedTargetTab, siblingTab]
+    const retry = {
+      attemptId: 'attempt' as DirectSshPaneRetryAttemptId,
+      authority,
+      tabGeneration: 0,
+      startedAt: 0
+    }
+    const retryByTabId = Object.fromEntries(ledgerTabs.map((tab) => [tab.id, retry]))
+    const liveBinding = { ...retry, ptyId: 'ssh:target-a@@pty-ledger' }
+    const liveByTabId = Object.fromEntries(ledgerTabs.map((tab) => [tab.id, liveBinding]))
+    const historyByTabId = Object.fromEntries(
+      ledgerTabs.map((tab) => [tab.id, { authority, attemptedAt: [0] }])
+    )
+    seedStore(store, {
+      workspaceSessionReady: true,
+      repos: [
+        { ...TEST_REPO, id: 'repo-a', connectionId: 'target-a' },
+        { ...TEST_REPO, id: 'repo-b', connectionId: 'target-b' }
+      ],
+      worktreesByRepo: {
+        'repo-a': [makeWorktree({ id: targetWorktreeId, repoId: 'repo-a', path: '/target' })],
+        'repo-b': [makeWorktree({ id: siblingWorktreeId, repoId: 'repo-b', path: '/sibling' })]
+      },
+      tabsByWorktree: {
+        [targetWorktreeId]: [targetTab, deletedTargetTab],
+        [siblingWorktreeId]: siblingTabs,
+        [localWorktreeId]: localTabs,
+        [runtimeWorktreeId]: runtimeTabs,
+        [folderWorktreeId]: folderTabs
+      },
+      ptyIdsByTabId: {
+        [targetTab.id]: [],
+        [siblingTab.id]: [siblingTab.ptyId!],
+        [runtimeTab.id]: [runtimeTab.ptyId!]
+      },
+      activeRepoId: 'repo-b',
+      activeWorktreeId: siblingWorktreeId,
+      activeTabId: siblingTab.id,
+      restoredRuntimeHostIdByWorkspaceSessionKey: runtimeOwners,
+      directSshPaneRetryByTabId: retryByTabId,
+      directSshLivePtyBindingByTabId: liveByTabId,
+      directSshPaneRetryHistoryByTabId: historyByTabId,
+      sshConnectionStates: new Map([
+        [
+          authority.targetId,
+          {
+            targetId: authority.targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: authority.providerEpoch,
+            connectionGeneration: authority.connectionGeneration
+          }
+        ]
+      ])
+    })
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo-a',
+      activeWorktreeId: targetWorktreeId,
+      activeTabId: targetTab.id,
+      tabsByWorktree: {
+        [targetWorktreeId]: [
+          { ...targetTab, ptyId: 'ssh:target-a@@pty-a' },
+          makeTab({
+            id: 'tab-wrong-host',
+            worktreeId: targetWorktreeId,
+            ptyId: 'ssh:target-b@@pty-wrong'
+          })
+        ],
+        [siblingWorktreeId]: siblingTabs,
+        [runtimeWorktreeId]: runtimeTabs
+      },
+      activeWorktreeIdsOnShutdown: [targetWorktreeId],
+      terminalLayoutsByTabId: {}
+    }
+
+    store.getState().hydrateWorkspaceSession(session, {
+      directSshAuthority: authority,
+      replaceWorkspaceKeys: [targetWorktreeId]
+    })
+
+    expect(store.getState().tabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
+    expect(store.getState().tabsByWorktree[localWorktreeId]).toBe(localTabs)
+    expect(store.getState().tabsByWorktree[runtimeWorktreeId]).toBe(runtimeTabs)
+    expect(store.getState().tabsByWorktree[folderWorktreeId]).toBe(folderTabs)
+    expect(store.getState().ptyIdsByTabId[siblingTab.id]).toEqual([siblingTab.ptyId])
+    expect(store.getState().ptyIdsByTabId[runtimeTab.id]).toEqual([runtimeTab.ptyId])
+    expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toBe(runtimeOwners)
+    expect(store.getState().activeWorktreeId).toBe(siblingWorktreeId)
+    expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
+      [targetTab.id]: 'ssh:target-a@@pty-a'
+    })
+    const retainedLedgerTabIds = ledgerTabs
+      .filter((tab) => tab.id !== deletedTargetTab.id)
+      .map((tab) => tab.id)
+      .sort()
+    expect(Object.keys(store.getState().directSshPaneRetryByTabId).sort()).toEqual(
+      retainedLedgerTabIds
+    )
+    expect(Object.keys(store.getState().directSshLivePtyBindingByTabId).sort()).toEqual(
+      retainedLedgerTabIds
+    )
+    expect(Object.keys(store.getState().directSshPaneRetryHistoryByTabId).sort()).toEqual(
+      retainedLedgerTabIds
+    )
+
+    await store.getState().reconnectPersistedTerminals(undefined, {
+      directSshAuthority: authority,
+      workspaceKeys: [targetWorktreeId]
+    })
+
+    const targetTabs = store.getState().tabsByWorktree[targetWorktreeId]
+    expect(targetTabs.find((tab) => tab.id === targetTab.id)?.ptyId).toBe('ssh:target-a@@pty-a')
+    expect(targetTabs.find((tab) => tab.id === 'tab-wrong-host')?.ptyId).toBeNull()
+    expect(store.getState().tabsByWorktree[siblingWorktreeId]).toBe(siblingTabs)
+    expect(store.getState().tabsByWorktree[runtimeWorktreeId]).toBe(runtimeTabs)
+    expect(store.getState().workspaceSessionReady).toBe(true)
+  })
 })
 
 describe('hydrationSucceeded flag (issue #1158)', () => {
   it('defaults to false so the session writer is gated off at startup', () => {
-    // Why: App.tsx only flips hydrationSucceeded=true after a clean load from
-    // orca-data.json. If a startup error prevents that call, the flag stays
-    // false and the debounced writer never fires — protecting the user's good
-    // on-disk state from being overwritten with an empty in-memory snapshot.
+    // Why: default false so a startup error keeps the debounced writer gated off, protecting good on-disk state from an empty snapshot.
     const store = createTestStore()
     expect(store.getState().hydrationSucceeded).toBe(false)
   })
@@ -678,10 +880,7 @@ describe('hydrationSucceeded flag (issue #1158)', () => {
   })
 
   it('hydrateWorkspaceSession does not flip hydrationSucceeded on its own', () => {
-    // Why: the hydration call can populate state partially and still throw
-    // downstream (e.g. reconnect fails). Leaving the flip to App.tsx — after
-    // hydrateWorkspaceSession has returned without throwing — keeps the gate
-    // honest in those mid-flight failures.
+    // Why: hydration can populate state then throw downstream, so App.tsx flips the flag only after a clean return.
     const store = createTestStore()
     const wt = 'repo1::/wt'
     seedStore(store, {

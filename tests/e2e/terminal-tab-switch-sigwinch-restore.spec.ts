@@ -1,5 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveTabId,
@@ -56,7 +57,8 @@ function buildSigwinchResetProbeCommand(): string {
     "process.on('SIGWINCH',()=>{if(armed===false)return;page=0;paint(topLabel)})",
     'setInterval(()=>{},1000)'
   ].join(';')
-  return `node -e ${JSON.stringify(script)}`
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  return stageNodeScriptForTerminal(script, { prefix: 'orca-sigwinch-probe' }).command
 }
 
 function buildSigwinchResetProbeSnapshot(label: string): string {

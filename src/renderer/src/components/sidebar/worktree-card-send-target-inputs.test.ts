@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui'
 import {
+  EMPTY_SEND_TARGET_CONTROL_INPUTS,
   EMPTY_SEND_TARGET_INPUTS,
+  selectSendTargetControlInputs,
   selectSendTargetInputs,
+  type SendTargetControlInputsState,
   type SendTargetInputsState
 } from './worktree-card-send-target-inputs'
 
@@ -83,5 +86,46 @@ describe('selectSendTargetInputs', () => {
     // open popover re-derives eligibility, exactly as before this change.
     const s2: SendTargetInputsState = { ...s1, runtimePaneTitlesByTabId: { 'tab-1': 'codex' } }
     expect(shallow(r1, selectSendTargetInputs(s2, 'wt-A'))).toBe(false)
+  })
+})
+
+describe('selectSendTargetControlInputs', () => {
+  it('stays stable across global epoch changes while the picker is closed', () => {
+    const first = selectSendTargetControlInputs(
+      { agentSendPopoverTargetMode: null, agentStatusEpoch: 1 },
+      'wt-A'
+    )
+    const afterEpoch = selectSendTargetControlInputs(
+      { agentSendPopoverTargetMode: null, agentStatusEpoch: 2 },
+      'wt-A'
+    )
+
+    expect(first).toBe(EMPTY_SEND_TARGET_CONTROL_INPUTS)
+    expect(afterEpoch).toBe(EMPTY_SEND_TARGET_CONTROL_INPUTS)
+    expect(shallow(first, afterEpoch)).toBe(true)
+  })
+
+  it('stays stable when the picker targets another worktree', () => {
+    const state: SendTargetControlInputsState = {
+      agentSendPopoverTargetMode: makeMode('wt-B'),
+      agentStatusEpoch: 3
+    }
+
+    expect(selectSendTargetControlInputs(state, 'wt-A')).toBe(EMPTY_SEND_TARGET_CONTROL_INPUTS)
+  })
+
+  it('tracks the mode and freshness epoch only for the targeted worktree', () => {
+    const mode = makeMode('wt-A')
+    const first = selectSendTargetControlInputs(
+      { agentSendPopoverTargetMode: mode, agentStatusEpoch: 4 },
+      'wt-A'
+    )
+    const afterEpoch = selectSendTargetControlInputs(
+      { agentSendPopoverTargetMode: mode, agentStatusEpoch: 5 },
+      'wt-A'
+    )
+
+    expect(first).toEqual({ targetMode: mode, agentStatusEpoch: 4 })
+    expect(shallow(first, afterEpoch)).toBe(false)
   })
 })

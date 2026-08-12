@@ -3537,6 +3537,72 @@ describe('ClaudeRuntimeAuthService', () => {
     })
   })
 
+  it('uses the global WSL runtime for untargeted Claude preparation under auto', async () => {
+    setPlatform('win32')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const ubuntuAuthPath = createManagedClaudeAuth(
+      testState.userDataDir,
+      'ubuntu-account',
+      createClaudeCredentialsJson('ubuntu@example.com', 'ubuntu-token')
+    )
+    const settings = createSettings({
+      localAccountRuntime: 'auto',
+      localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' },
+      claudeManagedAccounts: [
+        createClaudeAccount('ubuntu-account', ubuntuAuthPath, {
+          managedAuthRuntime: 'wsl',
+          wslDistro: 'Ubuntu',
+          wslLinuxAuthPath: '/home/alice/.local/share/orca/claude-accounts/ubuntu/auth'
+        })
+      ],
+      activeClaudeManagedAccountId: null,
+      activeClaudeManagedAccountIdsByRuntime: {
+        host: null,
+        wsl: { Ubuntu: 'ubuntu-account' }
+      }
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      provenance: 'managed:ubuntu-account:wsl:Ubuntu'
+    })
+  })
+
+  it('ignores a persisted WSL account-runtime pin on non-Windows hosts', async () => {
+    setPlatform('darwin')
+    vi.doMock('../wsl', () => ({
+      getDefaultWslDistro: () => 'Ubuntu',
+      getWslHome: () => null,
+      toWindowsWslPath: (value: string) => value
+    }))
+    const settings = createSettings({
+      localAccountRuntime: 'wsl',
+      localAccountWslDistro: 'Ubuntu'
+    })
+    const store = createStore(settings)
+
+    const { ClaudeRuntimeAuthService } = await import('./runtime-auth-service')
+    const service = new ClaudeRuntimeAuthService(store as never)
+    const preparation = await service.prepareForClaudeLaunch()
+
+    expect(preparation).toMatchObject({
+      runtime: 'host',
+      wslDistro: null,
+      provenance: 'system',
+      stripAuthEnv: false
+    })
+  })
+
   it('keeps untargeted Claude preparation on host when account runtime is host', async () => {
     setPlatform('win32')
     vi.doMock('../wsl', () => ({

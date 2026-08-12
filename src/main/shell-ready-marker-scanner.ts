@@ -1,5 +1,4 @@
 export const SHELL_READY_MARKER_PREFIX = '\x1b]777;orca-shell-ready'
-export const SHELL_READY_MARKER = `${SHELL_READY_MARKER_PREFIX}\x07`
 
 export type ShellReadyScanState = {
   matchPos: number

@@ -1,24 +1,46 @@
+import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { basename, posix, win32 } from 'node:path'
+import { posix, win32 } from 'node:path'
+import { parseWslUncPath } from '../shared/wsl-paths'
+import { isVsCodeLauncherExecutable } from '../shared/vscode-remote-ssh-launcher'
 import { resolveCliCommand } from './codex-cli/command'
-import { getCmdExePath } from './win32-utils'
+import {
+  getLauncherBaseName,
+  hasMatchingOuterQuotes,
+  stripMatchingQuotes
+} from './editor-launcher-name'
+import {
+  isJetBrainsConsoleShim,
+  resolveColocatedJetBrainsGuiExecutable
+} from './jetbrains-windows-gui-launchers'
+import { getCmdExePath, getSpawnArgsForWindows } from './win32-utils'
 
 export const EXTERNAL_EDITOR_CLI_COMMAND = 'code'
 const WINDOWS_CONSOLE_EDITORS = new Set(['nvim', 'vim'])
 
+export type ExternalEditorExecutableLaunchSpec = {
+  kind: 'executable'
+  hideWindowsConsole: boolean
+  /**
+   * Set only for Windows batch shims that would otherwise leave a Command
+   * Prompt behind; routes the spawn through `start` with an empty title and
+   * `/B`. Left unset elsewhere because `start` re-parses quoted argv.
+   */
+  detachedGui?: boolean
+  spawnCmd: string
+  spawnArgs: string[]
+}
+
+export type ExternalEditorShellLaunchSpec = {
+  kind: 'shell'
+  hideWindowsConsole: boolean
+  spawnCmd: string
+  spawnArgs: string[]
+}
+
 export type ExternalEditorLaunchSpec =
-  | {
-      kind: 'executable'
-      hideWindowsConsole: boolean
-      spawnCmd: string
-      spawnArgs: string[]
-    }
-  | {
-      kind: 'shell'
-      hideWindowsConsole: boolean
-      spawnCmd: string
-      spawnArgs: string[]
-    }
+  | ExternalEditorExecutableLaunchSpec
+  | ExternalEditorShellLaunchSpec
 
 function escapePosixPathForShell(pathValue: string): string {
   if (/^[a-zA-Z0-9_./@:-]+$/.test(pathValue)) {
@@ -35,41 +57,6 @@ function escapePathForShell(pathValue: string, platform: NodeJS.Platform): strin
   return platform === 'win32'
     ? escapeWindowsPathForShell(pathValue)
     : escapePosixPathForShell(pathValue)
-}
-
-function getLauncherBaseName(command: string, options: { shellCommand?: boolean } = {}): string {
-  const normalized = options.shellCommand
-    ? getLeadingShellCommandToken(command)
-    : stripMatchingQuotes(command)
-  const name = normalized.includes('\\') ? win32.basename(normalized) : basename(normalized)
-  return name.replace(/\.(?:cmd|exe|bat)$/i, '').toLowerCase()
-}
-
-function getLeadingShellCommandToken(command: string): string {
-  const trimmed = command.trim()
-  const quote = trimmed[0]
-  if (quote === '"' || quote === "'") {
-    const closingIndex = trimmed.indexOf(quote, 1)
-    if (closingIndex > 0) {
-      return trimmed.slice(1, closingIndex)
-    }
-  }
-  return trimmed.split(/\s+/, 1)[0] ?? ''
-}
-
-function stripMatchingQuotes(value: string): string {
-  const trimmed = value.trim()
-  const quote = trimmed[0]
-  if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
-    return trimmed.slice(1, -1)
-  }
-  return trimmed
-}
-
-function hasMatchingOuterQuotes(value: string): boolean {
-  const trimmed = value.trim()
-  const quote = trimmed[0]
-  return (quote === '"' || quote === "'") && trimmed.endsWith(quote)
 }
 
 function isWindowsExecutablePath(command: string): boolean {
@@ -106,17 +93,69 @@ function shouldShowWindowsConsole(
   return platform === 'win32' && WINDOWS_CONSOLE_EDITORS.has(getLauncherBaseName(command, options))
 }
 
-function buildExecutableArgs(editorCommand: string, pathValue: string): string[] {
-  if (getLauncherBaseName(editorCommand) === 'cursor') {
+function buildExecutableArgs(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): string[] {
+  const launcherBaseName = getLauncherBaseName(editorCommand)
+  if (launcherBaseName === 'cursor') {
     // Why: Cursor can route bare folder launches through the last active
     // workbench. A new window keeps "Open in Cursor" scoped to this worktree.
     return ['--new-window', pathValue]
+  }
+  if (platform === 'win32' && isVsCodeLauncherExecutable(editorCommand)) {
+    const wslPath = parseWslUncPath(pathValue)
+    if (wslPath) {
+      // Why: VS Code otherwise treats a WSL UNC path as a local Windows folder.
+      return ['--remote', `wsl+${wslPath.distro}`, wslPath.linuxPath]
+    }
   }
   return [pathValue]
 }
 
 function isCompoundShellCommand(command: string): boolean {
   return /\s/.test(command)
+}
+
+function preferJetBrainsGuiExecutable(
+  editorCommand: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): string {
+  if (platform !== 'win32') {
+    return editorCommand
+  }
+  return resolveColocatedJetBrainsGuiExecutable(editorCommand, fileExists) ?? editorCommand
+}
+
+function resolveSimpleEditorCommand(
+  command: string,
+  platform: NodeJS.Platform,
+  fileExists: (path: string) => boolean
+): string {
+  return preferJetBrainsGuiExecutable(
+    resolveCliCommand(command, { platform }),
+    platform,
+    fileExists
+  )
+}
+
+function buildExecutableLaunchSpec(
+  editorCommand: string,
+  pathValue: string,
+  platform: NodeJS.Platform
+): ExternalEditorExecutableLaunchSpec {
+  const spec: ExternalEditorExecutableLaunchSpec = {
+    kind: 'executable',
+    hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
+    spawnCmd: editorCommand,
+    spawnArgs: buildExecutableArgs(editorCommand, pathValue, platform)
+  }
+  if (spec.hideWindowsConsole && isJetBrainsConsoleShim(editorCommand, platform)) {
+    spec.detachedGui = true
+  }
+  return spec
 }
 
 function buildShellLaunchSpec(
@@ -126,6 +165,11 @@ function buildShellLaunchSpec(
 ): ExternalEditorLaunchSpec {
   const shellCommand = `${command} ${escapePathForShell(pathValue, platform)}`
   if (platform === 'win32') {
+    // Why: no `start` wrap here. `start` re-parses the line — it swallows the
+    // first quoted operand as a window title and mangles remote paths with
+    // spaces — and on a batch target it leaves a resident nested `cmd /K`.
+    // User-authored compound commands run verbatim; users who want a detached
+    // launch already write `start` themselves.
     return {
       kind: 'shell',
       hideWindowsConsole: !shouldShowWindowsConsole(command, platform, { shellCommand: true }),
@@ -151,24 +195,102 @@ export function resolveExternalEditorLaunchSpec(
   const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
 
   if (isDirectExecutablePath(trimmed, platform, fileExists)) {
-    const editorCommand = stripMatchingQuotes(trimmed)
-    return {
-      kind: 'executable',
-      hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
-      spawnCmd: editorCommand,
-      spawnArgs: buildExecutableArgs(editorCommand, pathValue)
-    }
+    // Why: settings often store a full path to idea.cmd / idea.exe; upgrade
+    // those the same way as PATH-resolved names when *64.exe is colocated.
+    return buildExecutableLaunchSpec(
+      preferJetBrainsGuiExecutable(stripMatchingQuotes(trimmed), platform, fileExists),
+      pathValue,
+      platform
+    )
   }
 
   if (isCompoundShellCommand(trimmed)) {
     return buildShellLaunchSpec(trimmed, pathValue, platform)
   }
 
-  const editorCommand = resolveCliCommand(trimmed, { platform })
+  return buildExecutableLaunchSpec(
+    resolveSimpleEditorCommand(trimmed, platform, fileExists),
+    pathValue,
+    platform
+  )
+}
+
+export function resolveVsCodeRemoteSshLaunchSpec(
+  command: string | undefined,
+  pathValue: string,
+  authority: string,
+  options: { platform?: NodeJS.Platform; fileExists?: (path: string) => boolean } = {}
+): ExternalEditorLaunchSpec | null {
+  const platform = options.platform ?? process.platform
+  const fileExists = options.fileExists ?? existsSync
+  const trimmed = command?.trim() || EXTERNAL_EDITOR_CLI_COMMAND
+
+  let editorCommand: string
+  if (isDirectExecutablePath(trimmed, platform, fileExists)) {
+    editorCommand = stripMatchingQuotes(trimmed)
+  } else {
+    if (isCompoundShellCommand(trimmed)) {
+      return null
+    }
+    editorCommand = resolveCliCommand(trimmed, { platform })
+  }
+
+  if (!isVsCodeLauncherExecutable(editorCommand)) {
+    return null
+  }
   return {
     kind: 'executable',
-    hideWindowsConsole: !shouldShowWindowsConsole(editorCommand, platform),
+    hideWindowsConsole: true,
     spawnCmd: editorCommand,
-    spawnArgs: buildExecutableArgs(editorCommand, pathValue)
+    spawnArgs: ['--remote', `ssh-remote+${authority}`, pathValue]
   }
+}
+
+function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
+  spawnCmd: string
+  spawnArgs: string[]
+  windowsHide: boolean
+} {
+  // Why: only shims flagged during resolution (JetBrains) take the start /B
+  // detach; every other launcher keeps the waiting form so its argv survives.
+  if (launchSpec.kind === 'executable') {
+    const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs, {
+      detachedGui: launchSpec.detachedGui === true
+    })
+    return { ...spawned, windowsHide: launchSpec.hideWindowsConsole }
+  }
+  return {
+    spawnCmd: launchSpec.spawnCmd,
+    spawnArgs: launchSpec.spawnArgs,
+    windowsHide: launchSpec.hideWindowsConsole
+  }
+}
+
+export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
+  const { spawnCmd, spawnArgs, windowsHide } = resolveExternalEditorSpawn(launchSpec)
+  await new Promise<void>((resolvePromise, rejectPromise) => {
+    const child = spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide })
+    let settled = false
+    function cleanup(): void {
+      child.off('error', onError)
+      child.off('spawn', onSpawn)
+    }
+    function settle(callback: () => void): void {
+      if (settled) {
+        return
+      }
+      settled = true
+      cleanup()
+      callback()
+    }
+    function onError(error: Error): void {
+      settle(() => rejectPromise(error))
+    }
+    function onSpawn(): void {
+      child.unref()
+      settle(resolvePromise)
+    }
+    child.once('error', onError)
+    child.once('spawn', onSpawn)
+  })
 }

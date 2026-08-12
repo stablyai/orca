@@ -79,6 +79,22 @@ export type NativeChatMessage = {
   turnId?: string
 }
 
+export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
+export type NativeChatTurnLifecycleState = (typeof NATIVE_CHAT_TURN_LIFECYCLE_STATES)[number]
+
+export const NATIVE_CHAT_INTERRUPTED_STATUS_TEXT = 'Conversation interrupted'
+
+/** A provider-authored turn boundary recovered from the transcript itself.
+ *  Unlike assistant prose, this is explicit lifecycle evidence (completion or
+ *  interruption records) and is safe to replay. */
+export type NativeChatTurnLifecycle = {
+  state: NativeChatTurnLifecycleState
+  /** Stable provider id when available, otherwise the JSONL record position. */
+  turnId: string
+  /** Provider timestamp; null only when the transcript omitted one. */
+  timestamp: number | null
+}
+
 export const NATIVE_CHAT_SESSION_STATUSES = [
   'loading',
   'ready',
@@ -113,6 +129,18 @@ export function isToolCallBlock(block: NativeChatBlock): block is NativeChatTool
 
 export function isToolResultBlock(block: NativeChatBlock): block is NativeChatToolResultBlock {
   return block.type === 'tool-result'
+}
+
+/** The provider-authored interrupt row the transcript decoders emit (Claude's
+ *  `interruptedMessageId` record, Codex's `turn_aborted`). The turn it ends
+ *  never delivers results for the tool calls it left in flight. */
+export function isInterruptedStatusMessage(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'system' &&
+    message.blocks.some(
+      (block) => block.type === 'text' && block.text === NATIVE_CHAT_INTERRUPTED_STATUS_TEXT
+    )
+  )
 }
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {

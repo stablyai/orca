@@ -1,11 +1,29 @@
 import { createReadStream } from 'node:fs'
-import { createInterface } from 'node:readline'
-import type { AgentType, NativeChatMessage } from '../../shared/native-chat-types'
+import type {
+  AgentType,
+  NativeChatMessage,
+  NativeChatTurnLifecycle
+} from '../../shared/native-chat-types'
+import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat-agent-support'
 import { errorMessage } from '../ai-vault/session-scanner-values'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
-import { decodeClaudeTranscriptLine, decodeCodexTranscriptLine } from './transcript-line-decoders'
+import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import {
+  decodeClaudeTranscriptLine,
+  decodeCodexTranscriptLine,
+  decodeGrokTranscriptLine,
+  decodeOmpTranscriptLine
+} from './transcript-line-decoders'
+import { decodeTranscriptStream } from './transcript-stream-lines'
 
-export type ReadTranscriptResult = { messages: NativeChatMessage[] } | { error: string }
+export type ReadTranscriptResult =
+  | {
+      messages: NativeChatMessage[]
+      lifecycle?: NativeChatTurnLifecycle
+    }
+  // notFound marks a retry-worthy miss (transcript not flushed to disk yet,
+  // #8401) as opposed to a real parse/IO error callers surface immediately.
+  | { error: string; notFound?: true }
 
 export type ReadTranscriptOptions = ResolveSessionFileOptions & {
   /** Resolve directly to this file, skipping path discovery (used by tests). */
@@ -17,27 +35,45 @@ export type ReadTranscriptOptions = ResolveSessionFileOptions & {
  * the NativeChatMessage model. Unlike the AI-Vault preview scan, this applies
  * NO message cap. Unknown record types are skipped rather than throwing, so a
  * single malformed/unrecognized line cannot fail the whole read. The per-line
- * record→message mapping is shared with the live tailer (transcript-watch.ts)
- * via transcript-line-decoders.ts.
+ * record-to-message mapping is shared with the live tailer.
  */
 export async function readNativeChatTranscript(
   agent: AgentType,
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
-  const filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  let filePath: string | null
+  try {
+    filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))
+  } catch (err) {
+    // Why: gate refusal is transient unavailability with retry guidance —
+    // `notFound` would settle callers into a false "missing" state.
+    return { error: wslTranscriptFsRefusal(err).message }
+  }
   if (!filePath) {
-    return { error: `No transcript found for ${agent} session ${sessionId}` }
+    return { error: `No transcript found for ${agent} session ${sessionId}`, notFound: true }
   }
   try {
-    if (agent === 'claude') {
+    const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+    if (transcriptAgent === 'claude') {
       return { messages: await readTranscript(filePath, decodeClaudeTranscriptLine) }
     }
-    if (agent === 'codex') {
+    if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
     }
-    return { error: `Unsupported agent for native chat transcript: ${agent}` }
+    if (transcriptAgent === 'grok') {
+      return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }
+    }
+    if (transcriptAgent === 'omp') {
+      return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+    }
+    return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {
+    // Why: ENOENT after a successful resolve is the same first-flush/rotation
+    // race as an unresolved path — keep it retry-worthy (#8401).
+    if ((err as NodeJS.ErrnoException | null)?.code === 'ENOENT') {
+      return { error: errorMessage(err), notFound: true }
+    }
     return { error: errorMessage(err) }
   }
 }
@@ -46,21 +82,7 @@ async function readTranscript(
   filePath: string,
   decode: (line: string, fallbackId: string) => NativeChatMessage | null
 ): Promise<NativeChatMessage[]> {
-  const reader = createInterface({
-    input: createReadStream(filePath, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  const messages: NativeChatMessage[] = []
-  let index = 0
-  for await (const line of reader) {
-    // Why: fallback id embeds start offset 0 so it matches the live tailer's id
-    // for the same record (the tailer's first drain reads from offset 0 too).
-    // Records that re-emit then collapse by id in the assembler — no dup, no drop.
-    const message = decode(line, `${filePath}:0:${index}`)
-    if (message) {
-      messages.push(message)
-    }
-    index++
-  }
+  const stream = createReadStream(filePath, { encoding: 'utf-8' })
+  const { messages } = await decodeTranscriptStream(stream, filePath, 0, decode, true)
   return messages
 }

@@ -32,9 +32,9 @@ vi.mock('../daemon/daemon-init', () => ({
   getDaemonProvider: () => getDaemonProviderMock()
 }))
 
-// Why: the hydrator builds its worktreeId → connectionId map by calling
-// listRepoWorktrees(repo) for every repo in the store. The git I/O is
-// out of scope for this unit; mock returns whatever the test wants.
+// Why: the hydrator builds its worktreeId → connectionId map through
+// listRepoWorktrees(repo). The git I/O is out of scope for this unit; the mock
+// also lets count tests prove repos without live sessions launch no Git work.
 const listRepoWorktreesMock = vi.fn()
 vi.mock('../repo-worktrees', () => ({
   listRepoWorktrees: (repo: unknown) => listRepoWorktreesMock(repo)
@@ -77,6 +77,17 @@ function makeLocalSessions(repoId: string, worktreePath: string, count: number):
     } as unknown as SessionInfo)
   }
   return sessions
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolver) => {
+    resolve = resolver
+  })
+  return { promise, resolve }
 }
 
 // Why: the module under test memoizes `hasHydrated` at module scope so it
@@ -127,6 +138,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     await hydrate(makeStore([{ id: 'repo-a' }]))
 
     expect(provider.listSessions).toHaveBeenCalledTimes(1)
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('catches provider.listSessions rejection and does not throw', async () => {
@@ -145,6 +157,7 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     warnSpy.mockRestore()
 
     expect(listRegisteredPtys()).toHaveLength(0)
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
   })
 
   it('does not clobber a pre-existing registry pid with a null pid from listSessions', async () => {
@@ -180,6 +193,69 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry).toBeDefined()
     expect(entry!.pid).toBe(12345)
     expect(entry!.paneKey).toBe('tab-1:1')
+    expect(listRepoWorktreesMock).not.toHaveBeenCalled()
+  })
+
+  it('does not clobber a pty:spawn registration that arrives during worktree enumeration', async () => {
+    const { hydrate, listRegisteredPtys, registerPty } = await loadFresh()
+    const ptyId = 'repo-a::/local/Triton@@deadbeef'
+    const provider = makeProvider([
+      { sessionId: ptyId, pid: null, cwd: '/local/Triton' } as unknown as SessionInfo
+    ])
+    getDaemonProviderMock.mockReturnValue(provider)
+    const worktrees =
+      createDeferred<
+        { path: string; head: string; branch: string; isBare: boolean; isMainWorktree: boolean }[]
+      >()
+    listRepoWorktreesMock.mockReturnValue(worktrees.promise)
+
+    const hydration = hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
+    await vi.waitFor(() => expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1))
+    registerPty({
+      ptyId,
+      worktreeId: 'repo-a::/local/Triton',
+      sessionId: ptyId,
+      paneKey: 'tab-1:1',
+      pid: 12345
+    })
+    worktrees.resolve([
+      { path: '/local/Triton', head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+    await hydration
+
+    expect(listRegisteredPtys()).toEqual([
+      expect.objectContaining({ ptyId, pid: 12345, paneKey: 'tab-1:1' })
+    ])
+  })
+
+  it('does not resurrect a daemon session that exits during worktree enumeration', async () => {
+    const { hydrate, listRegisteredPtys, unregisterPty } = await loadFresh()
+    const ptyId = 'repo-a::/local/Triton@@deadbeef'
+    const provider = {
+      listSessions: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { sessionId: ptyId, pid: 4242, cwd: '/local/Triton' } as unknown as SessionInfo
+        ])
+        .mockResolvedValueOnce([])
+    }
+    getDaemonProviderMock.mockReturnValue(provider)
+    const worktrees =
+      createDeferred<
+        { path: string; head: string; branch: string; isBare: boolean; isMainWorktree: boolean }[]
+      >()
+    listRepoWorktreesMock.mockReturnValue(worktrees.promise)
+
+    const hydration = hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
+    await vi.waitFor(() => expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1))
+    unregisterPty(ptyId)
+    worktrees.resolve([
+      { path: '/local/Triton', head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+    await hydration
+
+    expect(provider.listSessions).toHaveBeenCalledTimes(2)
+    expect(listRegisteredPtys()).toHaveLength(0)
   })
 
   it('skips SSH repos before enumerating worktrees', async () => {
@@ -221,6 +297,99 @@ describe('hydrateLocalPtyRegistryAtBoot', () => {
     expect(entry).toBeDefined()
     expect(entry!.pid).toBe(4242)
     expect(entry!.worktreeId).toBe('repo-a::/local/Triton')
+  })
+
+  it('does not register a daemon session whose worktree was removed', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+    const provider = makeProvider([
+      {
+        sessionId: 'repo-a::/local/removed@@deadbeef',
+        pid: 4242,
+        cwd: '/local/removed'
+      } as unknown as SessionInfo
+    ])
+    getDaemonProviderMock.mockReturnValue(provider)
+    listRepoWorktreesMock.mockResolvedValue([
+      { path: '/local/current', head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+
+    await hydrate(makeStore([{ id: 'repo-a', connectionId: null }]))
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(1)
+    expect(listRegisteredPtys()).toHaveLength(0)
+  })
+
+  it('enumerates worktrees only for repos referenced by live daemon sessions', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+    const repos = Array.from({ length: 100 }, (_, index) => ({ id: `repo-${index}` }))
+    const activeRepoIds = ['repo-17', 'repo-83']
+    const provider = makeProvider(
+      activeRepoIds.map(
+        (repoId, index) =>
+          ({
+            sessionId: `${repoId}::/local/${repoId}@@0000000${index}`,
+            pid: 4000 + index,
+            cwd: `/local/${repoId}`
+          }) as unknown as SessionInfo
+      )
+    )
+    getDaemonProviderMock.mockReturnValue(provider)
+    listRepoWorktreesMock.mockImplementation(async (repo: Repo) => [
+      {
+        path: `/local/${repo.id}`,
+        head: '',
+        branch: '',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await hydrate(makeStore(repos))
+
+    expect(listRepoWorktreesMock).toHaveBeenCalledTimes(activeRepoIds.length)
+    expect(listRepoWorktreesMock.mock.calls.map(([repo]) => (repo as Repo).id)).toEqual(
+      activeRepoIds
+    )
+    expect(listRegisteredPtys()).toHaveLength(activeRepoIds.length)
+  })
+
+  it('scans a repo that only becomes visible on the post-enumeration re-read', async () => {
+    const { hydrate, listRegisteredPtys } = await loadFresh()
+
+    const sessionA = {
+      sessionId: 'repo-a::/local/repo-a@@00000001',
+      pid: 4001,
+      cwd: '/local/repo-a'
+    } as unknown as SessionInfo
+    const sessionB = {
+      sessionId: 'repo-b::/local/repo-b@@00000002',
+      pid: 4002,
+      cwd: '/local/repo-b'
+    } as unknown as SessionInfo
+    // Why: a briefly unreachable adapter can omit a session from the first
+    // listing; once it reappears on the re-read its repo must still be
+    // scanned and the session registered instead of silently dropped.
+    const listSessions = vi
+      .fn()
+      .mockResolvedValueOnce([sessionA])
+      .mockResolvedValue([sessionA, sessionB])
+    getDaemonProviderMock.mockReturnValue({ listSessions })
+    listRepoWorktreesMock.mockImplementation(async (repo: Repo) => [
+      { path: `/local/${repo.id}`, head: '', branch: '', isBare: false, isMainWorktree: true }
+    ])
+
+    await hydrate(makeStore([{ id: 'repo-a' }, { id: 'repo-b' }]))
+
+    expect(listRepoWorktreesMock.mock.calls.map(([repo]) => (repo as Repo).id)).toEqual([
+      'repo-a',
+      'repo-b'
+    ])
+    expect(listSessions).toHaveBeenCalledTimes(3)
+    const registered = listRegisteredPtys()
+    expect(registered.map((p) => p.ptyId).sort()).toEqual([
+      'repo-a::/local/repo-a@@00000001',
+      'repo-b::/local/repo-b@@00000002'
+    ])
   })
 
   it('hydrates large daemon session lists', async () => {

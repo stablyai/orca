@@ -114,9 +114,7 @@ describe('Orca cloud profile service', () => {
     safeStorageMock.encryptString.mockReset()
     safeStorageMock.isEncryptionAvailable.mockReset()
     safeStorageMock.decryptString.mockImplementation((value: Buffer) => value.toString('utf-8'))
-    safeStorageMock.encryptString.mockImplementation((value: string) =>
-      Buffer.from(value, 'utf-8')
-    )
+    safeStorageMock.encryptString.mockImplementation((value: string) => Buffer.from(value, 'utf-8'))
     safeStorageMock.isEncryptionAvailable.mockReturnValue(true)
     revokeOrcaCloudSessionMock.mockResolvedValue(undefined)
     vi.unstubAllEnvs()

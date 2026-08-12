@@ -6,16 +6,36 @@
  * Signals readiness to parent via IPC: { type: 'ready' }
  * Shuts down cleanly on SIGTERM.
  */
+import { readFileSync } from 'node:fs'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { createPtySubprocess } from './pty-subprocess'
 import { warmWindowsConptyOnce } from './windows-conpty-warmup'
 import { warmPwshAvailabilityCache } from '../pwsh'
 import { createDaemonFileLog, createNoopDaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
+import {
+  DAEMON_EXIT_ENDPOINT_OCCUPIED,
+  DaemonEndpointUnavailableError
+} from './daemon-endpoint-ownership'
+import {
+  prepareMacosTccLoginShell,
+  probeMacosLoginSessionAlive
+} from '../providers/macos-tcc-login-shell'
+import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
+import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
+import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
+import { publishDaemonPidFile } from './daemon-spawner'
 
 export type ParsedDaemonArgs = {
   socketPath: string
   tokenPath: string
+  pidPath?: string
+  launchNonce?: string
+  entryPath?: string
+  appVersion?: string
+  spawnerExecPath?: string
+  /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
+  loginSessionWatch?: boolean
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
   logFilePath?: string
 }
@@ -24,6 +44,12 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let socketPath = ''
   let tokenPath = ''
   let logFilePath = ''
+  let pidPath = ''
+  let launchNonce = ''
+  let entryPath = ''
+  let appVersion = ''
+  let spawnerExecPath = ''
+  let loginSessionWatch = false
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -35,6 +61,23 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     } else if (argv[i] === '--log-file' && argv[i + 1]) {
       logFilePath = argv[i + 1]
       i++
+    } else if (argv[i] === '--pid-record' && argv[i + 1]) {
+      pidPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--launch-nonce' && argv[i + 1]) {
+      launchNonce = argv[i + 1]
+      i++
+    } else if (argv[i] === '--entry-path' && argv[i + 1]) {
+      entryPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--app-version' && argv[i + 1]) {
+      appVersion = argv[i + 1]
+      i++
+    } else if (argv[i] === '--spawner-exec-path' && argv[i + 1]) {
+      spawnerExecPath = argv[i + 1]
+      i++
+    } else if (argv[i] === '--login-session-watch') {
+      loginSessionWatch = true
     }
   }
 
@@ -42,7 +85,20 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     throw new Error('Usage: daemon-entry --socket <path> --token <path> [--log-file <path>]')
   }
 
-  return logFilePath ? { socketPath, tokenPath, logFilePath } : { socketPath, tokenPath }
+  if ((pidPath && !launchNonce) || (!pidPath && launchNonce)) {
+    throw new Error('Daemon PID record path and launch nonce must be provided together')
+  }
+
+  return {
+    socketPath,
+    tokenPath,
+    ...(pidPath ? { pidPath, launchNonce } : {}),
+    ...(entryPath ? { entryPath } : {}),
+    ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
+    ...(loginSessionWatch ? { loginSessionWatch } : {}),
+    ...(logFilePath ? { logFilePath } : {})
+  }
 }
 
 async function main(): Promise<void> {
@@ -53,11 +109,35 @@ async function main(): Promise<void> {
   // an otherwise healthy detached daemon. Swallow it: stderr is diagnostic only.
   process.stderr.on('error', () => {})
 
-  const { socketPath, tokenPath, logFilePath } = parseArgs(process.argv.slice(2))
+  const {
+    socketPath,
+    tokenPath,
+    pidPath,
+    launchNonce,
+    entryPath,
+    appVersion,
+    spawnerExecPath,
+    loginSessionWatch,
+    logFilePath
+  } = parseArgs(process.argv.slice(2))
+  const startedAtMs = Date.now() - process.uptime() * 1000
+  const readyIdentity = await readCurrentDaemonReadyIdentity(startedAtMs)
   // Fail-open: a broken log path must never block daemon startup.
   const daemonLog = logFilePath ? createDaemonFileLog(logFilePath) : createNoopDaemonFileLog()
   daemonLog.log('startup', { protocolVersion: PROTOCOL_VERSION, socketPath })
   void warmPwshAvailabilityCache()
+
+  // Why: detached daemons destroy stderr, so the preflight's console.warn is lost;
+  // surface a degraded TCC attribution here where it's diagnosable (F2).
+  const runMacosLoginPreflight = async (): Promise<void> => {
+    const outcome = await prepareMacosTccLoginShell()
+    if (outcome && !outcome.ok) {
+      daemonLog.log('macos-login-preflight', { ok: outcome.ok, reason: outcome.reason })
+    }
+  }
+  // Why: warm the PAM probe at idle startup so the first terminal spawn doesn't
+  // pay it under load — shrinking the window where a slow probe degrades (F1/F7).
+  void runMacosLoginPreflight()
 
   // Why: node-pty can throw a C++ Napi::Error that escapes all JS try/catch
   // blocks (e.g. writing to a PTY whose fd was closed between the native
@@ -88,6 +168,7 @@ async function main(): Promise<void> {
   })
 
   let daemon: DaemonHandle | null = null
+  let deathWatch: MacosLoginSessionDeathWatch | null = null
   let shuttingDown = false
   // Bound the wait so a wedged native shutdown can't leave the daemon running
   // forever on SIGTERM/SIGINT (it would then survive a real quit, not just updates).
@@ -99,6 +180,7 @@ async function main(): Promise<void> {
       return
     }
     shuttingDown = true
+    deathWatch?.stop()
     daemonLog.log('shutdown', { reason })
     try {
       if (daemon) {
@@ -122,16 +204,123 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
 
+  // Why: a dead macOS login session cannot be fabricated without root (PAM owns
+  // audit-session teardown), so e2e drives the oracles from a verdict file:
+  // 'alive' → accepted/healthy, 'dead' → rejected/unhealthy, 'hang' →
+  // timeout-inconclusive/unhealthy (the fail-safe path), else inconclusive.
+  const e2eProbeFile = process.env.ORCA_E2E_LOGIN_SESSION_PROBE_FILE
+  const readE2eVerdict = (): string => {
+    try {
+      return readFileSync(e2eProbeFile as string, 'utf8').trim()
+    } catch {
+      return ''
+    }
+  }
+  deathWatch =
+    loginSessionWatch && process.platform === 'darwin'
+      ? new MacosLoginSessionDeathWatch({
+          probeLoginSession: e2eProbeFile
+            ? async () => {
+                const verdict = readE2eVerdict()
+                if (verdict === 'alive') {
+                  return { ok: true, conclusive: true, reason: 'accepted' }
+                }
+                if (verdict === 'dead') {
+                  return { ok: false, conclusive: true, reason: 'rejected' }
+                }
+                return { ok: false, conclusive: false, reason: 'timeout' }
+              }
+            : probeMacosLoginSessionAlive,
+          readResolverHealth: e2eProbeFile
+            ? async () => {
+                const verdict = readE2eVerdict()
+                return verdict === 'dead' || verdict === 'hang' ? 'unhealthy' : 'healthy'
+              }
+            : readCurrentProcessMacSystemResolverHealth,
+          ...(e2eProbeFile
+            ? {
+                timing: {
+                  periodicProbeMs: 2_000,
+                  rejectionRecheckMs: 500,
+                  minimumRejectionSpanMs: 2_000,
+                  ptyExitDebounceMs: 200,
+                  clientActivityMinGapMs: 1_000,
+                  minProbeGapMs: 100
+                }
+              }
+            : {}),
+          log: daemonLog,
+          onRetire: (details) => {
+            shuttingDown = true
+            daemonLog.log('login-session-dead-retire', details)
+            daemonLog.close()
+            // Why: crash-style exit (no PTY teardown) keeps session meta unclean so the
+            // replacement daemon cold-restores scrollback; stale socket/pid files ride
+            // the existing dead-endpoint recovery.
+            process.exit(1)
+          }
+        })
+      : null
+
   daemon = await startDaemon({
     socketPath,
     tokenPath,
+    ...(pidPath ? { pidPath } : {}),
+    ...(launchNonce ? { launchNonce } : {}),
+    ...(pidPath ? { startedAtMs } : {}),
+    ...(entryPath ? { entryPath } : {}),
+    ...(appVersion ? { appVersion } : {}),
+    ...(spawnerExecPath ? { spawnerExecPath } : {}),
+    ...(pidPath && launchNonce
+      ? {
+          publishEndpointOwnership: () =>
+            publishDaemonPidFile(pidPath, {
+              pid: process.pid,
+              ...readyIdentity,
+              ...(entryPath ? { entryPath } : {}),
+              ...(appVersion ? { appVersion } : {}),
+              ...(spawnerExecPath ? { spawnerExecPath } : {}),
+              launchNonce
+            })
+        }
+      : {}),
     log: daemonLog,
-    spawnSubprocess: (opts) => createPtySubprocess(opts)
+    preparePtySpawn: runMacosLoginPreflight,
+    ...(deathWatch
+      ? {
+          onPtySessionExit: () => deathWatch.notifyPtyExit(),
+          onAuthenticatedClientPair: () => deathWatch.notifyClientActivity()
+        }
+      : {}),
+    spawnSubprocess: (opts) =>
+      createPtySubprocess({
+        ...opts,
+        ...(process.platform === 'darwin'
+          ? {
+              onMacosTccSpawnStrategy: (strategy) =>
+                daemonLog.log('macos-tcc-pty-spawn', { strategy })
+            }
+          : {})
+      }),
+    onIdleShutdown: () => {
+      deathWatch?.stop()
+      shuttingDown = true
+      daemonLog.log('shutdown', { reason: 'idle' })
+      daemonLog.close()
+      process.exit(0)
+    },
+    onRpcShutdown: () => {
+      deathWatch?.stop()
+      shuttingDown = true
+      daemonLog.close()
+      process.exit(0)
+    }
   })
+  deathWatch?.start()
 
   // Signal readiness to parent via IPC (if available)
   if (process.send) {
-    process.send({ type: 'ready' })
+    process.send({ type: 'ready', ...readyIdentity })
   }
   daemonLog.log('ready')
 
@@ -143,6 +332,14 @@ const isDirectExecution = !process.env.VITEST
 if (isDirectExecution) {
   main().catch((err) => {
     console.error('[daemon] Fatal:', err)
+    if (err instanceof DaemonEndpointUnavailableError && err.reason === 'occupied') {
+      // Why an exit code and not the IPC message: process.send only proves the write left this
+      // process, not that the parent dispatched 'message' before it observed the exit — and the
+      // parent settles the launch on exit. A code rides the same event that ends the wait, so it
+      // cannot lose that race. The message is still sent best-effort for log detail.
+      process.send?.({ type: 'endpoint-unavailable', reason: err.reason })
+      process.exit(DAEMON_EXIT_ENDPOINT_OCCUPIED)
+    }
     process.exit(1)
   })
 }

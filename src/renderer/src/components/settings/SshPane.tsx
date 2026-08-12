@@ -2,11 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, Upload } from 'lucide-react'
 import type { SshTarget } from '../../../../shared/ssh-types'
-import { SSH_TERMINATE_RECONNECT_REQUIRED } from '../../../../shared/constants'
 import { useAppStore } from '@/store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../ui/button'
 import { removeSshTargetWithBestEffortCleanup } from './ssh-target-remove'
+import { terminateSshSessionsWithReconnect } from './ssh-session-termination'
 import { SshTargetCard } from './SshTargetCard'
 import { SshTargetDestructiveActions } from './SshTargetDestructiveActions'
 import { SshTargetForm, EMPTY_FORM, type EditingTarget } from './SshTargetForm'
@@ -17,11 +17,12 @@ import { resolveSshHostRemoval } from '../sidebar/ssh-host-remove-resolution'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
+import { useSshAddTargetIntent } from './use-ssh-add-target-intent'
 export { getSshPaneSearchEntries } from './ssh-search'
 
-type SshPaneProps = Record<string, never>
+type SshPaneProps = { addTargetIntentSignal?: number }
 
-export function SshPane(_props: SshPaneProps): React.JSX.Element {
+export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Element {
   const [targets, setTargets] = useState<SshTarget[]>([])
   // Why: connection states are already hydrated and kept up-to-date by the
   // global store (via useIpcEvents.ts). Reading from the store avoids
@@ -31,6 +32,9 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
   const [showForm, setShowForm] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<EditingTarget>(EMPTY_FORM)
+  // Why: gates the submit button and the Enter path so a double click cannot
+  // land two addTarget/updateTarget writes for one draft.
+  const [saving, setSaving] = useState(false)
   const [testingIds, setTestingIds] = useState<Set<string>>(new Set())
   // Why: when a target still has workspaces, route removal through the shared
   // workspace-aware HostRemoveDialog (same as the sidebar) instead of the plain
@@ -72,7 +76,8 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     // a sync failure must not block listing the already-known targets.
     void (async () => {
       try {
-        await window.api.ssh.importConfig()
+        const result = await window.api.ssh.importConfig()
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       } catch {
         // Surfaced on demand via the explicit Import button; ignore here.
       }
@@ -84,17 +89,33 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
     return () => abortController.abort()
   }, [loadTargets])
 
+  const openAddTargetForm = useCallback((): void => {
+    // Why: composer deep-links should land on the existing add form, not just
+    // the host management pane.
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setShowForm(true)
+  }, [])
+  useSshAddTargetIntent(addTargetIntentSignal, openAddTargetForm)
+
   const handleSave = async (): Promise<void> => {
     const savePayload = buildSshTargetSavePayload(form)
     if (!savePayload.ok) {
       toast.error(savePayload.error)
       return
     }
+    if (saving) {
+      return
+    }
+    setSaving(true)
 
     try {
-      await (editingId
-        ? window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
-        : window.api.ssh.addTarget({ target: savePayload.payload.target }))
+      if (editingId) {
+        await window.api.ssh.updateTarget({ id: editingId, updates: savePayload.payload.updates })
+      } else {
+        const result = await window.api.ssh.addTarget({ target: savePayload.payload.target })
+        useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
+      }
       recordFeatureInteraction('ssh')
       if (!mountedRef.current) {
         return
@@ -116,21 +137,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
             : translate('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
         )
       }
-    }
-  }
-
-  const terminateSessionsWithReconnect = async (targetId: string): Promise<void> => {
-    try {
-      await window.api.ssh.terminateSessions({ targetId })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      if (!message.includes(SSH_TERMINATE_RECONNECT_REQUIRED)) {
-        throw err
+    } finally {
+      if (mountedRef.current) {
+        setSaving(false)
       }
-      // Why: disconnect is now non-destructive, so preserved remote PTYs may
-      // require a fresh relay attachment before they can be explicitly killed.
-      await window.api.ssh.connect({ targetId })
-      await window.api.ssh.terminateSessions({ targetId })
     }
   }
 
@@ -208,7 +218,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
 
   const handleTerminateSessions = async (targetId: string): Promise<void> => {
     try {
-      await terminateSessionsWithReconnect(targetId)
+      await terminateSshSessionsWithReconnect(targetId)
       toast.success(
         translate('auto.components.settings.SshPane.90e308c98b', 'Remote terminals ended')
       )
@@ -288,17 +298,18 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
       // Why: the explicit Import action re-adopts every ~/.ssh/config host,
       // including ones the user previously deleted — clear tombstones so a
       // deliberate re-import can bring them back.
-      const synced = (await window.api.ssh.importConfig({ reAdopt: true })) as SshTarget[]
+      const result = await window.api.ssh.importConfig({ reAdopt: true })
+      useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
       recordFeatureInteraction('ssh')
       if (mountedRef.current) {
-        if (synced.length === 0) {
+        if (result.targets.length === 0) {
           toast('~/.ssh/config already in sync')
         } else {
           toast.success(
             translate(
               'auto.components.settings.SshPane.f8050f6307',
               'Synced {{value0}} server{{value1}}',
-              { value0: synced.length, value1: synced.length > 1 ? 's' : '' }
+              { value0: result.targets.length, value1: result.targets.length > 1 ? 's' : '' }
             )
           )
         }
@@ -346,21 +357,10 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
             <Upload className="size-3" />
             {translate('auto.components.settings.SshPane.51d7dba44d', 'Import')}
           </Button>
-          {!showForm ? (
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => {
-                setEditingId(null)
-                setForm(EMPTY_FORM)
-                setShowForm(true)
-              }}
-              className="gap-1.5"
-            >
-              <Plus className="size-3" />
-              {translate('auto.components.settings.SshPane.639ceb3698', 'Add Target')}
-            </Button>
-          ) : null}
+          <Button variant="outline" size="xs" onClick={openAddTargetForm} className="gap-1.5">
+            <Plus className="size-3" />
+            {translate('auto.components.settings.SshPane.639ceb3698', 'Add Target')}
+          </Button>
         </div>
       </div>
 
@@ -373,7 +373,7 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
         {({ busyActionForTarget, requestRemove, requestResetRelay, requestTerminateSessions }) => (
           <>
             {/* Target list */}
-            {targets.length === 0 && !showForm ? (
+            {targets.length === 0 ? (
               <div className="flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-card/30 px-4 py-5 text-sm text-muted-foreground">
                 {translate(
                   'auto.components.settings.SshPane.c0f1c80166',
@@ -404,20 +404,24 @@ export function SshPane(_props: SshPaneProps): React.JSX.Element {
                 ))}
               </div>
             )}
-
-            {/* Add/Edit form */}
-            {showForm ? (
-              <SshTargetForm
-                editingId={editingId}
-                form={form}
-                onFormChange={setForm}
-                onSave={() => void handleSave()}
-                onCancel={cancelForm}
-              />
-            ) : null}
           </>
         )}
       </SshTargetDestructiveActions>
+
+      {/* Why: modal keeps the form in viewport over long host lists (STA-3067). */}
+      <SshTargetForm
+        open={showForm}
+        editingId={editingId}
+        form={form}
+        saving={saving}
+        onFormChange={setForm}
+        onSave={() => void handleSave()}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            cancelForm()
+          }
+        }}
+      />
 
       {hostRemoveTarget ? (
         <HostRemoveDialog

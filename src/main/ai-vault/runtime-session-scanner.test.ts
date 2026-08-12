@@ -14,8 +14,11 @@ vi.mock('../ipc/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: mocks.callRuntimeEnvironment
 }))
 
-const { getSavedRuntimeAiVaultHostInfos, scanRuntimeAiVaultSessions } =
-  await import('./runtime-session-scanner')
+const {
+  getSavedRuntimeAiVaultHostInfos,
+  prepareRuntimeAiVaultSessionResume,
+  scanRuntimeAiVaultSessions
+} = await import('./runtime-session-scanner')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -65,6 +68,21 @@ describe('runtime AI Vault session scanner', () => {
     )
   })
 
+  it('surfaces project scope truncation from the runtime transport bound', async () => {
+    const scopePaths = Array.from({ length: 80 }, (_, index) => `/srv/repo-${index}`)
+
+    const scanResult = await scanRuntimeAiVaultSessions('/user-data', 'env-1', {
+      scopePaths
+    })
+
+    expect(scanResult.issues).toContainEqual(
+      expect.objectContaining({
+        kind: 'scope',
+        message: expect.stringContaining('first 64 project paths')
+      })
+    )
+  })
+
   it('stamps sessions and issues returned for a different execution host', async () => {
     mocks.callRuntimeEnvironment.mockResolvedValueOnce({
       ok: true,
@@ -108,6 +126,64 @@ describe('runtime AI Vault session scanner', () => {
       })
     ])
   })
+
+  it('prepares a resume on the transcript-owning runtime', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: { useRealCodexHome: true }
+    })
+    const args = {
+      agent: 'codex' as const,
+      filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+      codexHome: '/managed',
+      executionHostId: 'runtime:env-1' as const
+    }
+
+    await expect(prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', args)).resolves.toEqual({
+      useRealCodexHome: true
+    })
+    expect(mocks.callRuntimeEnvironment).toHaveBeenCalledWith(
+      '/user-data',
+      'env-1',
+      'aiVault.prepareSessionResume',
+      args
+    )
+  })
+
+  it('keeps a repinned account home instead of stripping it', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({
+      ok: true,
+      result: {
+        useRealCodexHome: false,
+        substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+      }
+    })
+
+    await expect(
+      prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+        agent: 'codex',
+        filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'runtime:env-1'
+      })
+    ).resolves.toEqual({
+      useRealCodexHome: false,
+      substituteCodexHome: '/data/orca/codex-accounts/account-2/home'
+    })
+  })
+
+  it('fails retryably when runtime preparation returns an invalid result', async () => {
+    mocks.callRuntimeEnvironment.mockResolvedValueOnce({ ok: true, result: {} })
+
+    await expect(
+      prepareRuntimeAiVaultSessionResume('/user-data', 'env-1', {
+        agent: 'codex',
+        filePath: '/managed/sessions/2026/07/20/rollout-a.jsonl',
+        codexHome: '/managed',
+        executionHostId: 'runtime:env-1'
+      })
+    ).rejects.toThrow('Invalid aiVault.prepareSessionResume response')
+  })
 })
 
 function result(
@@ -141,6 +217,7 @@ function session(
     previewMessages: [],
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
-    resumeCommand: `codex resume ${sessionId}`
+    resumeCommand: `codex resume ${sessionId}`,
+    subagent: null
   }
 }

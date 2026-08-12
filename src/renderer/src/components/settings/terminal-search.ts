@@ -115,7 +115,7 @@ export function getTerminalPaneSearchEntries(platform: {
           ...getTerminalWindowsPowershellImplementationSearchEntry()
         ]
       : []),
-    ...(platform.isWindows ? getTerminalRightClickToPasteSearchEntry() : []),
+    ...getTerminalRightClickToPasteSearchEntry(),
     ...getTerminalSetupScriptSearchEntries(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),

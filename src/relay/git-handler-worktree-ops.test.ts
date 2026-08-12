@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import * as path from 'node:path'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
 import type { GitExec } from './git-handler-ops'
 import { addWorktreeOp, removeWorktreeOp } from './git-handler-worktree-ops'
+
+function removeWorktreeWithCapabilityCache(
+  git: GitExec,
+  params: Parameters<typeof removeWorktreeOp>[1]
+) {
+  return removeWorktreeOp(git, params, new GitCapabilityCache())
+}
 
 function worktreeList(...entries: { path: string; branch?: string }[]): string {
   return entries
@@ -128,6 +136,32 @@ describe('addWorktreeOp', () => {
 })
 
 describe('removeWorktreeOp', () => {
+  it('rejects a locked SSH worktree before invoking remove', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: `${worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          )}\nlocked remote agent`,
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('Worktree is locked by Git. Lock reason: remote agent.')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '/repo-feature'],
+      expect.any(String)
+    )
+  })
+
   it('deletes the now-unused branch after removing an SSH worktree', async () => {
     const calls: string[] = []
     let listCount = 0
@@ -152,7 +186,7 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
+    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
@@ -160,6 +194,117 @@ describe('removeWorktreeOp', () => {
       `${resolvedRepoPath()}$ worktree remove /repo-feature`,
       `${resolvedRepoPath()}$ branch -d -- feature/test`
     ])
+  })
+
+  it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
+    const calls: string[] = []
+    let listCount = 0
+    const git = vi.fn<GitExec>(async (args, cwd) => {
+      calls.push(`${cwd}$ ${args.join(' ')}`)
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        listCount += 1
+        return {
+          stdout:
+            listCount === 1
+              ? worktreeList(
+                  { path: '/repo', branch: 'main' },
+                  { path: '/repo-feature', branch: 'feature/test' }
+                )
+              : worktreeList({ path: '/repo', branch: 'main' }),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'remove' && !args.includes('--force')) {
+        throw Object.assign(new Error('git worktree remove failed'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+
+    expect(calls).toEqual([
+      '/repo-feature$ rev-parse --git-common-dir',
+      `${resolvedRepoPath()}$ worktree list --porcelain -z`,
+      `${resolvedRepoPath()}$ worktree remove /repo-feature`,
+      '/repo-feature$ status --porcelain --untracked-files=all',
+      `${resolvedRepoPath()}$ worktree remove --force /repo-feature`,
+      `${resolvedRepoPath()}$ branch -d -- feature/test`
+    ])
+  })
+
+  it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'remove') {
+        throw Object.assign(new Error('git worktree remove failed'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      }
+      if (args[0] === 'status') {
+        return { stdout: ' M sub\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).rejects.toThrow('Worktree has uncommitted or untracked changes.')
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
+  })
+
+  it('does not force-retry when the caller already forced SSH removal', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          ),
+          stderr: ''
+        }
+      }
+      if (args[0] === 'worktree' && args[1] === 'remove') {
+        throw Object.assign(new Error('git worktree remove failed'), {
+          stderr: 'fatal: working trees containing submodules cannot be moved or removed'
+        })
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature', force: true })
+    ).rejects.toThrow('git worktree remove failed')
+    expect(
+      git.mock.calls.filter(
+        ([args]) => args[0] === 'worktree' && args[1] === 'remove' && args.includes('--force')
+      )
+    ).toHaveLength(1)
+    expect(git).not.toHaveBeenCalledWith(
+      ['status', '--porcelain', '--untracked-files=all'],
+      expect.any(String)
+    )
   })
 
   it('preserves the branch (does not throw) when `branch -d` refuses an unmerged branch', async () => {
@@ -188,7 +333,9 @@ describe('removeWorktreeOp', () => {
     })
 
     // The unmerged-branch refusal must be surfaced without failing workspace removal.
-    await expect(removeWorktreeOp(git, { worktreePath: '/repo-feature' })).resolves.toEqual({
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
+    ).resolves.toEqual({
       preservedBranch: { branchName: 'feature/test', head: '1' }
     })
 
@@ -218,14 +365,45 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, {
+    await removeWorktreeWithCapabilityCache(git, {
       worktreePath: '/repo-feature',
       force: true,
       forceBranchDelete: true
     })
 
+    expect(git).toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
     expect(git).toHaveBeenCalledWith(['branch', '-D', '--', 'feature/test'], expect.any(String))
     expect(git).not.toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
+  })
+
+  it('does not let force override a locked SSH worktree', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'rev-parse') {
+        return { stdout: '/repo/.git\n', stderr: '' }
+      }
+      if (args[0] === 'worktree' && args[1] === 'list') {
+        return {
+          stdout: `${worktreeList(
+            { path: '/repo', branch: 'main' },
+            { path: '/repo-feature', branch: 'feature/test' }
+          )}\nlocked remote agent`,
+          stderr: ''
+        }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature', force: true })
+    ).rejects.toThrow('Worktree is locked by Git. Lock reason: remote agent')
+
+    expect(git).not.toHaveBeenCalledWith(
+      ['worktree', 'remove', '--force', '/repo-feature'],
+      expect.any(String)
+    )
   })
 
   it('skips branch deletion entirely when deleteBranch is false', async () => {
@@ -247,7 +425,10 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, { worktreePath: '/repo-feature', deleteBranch: false })
+    await removeWorktreeWithCapabilityCache(git, {
+      worktreePath: '/repo-feature',
+      deleteBranch: false
+    })
 
     expect(calls).toEqual([
       '/repo-feature$ rev-parse --git-common-dir',
@@ -286,7 +467,7 @@ describe('removeWorktreeOp', () => {
       return { stdout: '', stderr: '' }
     })
 
-    await removeWorktreeOp(git, { worktreePath: '/repo-feature' })
+    await removeWorktreeWithCapabilityCache(git, { worktreePath: '/repo-feature' })
 
     expect(git).toHaveBeenCalledWith(['branch', '-d', '--', 'feature/test'], expect.any(String))
     expect(git).toHaveBeenCalledWith(['worktree', 'prune'], expect.any(String))

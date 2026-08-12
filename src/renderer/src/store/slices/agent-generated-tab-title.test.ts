@@ -65,6 +65,215 @@ describe('generated agent tab titles', () => {
     )
   })
 
+  it('replaces a raw dispatch preamble title when orchestration display metadata arrives', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-1
+
+=== CLI COMMANDS ===
+orca orchestration send --to term_parent
+
+=== TASK ===
+Implement the detailed worker instructions that should not be the short label`,
+      agentType: 'codex'
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement the detailed worker'
+    )
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Implement worker instructions',
+        displayName: 'Better worker label'
+      }
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Better worker label'
+    )
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
+      'Better worker label'
+    )
+  })
+
+  it('does not replace with sticky orchestration when a new non-dispatch prompt arrives', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+    const dispatchPrompt = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-1
+
+=== CLI COMMANDS ===
+orca orchestration send --to term_parent
+
+=== TASK ===
+Implement the detailed worker instructions that should not be the short label`
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: dispatchPrompt,
+      agentType: 'codex'
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Implement worker instructions',
+        displayName: 'Better worker label'
+      }
+    })
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Better worker label'
+    )
+
+    // Why: orchestration metadata is sticky (~30m). A later non-dispatch turn on
+    // the same pane must first-write-wins — not re-assert the old dispatch name.
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: 'Refactor the auth middleware to use JWT tokens for session recovery',
+      agentType: 'codex'
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Better worker label'
+    )
+  })
+
+  it('generates from a new non-dispatch prompt when sticky orchestration remains but no title exists', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    // Seed sticky orchestration without a prior generated title (e.g. feature was off).
+    store.getState().setAgentStatus(paneKey, {
+      state: 'done',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-1
+
+=== TASK ===
+Old dispatch task that already finished`,
+      agentType: 'codex'
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Old dispatch task',
+        displayName: 'Stale worker label'
+      }
+    })
+    // Clear any title set during the dispatch turn so the next non-dispatch
+    // prompt is a pure first-write with sticky orchestration still present.
+    const tabs = store.getState().tabsByWorktree[WORKTREE_ID]
+    store.setState({
+      tabsByWorktree: {
+        ...store.getState().tabsByWorktree,
+        [WORKTREE_ID]: tabs.map((tab) =>
+          tab.id === tabId ? { ...tab, generatedTitle: undefined } : tab
+        )
+      },
+      unifiedTabsByWorktree: {
+        ...store.getState().unifiedTabsByWorktree,
+        [WORKTREE_ID]: (store.getState().unifiedTabsByWorktree[WORKTREE_ID] ?? []).map((tab) =>
+          tab.id === tabId ? { ...tab, generatedLabel: undefined } : tab
+        )
+      }
+    })
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: 'Can you please refactor the auth middleware to use JWT tokens?',
+      agentType: 'codex'
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+    expect(store.getState().unifiedTabsByWorktree[WORKTREE_ID][0].generatedLabel).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
+  it('does not re-pin sticky task A labels onto a later dispatch task B preamble', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-a
+
+=== TASK ===
+Implement task A worker instructions that should not stick`,
+      agentType: 'codex'
+    })
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-a',
+        dispatchId: 'ctx-a',
+        taskTitle: 'Task A',
+        displayName: 'Worker A label'
+      }
+    })
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe('Worker A label')
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
+Your task ID is: task-b
+
+=== TASK ===
+Implement task B worker instructions for the next dispatch`,
+      agentType: 'codex'
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Implement task B worker instructions'
+    )
+  })
+
+  it('does not force-replace titles when sticky orchestration updates after a non-dispatch prompt', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    const tabId = seedWorktree(store, true)
+    const paneKey = makePaneKey(tabId, LEAF_ID)
+
+    store.getState().setAgentStatus(paneKey, {
+      state: 'working',
+      prompt: 'Can you please refactor the auth middleware to use JWT tokens?',
+      agentType: 'codex'
+    })
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+
+    store.getState().setRuntimeAgentOrchestrationByPaneKey({
+      [paneKey]: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        taskTitle: 'Stale orchestration task',
+        displayName: 'Stale orchestration label'
+      }
+    })
+
+    expect(store.getState().tabsByWorktree[WORKTREE_ID][0].generatedTitle).toBe(
+      'Refactor the auth middleware to use JWT'
+    )
+  })
+
   it('does not trim the full paste-sized prompt before generating an optional title', () => {
     vi.useFakeTimers()
     const trimSpy = vi.spyOn(String.prototype, 'trim')

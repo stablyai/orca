@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type {
   ComputerUsePermissionSetupResult,
@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION,
   buildOnboardingFeatureSetupClipboardText,
+  createOnboardingFeatureSetupDeps,
   onboardingFeatureSetupRunTelemetry,
   onboardingFeatureSetupTelemetryFeature,
   onboardingFeatureSetupTelemetrySelection,
@@ -26,6 +27,7 @@ import {
   type OnboardingFeatureSetupDeps,
   type OnboardingFeatureSetupSelection
 } from './onboarding-feature-setup'
+import { getOnboardingFeatureSetupAgentRuntime } from './onboarding-feature-setup-runtime'
 
 const ALL_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_CLI_SKILL_NAME,
@@ -100,6 +102,10 @@ function createDeps(
 }
 
 describe('onboarding feature setup runner', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('defaults every setup item on so first-launch setup is ready to run', () => {
     expect(DEFAULT_ONBOARDING_FEATURE_SETUP_SELECTION).toEqual({
       browserUse: true,
@@ -119,8 +125,73 @@ describe('onboarding feature setup runner', () => {
 
     expect(text).toBe(ALL_SKILL_INSTALL_COMMAND)
     expect(text).toBe(
-      'npx skills add https://github.com/stablyai/orca --skill orca-cli computer-use orchestration orca-linear --global'
+      'npx skills add https://github.com/stablyai/orca --skill orca-cli --skill computer-use --skill orchestration --skill orca-linear --global'
     )
+  })
+
+  it('keeps the copied command valid for the WSL target shell', () => {
+    const text = buildOnboardingFeatureSetupClipboardText(
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
+      { runtime: 'wsl', wslDistro: 'Ubuntu', label: 'WSL Ubuntu' }
+    )
+
+    expect(text).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+  })
+
+  it('leaves the copied command bare for a host runtime', () => {
+    const text = buildOnboardingFeatureSetupClipboardText(
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
+      { runtime: 'host', label: 'Windows' }
+    )
+
+    expect(text).toBe(ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND)
+  })
+
+  it('falls back to the host when the selected runtime needs repair', () => {
+    expect(
+      getOnboardingFeatureSetupAgentRuntime({
+        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
+        installDisabledReason: 'The selected WSL distro is unavailable.'
+      })
+    ).toBeUndefined()
+  })
+
+  it('uses the WSL CLI APIs for the selected distro', async () => {
+    const getInstallStatus = vi.fn()
+    const install = vi.fn()
+    const getWslInstallStatus = vi.fn(async () => INSTALLED_CLI_STATUS)
+    const installWsl = vi.fn(async () => INSTALLED_CLI_STATUS)
+    vi.stubGlobal('window', {
+      api: { cli: { getInstallStatus, install, getWslInstallStatus, installWsl } }
+    })
+    const deps = createOnboardingFeatureSetupDeps({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    })
+
+    await deps.getCliStatus()
+    await deps.installCli()
+
+    expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
+    expect(installWsl).toHaveBeenCalledWith({ distro: 'Ubuntu' })
+    expect(getInstallStatus).not.toHaveBeenCalled()
+    expect(install).not.toHaveBeenCalled()
+  })
+
+  it('keeps the runner on the host when the selected WSL runtime needs repair', async () => {
+    const deps = createDeps()
+
+    await runOnboardingFeatureSetup(
+      { browserUse: false, computerUse: false, orchestration: true, linearTickets: false },
+      deps,
+      {
+        agentRuntime: { runtime: 'wsl', wslDistro: 'Missing', label: 'WSL Missing' },
+        installDisabledReason: 'The selected WSL distro is unavailable.'
+      }
+    )
+
+    expect(deps.clipboardWrites).toEqual([ORCHESTRATION_ONLY_SKILL_INSTALL_COMMAND])
   })
 
   it('builds privacy-safe telemetry payloads for selected feature setup items', () => {
@@ -274,6 +345,39 @@ describe('onboarding feature setup runner', () => {
     expect(deps.clipboardWrites).toEqual([])
   })
 
+  it('skips openSetup and warns when the macOS Computer Use helper app is unavailable', async () => {
+    // Why: getComputerUsePermissionStatus reports helperUnavailableReason with
+    // all permissions set to not-granted when the helper app is missing (e.g.
+    // a dev build that never ran `pnpm build:computer-macos`). The runner must
+    // not call openSetup in that case, or the IPC handler throws.
+    const unavailableStatus: ComputerUsePermissionStatusResult = {
+      platform: 'darwin',
+      helperAppPath: null,
+      helperUnavailableReason: 'Orca Computer Use.app was not found',
+      permissions: [
+        { id: 'accessibility', status: 'not-granted' },
+        { id: 'screenshots', status: 'not-granted' }
+      ]
+    }
+    const openComputerUsePermissionSetup = vi.fn(async () => OPENED_COMPUTER_USE_SETUP)
+    const deps = createDeps({
+      getComputerUsePermissionStatus: vi.fn(async () => unavailableStatus),
+      openComputerUsePermissionSetup
+    })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: true, orchestration: true, linearTickets: true },
+      deps
+    )
+
+    expect(result.computerUsePermissionsOpened).toBe(false)
+    expect(openComputerUsePermissionSetup).not.toHaveBeenCalled()
+    expect(result.warnings).toContainEqual({
+      featureId: 'computerUse',
+      message: 'Orca Computer Use.app was not found'
+    })
+  })
+
   it('shows CLI registration context before installing a missing CLI during onboarding', async () => {
     const staleStatus: CliInstallStatus = {
       ...INSTALLED_CLI_STATUS,
@@ -300,5 +404,25 @@ describe('onboarding feature setup runner', () => {
     expect(showCliRegistrationPrompt.mock.invocationCallOrder[0]).toBeLessThan(
       installCli.mock.invocationCallOrder[0]
     )
+  })
+
+  it('warns without changing PATH when the Windows registry read is unknown', async () => {
+    const unknownStatus: CliInstallStatus = {
+      ...INSTALLED_CLI_STATUS,
+      platform: 'win32',
+      pathConfigured: null,
+      detail: 'Orca could not read the Windows user PATH registry value.'
+    }
+    const deps = createDeps({ getCliStatus: vi.fn(async () => unknownStatus) })
+
+    const result = await runOnboardingFeatureSetup(
+      { browserUse: true, computerUse: false, orchestration: false, linearTickets: false },
+      deps
+    )
+
+    expect(result.cliTouched).toBe(false)
+    expect(result.warnings).toContainEqual({ featureId: 'cli', message: unknownStatus.detail })
+    expect(deps.showCliRegistrationPrompt).not.toHaveBeenCalled()
+    expect(deps.installCli).not.toHaveBeenCalled()
   })
 })

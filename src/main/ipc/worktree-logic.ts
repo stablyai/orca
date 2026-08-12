@@ -1,15 +1,21 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
 import type { GlobalSettings, OrcaWorkspaceLayout, Repo } from '../../shared/types'
-import { resolveRuntimePath } from '../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree-id'
+import { replaceKnownEmojiWithShortcodes } from '../../shared/emoji-shortcode-catalog'
 import { getWslHome, parseWslPath } from '../wsl'
 
 type WorktreePathSettings = Pick<GlobalSettings, 'nestWorkspaces' | 'workspaceDir'>
 type WorktreeBasePathRepo = Pick<Repo, 'path' | 'worktreeBasePath'>
 
-export { computeBranchName, getConfiguredBranchPrefix } from './worktree-branch-name'
+export {
+  computeBranchName,
+  getConfiguredBranchPrefix,
+  computeValidatedBranchName
+} from './worktree-branch-name'
 export { mergeWorktree } from './worktree-metadata-merge'
+export { areWorktreePathsEqual } from './worktree-path-comparison'
 
 /**
  * Sanitize a worktree name for use in branch names and directory paths.
@@ -20,7 +26,7 @@ export function sanitizeWorktreeName(input: string): string {
   // name workspaces in their own language. Git ref-format permits non-ASCII
   // bytes, and modern filesystems handle UTF-8 paths. Only strip characters
   // git or the filesystem actually rejects.
-  const sanitized = input
+  const sanitized = replaceKnownEmojiWithShortcodes(input)
     .trim()
     .replace(/[^\p{L}\p{N}._-]+/gu, '-')
     .replace(/-+/g, '-')
@@ -32,11 +38,21 @@ export function sanitizeWorktreeName(input: string): string {
     .replace(/\.{2,}/g, '.')
     .replace(/^[.-]+|[.-]+$/g, '')
 
+  if (!sanitized && containsEmoji(input)) {
+    return 'workspace'
+  }
+
   if (!sanitized || sanitized === '.' || sanitized === '..') {
     throw new Error('Invalid worktree name')
   }
 
   return sanitized
+}
+
+function containsEmoji(input: string): boolean {
+  return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
+    input
+  )
 }
 
 export function sanitizeWorktreeDisplayName(input: string): string | undefined {
@@ -124,9 +140,10 @@ export function computeRemoteWorktreePath(
     return computeWorktreePath(sanitizedName, repoPath, settings)
   }
   // Why: absolute global workspaceDir values belong to the desktop machine.
-  // SSH worktrees keep the legacy repo-sibling root unless a repo-specific
-  // path opts into a remote-host location.
-  return getRuntimePathOps(repoPath, repoPath).join(repoPath, '..', sanitizedName)
+  // SSH falls back to repo-qualified sibling paths so origin/main is not shared.
+  const pathOps = getRuntimePathOps(repoPath, repoPath)
+  const repoName = pathOps.basename(repoPath).replace(/\.git$/, '')
+  return pathOps.join(repoPath, '..', `${repoName}-${sanitizedName}`)
 }
 
 export function getWorktreePathSettings(
@@ -153,65 +170,13 @@ export function hasRepoWorktreeBasePath(repo: Pick<Repo, 'worktreeBasePath'>): b
   return getRepoWorktreeBasePath(repo) !== undefined
 }
 
-export function areWorktreePathsEqual(
-  leftPath: string,
-  rightPath: string,
-  platform = process.platform
-): boolean {
-  if (looksLikePosixAbsolutePath(leftPath) || looksLikePosixAbsolutePath(rightPath)) {
-    // Why: local WSL projects run POSIX paths on a Windows desktop; comparing
-    // them with win32 rules can delete or dedupe the wrong runtime-owned path.
-    if (!looksLikePosixAbsolutePath(leftPath) || !looksLikePosixAbsolutePath(rightPath)) {
-      return false
-    }
-    const left = normalizePosixWorktreePathForComparison(leftPath, platform)
-    const right = normalizePosixWorktreePathForComparison(rightPath, platform)
-    return left === right
-  }
-
-  if (platform === 'win32' || looksLikeWindowsPath(leftPath) || looksLikeWindowsPath(rightPath)) {
-    const left = win32.normalize(win32.resolve(leftPath))
-    const right = win32.normalize(win32.resolve(rightPath))
-    // Why: `git worktree list` can report the same Windows path with different
-    // slash styles or drive-letter casing than the path we computed before
-    // creation. Orca must treat those as the same worktree or a successful
-    // create spuriously fails until the next full reload repopulates state.
-    return left.toLowerCase() === right.toLowerCase()
-  }
-  const left = normalizePosixWorktreePathForComparison(leftPath, platform)
-  const right = normalizePosixWorktreePathForComparison(rightPath, platform)
-  return left === right
-}
-
-function looksLikeWindowsPath(pathValue: string): boolean {
-  return (
-    /^[A-Za-z]:[\\/]/.test(pathValue) || pathValue.startsWith('\\\\') || pathValue.startsWith('//')
-  )
-}
-
-function looksLikePosixAbsolutePath(pathValue: string): boolean {
-  return pathValue.startsWith('/') && !pathValue.startsWith('//')
-}
-
-function normalizePosixWorktreePathForComparison(
-  pathValue: string,
-  platform: NodeJS.Platform
-): string {
-  const normalized = posix.normalize(posix.resolve(pathValue))
-  if (platform !== 'darwin') {
-    return normalized
-  }
-  if (normalized === '/private/tmp') {
-    return '/tmp'
-  }
-  return normalized.startsWith('/private/tmp/') ? normalized.slice('/private'.length) : normalized
-}
-
 function getRuntimePathOps(
   repoPath: string,
   workspaceDir: string
 ): Pick<typeof posix, 'basename' | 'isAbsolute' | 'join' | 'normalize'> {
-  return looksLikeWindowsPath(repoPath) || looksLikeWindowsPath(workspaceDir) ? win32 : posix
+  return isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(workspaceDir)
+    ? win32
+    : posix
 }
 
 function resolveWorkspaceDirForRepo(repoPath: string, workspaceDir: string): string {

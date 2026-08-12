@@ -14,8 +14,9 @@ import {
 import {
   getTerminalFileContext,
   isHtmlFilePath,
-  openDetectedFilePath,
-  shouldOpenTerminalFileWithSystemDefault
+  mapTerminalFilePath,
+  shouldOpenTerminalFileWithSystemDefault,
+  terminalLinkWslDistro
 } from './terminal-file-open-routing'
 import {
   buildHardWrappedPathLogicalLineCandidates,
@@ -36,9 +37,13 @@ import {
   getTerminalUrlOpenHint
 } from './terminal-link-open-hints'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
-import { isTerminalLinkActivation } from './terminal-link-activation'
+import { isTerminalLinkDirectActivation } from './terminal-link-activation'
+import { getTerminalBufferPositionForMouseEvent } from './terminal-mouse-buffer-position'
+import type { TerminalLinkActionContext } from './terminal-link-action-request'
+import { handleTerminalFileLink } from './terminal-file-link-actions'
 
 export { openDetectedFilePath } from './terminal-file-open-routing'
+export { mapTerminalFilePath } from './terminal-file-open-routing'
 export { openFilePathLinkAtBufferPosition } from './terminal-file-link-hit-testing'
 export { getTerminalFileOpenHint, getTerminalHtmlFileOpenHint, getTerminalUrlOpenHint }
 export { isTerminalLinkActivation } from './terminal-link-activation'
@@ -53,7 +58,9 @@ export type LinkHandlerDeps = {
   pathExistsCache: Map<string, boolean>
   runtimeEnvironmentId?: string | null
   terminalHomePath?: string | null
+  wslDistro?: string | null
   getRuntimeEnvironmentIdForPane?: (paneId: number) => string | null
+  getLinkActionContext?: (paneId: number) => TerminalLinkActionContext | null
 }
 
 type ProvidedFileLink = {
@@ -132,29 +139,31 @@ export function createFilePathLinkProvider(
               if (!resolved) {
                 return null
               }
+              const runtimeEnvironmentId =
+                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
+              const mappedPath = mapTerminalFilePath(
+                resolved.absolutePath,
+                worktreePath,
+                terminalLinkWslDistro(deps.wslDistro, runtimeEnvironmentId)
+              )
               const range = rangeForParsedFileLink(logicalLine, parsed.startIndex, parsed.endIndex)
               if (!range) {
                 return null
               }
 
-              const runtimeEnvironmentId =
-                deps.getRuntimeEnvironmentIdForPane?.(paneId) ?? deps.runtimeEnvironmentId ?? null
               const fileContext = getTerminalFileContext(
                 worktreeId,
                 worktreePath,
                 runtimeEnvironmentId
               )
-              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(
-                fileContext,
-                resolved.absolutePath
-              )
+              const isRemoteRuntimePath = isRemoteRuntimeFileOperation(fileContext, mappedPath)
               const cacheKey = getTerminalPathExistsCacheKey({
-                absolutePath: resolved.absolutePath,
+                absolutePath: mappedPath,
                 connectionId: fileContext.connectionId,
                 isRemoteRuntimePath,
                 runtimeEnvironmentId
               })
-              const worktreeRootLink = resolveKnownWorktreeRootPathLink(resolved.absolutePath)
+              const worktreeRootLink = resolveKnownWorktreeRootPathLink(mappedPath)
               if (/[\\/]$/.test(parsed.pathText) && !worktreeRootLink) {
                 return null
               }
@@ -165,8 +174,8 @@ export function createFilePathLinkProvider(
                 const exists =
                   cachedExists ??
                   (fileContext.connectionId || isRemoteRuntimePath
-                    ? await runtimePathExists(fileContext, resolved.absolutePath)
-                    : await window.api.shell.pathExists(resolved.absolutePath))
+                    ? await runtimePathExists(fileContext, mappedPath)
+                    : await window.api.shell.pathExists(mappedPath))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
                   return null
@@ -179,31 +188,44 @@ export function createFilePathLinkProvider(
                   range,
                   text: parsed.displayText,
                   activate: (event) => {
-                    if (!isTerminalLinkActivation(event)) {
-                      return
+                    if (
+                      handleTerminalFileLink(
+                        mappedPath,
+                        resolved.line,
+                        resolved.column,
+                        event,
+                        {
+                          worktreeId,
+                          worktreePath,
+                          runtimeEnvironmentId,
+                          wslDistro: deps.wslDistro
+                        },
+                        deps.getLinkActionContext?.(paneId)
+                      )
+                    ) {
+                      pane.terminal.clearSelection?.()
                     }
-                    openDetectedFilePath(resolved.absolutePath, resolved.line, resolved.column, {
-                      worktreeId,
-                      worktreePath,
-                      runtimeEnvironmentId,
-                      openWithSystemDefault: Boolean(event.shiftKey)
-                    })
                   },
                   hover: () => {
                     // Why: only local paths can offer the Shift+modifier system
                     // default escape hatch; remote paths may not exist locally.
                     const canOpenWithSystemDefault = shouldOpenTerminalFileWithSystemDefault(
                       fileContext,
-                      resolved.absolutePath
+                      mappedPath
                     )
+                    const showActions = deps.getLinkActionContext
+                      ? deps.getLinkActionContext(paneId) !== null
+                      : true
                     const hint = worktreeRootLink
-                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault)
+                      ? getTerminalWorktreePathOpenHint(canOpenWithSystemDefault, showActions)
                       : canOpenWithSystemDefault
-                        ? isHtmlFilePath(resolved.absolutePath)
-                          ? getTerminalHtmlFileOpenHint()
-                          : openLinkHint
-                        : getTerminalOrcaFileOpenHint()
-                    linkTooltip.textContent = `${resolved.absolutePath} (${hint})`
+                        ? isHtmlFilePath(mappedPath)
+                          ? getTerminalHtmlFileOpenHint(showActions)
+                          : showActions
+                            ? openLinkHint
+                            : getTerminalFileOpenHint(false)
+                        : getTerminalOrcaFileOpenHint(showActions)
+                    linkTooltip.textContent = `${mappedPath} (${hint})`
                     linkTooltip.style.display = ''
                   },
                   leave: () => {
@@ -214,56 +236,36 @@ export function createFilePathLinkProvider(
             }
           )
         )
-      ).then((resolvedLinks) => {
-        const latestFingerprints = new Set(
-          buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
-            (logicalLine) => logicalLine.fingerprint
-          )
+      )
+        .then(
+          (resolvedLinks) => {
+            const latestFingerprints = new Set(
+              buildCandidateLogicalLinesForBufferPosition(buffer, bufferLineNumber).map(
+                (logicalLine) => logicalLine.fingerprint
+              )
+            )
+            const providedLinks = resolvedLinks.filter(
+              (link): link is ProvidedFileLink => link !== null
+            )
+            const links = preferLongestNonOverlappingLinks(providedLinks)
+              .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
+              .map(({ link }) => link)
+            if (providedLinks.length > 0 && links.length === 0) {
+              return
+            }
+            callback(links.length > 0 ? links : undefined)
+          },
+          () => {
+            // Why: remote probes reject during SSH teardown; using the rejection
+            // arm avoids treating a consumer callback failure as a probe failure.
+            callback(undefined)
+          }
         )
-        const providedLinks = resolvedLinks.filter(
-          (link): link is ProvidedFileLink => link !== null
-        )
-        const links = preferLongestNonOverlappingLinks(providedLinks)
-          .filter(({ logicalLine }) => latestFingerprints.has(logicalLine.fingerprint))
-          .map(({ link }) => link)
-        if (providedLinks.length > 0 && links.length === 0) {
-          return
-        }
-        callback(links.length > 0 ? links : undefined)
-      })
+        .catch(() => {
+          // Link discovery is best-effort; a stale xterm callback must not
+          // recreate the unhandled rejection this path is meant to contain.
+        })
     }
-  }
-}
-
-function getTerminalScreenElement(terminal: Terminal): HTMLElement | null {
-  return terminal.element?.querySelector('.xterm-screen') ?? null
-}
-
-function getBufferPositionForTerminalMouseEvent(
-  terminal: Terminal,
-  event: MouseEvent
-): { x: number; y: number } | null {
-  const screenElement = getTerminalScreenElement(terminal)
-  if (!screenElement || terminal.cols <= 0 || terminal.rows <= 0) {
-    return null
-  }
-
-  const rect = screenElement.getBoundingClientRect()
-  const relativeX = event.clientX - rect.left
-  const relativeY = event.clientY - rect.top
-  if (relativeX < 0 || relativeY < 0 || relativeX >= rect.width || relativeY >= rect.height) {
-    return null
-  }
-
-  const cellWidth = rect.width / terminal.cols
-  const cellHeight = rect.height / terminal.rows
-  if (cellWidth <= 0 || cellHeight <= 0) {
-    return null
-  }
-
-  return {
-    x: Math.floor(relativeX / cellWidth) + 1,
-    y: Math.floor(relativeY / cellHeight) + terminal.buffer.active.viewportY + 1
   }
 }
 
@@ -274,11 +276,11 @@ export function installFilePathLinkClickFallback(
 ): IDisposable {
   const mouseUpListenerOptions = { capture: true }
   const handleMouseUp = (event: MouseEvent): void => {
-    if (event.button !== 0 || !isTerminalLinkActivation(event)) {
+    if (!isTerminalLinkDirectActivation(event)) {
       return
     }
 
-    const position = getBufferPositionForTerminalMouseEvent(terminal, event)
+    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
     if (!position) {
       return
     }
@@ -297,6 +299,7 @@ export function installFilePathLinkClickFallback(
         worktreeId: deps.worktreeId,
         worktreePath: deps.worktreePath,
         runtimeEnvironmentId,
+        wslDistro: deps.wslDistro,
         pathExistsCache: deps.pathExistsCache,
         openWithSystemDefault: Boolean(event.shiftKey)
       }

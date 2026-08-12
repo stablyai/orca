@@ -7,6 +7,7 @@ import {
 } from '../../shared/keybindings'
 import type { UpdateCheckOptions } from '../../shared/types'
 import { translateMain } from '../i18n/main-i18n'
+import { createAppMenuSelectionItem } from './app-menu-selection-item'
 
 export type AppearanceMenuState = {
   showTasksButton: boolean
@@ -37,6 +38,9 @@ type RegisterAppMenuOptions = {
   onToggleAppearance: (key: AppearanceMenuKey) => void
   getAppearanceState: () => AppearanceMenuState
   getKeybindings?: () => KeybindingOverrides | undefined
+  // Why: the macOS app-menu title. Passed the per-branch dev label since
+  // app.name is now pinned to a stable value for Keychain-key stability.
+  appMenuLabel?: string
 }
 
 function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
@@ -93,10 +97,15 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     event
   ) => {
     const modifierClick = !event.triggeredByAccelerator
+    const localBuild = isMac && modifierClick && event.altKey === true
     const includePerfPrerelease =
-      modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
-    const includePrerelease = modifierClick && event.shiftKey === true
-    onCheckForUpdates({ includePrerelease, includePerfPrerelease })
+      !localBuild && modifierClick && (isMac ? event.metaKey === true : event.ctrlKey === true)
+    const includePrerelease = !localBuild && modifierClick && event.shiftKey === true
+    onCheckForUpdates({
+      includePrerelease,
+      includePerfPrerelease,
+      ...(localBuild ? { localBuild: true } : {})
+    })
   }
 
   const checkForUpdatesItem: Electron.MenuItemConstructorOptions = {
@@ -130,7 +139,7 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
   // redundant "Orca" entry with roles that don't apply, so we omit it there
   // and distribute its items across File / Help instead.
   const macAppMenu: Electron.MenuItemConstructorOptions = {
-    label: app.name,
+    label: options.appMenuLabel ?? app.name,
     submenu: [
       { role: 'about' },
       checkForUpdatesItem,
@@ -158,24 +167,46 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
     ]
   }
 
+  // Why: keep native menu hints while letting non-macOS Ctrl+Z/Ctrl+Y reach the focused terminal or DOM control.
+  const undoRedoOptions: Electron.MenuItemConstructorOptions = isMac
+    ? {}
+    : { registerAccelerator: false }
   const editMenu: Electron.MenuItemConstructorOptions = {
     label: translateMain('menu.edit', 'Edit'),
     submenu: [
-      { role: 'undo' },
-      { role: 'redo' },
+      { role: 'undo', ...undoRedoOptions },
+      { role: 'redo', ...undoRedoOptions },
       { type: 'separator' },
       { role: 'cut' },
-      { role: 'copy' },
+      createAppMenuSelectionItem({
+        action: 'copy',
+        label: translateMain('menu.copy', 'Copy'),
+        isMac
+      }),
       {
         label: translateMain('menu.paste', 'Paste'),
         accelerator: 'CmdOrCtrl+V',
         click: () => {
           // Why: a focused terminal/native-chat pane is not a native editable
           // control, so raw Electron paste cannot know which Orca surface owns it.
-          BrowserWindow.getFocusedWindow()?.webContents.send('ui:appMenuPaste')
+          const focusedWindow = BrowserWindow.getFocusedWindow()
+          if (focusedWindow) {
+            focusedWindow.webContents.send('ui:appMenuPaste')
+            return
+          }
+
+          // Why: a macOS native panel (open/save, Go to Folder) leaves no focused
+          // BrowserWindow, so overriding the paste role would strand Cmd+V as a no-op.
+          if (isMac) {
+            Menu.sendActionToFirstResponder('paste:')
+          }
         }
       },
-      { role: 'selectAll' }
+      createAppMenuSelectionItem({
+        action: 'select-all',
+        label: translateMain('menu.selectAll', 'Select All'),
+        isMac
+      })
     ]
   }
 

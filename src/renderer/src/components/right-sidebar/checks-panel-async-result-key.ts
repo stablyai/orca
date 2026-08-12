@@ -1,10 +1,8 @@
 import type { GitHubOwnerRepo } from '../../../../shared/types'
+import { githubRepoIdentityKey } from '../../../../shared/github-repository-identity-key'
 
 function normalizedPRRepoIdentity(prRepo?: GitHubOwnerRepo | null): string {
-  if (!prRepo) {
-    return 'none'
-  }
-  return `${prRepo.owner.toLowerCase()}/${prRepo.repo.toLowerCase()}`
+  return prRepo ? githubRepoIdentityKey(prRepo) : 'none'
 }
 
 export function checksPanelAsyncResultKey(

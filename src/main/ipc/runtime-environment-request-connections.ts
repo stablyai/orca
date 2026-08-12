@@ -1,5 +1,8 @@
 import type { PairingOffer } from '../../shared/pairing'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRpcResponse
+} from '../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeRequestConnection } from '../../shared/remote-runtime-request-connection'
 import { RemoteRuntimeSharedControlConnection } from '../../shared/remote-runtime-shared-control-connection'
 import type {
@@ -47,23 +50,20 @@ export function closeRemoteRuntimeRequestConnection(environmentId: string): void
   closeRemoteRuntimeSharedControlConnection(environmentId)
 }
 
-export function closeAllRemoteRuntimeRequestConnections(): void {
-  for (const environmentId of Array.from(requestConnections.keys())) {
-    closeRemoteRuntimeRequestConnection(environmentId)
-  }
-  for (const environmentId of Array.from(sharedControlConnections.keys())) {
-    closeRemoteRuntimeSharedControlConnection(environmentId)
-  }
-}
-
 export function sendRemoteRuntimeSharedControlRequest<TResult>(
   environmentId: string,
   pairing: PairingOffer,
   method: string,
   params: unknown,
-  timeoutMs: number
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope
 ): Promise<RuntimeRpcResponse<TResult>> {
-  return getSharedControlConnection(environmentId, pairing).request(method, params, timeoutMs)
+  return getSharedControlConnection(environmentId, pairing).request(
+    method,
+    params,
+    timeoutMs,
+    envelope
+  )
 }
 
 export function subscribeRemoteRuntimeSharedControlRequest<TResult>(
@@ -97,6 +97,16 @@ export function getRemoteRuntimeSharedControlDiagnostics(
   environmentId: string
 ): RemoteRuntimeSharedConnectionDiagnostics | null {
   return sharedControlConnections.get(environmentId)?.connection.getDiagnostics() ?? null
+}
+
+export function reconnectRemoteRuntimeSharedControlConnection(environmentId: string): void {
+  sharedControlConnections.get(environmentId)?.connection.reconnectNow()
+}
+
+export function retryRemoteRuntimeSharedControlConnectionsNow(): void {
+  for (const { connection } of sharedControlConnections.values()) {
+    connection.retryNow()
+  }
 }
 
 function getSharedControlConnection(
