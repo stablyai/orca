@@ -5257,6 +5257,47 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('claims the viewport when the post-spawn reconcile settles a paired-runtime grid', async () => {
+    // Why: a paired-runtime client advertises explicit viewport claims, so a plain Resize frame only
+    // registers passive viewer geometry. Without a claim the PTY stays at the runtime's spawn grid
+    // (120x40) and the TUI paints against stale columns until a manual pane resize.
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const runNextFrame = (): void => {
+      const callback = frameCallbacks.shift()
+      if (!callback) {
+        throw new Error('expected a queued animation frame')
+      }
+      callback(0)
+    }
+
+    const { connectPanePty } = await import('./pty-connection')
+    const ptyId = 'remote:env-1@@pty-post-spawn-claim'
+    const transport = createMockTransport(ptyId)
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    runNextFrame()
+    await flushAsyncTicks()
+
+    pane.terminal.cols = 96
+    pane.terminal.rows = 30
+    runNextFrame()
+
+    expect(transport.resize).toHaveBeenCalledWith(96, 30, { claim: true })
+  })
+
   it('waits for setup-split geometry before spawning the initial startup command', async () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -9029,6 +9070,514 @@ describe('connectPanePty', () => {
     expect(transport.resize).toHaveBeenCalledWith(120, 40)
     expect(signalPty).toHaveBeenCalledWith('tab-pty', 'SIGWINCH')
     expect(writes.join('')).toContain('live-after-snapshot')
+  })
+
+  it('claims the viewport with the reattach grid of a visible paired-runtime pane', async () => {
+    // Why: the snapshot pins xterm to the source grid, so the reattach push is the pane's first
+    // authoritative grid. A plain Resize frame only registers passive viewer geometry on a
+    // claim-capable runtime, leaving the PTY at the runtime's grid until a manual resize.
+    const { connectPanePty } = await import('./pty-connection')
+    const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
+    const remotePtyId = 'remote:env-1@@terminal-1'
+    const transport = createMockTransport(remotePtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      transport.getPtyId.mockReturnValue(remotePtyId)
+      callbacks.onReplayData?.('current screen from initial subscribe\r\n')
+      return { id: remotePtyId, isReattach: true, replay: '' }
+    })
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'restored paired screen\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 4_096,
+      source: 'headless'
+    })
+    transportFactoryQueue.push(transport)
+    await parkTabForReveal('tab-1', remotePtyId)
+    mockStoreState = {
+      ...mockStoreState,
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: Date.now(),
+            status: { capabilities: ['terminal.paired-parking.v1'] }
+          }
+        ]
+      ])
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks } = captureCallbackTerminalWrites(pane)
+    pane.fitAddon.proposeDimensions = vi.fn(() => undefined) as never
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+    transport.resize.mockClear()
+
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 })) as never
+    safeFit(pane as never)
+    await flushAsyncTicks(12)
+
+    expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('claims the measured viewport when a visible pane attaches its restored paired-runtime PTY', async () => {
+    // Why: an app restart attaches the restored remote leaf directly — no reconcile, no reattach
+    // push, and remote PTYs skip size reassertion. The attach viewport only registers passive
+    // geometry, so without a claim the PTY keeps the runtime's grid until a manual resize.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty'
+    const transport = createMockTransport(remotePtyId)
+    // Why: the remote transport signals onConnect once its stream is subscribed, and the runtime's
+    // first driver frame follows it — the first moment a claim may reach the runtime.
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const pane = createPane(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(transport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: remotePtyId, cols: 120, rows: 40 })
+    )
+    expect(transport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('keeps a hidden pane attaching its restored paired-runtime PTY a passive viewer', async () => {
+    // Why: the visible-pane ownership rule is the whole gate — a background pane must not take the
+    // viewport from the client the user is looking at.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-hidden'
+    const transport = createMockTransport(remotePtyId)
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const pane = createPane(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId },
+      isVisibleRef: { current: false }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(transport.attach).toHaveBeenCalled()
+    expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('claims once per attach so a recovery resubscribe does not re-take the viewport', async () => {
+    // Why: onConnect fires again on every recovery resubscribe; ownership is taken by the pane's own
+    // attach, not re-taken behind the user's back each time the stream comes back.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-resubscribe'
+    const transport = createMockTransport(remotePtyId)
+    const attached: { callbacks?: ConnectCallbacks } = {}
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        attached.callbacks = callbacks
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const pane = createPane(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+    attached.callbacks?.onConnect?.()
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    const claims = (
+      transport.resize.mock.calls as [number, number, { claim?: boolean } | undefined][]
+    ).filter((call) => call[2]?.claim === true)
+    expect(claims).toEqual([[120, 40, { claim: true }]])
+  })
+
+  it('drops a paired-runtime attach claim that arrives after the pane is disposed', async () => {
+    // Why: onConnect can land a tick after teardown; a claim from a pane that no longer exists would
+    // take the viewport from whichever client owns it now.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-disposed'
+    const transport = createMockTransport(remotePtyId)
+    const attached: { callbacks?: ConnectCallbacks } = {}
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        attached.callbacks = callbacks
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const pane = createPane(1)
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+    expect(attached.callbacks).toBeTypeOf('object')
+
+    binding.dispose()
+    attached.callbacks?.onConnect?.()
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('keeps a visible pane attaching a mobile-owned paired-runtime PTY a passive viewer', async () => {
+    // Why: mobile presence owns the PTY grid while it drives; the desktop pane renders that grid and
+    // must not take it back on attach, or the phone's session reflows under the user.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-mobile'
+    setDriverForPty(remotePtyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      const transport = createMockTransport(remotePtyId)
+      transport.attach.mockImplementation(
+        ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+          transport.getPtyId.mockReturnValue(existingPtyId)
+          callbacks?.onConnect?.()
+        }
+      )
+      transportFactoryQueue.push(transport)
+      mockStoreState = {
+        ...mockStoreState,
+        tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+      } as StoreState
+      const pane = createPane(1)
+      const deps = createDeps({
+        restoredLeafId: LEAF_1,
+        restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+      })
+
+      connectPanePty(pane as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(20)
+      // Why: the runtime re-states the driver after the subscription; that frame releases the claim.
+      setDriverForPty(remotePtyId, { kind: 'mobile', clientId: 'phone-1' })
+      await flushAsyncTicks(4)
+
+      expect(transport.attach).toHaveBeenCalled()
+      expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+    } finally {
+      setDriverForPty(remotePtyId, { kind: 'idle' })
+    }
+  })
+
+  it('defers a restored attach claim until the initial driver state shows mobile owns the PTY', async () => {
+    // Why: the runtime completes the subscription before it sends the first driver frame, and an
+    // unknown local driver reads as idle. Claiming at onConnect therefore takes the grid from a phone
+    // that is already driving this PTY.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-driver-late-mobile'
+    const transport = createMockTransport(remotePtyId)
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    expect(transport.attach).toHaveBeenCalled()
+    expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+
+    try {
+      setDriverForPty(remotePtyId, { kind: 'mobile', clientId: 'phone-1' })
+      await flushAsyncTicks(4)
+      expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+    } finally {
+      setDriverForPty(remotePtyId, { kind: 'idle' })
+    }
+  })
+
+  it('drops the deferred attach claim when the pane is disposed before the driver state arrives', async () => {
+    // Why: the claim now waits on a driver frame that may land long after teardown; a pane that no
+    // longer exists must neither claim nor keep listening.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-disposed-before-driver'
+    const transport = createMockTransport(remotePtyId)
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    binding.dispose()
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('claims a restored attach exactly once when the initial driver state reports idle', async () => {
+    // Why: deferring must not lose the claim — the ordinary case is an idle driver frame arriving
+    // just after the subscription completes, and that is when the pane takes its measured grid.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-driver-late-idle'
+    const transport = createMockTransport(remotePtyId)
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    const claims = (
+      transport.resize.mock.calls as [number, number, { claim?: boolean } | undefined][]
+    ).filter((call) => call[2]?.claim === true)
+    expect(claims).toEqual([[120, 40, { claim: true }]])
+  })
+
+  it('withdraws paired-runtime viewport authority when the pane hides, mobile takes over, or it is disposed', async () => {
+    // Why: the transport replays a recovery-blocked claim after the outage. It can only tell whether
+    // this pane still owns the grid by asking the pane, so the predicate must track the same
+    // visibility, mobile-driver, and teardown state the live claim sites use.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@tab-pty-authority'
+    const transport = createMockTransport(remotePtyId)
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: remotePtyId }] }
+    } as StoreState
+    const visibility = { current: true }
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: remotePtyId },
+      isVisibleRef: visibility
+    })
+
+    const binding = connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    const isAuthoritative = createdTransportOptions.at(-1)?.isViewportClaimAuthoritative as
+      | (() => boolean)
+      | undefined
+    expect(isAuthoritative?.()).toBe(true)
+
+    visibility.current = false
+    expect(isAuthoritative?.()).toBe(false)
+
+    visibility.current = true
+    setDriverForPty(remotePtyId, { kind: 'mobile', clientId: 'phone-1' })
+    try {
+      expect(isAuthoritative?.()).toBe(false)
+    } finally {
+      setDriverForPty(remotePtyId, { kind: 'idle' })
+    }
+
+    binding.dispose()
+    expect(isAuthoritative?.()).toBe(false)
+  })
+
+  it('claims the measured viewport when a remount adopts a pending paired-runtime spawn', async () => {
+    // Why: a StrictMode remount attaches to the PTY the first mount spawned, so this successor pane
+    // never runs the post-spawn reconcile that claims elsewhere. Its attach viewport only registers
+    // passive geometry, leaving the PTY at the runtime's spawn grid until a manual resize.
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const remotePtyId = 'remote:env-1@@pending-spawn-adopt'
+    const pendingSpawn = createDeferred<string>()
+    const firstTransport = createMockTransport()
+    firstTransport.connect.mockReturnValueOnce(pendingSpawn.promise)
+    const remountTransport = createMockTransport()
+    remountTransport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        remountTransport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(firstTransport, remountTransport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    } as StoreState
+
+    const firstBinding = connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps() as never
+    )
+    await flushAsyncTicks()
+    firstBinding.dispose()
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    await flushAsyncTicks()
+
+    pendingSpawn.resolve(remotePtyId)
+    await flushAsyncTicks(12)
+    setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(remountTransport.attach).toHaveBeenCalledWith(
+      expect.objectContaining({ existingPtyId: remotePtyId })
+    )
+    expect(remountTransport.resize).toHaveBeenCalledWith(120, 40, { claim: true })
+  })
+
+  it('keeps the reattach grid of a hidden paired-runtime pane a passive viewport registration', async () => {
+    // Why: a hidden pane is a passive viewer — its grid must register geometry so detach can release
+    // it, but claiming would take viewport ownership away from the client the user is looking at.
+    const { connectPanePty } = await import('./pty-connection')
+    const { safeFit } = await import('@/lib/pane-manager/pane-tree-ops')
+    const remotePtyId = 'remote:env-1@@terminal-1'
+    const transport = createMockTransport(remotePtyId)
+    transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+      transport.getPtyId.mockReturnValue(remotePtyId)
+      callbacks.onReplayData?.('current screen from initial subscribe\r\n')
+      return { id: remotePtyId, isReattach: true, replay: '' }
+    })
+    transport.serializeBuffer = vi.fn().mockResolvedValue({
+      data: 'restored paired screen\r\n',
+      cols: 80,
+      rows: 24,
+      seq: 4_096,
+      source: 'headless'
+    })
+    transportFactoryQueue.push(transport)
+    await parkTabForReveal('tab-1', remotePtyId)
+    mockStoreState = {
+      ...mockStoreState,
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: Date.now(),
+            status: { capabilities: ['terminal.paired-parking.v1'] }
+          }
+        ]
+      ])
+    }
+
+    const pane = createPane(1)
+    const { parseCallbacks } = captureCallbackTerminalWrites(pane)
+    pane.fitAddon.proposeDimensions = vi.fn(() => undefined) as never
+    const deps = createDeps({ isVisibleRef: { current: false } })
+
+    connectPanePty(pane as never, createManager(1) as never, deps as never)
+    for (let step = 0; step < 30; step += 1) {
+      parseCallbacks.shift()?.()
+      await flushAsyncTicks(2)
+    }
+    transport.resize.mockClear()
+
+    pane.fitAddon.proposeDimensions = vi.fn(() => ({ cols: 120, rows: 40 })) as never
+    safeFit(pane as never)
+    await flushAsyncTicks(12)
+
+    expect(transport.resize).toHaveBeenCalledWith(120, 40)
+    expect(transport.resize).not.toHaveBeenCalledWith(120, 40, { claim: true })
   })
 
   it('forwards the destination grid on reveal when the reattach fit was deferred by a display:none pane', async () => {

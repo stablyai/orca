@@ -76,7 +76,7 @@ import {
   getFitOverrideForPty,
   onOverrideChange
 } from '@/lib/pane-manager/mobile-fit-overrides'
-import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
+import { isPtyLocked, onDriverChange } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames, type PtySizeReconcileHandle } from './pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from './remote-desktop-viewport-claim'
 import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
@@ -3838,6 +3838,12 @@ export function connectPanePty(
           onAgentBecameWorking,
           onAgentExited
         }),
+    // Why: a claim the transport queued during an outage replays after it; by then this pane may be
+    // hidden, disposed, or mobile-driven, and only the pane knows.
+    isViewportClaimAuthoritative: (): boolean =>
+      !disposed &&
+      claimsRemoteRuntimeViewport(transport.getPtyId()) &&
+      !shouldSuppressDesktopPtyResize(),
     // Why: local IPC terminals are now model-owned in main: OrcaRuntimeService
     // parses OSC 9999 before renderer delivery and forwards through the hook
     // server with local/SSH identity. Remote-runtime streams do not pass through
@@ -4222,6 +4228,15 @@ export function connectPanePty(
     return false
   }
 
+  // Why: a paired-runtime client advertises explicit viewport claims, so its plain Resize frames only
+  // register passive viewer geometry. A grid this pane fitted itself must claim, or the PTY keeps the
+  // runtime's spawn grid until a manual resize. Only a visible pane is authoritative — a hidden one
+  // stays a passive viewer so it cannot take ownership from the active client.
+  const claimsRemoteRuntimeViewport = (ptyId: string | null | undefined): boolean =>
+    isRemoteRuntimePtyId(ptyId) && deps.isVisibleRef.current
+  // Why: the attach claim waits for this PTY's first driver frame; teardown must drop that listener.
+  let stopWaitingForInitialDriverState: (() => void) | null = null
+
   const forwardPtyResize = (cols: number, rows: number): void => {
     if (!isRendererPtyResizeAuthoritative()) {
       return
@@ -4309,7 +4324,11 @@ export function connectPanePty(
         const reattachCols = pane.terminal.cols
         const reattachRows = pane.terminal.rows
         if (reattachCols > 0 && reattachRows > 0) {
-          transport.resize(reattachCols, reattachRows)
+          if (claimsRemoteRuntimeViewport(reattachPtyId)) {
+            transport.resize(reattachCols, reattachRows, { claim: true })
+          } else {
+            transport.resize(reattachCols, reattachRows)
+          }
         }
         // Why: POSIX only sends SIGWINCH on an actual dimension change; signal explicitly so restored TUIs repaint at the correct cursor after replay.
         if (!isRemoteRuntimePtyId(reattachPtyId)) {
@@ -4544,9 +4563,14 @@ export function connectPanePty(
         return cols > 0 && rows > 0 ? { cols, rows } : null
       },
       resize: (cols, rows) => {
-        if (!shouldSuppressDesktopPtyResize()) {
-          transport.resize(cols, rows)
+        if (shouldSuppressDesktopPtyResize()) {
+          return
         }
+        if (claimsRemoteRuntimeViewport(ptyId)) {
+          transport.resize(cols, rows, { claim: true })
+          return
+        }
+        transport.resize(cols, rows)
       },
       // Why: confirm the PTY actually applied the size we forwarded before the
       // reconcile hands off. transport.resize is fire-and-forget for daemon/SSH
@@ -5840,6 +5864,55 @@ export function connectPanePty(
               handleRemoteOutputPauseChanged(paused, supported)
             }
           }
+        }
+      }
+    }
+
+    // Why: attach hands its viewport to subscribe, which only registers passive geometry, and remote
+    // PTYs get no size reassertion. Claim once the stream is live so a visible restored pane owns the
+    // grid it measured instead of waiting for a manual resize; once per attach, so a later recovery
+    // resubscribe does not re-take ownership on its own.
+    type AttachCallbacks = Parameters<typeof transport.attach>[0]['callbacks']
+    const claimAttachedRemoteViewport = (attachedPtyId: string | null): void => {
+      if (
+        transport.getPtyId() !== attachedPtyId ||
+        !claimsRemoteRuntimeViewport(attachedPtyId) ||
+        shouldSuppressDesktopPtyResize()
+      ) {
+        return
+      }
+      const claimCols = pane.terminal.cols
+      const claimRows = pane.terminal.rows
+      if (claimCols > 0 && claimRows > 0) {
+        transport.resize(claimCols, claimRows, { claim: true })
+      }
+    }
+    const claimRemoteViewportOnFirstConnect = (callbacks: AttachCallbacks): AttachCallbacks => {
+      let claimed = false
+      return {
+        ...callbacks,
+        onConnect: (): void => {
+          callbacks.onConnect?.()
+          if (claimed || disposed) {
+            return
+          }
+          claimed = true
+          const attachedPtyId = transport.getPtyId()
+          if (!isRemoteRuntimePtyId(attachedPtyId)) {
+            return
+          }
+          // Why: the runtime completes the subscription before it sends this PTY's first driver
+          // frame, and an unknown local driver reads as idle — claiming now would take the grid from
+          // a phone already driving it. Wait for that frame, then re-test every ownership term.
+          stopWaitingForInitialDriverState?.()
+          stopWaitingForInitialDriverState = onDriverChange((event) => {
+            if (event.ptyId !== attachedPtyId) {
+              return
+            }
+            stopWaitingForInitialDriverState?.()
+            stopWaitingForInitialDriverState = null
+            claimAttachedRemoteViewport(attachedPtyId)
+          })
         }
       }
     }
@@ -9093,7 +9166,7 @@ export function connectPanePty(
             existingPtyId: attachPtyId,
             cols,
             rows,
-            callbacks: outputCallbacks.callbacks
+            callbacks: claimRemoteViewportOnFirstConnect(outputCallbacks.callbacks)
           })
           const attachedPtyId = transport.getPtyId() ?? attachPtyId
           bindActivePanePty(attachedPtyId, {
@@ -9148,7 +9221,7 @@ export function connectPanePty(
               existingPtyId: spawnedPtyId,
               cols,
               rows,
-              callbacks: outputCallbacks.callbacks
+              callbacks: claimRemoteViewportOnFirstConnect(outputCallbacks.callbacks)
             })
             const attachedPtyId = transport.getPtyId() ?? spawnedPtyId
             // Why: this reuses a PTY spawned by an earlier mount, so no later spawn event will bind this remounted pane's DOM/container.
@@ -9348,6 +9421,8 @@ export function connectPanePty(
       pendingReattachFit = null
       // Why: park/reconnect/remount doesn't advance the recovery epoch, so invalidate this xterm or its delayed retry could hit the next instance.
       terminalRecoveryInstance.unregister()
+      stopWaitingForInitialDriverState?.()
+      stopWaitingForInitialDriverState = null
       unregisterUndeliverableWriteHandler()
       unsubscribeRemoteDesktopActivationClaim()
       cancelHiddenOutputSnapshotScrollRestore()

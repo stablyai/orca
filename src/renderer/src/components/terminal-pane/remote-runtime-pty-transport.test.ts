@@ -5396,6 +5396,130 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
   })
 
+  it('replays an authoritative resize as a claim when recovery blocked it', async () => {
+    // Why: recovery drops the resize before it reaches the wire. Remembering the geometry alone
+    // downgrades the pane's own grid to passive viewer registration on resubscribe, so the PTY keeps
+    // the grid it had before the outage.
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    subscriptionSendBinary.mockClear()
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.resize(132, 43, { claim: true })).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => {
+      expect(
+        subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+      ).toContain(TerminalStreamOpcode.ClaimViewport)
+    })
+  })
+
+  it('replays an activity claim that recovery blocked', async () => {
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    subscriptionSendBinary.mockClear()
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.claimViewport?.(132, 43)).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => {
+      expect(
+        subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+      ).toContain(TerminalStreamOpcode.ClaimViewport)
+    })
+  })
+
+  it('keeps a blocked claim through a recoverable resubscribe failure and replays it on the retry', async () => {
+    // Why: a recoverable retry does not end this pane's ownership of the grid it measured. Dropping
+    // the intent on the failed attempt downgrades the replay to passive registration, so the PTY
+    // keeps its pre-outage grid until the user resizes.
+    let attempt = 0
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        attempt += 1
+        if (attempt === 2) {
+          throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
+            code: 'remote_runtime_unavailable'
+          })
+        }
+        subscriptionCallbacks = callbacks
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    subscriptionSendBinary.mockClear()
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.resize(132, 43, { claim: true })).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3), { timeout: 5000 })
+    await vi.waitFor(() => {
+      expect(
+        subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+      ).toContain(TerminalStreamOpcode.ClaimViewport)
+    })
+    transport.destroy?.()
+  })
+
+  it('registers geometry instead of claiming when the pane loses desktop authority during recovery', async () => {
+    // Why: the pane can be hidden, disposed, or taken over by mobile while the claim waits for a
+    // stream. Replaying it then takes the grid from whoever owns it now; the measured geometry is
+    // still wanted as passive viewer registration.
+    let authoritative = true
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1',
+      isViewportClaimAuthoritative: () => authoritative
+    })
+
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    subscriptionSendBinary.mockClear()
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.resize(132, 43, { claim: true })).toBe(true)
+    authoritative = false
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() =>
+      expect(latestSubscribePayload().viewport).toEqual({ cols: 132, rows: 43 })
+    )
+    for (let tick = 0; tick < 20; tick += 1) {
+      await Promise.resolve()
+    }
+    expect(
+      subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+    ).not.toContain(TerminalStreamOpcode.ClaimViewport)
+    transport.destroy?.()
+  })
+
   it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {
     // Why: a resize landing while the subscribe is in flight takes the one-shot
     // RPC fallback, which is refresh-only (no leak) and no-ops before the stream
@@ -5916,6 +6040,38 @@ describe('createRemoteRuntimePtyTransport', () => {
         cols: 120,
         rows: 40
       })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('claims the viewport for a resize marked authoritative and only registers a plain one', async () => {
+    // Why: startup reconcile and reattach push their fitted grid through resize(), so the claim flag
+    // is the only thing separating an authoritative grid from passive viewer geometry on the wire.
+    vi.useFakeTimers()
+    try {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1'
+      })
+
+      await transport.connect({ url: '', callbacks: {} })
+      subscriptionSendBinary.mockClear()
+
+      expect(transport.resize(101, 33, { claim: true })).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+      expect(
+        subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+      ).toEqual([TerminalStreamOpcode.ClaimViewport, TerminalStreamOpcode.Resize])
+
+      subscriptionSendBinary.mockClear()
+      expect(transport.resize(90, 30)).toBe(true)
+      await vi.runOnlyPendingTimersAsync()
+      expect(
+        subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+      ).toEqual([TerminalStreamOpcode.Resize])
     } finally {
       vi.useRealTimers()
     }

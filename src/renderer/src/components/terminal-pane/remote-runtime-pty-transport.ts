@@ -163,7 +163,8 @@ export function createRemoteRuntimePtyTransport(
     onAgentBecameIdle,
     onAgentBecameWorking,
     onAgentExited,
-    onAgentStatus
+    onAgentStatus,
+    isViewportClaimAuthoritative
   } = opts
   let connected = false
   let attachmentReady = false
@@ -344,13 +345,18 @@ export function createRemoteRuntimePtyTransport(
     authoritativeHostPlatform = terminal.hostPlatform ?? authoritativeHostPlatform
   }
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
-  const clearPendingViewportClaim = (): void => {
-    pendingViewportClaim = false
+  // Why: bytes queued behind a claim have unknown delivery after a partition and must never replay,
+  // but the claim itself is this pane's own grid — a recoverable retry still owns it.
+  const dropClaimQueuedInput = (): void => {
     pendingClaimInput = ''
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(false)
     }
     viewportClaimReadyWaiters.clear()
+  }
+  const clearPendingViewportClaim = (): void => {
+    pendingViewportClaim = false
+    dropClaimQueuedInput()
   }
   // Why: tab/leaf ids are shared by paired viewers; the instance suffix keeps one viewer's refresh off peer records.
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
@@ -1509,8 +1515,9 @@ export function createRemoteRuntimePtyTransport(
     if (multiplexedStreamHandle !== targetHandle) {
       closeMultiplexedStream()
     }
-    clearPendingViewportClaim()
+    dropClaimQueuedInput()
     if (!isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
+      clearPendingViewportClaim()
       return false
     }
     if (recovery.currentPhase === 'disconnected') {
@@ -1629,7 +1636,7 @@ export function createRemoteRuntimePtyTransport(
       // Why: bytes queued before a partition have unknown delivery; never replay them on a replacement stream.
       inputBatcher.clear()
       viewportBatcher.clear()
-      clearPendingViewportClaim()
+      dropClaimQueuedInput()
     }
     strengthenRecoveryReplacementPolicy(handle, replacementPolicy)
     if (
@@ -1667,7 +1674,7 @@ export function createRemoteRuntimePtyTransport(
     void resubscribeAfterTransportClose(resubscribeHandle, replacementPolicy, recoveryEpoch)
       .catch((error) => {
         if (!destroyed && connected && handle && recovery.isCurrent(recoveryEpoch)) {
-          clearPendingViewportClaim()
+          dropClaimQueuedInput()
           const clientError = toRemoteRuntimeClientErrorLike(error)
           if (isRecoverableRemoteRuntimeConnectionError(clientError)) {
             retryScheduled = recovery.schedule(recoveryEpoch, (nextEpoch) => {
@@ -1677,6 +1684,7 @@ export function createRemoteRuntimePtyTransport(
               scheduleResubscribeAfterTransportClose(currentReplacementPolicy, nextEpoch)
             })
           } else {
+            clearPendingViewportClaim()
             recovery.markDisconnected()
             // Why: stale/gone/SSH-expired handling lives in handleRemoteTerminalError; its
             // fallthrough surfaces the message, so routing here keeps those recoveries alive.
@@ -1715,7 +1723,7 @@ export function createRemoteRuntimePtyTransport(
     if (!recoveryWasActive) {
       inputBatcher.clear()
       viewportBatcher.clear()
-      clearPendingViewportClaim()
+      dropClaimQueuedInput()
     }
     recovery.schedule(recoveryEpoch, (nextEpoch) => {
       scheduleResubscribeAfterTransportClose('reuse', nextEpoch)
@@ -1817,7 +1825,7 @@ export function createRemoteRuntimePtyTransport(
             setAttachmentReady(false)
             multiplexedStream = null
             multiplexedStreamHandle = null
-            clearPendingViewportClaim()
+            dropClaimQueuedInput()
             // Why: repeated same-handle end/reuse cycles must eventually stop on a replacement boundary.
             scheduleResubscribeAfterTransportClose(
               replacementPolicyAfterWebStreamEnd(subscribedHandle)
@@ -1910,6 +1918,12 @@ export function createRemoteRuntimePtyTransport(
     if (subscriptionAttached) {
       resetRecoveryReplacementPolicy()
       markRecoveryHealthy()
+    }
+    // Why: the pane may have gone hidden, been disposed, or lost the PTY to mobile while the claim
+    // waited for a stream; a stale replay would take the grid from whoever owns it now. The subscribe
+    // frame already carried the geometry, so dropping the intent leaves it a passive registration.
+    if (pendingViewportClaim && isViewportClaimAuthoritative?.() === false) {
+      clearPendingViewportClaim()
     }
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
     if (pendingViewportClaim && desiredViewport) {
@@ -2380,6 +2394,7 @@ export function createRemoteRuntimePtyTransport(
       }
       rememberViewport(cols, rows)
       if (recoveryBlocksIo()) {
+        pendingViewportClaim = true
         return true
       }
       viewportBatcher.clear()
@@ -2403,6 +2418,11 @@ export function createRemoteRuntimePtyTransport(
       }
       rememberViewport(cols, rows)
       if (recoveryBlocksIo()) {
+        // Why: remembering geometry alone downgrades an authoritative grid to passive registration on
+        // resubscribe; keep the claim intent so the replay re-takes the viewport.
+        if (meta?.claim) {
+          pendingViewportClaim = true
+        }
         return true
       }
       if (meta?.claim) {

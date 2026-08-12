@@ -250,4 +250,9 @@ export type IpcPtyTransportOptions = {
   onAgentBecameWorking?: () => void
   onAgentExited?: () => void
   onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
+  /**
+   * Whether this pane may still take viewport ownership. Read when a recovery replays a claim the
+   * outage blocked: a pane hidden, disposed, or driven by mobile since then registers geometry only.
+   */
+  isViewportClaimAuthoritative?: () => boolean
 }
