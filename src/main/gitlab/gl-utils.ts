@@ -19,6 +19,7 @@ export {
   getProjectRefForRemote,
   glabHostnameArgs,
   glabRepoExecOptions,
+  orderRemoteNamesForProjectRefProbe,
   parseGlabAuthStatusHosts,
   parseGitLabProjectRef,
   resolveIssueSource

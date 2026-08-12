@@ -2,7 +2,6 @@ import { glabExecFileAsync } from '../git/runner'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import type { IssueSourcePreference } from '../../shared/types'
 import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
 import {
   _resetGlabUnauthenticatedHosts,
@@ -163,84 +162,13 @@ async function resolveProjectRefForRemote(
   return null
 }
 
-export async function getProjectRef(
-  repoPath: string,
-  knownHosts?: readonly string[],
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ProjectRef | null> {
-  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
-}
-
-export async function getIssueProjectRef(
-  repoPath: string,
-  knownHosts?: readonly string[],
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
-    repoPath,
-    'upstream',
-    knownHosts,
-    connectionId,
-    localGitOptions
-  )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
-  )
-}
-
-export type ResolvedIssueSource = {
-  source: ProjectRef | null
-  /** True when explicit upstream is gone and resolver fell back to origin. */
-  fellBack: boolean
-}
-
-export async function resolveIssueSource(
-  repoPath: string,
-  preference: IssueSourcePreference | undefined,
-  knownHosts?: readonly string[],
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<ResolvedIssueSource> {
-  if (preference === 'upstream') {
-    const upstream = await getProjectRefForRemote(
-      repoPath,
-      'upstream',
-      knownHosts,
-      connectionId,
-      localGitOptions
-    )
-    if (upstream) {
-      return { source: upstream, fellBack: false }
-    }
-    const origin = await getProjectRefForRemote(
-      repoPath,
-      'origin',
-      knownHosts,
-      connectionId,
-      localGitOptions
-    )
-    return { source: origin, fellBack: origin !== null }
-  }
-  if (preference === 'origin') {
-    return {
-      source: await getProjectRefForRemote(
-        repoPath,
-        'origin',
-        knownHosts,
-        connectionId,
-        localGitOptions
-      ),
-      fellBack: false
-    }
-  }
-  return {
-    source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
-    fellBack: false
-  }
-}
+export {
+  getIssueProjectRef,
+  getProjectRef,
+  orderRemoteNamesForProjectRefProbe,
+  resolveIssueSource
+} from './gitlab-project-ref-remote-preference'
+export type { ResolvedIssueSource } from './gitlab-project-ref-remote-preference'
 
 export function glabRepoExecOptions(
   repoPath: string,

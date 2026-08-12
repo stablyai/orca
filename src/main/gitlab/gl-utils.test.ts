@@ -32,6 +32,22 @@ import { registerSshGitProvider, unregisterSshGitProvider } from '../providers/s
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 
+function mockGitRemotes(remotes: Record<string, string | null>): void {
+  gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+    if (args[0] === 'remote' && args.length === 1) {
+      return { stdout: `${Object.keys(remotes).join('\n')}\n`, stderr: '' }
+    }
+    if (args[0] === 'remote' && args[1] === 'get-url') {
+      const name = args[2] ?? ''
+      if (!(name in remotes) || remotes[name] === null) {
+        throw new Error(`error: No such remote '${name}'`)
+      }
+      return { stdout: `${remotes[name]}\n`, stderr: '' }
+    }
+    throw new Error(`unexpected git args: ${args.join(' ')}`)
+  })
+}
+
 describe('gitlab project ref resolution', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -220,6 +236,8 @@ describe('gitlab project ref resolution', () => {
   it('does not cache a local probe killed on its deadline as a definitive miss', async () => {
     gitExecFileAsyncMock
       .mockRejectedValueOnce(new Error('git timed out.'))
+      // After the preferred-name miss, list remotes (empty) then succeed on re-probe.
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
       .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
 
     await expect(getProjectRef('/repo')).resolves.toBeNull()
@@ -227,28 +245,41 @@ describe('gitlab project ref resolution', () => {
       host: 'gitlab.com',
       path: 'fork/orca'
     })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
   })
 
   it('re-probes a repo whose GitLab remote could have been added since the miss', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+    // Miss path: no origin, and listing remotes finds nothing (list is not negatively cached).
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args.length === 1) {
+        return { stdout: '', stderr: '' }
+      }
+      throw new Error("error: No such remote 'origin'")
+    })
 
     await expect(getProjectRef('/repo')).resolves.toBeNull()
     await expect(getProjectRef('/repo')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    // origin get-url once (negative cached) + `git remote` list on each resolve attempt.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
 
     // Nothing watches `.git/config`, and SSH/WSL repos have no file to watch, so
     // a remote configured after the miss is only visible once the negative ages out.
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'remote' && args[1] === 'get-url' && args[2] === 'origin') {
+        return { stdout: 'git@gitlab.com:fork/orca.git\n', stderr: '' }
+      }
+      throw new Error(`unexpected git args: ${args.join(' ')}`)
+    })
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'fork/orca'
     })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    // Re-probe origin after negative TTL; no list needed when origin hits.
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })
 
   it('keeps a resolved project ref past the negative interval', async () => {
@@ -351,9 +382,9 @@ describe('resolveIssueSource', () => {
   })
 
   it("'upstream' + no upstream remote → origin, fellBack=true", async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('fatal: No such remote'))
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:solo/orca.git\n' })
+    mockGitRemotes({
+      origin: 'git@gitlab.com:solo/orca.git'
+    })
 
     await expect(resolveIssueSource('/repo', 'upstream')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'solo/orca' },

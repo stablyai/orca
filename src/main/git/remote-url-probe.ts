@@ -47,6 +47,43 @@ export async function readRemoteUrl(
   return stdout
 }
 
+export function parseRemoteNames(stdout: string): string[] {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+/**
+ * Lists configured remote names (`git remote`), or [] when the SSH runtime is
+ * down / the probe fails. Callers that only care about named remotes use this
+ * after preferred names miss so custom remote labels still resolve.
+ */
+export async function listRemoteNames(context: RemoteUrlProbeContext): Promise<string[]> {
+  try {
+    if (context.connectionId) {
+      const provider = getSshGitProvider(context.connectionId)
+      if (!provider) {
+        return []
+      }
+      const { stdout } = await provider.exec(['remote'], context.repoPath, {
+        signal: AbortSignal.timeout(REMOTE_URL_PROBE_TIMEOUT_MS)
+      })
+      return parseRemoteNames(stdout)
+    }
+    const { stdout } = await gitExecFileAsync(['remote'], {
+      cwd: context.repoPath,
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
+      ...(context.wslDistro ? { wslDistro: context.wslDistro } : {})
+    })
+    return parseRemoteNames(stdout)
+  } catch {
+    // Why: a list failure is not "no remotes" evidence worth caching at this
+    // layer — callers treat [] as "no fallback candidates" and re-ask later.
+    return []
+  }
+}
+
 const TRANSIENT_PROBE_PATTERNS = [
   /\btimed out\b/i,
   /\bETIMEDOUT\b/,

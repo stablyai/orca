@@ -15,6 +15,8 @@ vi.mock('./runner', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 import {
   assertRemoteUrlReadable,
   isTransientGitProbeError,
+  listRemoteNames,
+  parseRemoteNames,
   readRemoteUrl,
   REMOTE_URL_PROBE_TIMEOUT_MS
 } from './remote-url-probe'
@@ -23,6 +25,58 @@ describe('remote URL probe', () => {
   beforeEach(() => {
     getSshGitProviderMock.mockReset()
     gitExecFileAsyncMock.mockReset()
+  })
+
+  it('parses remote names from git remote stdout', () => {
+    expect(parseRemoteNames('origin\nupstream\nmyremote\n')).toEqual([
+      'origin',
+      'upstream',
+      'myremote'
+    ])
+    expect(parseRemoteNames('')).toEqual([])
+  })
+
+  it('lists remote names locally with the shared timeout', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'myremote\norigin\n', stderr: '' })
+
+    await expect(listRemoteNames({ repoPath: '/repo' })).resolves.toEqual(['myremote', 'origin'])
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote'], {
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
+    })
+  })
+
+  it('lists remote names through WSL with the shared timeout', async () => {
+    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'myremote\n', stderr: '' })
+
+    await expect(listRemoteNames({ repoPath: '/home/repo', wslDistro: 'Ubuntu' })).resolves.toEqual(
+      ['myremote']
+    )
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote'], {
+      cwd: '/home/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS,
+      wslDistro: 'Ubuntu'
+    })
+  })
+
+  it('lists remote names through the SSH provider', async () => {
+    const exec = vi.fn().mockResolvedValue({ stdout: 'myremote\n', stderr: '' })
+    getSshGitProviderMock.mockReturnValue({ exec })
+
+    await expect(listRemoteNames({ repoPath: '/repo', connectionId: 'conn-1' })).resolves.toEqual([
+      'myremote'
+    ])
+    expect(exec).toHaveBeenCalledWith(['remote'], '/repo', {
+      signal: expect.any(AbortSignal)
+    })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('returns an empty list when the SSH provider is unavailable', async () => {
+    getSshGitProviderMock.mockReturnValue(null)
+    await expect(listRemoteNames({ repoPath: '/repo', connectionId: 'conn-1' })).resolves.toEqual(
+      []
+    )
   })
 
   it('bounds local and WSL remote reads with the shared timeout', async () => {
