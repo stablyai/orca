@@ -403,6 +403,19 @@ describe('glab error classification', () => {
     expect(classifyGlabError('Project Not Found').type).toBe('not_found')
   })
 
+  it('classifies glab GITLAB_HOST remote-mismatch as not_found (#13817)', () => {
+    const stderr =
+      'ERROR None of the git remotes configured for this repository correspond to the GITLAB_HOST environment variable.\n' +
+      'Try adding a matching remote or unsetting the variable.\n' +
+      'GITLAB_HOST is currently set to gitlab.example.com\n' +
+      'Configured remotes: 10.0.0.5.'
+    expect(classifyGlabError(stderr).type).toBe('not_found')
+    expect(classifyListIssuesError(stderr)).toEqual({
+      type: 'not_found',
+      message: 'Project not found.'
+    })
+  })
+
   it('classifies 422 / unprocessable as validation_error', () => {
     expect(classifyGlabError('HTTP 422 Unprocessable Entity').type).toBe('validation_error')
   })

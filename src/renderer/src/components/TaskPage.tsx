@@ -319,6 +319,12 @@ import {
   getTaskProjectPickerGroups,
   normalizeTaskRepoSelection
 } from '@/components/task-page-default-repo-selection'
+import { getGitLabTaskEligibleRepos } from '../../../shared/gitlab-task-eligibility'
+import {
+  aggregateGitLabMultiProjectResults,
+  toGitLabProjectFetchResult,
+  type GitLabProjectFetchResult
+} from '@/components/task-page-gitlab-multi-project'
 import {
   getRepoBackedProviderAvailability,
   type RuntimeProviderPreflightStatus
@@ -4935,9 +4941,11 @@ export default function TaskPage(): React.JSX.Element {
     ) {
       return
     }
-    // Why: folder-mode repos lack remotes to derive a GitLab project from; SSH-backed repos use the same provider-aware IPC path.
-    const eligibleRepos = selectedRepos
-    if (eligibleRepos.length === 0) {
+    // Why (#13817): drop settled non-GitLab remotes before querying so a
+    // migrated-off-GitLab project is not part of the GitLab task fan-out.
+    // Pending identity stays; main soft-returns not_found for residual misses.
+    const gitlabEligibleRepos = getGitLabTaskEligibleRepos(selectedRepos)
+    if (gitlabEligibleRepos.length === 0) {
       setGitlabItems([])
       setGitlabLoading(false)
       setGitlabError(null)
@@ -4949,7 +4957,7 @@ export default function TaskPage(): React.JSX.Element {
 
     const fetchItems =
       gitlabView === 'issues'
-        ? (repo: (typeof eligibleRepos)[0]) => {
+        ? (repo: (typeof gitlabEligibleRepos)[0]) => {
             const isAssignedToMe = activeIssueFilter === 'assigned-to-me'
             return window.api.gl
               .listIssues({
@@ -4960,17 +4968,9 @@ export default function TaskPage(): React.JSX.Element {
                 assignee: isAssignedToMe ? '@me' : undefined,
                 limit: 50
               })
-              .then((result) => {
-                const typed = result as {
-                  items: GitLabWorkItem[]
-                  error?: { type?: string; message: string }
-                }
-                // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
-                const error = typed.error?.type === 'not_found' ? undefined : typed.error
-                return { repoId: repo.id, items: typed.items, error }
-              })
+              .then((result) => toGitLabProjectFetchResult(repo.id, result))
           }
-        : (repo: (typeof eligibleRepos)[0]) =>
+        : (repo: (typeof gitlabEligibleRepos)[0]) =>
             window.api.gl
               .listMRs({
                 repoPath: repo.path,
@@ -4980,40 +4980,31 @@ export default function TaskPage(): React.JSX.Element {
                 page: 1,
                 perPage: 50
               })
-              .then((result) => {
-                const typed = result as {
-                  items: GitLabWorkItem[]
-                  error?: { type?: string; message: string }
-                }
-                const error = typed.error?.type === 'not_found' ? undefined : typed.error
-                return { repoId: repo.id, items: typed.items, error }
-              })
+              .then((result) => toGitLabProjectFetchResult(repo.id, result))
 
-    void Promise.allSettled(eligibleRepos.map(fetchItems))
+    void Promise.allSettled(gitlabEligibleRepos.map(fetchItems))
       .then((results) => {
         if (stale) {
           return
         }
-        const merged: GitLabWorkItem[] = []
-        const errs: string[] = []
+        const projectResults: GitLabProjectFetchResult[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
-            errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
+            projectResults.push({
+              repoId: 'unknown',
+              items: [],
+              error: {
+                type: 'unknown',
+                message: r.reason instanceof Error ? r.reason.message : String(r.reason)
+              }
+            })
             continue
           }
-          for (const item of r.value.items) {
-            merged.push({ ...item, repoId: r.value.repoId })
-          }
-          if (r.value.error) {
-            errs.push(r.value.error.message)
-          }
+          projectResults.push(r.value)
         }
-        merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
-        setGitlabItems(merged)
-        // Why: only banner when every eligible repo failed; a partial one would hide working rows in a mixed (non-GitLab) selection.
-        if (errs.length > 0 && merged.length === 0) {
-          setGitlabError(errs[0])
-        }
+        const aggregate = aggregateGitLabMultiProjectResults(projectResults)
+        setGitlabItems(aggregate.items)
+        setGitlabError(aggregate.bannerError)
       })
       .finally(() => {
         if (!stale) {

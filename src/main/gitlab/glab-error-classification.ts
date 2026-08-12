@@ -11,7 +11,16 @@ export function classifyGlabError(stderr: string): ClassifiedError {
       message: "You don't have permission to edit this issue. Check your GitLab token scopes."
     }
   }
-  if (s.includes('http 404') || s.includes('project not found')) {
+  if (
+    s.includes('http 404') ||
+    s.includes('project not found') ||
+    // Why: glab reports this when remotes no longer match its effective host
+    // (config host or GITLAB_HOST) — common after a repo migrates off GitLab.
+    // Treat as not_found so multi-project aggregates soft-skip instead of
+    // dumping raw CLI stderr into the Tasks banner (#13817).
+    s.includes('none of the git remotes configured for this repository correspond to the gitlab_host') ||
+    s.includes('none of the git remotes configured for this repository correspond to the gitlab host')
+  ) {
     return { type: 'not_found', message: 'Issue not found — it may have been deleted.' }
   }
   if (s.includes('http 422') || s.includes('unprocessable')) {

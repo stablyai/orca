@@ -805,87 +805,22 @@ describe('gitlab client — MR operations', () => {
       expect(result.items[0].isCrossRepository).toBe(true)
     })
 
-    it('falls back to glab mr list when project ref is unresolved', async () => {
+    it('returns not_found without spawning glab when project ref is unresolved (local)', async () => {
+      // Why (#13817): cwd-inferred `glab mr list` turned migrated non-GitLab
+      // remotes into hard GITLAB_HOST mismatches that replaced multi-project views.
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
       })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify([
-          {
-            id: 300,
-            iid: 3,
-            title: 'fallback mr',
-            state: 'opened',
-            web_url: 'https://gitlab.com/-/merge_requests/3',
-            updated_at: '2026-05-05',
-            source_project_id: 5,
-            target_project_id: 5
-          }
-        ])
-      })
-      const result = await listMergeRequests('/repo', 'opened')
-      expect(result.items).toHaveLength(1)
-      expect(result.items[0].title).toBe('fallback mr')
-      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
-      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-        [
-          'mr',
-          'list',
-          '--output',
-          'json',
-          '--per-page',
-          '20',
-          '--page',
-          '1',
-          '--order',
-          'updated_at',
-          '--sort',
-          'desc'
-        ],
-        { cwd: '/repo' }
-      )
-    })
-
-    it('threads --search into the cwd fallback when a query is supplied', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({
-        source: null,
-        fellBack: false
-      })
-      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-      await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
-      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
-      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-      // Why (#6263): the cwd-inferred fallback must honor the typed query too.
-      const searchIdx = callArgs.indexOf('--search')
-      expect(searchIdx).toBeGreaterThanOrEqual(0)
-      expect(callArgs[searchIdx + 1]).toBe('fix login')
-    })
-
-    it('omits --search from the cwd fallback for a whitespace-only query', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({
-        source: null,
-        fellBack: false
-      })
-      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]' })
-      await listMergeRequests('/repo', 'opened', 1, 20, undefined, '   ')
-      const callArgs = glabExecFileAsyncMock.mock.calls[0][0] as string[]
-      expect(callArgs).not.toContain('--search')
-    })
-
-    it('classifies fallback errors into the result envelope', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({
-        source: null,
-        fellBack: false
-      })
-      glabExecFileAsyncMock.mockRejectedValueOnce(new Error('HTTP 403 Forbidden'))
-      const result = await listMergeRequests('/repo', 'opened')
-      expect(result.error?.type).toBe('permission_denied')
+      const result = await listMergeRequests('/migrated-repo', 'opened')
+      expect(result.error?.type).toBe('not_found')
+      expect(result.error?.message).toMatch(/No GitLab project found/i)
       expect(result.items).toEqual([])
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })
 
-    it('does not run the cwd fallback for unresolved SSH repos', async () => {
+    it('returns not_found without spawning glab when project ref is unresolved (SSH)', async () => {
       resolveIssueSourceMock.mockResolvedValueOnce({
         source: null,
         fellBack: false
@@ -901,6 +836,17 @@ describe('gitlab client — MR operations', () => {
       )
       expect(result.error?.type).toBe('not_found')
       expect(result.items).toEqual([])
+      expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
+      expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
+    })
+
+    it('does not cwd-infer even when a search query is supplied on an unresolved project', async () => {
+      resolveIssueSourceMock.mockResolvedValueOnce({
+        source: null,
+        fellBack: false
+      })
+      const result = await listMergeRequests('/repo', 'opened', 1, 20, undefined, 'fix login')
+      expect(result.error?.type).toBe('not_found')
       expect(glabExecFileAsyncMock).not.toHaveBeenCalled()
       expect(glabApiWithHeadersMock).not.toHaveBeenCalled()
     })
@@ -923,17 +869,6 @@ describe('gitlab client — MR operations', () => {
       expect(result.items).toEqual([])
       expect(result.error?.type).toBe('unknown')
       expect(result.error?.message).toContain('fix network timeout')
-      expect(result.error?.message).not.toContain('is not a function')
-    })
-
-    it('reports the body instead of ".map is not a function" when the cwd fallback returns a non-array', async () => {
-      resolveIssueSourceMock.mockResolvedValueOnce({ source: null, fellBack: false })
-      glabExecFileAsyncMock.mockResolvedValueOnce({
-        stdout: JSON.stringify({ data: [], total: 0 })
-      })
-      const result = await listMergeRequests('/repo', 'opened')
-      expect(result.items).toEqual([])
-      expect(result.error?.message).toContain('{"data":[],"total":0}')
       expect(result.error?.message).not.toContain('is not a function')
     })
 
