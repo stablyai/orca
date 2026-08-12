@@ -13,6 +13,7 @@ import type {
   RuntimeTerminalSplit
 } from '../../../shared/runtime-types'
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { PaneSplitPosition } from '../lib/pane-manager/pane-manager-types'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type {
   SleepingAgentLaunchConfig,
@@ -966,7 +967,10 @@ async function callWebRuntimeSessionTabMethod(
 export function splitWebRuntimeTerminal(
   ptyId: string | null | undefined,
   direction: 'horizontal' | 'vertical',
-  telemetrySource: TerminalPaneSplitSource
+  telemetrySource: TerminalPaneSplitSource,
+  // Why: optional on the wire — a host too old to know `position` still splits
+  // after the source pane rather than failing the call.
+  position: PaneSplitPosition = 'after'
 ): boolean {
   if (!ptyId) {
     return false
@@ -991,6 +995,7 @@ export function splitWebRuntimeTerminal(
       params: {
         terminal: remote.handle,
         direction,
+        ...(position === 'before' ? { position } : {}),
         telemetrySource
       },
       timeoutMs: 15_000

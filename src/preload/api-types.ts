@@ -3217,6 +3217,7 @@ export type PreloadApi = {
         tabId: string
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
+        position?: 'before' | 'after'
         command?: string
         telemetrySource?: TerminalPaneSplitSource
       }) => void

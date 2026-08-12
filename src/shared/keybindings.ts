@@ -114,6 +114,8 @@ export type KeybindingActionId =
   | 'terminal.closePane'
   | 'terminal.splitRight'
   | 'terminal.splitDown'
+  | 'terminal.splitLeft'
+  | 'terminal.splitUp'
   | 'terminal.switchInputSource'
   | PluginKeybindingActionId
 
@@ -1065,6 +1067,24 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       linux: ['Alt+Shift+D'],
       win32: ['Alt+Shift+D']
     }
+  },
+  // Why: no default chord — every Mod/Alt+D combination is already taken by the
+  // right/down splits on some platform, so users opt in from shortcut settings.
+  {
+    id: 'terminal.splitLeft',
+    title: 'Split terminal left',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'left'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.splitUp',
+    title: 'Split terminal up',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'up'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'terminal.switchInputSource',

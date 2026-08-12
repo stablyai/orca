@@ -9,8 +9,10 @@ import {
   MessageSquare,
   Minimize2,
   PanelBottomClose,
+  PanelLeftClose,
   PanelsTopLeft,
   PanelRightClose,
+  PanelTopClose,
   Pencil,
   SquareTerminal,
   TextSelect,
@@ -27,7 +29,7 @@ import {
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../shared/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
+import { formatOptionalShortcutLabel, formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import type { KeybindingOverrides } from '../../../../shared/keybindings'
 import { translate } from '@/i18n/i18n'
 import { isMacPlatform, nativeChatToggleShortcutLabel } from '../native-chat/native-chat-shortcut'
@@ -48,6 +50,8 @@ type TerminalContextMenuProps = {
   onPaste: () => void
   onSplitRight: () => void
   onSplitDown: () => void
+  onSplitLeft: () => void
+  onSplitUp: () => void
   keybindings: KeybindingOverrides
   canEqualizePaneSizes: boolean
   onEqualizePaneSizes: () => void
@@ -87,6 +91,8 @@ export default function TerminalContextMenu({
   onPaste,
   onSplitRight,
   onSplitDown,
+  onSplitLeft,
+  onSplitUp,
   keybindings,
   canEqualizePaneSizes,
   onEqualizePaneSizes,
@@ -120,6 +126,8 @@ export default function TerminalContextMenu({
       paste: formatPrimaryShortcutLabel('terminal.paste', keybindings),
       splitRight: formatPrimaryShortcutLabel('terminal.splitRight', keybindings),
       splitDown: formatPrimaryShortcutLabel('terminal.splitDown', keybindings),
+      splitLeft: formatOptionalShortcutLabel('terminal.splitLeft', keybindings),
+      splitUp: formatOptionalShortcutLabel('terminal.splitUp', keybindings),
       equalize: formatPrimaryShortcutLabel('terminal.equalizePaneSizes', keybindings),
       expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
@@ -246,6 +254,26 @@ export default function TerminalContextMenu({
             'Split Terminal Down'
           )}
           <DropdownMenuShortcut>{shortcuts.splitDown}</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitLeft}>
+          <PanelLeftClose />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.e179938889',
+            'Split Terminal Left'
+          )}
+          {shortcuts.splitLeft ? (
+            <DropdownMenuShortcut>{shortcuts.splitLeft}</DropdownMenuShortcut>
+          ) : null}
+        </DropdownMenuItem>
+        <DropdownMenuItem className="whitespace-nowrap" onSelect={onSplitUp}>
+          <PanelTopClose />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.81f1f200c7',
+            'Split Terminal Up'
+          )}
+          {shortcuts.splitUp ? (
+            <DropdownMenuShortcut>{shortcuts.splitUp}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
         {canEqualizePaneSizes && (
           <DropdownMenuItem onSelect={onEqualizePaneSizes}>

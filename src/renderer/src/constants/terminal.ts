@@ -50,6 +50,7 @@ export type SplitTerminalPaneDetail = {
   tabId: string
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
+  position?: 'before' | 'after'
   command?: string
   sourceLeafId?: string
   sourcePtyId?: string

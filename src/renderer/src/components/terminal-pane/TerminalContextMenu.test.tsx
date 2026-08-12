@@ -69,6 +69,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onPaste: vi.fn(),
     onSplitRight: vi.fn(),
     onSplitDown: vi.fn(),
+    onSplitLeft: vi.fn(),
+    onSplitUp: vi.fn(),
     keybindings: {},
     canEqualizePaneSizes: false,
     onEqualizePaneSizes: vi.fn(),
@@ -125,6 +127,28 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('offers all four split directions', () => {
+    const onSplitLeft = vi.fn()
+    const onSplitUp = vi.fn()
+    renderMenu({ onSplitLeft, onSplitUp })
+
+    const findSplitItem = (label: string): (typeof items.list)[number] | undefined =>
+      items.list.find((item) => childrenText(item.children).startsWith(label))
+
+    for (const label of ['Right', 'Down', 'Left', 'Up']) {
+      expect(findSplitItem(`Split Terminal ${label}`)).toBeDefined()
+    }
+
+    // Why: unbound actions must not render the 'Unassigned' sentinel as a chip.
+    expect(childrenText(findSplitItem('Split Terminal Left')!.children)).toBe('Split Terminal Left')
+    expect(childrenText(findSplitItem('Split Terminal Up')!.children)).toBe('Split Terminal Up')
+
+    findSplitItem('Split Terminal Left')?.onSelect?.()
+    findSplitItem('Split Terminal Up')?.onSelect?.()
+    expect(onSplitLeft).toHaveBeenCalledTimes(1)
+    expect(onSplitUp).toHaveBeenCalledTimes(1)
   })
 
   it('shows new-session continuation only for eligible agent panes', () => {

@@ -3,6 +3,7 @@ import type {
   DropZone,
   ManagedPane,
   ManagedPaneInternal,
+  PaneSplitPosition,
   PaneStyleOptions
 } from './pane-manager-types'
 import { createDivider, disposeDivider } from './pane-divider'
@@ -304,14 +305,15 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
 
 /**
  * Create a flex split wrapper that replaces `existingContainer` in the DOM,
- * then places [existing] [divider] [new] inside it.
+ * then places [existing] [divider] [new] inside it — or the reverse when
+ * `position` is 'before' (split left / split up).
  */
 export function wrapInSplit(
   existingContainer: HTMLElement,
   newContainer: HTMLElement,
   isVertical: boolean,
   divider: HTMLElement,
-  opts?: { ratio?: number }
+  opts?: { ratio?: number; position?: PaneSplitPosition }
 ): void {
   const parent = existingContainer.parentElement
   if (!parent) {
@@ -342,16 +344,21 @@ export function wrapInSplit(
   applyPaneFlexStyle(existingContainer)
   applyPaneFlexStyle(newContainer)
 
-  // Apply custom ratio if provided
+  const [leading, trailing] =
+    opts?.position === 'before'
+      ? [newContainer, existingContainer]
+      : [existingContainer, newContainer]
+
+  // Ratio is the leading child's fraction, matching the serialized `first`/`second` order.
   const ratio = opts?.ratio
   if (ratio !== undefined && ratio > 0 && ratio < 1) {
-    existingContainer.style.flex = `${ratio} 1 0%`
-    newContainer.style.flex = `${1 - ratio} 1 0%`
+    leading.style.flex = `${ratio} 1 0%`
+    trailing.style.flex = `${1 - ratio} 1 0%`
   }
 
   // Replace existing with split in the DOM, then build children
   parent.replaceChild(split, existingContainer)
-  split.appendChild(existingContainer)
+  split.appendChild(leading)
   split.appendChild(divider)
-  split.appendChild(newContainer)
+  split.appendChild(trailing)
 }

@@ -57,11 +57,80 @@ describe('splitTerminalPaneWithInheritedCwd', () => {
     await flushAsyncSplit()
 
     expect(staleSplitPane).not.toHaveBeenCalled()
-    expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/resolved' })
+    expect(liveSplitPane).toHaveBeenCalledWith(1, 'vertical', {
+      cwd: '/resolved',
+      position: 'after'
+    })
     expect(mocks.recordCreatedTerminalPaneSplit).toHaveBeenCalledWith(
       { id: 2 },
       { source: 'context_menu', direction: 'vertical' }
     )
+  })
+
+  it('forwards a leading position through the cached-cwd path', () => {
+    const splitPane = vi.fn(() => ({ id: 2 }))
+
+    splitTerminalPaneWithInheritedCwd({
+      manager: makeManager(splitPane),
+      paneTransports: new Map<number, PtyTransport>(),
+      paneCwdMap: new Map([[1, { cwd: '/cached', confirmed: true }]]),
+      fallbackCwd: '/fallback',
+      pane: { id: 1 } as ManagedPane,
+      direction: 'vertical',
+      position: 'before',
+      source: 'context_menu'
+    })
+
+    expect(splitPane).toHaveBeenCalledWith(1, 'vertical', { cwd: '/cached', position: 'before' })
+  })
+
+  it('forwards a leading position through the async cwd path', async () => {
+    const splitPane = vi.fn(() => ({ id: 2 }))
+    mocks.resolveSplitCwd.mockResolvedValue('/resolved')
+
+    splitTerminalPaneWithInheritedCwd({
+      manager: makeManager(splitPane),
+      paneTransports: new Map<number, PtyTransport>(),
+      paneCwdMap: new Map(),
+      fallbackCwd: '/fallback',
+      pane: { id: 1 } as ManagedPane,
+      direction: 'horizontal',
+      position: 'before',
+      source: 'context_menu'
+    })
+
+    await flushAsyncSplit()
+
+    expect(splitPane).toHaveBeenCalledWith(1, 'horizontal', {
+      cwd: '/resolved',
+      position: 'before'
+    })
+  })
+
+  it('hands the position to the remote runtime so SSH panes split the same way', () => {
+    const splitPane = vi.fn()
+    const transport = { getPtyId: () => 'remote-pty' } as unknown as PtyTransport
+    mocks.splitWebRuntimeTerminal.mockReturnValue(true)
+
+    splitTerminalPaneWithInheritedCwd({
+      manager: makeManager(splitPane),
+      paneTransports: new Map([[1, transport]]),
+      paneCwdMap: new Map(),
+      fallbackCwd: '/fallback',
+      pane: { id: 1 } as ManagedPane,
+      direction: 'vertical',
+      position: 'before',
+      source: 'context_menu'
+    })
+
+    expect(mocks.splitWebRuntimeTerminal).toHaveBeenCalledWith(
+      'remote-pty',
+      'vertical',
+      'context_menu',
+      'before'
+    )
+    // Why: the host owns the remote split; a local one would mint a mirrored tab instead.
+    expect(splitPane).not.toHaveBeenCalled()
   })
 
   it('does not split a stale manager when the live manager is gone', async () => {

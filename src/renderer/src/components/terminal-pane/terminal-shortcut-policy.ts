@@ -62,7 +62,11 @@ export type TerminalShortcutAction =
   | { type: 'setTitle' }
   | { type: 'clearPaneTitle' }
   | { type: 'closeActivePane' }
-  | { type: 'splitActivePane'; direction: 'vertical' | 'horizontal' }
+  | {
+      type: 'splitActivePane'
+      direction: 'vertical' | 'horizontal'
+      position: 'before' | 'after'
+    }
   | { type: 'scrollViewport'; position: 'top' | 'bottom' }
   | { type: 'sendInput'; data: string }
   | { type: 'switchInputSource' }
@@ -174,11 +178,19 @@ export function resolveTerminalShortcutAction(
     }
 
     if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
-      return { type: 'splitActivePane', direction: 'vertical' }
+      return { type: 'splitActivePane', direction: 'vertical', position: 'after' }
     }
 
     if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
-      return { type: 'splitActivePane', direction: 'horizontal' }
+      return { type: 'splitActivePane', direction: 'horizontal', position: 'after' }
+    }
+
+    if (keybindingMatchesAction('terminal.splitLeft', event, platform, keybindings)) {
+      return { type: 'splitActivePane', direction: 'vertical', position: 'before' }
+    }
+
+    if (keybindingMatchesAction('terminal.splitUp', event, platform, keybindings)) {
+      return { type: 'splitActivePane', direction: 'horizontal', position: 'before' }
     }
   }
 

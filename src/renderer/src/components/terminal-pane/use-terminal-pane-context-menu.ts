@@ -95,6 +95,8 @@ type TerminalMenuState = {
   onPaste: () => Promise<void>
   onSplitRight: () => void
   onSplitDown: () => void
+  onSplitLeft: () => void
+  onSplitUp: () => void
   onEqualizePaneSizes: () => void
   onClosePane: () => void
   onClearScreen: () => void
@@ -354,7 +356,8 @@ export function useTerminalPaneContextMenu({
   const splitWithInheritedCwd = useCallback(
     (
       direction: 'vertical' | 'horizontal',
-      source: 'contextual_tour' | 'context_menu' = 'context_menu'
+      source: 'contextual_tour' | 'context_menu' = 'context_menu',
+      position: 'before' | 'after' = 'after'
     ): void => {
       const pane = resolveMenuPane()
       const manager = managerRef.current
@@ -369,6 +372,7 @@ export function useTerminalPaneContextMenu({
         fallbackCwd,
         pane,
         direction,
+        position,
         source
       })
     },
@@ -377,6 +381,8 @@ export function useTerminalPaneContextMenu({
 
   const onSplitRight = (): void => splitWithInheritedCwd('vertical')
   const onSplitDown = (): void => splitWithInheritedCwd('horizontal')
+  const onSplitLeft = (): void => splitWithInheritedCwd('vertical', 'context_menu', 'before')
+  const onSplitUp = (): void => splitWithInheritedCwd('horizontal', 'context_menu', 'before')
 
   useEffect(() => {
     const onRequestSplit = (event: Event): void => {
@@ -603,6 +609,8 @@ export function useTerminalPaneContextMenu({
     onPaste,
     onSplitRight,
     onSplitDown,
+    onSplitLeft,
+    onSplitUp,
     onEqualizePaneSizes,
     onClosePane,
     onClearScreen,

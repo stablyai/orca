@@ -52,13 +52,13 @@ describe('resolveTerminalShortcutAction', () => {
     })
     expect(
       resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', metaKey: true }), true)
-    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+    ).toEqual({ type: 'splitActivePane', direction: 'vertical', position: 'after' })
     expect(
       resolveTerminalShortcutAction(
         event({ key: 'd', code: 'KeyD', metaKey: true, shiftKey: true }),
         true
       )
-    ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
+    ).toEqual({ type: 'splitActivePane', direction: 'horizontal', position: 'after' })
     expect(
       resolveTerminalShortcutAction(event({ key: '[', code: 'BracketLeft', metaKey: true }), true)
     ).toEqual({ type: 'focusPane', direction: 'previous' })
@@ -496,7 +496,7 @@ describe('resolveTerminalShortcutAction', () => {
         event({ key: 'd', code: 'KeyD', ctrlKey: true, shiftKey: true }),
         false
       )
-    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+    ).toEqual({ type: 'splitActivePane', direction: 'vertical', position: 'after' })
 
     // Alt+Shift+D on Windows/Linux splits the pane down (horizontal)
     expect(
@@ -504,7 +504,7 @@ describe('resolveTerminalShortcutAction', () => {
         event({ key: 'd', code: 'KeyD', altKey: true, shiftKey: true }),
         false
       )
-    ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
+    ).toEqual({ type: 'splitActivePane', direction: 'horizontal', position: 'after' })
 
     // Alt+Shift+D should NOT trigger split-down on Mac (Mac uses Cmd+Shift+D)
     expect(
@@ -684,19 +684,6 @@ describe('resolveTerminalShortcutAction', () => {
     expect(
       resolveTerminalShortcutAction(event({ key: 'b', code: 'KeyB', altKey: true }), true, 'true')
     ).toBeNull()
-  })
-
-  it('keeps Cmd+D and Cmd+Shift+D for split on macOS', () => {
-    expect(
-      resolveTerminalShortcutAction(event({ key: 'd', code: 'KeyD', metaKey: true }), true)
-    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
-
-    expect(
-      resolveTerminalShortcutAction(
-        event({ key: 'd', code: 'KeyD', metaKey: true, shiftKey: true }),
-        true
-      )
-    ).toEqual({ type: 'splitActivePane', direction: 'horizontal' })
   })
 
   it('resolves terminal.switchInputSource via explicit override (for OS input-source chords)', () => {

@@ -3905,6 +3905,7 @@ const api = {
         tabId: string
         paneRuntimeId: number
         direction: 'horizontal' | 'vertical'
+        position?: 'before' | 'after'
         command?: string
         telemetrySource?: TerminalPaneSplitSource
       }) => void
@@ -3915,6 +3916,7 @@ const api = {
           tabId: string
           paneRuntimeId: number
           direction: 'horizontal' | 'vertical'
+          position?: 'before' | 'after'
           command?: string
           telemetrySource?: TerminalPaneSplitSource
         }

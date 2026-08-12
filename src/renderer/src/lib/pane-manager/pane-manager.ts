@@ -8,7 +8,8 @@ import type {
   DropZone,
   PaneExternalDropHandler,
   PaneExternalDropResolver,
-  PaneExternalDropTarget
+  PaneExternalDropTarget,
+  PaneSplitPosition
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import {
@@ -113,7 +114,13 @@ export class PaneManager {
   splitPane(
     paneId: number,
     direction: 'vertical' | 'horizontal',
-    opts?: { ratio?: number; cwd?: string; leafId?: string; ptyId?: string }
+    opts?: {
+      ratio?: number
+      cwd?: string
+      leafId?: string
+      ptyId?: string
+      position?: PaneSplitPosition
+    }
   ): ManagedPane | null {
     return splitManagedPane({
       paneId,

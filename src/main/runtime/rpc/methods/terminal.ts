@@ -973,6 +973,7 @@ const TerminalSplit = TerminalHandle.extend({
     .optional(),
   command: OptionalString,
   env: z.record(z.string(), z.string()).optional(),
+  position: z.enum(['before', 'after']).optional(),
   telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional()
 })
 
@@ -1458,6 +1459,7 @@ export const TERMINAL_METHODS: RpcAnyMethod[] = [
     handler: async (params, { runtime }) => ({
       split: await runtime.splitTerminal(params.terminal, {
         direction: params.direction,
+        position: params.position,
         command: params.command,
         env: params.env,
         telemetrySource: params.telemetrySource

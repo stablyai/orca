@@ -149,7 +149,7 @@ describe('resolvePreviewShortcutAction', () => {
   it('reports pane-scoped chords so the caller can swallow them', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'd', code: 'KeyD', metaKey: true }), contextFor())
-    ).toEqual({ type: 'splitActivePane', direction: 'vertical' })
+    ).toEqual({ type: 'splitActivePane', direction: 'vertical', position: 'after' })
   })
 
   // Why: a terminal-first user remapped terminal.closePane away, so only the
