@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import type React from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import type { InlineInput } from './FileExplorerRow'
 import type { TreeNode } from './file-explorer-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
@@ -156,7 +156,7 @@ export function useFileExplorerKeys(opts: {
       // Why: require focus inside the explorer shell (includes the scrollbar, not just
       // the viewport — Radix renders the scrollbar as a sibling of the viewport).
       const inExplorer = focusInExplorer()
-      const platform = getShortcutPlatform()
+      const platform = getRendererAppPlatform()
       const wantUndo =
         keybindingMatchesAction('fileExplorer.undo', e, platform, keybindings) &&
         fileExplorerHasUndo()

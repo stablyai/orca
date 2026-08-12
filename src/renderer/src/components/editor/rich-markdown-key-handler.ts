@@ -1,6 +1,6 @@
 import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
 import { isMarkdownPreviewFindShortcut } from './markdown-preview-search'
 import { handleRichMarkdownAddReviewNoteShortcut } from './rich-markdown-annotation-shortcut'
@@ -87,7 +87,7 @@ export function createRichMarkdownKeyHandler(
     if (
       isMarkdownPreviewFindShortcut(
         event,
-        getShortcutPlatform(),
+        getRendererAppPlatform(),
         useAppStore.getState().keybindings
       )
     ) {

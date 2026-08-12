@@ -74,7 +74,7 @@ import {
 import { installOpenDraftAddReviewNoteGuard } from './editor-shortcuts'
 import { usePreserveSectionDuringExternalEdit } from './usePreserveSectionDuringExternalEdit'
 import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/http-link-routing'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { markdownPreviewUrlTransform } from './markdown-preview-url-transform'
 import { prewarmMarkdownPreviewLocalImages } from './markdown-preview-local-images'
@@ -956,7 +956,7 @@ export default function MarkdownPreview({
       const targetInsidePreview = target instanceof Node && root.contains(target)
 
       if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
+        isMarkdownPreviewFindShortcut(event, getRendererAppPlatform(), keybindings) &&
         targetInsidePreview
       ) {
         event.preventDefault()
@@ -967,7 +967,7 @@ export default function MarkdownPreview({
 
       const reviewNoteKey = resolveMarkdownPreviewAddReviewNoteKey({
         event,
-        platform: getShortcutPlatform(),
+        platform: getRendererAppPlatform(),
         keybindings,
         targetInsidePreview,
         markdownAnnotationsEnabled,

@@ -6,10 +6,10 @@ import { createRichMarkdownKeyHandler, type KeyHandlerContext } from './rich-mar
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
-// Why: keybinding matching resolves the platform from navigator.userAgent,
-// which is environment-dependent under vitest; pin it for determinism.
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => 'darwin' as NodeJS.Platform
+// Why: keybinding matching resolves the platform through the preload-aware
+// renderer platform module; pin it for deterministic shortcut coverage.
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => 'darwin' as NodeJS.Platform
 }))
 
 const extensions = [StarterKit, createIsolatedMarkdownExtensionForTests()]

@@ -10,7 +10,7 @@ import {
 } from 'pdfjs-dist/web/pdf_viewer.mjs'
 import 'pdfjs-dist/web/pdf_viewer.css'
 import PdfFind from './PdfFind'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
@@ -329,7 +329,7 @@ export default function PdfViewer({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
-      const platform = getShortcutPlatform()
+      const platform = getRendererAppPlatform()
       if (keybindingMatchesAction('editor.find', e, platform, keybindings)) {
         e.preventDefault()
         e.stopPropagation()

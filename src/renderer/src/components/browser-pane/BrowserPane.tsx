@@ -133,7 +133,8 @@ import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import BrowserFind from './BrowserFind'
 import { BrowserMobileDriverOverlay } from './BrowserMobileDriverOverlay'
-import { getShortcutPlatform, useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { useRemoteBrowserStreamActivation } from './use-remote-browser-stream-activation'
 import {
@@ -1593,7 +1594,7 @@ function RemoteBrowserPagePane({
     if (!isActive) {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       const method = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
         ? 'browser.back'
@@ -3167,7 +3168,7 @@ function BrowserPagePane({
     if (findShortcutScope === 'inactive') {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.find', e, shortcutPlatform, keybindings)) {
         return
@@ -3206,7 +3207,7 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       const direction = keybindingMatchesAction('browser.back', e, shortcutPlatform, keybindings)
         ? 'back'
@@ -3248,7 +3249,7 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       const isHardReload = keybindingMatchesAction(
         'browser.hardReload',
@@ -4062,7 +4063,7 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       // Why: don't intercept in editable targets so native Cmd+C still copies in inputs/contentEditable.
       if (isEditableKeyboardTarget(e.target)) {
@@ -4085,7 +4086,7 @@ function BrowserPagePane({
     if (!isActive) {
       return
     }
-    const shortcutPlatform = getShortcutPlatform()
+    const shortcutPlatform = getRendererAppPlatform()
     const handleKeyDown = (e: KeyboardEvent): void => {
       if (!keybindingMatchesAction('browser.focusAddressBar', e, shortcutPlatform, keybindings)) {
         return

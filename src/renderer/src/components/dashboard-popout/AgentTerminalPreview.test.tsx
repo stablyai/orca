@@ -111,8 +111,8 @@ vi.mock('@/components/terminal-pane/terminal-user-input-signal', () => ({
 vi.mock('@/components/terminal-pane/use-system-prefers-dark', () => ({
   useSystemPrefersDark: () => false
 }))
-vi.mock('@/lib/shortcut-platform', () => ({
-  getShortcutPlatform: () => platformState.value
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => platformState.value
 }))
 vi.mock('@/components/terminal-pane/terminal-ime-native-text-forwarder', () => ({
   installTerminalImeNativeTextForwarder: (args: { sendInput: (data: string) => void }) => {

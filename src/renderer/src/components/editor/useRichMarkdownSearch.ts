@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
 import {
   isMarkdownPreviewFindShortcut,
@@ -309,7 +309,7 @@ export function useRichMarkdownSearch({
       const target = event.target
       const targetInsideEditor = target instanceof Node && root.contains(target)
       if (
-        isMarkdownPreviewFindShortcut(event, getShortcutPlatform(), keybindings) &&
+        isMarkdownPreviewFindShortcut(event, getRendererAppPlatform(), keybindings) &&
         targetInsideEditor
       ) {
         event.preventDefault()
@@ -319,7 +319,7 @@ export function useRichMarkdownSearch({
       }
 
       if (
-        isMarkdownPreviewReplaceShortcut(event, getShortcutPlatform(), keybindings) &&
+        isMarkdownPreviewReplaceShortcut(event, getRendererAppPlatform(), keybindings) &&
         targetInsideEditor
       ) {
         event.preventDefault()

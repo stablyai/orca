@@ -1,6 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 import { detectLanguage } from '@/lib/language-detect'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { canOpenMarkdownPreview, isMarkdownPreviewShortcut } from './markdown-preview-controls'
@@ -53,7 +53,7 @@ export function useMarkdownPreviewShortcut({
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (
         event.defaultPrevented ||
-        !isMarkdownPreviewShortcut(event, getShortcutPlatform(), keybindings)
+        !isMarkdownPreviewShortcut(event, getRendererAppPlatform(), keybindings)
       ) {
         return
       }

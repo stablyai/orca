@@ -61,7 +61,7 @@ import {
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   ORCHESTRATION_SETUP_STATE_EVENT,
@@ -1215,7 +1215,7 @@ export function FloatingTerminalPanel({
   const resolveFloatingPanelShortcut = useCallback(
     (input: FloatingPanelShortcutInput): FloatingPanelShortcutResolution | null => {
       const state = useAppStore.getState()
-      const platform = getShortcutPlatform()
+      const platform = getRendererAppPlatform()
       const terminalShortcutPolicy = state.settings?.terminalShortcutPolicy
       const isFloatingTerminalInput = isFloatingWorkspaceTerminalInputTarget(input.target)
       const context: KeybindingContext = input.doubleTapModifier
@@ -1454,7 +1454,7 @@ export function FloatingTerminalPanel({
         ? 'terminal'
         : 'app'
       const matches = (actionId: KeybindingActionId): boolean =>
-        keybindingMatchesAction(actionId, event, getShortcutPlatform(), state.keybindings, {
+        keybindingMatchesAction(actionId, event, getRendererAppPlatform(), state.keybindings, {
           context,
           terminalShortcutPolicy: state.settings?.terminalShortcutPolicy
         })

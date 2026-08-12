@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { subscribeToTerminalUserInput } from '@/components/terminal-pane/terminal-user-input-signal'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
@@ -226,7 +226,7 @@ export function AgentTerminalPreview({
         // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
         sendInput: (data) => terminal?.input(data),
         getShortcutContext: () => ({
-          clientPlatform: getShortcutPlatform(),
+          clientPlatform: getRendererAppPlatform(),
           macOptionAsAlt: macOptionAsAltRef.current,
           keybindings: useAppStore.getState().keybindings,
           terminalInput: terminalInputRef.current,

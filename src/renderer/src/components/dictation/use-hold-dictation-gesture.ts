@@ -1,5 +1,5 @@
 import { useEffect, useRef, type MutableRefObject } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/types'
@@ -124,7 +124,7 @@ export function useHoldDictationGesture({
     }
 
     const handleKeyDown = (e: KeyboardEvent): void => {
-      if (keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)) {
+      if (keybindingMatchesAction('voice.dictation', e, getRendererAppPlatform(), keybindings)) {
         if (!settings?.voice?.enabled || !settings.voice.sttModel) {
           return
         }
@@ -143,7 +143,7 @@ export function useHoldDictationGesture({
         return
       }
       if (
-        !keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings) &&
+        !keybindingMatchesAction('voice.dictation', e, getRendererAppPlatform(), keybindings) &&
         releaseMatcherRef.current?.(e) !== true
       ) {
         return

@@ -7,9 +7,7 @@ import {
   type KeybindingOverrides
 } from '../../../shared/keybindings'
 import { useAppStore } from '../store'
-import { getShortcutPlatform } from '../lib/shortcut-platform'
-
-export { getShortcutPlatform }
+import { getRendererAppPlatform } from '../lib/renderer-app-platform'
 
 export type ShortcutKeyComboDetails = {
   keys: string[]
@@ -20,7 +18,7 @@ export function formatShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
 ): string {
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   return formatKeybindingList(
     getEffectiveKeybindingsForAction(actionId, platform, overrides),
     platform
@@ -31,7 +29,7 @@ export function formatPrimaryShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
 ): string {
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   const [binding] = getEffectiveKeybindingsForAction(actionId, platform, overrides)
   return binding ? formatKeybindingList([binding], platform) : 'Unassigned'
 }
@@ -48,7 +46,7 @@ export function formatOptionalShortcutLabel(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
 ): string | null {
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   const bindings = getEffectiveKeybindingsForAction(actionId, platform, overrides)
   if (bindings.length === 0) {
     return null
@@ -65,7 +63,7 @@ export function formatShortcutKeyComboDetails(
   actionId: KeybindingActionId,
   overrides?: KeybindingOverrides
 ): ShortcutKeyComboDetails[] {
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   return getEffectiveKeybindingsForAction(actionId, platform, overrides).map((binding) => ({
     keys: formatKeybinding(binding, platform),
     doubleTap: isDoubleTapBinding(binding)

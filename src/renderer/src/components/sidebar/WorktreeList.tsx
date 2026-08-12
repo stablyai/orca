@@ -153,7 +153,7 @@ import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
 } from '@/lib/folder-workspace-path-status'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import {
   SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
   type ScrollToCurrentWorkspaceRevealRequestDetail
@@ -2546,7 +2546,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         return
       }
 
-      const platform = getShortcutPlatform()
+      const platform = getRendererAppPlatform()
       if (keybindingMatchesAction('sidebar.focusWorktreeList', e, platform, keybindings)) {
         scrollRef.current?.focus()
         e.preventDefault()

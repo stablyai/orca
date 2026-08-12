@@ -1,5 +1,5 @@
 import type { Terminal } from '@xterm/xterm'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { keybindingMatchesAction } from '../../../../shared/keybindings'
 import { useAppStore } from '@/store'
 import { prefetchLayoutBaseCharacters } from '@/lib/keyboard-layout/layout-base-character'
@@ -28,7 +28,7 @@ export function installPreviewTerminalKeyHandler(args: {
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocation'>
 }): () => void {
   const { terminal } = args
-  const platform = getShortcutPlatform()
+  const platform = getRendererAppPlatform()
   const consumedClipboardKeys = new Set<string>()
   const nativeOnlyShortcutTracker = createTerminalNativeOnlyShortcutTracker()
   const consumeEvent = (event: KeyboardEvent): false => {
