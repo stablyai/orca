@@ -2,17 +2,33 @@ import type { ChildProcess, SpawnOptions, spawn } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import {
-  parseServeSupervisorMessage,
   parseServeUpdateHandoffState,
   type ServeUpdateHandoffState
 } from '../../shared/serve-update-handoff'
+import {
+  SERVE_ALREADY_RUNNING_EXIT_CODE,
+  SERVE_SUPERVISOR_STOP_EXIT_CODE
+} from '../../shared/serve-supervision'
+import type { ServeRuntimeHealth } from './serve-runtime-health'
+import type { ServeSingletonRecoveryResult } from './serve-singleton-recovery'
+import {
+  SERVE_HEALTH_CHECK_INTERVAL_MS,
+  SERVE_HEALTH_FAILURE_LIMIT,
+  waitForForegroundServeChild
+} from './serve-child-monitor'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { waitForMacBundleVersion } from './mac-app-update-bundle'
 
-export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
+export const SERVE_CRASH_BUDGET_RESET_MS = 5 * 60_000
+export const SERVE_CRASH_RESTART_DELAYS_MS = [1_000, 5_000, 15_000] as const
+export { SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../../shared/serve-supervision'
+export {
+  SERVE_HEALTH_CHECK_INTERVAL_MS,
+  SERVE_HEALTH_FAILURE_LIMIT,
+  SERVE_REPLACEMENT_READY_TIMEOUT_MS
+} from './serve-child-monitor'
 
 type InstallRequestedHandoff = Extract<ServeUpdateHandoffState, { phase: 'install-requested' }>
-type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
 
 type ServeSupervisorArgs = {
   executable: string
@@ -20,6 +36,14 @@ type ServeSupervisorArgs = {
   spawnOptions: SpawnOptions
   spawnChild: typeof spawn
   handoffPath: string | null
+  healthProbe?: () => Promise<ServeRuntimeHealth>
+  recoverSingleton?: () => Promise<ServeSingletonRecoveryResult>
+  beforeRestart?: () => Promise<void>
+  sleep?: (delayMs: number) => Promise<void>
+  restartDelaysMs?: readonly number[]
+  healthCheckIntervalMs?: number
+  healthFailureLimit?: number
+  stableRunResetMs?: number
 }
 
 export async function resumeInterruptedServeUpdate(
@@ -49,16 +73,31 @@ export async function superviseForegroundServe(
 ): Promise<number> {
   let child = args.child
   let expectedHandoff = args.expectedHandoff
+  let restartIndex = 0
+  let singletonRetryUsed = false
+  const restartDelays = args.restartDelaysMs ?? SERVE_CRASH_RESTART_DELAYS_MS
+  const sleep = args.sleep ?? defaultSleep
 
   while (true) {
-    const result = await waitForForegroundChild(
+    const result = await waitForForegroundServeChild(
       child,
       args.handoffPath && expectedHandoff
-        ? { handoffPath: args.handoffPath, handoff: expectedHandoff }
-        : null
+        ? {
+            targetVersion: expectedHandoff.targetVersion,
+            recordFailure: (reason) =>
+              recordServeUpdateHandoffFailure(args.handoffPath!, expectedHandoff!, reason),
+            complete: (runtimeId) =>
+              completeServeUpdateHandoff(args.handoffPath!, expectedHandoff!, runtimeId)
+          }
+        : null,
+      {
+        healthProbe: args.healthProbe,
+        healthCheckIntervalMs: args.healthCheckIntervalMs ?? SERVE_HEALTH_CHECK_INTERVAL_MS,
+        healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
+      }
     )
 
-    if (result.readiness === 'failed') {
+    if (expectedHandoff && result.readiness === 'failed') {
       return 1
     }
     if (expectedHandoff && result.readiness !== 'verified') {
@@ -74,139 +113,111 @@ export async function superviseForegroundServe(
 
     const handoff = args.handoffPath ? await readServeUpdateHandoff(args.handoffPath) : null
     if (
-      handoff?.phase !== 'install-requested' ||
-      (child.pid !== undefined && handoff.servingPid !== child.pid)
+      handoff?.phase === 'install-requested' &&
+      (child.pid === undefined || handoff.servingPid === child.pid)
     ) {
+      const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
+      if (!installed) {
+        await recordServeUpdateHandoffFailure(
+          args.handoffPath!,
+          handoff,
+          `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
+        )
+        expectedHandoff = null
+      } else {
+        expectedHandoff = handoff
+      }
+      const replacement = await spawnRestartChild(args)
+      if (!replacement) {
+        return expectedHandoff ? 1 : SERVE_SUPERVISOR_STOP_EXIT_CODE
+      }
+      child = replacement
+      continue
+    }
+
+    if (expectedHandoff && result.readiness === 'verified') {
+      expectedHandoff = null
+    }
+    if (result.readiness === 'verified') {
+      singletonRetryUsed = false
+    }
+    if (result.terminationRequested) {
       if (typeof result.code === 'number') {
         return result.code
       }
       throw serveSignalExitError(result.signal)
     }
-
-    const installed = await waitForMacBundleVersion(args.executable, handoff.targetVersion)
-    if (!installed) {
-      await recordServeUpdateHandoffFailure(
-        args.handoffPath!,
-        handoff,
-        `Timed out waiting for Orca ${handoff.targetVersion} to be installed.`
-      )
-      expectedHandoff = null
-    } else {
-      expectedHandoff = handoff
+    if (!args.healthProbe && !args.recoverSingleton) {
+      if (typeof result.code === 'number') {
+        return result.code
+      }
+      throw serveSignalExitError(result.signal)
     }
-    child = args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
+    if (result.code === SERVE_SUPERVISOR_STOP_EXIT_CODE) {
+      return SERVE_SUPERVISOR_STOP_EXIT_CODE
+    }
+    if (result.code === SERVE_ALREADY_RUNNING_EXIT_CODE) {
+      if (singletonRetryUsed || !args.recoverSingleton) {
+        return SERVE_ALREADY_RUNNING_EXIT_CODE
+      }
+      const recovery = await args.recoverSingleton()
+      if (recovery.state !== 'recovered') {
+        const reason = recovery.state === 'active-owner' ? 'active_owner' : recovery.reason
+        process.stderr.write(
+          `[serve] singleton recovery refused (${reason}); leaving the profile unchanged.\n`
+        )
+        return SERVE_ALREADY_RUNNING_EXIT_CODE
+      }
+      singletonRetryUsed = true
+      process.stderr.write(
+        `[serve] quarantined stale Linux singleton artifacts for exited pid ${recovery.ownerPid}; retrying once.\n`
+      )
+      const replacement = await spawnRestartChild(args)
+      if (!replacement) {
+        return SERVE_SUPERVISOR_STOP_EXIT_CODE
+      }
+      child = replacement
+      continue
+    }
+
+    if (result.healthyDurationMs >= (args.stableRunResetMs ?? SERVE_CRASH_BUDGET_RESET_MS)) {
+      restartIndex = 0
+    }
+    if (restartIndex >= restartDelays.length) {
+      process.stderr.write(
+        `[serve] main-process recovery exhausted after ${restartDelays.length} restart attempts; exiting with code ${SERVE_SUPERVISOR_STOP_EXIT_CODE}.\n`
+      )
+      return SERVE_SUPERVISOR_STOP_EXIT_CODE
+    }
+
+    const delayMs = restartDelays[restartIndex]
+    restartIndex += 1
+    process.stderr.write(
+      `[serve] main process became unavailable; restarting in ${delayMs}ms (${restartIndex}/${restartDelays.length}).\n`
+    )
+    await sleep(delayMs)
+    const replacement = await spawnRestartChild(args)
+    if (!replacement) {
+      return SERVE_SUPERVISOR_STOP_EXIT_CODE
+    }
+    child = replacement
   }
 }
 
-function waitForForegroundChild(
-  child: ChildProcess,
-  expected: { handoffPath: string; handoff: InstallRequestedHandoff } | null
-): Promise<{
-  code: number | null
-  signal: NodeJS.Signals | null
-  readiness: ServeReadiness
-}> {
-  return new Promise((resolveWait, reject) => {
-    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
-    let readyTimer: ReturnType<typeof setTimeout> | null = null
-    let readiness: ServeReadiness = expected ? 'pending' : 'not-expected'
-    let stateWrite = Promise.resolve()
-    const terminateChild = (): void => {
-      child.kill('SIGTERM')
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
-    }
-    const recordReplacementFailure = (reason: string): boolean => {
-      if (!expected || readiness !== 'pending') {
-        return false
-      }
-      readiness = 'failed'
-      if (readyTimer) {
-        clearTimeout(readyTimer)
-        readyTimer = null
-      }
-      stateWrite = recordServeUpdateHandoffFailure(
-        expected.handoffPath,
-        expected.handoff,
-        reason
-      ).catch((error) => {
-        process.stderr.write(`[serve] could not record update handoff failure: ${String(error)}\n`)
-      })
-      return true
-    }
-    const rejectReplacement = (reason: string): void => {
-      if (!recordReplacementFailure(reason)) {
-        return
-      }
-      terminateChild()
-    }
-    const forwardSignal = (signal: NodeJS.Signals): void => {
-      child.kill(signal)
-      forceKillTimer ??= setTimeout(() => child.kill('SIGKILL'), 5000)
-    }
-    const handleMessage = (value: unknown): void => {
-      const message = parseServeSupervisorMessage(value)
-      if (!message || !expected || readiness !== 'pending') {
-        return
-      }
-      if (message.version !== expected.handoff.targetVersion) {
-        rejectReplacement(
-          `Replacement reported version ${message.version}; expected ${expected.handoff.targetVersion}.`
-        )
-        return
-      }
-      readiness = 'verified'
-      if (readyTimer) {
-        clearTimeout(readyTimer)
-        readyTimer = null
-      }
-      stateWrite = completeServeUpdateHandoff(
-        expected.handoffPath,
-        expected.handoff,
-        message.runtimeId
-      ).catch((error) => {
-        readiness = 'failed'
-        process.stderr.write(`[serve] could not complete update handoff: ${String(error)}\n`)
-        terminateChild()
-      })
-    }
-    const cleanup = (): void => {
-      process.off('SIGINT', forwardSignal)
-      process.off('SIGTERM', forwardSignal)
-      if (typeof child.off === 'function') {
-        child.off('message', handleMessage)
-      }
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-      }
-      if (readyTimer) {
-        clearTimeout(readyTimer)
-      }
-    }
-    process.on('SIGINT', forwardSignal)
-    process.on('SIGTERM', forwardSignal)
-    if (typeof child.on === 'function') {
-      child.on('message', handleMessage)
-    }
-    if (expected) {
-      readyTimer = setTimeout(() => {
-        rejectReplacement(
-          `Replacement did not report serving version ${expected.handoff.targetVersion} within ${SERVE_REPLACEMENT_READY_TIMEOUT_MS}ms.`
-        )
-      }, SERVE_REPLACEMENT_READY_TIMEOUT_MS)
-    }
-    const handleExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-      cleanup()
-      void stateWrite.then(() => resolveWait({ code, signal, readiness }))
-    }
-    child.once('error', (error) => {
-      recordReplacementFailure(`Could not start the replacement process: ${String(error)}`)
-      cleanup()
-      child.off('exit', handleExit)
-      // Why: the LaunchAgent may restart this parent immediately, so durable failure must precede process rejection.
-      void stateWrite.then(() => reject(error))
-    })
-    child.once('exit', handleExit)
-  })
+async function spawnRestartChild(args: ServeSupervisorArgs): Promise<ChildProcess | null> {
+  try {
+    await args.beforeRestart?.()
+    return args.spawnChild(args.executable, args.childArgs, args.spawnOptions)
+  } catch (error) {
+    process.stderr.write(
+      `[serve] could not restart main process: ${error instanceof Error ? error.message : String(error)}\n`
+    )
+    return null
+  }
+}
+
+async function defaultSleep(delayMs: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, delayMs))
 }
 
 export async function readServeUpdateHandoff(

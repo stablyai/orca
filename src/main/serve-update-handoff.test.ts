@@ -8,6 +8,7 @@ import {
   getServeUpdateHandoffPath,
   parseServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
+import { SERVE_SUPERVISOR_ENV } from '../shared/serve-supervision'
 
 const { appMock, getCanonicalUserDataPathMock } = vi.hoisted(() => ({
   appMock: { getVersion: vi.fn(() => '1.0.51'), quit: vi.fn() },
@@ -31,6 +32,7 @@ describe('serve update handoff', () => {
 
   afterEach(() => {
     delete process.env[SERVE_UPDATE_HANDOFF_PATH_ENV]
+    delete process.env[SERVE_SUPERVISOR_ENV]
     rmSync(root, { recursive: true, force: true })
   })
 
@@ -94,6 +96,30 @@ describe('serve update handoff', () => {
       removeListener()
     }
   )
+
+  it('quits a supervised serve child on every platform when its CLI parent is lost', async () => {
+    const parent = new EventEmitter()
+    process.env[SERVE_SUPERVISOR_ENV] = '1'
+    const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
+
+    const removeListener = installServeSupervisorDisconnectQuit(true, parent)
+    parent.emit('disconnect')
+
+    expect(appMock.quit).toHaveBeenCalledOnce()
+    removeListener()
+  })
+
+  it('quits immediately when the foreground supervisor disconnected before startup wiring', async () => {
+    const parent = Object.assign(new EventEmitter(), { connected: false })
+    process.env[SERVE_SUPERVISOR_ENV] = '1'
+    const { installServeSupervisorDisconnectQuit } = await import('./serve-update-handoff')
+
+    const removeListener = installServeSupervisorDisconnectQuit(true, parent)
+
+    expect(appMock.quit).toHaveBeenCalledOnce()
+    expect(parent.listenerCount('disconnect')).toBe(0)
+    removeListener()
+  })
 })
 
 function readState(root: string) {

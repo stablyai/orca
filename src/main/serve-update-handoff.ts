@@ -8,6 +8,7 @@ import {
   type ServeSupervisorMessage,
   type ServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
+import { SERVE_SUPERVISOR_ENV, type ServeSupervisorHealth } from '../shared/serve-supervision'
 import { getCanonicalUserDataPath } from './persistence'
 
 function getConfiguredHandoffPath(): string | null {
@@ -21,6 +22,10 @@ function getConfiguredHandoffPath(): string | null {
 
 export function hasServeUpdateSupervisor(): boolean {
   return process.platform === 'darwin' && getConfiguredHandoffPath() !== null
+}
+
+export function hasForegroundServeSupervisor(): boolean {
+  return process.env[SERVE_SUPERVISOR_ENV] === '1'
 }
 
 export function requestServeUpdateHandoff(targetVersion: string): boolean {
@@ -53,14 +58,18 @@ export function failServeUpdateHandoff(reason: string): void {
   }
 }
 
-export function notifyServeSupervisorReady(runtimeId: string): void {
+export function notifyServeSupervisorReady(
+  runtimeId: string,
+  health?: ServeSupervisorHealth
+): void {
   if (!process.send || process.connected === false) {
     return
   }
   const message: ServeSupervisorMessage = {
     type: 'orca:serve-ready',
     version: app.getVersion(),
-    runtimeId
+    runtimeId,
+    ...(health ? { health } : {})
   }
   try {
     process.send(message)
@@ -72,14 +81,20 @@ export function notifyServeSupervisorReady(runtimeId: string): void {
 export function installServeSupervisorDisconnectQuit(
   isServeMode: boolean,
   parent: {
+    connected?: boolean
     once(event: 'disconnect', listener: () => void): unknown
     off(event: 'disconnect', listener: () => void): unknown
   } = process
 ): () => void {
-  if (!isServeMode || !hasServeUpdateSupervisor()) {
+  const foregroundSupervised = hasForegroundServeSupervisor()
+  if (!isServeMode || (!hasServeUpdateSupervisor() && !foregroundSupervised)) {
     return () => undefined
   }
   const quit = (): void => app.quit()
+  if (foregroundSupervised && parent.connected === false) {
+    quit()
+    return () => undefined
+  }
   parent.once('disconnect', quit)
   return () => parent.off('disconnect', quit)
 }

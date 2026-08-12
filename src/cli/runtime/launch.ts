@@ -6,11 +6,23 @@ import {
   getServeUpdateHandoffPath
 } from '../../shared/serve-update-handoff'
 import {
+  SERVE_SUPERVISOR_ENV,
+  SERVE_SUPERVISOR_STOP_EXIT_CODE
+} from '../../shared/serve-supervision'
+import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
 } from '../../shared/ephemeral-vm-recipes'
 import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
+import { probeServeRuntimeHealth } from './serve-runtime-health'
+import { recoverStaleServeSingleton } from './serve-singleton-recovery'
+import {
+  applyServeTempDirectory,
+  prepareServeTempDirectory,
+  ServeTempDirectoryError,
+  SERVE_TEMP_DIRECTORY_ENV
+} from './serve-temp-directory'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
@@ -116,12 +128,27 @@ export function serveOrcaApp(
     childArgs.push('--serve-recipe-json', '--serve-project-root', args.projectRoot)
   }
 
+  const userDataPath = getDefaultUserDataPath()
+  let tempDirectory: string
+  try {
+    tempDirectory = prepareServeTempDirectory()
+  } catch (error) {
+    if (!(error instanceof ServeTempDirectoryError)) {
+      throw error
+    }
+    process.stderr.write(`[serve] ${error.message}\n`)
+    return Promise.resolve(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+  }
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
-      ? getServeUpdateHandoffPath(getDefaultUserDataPath())
+      ? getServeUpdateHandoffPath(userDataPath)
       : null
-  const childEnv = stripElectronRunAsNode(process.env)
+  const useCrashSupervisor = args.recipeJson !== true && process.platform === 'linux'
+  const childEnv = applyServeTempDirectory(stripElectronRunAsNode(process.env), tempDirectory)
   delete childEnv.ORCA_APPIMAGE_NO_SANDBOX
+  if (useCrashSupervisor) {
+    childEnv[SERVE_SUPERVISOR_ENV] = '1'
+  }
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
@@ -131,13 +158,24 @@ export function serveOrcaApp(
     stdio:
       args.recipeJson === true
         ? ['ignore', 'pipe', 'inherit']
-        : handoffPath
+        : handoffPath || useCrashSupervisor
           ? ['inherit', 'inherit', 'inherit', 'ipc']
           : 'inherit',
     ...getExecutableSpawnOptions(executable),
     env: childEnv
   }
   const interruptedHandoff = handoffPath ? readServeUpdateHandoffSync(handoffPath) : null
+  const supervision = useCrashSupervisor
+    ? {
+        healthProbe: () => probeServeRuntimeHealth(userDataPath),
+        recoverSingleton: () => recoverStaleServeSingleton(userDataPath),
+        beforeRestart: async () => {
+          prepareServeTempDirectory({
+            env: { [SERVE_TEMP_DIRECTORY_ENV]: tempDirectory }
+          })
+        }
+      }
+    : {}
   if (interruptedHandoff?.phase === 'install-requested') {
     // Why: the node-mode CLI is not an NSRunningApplication, so it can retain launchd ownership while ShipIt swaps the app.
     return resumeInterruptedServeUpdate({
@@ -146,7 +184,8 @@ export function serveOrcaApp(
       spawnOptions,
       spawnChild: spawnProcess,
       handoffPath: handoffPath!,
-      handoff: interruptedHandoff
+      handoff: interruptedHandoff,
+      ...supervision
     })
   }
   const child = spawnProcess(executable, childArgs, spawnOptions)
@@ -161,7 +200,8 @@ export function serveOrcaApp(
     spawnChild: spawnProcess,
     child,
     handoffPath,
-    expectedHandoff: null
+    expectedHandoff: null,
+    ...supervision
   })
 }
 
