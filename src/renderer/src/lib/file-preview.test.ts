@@ -6,6 +6,7 @@ import {
   openFileInBrowserTab,
   openFilePreviewToSide
 } from './file-preview'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 
 function browserActionState(connectionId: string | null = null): never {
   return {
@@ -208,15 +209,58 @@ describe('canShowWorkspaceFileBrowserAction', () => {
   it('hides incapable paired providers and permits capable runtime providers', () => {
     mocks.environmentId = 'runtime-1'
     mocks.browserAvailability = { state: 'hidden', reason: 'streaming unavailable' }
-    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(false)
+    expect(
+      canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1', '/repo/report.html')
+    ).toBe(false)
 
     mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
-    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(true)
+    expect(
+      canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1', '/repo/report.html')
+    ).toBe(true)
   })
 
   it('permits local files but hides SSH paths from the local browser provider', () => {
-    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(true)
-    expect(canShowWorkspaceFileBrowserAction(browserActionState('ssh-1'), 'wt-1')).toBe(false)
+    expect(
+      canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1', '/repo/report.html')
+    ).toBe(true)
+    expect(
+      canShowWorkspaceFileBrowserAction(browserActionState('ssh-1'), 'wt-1', '/repo/report.html')
+    ).toBe(false)
+  })
+
+  it('resolves local and SSH files independently in a mixed folder workspace', () => {
+    const workspaceId = folderWorkspaceKey('folder-1')
+    const state = {
+      folderWorkspaces: [
+        {
+          id: 'folder-1',
+          projectGroupId: 'group-1',
+          folderPath: '/workspace'
+        }
+      ],
+      projectGroups: [{ id: 'group-1', parentGroupId: null }],
+      repos: [
+        {
+          id: 'repo-local',
+          path: '/workspace/local',
+          projectGroupId: 'group-1'
+        },
+        {
+          id: 'repo-ssh',
+          path: '/workspace/remote',
+          projectGroupId: 'group-1',
+          connectionId: 'ssh-1'
+        }
+      ],
+      worktreesByRepo: {}
+    } as never
+
+    expect(
+      canShowWorkspaceFileBrowserAction(state, workspaceId, '/workspace/local/report.html')
+    ).toBe(true)
+    expect(
+      canShowWorkspaceFileBrowserAction(state, workspaceId, '/workspace/remote/report.html')
+    ).toBe(false)
   })
 })
 

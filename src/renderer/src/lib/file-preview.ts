@@ -1,7 +1,10 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
+import { useCallback } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
@@ -13,15 +16,56 @@ export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
 const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
 
-export function canShowWorkspaceFileBrowserAction(state: AppState, worktreeId: string): boolean {
+type WorkspaceFileBrowserActionMode = 'local-client' | 'paired-runtime' | null
+
+function getWorkspaceFileBrowserActionMode(
+  state: AppState,
+  worktreeId: string
+): WorkspaceFileBrowserActionMode {
   const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
   if (availability.state !== 'enabled') {
-    return false
+    return null
   }
   const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
   return environmentId
     ? availability.provider === 'paired-runtime'
-    : getConnectionIdFromState(state, worktreeId) === null
+      ? 'paired-runtime'
+      : null
+    : 'local-client'
+}
+
+export function canShowWorkspaceFileBrowserAction(
+  state: AppState,
+  worktreeId: string,
+  filePath: string
+): boolean {
+  const mode = getWorkspaceFileBrowserActionMode(state, worktreeId)
+  return (
+    mode === 'paired-runtime' ||
+    (mode === 'local-client' &&
+      getConnectionIdForFileFromState(state, worktreeId, filePath) === null)
+  )
+}
+
+export function useWorkspaceFileBrowserActionPredicate(
+  worktreeId: string | null
+): (filePath: string) => boolean {
+  const inputs = useAppStore(
+    useShallow((state) => ({
+      mode: worktreeId ? getWorkspaceFileBrowserActionMode(state, worktreeId) : null,
+      folderWorkspaces: state.folderWorkspaces,
+      projectGroups: state.projectGroups,
+      repos: state.repos,
+      worktreesByRepo: state.worktreesByRepo
+    }))
+  )
+  return useCallback(
+    (filePath: string) =>
+      inputs.mode === 'paired-runtime' ||
+      (inputs.mode === 'local-client' &&
+        getConnectionIdForFileFromState(inputs, worktreeId, filePath) === null),
+    [inputs, worktreeId]
+  )
 }
 
 function reportRemoteFileBrowserOpen(result: Promise<boolean>, onFailure?: () => void): void {
@@ -54,7 +98,7 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   filePath: string
   worktreeId: string
 }): WorkspaceFileBrowserOpenTarget {
-  if (getConnectionId(params.worktreeId)) {
+  if (getConnectionIdForFile(params.worktreeId, params.filePath) !== null) {
     // Why: Chromium resolves file:// URLs on the local machine. Remote files
     // need an Orca-served URL before the browser can render them correctly.
     return {

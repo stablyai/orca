@@ -46,7 +46,9 @@ function EditorPanelInner({
   const activeFile = openFiles.find((f) => f.id === activeFileId) ?? null
   const activeWorktreeId = activeFile?.worktreeId
   const canOpenWorkspaceFileBrowser = useAppStore((s) =>
-    activeWorktreeId ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId) : false
+    activeWorktreeId && activeFile
+      ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId, activeFile.filePath)
+      : false
   )
   const markFileDirty = useAppStore((s) => s.markFileDirty)
   const pendingEditorReveal = useAppStore((s) => s.pendingEditorReveal)
