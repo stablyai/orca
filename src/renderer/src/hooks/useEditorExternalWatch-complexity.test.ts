@@ -52,7 +52,7 @@ const OPEN_FILE_COUNT = 100
 
 describe('external watcher path matching complexity', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     vi.clearAllMocks()
     pathOperationCounts.aliasComparisons = 0
     pathOperationCounts.normalizations = 0
