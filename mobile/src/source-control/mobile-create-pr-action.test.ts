@@ -145,8 +145,10 @@ describe('buildMobileCreatePrAction', () => {
   })
 
   it('keeps a disabled status row for providers without review creation', () => {
+    // Why: bitbucket/azure-devops/gitea are creation-capable after #5832; only
+    // the sentinel `unsupported` provider must stay non-creatable here.
     const { descriptor } = action({
-      eligibility: eligibility({ provider: 'bitbucket' as HostedReviewProvider })
+      eligibility: eligibility({ provider: 'unsupported' as HostedReviewProvider })
     })
 
     expect(descriptor).toMatchObject({
@@ -154,6 +156,20 @@ describe('buildMobileCreatePrAction', () => {
       disabled: true,
       label: 'Review creation unavailable for this provider'
     })
+  })
+
+  it('enables create for bitbucket once review creation is supported', () => {
+    const { descriptor, onCreatePr } = action({
+      eligibility: eligibility({ provider: 'bitbucket' as HostedReviewProvider })
+    })
+
+    expect(descriptor).toMatchObject({
+      visible: true,
+      disabled: false,
+      label: 'Create Pull Request'
+    })
+    descriptor.onPress()
+    expect(onCreatePr).toHaveBeenCalledWith(false)
   })
 
   it('keeps a creatable button visible but disabled while a newer eligibility loads', () => {
@@ -211,7 +227,7 @@ describe('cold-mount layout stability (issue #8411)', () => {
       'unsupported provider',
       {
         kind: 'ready',
-        eligibility: eligibility({ provider: 'bitbucket' as HostedReviewProvider })
+        eligibility: eligibility({ provider: 'unsupported' as HostedReviewProvider })
       } satisfies MobileCreatePrEligibilityState
     ],
     ['eligibility error', { kind: 'error' } satisfies MobileCreatePrEligibilityState]

@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 import {
@@ -11,6 +12,7 @@ import {
 type RuntimeRepoSummary = {
   id: string
   connectionId?: string | null
+  executionHostId?: string | null
 }
 
 export async function loadMobileNewTabAgentOptions(args: {
@@ -55,8 +57,49 @@ async function loadWorkspaceDetectedAgents(client: RpcClient, worktreeId: string
   if (!repo) {
     throw new Error('worktree_repo_not_found')
   }
+  return requestDetectedAgentsForRepo(client, repo)
+}
+
+async function requestDetectedAgentsForRepo(
+  client: RpcClient,
+  repo: RuntimeRepoSummary
+): Promise<RpcSuccess | RpcFailure> {
+  const executionHost = parseExecutionHostId(repo.executionHostId)
+  if (executionHost?.kind === 'runtime') {
+    return requestRuntimeDetectedAgents(client, executionHost.environmentId)
+  }
+  if (executionHost?.kind === 'ssh') {
+    return client.sendRequest('preflight.detectRemoteAgents', {
+      connectionId: executionHost.targetId
+    })
+  }
   const connectionId = repo.connectionId?.trim() || null
   return connectionId
     ? client.sendRequest('preflight.detectRemoteAgents', { connectionId })
     : client.sendRequest('preflight.detectAgents')
+}
+
+async function requestRuntimeDetectedAgents(
+  client: RpcClient,
+  environmentId: string
+): Promise<RpcSuccess | RpcFailure> {
+  const response = await client.sendRequest('preflight.detectRuntimeAgents', {
+    environmentId
+  })
+  // Why: hosts that predate the runtime-delegation RPC fall back to the paired
+  // host's local detection (previous behavior) instead of blanking the menu.
+  if (!response.ok && isMethodUnavailable(response as RpcFailure)) {
+    return client.sendRequest('preflight.detectAgents')
+  }
+  return response
+}
+
+function isMethodUnavailable(response: RpcFailure): boolean {
+  const code = response.error.code
+  const message = response.error.message
+  return (
+    code === 'method_not_found' ||
+    message.includes('not available to mobile clients') ||
+    message.includes('Unknown method')
+  )
 }

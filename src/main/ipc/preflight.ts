@@ -22,6 +22,7 @@ import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
 } from './preflight-remote-windows-terminal-capabilities'
+import { detectRuntimeAgents } from './preflight-runtime-agent-detection'
 import {
   getTuiAgentDetectionProbeCommands,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
@@ -306,6 +307,13 @@ export function registerPreflightHandlers(): void {
     'preflight:detectRemoteAgents',
     async (_event, args: { connectionId: string }): Promise<string[]> => {
       return detectRemoteAgents(args)
+    }
+  )
+
+  ipcMain.handle(
+    'preflight:detectRuntimeAgents',
+    async (_event, args: { environmentId: string }): Promise<string[]> => {
+      return detectRuntimeAgents(args)
     }
   )
 

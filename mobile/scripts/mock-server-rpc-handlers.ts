@@ -223,6 +223,7 @@ export function handleRequest(
 
     case 'preflight.detectAgents':
     case 'preflight.detectRemoteAgents':
+    case 'preflight.detectRuntimeAgents':
       respond(success(request.id, ['claude', 'codex', 'gemini']))
       break
 

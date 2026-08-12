@@ -7,12 +7,16 @@ import {
   refreshShellPathAndDetectAgents,
   runPreflightCheck
 } from '../../../ipc/preflight'
+import { detectRuntimeAgents } from '../../../ipc/preflight-runtime-agent-detection'
 
 const PreflightCheck = z.object({
   force: z.boolean().optional()
 })
 const PreflightDetectRemoteAgents = z.object({
   connectionId: z.string().min(1)
+})
+const PreflightDetectRuntimeAgents = z.object({
+  environmentId: z.string().min(1)
 })
 const PreflightDetectRemoteWindowsTerminalCapabilities = z.object({
   connectionId: z.string().min(1)
@@ -33,6 +37,11 @@ export const PREFLIGHT_METHODS: RpcMethod[] = [
     name: 'preflight.detectRemoteAgents',
     params: PreflightDetectRemoteAgents,
     handler: async (params) => detectRemoteAgents(params)
+  }),
+  defineMethod({
+    name: 'preflight.detectRuntimeAgents',
+    params: PreflightDetectRuntimeAgents,
+    handler: async (params) => detectRuntimeAgents(params)
   }),
   defineMethod({
     name: 'preflight.detectRemoteWindowsTerminalCapabilities',
