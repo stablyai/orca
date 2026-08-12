@@ -105,7 +105,7 @@ describe('ClinePassAccountsSection', () => {
 
     expect(await screen.findByText('Configured by CLINE_API_KEY')).toBeInTheDocument()
     expect(screen.getByText(/cannot be cleared here/i)).toBeInTheDocument()
-    expect(screen.getByText(/saved key overrides the environment/i)).toBeInTheDocument()
+    expect(screen.getByText(/saved key overrides the environment variable/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Forget API key' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled()
     expect(screen.getByRole('link', { name: 'API key docs' })).toHaveAttribute(

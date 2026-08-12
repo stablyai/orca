@@ -66,8 +66,8 @@ export function ClinePassApiKeyForm({
         {isEnvironment ? (
           <span className="text-[11px] text-muted-foreground">
             {translate(
-              'auto.components.settings.ClinePassAccountsSection.7e87f4df2a',
-              'A saved key overrides the environment'
+              'auto.components.settings.ClinePassApiKeyForm.3c8f8283c8',
+              'A saved key overrides the environment variable.'
             )}
           </span>
         ) : null}

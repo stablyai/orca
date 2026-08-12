@@ -11296,7 +11296,6 @@
           "d9ea8a4643": "Not saved",
           "c89556fc40": "ClinePass API key",
           "3d738f9c5f": "Authenticate quota refreshes with an official Cline API key.",
-          "7e87f4df2a": "A saved key overrides the environment",
           "ce12d5e9c6": "Paste a Cline API key",
           "61a2148925": "Replace",
           "3fc8e072dc": "Save",
@@ -11305,6 +11304,9 @@
         },
         "ClinePassCredentialStatus": {
           "4df8f88808": "Orca could not check whether a Cline API key is configured. Try again."
+        },
+        "ClinePassApiKeyForm": {
+          "3c8f8283c8": "A saved key overrides the environment variable."
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
