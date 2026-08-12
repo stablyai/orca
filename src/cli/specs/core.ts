@@ -214,7 +214,18 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Send input to a live terminal',
     usage:
       'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
+    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt'],
+    notes: [
+      // Why: integrators often assume only Enter/Ctrl+C are supported; --text is a raw PTY byte channel.
+      "--text is written to the PTY verbatim (no filtering or escaping). Control bytes such as Escape ($'\\x1b') or Ctrl+U ($'\\x15') work when the shell can pass them.",
+      '--interrupt is a convenience that appends Ctrl+C (\\x03). Prefer --text when you need other control sequences.',
+      'Agent-prompt injection paths may wrap payloads in bracketed paste; terminal send does not.'
+    ],
+    examples: [
+      'orca terminal send --terminal term_123 --text "hi" --enter',
+      "orca terminal send --terminal term_123 --text $'\\x1b'",
+      'orca terminal send --terminal term_123 --interrupt'
+    ]
   },
   {
     path: ['terminal', 'wait'],

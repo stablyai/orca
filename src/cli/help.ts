@@ -268,9 +268,9 @@ Selectors:
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
 Terminal Send Options:
-  --text <text>             Text to send to the terminal
+  --text <text>             Raw bytes written to the PTY (not filtered). Use shell escapes for control keys, e.g. $'\\x1b' for Escape
   --enter                   Append Enter after sending text
-  --interrupt               Send as an interrupt-style input when supported
+  --interrupt               Append Ctrl+C (\\x03); other control keys go through --text
 
 Terminal List Options:
   --include-visual-layouts  Include tab and pane topology in JSON output
@@ -348,6 +348,7 @@ Examples:
   $ orca terminal create --worktree active --command "codex"
   $ orca terminal list --worktree path:/Users/me/orca/workspaces/orca/cli-test-1 --json
   $ orca terminal send --terminal term_123 --text "hi" --enter
+  $ orca terminal send --terminal term_123 --text $'\\x1b'
   $ orca terminal wait --terminal term_123 --for exit --timeout-ms 60000 --json
   $ orca tab current --json
   $ orca tab show --page page_123 --json
@@ -429,6 +430,12 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
   const command = commandPath.join(' ')
   if (command === 'skills install' && flag === 'agent') {
     return '--agent <names>        Comma-separated install targets; default is detected agents'
+  }
+  if (command === 'terminal send' && flag === 'text') {
+    return "--text <text>          Raw PTY bytes (verbatim). Control keys: $'\\x1b' Escape, $'\\x15' Ctrl+U"
+  }
+  if (command === 'terminal send' && flag === 'interrupt') {
+    return '--interrupt            Append Ctrl+C (\\x03); other control sequences use --text'
   }
   if (command === 'terminal close' && flag === 'tab') {
     return '--tab                  Close the whole tab and wait for durable persistence'
