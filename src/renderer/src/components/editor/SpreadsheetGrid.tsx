@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { SpreadsheetColumnResizeHandle } from './SpreadsheetColumnResizeHandle'
-import { useSpreadsheetColumnResize } from './use-spreadsheet-column-resize'
+import { SpreadsheetResizeHandle } from './SpreadsheetResizeHandle'
+import { computeSpreadsheetAutoRowHeight } from './spreadsheet-row-heights'
+import { useSpreadsheetColumnResize, useSpreadsheetRowResize } from './use-spreadsheet-resize'
 import { computeEditorFontSize } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
@@ -114,6 +115,7 @@ export function SpreadsheetGrid({
     [header, columnCount]
   )
   const columnResize = useSpreadsheetColumnResize(zoomScale)
+  const rowResize = useSpreadsheetRowResize(zoomScale)
   const columnWidths = useMemo(
     () =>
       computeSpreadsheetColumnWidths({
@@ -128,9 +130,25 @@ export function SpreadsheetGrid({
   )
   const mergeIndex = useMemo(() => buildSpreadsheetMergeIndex(mergedRanges ?? []), [mergedRanges])
   const getRowHeightPx = useCallback(
-    (index: number) =>
-      Math.round((declaredRowHeights?.[index] ?? SPREADSHEET_GRID_ROW_HEIGHT) * zoomScale),
-    [declaredRowHeights, zoomScale]
+    (index: number) => {
+      // Why: a reader's own height wins, then the file's, and only a row the file
+      // leaves unsized is measured from its content — which is the order Excel
+      // applies too.
+      const override = rowResize.widthOverrides[index]
+      if (override !== undefined) {
+        return Math.round(override * zoomScale)
+      }
+      const declared = declaredRowHeights?.[index]
+      if (declared !== undefined) {
+        return Math.round(declared * zoomScale)
+      }
+      return computeSpreadsheetAutoRowHeight({
+        rowStyles: cellStyles?.[index],
+        baseRowHeightPx: Math.round(SPREADSHEET_GRID_ROW_HEIGHT * zoomScale),
+        fontSizePx
+      })
+    },
+    [rowResize.widthOverrides, declaredRowHeights, cellStyles, zoomScale, fontSizePx]
   )
   const overlay = useMemo(
     () =>
@@ -161,11 +179,14 @@ export function SpreadsheetGrid({
     overscan: SPREADSHEET_GRID_COLUMN_OVERSCAN,
     getItemKey: (index) => index
   })
-  // Why: the virtualizer caches a measurement per column, so a dragged width
-  // needs an explicit re-measure or the grid keeps the size it first estimated.
+  // Why: the virtualizer caches a measurement per track, so a dragged size needs
+  // an explicit re-measure or the grid keeps the size it first estimated.
   useEffect(() => {
     columnVirtualizer.measure()
   }, [columnVirtualizer, columnWidths])
+  useEffect(() => {
+    rowVirtualizer.measure()
+  }, [rowVirtualizer, getRowHeightPx])
 
   const virtualRows = rowVirtualizer.getVirtualItems()
   const virtualColumns = columnVirtualizer.getVirtualItems()
@@ -232,11 +253,12 @@ export function SpreadsheetGrid({
                 <span className="truncate" title={cell}>
                   {cell}
                 </span>
-                <SpreadsheetColumnResizeHandle
-                  columnIndex={virtualColumn.index}
-                  renderedWidthPx={virtualColumn.size}
+                <SpreadsheetResizeHandle
+                  index={virtualColumn.index}
+                  renderedSizePx={virtualColumn.size}
                   resize={columnResize}
                   label={cell === '' ? String(virtualColumn.index + 1) : cell}
+                  orientation="vertical"
                 />
               </div>
             )
@@ -274,6 +296,13 @@ export function SpreadsheetGrid({
                   style={{ fontSize: headerFontSizePx }}
                 >
                   {virtualRow.index + 1}
+                  <SpreadsheetResizeHandle
+                    index={virtualRow.index}
+                    renderedSizePx={virtualRow.size}
+                    resize={rowResize}
+                    label={String(virtualRow.index + 1)}
+                    orientation="horizontal"
+                  />
                 </div>
                 <div aria-hidden className="border-b border-spreadsheet-gridline" />
                 {virtualColumns.map((virtualColumn) => {

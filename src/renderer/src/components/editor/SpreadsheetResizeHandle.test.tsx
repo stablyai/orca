@@ -2,8 +2,8 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SpreadsheetColumnResizeHandle } from './SpreadsheetColumnResizeHandle'
-import type { SpreadsheetColumnResize } from './use-spreadsheet-column-resize'
+import { SpreadsheetResizeHandle } from './SpreadsheetResizeHandle'
+import type { SpreadsheetColumnResize } from './use-spreadsheet-resize'
 
 type ResizeDouble = {
   [Key in keyof SpreadsheetColumnResize]: SpreadsheetColumnResize[Key] extends (
@@ -27,13 +27,17 @@ function createResizeDouble(resizingColumnIndex: number | null = null): ResizeDo
   }
 }
 
-function renderHandle(resize: ResizeDouble): HTMLElement {
+function renderHandle(
+  resize: ResizeDouble,
+  orientation: 'vertical' | 'horizontal' = 'vertical'
+): HTMLElement {
   render(
-    <SpreadsheetColumnResizeHandle
-      columnIndex={3}
-      renderedWidthPx={120}
+    <SpreadsheetResizeHandle
+      index={3}
+      renderedSizePx={120}
       resize={resize as unknown as SpreadsheetColumnResize}
       label="D"
+      orientation={orientation}
     />
   )
   return screen.getByRole('separator')
@@ -60,7 +64,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('SpreadsheetColumnResizeHandle', () => {
+describe('SpreadsheetResizeHandle', () => {
   it('announces itself as a vertical separator naming its column', () => {
     const handle = renderHandle(createResizeDouble())
 
@@ -234,5 +238,102 @@ describe('SpreadsheetColumnResizeHandle', () => {
     const handle = renderHandle(createResizeDouble(1))
 
     expect(handle.classList.contains('bg-spreadsheet-gridline-strong')).toBe(false)
+  })
+
+  it('names the column it sizes when vertical', () => {
+    const handle = renderHandle(createResizeDouble())
+
+    expect(handle.getAttribute('aria-label')).toContain('Resize column')
+  })
+
+  it('grips the bottom edge with a row cursor when horizontal', () => {
+    const handle = renderHandle(createResizeDouble(), 'horizontal')
+
+    expect(handle.classList.contains('cursor-row-resize')).toBe(true)
+    expect(handle.classList.contains('h-[6px]')).toBe(true)
+  })
+
+  it('grips the trailing edge with a column cursor when vertical', () => {
+    const handle = renderHandle(createResizeDouble())
+
+    expect(handle.classList.contains('cursor-col-resize')).toBe(true)
+    expect(handle.classList.contains('w-[6px]')).toBe(true)
+  })
+})
+
+describe('SpreadsheetResizeHandle on a row', () => {
+  it('announces itself as a horizontal separator naming its row', () => {
+    const handle = renderHandle(createResizeDouble(), 'horizontal')
+
+    expect(handle.getAttribute('aria-orientation')).toBe('horizontal')
+    expect(handle.getAttribute('aria-label')).toContain('Resize row')
+  })
+
+  it('reports the vertical travel and ignores how far the pointer strayed sideways', () => {
+    const resize = createResizeDouble(3)
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.pointerDown(handle, { pointerId: 7, clientX: 10, clientY: 100 })
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 400, clientY: 160 })
+
+    expect(resize.updateResize).toHaveBeenCalledWith(60)
+  })
+
+  it('reads the horizontal travel on a column separator given the same crossed move', () => {
+    const resize = createResizeDouble(3)
+    const handle = renderHandle(resize)
+
+    fireEvent.pointerDown(handle, { pointerId: 7, clientX: 10, clientY: 100 })
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 400, clientY: 160 })
+
+    expect(resize.updateResize).toHaveBeenCalledWith(390)
+  })
+
+  it('grows the row by one step on ArrowDown', () => {
+    const resize = createResizeDouble()
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.keyDown(handle, { key: 'ArrowDown' })
+
+    expect(resize.nudgeResize).toHaveBeenCalledWith(3, 120, 8)
+  })
+
+  it('shrinks the row on ArrowUp', () => {
+    const resize = createResizeDouble()
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.keyDown(handle, { key: 'ArrowUp' })
+
+    expect(resize.nudgeResize).toHaveBeenCalledWith(3, 120, -8)
+  })
+
+  it('leaves ArrowRight alone on a row separator', () => {
+    const resize = createResizeDouble()
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.keyDown(handle, { key: 'ArrowRight' })
+
+    expect(resize.nudgeResize).not.toHaveBeenCalled()
+    expect(resize.resetColumn).not.toHaveBeenCalled()
+  })
+
+  it('drops the row height on a double click', () => {
+    const resize = createResizeDouble()
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.doubleClick(handle)
+
+    expect(resize.resetColumn).toHaveBeenCalledWith(3)
+  })
+
+  it('drops the row height on Enter and on Backspace', () => {
+    const resize = createResizeDouble()
+    const handle = renderHandle(resize, 'horizontal')
+
+    fireEvent.keyDown(handle, { key: 'Enter' })
+    fireEvent.keyDown(handle, { key: 'Backspace' })
+
+    expect(resize.resetColumn).toHaveBeenCalledTimes(2)
+    expect(resize.resetColumn).toHaveBeenLastCalledWith(3)
   })
 })

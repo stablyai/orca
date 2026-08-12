@@ -4,8 +4,10 @@ import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   resolveSpreadsheetResizeKeyStep,
-  useSpreadsheetColumnResize
-} from './use-spreadsheet-column-resize'
+  useSpreadsheetColumnResize,
+  useSpreadsheetRowResize,
+  useSpreadsheetSizeResize
+} from './use-spreadsheet-resize'
 
 describe('resolveSpreadsheetResizeKeyStep', () => {
   it('widens by one step on ArrowRight', () => {
@@ -33,6 +35,125 @@ describe('resolveSpreadsheetResizeKeyStep', () => {
 
   it('reports no step for an unhandled key even when coarse', () => {
     expect(resolveSpreadsheetResizeKeyStep('ArrowDown', true)).toBe(null)
+  })
+
+  it('sizes a column with the horizontal arrows when told so explicitly', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowRight', false, 'vertical')).toBe(8)
+    expect(resolveSpreadsheetResizeKeyStep('ArrowLeft', false, 'vertical')).toBe(-8)
+  })
+
+  it('leaves the vertical arrows alone on a column separator', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowDown', false, 'vertical')).toBe(null)
+    expect(resolveSpreadsheetResizeKeyStep('ArrowUp', false, 'vertical')).toBe(null)
+  })
+
+  it('grows a row by one step on ArrowDown', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowDown', false, 'horizontal')).toBe(8)
+  })
+
+  it('grows a row by a coarse step on shift ArrowDown', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowDown', true, 'horizontal')).toBe(48)
+  })
+
+  it('shrinks a row by one step on ArrowUp', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowUp', false, 'horizontal')).toBe(-8)
+  })
+
+  it('shrinks a row by a coarse step on shift ArrowUp', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowUp', true, 'horizontal')).toBe(-48)
+  })
+
+  it('leaves the horizontal arrows alone on a row separator', () => {
+    expect(resolveSpreadsheetResizeKeyStep('ArrowRight', false, 'horizontal')).toBe(null)
+    expect(resolveSpreadsheetResizeKeyStep('ArrowLeft', true, 'horizontal')).toBe(null)
+  })
+})
+
+describe('useSpreadsheetRowResize', () => {
+  it('starts with no reader heights and no drag in progress', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(1))
+
+    expect(result.current.widthOverrides).toEqual([])
+    expect(result.current.resizingColumnIndex).toBe(null)
+  })
+
+  it('adds the pointer travel to the height the drag started from', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(1))
+
+    act(() => result.current.startResize(2, 40))
+    act(() => result.current.updateResize(20))
+
+    expect(result.current.widthOverrides[2]).toBe(60)
+  })
+
+  it('clamps a drag past the top edge to the row minimum, tighter than a column', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(1))
+
+    act(() => result.current.startResize(0, 40))
+    act(() => result.current.updateResize(-500))
+
+    expect(result.current.widthOverrides[0]).toBe(12)
+  })
+
+  it('clamps a runaway drag to the row maximum, lower than a column', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(1))
+
+    act(() => result.current.startResize(0, 40))
+    act(() => result.current.updateResize(9999))
+
+    expect(result.current.widthOverrides[0]).toBe(400)
+  })
+
+  it('stores the height unzoomed so it keeps its proportion at other zoom levels', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(2))
+
+    act(() => result.current.startResize(0, 80))
+    act(() => result.current.updateResize(40))
+
+    expect(result.current.widthOverrides[0]).toBe(60)
+  })
+
+  it('drops one row height so the row sizes itself again', () => {
+    const { result } = renderHook(() => useSpreadsheetRowResize(1))
+
+    act(() => result.current.nudgeResize(1, 40, 8))
+    act(() => result.current.resetColumn(1))
+
+    expect(result.current.widthOverrides[1]).toBe(undefined)
+  })
+
+  it('keeps row heights and column widths in separate state', () => {
+    const rows = renderHook(() => useSpreadsheetRowResize(1))
+    const columns = renderHook(() => useSpreadsheetColumnResize(1))
+
+    act(() => rows.result.current.nudgeResize(0, 40, 8))
+
+    expect(rows.result.current.widthOverrides[0]).toBe(48)
+    expect(columns.result.current.widthOverrides).toEqual([])
+  })
+})
+
+describe('useSpreadsheetSizeResize', () => {
+  it('clamps to the bounds it was handed rather than the column ones', () => {
+    const { result } = renderHook(() => useSpreadsheetSizeResize(1, { minPx: 5, maxPx: 50 }))
+
+    act(() => result.current.startResize(0, 20))
+    act(() => result.current.updateResize(-500))
+    expect(result.current.widthOverrides[0]).toBe(5)
+
+    act(() => result.current.updateResize(9999))
+    expect(result.current.widthOverrides[0]).toBe(50)
+  })
+
+  it('pins every drag to the single size allowed by equal bounds', () => {
+    const { result } = renderHook(() => useSpreadsheetSizeResize(1, { minPx: 30, maxPx: 30 }))
+
+    act(() => result.current.startResize(0, 100))
+    act(() => result.current.updateResize(-40))
+    expect(result.current.widthOverrides[0]).toBe(30)
+
+    act(() => result.current.updateResize(40))
+    expect(result.current.widthOverrides[0]).toBe(30)
   })
 })
 
