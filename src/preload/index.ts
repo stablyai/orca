@@ -1990,6 +1990,106 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  huly: {
+    connect: (args: {
+      name: string
+      url: string
+      workspace: string
+      email: string | null
+      secret: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('huly:connect', args),
+
+    disconnect: (args?: { connectionId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('huly:disconnect', args),
+
+    selectConnection: (args: { connectionId: string }): Promise<unknown> =>
+      ipcRenderer.invoke('huly:selectConnection', args),
+
+    status: (): Promise<unknown> => ipcRenderer.invoke('huly:status'),
+
+    preflight: (): Promise<unknown> => ipcRenderer.invoke('huly:preflight'),
+
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      connectionId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('huly:searchIssues', args),
+
+    listIssues: (args?: {
+      filter?: 'assigned' | 'created' | 'all'
+      limit?: number
+      connectionId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('huly:listIssues', args),
+
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+      priority?: number
+      stateId?: string
+      assigneeId?: string | null
+      labelIds?: string[]
+      projectId?: string | null
+      connectionId?: string
+    }): Promise<{ ok: true; issue: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('huly:createIssue', args),
+
+    getIssue: (args: { id: string; connectionId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('huly:getIssue', args),
+
+    updateIssue: (args: {
+      id: string
+      updates: unknown
+      connectionId?: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('huly:updateIssue', args),
+
+    addComment: (args: {
+      issueId: string
+      body: string
+      connectionId?: string
+    }): Promise<{ ok: true; comment: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('huly:addComment', args),
+
+    listComments: (args: { issueId: string; connectionId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('huly:listComments', args),
+
+    listTeams: (args?: { connectionId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('huly:listTeams', args),
+
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      connectionId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('huly:listProjects', args),
+
+    getProject: (args: { id: string; connectionId?: string }): Promise<unknown> =>
+      ipcRenderer.invoke('huly:getProject', args),
+
+    createProject: (args: {
+      name: string
+      description?: string
+      connectionId?: string
+    }): Promise<{ ok: true; project: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('huly:createProject', args),
+
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      connectionId?: string
+    }): Promise<unknown[]> => ipcRenderer.invoke('huly:listProjectIssues', args),
+
+    teamMembers: (args: { teamId: string; connectionId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('huly:teamMembers', args),
+
+    teamStates: (args: { teamId: string; connectionId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('huly:teamStates', args),
+
+    teamLabels: (args: { teamId: string; connectionId?: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('huly:teamLabels', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

@@ -1,6 +1,7 @@
 import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
+import { HulyIcon } from '@/components/icons/HulyIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +17,7 @@ import {
 } from '../../../shared/linear-issue-view-resume-state'
 import { getTaskPresetQuery } from '../../../shared/task-preset-query'
 import type { TaskProvider, TaskViewPresetId } from '../../../shared/types'
+import type { TaskProviderAvailability } from '../../../shared/task-providers'
 
 export type GitLabTaskFilter = 'opened' | 'merged' | 'closed' | 'all'
 export type GitLabIssueFilter = 'opened' | 'assigned-to-me'
@@ -110,28 +112,53 @@ export function getGitHubTaskKindPresets(kind: GitHubTaskKind): TaskQueryPreset[
   return kind === 'prs' ? getPRTaskQueryPresets() : getIssueTaskQueryPresets()
 }
 
-export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
-  {
-    id: 'github',
-    label: translate('auto.components.TaskPage.acef77f7ca', 'GitHub'),
-    Icon: ({ className }) => <Github className={className} />
-  },
-  {
-    id: 'gitlab',
-    label: translate('auto.components.TaskPage.11a828abf8', 'GitLab'),
-    Icon: ({ className }) => <Gitlab className={className} />
-  },
-  {
-    id: 'linear',
-    label: translate('auto.components.TaskPage.8675cd6188', 'Linear'),
-    Icon: ({ className }) => <LinearIcon className={className} />
-  },
-  {
-    id: 'jira',
-    label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
-    Icon: ({ className }) => <JiraIcon className={className} />
+function buildSourceOptions(availability?: TaskProviderAvailability): SourceOption[] {
+  // Why: Huly-first when configured. When Huly is connected, promote it to
+  // position 0 so the Tasks source picker and default open on Huly.
+  const base: SourceOption[] = [
+    {
+      id: 'github',
+      label: translate('auto.components.TaskPage.acef77f7ca', 'GitHub'),
+      Icon: ({ className }) => <Github className={className} />
+    },
+    {
+      id: 'gitlab',
+      label: translate('auto.components.TaskPage.11a828abf8', 'GitLab'),
+      Icon: ({ className }) => <Gitlab className={className} />
+    },
+    {
+      id: 'linear',
+      label: translate('auto.components.TaskPage.8675cd6188', 'Linear'),
+      Icon: ({ className }) => <LinearIcon className={className} />
+    },
+    {
+      id: 'jira',
+      label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
+      Icon: ({ className }) => <JiraIcon className={className} />
+    },
+    {
+      id: 'huly',
+      label: translate('auto.components.TaskPage.huly', 'Huly'),
+      Icon: ({ className }) => <HulyIcon className={className} />
+    }
+  ]
+  if (!availability?.hulyConnected) {
+    return base
   }
-])
+  const huly = base.find((option) => option.id === 'huly')
+  if (!huly) {
+    return base
+  }
+  return [huly, ...base.filter((option) => option.id !== 'huly')]
+}
+
+export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => buildSourceOptions())
+
+export function getSourceOptionsWithAvailability(
+  availability?: TaskProviderAvailability
+): SourceOption[] {
+  return buildSourceOptions(availability)
+}
 
 export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
   { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },

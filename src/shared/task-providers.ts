@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'huly'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'huly'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -55,6 +61,7 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  hulyConnected: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -90,7 +97,7 @@ export function restoreAvailableDefaultTaskProvider(
   return available
 }
 
-function isTaskProviderAvailable(
+export function isTaskProviderAvailable(
   provider: TaskProvider,
   availability: TaskProviderAvailability
 ): boolean {
@@ -105,15 +112,37 @@ function isTaskProviderAvailable(
   if (provider === 'jira') {
     return true
   }
+  if (provider === 'huly') {
+    return availability.hulyConnected
+  }
   return availability.linearConnected
+}
+
+// Why: Huly-first when configured. The default order matches TASK_PROVIDERS
+// (Huly appended at the end for existing users), but when Huly is connected,
+// promote it to position 0 so the Tasks picker and default selection open to it.
+export function orderTaskProviders(
+  visibleProviders: readonly TaskProvider[],
+  availability: TaskProviderAvailability | undefined
+): TaskProvider[] {
+  const base = visibleProviders.filter(isTaskProvider)
+  if (!availability?.hulyConnected || !base.includes('huly') || base[0] === 'huly') {
+    return [...base]
+  }
+  return ['huly', ...base.filter((provider) => provider !== 'huly')]
 }
 
 export function resolveVisibleTaskProvider(
   preferred: TaskProvider | null | undefined,
-  visibleProviders: readonly TaskProvider[]
+  visibleProviders: readonly TaskProvider[],
+  availability?: TaskProviderAvailability
 ): TaskProvider {
+  const ordered = orderTaskProviders(visibleProviders, availability)
   if (preferred && visibleProviders.includes(preferred)) {
     return preferred
   }
-  return visibleProviders[0] ?? 'github'
+  if (availability?.hulyConnected && ordered.includes('huly')) {
+    return 'huly'
+  }
+  return ordered[0] ?? 'github'
 }

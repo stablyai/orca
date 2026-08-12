@@ -2,6 +2,7 @@ import React from 'react'
 import { EyeOff, Github, Gitlab, List } from 'lucide-react'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { HulyIcon } from '@/components/icons/HulyIcon'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,6 +10,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { PER_REPO_FETCH_LIMIT } from '@/lib/new-workspace'
+import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
@@ -77,6 +79,7 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   const showTasksButton = useAppStore((s) => s.settings?.showTasksButton !== false)
   const rawVisibleTaskProviders = useAppStore((s) => s.settings?.visibleTaskProviders)
   const defaultTaskSource = useAppStore((s) => s.settings?.defaultTaskSource ?? 'github')
+  const settings = useAppStore((s) => s.settings)
   const preflightStatus = useAppStore((s) => s.preflightStatus)
   const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
   const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
@@ -86,28 +89,42 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
   )
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
+  const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
+  const hulyStatus = useAppStore((s) => s.hulyStatus)
+  const hulyStatusChecked = useAppStore((s) => s.hulyStatusChecked)
+  const hulyStatusChecking = useAppStore((s) => s.hulyStatusChecking)
+  const hulyStatusContextKey = useAppStore((s) => s.hulyStatusContextKey)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
+  const checkHulyConnection = useAppStore((s) => s.checkHulyConnection)
   const prefetchWorkItems = useAppStore((s) => s.prefetchWorkItems)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
   const defaultTaskViewPreset = useAppStore((s) => s.settings?.defaultTaskViewPreset ?? 'all')
+  const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const preferredVisibleTaskProviders = React.useMemo(
     () => normalizeVisibleTaskProviders(rawVisibleTaskProviders),
     [rawVisibleTaskProviders]
   )
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
+  const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
+  const hulyStatusCurrent = hulyStatusContextKey === providerRuntimeContextKey
+  const linearAvailable =
+    linearStatusCurrent && linearStatusChecked && linearStatus.connected === true
+  const hulyAvailable = hulyStatusCurrent && hulyStatusChecked && hulyStatus.connected === true
   const visibleTaskProviders = React.useMemo(
     () =>
       restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearAvailable,
+          hulyConnected: hulyAvailable
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
-      linearStatus.connected,
+      linearAvailable,
+      hulyAvailable,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed
@@ -122,14 +139,25 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
     if (!preflightStatusChecked || !preflightStatusCurrent) {
       void refreshPreflightStatus()
     }
-    if (!linearStatusChecked) {
+    if (!linearStatusCurrent || !linearStatusChecked) {
       void checkLinearConnection()
     }
+    if ((!hulyStatusCurrent || !hulyStatusChecked) && !hulyStatusChecking) {
+      void checkHulyConnection()
+    }
   }, [
+    checkHulyConnection,
     checkLinearConnection,
+    hulyStatusChecked,
+    hulyStatusChecking,
+    hulyStatusContextKey,
+    hulyStatusCurrent,
     linearStatusChecked,
+    linearStatusContextKey,
+    linearStatusCurrent,
     preflightStatusChecked,
     preflightStatusCurrent,
+    providerRuntimeContextKey,
     refreshPreflightStatus
   ])
 
@@ -246,6 +274,18 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
                 onOpen={() => openTaskPage({ taskSource: 'jira' })}
               >
                 <JiraIcon className="size-3.5" />
+              </TaskProviderShortcut>
+            ) : null}
+            {visibleTaskProviders.includes('huly') ? (
+              <TaskProviderShortcut
+                canBrowseTasks={canBrowseTasks}
+                label={translate(
+                  'auto.components.sidebar.SidebarNav.huly_open_tasks',
+                  'Open Huly tasks'
+                )}
+                onOpen={() => openTaskPage({ taskSource: 'huly' })}
+              >
+                <HulyIcon className="size-3.5" />
               </TaskProviderShortcut>
             ) : null}
           </span>

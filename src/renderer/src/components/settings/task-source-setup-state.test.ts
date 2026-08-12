@@ -11,7 +11,7 @@ import {
   type TaskProviderReadiness
 } from './task-source-setup-state'
 
-const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ORDER: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'huly']
 
 function buildReadiness(
   overrides: Partial<Record<TaskProvider, Partial<TaskProviderReadiness>>> = {}
@@ -26,7 +26,8 @@ function buildReadiness(
       skillChecking: false,
       visible: true
     },
-    jira: { connected: true, checking: false, visible: true }
+    jira: { connected: true, checking: false, visible: true },
+    huly: { connected: false, checking: false, visible: false }
   }
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])
@@ -41,6 +42,7 @@ describe('task-source-setup-state', () => {
         connected: true,
         checking: false,
         skillInstalled: false,
+        skillRequired: true,
         visible: true
       })
     ).toEqual({ completed: 2, total: 3 })
@@ -58,6 +60,7 @@ describe('task-source-setup-state', () => {
         connected: true,
         checking: false,
         skillInstalled: true,
+        skillRequired: true,
         visible: true
       })
     ).toBe(true)
@@ -66,6 +69,7 @@ describe('task-source-setup-state', () => {
         connected: true,
         checking: false,
         skillInstalled: false,
+        skillRequired: true,
         visible: true
       })
     ).toBe(false)
@@ -104,6 +108,7 @@ describe('task-source-setup-state', () => {
         connected: true,
         checking: false,
         skillInstalled: false,
+        skillRequired: true,
         visible: true
       })
     ).toBe('skill-required')
@@ -139,7 +144,7 @@ describe('task-source-setup-state', () => {
     const readiness = buildReadiness({
       github: { connected: false, visible: false },
       gitlab: { connected: false, checking: true },
-      linear: { skillInstalled: false }
+      linear: { skillInstalled: false, skillRequired: true }
     })
 
     expect(getIncompleteVisibleTaskProviders(ORDER, readiness)).toEqual(['linear'])
@@ -148,7 +153,7 @@ describe('task-source-setup-state', () => {
   it('auto-expands only the first incomplete visible provider', () => {
     const readiness = buildReadiness({
       gitlab: { connected: false },
-      linear: { skillInstalled: false }
+      linear: { skillInstalled: false, skillRequired: true }
     })
 
     expect(getIncompleteVisibleTaskProviders(ORDER, readiness)).toEqual(['gitlab', 'linear'])
@@ -165,7 +170,7 @@ describe('task-source-setup-state', () => {
     const untouched = buildReadiness({
       github: { connected: false },
       gitlab: { connected: false },
-      linear: { connected: false, skillInstalled: false },
+      linear: { connected: false, skillInstalled: false, skillRequired: true },
       jira: { connected: false }
     })
 
@@ -181,7 +186,7 @@ describe('task-source-setup-state', () => {
   it('warns about setup that started and stalled partway', () => {
     const stalled = buildReadiness({
       github: { connected: false },
-      linear: { skillInstalled: false }
+      linear: { skillInstalled: false, skillRequired: true }
     })
 
     // GitHub was never connected; Linear has a key but no skill.
@@ -190,7 +195,7 @@ describe('task-source-setup-state', () => {
 
   it('counts an installed skill as started even without an API key', () => {
     const stalled = buildReadiness({
-      linear: { connected: false, skillInstalled: true }
+      linear: { connected: false, skillInstalled: true, skillRequired: true }
     })
 
     expect(getStalledVisibleTaskProviders(ORDER, stalled)).toEqual(['linear'])
@@ -199,7 +204,7 @@ describe('task-source-setup-state', () => {
   it('keeps still-checking and hidden providers out of the warning', () => {
     const readiness = buildReadiness({
       gitlab: { connected: true, checking: true, visible: true },
-      linear: { skillInstalled: false, visible: false }
+      linear: { skillInstalled: false, visible: false, skillRequired: true }
     })
 
     expect(getStalledVisibleTaskProviders(ORDER, readiness)).toEqual([])
@@ -207,7 +212,7 @@ describe('task-source-setup-state', () => {
 
   it('keeps the previous auto-expanded provider open while a recheck is in flight', () => {
     const whileChecking = buildReadiness({
-      linear: { skillInstalled: false, skillChecking: true }
+      linear: { skillInstalled: false, skillChecking: true, skillRequired: true }
     })
 
     // Fresh incomplete list excludes checking providers (banner path).
@@ -224,7 +229,7 @@ describe('task-source-setup-state', () => {
 
   it('does not switch to a later incomplete provider during the previous provider recheck', () => {
     const whileChecking = buildReadiness({
-      linear: { skillInstalled: false, skillChecking: true },
+      linear: { skillInstalled: false, skillChecking: true, skillRequired: true },
       jira: { connected: false }
     })
 
@@ -244,7 +249,7 @@ describe('task-source-setup-state', () => {
     const afterPreflight = buildReadiness({
       github: { connected: false },
       gitlab: { connected: false },
-      linear: { skillInstalled: false }
+      linear: { skillInstalled: false, skillRequired: true }
     })
 
     expect(getAutoExpandedTaskProvider(ORDER, afterPreflight)).toBe('github')
@@ -276,7 +281,7 @@ describe('task-source-setup-state', () => {
     // hand the expansion to another card.
     const afterHidingLinear = buildReadiness({
       github: { connected: false },
-      linear: { skillInstalled: false, visible: false }
+      linear: { skillInstalled: false, visible: false, skillRequired: true }
     })
 
     expect(
@@ -286,5 +291,43 @@ describe('task-source-setup-state', () => {
         previousAutoExpanded: 'linear'
       })
     ).toBe('linear')
+  })
+
+  it('treats a Huly setup with connection but no skill as ready (skill is optional)', () => {
+    const readiness = buildReadiness({
+      huly: { connected: true, checking: false, visible: true, skillInstalled: false }
+    })
+    // Why: the Huly agent skill is optional — TaskSourceHulySetup describes it as
+    // such and the readiness object mirrors that, so a connected Huly without a
+    // skill still resolves as ready.
+    expect(getTaskProviderSetupStatus(readiness.huly)).toBe('ready')
+  })
+
+  it('treats a Huly setup with connection + skill + visibility as ready', () => {
+    const readiness = buildReadiness({
+      huly: { connected: true, checking: false, visible: true, skillInstalled: true }
+    })
+    expect(isTaskProviderReady(readiness.huly)).toBe(true)
+  })
+
+  it('treats a hidden Huly as deliberately disabled even when connected', () => {
+    const readiness = buildReadiness({
+      huly: { connected: true, checking: false, visible: false, skillInstalled: true }
+    })
+    expect(getTaskProviderSetupStatus(readiness.huly)).toBe('hidden')
+  })
+
+  it('reports Huly as ready when connected without a skill install', () => {
+    const readiness = buildReadiness({
+      huly: { connected: true, checking: false, visible: true, skillInstalled: false }
+    })
+    expect(isTaskProviderReady(readiness.huly)).toBe(true)
+  })
+
+  it('excludes a disconnected Huly from the stalled-provider warning', () => {
+    const readiness = buildReadiness({
+      huly: { connected: false, checking: false, visible: true }
+    })
+    expect(getStalledVisibleTaskProviders(ORDER, readiness)).not.toContain('huly')
   })
 })

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterAvailableTaskProviders,
+  isTaskProviderAvailable,
   normalizeTaskProviderSettings,
   normalizeVisibleTaskProviders,
-  restoreAvailableDefaultTaskProvider,
-  resolveVisibleTaskProvider
+  orderTaskProviders,
+  resolveVisibleTaskProvider,
+  restoreAvailableDefaultTaskProvider
 } from './task-providers'
 
 describe('task providers', () => {
@@ -16,7 +18,13 @@ describe('task providers', () => {
   })
 
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'huly'
+    ])
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -51,7 +59,8 @@ describe('task providers', () => {
     expect(
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
         gitlabInstalled: false,
-        linearConnected: true
+        linearConnected: true,
+        hulyConnected: false
       })
     ).toEqual(['github', 'linear'])
   })
@@ -62,7 +71,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          hulyConnected: false
         },
         'github'
       )
@@ -75,7 +85,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          hulyConnected: false
         },
         'linear'
       )
@@ -88,7 +99,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          hulyConnected: false
         },
         'gitlab'
       )
@@ -101,7 +113,8 @@ describe('task providers', () => {
         ['gitlab'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          hulyConnected: false
         },
         'bitbucket'
       )
@@ -112,8 +125,106 @@ describe('task providers', () => {
     expect(
       filterAvailableTaskProviders(['gitlab', 'linear'], {
         gitlabInstalled: false,
-        linearConnected: false
+        linearConnected: false,
+        hulyConnected: false
       })
     ).toEqual(['github'])
+  })
+
+  it('hides Huly when the connection status is not connected', () => {
+    expect(
+      filterAvailableTaskProviders(['github', 'huly'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: false
+      })
+    ).toEqual(['github'])
+  })
+
+  it('keeps Huly visible when hulyConnected is true', () => {
+    expect(
+      filterAvailableTaskProviders(['github', 'huly'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: true
+      })
+    ).toEqual(['github', 'huly'])
+  })
+
+  it('isTaskProviderAvailable returns true for Huly only when hulyConnected', () => {
+    expect(
+      isTaskProviderAvailable('huly', {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: false
+      })
+    ).toBe(false)
+    expect(
+      isTaskProviderAvailable('huly', {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: true
+      })
+    ).toBe(true)
+  })
+
+  it('orderTaskProviders leaves Huly in its slot when not connected', () => {
+    expect(
+      orderTaskProviders(['github', 'gitlab', 'linear', 'jira', 'huly'], {
+        gitlabInstalled: true,
+        linearConnected: true,
+        hulyConnected: false
+      })
+    ).toEqual(['github', 'gitlab', 'linear', 'jira', 'huly'])
+  })
+
+  it('orderTaskProviders promotes Huly to position 0 when connected', () => {
+    expect(
+      orderTaskProviders(['github', 'gitlab', 'linear', 'jira', 'huly'], {
+        gitlabInstalled: true,
+        linearConnected: true,
+        hulyConnected: true
+      })
+    ).toEqual(['huly', 'github', 'gitlab', 'linear', 'jira'])
+  })
+
+  it('orderTaskProviders does not promote Huly when it is not in the visible list', () => {
+    expect(
+      orderTaskProviders(['github', 'gitlab', 'linear', 'jira'], {
+        gitlabInstalled: true,
+        linearConnected: true,
+        hulyConnected: true
+      })
+    ).toEqual(['github', 'gitlab', 'linear', 'jira'])
+  })
+
+  it('orderTaskProviders tolerates a missing availability argument', () => {
+    expect(
+      orderTaskProviders(['github', 'huly'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: false
+      })
+    ).toEqual(['github', 'huly'])
+  })
+
+  it('resolveVisibleTaskProvider honors the saved preference when explicit', () => {
+    expect(
+      resolveVisibleTaskProvider('github', ['github', 'linear', 'huly'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        hulyConnected: true
+      })
+    ).toBe('github')
+  })
+
+  it('resolveVisibleTaskProvider honors the saved preference when Huly is not connected', () => {
+    expect(
+      resolveVisibleTaskProvider('linear', ['github', 'linear', 'huly'], {
+        gitlabInstalled: false,
+        linearConnected: true,
+        hulyConnected: false
+      })
+    ).toBe('linear')
   })
 })

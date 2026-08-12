@@ -31,6 +31,10 @@ export function useFeatureWallTaskSourcePresentation(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const hulyStatus = useAppStore((s) => s.hulyStatus)
+  const hulyStatusChecked = useAppStore((s) => s.hulyStatusChecked)
+  const hulyStatusContextKey = useAppStore((s) => s.hulyStatusContextKey)
+  const checkHulyConnection = useAppStore((s) => s.checkHulyConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const settings = useAppStore((s) => s.settings)
   const expectedPreflightContextKey = useAppStore((s) =>
@@ -39,6 +43,7 @@ export function useFeatureWallTaskSourcePresentation(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const hulyStatusCurrent = hulyStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
 
   useEffect(() => {
@@ -56,10 +61,17 @@ export function useFeatureWallTaskSourcePresentation(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!hulyStatusCurrent || !hulyStatusChecked) {
+      void checkHulyConnection()
+    }
   }, [
+    checkHulyConnection,
     checkJiraConnection,
     checkLinearConnection,
     expectedPreflightContextKey,
+    hulyStatusChecked,
+    hulyStatusContextKey,
+    hulyStatusCurrent,
     isOpen,
     jiraStatusCurrent,
     jiraStatusChecked,
@@ -87,6 +99,9 @@ export function useFeatureWallTaskSourcePresentation(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    hulyStatus,
+    hulyStatusChecked,
+    hulyStatusContextKey,
     providerRuntimeContextKey
   })
 

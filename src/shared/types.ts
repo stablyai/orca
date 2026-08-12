@@ -360,13 +360,14 @@ export type FolderWorkspace = {
 }
 
 export type WorkspaceLinkedItem = {
-  provider: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider: 'github' | 'gitlab' | 'linear' | 'jira' | 'huly'
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
   url: string
   linearIdentifier?: string
   jiraIdentifier?: string
+  hulyIdentifier?: string
   repoId?: string
 }
 
@@ -1981,6 +1982,130 @@ export type LinearIssueUpdate = {
   projectId?: string | null
   parentId?: string | null
 }
+
+// ─── Huly ────────────────────────────────────────────────────────────
+export type HulyConnectionSelection = string | 'all'
+
+export type HulyViewer = {
+  displayName: string
+  email: string | null
+  workspaceName?: string
+  workspaceId?: string
+}
+
+export type HulyConnection = {
+  id: string
+  name: string
+  url: string
+  workspace: string
+  email: string | null
+  displayName?: string
+  credentialRevision?: number
+}
+
+export type HulyConnectionStatus = {
+  connected: boolean
+  viewer: HulyViewer | null
+  connections: HulyConnection[]
+  activeConnectionId: string | null
+  selectedConnectionId: HulyConnectionSelection | null
+  cliInstalled: boolean
+  cliAuthenticated: boolean
+  cliVersion?: string
+  credentialError?: string
+}
+
+export type HulyTeamSummary = {
+  id: string
+  name: string
+  key: string
+  description?: string
+}
+
+export type HulyTeamMember = {
+  id: string
+  displayName: string
+  email?: string
+  avatarUrl?: string
+}
+
+export type HulyIssueState = {
+  id: string
+  name: string
+  type: string
+  color?: string
+}
+
+export type HulyLabel = {
+  id: string
+  name: string
+  color?: string
+}
+
+export type HulyIssue = {
+  id: string
+  connectionId: string
+  identifier: string
+  title: string
+  description?: string
+  url: string
+  state: HulyIssueState
+  team: HulyTeamSummary
+  project?: HulyProjectSummary
+  subIssues?: HulyIssueChildSummary[]
+  labels: string[]
+  labelIds: string[]
+  assignee?: HulyTeamMember
+  priority: number
+  dueDate?: string | null
+  updatedAt: string
+}
+
+export type HulyIssueChildSummary = {
+  id: string
+  identifier: string
+  title: string
+  url: string
+}
+
+export type HulyProjectSummary = {
+  id: string
+  name: string
+  description?: string
+  color?: string
+  url?: string
+  status?: { id: string; name: string; color?: string }
+  members?: HulyTeamMember[]
+  teams?: HulyTeamSummary[]
+  labels?: HulyLabel[]
+  startDate?: string | null
+  targetDate?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export type HulyProjectDetail = HulyProjectSummary & {
+  // Why: Huly projects expose milestones like Linear; keep shape parallel.
+  milestones?: { id: string; name: string; status?: string; targetDate?: string | null }[]
+}
+
+export type HulyComment = {
+  id: string
+  body: string
+  createdAt: string
+  user?: { displayName: string; avatarUrl?: string }
+}
+
+export type HulyIssueUpdate = {
+  stateId?: string
+  title?: string
+  description?: string
+  assigneeId?: string | null
+  priority?: number
+  labelIds?: string[]
+}
+
+export type HulyListFilter = 'assigned' | 'created' | 'all'
 
 export type ClassifiedError = {
   type:

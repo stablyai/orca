@@ -9625,7 +9625,20 @@
                 "2d60ec7921": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.",
                 "977e360b71": "Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.",
                 "statusConnected": "Connected",
-                "statusNotConnected": "Not connected"
+                "statusNotConnected": "Not connected",
+                "huly_install_host_remote": "Orca server",
+                "huly_install_host_local": "this machine",
+                "huly_connected_one": "{{count}} connection configured",
+                "huly_connected_other": "{{count}} connections configured",
+                "huly_connected": "{{count}} connection configured",
+                "huly_checking": "Checking Huly access before showing setup actions.",
+                "huly_setup": "Add Huly access to browse and link issues.",
+                "huly_cli_installed": "huly CLI installed{{value0}}",
+                "huly_cli_missing": "huly CLI not detected on {{value0}}. Run: {{value1}}",
+                "huly_verify_connection_missing": "Connection not found.",
+                "huly_verify_failed": "Verification failed.",
+                "huly_add_connection": "Add connection",
+                "huly_add_access": "Add Huly access"
               }
             }
           }
@@ -13054,7 +13067,7 @@
             "list_end": ", and ",
             "list_pair": " and ",
             "list_mid": ", ",
-            "code_host_tasks_summary": "issues available as tasks · add Linear or Jira if your team plans work there",
+            "code_host_tasks_summary": "issues available as tasks · add Linear, Jira, or Huly if your team plans work there",
             "code_host_tasks_caption": "Your code host's issues also work as tasks.",
             "review_step_title": "See PR status while agents work",
             "review_step_description": "Connect a review provider so Orca can show PR or MR status, checks, and reviews.",
@@ -15069,6 +15082,22 @@
           "openLink": "Open link",
           "updating": "Updating…",
           "update": "Update shared content"
+        }
+      },
+      "huly": {
+        "connection": {
+          "dialog": {
+            "required_fields_missing": "Connection name, base URL, workspace, and credential are required.",
+            "title": "Connect a Huly instance",
+            "description": "Orca stores the credential in its encrypted keychain on {{value0}} and shells out to the `huly` CLI to talk to Huly.",
+            "server_remote": "the Orca server",
+            "server_local": "this machine",
+            "secret_token": "Personal access token",
+            "secret_password": "Password",
+            "name": "Connection name",
+            "name_placeholder": "My Huly workspace",
+            "url": "Huly base URL"
+          }
         }
       }
     },

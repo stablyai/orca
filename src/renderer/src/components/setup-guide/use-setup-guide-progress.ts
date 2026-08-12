@@ -59,6 +59,10 @@ export function useSetupGuideProgress(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const hulyStatus = useAppStore((s) => s.hulyStatus)
+  const hulyStatusChecked = useAppStore((s) => s.hulyStatusChecked)
+  const hulyStatusContextKey = useAppStore((s) => s.hulyStatusContextKey)
+  const checkHulyConnection = useAppStore((s) => s.checkHulyConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
   const repos = useAppStore((s) => s.repos)
   const activeRepoId = useAppStore((s) => s.activeRepoId)
@@ -97,8 +101,8 @@ export function useSetupGuideProgress(
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const linearStatusCurrent = linearStatusContextKey === providerRuntimeContextKey
   const jiraStatusCurrent = jiraStatusContextKey === providerRuntimeContextKey
+  const hulyStatusCurrent = hulyStatusContextKey === providerRuntimeContextKey
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
-
   useEffect(() => {
     if (!shouldRefreshCoreState) {
       return
@@ -112,9 +116,16 @@ export function useSetupGuideProgress(
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!hulyStatusCurrent || !hulyStatusChecked) {
+      void checkHulyConnection()
+    }
   }, [
+    checkHulyConnection,
     checkJiraConnection,
     checkLinearConnection,
+    hulyStatusCurrent,
+    hulyStatusChecked,
+    hulyStatusContextKey,
     jiraStatusCurrent,
     jiraStatusChecked,
     jiraStatusContextKey,
@@ -248,6 +259,9 @@ export function useSetupGuideProgress(
     jiraStatus,
     jiraStatusChecked,
     jiraStatusContextKey,
+    hulyStatus,
+    hulyStatusChecked,
+    hulyStatusContextKey,
     providerRuntimeContextKey
   })
   const hasConnectedTaskSource = taskSourceStatus.trackerConnected
@@ -312,9 +326,6 @@ export function useSetupGuideProgress(
       worktreesByRepo
     ]
   )
-  const historicalSplitTerminalDone = hasFeatureInteraction(
-    featureInteractions,
-    'terminal-pane-split'
-  )
+  const historicalSplitTerminalDone = hasFeatureInteraction(featureInteractions, 'terminal-pane-split')
   return useSetupGuideBrowserMilestoneProgress(rawProgress, historicalSplitTerminalDone)
 }

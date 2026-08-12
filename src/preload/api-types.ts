@@ -230,6 +230,18 @@ import type {
   LinearProjectDetail,
   LinearProjectSummary,
   LinearTeam,
+  HulyViewer,
+  HulyConnectionStatus,
+  HulyIssue,
+  HulyIssueUpdate,
+  HulyIssueState,
+  HulyComment,
+  HulyLabel,
+  HulyListFilter,
+  HulyTeamMember,
+  HulyTeamSummary,
+  HulyProjectDetail,
+  HulyProjectSummary,
   MarkdownDocument,
   FloatingTerminalCwdRequest,
   GitHubIssueUpdate,
@@ -2321,6 +2333,72 @@ export type PreloadApi = {
       projectKey: string
       siteId?: string
     }) => Promise<JiraProjectStatusOrder>
+  }
+  huly: {
+    connect: (args: {
+      name: string
+      url: string
+      workspace: string
+      email: string | null
+      secret: string
+    }) => Promise<{ ok: true; viewer: HulyViewer } | { ok: false; error: string }>
+    disconnect: (args?: { connectionId?: string }) => Promise<HulyConnectionStatus>
+    selectConnection: (args: { connectionId: string }) => Promise<HulyConnectionStatus>
+    status: () => Promise<HulyConnectionStatus>
+    preflight: () => Promise<{ installed: boolean; authenticated: boolean; cliVersion?: string }>
+    searchIssues: (args: {
+      query: string
+      limit?: number
+      connectionId?: string
+    }) => Promise<HulyIssue[]>
+    listIssues: (args?: {
+      filter?: HulyListFilter
+      limit?: number
+      connectionId?: string
+    }) => Promise<HulyIssue[]>
+    createIssue: (args: {
+      teamId: string
+      title: string
+      description?: string
+      priority?: number
+      stateId?: string
+      assigneeId?: string | null
+      labelIds?: string[]
+      projectId?: string | null
+      connectionId?: string
+    }) => Promise<{ ok: true; issue: HulyIssue } | { ok: false; error: string }>
+    getIssue: (args: { id: string; connectionId?: string }) => Promise<HulyIssue | null>
+    updateIssue: (args: {
+      id: string
+      updates: HulyIssueUpdate
+      connectionId?: string
+    }) => Promise<{ ok: true } | { ok: false; error: string }>
+    addComment: (args: {
+      issueId: string
+      body: string
+      connectionId?: string
+    }) => Promise<{ ok: true; comment: HulyComment } | { ok: false; error: string }>
+    listComments: (args: { issueId: string; connectionId?: string }) => Promise<HulyComment[]>
+    listTeams: (args?: { connectionId?: string }) => Promise<HulyTeamSummary[]>
+    listProjects: (args?: {
+      query?: string
+      limit?: number
+      connectionId?: string
+    }) => Promise<HulyProjectSummary[]>
+    getProject: (args: { id: string; connectionId?: string }) => Promise<HulyProjectDetail | null>
+    createProject: (args: {
+      name: string
+      description?: string
+      connectionId?: string
+    }) => Promise<{ ok: true; project: HulyProjectSummary } | { ok: false; error: string }>
+    listProjectIssues: (args: {
+      projectId: string
+      limit?: number
+      connectionId?: string
+    }) => Promise<HulyIssue[]>
+    teamMembers: (args: { teamId: string; connectionId?: string }) => Promise<HulyTeamMember[]>
+    teamStates: (args: { teamId: string; connectionId?: string }) => Promise<HulyIssueState[]>
+    teamLabels: (args: { teamId: string; connectionId?: string }) => Promise<HulyLabel[]>
   }
   starNag: {
     onShow: (

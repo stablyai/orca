@@ -38,6 +38,14 @@ function getRepoBackedProviderToolStatus(
     : 'unsupported'
 }
 
+// Why: Huly is account-backed (credentials live in Orca's keychain), not
+// repo-backed. The CLI binary is a preflight concern, not an availability gate.
+export function isAccountBackedProvider(
+  provider: TaskProvider
+): provider is 'linear' | 'jira' | 'huly' {
+  return provider === 'linear' || provider === 'jira' || provider === 'huly'
+}
+
 function getProviderReason(
   status: ProviderAvailabilityStatus
 ): TaskSourceHostAvailability['reason'] | null {

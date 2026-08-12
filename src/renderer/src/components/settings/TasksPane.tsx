@@ -4,8 +4,10 @@ import type { GlobalSettings, TaskProvider } from '../../../../shared/types'
 import {
   TASK_PROVIDERS,
   normalizeVisibleTaskProviders,
+  orderTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
+import { HulyIcon } from '@/components/icons/HulyIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
@@ -14,12 +16,14 @@ import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
+import { TaskSourceHulySetup } from './TaskSourceHulySetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
   getStalledVisibleTaskProviders,
   resolveStickyAutoExpandedTaskProvider
 } from './task-source-setup-state'
 import {
+  HULY_INTEGRATION_SECTION_ID,
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
@@ -88,6 +92,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  huly: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.huly', 'Huly')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.hulyDescription',
+        'Connect a Huly instance, install the agent skill, and show it in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <HulyIcon className={className} />
   }
 }
 
@@ -188,7 +204,11 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
           keywords={getTasksPaneSearchKeywords()}
           className="space-y-3 py-2"
         >
-          {TASK_PROVIDERS.map((provider) => {
+          {orderTaskProviders(TASK_PROVIDERS, {
+            gitlabInstalled: readinessByProvider.gitlab.connected,
+            linearConnected: readinessByProvider.linear.connected,
+            hulyConnected: readinessByProvider.huly.connected
+          }).map((provider) => {
             const meta = PROVIDER_META[provider]
             const readiness = readinessByProvider[provider]
             const Icon = meta.Icon
@@ -225,6 +245,15 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'huly' ? (
+                  <TaskSourceHulySetup
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('huly')}
+                    onOpenIntegrations={() => openIntegrations(HULY_INTEGRATION_SECTION_ID)}
                   />
                 ) : (
                   <CodeHostSetupSteps
