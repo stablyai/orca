@@ -5,7 +5,9 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
@@ -160,4 +162,19 @@ export function isCursorAgentTitle(title: string | null | undefined): boolean {
 // owns the pane. A hookless Cursor pane still needs the literal once, for identity.
 export function shouldSuppressCursorNativeTitle(lastEmittedTitle: string | null): boolean {
   return lastEmittedTitle !== null && isCursorAgentTitle(lastEmittedTitle)
+}
+
+// Why: only identity frames (not free-form task text mentioning "cline") claim the pane.
+const CLINE_IDENTITY_FRAME_RE =
+  /^cline(?:\.(?:exe|cmd|bat|ps1))?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+export function isClineAgentTitle(title: string | null | undefined): boolean {
+  if (typeof title !== 'string') {
+    return false
+  }
+  return getWrapperTitleSegments(title).some((segment) =>
+    CLINE_IDENTITY_FRAME_RE.test(
+      stripLeadingAgentTitleDecorationOrEmpty(segment).trim().toLowerCase()
+    )
+  )
 }

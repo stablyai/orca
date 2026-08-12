@@ -4,7 +4,11 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
+import {
+  containsAgentSpinnerGlyph,
+  isClineAgentTitle,
+  isCursorAgentTitle
+} from './agent-title-core'
 import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
@@ -97,9 +101,10 @@ export function isClaudeAgent(title: string): boolean {
     return true
   }
   if (containsAgentSpinnerGlyph(title)) {
-    // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
-    // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
-    return !isCursorAgentTitle(title) && !lower.includes('openclaude')
+    // Why: gate Cursor/Cline by identity frames so Claude task text mentioning them stays Claude.
+    return (
+      !isCursorAgentTitle(title) && !isClineAgentTitle(title) && !lower.includes('openclaude')
+    )
   }
   // Why: permission/action-required Claude titles can omit the usual prefixes.
   // Token-match so cwd/worktree titles like "claude-scratch" do not become
@@ -184,6 +189,10 @@ export function getAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'aider')) {
     return 'Aider'
   }
+  // Why: identity frames only — task text mentioning "cline" must not steal Claude panes.
+  if (isClineAgentTitle(title)) {
+    return 'Cline'
+  }
   // Why: `cursor` is ordinary editor vocabulary, not identity. Match Cursor's closed
   // title set (mirrors @cursor routing), before `isClaudeAgent` claims the braille frame.
   if (isCursorAgentTitle(title)) {
@@ -222,6 +231,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
   OpenCode: 'opencode',
   'MiMo Code': 'mimo-code',
   Aider: 'aider',
+  Cline: 'cline',
   Cursor: 'cursor',
   Droid: 'droid',
   Hermes: 'hermes',

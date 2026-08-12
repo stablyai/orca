@@ -201,6 +201,53 @@ describe('buildTitleDerivedAgentRows', () => {
     }
   })
 
+  // Why: live Windows `cline -i` emits bare "Cline"; without title-path identity the row is dropped.
+  it('adds an idle Cline row for the live Cline identity title', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: 'Cline' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-cline'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.lastAssistantMessage])).toEqual([
+      ['cline', 'idle', 'Idle']
+    ])
+  })
+
+  it('does not invent a Cline row from Claude task text that merely mentions cline', () => {
+    const unowned = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1')],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ use cline for the sidebar fix' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude-task'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(unowned).toHaveLength(0)
+
+    const owned = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'claude' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': { 1: '⠋ use cline for the sidebar fix' }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-claude-task'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+    expect(owned.map((row) => row.agentType)).toEqual(['claude'])
+  })
+
   it('attributes a spinner-only title to the launched agent when the title has no identity', () => {
     const launchAgent: TuiAgent = 'codex'
     const rows = buildWorktreeAgentRows({

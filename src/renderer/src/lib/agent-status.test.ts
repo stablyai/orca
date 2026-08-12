@@ -512,6 +512,11 @@ describe('getAgentLabel', () => {
     expect(getAgentLabel('⠋ preserve cursor visibility across replays')).toBe('Claude Code')
     expect(getAgentLabel('⠋ Codex: fix cursor offsets')).toBe('Codex')
     expect(getAgentLabel('Terminal Cursor and Orca slows down')).toBeNull()
+    expect(getAgentLabel('Cline')).toBe('Cline')
+    expect(getAgentLabel('Cline ready')).toBe('Cline')
+    expect(getAgentLabel('⠋ Cline')).toBe('Cline')
+    expect(getAgentLabel('⠋ use cline for the sidebar fix')).toBe('Claude Code')
+    expect(getAgentLabel('~/cline-scratch')).toBeNull()
   })
 })
 
