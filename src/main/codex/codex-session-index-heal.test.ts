@@ -216,6 +216,32 @@ describe('runCodexSessionIndexHeal', () => {
     expect(rig.readLog()).toMatchObject({ serverStarts: 0, threadIds: [] })
   })
 
+  it('lets a later archived rollout cancel an earlier pending publication', async () => {
+    const id = threadId('1')
+    const activeStamp = '2026-07-01T10-00-00'
+    const archivedStamp = '2026-07-02T10-00-00'
+    const rig = createHealRig({
+      auditedThreads: [
+        { stamp: activeStamp, id },
+        { stamp: archivedStamp, id }
+      ]
+    })
+    const archivedPath = join(
+      rig.paths.systemArchivedSessionsRoot,
+      `rollout-${archivedStamp}-${id}.jsonl`
+    )
+    mkdirSync(dirname(archivedPath), { recursive: true })
+    writeFileSync(archivedPath, 'archived\n', 'utf-8')
+
+    const summary = await runCodexSessionIndexHeal(rig.paths, {
+      buildInvocation: rig.buildInvocation,
+      interBatchDelayMs: 0
+    })
+
+    expect(summary).toMatchObject({ outcome: 'completed', pendingThreads: 0, healedThreads: 0 })
+    expect(rig.readLog()).toMatchObject({ serverStarts: 0, threadIds: [] })
+  })
+
   it('reads every backfilled session recent-first and completes with a marker', async () => {
     const rig = createHealRig({
       auditedThreads: [

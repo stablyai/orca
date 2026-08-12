@@ -1,6 +1,17 @@
 import type { Stats } from 'node:fs'
-import { unlink } from 'node:fs/promises'
+import { lstat, unlink } from 'node:fs/promises'
 import { readCodexSessionTargetStat } from './codex-session-backfill-audit-pass'
+
+export async function readArchivedCodexSessionStat(filePath: string): Promise<Stats | null> {
+  try {
+    return await lstat(filePath)
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return null
+    }
+    throw error
+  }
+}
 
 export async function removeRedundantActiveCodexSessionHardlink(
   managedSessionFilePath: string,

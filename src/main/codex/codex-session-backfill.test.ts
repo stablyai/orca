@@ -30,6 +30,7 @@ const { fsMockState } = vi.hoisted(() => ({
     failLinkPermission: false,
     raceTargetIntoExistence: false,
     archivePathAfterLink: null as string | null,
+    failLstatPathAfterLink: null as string | null,
     failMarkerRm: false,
     failMarkerReplacement: false,
     failAuditMkdirOnce: false,
@@ -137,6 +138,10 @@ vi.mock('node:fs/promises', async () => {
         throw error
       }
       await actual.link(...args)
+      if (fsMockState.failLstatPathAfterLink) {
+        fsMockState.failLstatPath = fsMockState.failLstatPathAfterLink
+        fsMockState.failLstatPathAfterLink = null
+      }
       if (fsMockState.archivePathAfterLink) {
         const archivedPath = fsMockState.archivePathAfterLink
         fsMockState.archivePathAfterLink = null
@@ -231,6 +236,7 @@ beforeEach(() => {
   fsMockState.failLinkPermission = false
   fsMockState.raceTargetIntoExistence = false
   fsMockState.archivePathAfterLink = null
+  fsMockState.failLstatPathAfterLink = null
   fsMockState.failMarkerRm = false
   fsMockState.failMarkerReplacement = false
   fsMockState.failAuditMkdirOnce = false
@@ -343,6 +349,28 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(readAuditActions()).toEqual(['run-summary'])
   })
 
+  it('fails closed when the archived rollout cannot be inspected', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000005.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    fsMockState.failLstatPath = join(
+      getSystemArchivedSessionsRoot(),
+      relativePath.split(/[/\\]/).at(-1)!
+    )
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, failedFiles: 1 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
+  })
+
   it('rolls back its new active link when an archive wins the publication race', async () => {
     const relativePath = join(
       '2026',
@@ -362,6 +390,28 @@ describe('backfillManagedCodexSessionsIntoSystemHome', () => {
     expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
     expect(existsSync(archivedPath)).toBe(true)
     expect(readAuditActions()).toEqual(['run-summary'])
+  })
+
+  it('rolls back its new active link when the archive race probe fails', async () => {
+    const relativePath = join(
+      '2026',
+      '05',
+      '26',
+      'rollout-2026-05-26T10-00-00-019f0000-1111-7222-8333-000000000006.jsonl'
+    )
+    writeManagedSession(relativePath, 'managed contents\n')
+    fsMockState.failLstatPathAfterLink = join(
+      getSystemArchivedSessionsRoot(),
+      relativePath.split(/[/\\]/).at(-1)!
+    )
+
+    const summary = await backfillManagedCodexSessionsIntoSystemHome(
+      resolveCodexSessionBackfillPaths()
+    )
+
+    expect(summary).toMatchObject({ linkedFiles: 0, failedFiles: 1 })
+    expect(existsSync(join(getSystemSessionsRoot(), relativePath))).toBe(false)
+    expect(readAuditActions()).toEqual(['failed', 'run-summary'])
   })
 
   it('removes an active duplicate when the same rollout is archived', async () => {

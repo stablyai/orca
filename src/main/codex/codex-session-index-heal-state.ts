@@ -70,12 +70,13 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
     if (!match) {
       continue
     }
+    const threadId = match[2].toLowerCase()
     if (isArchivedRollout(paths, lastPathSegment(line.target))) {
       // Historical publication records remain append-only, but an archived
-      // rollout must never be re-indexed into the active task list.
+      // rollout must cancel any older pending publication for this thread.
+      pendingByThreadId.delete(threadId)
       continue
     }
-    const threadId = match[2].toLowerCase()
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
       auditRecordId
