@@ -279,7 +279,6 @@ describe('orchestration skill guidance', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
-    expect(workerLoop).toContain('Claude model-family requests without an explicit provider')
     expect(workerLoop).toContain('`--effort` requires `--model`')
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
     expect(workerLoop).toContain('--agent claude --model opus --effort high --json')

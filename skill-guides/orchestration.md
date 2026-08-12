@@ -194,8 +194,6 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
-For Claude model-family requests without an explicit provider, use the provider-neutral family alias (for example, `opus`) rather than inferring a provider-specific id from documentation examples.
-
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
