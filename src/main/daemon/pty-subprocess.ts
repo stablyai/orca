@@ -75,6 +75,8 @@ import {
 } from '../../shared/windows-environment-expansion'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
+import { MacosLoginWrapperDeathWatch } from './macos-login-wrapper-death-watch'
+import type { DaemonFileLog } from './daemon-file-log'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -130,6 +132,8 @@ export type PtySubprocessOptions = {
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   onMacosTccSpawnStrategy?: (strategy: 'wrapped' | 'direct') => void
+  /** Optional daemon file log for login-wrapper empty-session reaping (#13764). */
+  log?: DaemonFileLog
 }
 
 function deleteRequestedDaemonEnvKeys(
@@ -562,10 +566,16 @@ function spawnDaemonPtyWithWindowsFallback(args: {
   process: pty.IPty
   shellPath: string
   spawnCwd: string
+  macosTccSpawnStrategy: 'wrapped' | 'direct'
   startupCommandDeliveredInShellArgs?: boolean
 } {
-  const spawnAt = (shellPath: string, shellArgs: string[], cwd: string): pty.IPty => {
+  const spawnAt = (
+    shellPath: string,
+    shellArgs: string[],
+    cwd: string
+  ): { process: pty.IPty; macosTccSpawnStrategy: 'wrapped' | 'direct' } => {
     const wrapped = wrapShellSpawnForMacosTccAttribution(shellPath, shellArgs, args.env)
+    const strategy: 'wrapped' | 'direct' = wrapped.file === shellPath ? 'direct' : 'wrapped'
     const proc = pty.spawn(wrapped.file, wrapped.args, {
       name: args.env.TERM ?? 'xterm-256color',
       cols: args.cols,
@@ -575,15 +585,17 @@ function spawnDaemonPtyWithWindowsFallback(args: {
       // Why: legacy system ConPTY can corrupt full-width TUI rows in scrollback; bundled ConPTY has the wrap-marker behavior xterm expects.
       ...(process.platform === 'win32' ? { useConptyDll: true } : {})
     })
-    args.onMacosTccSpawnStrategy?.(wrapped.file === shellPath ? 'direct' : 'wrapped')
-    return proc
+    args.onMacosTccSpawnStrategy?.(strategy)
+    return { process: proc, macosTccSpawnStrategy: strategy }
   }
 
   try {
+    const primary = spawnAt(args.shellPath, args.shellArgs, args.spawnCwd)
     return {
-      process: spawnAt(args.shellPath, args.shellArgs, args.spawnCwd),
+      process: primary.process,
       shellPath: args.shellPath,
-      spawnCwd: args.spawnCwd
+      spawnCwd: args.spawnCwd,
+      macosTccSpawnStrategy: primary.macosTccSpawnStrategy
     }
   } catch (primaryErr) {
     if (process.platform !== 'win32') {
@@ -592,15 +604,16 @@ function spawnDaemonPtyWithWindowsFallback(args: {
     // Skip the first entry: it is the primary that already failed above.
     for (const attempt of args.windowsFallbackAttempts.slice(1)) {
       try {
-        const process = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
+        const fallback = spawnAt(attempt.shellPath, attempt.shellArgs, attempt.effectiveCwd)
         const message = primaryErr instanceof Error ? primaryErr.message : String(primaryErr)
         console.warn(
           `[daemon/pty] Primary shell "${args.shellPath}" failed (${message}), fell back to "${attempt.shellPath}"`
         )
         return {
-          process,
+          process: fallback.process,
           shellPath: attempt.shellPath,
           spawnCwd: attempt.effectiveCwd,
+          macosTccSpawnStrategy: fallback.macosTccSpawnStrategy,
           startupCommandDeliveredInShellArgs: attempt.startupCommandDeliveredInShellArgs
         }
       } catch {
@@ -846,6 +859,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   })
 
   let proc: pty.IPty
+  let macosTccSpawnStrategy: 'wrapped' | 'direct' = 'direct'
   try {
     const spawned = spawnDaemonPtyWithWindowsFallback({
       shellPath,
@@ -858,6 +872,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       onMacosTccSpawnStrategy: opts.onMacosTccSpawnStrategy
     })
     proc = spawned.process
+    macosTccSpawnStrategy = spawned.macosTccSpawnStrategy
     // Why: a Windows fallback (e.g. cmd.exe) carries its own argv-embedded startup command; adopt the winning shell's identity + delivery flag.
     shellPath = spawned.shellPath
     spawnCwd = spawned.spawnCwd
@@ -876,6 +891,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let pendingPreListenerData: string[] = []
   let pendingPreListenerDataChars = 0
   let pendingPreListenerExitCode: number | null = null
+  let loginWrapperDeathWatch: MacosLoginWrapperDeathWatch | null = null
 
   const bufferPreListenerData = (data: string): void => {
     // Why: Windows shell-arg startup commands can print before Session wires this subprocess in; preserve that spawn-time race window.
@@ -903,6 +919,11 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   }
 
+  const stopLoginWrapperDeathWatch = (): void => {
+    loginWrapperDeathWatch?.stop()
+    loginWrapperDeathWatch = null
+  }
+
   let lastOutputAt = 0
   proc.onData((data) => {
     if (data.length > 0) {
@@ -915,6 +936,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
     }
   })
   proc.onExit(({ exitCode }) => {
+    stopLoginWrapperDeathWatch()
     if (onExitCb) {
       flushPreListenerData()
       onExitCb(exitCode)
@@ -927,6 +949,38 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
   let dead = false
   let disposed = false
   let nodePtyKillIssued = false
+
+  const forceKillOwnedRoot = (): void => {
+    // Why: after reap/dispose proc.pid is a recycled pid, so SIGKILL would hit an unrelated process (forceKill only signals a live child).
+    // Why: Windows node-pty kill already closed ConPTY; forcing again can double-close the native handle.
+    if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
+      return
+    }
+    try {
+      forceKillPosixPtyProcessGroups(proc.pid, () => {
+        process.kill(proc.pid, 'SIGKILL')
+      })
+    } catch (signalError) {
+      try {
+        proc.kill()
+        nodePtyKillIssued = true
+      } catch {
+        nodePtyKillIssued = false
+        // Keep the original OS failure so callers can retry the same owner.
+        throw signalError
+      }
+    }
+  }
+
+  // Why: TCC login wrappers make the PTY root login(1); shell exit can leave login holding the PTY with no onExit (#13764).
+  if (process.platform === 'darwin' && macosTccSpawnStrategy === 'wrapped' && proc.pid) {
+    loginWrapperDeathWatch = new MacosLoginWrapperDeathWatch({
+      rootPid: proc.pid,
+      forceKillRoot: forceKillOwnedRoot,
+      log: opts.log
+    })
+    loginWrapperDeathWatch.start()
+  }
   let cachedAgentForeground: { processName: string; refreshedAt: number } | null = null
   const agentForegroundContextPaths = getAgentForegroundContextPaths({
     cwd: opts.cwd,
@@ -1227,25 +1281,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
     },
     forceKill: () => {
-      // Why: after reap/dispose proc.pid is a recycled pid, so SIGKILL would hit an unrelated process (forceKill only signals a live child).
-      // Why: Windows node-pty kill already closed ConPTY; forcing again can double-close the native handle.
-      if (dead || (process.platform === 'win32' && nodePtyKillIssued)) {
-        return
-      }
-      try {
-        forceKillPosixPtyProcessGroups(proc.pid, () => {
-          process.kill(proc.pid, 'SIGKILL')
-        })
-      } catch (signalError) {
-        try {
-          proc.kill()
-          nodePtyKillIssued = true
-        } catch {
-          nodePtyKillIssued = false
-          // Keep the original OS failure so callers can retry the same owner.
-          throw signalError
-        }
-      }
+      forceKillOwnedRoot()
     },
     signal: (sig) => {
       // Why: same recycled-pid hazard as forceKill — once dead, dropping avoids signalling an unrelated process.
@@ -1288,6 +1324,7 @@ export function createPtySubprocess(opts: PtySubprocessOptions): SubprocessHandl
       }
       disposed = true
       dead = true
+      stopLoginWrapperDeathWatch()
       onDataCb = null
       onExitCb = null
       pendingPreListenerData = []

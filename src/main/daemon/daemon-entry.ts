@@ -295,6 +295,7 @@ async function main(): Promise<void> {
     spawnSubprocess: (opts) =>
       createPtySubprocess({
         ...opts,
+        log: daemonLog,
         ...(process.platform === 'darwin'
           ? {
               onMacosTccSpawnStrategy: (strategy) =>
