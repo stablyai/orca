@@ -17,6 +17,7 @@ export const MOBILE_TUI_AGENT_AUTO_PICK_ORDER = [
   'pi',
   'omp',
   'prime-agent',
+  'gjc',
   'gemini',
   'antigravity',
   'aider',
@@ -78,7 +79,8 @@ export const MOBILE_TUI_AGENT_LABELS: Record<TuiAgent, string> = {
   rovo: 'Rovo Dev',
   hermes: 'Hermes',
   devin: 'Devin',
-  openclaw: 'OpenClaw'
+  openclaw: 'OpenClaw',
+  gjc: 'Gajae Code'
 }
 
 export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>> = {

@@ -19,6 +19,7 @@ export const TUI_AGENT_DISPLAY_NAMES: Record<TuiAgent, string> = {
   pi: 'Pi',
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
+  gjc: 'Gajae Code',
   gemini: 'Gemini',
   antigravity: 'Antigravity',
   aider: 'Aider',

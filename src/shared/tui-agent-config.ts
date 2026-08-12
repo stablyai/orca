@@ -114,6 +114,23 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     // Why: Prime Agent embeds Pi's TUI and decodes CSI-u the same way (see pi above).
     windowsShiftEnterEncoding: 'csi-u'
   },
+  gjc: {
+    detectCmd: 'gjc',
+    launchCmd: 'gjc',
+    // Why: `gjc` ships as a compiled single-file binary, so the foreground process
+    // carries its own name — no Node/Bun shim entrypoint to disambiguate.
+    expectedProcess: 'gjc',
+    // Why: `gjc [prompt]` takes the task as positional argv (`gjc "List all .ts files in src/"`).
+    promptInjectionMode: 'argv',
+    // Why: separator so a prompt that is exactly a subcommand word (`resume`, `stats`,
+    // `models`) or starts with `/` reaches the parser as message text instead of
+    // dispatching. Verified against its arg parser: a bare `--` is skipped and every
+    // following non-flag token lands in `messages`.
+    argvPromptSeparator: '--'
+    // Why no windowsShiftEnterEncoding: unlike the Pi TUI it forked, gjc binds newline to
+    // `alt+enter`/`ctrl+j` on win32 (interactive-mode.ts) rather than `shift+enter`, so the
+    // default Esc+CR path is already the encoding it expects.
+  },
   gemini: {
     detectCmd: 'gemini',
     launchCmd: 'gemini',
