@@ -116,6 +116,7 @@ import {
 import { clampMarkdownTocPanelWidth } from '../../../../shared/markdown-toc-panel-width'
 import { clampCombinedDiffFileTreeWidth } from '../../../../shared/combined-diff-file-tree-width'
 import { normalizeKagiSessionLink } from '../../../../shared/browser-url'
+import { buildBeadsRepoTaskSourceContext } from '../../lib/beads-repo-task-source-context'
 import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import {
   isSettingsNavigationTarget,
@@ -314,21 +315,6 @@ const MAX_LEFT_SIDEBAR_WIDTH = 500
 const MAX_RIGHT_SIDEBAR_WIDTH = 4000
 const LINEAR_TASK_PREFETCH_LIMIT = 36
 
-// Why: must mint the same cache scope as TaskPage's repo-backed beads context
-// (identity prefix unknown pre-fetch → cache part ''), or the warm fetch misses.
-function buildBeadsRepoPrefetchContext(repo: Repo): TaskSourceContext | null {
-  const projection = projectHostSetupProjectionFromRepos([repo])
-  const setup = projection.setups[0]
-  const project = projection.projects[0]
-  return normalizeTaskSourceContext({
-    provider: 'beads',
-    projectId: setup?.projectId ?? project?.id ?? repo.id,
-    hostId: setup?.hostId ?? getRepoExecutionHostId(repo),
-    projectHostSetupId: setup?.id,
-    repoId: repo.id,
-    providerIdentity: null
-  })
-}
 // Why: bound disk growth across hard quits (crash paths leave acks pinned); mirrors HYDRATE_MAX_AGE_MS in agent-hooks/server.ts.
 const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 const VALID_TASK_PRESETS = new Set<TaskViewPresetId>([
@@ -1496,7 +1482,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // Why: qualifiers beyond the fetch scope filter client-side, so the warmed
       // list serves any resume query with the same plan.
       for (const repo of selectedRepos) {
-        const context = buildBeadsRepoPrefetchContext(repo)
+        const context = buildBeadsRepoTaskSourceContext(repo)
         if (context) {
           state.prefetchBeadsIssues(context, plan)
         }

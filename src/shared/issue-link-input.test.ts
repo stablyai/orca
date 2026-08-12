@@ -115,4 +115,39 @@ describe('parseIssueLinkInput', () => {
       expect(parseIssueLinkInput('   ', 'linear')).toBeNull()
     })
   })
+
+  describe('beads provider', () => {
+    it('accepts bd ids and preserves their casing', () => {
+      expect(parseIssueLinkInput('orca-4f8a2c', 'beads')).toEqual({
+        provider: 'beads',
+        beadsId: 'orca-4f8a2c'
+      })
+      expect(parseIssueLinkInput('  beads-probe-ay8 ', 'beads')).toEqual({
+        provider: 'beads',
+        beadsId: 'beads-probe-ay8'
+      })
+    })
+
+    it('accepts hierarchical child ids', () => {
+      expect(parseIssueLinkInput('orca-4f8a2c.12', 'beads')).toEqual({
+        provider: 'beads',
+        beadsId: 'orca-4f8a2c.12'
+      })
+    })
+
+    // A bare number is GitHub-shaped; without the interior hyphen it must not
+    // silently become a beads link when the chip happens to be on Beads.
+    it('rejects bare numbers, edge hyphens, and junk', () => {
+      expect(parseIssueLinkInput('42', 'beads')).toBeNull()
+      expect(parseIssueLinkInput('#42', 'beads')).toBeNull()
+      expect(parseIssueLinkInput('-lead', 'beads')).toBeNull()
+      expect(parseIssueLinkInput('trail-', 'beads')).toBeNull()
+      expect(parseIssueLinkInput('has spaces-1a', 'beads')).toBeNull()
+      expect(parseIssueLinkInput('', 'beads')).toBeNull()
+    })
+
+    it('never claims URLs during provider detection', () => {
+      expect(getIssueLinkProviderFromUrl('https://github.com/o/r/issues/12')).toBe('github')
+    })
+  })
 })

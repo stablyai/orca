@@ -2097,7 +2097,10 @@
         "beadsRelationSubIssues": "Sub-issues",
         "beadsRelationBlockedBy": "Blocked by",
         "beadsRelationBlocks": "Blocks",
-        "beadsRelationRelated": "Related"
+        "beadsRelationRelated": "Related",
+        "beadsBodyNotes": "Notes",
+        "beadsBodyDesign": "Design",
+        "beadsBodyAcceptanceCriteria": "Acceptance criteria"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -5868,11 +5871,16 @@
           "f047887705": "Paste a GitHub or Linear URL, or enter a number. Leave blank to remove the link.",
           "ad78f9bee2": "Issue",
           "662ae142f8": "Issue #, or a GitHub or Linear URL",
-          "929c98d05a": "Issue provider"
+          "929c98d05a": "Issue provider",
+          "beadsProvider": "Beads",
+          "beadsInvalid": "Not a Beads issue id (like orca-1a2b).",
+          "beadsHelper": "Enter a bd issue id from this repo. Leave blank to remove the link.",
+          "beadsPlaceholder": "Beads issue id"
         },
         "worktreeIssueDisplacement": {
           "3f61c0a8d2": "Linear {{value}}",
-          "9c4b7e1f60": "GitHub #{{value}}"
+          "9c4b7e1f60": "GitHub #{{value}}",
+          "beadsLink": "Beads {{value}}"
         },
         "WorktreeCardSshHostControl": {
           "connectFailed": "SSH connection failed",

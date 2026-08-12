@@ -18,6 +18,7 @@ import {
   type WorktreeMetaSavedPayload,
   type WorktreeMetaSnapshot
 } from './worktree-meta-updates'
+import { withEnrichedBeadsLinkedWorkItemTitle } from './worktree-beads-linked-item-title'
 import { useWorktreeIssueLink } from './use-worktree-issue-link'
 import { useWorktreeMetaWorkspace } from './use-worktree-meta-workspace'
 import { WorktreeIssueLinkField } from './WorktreeIssueLinkField'
@@ -73,6 +74,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     worktree,
     linkedIssue,
     linkedLinearIssue,
+    linkedBeadsIssue,
     currentIssue,
     currentProvider,
     isFolderWorkspace,
@@ -199,9 +201,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
         snapshot,
         isFolderWorkspace,
         linkedIssue,
-        linkedLinearIssue
+        linkedLinearIssue,
+        linkedBeadsIssue
       }),
-    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue]
+    [draft, snapshot, isFolderWorkspace, linkedIssue, linkedLinearIssue, linkedBeadsIssue]
   )
 
   const handleOpenChange = useCallback(
@@ -222,7 +225,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     // spinner for the whole in-flight save.
     setSaveError(null)
     try {
-      const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
+      // Why: a typed beads id has no title; bd supplies it when the repo answers.
+      const updates = await withEnrichedBeadsLinkedWorkItemTitle(
+        buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
+      )
 
       const result = await updateWorktreeMeta(worktreeId, updates)
       // Why: a failed save refetches and reverts the optimistic write. Closing
