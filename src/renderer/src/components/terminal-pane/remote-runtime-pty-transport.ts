@@ -836,10 +836,16 @@ export function createRemoteRuntimePtyTransport(
       onPtySpawn?.(remotePtyId)
     }
 
+    // Why: a concurrent attach can replace handle/id while this subscribe is in flight; the failure
+    // must be matched against the terminal it was issued for, not whatever is current on rejection.
+    const subscribedPtyId = remotePtyId
+    // Why: subscribeToHandle stamps its generation synchronously, so read it once the attempt is running.
+    const subscribePending = subscribeToHandle()
+    const subscribedGeneration = subscriptionGeneration
     try {
-      await subscribeToHandle()
+      await subscribePending
     } catch (error) {
-      if (!recoverAfterSubscribeFailure(error, hostHandle, remotePtyId)) {
+      if (!recoverAfterSubscribeFailure(error, hostHandle, subscribedPtyId, subscribedGeneration)) {
         throw error
       }
     }
@@ -1119,10 +1125,21 @@ export function createRemoteRuntimePtyTransport(
       onPtySpawn?.(remotePtyId)
     }
     emitRecoveryState()
+    const subscribedHandle = handle
+    const subscribedPtyId = remotePtyId
+    const subscribePending = subscribeToHandle()
+    const subscribedGeneration = subscriptionGeneration
     try {
-      await subscribeToHandle()
+      await subscribePending
     } catch (error) {
-      if (!recoverAfterSubscribeFailure(error, handle, remotePtyId)) {
+      if (
+        !recoverAfterSubscribeFailure(
+          error,
+          subscribedHandle,
+          subscribedPtyId,
+          subscribedGeneration
+        )
+      ) {
         throw error
       }
     }
@@ -1440,8 +1457,12 @@ export function createRemoteRuntimePtyTransport(
           const reattachEpoch = recovery.begin()
           clearPublishedHandleWait()
           const reusedPtyId = remotePtyId
-          void subscribeToHandle(reattachEpoch, true).catch((error) => {
-            if (!recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId)) {
+          const reattachPending = subscribeToHandle(reattachEpoch, true)
+          const reattachGeneration = subscriptionGeneration
+          void reattachPending.catch((error) => {
+            if (
+              !recoverAfterSubscribeFailure(error, previousHandle, reusedPtyId, reattachGeneration)
+            ) {
               handleRemoteTerminalError(error)
             }
           })
@@ -1454,8 +1475,13 @@ export function createRemoteRuntimePtyTransport(
         rebindRemoteTerminalHandle(update.terminalHandle)
         const reboundHandle = handle
         const reboundPtyId = remotePtyId
-        void subscribeToHandle().catch((error) => {
-          if (reboundHandle && !recoverAfterSubscribeFailure(error, reboundHandle, reboundPtyId)) {
+        const reboundPending = subscribeToHandle()
+        const reboundGeneration = subscriptionGeneration
+        void reboundPending.catch((error) => {
+          if (
+            reboundHandle &&
+            !recoverAfterSubscribeFailure(error, reboundHandle, reboundPtyId, reboundGeneration)
+          ) {
             handleRemoteTerminalError(error)
           }
         })
@@ -1507,7 +1533,8 @@ export function createRemoteRuntimePtyTransport(
   function recoverAfterSubscribeFailure(
     error: unknown,
     targetHandle: string,
-    targetPtyId: string | null
+    targetPtyId: string | null,
+    targetGeneration: number
   ): boolean {
     if (!isSameRemoteTerminal(targetHandle, targetPtyId)) {
       return true
@@ -1517,7 +1544,12 @@ export function createRemoteRuntimePtyTransport(
     }
     dropClaimQueuedInput()
     if (!isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))) {
-      clearPendingViewportClaim()
+      // Why: same-handle recovery overlaps subscribe attempts, so handle/ptyId identity alone cannot
+      // tell a dead attempt from the live one; only the failing attempt's own generation may retire it.
+      if (targetGeneration !== subscriptionGeneration) {
+        return true
+      }
+      retireAttachmentAfterFatalSubscribe(targetPtyId)
       return false
     }
     if (recovery.currentPhase === 'disconnected') {
@@ -1525,6 +1557,23 @@ export function createRemoteRuntimePtyTransport(
     }
     scheduleResubscribeAfterTransportClose()
     return true
+  }
+
+  // Why: a fatal subscribe rejection never installs a stream, so no stream callback will ever retire
+  // this attachment. Leaving connected and PTY identity live lets a later claim take the grid over the
+  // one-shot RPC and parks an acknowledged write on a claim waiter nothing can resolve.
+  function retireAttachmentAfterFatalSubscribe(stalePtyId: string | null): void {
+    recovery.cancel()
+    clearPublishedHandleWait()
+    connected = false
+    connecting = false
+    clearPendingViewportClaim()
+    unregisterShutdownHandlers(stalePtyId)
+    handle = null
+    remotePtyId = null
+    closeMultiplexedStream()
+    setAttachmentUnavailable()
+    emitRecoveryState()
   }
 
   // Why: after a transport drop the host may have re-minted this handle; re-derive from the snapshot so we don't mirror/type into whatever PTY now sits behind the stale one (#7718).
@@ -2145,10 +2194,21 @@ export function createRemoteRuntimePtyTransport(
         }
         emitRecoveryState()
 
+        const subscribedHandle = handle
+        const subscribedPtyId = remotePtyId
+        const subscribePending = subscribeToHandle()
+        const subscribedGeneration = subscriptionGeneration
         try {
-          await subscribeToHandle()
+          await subscribePending
         } catch (error) {
-          if (!recoverAfterSubscribeFailure(error, handle, remotePtyId)) {
+          if (
+            !recoverAfterSubscribeFailure(
+              error,
+              subscribedHandle,
+              subscribedPtyId,
+              subscribedGeneration
+            )
+          ) {
             throw error
           }
         }

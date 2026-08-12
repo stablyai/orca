@@ -5354,6 +5354,56 @@ describe('connectPanePty', () => {
     expect(claims).toEqual([[96, 30, { claim: true }]])
   })
 
+  it('resizes a direct-SSH PTY after spawn without claiming the viewport', async () => {
+    // Why: explicit viewport claims exist only on paired runtimes. A direct-SSH PTY has one owner, so
+    // a claim flag on its resize would be an unsupported option riding a supported path.
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const runNextFrame = (): void => {
+      const callback = frameCallbacks.shift()
+      if (!callback) {
+        throw new Error('expected a queued animation frame')
+      }
+      callback(0)
+    }
+
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    const sshPtyId = toAppSshPtyId('ssh-a', 'pty-viewport-claim')
+    const transport = createMockTransport(sshPtyId)
+    transport.getConnectionId.mockReturnValue('ssh-a')
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      repos: [{ id: 'repo1', connectionId: 'ssh-a' }],
+      sshConnectionStates: new Map([['ssh-a', { status: 'connected' }]]),
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    runNextFrame()
+    await flushAsyncTicks()
+
+    pane.terminal.cols = 96
+    pane.terminal.rows = 30
+    runNextFrame()
+    setDriverForPty(sshPtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    expect(transport.resize).toHaveBeenCalledWith(96, 30)
+    const claims = (
+      transport.resize.mock.calls as [number, number, { claim?: boolean } | undefined][]
+    ).filter((call) => call[2]?.claim === true)
+    expect(claims).toEqual([])
+  })
+
   it('waits for setup-split geometry before spawning the initial startup command', async () => {
     const frameCallbacks: FrameRequestCallback[] = []
     globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {

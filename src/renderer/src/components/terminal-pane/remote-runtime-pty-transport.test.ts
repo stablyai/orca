@@ -157,6 +157,15 @@ describe('createRemoteRuntimePtyTransport', () => {
       .findLast((frame) => frame?.opcode === opcode)
   }
 
+  // Why: a never-settling acknowledged write is itself a failure mode; race it so a hang shows up as
+  // an assertion on 'pending' instead of a suite timeout.
+  function settledPromptly<T>(pending: Promise<T> | undefined): Promise<T | 'pending'> {
+    return Promise.race<T | 'pending'>([
+      pending ?? Promise.resolve('pending'),
+      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 50))
+    ])
+  }
+
   function emitSnapshotFrame(
     streamId: number,
     opcode:
@@ -5190,6 +5199,139 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('retires the attachment when connect subscribe rejects with a fatal error', async () => {
+    // Why: connect sets connected and PTY identity before awaiting subscribe. A fatal rejection never
+    // installs a stream and nothing else retires the attachment, so a live identity would let later
+    // claim/input calls take the grid over a one-shot RPC and park an acknowledged write forever.
+    runtimeSubscribe.mockRejectedValue(
+      Object.assign(new Error('Remote Orca runtime rejected the pairing token.'), {
+        code: 'unauthorized'
+      })
+    )
+    const onError = vi.fn()
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await expect(
+      transport.connect({ url: '', cols: 80, rows: 24, callbacks: { onError } })
+    ).resolves.toBeUndefined()
+
+    expect(onError).toHaveBeenCalledTimes(1)
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.claimViewport?.(101, 33)).toBe(false)
+    expect(transport.sendInput('x')).toBe(false)
+    await expect(settledPromptly(transport.sendInputAccepted?.('x'))).resolves.toBe(false)
+    expect(
+      runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.updateViewport')
+    ).toBe(false)
+    transport.destroy?.()
+  })
+
+  it('retires the attachment when an adopted pane subscribe rejects with a fatal error', async () => {
+    runtimeSubscribe.mockRejectedValue(
+      Object.assign(new Error('Remote Orca runtime rejected the pairing token.'), {
+        code: 'unauthorized'
+      })
+    )
+    const onError = vi.fn()
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(transport.getPtyId()).toBeNull()
+    expect(transport.claimViewport?.(101, 33)).toBe(false)
+    expect(transport.sendInput('x')).toBe(false)
+    await expect(settledPromptly(transport.sendInputAccepted?.('x'))).resolves.toBe(false)
+    transport.destroy?.()
+  })
+
+  it('ignores a stale same-handle fatal subscribe rejection after a newer subscribe recovered', async () => {
+    // Why: web-surface recovery deliberately overlaps two subscribes for one handle. Matching the fatal
+    // rejection on handle/ptyId alone lets the older attempt's teardown retire the attachment the newer
+    // attempt just recovered.
+    const staleSubscribe = { reject: null as ((error: Error) => void) | null }
+    const liveStream = {
+      streamId: 2,
+      sendInput: vi.fn(() => true),
+      resize: vi.fn(() => true),
+      claimViewport: vi.fn(() => true),
+      setOutputPaused: vi.fn(() => true),
+      serializeBuffer: vi.fn(async () => null),
+      close: vi.fn()
+    }
+    const subscribeTerminal = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            staleSubscribe.reject = reject
+          })
+      )
+      .mockImplementationOnce(async (args: { callbacks: { onSubscribed?: () => void } }) => {
+        args.callbacks.onSubscribed?.()
+        return liveStream
+      })
+    vi.doMock('../../runtime/remote-runtime-terminal-multiplexer', () => ({
+      REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE: 'remote_terminal_snapshot_too_large',
+      getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
+    }))
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onError = vi.fn()
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    resolvedPaneHandle = 'terminal-1'
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscribeTerminal).toHaveBeenCalledOnce())
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: { onError }
+    })
+    await vi.waitFor(() => expect(subscribeTerminal).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
+
+    staleSubscribe.reject?.(
+      Object.assign(new Error('Remote Orca runtime rejected the pairing token.'), {
+        code: 'unauthorized'
+      })
+    )
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(onError).not.toHaveBeenCalled()
+    expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
+    expect(transport.isConnected()).toBe(true)
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+    expect(liveStream.claimViewport).toHaveBeenCalledWith(101, 33)
+    expect(liveStream.close).not.toHaveBeenCalled()
+    transport.destroy?.()
+  })
+
   it('recovers repeated partitions without changing PTY identity or accepting detached input', async () => {
     const callbacksByEpoch: NonNullable<typeof subscriptionCallbacks>[] = []
     const unsubscribeByEpoch: ReturnType<typeof vi.fn>[] = []
@@ -5512,6 +5654,62 @@ describe('createRemoteRuntimePtyTransport', () => {
         subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
       ).toContain(TerminalStreamOpcode.ClaimViewport)
     })
+    transport.destroy?.()
+  })
+
+  it('drops a blocked claim when a recoverable resubscribe retry turns fatal', async () => {
+    // Why: the recoverable side keeps the claim for the retry. Once the retry itself fails fatally the
+    // pane no longer owns the grid, so the stale intent must not survive to take the viewport over the
+    // one-shot RPC, and acknowledged writes must settle instead of parking on a claim that never lands.
+    let attempt = 0
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        attempt += 1
+        if (attempt === 2) {
+          throw Object.assign(new Error('Could not connect to the remote Orca runtime.'), {
+            code: 'remote_runtime_unavailable'
+          })
+        }
+        if (attempt === 3) {
+          throw Object.assign(new Error('Remote Orca runtime rejected the pairing token.'), {
+            code: 'unauthorized'
+          })
+        }
+        subscriptionCallbacks = callbacks
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const onError = vi.fn()
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: { onError } })
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    subscriptionSendBinary.mockClear()
+    runtimeCall.mockClear()
+
+    subscriptionCallbacks?.onClose?.()
+    expect(transport.resize(132, 43, { claim: true })).toBe(true)
+
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3), { timeout: 5000 })
+    await vi.waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+
+    expect(transport.getRecoveryState?.().phase).toBe('disconnected')
+    await expect(settledPromptly(transport.sendInputAccepted?.('x'))).resolves.toBe(false)
+    transport.claimViewport?.(101, 33)
+    await expect(settledPromptly(transport.sendInputAccepted?.('y'))).resolves.toBe(false)
+    expect(
+      subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+    ).not.toContain(TerminalStreamOpcode.ClaimViewport)
+    expect(
+      runtimeCall.mock.calls.some(([request]) => request.method === 'terminal.updateViewport')
+    ).toBe(false)
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(3)
     transport.destroy?.()
   })
 
