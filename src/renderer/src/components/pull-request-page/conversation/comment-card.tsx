@@ -66,6 +66,7 @@ export function ConversationCommentCard({
         <GitHubUserAvatar
           login={comment.author}
           avatarUrl={comment.authorAvatarUrl}
+          title={comment.author}
           className="size-5"
         />
         <span
