@@ -166,4 +166,9 @@ describe('isClaudeAgent', () => {
     expect(isClaudeAgent('⠋ preserve cursor visibility across replays')).toBe(true)
     expect(isClaudeAgent('⠋ OpenClaude')).toBe(false)
   })
+
+  it('recognizes Claude Code 2.1.228+ quarter-circle busy titles', () => {
+    expect(isClaudeAgent('◐ Claude Code')).toBe(true)
+    expect(isClaudeAgent('◑ fixing the auth flow')).toBe(true)
+  })
 })

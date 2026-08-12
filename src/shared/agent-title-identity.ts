@@ -4,6 +4,7 @@ import {
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
   containsBrailleSpinner,
+  hasClaudeBusyGlyphPrefix,
   isClaudeManagementTitle,
   isCursorAgentTitle,
   isGeminiTerminalTitle,
@@ -28,7 +29,7 @@ export function isClaudeAgent(title: string): boolean {
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return true
   }
-  if (title.startsWith('. ') || title.startsWith('* ')) {
+  if (title.startsWith('. ') || title.startsWith('* ') || hasClaudeBusyGlyphPrefix(title)) {
     return true
   }
   if (containsBrailleSpinner(title)) {
@@ -58,7 +59,8 @@ export function getAgentLabel(title: string): string | null {
     title.startsWith(`${CLAUDE_IDLE} `) ||
     title === CLAUDE_IDLE ||
     title.startsWith('. ') ||
-    title.startsWith('* ')
+    title.startsWith('* ') ||
+    hasClaudeBusyGlyphPrefix(title)
   ) {
     return 'Claude Code'
   }

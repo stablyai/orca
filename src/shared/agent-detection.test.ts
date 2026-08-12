@@ -81,6 +81,26 @@ describe('OSC title extraction', () => {
   })
 })
 
+describe('Claude Code 2.1.228+ quarter-circle busy titles (#13889)', () => {
+  it.each(['◐ Claude Code', '◑ Claude Code', '◒ Claude Code', '◓ Claude Code'] as const)(
+    'classifies %s as working Claude Code',
+    (title) => {
+      expect(detectAgentStatusFromTitle(title)).toBe('working')
+      expect(getAgentLabel(title)).toBe('Claude Code')
+    }
+  )
+
+  it('still treats the idle ✳ prefix as idle Claude Code', () => {
+    expect(detectAgentStatusFromTitle('✳ Claude Code')).toBe('idle')
+    expect(getAgentLabel('✳ Claude Code')).toBe('Claude Code')
+  })
+
+  it('does not treat Gemini idle ◇ as Claude busy', () => {
+    expect(detectAgentStatusFromTitle('◇ Gemini CLI')).toBe('idle')
+    expect(getAgentLabel('◇ Gemini CLI')).toBe('Gemini CLI')
+  })
+})
+
 describe('MiMo title detection', () => {
   it.each([
     ['MiMo Code', 'idle'],

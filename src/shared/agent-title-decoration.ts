@@ -5,7 +5,8 @@
 // displayed title. Scoped to titles we already know belong to an agent.
 const LEADING_AGENT_TITLE_DECORATION_RE =
   // eslint-disable-next-line no-control-regex -- intentional unicode status-glyph ranges
-  /^(?:[✳✦⏲◇✋⠀-⣿]+|[.*]\s)\s*/
+  // Why: Claude 2.1.228+ busy titles use ◐–◓ (U+25D0–U+25D3) instead of braille.
+  /^(?:[✳✦⏲◇✋◐-◓⠀-⣿]+|[.*]\s)\s*/
 
 export function stripLeadingAgentTitleDecorationOrEmpty(title: string): string {
   return title.replace(LEADING_AGENT_TITLE_DECORATION_RE, '').trimStart()

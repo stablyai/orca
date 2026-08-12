@@ -18,6 +18,11 @@ describe('stripLeadingAgentTitleDecoration', () => {
     expect(stripLeadingAgentTitleDecoration('⠋ Pi')).toBe('Pi')
   })
 
+  it('strips Claude 2.1.228+ quarter-circle busy glyphs', () => {
+    expect(stripLeadingAgentTitleDecoration('◐ Claude Code')).toBe('Claude Code')
+    expect(stripLeadingAgentTitleDecoration('◑ Claude Code')).toBe('Claude Code')
+  })
+
   it('leaves an undecorated title untouched', () => {
     expect(stripLeadingAgentTitleDecoration('Dolphin-2')).toBe('Dolphin-2')
     expect(stripLeadingAgentTitleDecoration('npm run dev')).toBe('npm run dev')

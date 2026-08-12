@@ -83,6 +83,15 @@ export function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
+// Why: Claude Code 2.1.228+ replaced braille busy titles with quarter-circle
+// glyphs (◐/◑; reserve the full U+25D0–U+25D3 set). A leading glyph + space is
+// the same prefix shape as `. ` / `* `.
+export const CLAUDE_BUSY_GLYPH_PREFIX_RE = /^[\u25d0-\u25d3] /u
+
+export function hasClaudeBusyGlyphPrefix(title: string): boolean {
+  return CLAUDE_BUSY_GLYPH_PREFIX_RE.test(title)
+}
+
 export function containsLegacyAgentName(title: string): boolean {
   return titleHasAnyLegacyAgentName(title)
 }

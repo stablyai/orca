@@ -33,6 +33,11 @@ export function containsBrailleSpinner(title: string): boolean {
   return false
 }
 
+// Keep in sync with agent-title-core.hasClaudeBusyGlyphPrefix (Claude Code 2.1.228+).
+export function hasClaudeBusyGlyphPrefix(title: string): boolean {
+  return /^[\u25d0-\u25d3] /u.test(title)
+}
+
 export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
@@ -93,7 +98,8 @@ export function isClaudeAgent(title: string): boolean {
   // Why: ". " (working) and "* " (idle) are Claude Code title conventions.
   // Other supported agents do not use them, and rejecting titles that mention
   // another agent in the task text caused false negatives for real Claude tabs.
-  if (title.startsWith('. ') || title.startsWith('* ')) {
+  // Claude Code 2.1.228+ busy titles use quarter-circle glyphs (◐/◑) the same way.
+  if (title.startsWith('. ') || title.startsWith('* ') || hasClaudeBusyGlyphPrefix(title)) {
     return true
   }
   if (containsBrailleSpinner(title)) {
@@ -134,7 +140,8 @@ export function getAgentLabel(title: string): string | null {
     title.startsWith(`${CLAUDE_IDLE} `) ||
     title === CLAUDE_IDLE ||
     title.startsWith('. ') ||
-    title.startsWith('* ')
+    title.startsWith('* ') ||
+    hasClaudeBusyGlyphPrefix(title)
   ) {
     return 'Claude Code'
   }
@@ -232,6 +239,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
 function hasGenericClaudeStatusPrefix(title: string): boolean {
   return (
     containsBrailleSpinner(title) ||
+    hasClaudeBusyGlyphPrefix(title) ||
     title.startsWith('✳ ') ||
     title === '✳' ||
     title.startsWith('. ') ||

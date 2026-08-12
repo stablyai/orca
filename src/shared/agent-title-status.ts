@@ -15,6 +15,7 @@ import {
   containsAgentName,
   containsAny,
   containsBrailleSpinner,
+  hasClaudeBusyGlyphPrefix,
   containsLegacyAgentName,
   isClaudeManagementTitle,
   isGeminiTerminalTitle,
@@ -181,7 +182,7 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (isPiTerminalTitle(title)) {
     return 'idle'
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsBrailleSpinner(title) || hasClaudeBusyGlyphPrefix(title)) {
     return 'working'
   }
 
