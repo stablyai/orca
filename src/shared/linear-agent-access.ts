@@ -109,24 +109,19 @@ export type LinearWriteTargetRequest = {
   context?: LinearCurrentIssueContextHints
 }
 
-export type LinearTeamDiscoveryRequest = {
-  teamInput?: string
-  workspaceId?: string | 'all'
-}
-
 export type LinearIssueListFilter = 'assigned' | 'created' | 'all' | 'completed' | 'open'
 
 export type LinearIssueListRequest = {
   filter?: LinearIssueListFilter
   teamInput?: string
   limit?: number
-  workspaceId?: string | 'all'
+  workspaceId?: (string & {}) | 'all'
 }
 
 export type LinearProjectListRequest = {
   query?: string
   limit?: number
-  workspaceId?: string | 'all'
+  workspaceId?: (string & {}) | 'all'
 }
 
 export type LinearStatusSetRequest = LinearWriteTargetRequest & {

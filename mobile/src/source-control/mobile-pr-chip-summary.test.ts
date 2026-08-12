@@ -52,14 +52,37 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.stateLabel).toBe('Draft')
   })
 
-  it('rolls up passed checks as passed/total', () => {
+  // Why: a skipped job is a deliberate "not applicable" — desktop and the tasks grid call this 3/3.
+  it('rolls up passed checks as passed/total, counting skipped as passed', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('success'), check('skipped')])
     )
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')
     }
-    expect(summary.rollup).toEqual({ kind: 'passed', text: '2/3', token: 'statusGreen' })
+    expect(summary.rollup).toEqual({ kind: 'passed', text: '3/3', token: 'statusGreen' })
+  })
+
+  it('treats a merge-blocking action_required gate as failing, not passing', () => {
+    const summary = buildMobilePrChipSummary(
+      ready(pr(), [check('success'), check('action_required')])
+    )
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({ kind: 'failing', text: '1 failing', token: 'statusRed' })
+  })
+
+  it('distinguishes checks that resolved to nothing actionable from having no checks', () => {
+    const summary = buildMobilePrChipSummary(ready(pr(), [check('neutral')]))
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({
+      kind: 'none',
+      text: 'Unresolved checks',
+      token: 'textSecondary'
+    })
   })
 
   it('prefers failing over running and passing', () => {

@@ -40,6 +40,9 @@ type NonInteractiveExecQueueEntry = {
   release: () => void
 }
 
+const NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS = 5_000
+const ABSENT_BRANCH_DIFF_HEAD_OID = { absent: true } as const
+
 function isJsonRpcMethodNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== 'object') {
     return false
@@ -127,11 +130,16 @@ export class SshGitProvider implements IGitProvider {
       ? { bypassEffectiveUpstreamNegativeCache: true }
       : {}
     const lineStatsReuseArgs = options?.reuseLineStats ? { reuseLineStats: true } : {}
+    const branchLineTotalArgs =
+      options?.branchLineTotalMergeBase === undefined
+        ? {}
+        : { branchLineTotalMergeBase: options.branchLineTotalMergeBase }
     const request = {
       worktreePath,
       ...includeIgnoredArgs,
       ...upstreamCacheBypassArgs,
-      ...lineStatsReuseArgs
+      ...lineStatsReuseArgs,
+      ...branchLineTotalArgs
     }
     return (await (options?.signal
       ? this.mux.request('git.status', request, { signal: options.signal })
@@ -370,10 +378,9 @@ export class SshGitProvider implements IGitProvider {
         }
       }
       entry.started = true
-      return (await this.mux.request(
-        'agent.execNonInteractive',
-        payload
-      )) as RemoteCommitMessageExecResult
+      return (await this.mux.request('agent.execNonInteractive', payload, {
+        timeoutMs: payload.timeoutMs + NON_INTERACTIVE_TRANSPORT_TIMEOUT_MARGIN_MS
+      })) as RemoteCommitMessageExecResult
     } finally {
       signal?.removeEventListener('abort', abortEntry)
       entry.release()
@@ -652,9 +659,14 @@ export class SshGitProvider implements IGitProvider {
   async getBranchDiff(
     worktreePath: string,
     baseRef: string,
-    options?: { includePatch?: boolean; filePath?: string; oldPath?: string }
+    options?: { includePatch?: boolean; filePath?: string; oldPath?: string; headOid?: string }
   ): Promise<GitDiffResult[]> {
     const keyOptions = options ?? {}
+    const { headOid: rawHeadOid, ...relayOptions } = keyOptions
+    // Why: compare snapshots type headOid as `string | null`, so collapse an
+    // unpinned null to absent instead of putting a field on the wire that a
+    // pinned-OID relay must reject.
+    const headOid = rawHeadOid == null ? undefined : rawHeadOid
     return this.gitDiffReadDedupe.run(
       stableInFlightKey([
         'branchDiff',
@@ -662,13 +674,15 @@ export class SshGitProvider implements IGitProvider {
         baseRef,
         keyOptions.includePatch ?? null,
         keyOptions.filePath ?? null,
-        keyOptions.oldPath ?? null
+        keyOptions.oldPath ?? null,
+        headOid === undefined ? ABSENT_BRANCH_DIFF_HEAD_OID : headOid
       ]),
       async () =>
         (await requestGitStreamable(this.mux, 'git.branchDiff', {
           worktreePath,
           baseRef,
-          ...options
+          ...relayOptions,
+          ...(headOid === undefined ? {} : { headOid })
         })) as GitDiffResult[]
     ) as Promise<GitDiffResult[]>
   }

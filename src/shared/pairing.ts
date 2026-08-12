@@ -1,10 +1,12 @@
 import {
-  PAIRING_CODE_MAX_CHARACTERS,
-  PAIRING_INPUT_MAX_CHARACTERS,
   PAIRING_OFFER_VERSION,
   PairingOfferSchema,
   type PairingOffer
 } from './mobile-relay-pairing-offer'
+import {
+  PAIRING_CODE_MAX_CHARACTERS,
+  PAIRING_INPUT_MAX_CHARACTERS
+} from './mobile-pairing-protocol-limits'
 
 export { PAIRING_OFFER_VERSION, PairingOfferSchema }
 export type { PairingOffer }
@@ -87,6 +89,11 @@ function decodePairingBase64(base64url: string): PairingOffer {
     throw new Error('Invalid pairing code')
   }
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  const json = Buffer.from(base64, 'base64').toString('utf-8')
+  const json =
+    typeof Buffer === 'undefined'
+      ? new TextDecoder().decode(
+          Uint8Array.from(atob(base64), (character) => character.charCodeAt(0))
+        )
+      : Buffer.from(base64, 'base64').toString('utf-8')
   return PairingOfferSchema.parse(JSON.parse(json))
 }

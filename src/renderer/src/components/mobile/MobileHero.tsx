@@ -1,32 +1,18 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, CircleAlert, Copy, RefreshCw } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Copy } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 import { AndroidLogo, IosBrandIcon } from './MobileBrandIcons'
-import { NetworkInterfacePicker } from './NetworkInterfacePicker'
-import { MobilePairingConnectionOptions } from '../settings/MobilePairingConnectionOptions'
-import { MobileRelayBetaNotice } from '../settings/MobileRelayBetaNotice'
 import { getChannelTagline, type InstallCopy, type IosChannel } from './mobile-platform-copy'
-import { WindowsFirewallNotice } from './WindowsFirewallNotice'
 import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import { MobileHeroPairingStep } from './MobileHeroPairingStep'
 export { HeroIntro } from './MobileHeroIntro'
 export { HeroPaired, type PairedDevice } from './MobileHeroPairedDevices'
 import { translate } from '@/i18n/i18n'
 
 export type Platform = 'ios' | 'android'
 export type StepIndex = 0 | 1
-
-// Why: header copy needs to refer to the *user's* device by its native name.
-function getDeviceLabel(): string {
-  const ua = navigator.userAgent
-  if (ua.includes('Mac')) {
-    return 'Mac'
-  }
-  if (ua.includes('Windows')) {
-    return 'PC'
-  }
-  return 'computer'
-}
 
 type HeroFlowProps = {
   stepIdx: StepIndex
@@ -40,8 +26,11 @@ type HeroFlowProps = {
   onCopyInstallUrl: () => void
   pairQrDataUrl: string | null
   pairingUrl: string | null
-  /** True when the shown QR degraded to local-only under an Anywhere selection. */
-  relayDegraded: boolean
+  pairingQrError: boolean
+  relayMintFailure: MobileRelayMintFailure | null
+  onUseLan: () => void
+  onRetryRelay: () => void
+  onCopyRelayDiagnostics: () => void
   pairLoading: boolean
   connectionMode: MobilePairingConnectionMode
   onConnectionModeChange: (mode: MobilePairingConnectionMode) => void
@@ -49,8 +38,13 @@ type HeroFlowProps = {
   canGeneratePairing: boolean
   onCopyPairingCode: () => void
   networkInterfaces: readonly MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  beforeCustomAddressChange: (address: string) => Promise<boolean>
   onRefreshNetworkInterfaces: () => void
   refreshingNetworkInterfaces: boolean
   onBack: () => void
@@ -70,7 +64,11 @@ export function HeroFlow({
   onCopyInstallUrl,
   pairQrDataUrl,
   pairingUrl,
-  relayDegraded,
+  pairingQrError,
+  relayMintFailure,
+  onUseLan,
+  onRetryRelay,
+  onCopyRelayDiagnostics,
   pairLoading,
   connectionMode,
   onConnectionModeChange,
@@ -78,8 +76,13 @@ export function HeroFlow({
   canGeneratePairing,
   onCopyPairingCode,
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  beforeCustomAddressChange,
   onRefreshNetworkInterfaces,
   refreshingNetworkInterfaces,
   onBack,
@@ -198,13 +201,7 @@ export function HeroFlow({
                 </button>
               </div>
             </div>
-            <div
-              className="mp-qr mp-qr-large"
-              aria-label={translate(
-                'auto.components.mobile.MobileHero.7af266b80d',
-                'Install QR code'
-              )}
-            >
+            <div className="mp-qr mp-qr-large">
               {installQrUrl ? (
                 <img
                   src={installQrUrl}
@@ -223,140 +220,31 @@ export function HeroFlow({
           aria-hidden={stepIdx !== 1}
           inert={stepIdx !== 1}
         >
-          <div className="mp-pairing-layout">
-            <div className="mp-step2-copy mp-pairing-copy">
-              <div className="mp-eyebrow-row">
-                <div className="mp-step-num">2</div>
-                <span className="mp-eyebrow">
-                  {translate('auto.components.mobile.MobileHero.3960f5c339', 'Step 2 of 2')}
-                </span>
-              </div>
-              <h2 className="mp-h2">
-                {translate('auto.components.mobile.MobileHero.901c98bb93', 'Pair this')}{' '}
-                {getDeviceLabel()}.
-              </h2>
-              <p className="mp-lead-sm">
-                {translate('auto.components.mobile.MobileHero.d1495e5e64', 'Open Orca Mobile, tap')}{' '}
-                <strong>
-                  {translate('auto.components.mobile.MobileHero.3aa7bb2d8b', 'Pair Desktop')}
-                </strong>
-                {translate('auto.components.mobile.MobileHero.2f077ef4eb', ', and scan the code.')}
-              </p>
-            </div>
-            <div className="mp-pairing-relay">
-              <MobilePairingConnectionOptions
-                value={connectionMode}
-                onChange={onConnectionModeChange}
-                compact
-              />
-              <MobileRelayBetaNotice className="mt-1.5" />
-            </div>
-            <div className="mp-qr-stack mp-pairing-qr">
-              <div
-                className="mp-qr mp-qr-large"
-                aria-label={translate(
-                  'auto.components.mobile.MobileHero.bb0074ce11',
-                  'Pairing QR code'
-                )}
-                aria-busy={pairLoading}
-              >
-                {pairQrDataUrl ? (
-                  <img
-                    src={pairQrDataUrl}
-                    alt={translate('auto.components.mobile.MobileHero.27735e5f4e', 'Pairing QR')}
-                    className={cn(pairLoading && 'mp-qr-refreshing')}
-                  />
-                ) : null}
-                {pairLoading ? (
-                  <span className="mp-qr-loading">
-                    {translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')}
-                  </span>
-                ) : null}
-              </div>
-              <button
-                type="button"
-                className="mp-link-under"
-                onClick={onRegeneratePairing}
-                // Why: signed-out Anywhere can't serve Relay; disabling avoids
-                // minting a local-only QR under the Relay label. Sign in or pick
-                // LAN (shown in the path options above) to enable it.
-                disabled={pairLoading || !canGeneratePairing}
-              >
-                {pairLoading
-                  ? translate('auto.components.mobile.MobileHero.65b3f2e8bc', 'Generating…')
-                  : pairQrDataUrl
-                    ? translate('auto.components.mobile.MobileHero.e59a252eca', 'Regenerate code')
-                    : translate('auto.components.mobile.MobileHero.a6cffbbb0b', 'Generate code')}
-              </button>
-              {relayDegraded ? (
-                <p
-                  className="flex w-full min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
-                  data-testid="relay-degraded-notice"
-                >
-                  <CircleAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-                  {/* Why: min-w-0 so the flex text item can wrap inside the fixed QR track (#9700). */}
-                  <span className="min-w-0">
-                    {translate(
-                      'auto.components.mobile.MobileHero.relayDegradedNotice',
-                      'Relay couldn’t be reached — this code only works on your LAN or Tailscale.'
-                    )}
-                  </span>
-                </p>
-              ) : null}
-            </div>
-            <div className="mp-pairing-controls">
-              <div className="mp-network-row">
-                <span className="mp-network-label">
-                  {translate('auto.components.mobile.MobileHero.dfd2aa9d5d', 'Network')}
-                </span>
-                <NetworkInterfacePicker
-                  networkInterfaces={networkInterfaces}
-                  selectedAddress={selectedAddress}
-                  onSelectedAddressChange={onSelectedAddressChange}
-                  // Why: direct-first and local-only pairing both advertise a
-                  // local route; keeping it visible also prevents mode shifts.
-                  disabled={false}
-                  className="mp-network-select"
-                />
-                <button
-                  type="button"
-                  className={cn('mp-network-refresh', refreshingNetworkInterfaces && 'is-spinning')}
-                  onClick={onRefreshNetworkInterfaces}
-                  disabled={refreshingNetworkInterfaces}
-                  aria-label={translate(
-                    'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
-                  )}
-                  title={translate(
-                    'auto.components.mobile.MobileHero.85067b9e06',
-                    'Refresh network interfaces'
-                  )}
-                >
-                  <RefreshCw className="size-3.5" />
-                </button>
-              </div>
-
-              <div className="mp-inline-actions">
-                <span className="mp-action-divider">
-                  {translate('auto.components.mobile.MobileHero.4c1df4eba7', "Can't scan?")}
-                </span>
-                <button
-                  type="button"
-                  className="mp-text-link"
-                  onClick={onCopyPairingCode}
-                  disabled={!pairingUrl || pairLoading}
-                >
-                  <Copy className="size-3.5" />
-                  {translate('auto.components.mobile.MobileHero.010dddcf27', 'Copy pairing code')}
-                </button>
-              </div>
-              <WindowsFirewallNotice
-                pairingReady={pairQrDataUrl != null}
-                address={selectedAddress}
-                className="mt-3"
-              />
-            </div>
-          </div>
+          <MobileHeroPairingStep
+            pairQrDataUrl={pairQrDataUrl}
+            pairingUrl={pairingUrl}
+            pairingQrError={pairingQrError}
+            relayMintFailure={relayMintFailure}
+            onUseLan={onUseLan}
+            onRetryRelay={onRetryRelay}
+            onCopyRelayDiagnostics={onCopyRelayDiagnostics}
+            pairLoading={pairLoading}
+            connectionMode={connectionMode}
+            onConnectionModeChange={onConnectionModeChange}
+            onRegeneratePairing={onRegeneratePairing}
+            canGeneratePairing={canGeneratePairing}
+            onCopyPairingCode={onCopyPairingCode}
+            networkInterfaces={networkInterfaces}
+            customAddresses={customAddresses}
+            selectedAddress={selectedAddress}
+            selectedAddressIsCustom={selectedAddressIsCustom}
+            onSelectedAddressChange={onSelectedAddressChange}
+            onCustomAddressSelect={onCustomAddressSelect}
+            onCustomAddressRemove={onCustomAddressRemove}
+            beforeCustomAddressChange={beforeCustomAddressChange}
+            onRefreshNetworkInterfaces={onRefreshNetworkInterfaces}
+            refreshingNetworkInterfaces={refreshingNetworkInterfaces}
+          />
         </div>
       </div>
 

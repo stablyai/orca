@@ -6,6 +6,10 @@ inputs:
     description: Native runtime to prepare after the script-free install (none, node, or electron).
     required: false
     default: none
+  node-version:
+    description: Node.js version override; defaults to the version declared in package.json.
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -17,9 +21,17 @@ runs:
         run_install: false
 
     - name: Setup Node.js
+      if: inputs.node-version == ''
       uses: actions/setup-node@v6
       with:
         node-version-file: package.json
+        cache: pnpm
+
+    - name: Setup requested Node.js
+      if: inputs.node-version != ''
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
         cache: pnpm
 
     - name: Validate native runtime

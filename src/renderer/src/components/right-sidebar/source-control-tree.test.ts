@@ -39,6 +39,24 @@ describe('buildSourceControlTree', () => {
     ])
   })
 
+  it('orders numbered sibling directories naturally, matching the file rows', () => {
+    const tree = buildSourceControlTree('unstaged', [
+      entry({ path: 'migrations/100 - b/a.sql' }),
+      entry({ path: 'migrations/9 - a/a.sql' }),
+      entry({ path: 'migrations/99 - c/a.sql' })
+    ])
+
+    expect(labels(flattenSourceControlTree(tree, new Set()))).toEqual([
+      'directory:migrations',
+      'directory:migrations/9 - a',
+      'file:migrations/9 - a/a.sql',
+      'directory:migrations/99 - c',
+      'file:migrations/99 - c/a.sql',
+      'directory:migrations/100 - b',
+      'file:migrations/100 - b/a.sql'
+    ])
+  })
+
   it('keeps conflict rows ahead of normal rows within a directory', () => {
     const tree = buildGitStatusSourceControlTree('unstaged', [
       entry({ path: 'src/a.ts' }),

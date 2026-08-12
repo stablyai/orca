@@ -95,9 +95,11 @@ import {
   type PinnedWorktreeDisplayPolicy
 } from './worktree-list-groups'
 import {
+  buildLineageRowRekeyMap,
   estimateRenderRowSize,
   extractWorktreeVirtualRowIndexes,
   getActiveStickyIndexesForScroll,
+  getRenderRowKey,
   getStickyHeaderIndexes,
   getVirtualRowTransform,
   pruneStaleVirtualRowElementCache,
@@ -108,6 +110,11 @@ import {
   revealElementInScrollContainer,
   WORKTREE_SIDEBAR_REVEAL_TOP_INSET
 } from './worktree-sidebar-reveal'
+import {
+  createPendingRevealScroll,
+  isRevealScrollSettling,
+  type PendingRevealScroll
+} from './worktree-sidebar-reveal-scroll-settle'
 import {
   getWorkspaceStatus,
   getWorkspaceStatusFromGroupKey,
@@ -122,6 +129,11 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
+import {
+  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+  filterFolderWorkspacesFromOtherDevices,
+  getPairedDeviceIdsByEnvironment
+} from './workspace-creator-visibility'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getWorktreeLineageAncestors
@@ -140,6 +152,8 @@ import {
 } from '@/hooks/useVirtualizedScrollAnchor'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import { useWorktreeListScrollToTop } from './use-worktree-list-scroll-to-top'
+import { WorktreeListScrollToTopButton } from './WorktreeListScrollToTopButton'
 import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
@@ -170,6 +184,7 @@ import {
   getWorkspaceKanbanSidebarDropTarget,
   hasWorkspaceKanbanSidebarDropBoard,
   isWorkspaceKanbanSidebarDropPointInBoard,
+  resolveWorkspaceKanbanSidebarFullLaneDropIndex,
   updateWorkspaceKanbanSidebarDropTargetVisual
 } from './workspace-kanban-sidebar-drop'
 import {
@@ -483,7 +498,8 @@ function revealMountedWorktreeElement(
   container: HTMLElement,
   worktreeId: string,
   behavior: ScrollBehavior,
-  optionId?: string
+  optionId?: string,
+  onScrollIssued?: (targetTop: number) => void
 ): HTMLElement | null {
   const element = optionId
     ? document.getElementById(optionId)
@@ -491,19 +507,24 @@ function revealMountedWorktreeElement(
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior) ? element : null
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+    ? element
+    : null
 }
 
 function revealMountedSidebarRowElement(
   container: HTMLElement,
   rowKey: string,
-  behavior: ScrollBehavior
+  behavior: ScrollBehavior,
+  onScrollIssued?: (targetTop: number) => void
 ): HTMLElement | null {
   const element = document.getElementById(getWorktreeOptionId(rowKey))
   if (!element || !container.contains(element)) {
     return null
   }
-  return revealElementInScrollContainer(container, element, behavior) ? element : null
+  return revealElementInScrollContainer(container, element, behavior, onScrollIssued)
+    ? element
+    : null
 }
 
 function getRenderRowSidebarKey(row: RenderRow): string | null {
@@ -1209,30 +1230,9 @@ function buildRenderableRows(rows: HostSectionRow[]): RenderRow[] {
   return renderRows
 }
 
-export function getRenderRowKey(row: RenderRow): string {
-  if (row.type === 'host-header') {
-    return `host:${row.hostId}`
-  }
-  if (row.type === 'header') {
-    return `hdr:${row.key}`
-  }
-  if (row.type === 'lineage-group') {
-    return `lineage-group:${row.key}`
-  }
-  if (row.type === 'imported-worktrees-card') {
-    return `imported:${row.key}`
-  }
-  if (row.type === 'new-external-worktrees-inbox') {
-    return `inbox:${row.key}`
-  }
-  if (row.type === 'pending-creation') {
-    return `pending:${row.creationId}`
-  }
-  if (row.type === 'folder-workspace') {
-    return `folder-workspace:${row.folderWorkspace.id}`
-  }
-  return `wt:${row.rowKey}`
-}
+// Why: getRenderRowKey lives with the other virtual-row helpers now; keep the
+// long-standing import path working for callers that reach for it here.
+export { getRenderRowKey }
 
 export function getWorktreeDragGroups(rows: HostSectionRow[]): WorktreeDragGroup[] {
   const groups: WorktreeDragGroup[] = []
@@ -1387,6 +1387,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   scrollAnchorRef
 }: VirtualizedWorktreeViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
+  const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const suppressMeasurementAdjustmentUntilRef = useRef(0)
   const directScrollInputUntilRef = useRef(0)
   const [dragOverStatus, setDragOverStatus] = useState<WorkspaceStatus | null>(null)
@@ -1419,6 +1421,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
   const pendingRevealRetryRef = useRef<{ worktreeId: string; count: number } | null>(null)
   const pendingRowRevealRetryRef = useRef<{ rowKey: string; count: number } | null>(null)
   const pendingRevealFrameIdsRef = useRef<Set<number>>(new Set())
+  const pendingRevealScrollRef = useRef<PendingRevealScroll | null>(null)
   const revealHighlightFrameIdRef = useRef<number | null>(null)
   const revealHighlightTimeoutRef = useRef<number | null>(null)
   const cancelPendingRevealFrames = useCallback(() => {
@@ -2051,14 +2054,34 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     suppressMeasurementAdjustmentUntilRef.current = suppressUntil
     directScrollInputUntilRef.current = suppressUntil
   }, [])
+  const { showScrollToTop, scrollToTop } = useWorktreeListScrollToTop({
+    scrollElement,
+    onUserScrollIntent: markDirectScrollInput
+  })
   const hasDirectScrollInput = useCallback(
     () => window.performance.now() < directScrollInputUntilRef.current,
     []
   )
+  const markRevealScroll = useCallback((targetTop: number) => {
+    pendingRevealScrollRef.current = createPendingRevealScroll(targetTop, window.performance.now())
+  }, [])
+  const isRevealScrollSettlingNow = useCallback(() => {
+    const settling = isRevealScrollSettling({
+      now: window.performance.now(),
+      pending: pendingRevealScrollRef.current,
+      scrollTop: scrollRef.current?.scrollTop ?? 0
+    })
+    if (!settling) {
+      pendingRevealScrollRef.current = null
+    }
+    return settling
+  }, [])
   // Why: programmatic scrolls keep measurement correction quiet, but only direct input blocks anchor-restore retries.
+  // A reveal's smooth scroll is the exception: restoring the anchor mid-animation cancels it a few pixels in.
   const shouldSkipScrollAnchorRestore = useCallback(
-    () => window.performance.now() < directScrollInputUntilRef.current,
-    []
+    () =>
+      window.performance.now() < directScrollInputUntilRef.current || isRevealScrollSettlingNow(),
+    [isRevealScrollSettlingNow]
   )
 
   const virtualizer = useVirtualizer({
@@ -2224,7 +2247,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
               container,
               pendingRevealWorktree.worktreeId,
               pendingRevealWorktree.behavior,
-              getRenderRowOptionId(targetRow, pendingRevealWorktree.worktreeId)
+              getRenderRowOptionId(targetRow, pendingRevealWorktree.worktreeId),
+              markRevealScroll
             )
           : null
         if (revealedOption) {
@@ -2296,6 +2320,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     projectGroups,
     pendingRevealRetryTick,
     flashRevealedRow,
+    markRevealScroll,
     setRenamingWorktreeId,
     schedulePendingRevealFrame,
     cancelPendingRevealFrames
@@ -2384,7 +2409,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         ? revealMountedSidebarRowElement(
             container,
             pendingRevealSidebarRow.rowKey,
-            pendingRevealSidebarRow.behavior
+            pendingRevealSidebarRow.behavior,
+            markRevealScroll
           )
         : null
       if (revealedElement) {
@@ -2419,6 +2445,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     virtualizer,
     pendingRevealRetryTick,
     flashRevealedRow,
+    markRevealScroll,
     clearPendingRevealSidebarRow,
     schedulePendingRevealFrame,
     cancelPendingRevealFrames
@@ -2431,6 +2458,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     [renderRows]
   )
   const activeRenderRowKeys = useMemo(() => new Set(renderRows.map(getRenderRowKey)), [renderRows])
+  const lineageRowRekeys = useMemo(() => buildLineageRowRekeyMap(renderRows), [renderRows])
   const totalSize = virtualizer.getTotalSize()
   const virtualItems = virtualizer.getVirtualItems()
   const activeStickyIndexes = getActiveStickyIndexesForScroll({
@@ -2488,6 +2516,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
     getItemElementKey: getVirtualRowKey,
     getRowKey: getRenderRowKey,
     itemElementSelector: '[data-worktree-virtual-row]',
+    rekeyedRowKeys: lineageRowRekeys,
     rows: renderRows,
     scrollElementRef: scrollRef,
     scrollOffsetRef,
@@ -2667,6 +2696,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         clearWorktreeDrag()
       }
       scrollRef.current = node
+      setScrollElement(node)
     },
     [
       cancelPendingRevealFrames,
@@ -3220,7 +3250,12 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
         onDropWorktreesOnWorkspaceBoard({
           worktreeIds: drag.reorderDraggedIds,
           status: boardDropTarget.status,
-          dropIndex: boardDropTarget.dropIndex,
+          // Why: the target counts rendered cards, but the groups are the full
+          // lane. Board search can make those two differ.
+          dropIndex: resolveWorkspaceKanbanSidebarFullLaneDropIndex(
+            boardDropTarget.status,
+            boardDropTarget.dropIndex
+          ),
           groups: getWorkspaceKanbanSidebarDropGroups()
         })
       } else {
@@ -4207,10 +4242,13 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                   projectGroupPathStatus.reason === 'ambiguous-connection')
               const projectGroupDepth = row.projectGroupDepth ?? 0
               const isHeaderCollapsed = collapsedGroups.has(row.key)
-              // Why: repo/project and status headers share compact section chrome; flat "All" stays a simple label.
+              // Why: repo/project/status/pinned share compact section chrome; flat "All" stays a simple label.
               const showHeaderCollapseAffordance =
                 row.count > 0 &&
-                (isRepoHeader || isProjectGroupHeader || headerWorkspaceStatus !== null)
+                (isRepoHeader ||
+                  isProjectGroupHeader ||
+                  headerWorkspaceStatus !== null ||
+                  isPinnedHeader)
               // Why: non-project headers like "All" are flat-list labels; don't reserve project hierarchy indent.
               const headerPaddingLeft =
                 isRepoHeader || isProjectGroupHeader
@@ -4254,6 +4292,8 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                         ? repoHeaderSectionEndByRepoId.get(projectIdForHeader)
                         : undefined
                     }
+                    // Why: row keeps handle attrs so indent/padding still arms drag; grab
+                    // cursor lives only on the title surface so … / + never inherit it.
                     data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
                     data-project-group-header-id={projectGroupIdForHeader}
                     data-project-group-header-index={projectGroupHeaderIndex}
@@ -4270,10 +4310,10 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                     data-workspace-status={headerWorkspaceStatus ?? undefined}
                     data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
                     className={cn(
+                      // Why: no row-level grab — only the title surface below shows the hand;
+                      // actions use cursor-pointer so … / + never look reorderable.
                       'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
-                      isDraggableRepoHeader || isDraggableProjectGroupHeader
-                        ? 'cursor-grab active:cursor-grabbing'
-                        : 'cursor-pointer',
+                      !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
                       highlightedRevealRowKey === row.key &&
                         'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
                       (isDraggingThis || isDraggingThisProjectGroup) &&
@@ -4330,39 +4370,48 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                       }
                     }}
                   >
-                    {row.icon ? (
-                      <div
-                        data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
-                        data-project-group-header-drag-handle={
-                          isDraggableProjectGroupHeader ? '' : undefined
-                        }
-                        className={cn(
-                          'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
-                          repoHeaderColor ? 'text-muted-foreground' : row.tone,
-                          (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
-                            'hover:cursor-grab active:cursor-grabbing'
-                        )}
-                      >
-                        {row.repo ? (
-                          <RepoIconGlyph
-                            repoIcon={row.repo.repoIcon}
-                            color={repoHeaderColor}
-                            className="size-4"
-                            iconClassName="size-3.5"
-                          />
-                        ) : (
-                          <row.icon className="size-3" />
-                        )}
-                      </div>
-                    ) : null}
-
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
-                          {row.label}
+                    {/* Why: grab cursor on icon+title only. Row still has handle attrs so
+                        indent/padding can arm drag; actions are excluded via data-repo-header-actions.
+                        self-stretch fills h-7 so grab matches the full title column height. */}
+                    <div
+                      data-repo-header-drag-handle={isDraggableRepoHeader ? '' : undefined}
+                      data-project-group-header-drag-handle={
+                        isDraggableProjectGroupHeader ? '' : undefined
+                      }
+                      className={cn(
+                        'flex min-w-0 flex-1 items-center gap-1.5 self-stretch',
+                        (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
+                          'cursor-grab active:cursor-grabbing'
+                      )}
+                    >
+                      {row.icon ? (
+                        <div
+                          className={cn(
+                            'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                            repoHeaderColor ? 'text-muted-foreground' : row.tone
+                          )}
+                        >
+                          {row.repo ? (
+                            <RepoIconGlyph
+                              repoIcon={row.repo.repoIcon}
+                              color={repoHeaderColor}
+                              className="size-4"
+                              iconClassName="size-3.5"
+                            />
+                          ) : (
+                            <row.icon className="size-3" />
+                          )}
                         </div>
-                        <RepoForkIndicator upstream={row.repo?.upstream} />
-                        <FolderPathStatusIndicator status={projectGroupPathStatus} />
+                      ) : null}
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <div className="min-w-0 truncate text-[13px] font-semibold leading-none">
+                            {row.label}
+                          </div>
+                          <RepoForkIndicator upstream={row.repo?.upstream} />
+                          <FolderPathStatusIndicator status={projectGroupPathStatus} />
+                        </div>
                       </div>
                     </div>
 
@@ -4705,6 +4754,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
                                   )
                                 }
                                 onKeyDown={stopRepoHeaderKeyboardToggle}
+                                onPointerDown={handleRepoHeaderActionPointerDown}
                                 onClick={(event) => {
                                   event.preventDefault()
                                   event.stopPropagation()
@@ -5162,6 +5212,7 @@ const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktreeViewp
           })}
         </div>
       </div>
+      {showScrollToTop ? <WorktreeListScrollToTopButton onClick={scrollToTop} /> : null}
     </div>
   )
 })
@@ -5218,6 +5269,8 @@ const WorktreeList = React.memo(function WorktreeList({
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
   const hideCliCreatedWorkspaces = useAppStore((s) => s.hideCliCreatedWorkspaces)
   const hideDetachedHeadWorkspaces = useAppStore((s) => s.hideDetachedHeadWorkspaces)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
+  const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
   const openModal = useAppStore((s) => s.openModal)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -5305,6 +5358,13 @@ const WorktreeList = React.memo(function WorktreeList({
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      hideWorkspacesFromOtherDevices
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
 
   const sortEpoch = useAppStore((s) => s.sortEpoch)
 
@@ -5350,7 +5410,7 @@ const WorktreeList = React.memo(function WorktreeList({
   // Why a ref alongside the memo: telemetry effects need the last attention map without re-reading store state.
   const lastAttentionByWorktreeRef = useRef<Map<string, WorktreeAttention> | null>(null)
 
-  const sortedIds = useMemo(() => {
+  const recomputedSortedIds = useMemo(() => {
     const state = useAppStore.getState()
     const nonArchivedWorktrees = getAllWorktreesFromState(state).filter(
       (worktree) => !worktree.isArchived
@@ -5398,6 +5458,8 @@ const WorktreeList = React.memo(function WorktreeList({
     // debouncedSortEpoch is an intentional trigger not read in the memo; its change (debounced) signals a recompute.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedSortEpoch, repoMap, sortBy])
+  // Why: stable ID order prevents rank-only refreshes from echoing an unchanged snapshot.
+  const sortedIds = useReusedArrayIdentity(recomputedSortedIds)
 
   // Why a ref of prior class: fire class_1_promotion only on transitions into Class 1, not every recompute that stays there.
   const prevClassByWorktreeIdRef = useRef<Map<string, SmartClass>>(new Map())
@@ -5423,9 +5485,9 @@ const WorktreeList = React.memo(function WorktreeList({
     }
     prevClassByWorktreeIdRef.current = next
     hasObservedSmartOnceRef.current = true
-  }, [sortBy, sortedIds])
+  }, [sortBy, recomputedSortedIds])
 
-  // Why retry on sortedIds: Smart may activate before attention hydrates; fire once, then stay quiet until the user leaves Smart.
+  // Why retry on recomputation: Smart may activate before attention hydrates; fire once, then stay quiet until the user leaves Smart.
   const hasTrackedSmartDistributionRef = useRef(false)
   useEffect(() => {
     if (sortBy !== 'smart') {
@@ -5462,7 +5524,7 @@ const WorktreeList = React.memo(function WorktreeList({
       total_worktrees: attention.size
     })
     hasTrackedSmartDistributionRef.current = true
-  }, [sortBy, sortedIds])
+  }, [sortBy, recomputedSortedIds])
 
   // Why fire on the transition: switching away from Smart is the signal; compare via ref so a round-trip doesn't double-fire.
   const prevSortByRef = useRef(sortBy)
@@ -5505,6 +5567,9 @@ const WorktreeList = React.memo(function WorktreeList({
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
       hideDetachedHeadWorkspaces,
+      hideWorkspacesFromOtherDevices,
+      pairedDeviceIdsByEnvironment,
+      alwaysShowDefaultBranchWorkspace,
       repoMap,
       workspaceHostScope,
       visibleWorkspaceHostIds,
@@ -5522,6 +5587,8 @@ const WorktreeList = React.memo(function WorktreeList({
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
     hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices,
+    alwaysShowDefaultBranchWorkspace,
     workspaceHostScope,
     visibleWorkspaceHostIds,
     settings,
@@ -5532,7 +5599,8 @@ const WorktreeList = React.memo(function WorktreeList({
     sortedIds,
     worktreeMap,
     worktreeLineageById,
-    worktreesByRepo
+    worktreesByRepo,
+    pairedDeviceIdsByEnvironment
   ])
   // Why: agentStatusEpoch bumps recompute this memo even when membership and
   // order are unchanged; keeping the previous identity stops the whole
@@ -5621,16 +5689,28 @@ const WorktreeList = React.memo(function WorktreeList({
     () => filterProjectGroupsForVisibleHosts(projectGroups, visibleHostIdSet, defaultHostId),
     [defaultHostId, projectGroups, visibleHostIdSet]
   )
-  const visibleFolderWorkspacesForRows = useMemo(
-    () =>
-      filterFolderWorkspacesForVisibleHosts(
-        folderWorkspaces,
-        projectGroups,
-        visibleHostIdSet,
-        defaultHostId
-      ),
-    [defaultHostId, folderWorkspaces, projectGroups, visibleHostIdSet]
-  )
+  const visibleFolderWorkspacesForRows = useMemo(() => {
+    const hostVisibleWorkspaces = filterFolderWorkspacesForVisibleHosts(
+      folderWorkspaces,
+      projectGroups,
+      visibleHostIdSet,
+      defaultHostId
+    )
+    if (!hideWorkspacesFromOtherDevices) {
+      return hostVisibleWorkspaces
+    }
+    return filterFolderWorkspacesFromOtherDevices(
+      hostVisibleWorkspaces,
+      pairedDeviceIdsByEnvironment
+    )
+  }, [
+    defaultHostId,
+    folderWorkspaces,
+    hideWorkspacesFromOtherDevices,
+    pairedDeviceIdsByEnvironment,
+    projectGroups,
+    visibleHostIdSet
+  ])
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
   }, [repos])
@@ -6483,6 +6563,8 @@ const WorktreeList = React.memo(function WorktreeList({
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
       hideDetachedHeadWorkspaces,
+      hideWorkspacesFromOtherDevices,
+      alwaysShowDefaultBranchWorkspace,
       visibleWorkspaceHostIds,
       workspaceHostScope
     }),
@@ -6493,6 +6575,8 @@ const WorktreeList = React.memo(function WorktreeList({
       hideAutomationGeneratedWorkspaces,
       hideCliCreatedWorkspaces,
       hideDetachedHeadWorkspaces,
+      hideWorkspacesFromOtherDevices,
+      alwaysShowDefaultBranchWorkspace,
       visibleWorkspaceHostIds,
       workspaceHostScope
     ]
@@ -6505,6 +6589,10 @@ const WorktreeList = React.memo(function WorktreeList({
   )
   const setHideCliCreatedWorkspaces = useAppStore((s) => s.setHideCliCreatedWorkspaces)
   const setHideDetachedHeadWorkspaces = useAppStore((s) => s.setHideDetachedHeadWorkspaces)
+  const setHideWorkspacesFromOtherDevices = useAppStore((s) => s.setHideWorkspacesFromOtherDevices)
+  const setAlwaysShowDefaultBranchWorkspace = useAppStore(
+    (s) => s.setAlwaysShowDefaultBranchWorkspace
+  )
   const setFilterRepoIds = useAppStore((s) => s.setFilterRepoIds)
   const setVisibleWorkspaceHostIds = useAppStore((s) => s.setVisibleWorkspaceHostIds)
 
@@ -6528,6 +6616,12 @@ const WorktreeList = React.memo(function WorktreeList({
     if (actions.resetHideDetachedHeadWorkspaces) {
       setHideDetachedHeadWorkspaces(false)
     }
+    if (actions.resetHideWorkspacesFromOtherDevices) {
+      setHideWorkspacesFromOtherDevices(false)
+    }
+    if (actions.resetAlwaysShowDefaultBranchWorkspace) {
+      setAlwaysShowDefaultBranchWorkspace(true)
+    }
     if (actions.resetVisibleWorkspaceHostIds) {
       setVisibleWorkspaceHostIds(null)
     }
@@ -6538,6 +6632,8 @@ const WorktreeList = React.memo(function WorktreeList({
     setHideAutomationGeneratedWorkspaces,
     setHideCliCreatedWorkspaces,
     setHideDetachedHeadWorkspaces,
+    setHideWorkspacesFromOtherDevices,
+    setAlwaysShowDefaultBranchWorkspace,
     setVisibleWorkspaceHostIds,
     filterState
   ])

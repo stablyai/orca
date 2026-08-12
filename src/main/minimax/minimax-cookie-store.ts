@@ -33,7 +33,7 @@ function decodeCookieEnvelope(raw: Buffer): MiniMaxCookieEnvelope | null {
   }
   const rest = text.slice(COOKIE_ENVELOPE_PREFIX.length)
   const separator = rest.indexOf(':')
-  if (separator < 0) {
+  if (separator === -1) {
     throw new Error('MiniMax session cookie could not be decrypted')
   }
   const kind = rest.slice(0, separator)

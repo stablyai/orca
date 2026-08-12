@@ -83,6 +83,13 @@ describe('orchestration RPC methods', () => {
       } else if (name === 'orchestration.dispatch') {
         scopedParams.run ??= activeRunId
         scopedParams.from ??= 'term_coord'
+      } else if (
+        name === 'orchestration.gateCreate' ||
+        name === 'orchestration.gateResolve' ||
+        name === 'orchestration.gateList'
+      ) {
+        // Why: gates resolve their Run from the sender's pane binding, so naming the run would skip that check.
+        scopedParams.from ??= 'term_coord'
       }
     }
     const parsed = method.params ? method.params.parse(scopedParams) : undefined
@@ -101,7 +108,11 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(34)
+    expect(registry.size).toBe(38)
+    expect(registry.has('orchestration.workerRelease')).toBe(true)
+    expect(registry.has('orchestration.workerRetain')).toBe(true)
+    expect(registry.has('orchestration.workerList')).toBe(true)
+    expect(registry.has('orchestration.workerTerminalUserInput')).toBe(true)
     expect(registry.has('orchestration.runCreate')).toBe(true)
     expect(registry.has('orchestration.runUse')).toBe(true)
     expect(registry.has('orchestration.runCurrent')).toBe(true)
@@ -164,7 +175,7 @@ describe('orchestration RPC methods', () => {
       await expect(
         call('orchestration.runCreate', { objective: 'No pane', from: 'term_stale' })
       ).rejects.toMatchObject({ code: 'stable_pane_required' })
-      expect(db.listRuns().filter((run) => run.legacy === 0)).toHaveLength(0)
+      expect(db.listRuns().runs.filter((run) => run.legacy === 0)).toHaveLength(0)
     })
 
     it('rebinds explicitly, lists Runs, and keeps the legacy Run inspect-only', async () => {
@@ -287,6 +298,8 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.send', () => {
     it('sends a message', async () => {
       setup()
+      // Why: send notifies arrival so already-idle recipients get push-on-idle
+      // delivery without waiting for a status transition (#12536).
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
       const result = (await call('orchestration.send', {
         from: 'term_coord',
@@ -297,7 +310,7 @@ describe('orchestration RPC methods', () => {
       expect(result.message.id).toMatch(/^msg_/)
       expect(result.message.from_handle).toBe('term_coord')
       expect(result.message.run_id).toBe(activeRunId)
-      expect(runtime.deliverPendingMessagesForHandle).not.toHaveBeenCalled()
+      expect(runtime.deliverPendingMessagesForHandle).toHaveBeenCalled()
     })
 
     it('routes exact Dispatch mail independently of terminal handles', async () => {
@@ -402,7 +415,7 @@ describe('orchestration RPC methods', () => {
       )
       vi.spyOn(runtime, 'deliverPendingMessagesForHandle').mockImplementation(() => {})
 
-      await call('orchestration.send', {
+      const result = await call('orchestration.send', {
         from: 'term_worker',
         to: 'term_coord',
         subject: 'Done',
@@ -416,6 +429,7 @@ describe('orchestration RPC methods', () => {
 
       expect(db.getTask(task.id)?.status).toBe('completed')
       expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+      expect(result).toMatchObject({ lifecycle: { action: 'completed' } })
     })
 
     it('rejects an identity-less lifecycle send resolved through the coordinator handle', async () => {
@@ -469,7 +483,7 @@ describe('orchestration RPC methods', () => {
       }
 
       expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(result.lifecycle).toBeUndefined()
+      expect(result.lifecycle).toMatchObject({ action: 'completed' })
       expect(result.message).toMatchObject({
         type: 'worker_done',
         subject: 'Done'
@@ -1752,23 +1766,36 @@ describe('orchestration RPC methods', () => {
       expect(result.task.status).toBe('pending')
     })
 
-    it('records the caller terminal handle when creating a task', async () => {
+    it('records the caller pane, process, and Run generation when creating a task', async () => {
       setup()
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_creator' ? coordinatorPaneKey : null
       )
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        terminalHandle: 'term_creator',
+        paneKey: coordinatorPaneKey,
+        processIncarnation: 'pty-creator:incarnation-a'
+      } as never)
       const result = (await call('orchestration.taskCreate', {
         spec: 'spawn related workspace',
         callerTerminalHandle: 'term_creator'
       })) as { task: { id: string } }
 
-      expect(db.getTask(result.task.id)?.created_by_terminal_handle).toBe('term_creator')
+      expect(db.getTask(result.task.id)).toMatchObject({
+        created_by_terminal_handle: 'term_creator',
+        created_by_pane_key: coordinatorPaneKey,
+        created_by_process_incarnation: 'pty-creator:incarnation-a',
+        created_by_run_generation: 1
+      })
     })
 
-    it('rejects invalid deps JSON', async () => {
+    it('rejects non-JSON deps', async () => {
       setup()
       await expect(
         call('orchestration.taskCreate', { spec: 'bad', deps: 'not-json' })
+      ).rejects.toThrow('Invalid --deps')
+      await expect(
+        call('orchestration.taskCreate', { spec: 'bad', deps: '[task_example]' })
       ).rejects.toThrow('Invalid --deps')
     })
   })
@@ -1887,6 +1914,16 @@ describe('orchestration RPC methods', () => {
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((candidate) =>
         candidate === handle ? `tab_worker:${handle}` : coordinatorPaneKey
       )
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((candidate) =>
+        candidate === handle
+          ? ({
+              terminalHandle: handle,
+              paneKey: `tab_worker:${handle}`,
+              processIncarnation: `runtime_test:${handle}:1`,
+              launchTokenHash: null
+            } as never)
+          : null
+      )
     }
 
     it('dispatches a task to a terminal', async () => {
@@ -1916,6 +1953,45 @@ describe('orchestration RPC methods', () => {
 
       expect(runtime.getTerminalPaneKey).toHaveBeenCalledWith('term_a')
       expect(db.getDispatchContextById(result.dispatch.id)?.assignee_pane_key).toBe('tab_w:leaf_w')
+    })
+
+    it('commits authenticated process authority on a manual dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_a',
+        ptyId: 'pty_a',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_w:leaf_w',
+        processIncarnation: 'runtime_test:term_a:1',
+        launchTokenHash: 'launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(db.getDispatchContextById(result.dispatch.id)).toMatchObject({
+        assignee_pane_key: 'tab_w:leaf_w',
+        process_incarnation: 'runtime_test:term_a:1',
+        launch_token_hash: 'launch-token-hash'
+      })
+    })
+
+    it('does not infer manual process authority from an unauthenticated handle', async () => {
+      setup()
+      const task = db.createTask({ spec: 'work' })
+
+      const result = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a'
+      })) as { dispatch: { id: string } }
+
+      expect(runtime.getTerminalProcessIncarnation('term_a')).toBe('runtime_test:term_a:1')
+      expect(db.getDispatchContextById(result.dispatch.id)?.process_incarnation).toBeNull()
     })
 
     it('rejects dispatch for a pending task', async () => {
@@ -2152,13 +2228,120 @@ describe('orchestration RPC methods', () => {
       )
       expect(db.getTask(task.id)?.status).toBe('dispatched')
       expect(db.getWorkerDispatch(result.dispatchId)?.state).toBe('ready')
+      // Why: dispatching a worker is background work — surfaceOwner:false adopts
+      // the tab without scrolling the sidebar to the worker's workspace.
       expect(runtime.createTerminal).toHaveBeenCalledWith('id:repo::worktree', {
-        command: 'codex',
-        title: `worker-${task.id}`
+        startupAgent: 'codex',
+        title: `worker-${task.id}`,
+        surfaceOwner: false
       })
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
+      )
+    })
+
+    it('applies and reports opaque per-invocation model preferences', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'launch a custom model' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'claude',
+        model: 'aws-bedrock-opus-5',
+        effort: 'high'
+      })) as {
+        dispatchId: string
+        state: string
+        launch: {
+          requested: { agent: string; model: string; effort: string }
+          effective: { agent: string; model: string; effort: string }
+        }
+      }
+
+      expect(result).toMatchObject({
+        state: 'ready',
+        launch: {
+          requested: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' },
+          effective: { agent: 'claude', model: 'aws-bedrock-opus-5', effort: 'high' }
+        }
+      })
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({
+          startupAgent: 'claude',
+          launchPreferences: { model: 'aws-bedrock-opus-5', effort: 'high' }
+        })
+      )
+      expect(JSON.parse(db.getWorkerDispatch(result.dispatchId)!.start_options)).toMatchObject({
+        launch: result.launch
+      })
+    })
+
+    it('rejects launch preferences for an existing terminal before creating a Dispatch', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'reuse exact worker' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker',
+          model: 'gpt-5.6-sol'
+        })
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
+    // Why: `cursor` on PATH is the Cursor desktop app; passing the agent id as a
+    // shell command opened the IDE and left a blank shell (issue #11926).
+    it('never passes the agent id to the worker terminal as a shell command', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      const task = db.createTask({ spec: 'start a cursor worker' })
+
+      await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'cursor'
+      })
+
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.objectContaining({ startupAgent: 'cursor' })
+      )
+      expect(runtime.createTerminal).toHaveBeenCalledWith(
+        'id:repo::worktree',
+        expect.not.objectContaining({ command: expect.anything() })
+      )
+    })
+
+    it('commits the launched worker token with its durable authority', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockReturnValue({
+        runtimeId: runtime.getRuntimeId(),
+        terminalHandle: 'term_worker',
+        ptyId: 'pty_worker',
+        worktreeId: 'repo::worktree',
+        paneKey: 'tab_worker:leaf_worker',
+        processIncarnation: 'runtime_test:term_worker:1',
+        launchTokenHash: 'worker-launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      const task = db.createTask({ spec: 'persist worker identity' })
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string }
+
+      expect(db.getDispatchContextById(result.dispatchId)?.launch_token_hash).toBe(
+        'worker-launch-token-hash'
       )
     })
 
@@ -2227,7 +2410,9 @@ describe('orchestration RPC methods', () => {
       )
       expect(runtime.createTerminal).toHaveBeenCalledWith(
         'id:repo::other',
-        expect.objectContaining({ command: 'codex' })
+        // Why: starting a worker in an existing worktree must not pull the sidebar
+        // away from whatever the user is looking at.
+        expect.objectContaining({ startupAgent: 'codex', surfaceOwner: false })
       )
       expect(createWorktree).not.toHaveBeenCalled()
     })
@@ -2408,9 +2593,10 @@ describe('orchestration RPC methods', () => {
         expect.objectContaining({
           repoSelector: 'repo',
           name: 'child-worker',
-          runHooks: true,
+          runHooks: false,
           setupDecision: 'run',
           startupAgent: 'codex',
+          activate: false,
           lineage: expect.objectContaining({ parentWorktree: 'repo::parent', noParent: false })
         })
       )
@@ -2893,9 +3079,11 @@ describe('orchestration RPC methods', () => {
     it('resets all state', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       const result = (await call('orchestration.reset', { all: true })) as { reset: string }
       expect(result.reset).toBe('all')
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -2903,8 +3091,10 @@ describe('orchestration RPC methods', () => {
     it('resets tasks only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { tasks: true })
+      expect(stopRelay).toHaveBeenCalledOnce()
       expect(db.getInbox()).toHaveLength(1)
       expect(db.listTasks()).toHaveLength(0)
     })
@@ -2912,8 +3102,10 @@ describe('orchestration RPC methods', () => {
     it('resets messages only', async () => {
       setup()
       seedResetState()
+      const stopRelay = vi.spyOn(runtime, 'stopOrchestrationFederationRelay')
 
       await call('orchestration.reset', { messages: true })
+      expect(stopRelay).not.toHaveBeenCalled()
       expect(db.getInbox()).toHaveLength(0)
       expect(db.listTasks()).toHaveLength(1)
     })

@@ -9,9 +9,11 @@ import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { retireUnownedTerminal } from '@/lib/retire-unowned-background-terminal'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { makePaneKey } from '../../../shared/stable-pane-id'
-import { buildSetupRunnerCommand } from '../../../shared/setup-runner-command'
+import {
+  buildSetupRunnerCommand,
+  getSetupRunnerCommandPlatformForPath
+} from '../../../shared/setup-runner-command'
 import type {
   TerminalLayoutSnapshot,
   Worktree,
@@ -120,9 +122,11 @@ function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: stri
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {
+  // Why: background setup tabs can launch later, so they must reuse the same shell chosen when the runner was written.
   return buildSetupRunnerCommand(
     setup.runnerScriptPath,
-    isWindowsAbsolutePathLike(setup.runnerScriptPath) ? 'windows' : 'posix'
+    getSetupRunnerCommandPlatformForPath(setup.runnerScriptPath, 'posix'),
+    setup.shell
   )
 }
 

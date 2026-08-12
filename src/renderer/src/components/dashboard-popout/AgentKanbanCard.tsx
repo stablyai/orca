@@ -14,10 +14,12 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import {
+  dashboardCardDisplayState,
+  type DashboardCard
+} from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
-import { getWorkspaceStatusVisualMeta } from '../sidebar/workspace-status'
 
 /** Compact "started N ago" (the card is glanceable — coarse units are fine). */
 function formatStartedAgo(startedAt: number, now: number): string {
@@ -93,9 +95,6 @@ function sameCard(a: DashboardCard, b: DashboardCard): boolean {
     a.leafId === b.leafId &&
     a.repoName === b.repoName &&
     a.worktreeName === b.worktreeName &&
-    a.workspaceStatusId === b.workspaceStatusId &&
-    a.workspaceStatusLabel === b.workspaceStatusLabel &&
-    a.workspaceStatusColor === b.workspaceStatusColor &&
     a.hasReview === b.hasReview &&
     a.review?.number === b.review?.number &&
     a.review?.state === b.review?.state &&
@@ -200,19 +199,12 @@ export const AgentKanbanCard = memo(
   }: AgentKanbanCardProps): React.JSX.Element {
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
-    const workspaceStatusMeta =
-      card.workspaceStatusId && card.workspaceStatusLabel
-        ? getWorkspaceStatusVisualMeta({
-            id: card.workspaceStatusId,
-            label: card.workspaceStatusLabel,
-            color: card.workspaceStatusColor
-          })
-        : null
     // Why: the two outcomes worth scanning for get a tinted card — amber for
     // "answer me", green for "finished, look at it". Everything else stays
     // neutral so the tint keeps meaning something.
     const needsYou = card.bucket === 'attention'
-    const isDone = card.dotState === 'done'
+    const displayState = dashboardCardDisplayState(card)
+    const isDone = displayState === 'done'
     // Why: the session's own name heads the card. Without one the worktree is
     // the best heading left — and then the footer drops it rather than say it
     // twice.
@@ -252,7 +244,7 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={card.dotState} className="ml-auto" />}
+            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
           </div>
 
           {card.lastUserMessage || card.lastAgentMessage ? (
@@ -322,14 +314,6 @@ export const AgentKanbanCard = memo(
           onClick={() => onOpenTerminal(card)}
           className="flex w-full items-center gap-2 rounded-md text-left text-[11px] text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          {workspaceStatusMeta ? (
-            <span
-              role="img"
-              aria-label={card.workspaceStatusLabel}
-              className={cn('size-2 shrink-0 rounded-full', workspaceStatusMeta.swatch)}
-              title={card.workspaceStatusLabel}
-            />
-          ) : null}
           <Tooltip>
             <TooltipTrigger asChild>
               <span

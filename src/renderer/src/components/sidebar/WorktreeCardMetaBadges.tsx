@@ -2,6 +2,7 @@ import React from 'react'
 import { CalendarClock, CircleDot, SquareTerminal, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
 import type {
@@ -17,13 +18,20 @@ function hasComment(comment: string | null): boolean {
 export function hasWorktreeCardDetails({
   issue,
   linearIssue,
+  jiraIssue,
   review,
   comment,
   automationProvenance,
   cliProvenance
 }: WorktreeCardMetaBadgesProps): boolean {
   return Boolean(
-    issue || linearIssue || review || hasComment(comment) || automationProvenance || cliProvenance
+    issue ||
+    linearIssue ||
+    jiraIssue ||
+    review ||
+    hasComment(comment) ||
+    automationProvenance ||
+    cliProvenance
   )
 }
 
@@ -31,13 +39,24 @@ export const WorktreeCardMetaBadges = React.forwardRef<
   HTMLDivElement,
   WorktreeCardMetaBadgesRootProps
 >(function WorktreeCardMetaBadges(
-  { issue, linearIssue, review, comment, automationProvenance, cliProvenance, className, ...props },
+  {
+    issue,
+    linearIssue,
+    jiraIssue,
+    review,
+    comment,
+    automationProvenance,
+    cliProvenance,
+    className,
+    ...props
+  },
   ref
 ): React.JSX.Element | null {
   if (
     !hasWorktreeCardDetails({
       issue,
       linearIssue,
+      jiraIssue,
       review,
       comment,
       automationProvenance,
@@ -109,6 +128,17 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           )}
         >
           <LinearIcon className="text-muted-foreground" />
+        </MetaIconBadge>
+      )}
+      {jiraIssue && (
+        <MetaIconBadge
+          label={translate(
+            'auto.components.sidebar.WorktreeCardMeta.linkedJira',
+            'Linked Jira {{value0}}',
+            { value0: jiraIssue.identifier }
+          )}
+        >
+          <JiraIcon className="text-muted-foreground" />
         </MetaIconBadge>
       )}
       {review && (

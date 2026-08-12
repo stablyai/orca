@@ -26,7 +26,7 @@ function isFileStat(value: GitDirectoryStat): boolean {
 function runtimeDirname(pathValue: string): string {
   const normalized = normalizeRuntimePathSeparators(pathValue).replace(/\/+$/, '')
   const index = normalized.lastIndexOf('/')
-  if (index < 0) {
+  if (index === -1) {
     return '.'
   }
   if (index === 0) {

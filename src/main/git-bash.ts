@@ -126,13 +126,24 @@ export function resolveWindowsGitBashShellPath(
     return resolveGitBashPath(options)
   }
 
+  // Why: resolveWindowsShellStartupFamily classifies extension-less `bash` as POSIX too, so both
+  // spellings must resolve here or setup/PTY shell selection disagrees with the quoting family.
   const shellBasename = pathWin32.basename(trimmed).toLowerCase()
-  if (shellBasename !== 'bash.exe') {
+  if (shellBasename !== 'bash.exe' && shellBasename !== 'bash') {
     return null
   }
 
   if (pathWin32.isAbsolute(trimmed) || trimmed.includes('\\') || trimmed.includes('/')) {
-    return isGitForWindowsBashPath(trimmed) ? trimmed : null
+    // Why: an uninstalled/stale configured path must resolve to null like the discovery
+    // branch above, so setup does not commit to a bash the PTY will never spawn.
+    const exists = options.exists ?? existsSync
+    if (shellBasename === 'bash') {
+      // Why: Git for Windows ships only bash.exe, so an extension-less path is a request for it.
+      // This branch synthesizes a path the user never typed, so it must confirm the file is there.
+      const candidate = `${trimmed}.exe`
+      return isGitForWindowsBashPath(candidate) && exists(candidate) ? candidate : null
+    }
+    return isGitForWindowsBashPath(trimmed) && exists(trimmed) ? trimmed : null
   }
 
   return resolveGitBashPath(options)

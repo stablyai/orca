@@ -5,7 +5,7 @@ import type { FileHandle } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { dirname, extname, join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
-import { gitExecFileAsync, wslAwareSpawn } from '../git/runner'
+import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync, wslAwareSpawn } from '../git/runner'
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
@@ -30,6 +30,7 @@ import type {
 } from '../../shared/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
+import { sortDirEntries } from '../../shared/file-name-sort'
 import { assertSshMutationExpectation } from '../ssh/ssh-connection-generation'
 import {
   buildRgArgs,
@@ -105,9 +106,17 @@ import {
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
 } from './local-worktree-runtime-options'
-import { resolveSourceControlAiLinkedIssue } from './source-control-ai-linked-issue'
+import {
+  resolveSourceControlAiLinkedIssue,
+  resolveSourceControlAiLinkedIssueMeta
+} from './source-control-ai-linked-issue'
 import { listMarkdownDocuments, markdownDocumentsFromRelativePaths } from './markdown-documents'
 import { checkRgAvailable } from './rg-availability'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess
+} from '../../shared/ripgrep-process-availability'
 import {
   getSshFilesystemProvider,
   requireSshFilesystemProvider
@@ -117,6 +126,7 @@ import {
   SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
 } from '../providers/ssh-git-dispatch'
 import { resolveHostedReviewBodyForGeneration } from '../source-control/pull-request-template'
+import { loadPullRequestLinkedIssue } from '../source-control/pull-request-linked-issue'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentRuntimeTarget,
@@ -134,6 +144,10 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import {
+  applyGitStatusUpstreamRefWatchRequest,
+  type GitStatusUpstreamRefWatchRequest
+} from './git-status-upstream-ref-watch-request'
 
 // Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
@@ -409,6 +423,26 @@ function getLocalAgentRuntimeTarget(
     : { runtime: 'host' }
 }
 
+async function resolveModelDiscoveryLocalPath(
+  store: Store,
+  requestedPath: string
+): Promise<string> {
+  try {
+    return await resolveRegisteredWorktreePath(requestedPath, store)
+  } catch (error) {
+    const folderWorkspaces =
+      typeof store.getFolderWorkspaces === 'function' ? store.getFolderWorkspaces() : []
+    const isFolderWorkspaceRoot = folderWorkspaces.some(
+      (workspace) =>
+        comparableLocalPath(workspace.folderPath) === comparableLocalPath(requestedPath)
+    )
+    if (!isFolderWorkspaceRoot) {
+      throw error
+    }
+    return resolveAuthorizedPath(requestedPath, store)
+  }
+}
+
 function getLocalTextGenerationTarget(
   worktreePath: string,
   gitOptions: LocalProjectWorktreeGitOptions,
@@ -512,7 +546,9 @@ export function registerFilesystemHandlers(
         if (args.connectionId) {
           throwSite = 'ssh-provider'
           const provider = requireSshFilesystemProvider(args.connectionId)
-          return await provider.readDir(args.dirPath)
+          // Why: re-sort locally — the remote relay may be an older build with
+          // lexicographic ordering.
+          return sortDirEntries(await provider.readDir(args.dirPath))
         }
         throwSite = 'authorize'
         const dirPath = await resolveAuthorizedPath(args.dirPath, store)
@@ -527,12 +563,7 @@ export function registerFilesystemHandlers(
             isSymlink: entry.isSymbolicLink()
           }))
         )
-        return mapped.sort((a, b) => {
-          if (a.isDirectory !== b.isDirectory) {
-            return a.isDirectory ? -1 : 1
-          }
-          return a.name.localeCompare(b.name)
-        })
+        return sortDirEntries(mapped)
       } catch (error: unknown) {
         recordCrashBreadcrumb(
           'fs_readdir_error',
@@ -954,32 +985,35 @@ export function registerFilesystemHandlers(
         Math.min(args.maxResults ?? DEFAULT_SEARCH_MAX_RESULTS, DEFAULT_SEARCH_MAX_RESULTS)
       )
       const searchKey = `${event.sender.id}:${rootPath}`
+      // Why: WSL's bash exit 127 is ambiguous with a real executable returning 127.
+      const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
 
-      // Why: probe rg upfront; on some platforms spawn emits 'close' before 'error', resolving empty before the git-grep fallback runs.
-      const rgAvailable = await checkRgAvailable(rootPath, localGitOptions.wslDistro)
-      if (!rgAvailable) {
+      if (wslDistroForOutput && !(await checkRgAvailable(rootPath, localGitOptions.wslDistro))) {
         return searchWithGitGrep(rootPath, args, maxResults, localGitOptions)
       }
 
-      return new Promise((resolvePromise) => {
+      return new Promise<SearchResult>((resolvePromise) => {
         const rgArgs = buildRgArgs(args.query, rootPath, args)
 
         // Why: kill the prior rg so it stops parsing thousands of matches on the main thread (the large-repo freeze) after the UI moved on.
-        activeTextSearches.get(searchKey)?.kill()
+        const previousChild = activeTextSearches.get(searchKey)
+        if (previousChild) {
+          killSpawnedRipgrepProcess(previousChild)
+        }
 
         const acc = createAccumulator()
         let stdoutBuffer = ''
         let resolved = false
+        let processErrorObserved = false
+        let unavailableExitObserved = false
         let child: ChildProcess | null = null
         let killTimeout: ReturnType<typeof setTimeout>
 
-        // Why: WSL-routed rg emits Linux paths; UNC repos carry the distro in the path, Windows-path repos in project runtime.
-        const wslDistroForOutput = parseWslPath(rootPath)?.distro ?? localGitOptions.wslDistro
         const transformAbsPath = wslDistroForOutput
           ? (p: string): string => (p.startsWith('/') ? toWindowsWslPath(p, wslDistroForOutput) : p)
           : undefined
 
-        const resolveOnce = (): void => {
+        const finish = (result: SearchResult | PromiseLike<SearchResult>): void => {
           if (resolved) {
             return
           }
@@ -993,13 +1027,22 @@ export function registerFilesystemHandlers(
           child?.stderr?.off('data', handleStderrData)
           child?.off('error', handleError)
           child?.off('close', handleClose)
-          resolvePromise(finalize(acc))
+          if (child) {
+            absorbPendingRipgrepSpawnError(child, {
+              errorObserved: processErrorObserved,
+              unavailableExitObserved
+            })
+          }
+          resolvePromise(result)
         }
+        const resolveOnce = (): void => finish(finalize(acc))
+        const resolveWithoutRipgrep = (): void =>
+          finish(searchWithGitGrep(rootPath, args, maxResults, localGitOptions))
 
         const processLine = (line: string): void => {
           const verdict = ingestRgJsonLine(line, rootPath, acc, maxResults, transformAbsPath)
-          if (verdict === 'stop') {
-            child?.kill()
+          if (verdict === 'stop' && child) {
+            killSpawnedRipgrepProcess(child)
           }
         }
 
@@ -1023,9 +1066,24 @@ export function registerFilesystemHandlers(
           // Drain stderr so rg cannot block on a full pipe.
         }
         const handleError = (): void => {
+          processErrorObserved = true
+          if (child && isRipgrepUnavailableExit(child, null, null)) {
+            resolveWithoutRipgrep()
+            return
+          }
           resolveOnce()
         }
-        const handleClose = (): void => {
+        const handleClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+          if (
+            child &&
+            isRipgrepUnavailableExit(child, code, signal, {
+              classifyNativeLauncherExit: !wslDistroForOutput
+            })
+          ) {
+            unavailableExitObserved = true
+            resolveWithoutRipgrep()
+            return
+          }
           if (stdoutBuffer) {
             processLine(stdoutBuffer)
           }
@@ -1041,7 +1099,9 @@ export function registerFilesystemHandlers(
         // Why: timeout kills the child mid-scan; mark truncated so the UI shows incomplete results.
         killTimeout = setTimeout(() => {
           acc.truncated = true
-          child?.kill()
+          if (child) {
+            killSpawnedRipgrepProcess(child)
+          }
           resolveOnce()
         }, SEARCH_TIMEOUT_MS)
       })
@@ -1099,6 +1159,7 @@ export function registerFilesystemHandlers(
         includeIgnored?: boolean
         bypassEffectiveUpstreamNegativeCache?: boolean
         reuseLineStats?: boolean
+        branchLineTotalMergeBase?: string
         requestToken?: string
       }
     ): Promise<GitStatusResult> => {
@@ -1106,6 +1167,9 @@ export function registerFilesystemHandlers(
       const options = {
         includeIgnored: args.includeIgnored ?? false,
         ...(args.reuseLineStats === true ? { reuseLineStats: true } : {}),
+        ...(args.branchLineTotalMergeBase === undefined
+          ? {}
+          : { branchLineTotalMergeBase: args.branchLineTotalMergeBase }),
         ...(args.bypassEffectiveUpstreamNegativeCache === true
           ? { bypassEffectiveUpstreamNegativeCache: true }
           : {}),
@@ -1140,6 +1204,12 @@ export function registerFilesystemHandlers(
   ipcMain.handle('git:cancelStatus', (event, args: { requestToken: string }): void => {
     gitStatusCancellations.cancel(event, args.requestToken)
   })
+
+  ipcMain.handle(
+    'git:setStatusUpstreamRefWatch',
+    (_event, args: GitStatusUpstreamRefWatchRequest): Promise<void> =>
+      applyGitStatusUpstreamRefWatchRequest(store, args)
+  )
 
   // Why: parent status reports only one gitlink row per submodule; fetch inner per-file changes from the submodule's own worktree.
   ipcMain.handle(
@@ -1517,16 +1587,17 @@ export function registerFilesystemHandlers(
       let localRuntimeTarget: CommitMessageAgentRuntimeTarget = { runtime: 'host' }
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
       if (args.worktreePath) {
-        const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+        const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
         const gitOptions = getLocalGitOptionsForRegisteredWorktree(
           store,
           args.worktreePath,
           worktreePath
         )
-        localRuntimeTarget = getLocalAgentRuntimeTarget(gitOptions)
-        localDiscoveryOptions = gitOptions.wslDistro
-          ? { cwd: worktreePath, wslDistro: gitOptions.wslDistro }
-          : { cwd: worktreePath }
+        const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
+        localRuntimeTarget = wslDistro
+          ? { runtime: 'wsl', wslDistro }
+          : getLocalAgentRuntimeTarget(gitOptions)
+        localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         agentId,
@@ -1596,6 +1667,13 @@ export function registerFilesystemHandlers(
             error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
           }
         }
+        const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args)
+        const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+          meta: issueMeta,
+          provider: args.provider,
+          repoPath: args.worktreePath,
+          connectionId: args.connectionId
+        })
         let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
         try {
           const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -1624,10 +1702,12 @@ export function registerFilesystemHandlers(
         if (!context) {
           return { success: false, error: 'No branch changes to summarize.' }
         }
-        context = withLinkedIssueDraftContext(
-          context,
-          resolveSourceControlAiLinkedIssue(store, args)
-        )
+        const linkedIssueDetails = await linkedIssueDetailsPromise
+        context = {
+          ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+          ...(args.provider ? { provider: args.provider } : {}),
+          ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+        }
         return generatePullRequestFieldsFromContext(context, resolvedSettings.params, {
           kind: 'remote',
           cwd: args.worktreePath,
@@ -1643,6 +1723,14 @@ export function registerFilesystemHandlers(
         args.worktreePath,
         worktreePath
       )
+      const issueMeta = resolveSourceControlAiLinkedIssueMeta(store, args, worktreePath)
+      const linkedIssueDetailsPromise = loadPullRequestLinkedIssue({
+        meta: issueMeta,
+        provider: args.provider,
+        repoPath: worktreePath,
+        connectionId: args.connectionId,
+        localGitOptions: gitOptions
+      })
       let context: Awaited<ReturnType<typeof getPullRequestDraftContext>>
       try {
         const currentBody = await resolveHostedReviewBodyForGeneration({
@@ -1671,10 +1759,12 @@ export function registerFilesystemHandlers(
       if (!context) {
         return { success: false, error: 'No branch changes to summarize.' }
       }
-      context = withLinkedIssueDraftContext(
-        context,
-        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
-      )
+      const linkedIssueDetails = await linkedIssueDetailsPromise
+      context = {
+        ...withLinkedIssueDraftContext(context, issueMeta?.linkedIssue),
+        ...(args.provider ? { provider: args.provider } : {}),
+        ...(linkedIssueDetails ? { linkedIssueDetails } : {})
+      }
       const localEnv = await prepareLocalCommitMessageAgentEnv(
         resolvedSettings.params.agentId,
         commitMessageAgentEnv,
@@ -1986,6 +2076,7 @@ export function registerFilesystemHandlers(
         }
         const results = await provider.getBranchDiff(args.worktreePath, args.compare.mergeBase, {
           includePatch: true,
+          headOid: args.compare.headOid,
           filePath: args.filePath,
           oldPath: args.oldPath
         })
@@ -2231,6 +2322,7 @@ export function registerFilesystemHandlers(
         return provider.getRemoteFileUrl(args.worktreePath, args.relativePath, args.line)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
       return getRemoteFileUrl(worktreePath, args.relativePath, args.line)
     }
   )
@@ -2251,6 +2343,7 @@ export function registerFilesystemHandlers(
         return provider.getRemoteCommitUrl(args.worktreePath, sha)
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      await awaitWindowsHostGitEnvironmentReady({ cwd: worktreePath })
       return getRemoteCommitUrl(worktreePath, sha)
     }
   )

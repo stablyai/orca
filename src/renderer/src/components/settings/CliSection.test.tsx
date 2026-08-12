@@ -4,12 +4,19 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
+import {
+  ORCA_CLI_SKILL_INSTALL_COMMAND,
+  ORCA_CLI_SKILL_UPDATE_COMMAND
+} from '@/lib/agent-feature-install-commands'
 import { CliSection } from './CliSection'
 
 const capturedPanel = vi.hoisted(() => ({
+  canUseLocalSkillFreshness: true,
   props: null as null | {
     command: string
     installedCommand: string
+    terminalRuntime?: { runtime: 'host' | 'wsl'; wslDistro?: string | null; label: string }
+    freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
   },
@@ -24,6 +31,12 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkill: capturedPanel.useInstalledAgentSkill
 }))
 
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    canUseLocalSkillFreshness: capturedPanel.canUseLocalSkillFreshness
+  })
+}))
+
 capturedPanel.useInstalledAgentSkill.mockReturnValue({
   installed: false,
   loading: false,
@@ -33,6 +46,7 @@ capturedPanel.useInstalledAgentSkill.mockReturnValue({
 
 afterEach(() => {
   cleanup()
+  capturedPanel.canUseLocalSkillFreshness = true
   toastError.mockReset()
   vi.unstubAllGlobals()
 })
@@ -41,6 +55,7 @@ vi.mock('./AgentSkillSetupPanel', () => ({
   AgentSkillSetupPanel: function AgentSkillSetupPanel(props: {
     command: string
     installedCommand: string
+    freshnessSkillName?: string
     getPrerequisiteStatus: () => Promise<unknown>
     onBeforeOpenTerminal: () => Promise<void>
   }) {
@@ -62,6 +77,30 @@ vi.mock('./WslCliRegistration', () => ({
 }))
 
 describe('CliSection project runtime defaults', () => {
+  it('exposes freshness only for a resolved local host runtime', () => {
+    const settings = getDefaultSettings('/tmp')
+    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
+    expect(capturedPanel.props?.freshnessSkillName).toBe('orca-cli')
+
+    capturedPanel.canUseLocalSkillFreshness = false
+    renderToStaticMarkup(<CliSection currentPlatform="darwin" settings={settings} />)
+    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
+
+    capturedPanel.canUseLocalSkillFreshness = true
+    renderToStaticMarkup(
+      <CliSection
+        currentPlatform="win32"
+        settings={{
+          ...settings,
+          localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
+        }}
+        wslSupportedPlatform
+        wslAvailable
+      />
+    )
+    expect(capturedPanel.props?.freshnessSkillName).toBeUndefined()
+  })
+
   it('passes the default project WSL distro to CLI skill prerequisite checks', async () => {
     const getWslInstallStatus = vi
       .fn()
@@ -101,12 +140,13 @@ describe('CliSection project runtime defaults', () => {
         sourceKinds: ['global']
       })
     )
-    expect(capturedPanel.props?.command).toMatch(
-      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
-    )
-    expect(capturedPanel.props?.installedCommand).toMatch(
-      /^& \{ \$PSNativeCommandArgumentPassing = 'Legacy'; wsl\.exe -d 'Ubuntu' -- sh -c 'eval \\"`printf %s [A-Za-z0-9+/=]+ \| base64 -d`\\"'/
-    )
+    expect(capturedPanel.props?.command).toBe(ORCA_CLI_SKILL_INSTALL_COMMAND)
+    expect(capturedPanel.props?.installedCommand).toBe(ORCA_CLI_SKILL_UPDATE_COMMAND)
+    expect(capturedPanel.props?.terminalRuntime).toEqual({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    })
     expect(getWslInstallStatus).toHaveBeenCalledWith({ distro: 'Ubuntu' })
     expect(getWslInstallStatus).toHaveBeenCalledTimes(2)
   })

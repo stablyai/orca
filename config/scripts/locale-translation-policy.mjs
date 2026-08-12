@@ -1,11 +1,17 @@
 import { CJK_LATIN_SPACED_TERMS } from './locale-cjk-latin-spaced-terms.mjs'
-import { isLocalizedProseTermContext } from './locale-prose-term-exemptions.mjs'
+import {
+  isCanonicalGenericRendering,
+  overlapsCanonicalRendering
+} from './locale-generic-ui-terms.mjs'
 import { isScreenCursorContext } from './locale-screen-cursor-exemptions.mjs'
+import { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
+import { isStyleValue } from './locale-style-values.mjs'
 import { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 import { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 import { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 import { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
 
+export { BRAND_MISTRANSLATIONS } from './locale-brand-mistranslations.mjs'
 export { LOCALE_KEY_OVERRIDES } from './locale-key-overrides.mjs'
 export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
@@ -17,9 +23,10 @@ const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
 // Why: product names and agent labels stay Latin — MT reads them as common words (Codex→copy, Gemini→zodiac).
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
 
+// Only genuine brand, product, and code tokens belong here. Ordinary UI words that happen to
+// name a product (agent, terminal, commit, repo, Continue) live in locale-generic-ui-terms.mjs
+// and are translated; their product sense is pinned by ENGLISH_ONLY_KEY_PREFIXES instead.
 export const NEVER_TRANSLATE_VALUES = new Set([
-  'Agent',
-  'Agents',
   'Aider',
   'Amp',
   'Android',
@@ -33,7 +40,6 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Codebuff',
   'Codex',
   'Command Code',
-  'Continue',
   'Cursor',
   'Droid',
   'Devin',
@@ -60,30 +66,16 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'Pi',
   'PostHog',
   'Qwen Code',
-  'Repo',
-  'Repos',
   'Rovo Dev',
-  'Commit',
-  'Commits',
   'Markdown',
-  'Terminal',
-  'Terminals',
   'VS Code',
   'Warp',
   'Zed',
-  'agent',
-  'agents',
   'android',
   'codex',
-  'commit',
-  'commits',
   'gemini',
   'claude',
   'markdown',
-  'repo',
-  'repos',
-  'terminal',
-  'terminals',
   'gh',
   'idle',
   'anthropic',
@@ -105,6 +97,7 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'yarn',
   'Kagi',
   'kagi',
+  'kimi',
   'Bitbucket',
   'bitbucket',
   'GNOME',
@@ -174,162 +167,54 @@ export const NEVER_TRANSLATE_VALUES = new Set([
   'lint',
   'MD',
   '/home/user/projects',
-  'Claude Code'
+  'Claude Code',
+  // Commands, refs, class strings and code samples: a translated one no longer runs or matches.
+  'pnpm install',
+  'glab auth login',
+  "gh pr list --json number -q '.[0].number'",
+  '--model sonnet',
+  'localhost, 127.0.0.1, *.internal',
+  'packages/web shared/ui',
+  'stale-agent-row-{{value0}}',
+  'text-foreground',
+  'source-control',
+  'combined-branch',
+  'pr-view',
+  'fix-login-flow',
+  'my-project',
+  'serve-sim',
+  'pnpm playwright test',
+  'gh auth login',
+  'size-4 text-muted-foreground',
+  'text-amber-700 dark:text-amber-300',
+  'text-emerald-700 dark:text-emerald-300',
+  'src/renderer packages/ui',
+  'upstream/main',
+  'origin/main',
+  'example.com',
+  'bastion.example.com',
+  'dashboard.spec.ts',
+  'checkout.spec.ts',
+  'login.spec.ts',
+  'untitled.md',
+  'review src/auth',
+  'throw src/auth',
+  // Rendered inside <code> or a font-mono element, so they are code the user copies or types.
+  '{prompt}',
+  '{basePrompt}',
+  '{firstPrompt}',
+  '{assistantMessage}',
+  '/goal',
+  '/pricing',
+  '/signup',
+  'npm run dev',
+  'nbformat',
+  'orca.yaml',
+  'upstream',
+  'LIN-329',
+  'GH #1799',
+  'orca · zsh'
 ])
-
-export const BRAND_MISTRANSLATIONS = {
-  ko: {
-    Codex: ['사본', '코덱스'],
-    Gemini: ['쌍둥이자리'],
-    Claude: ['클로드'],
-    Grok: ['그록'],
-    Orca: ['오르카', '범고래'],
-    Cursor: ['커서'],
-    OpenCode: ['오픈코드'],
-    OpenClaw: ['오픈클로'],
-    OpenClaude: ['오픈클로드'],
-    Antigravity: ['반중력'],
-    Continue: ['계속하다'],
-    Charm: ['매력'],
-    Goose: ['거위'],
-    Pi: ['파이'],
-    'GitHub Copilot': ['GitHub 코파일럿', '코파일럿'],
-    Git: ['힘내'],
-    Discord: ['디스코드'],
-    Linear: ['선형'],
-    Agent: ['에이전트'],
-    Agents: ['에이전트'],
-    agent: ['에이전트'],
-    agents: ['에이전트'],
-    Commit: ['커밋'],
-    Commits: ['커밋'],
-    commit: ['커밋'],
-    commits: ['커밋'],
-    Markdown: ['마크다운', '가격 인하'],
-    markdown: ['마크다운', '가격 인하'],
-    Repo: ['저장소', '레포'],
-    Repos: ['저장소', '레포'],
-    repo: ['저장소', '레포'],
-    repos: ['저장소', '레포'],
-    Terminal: ['터미널'],
-    Terminals: ['터미널'],
-    terminal: ['터미널'],
-    terminals: ['터미널']
-  },
-  zh: {
-    Codex: ['法典'],
-    Gemini: ['双子座'],
-    Claude: ['克洛德', '克劳德'],
-    Grok: ['格罗克'],
-    Orca: ['虎鲸', '逆戟鲸'],
-    Cursor: ['光标'],
-    OpenCode: ['开放代码'],
-    OpenClaw: ['开爪'],
-    OpenClaude: ['开放克劳德'],
-    Antigravity: ['反重力'],
-    Continue: ['继续'],
-    Charm: ['魅力'],
-    Goose: ['鹅'],
-    Pi: ['圆周率'],
-    Droid: ['机器人'],
-    'GitHub Copilot': ['GitHub 副驾驶', '副驾驶'],
-    Bitbucket: ['位桶'],
-    Linear: ['线性', '线形'],
-    Jira: ['吉拉'],
-    Tailscale: ['尾鳞', '尾鱗'],
-    Agent: ['代理', '智能体'],
-    Agents: ['代理', '智能体'],
-    agent: ['代理', '智能体'],
-    agents: ['代理', '智能体'],
-    Commit: ['提交'],
-    Commits: ['提交'],
-    commit: ['提交'],
-    commits: ['提交'],
-    Markdown: ['降价'],
-    markdown: ['降价'],
-    Repo: ['存储库', '仓库', '回购协议', '回购'],
-    Repos: ['存储库', '仓库', '回购协议', '回购'],
-    repo: ['存储库', '仓库', '回购协议', '回购'],
-    repos: ['存储库', '仓库', '回购协议', '回购'],
-    Terminal: ['终端', '端子'],
-    Terminals: ['终端', '端子'],
-    terminal: ['终端', '端子'],
-    terminals: ['终端', '端子'],
-    Bash: ['重击'],
-    PowerShell: ['电源外壳'],
-    REST: ['休息'],
-    HEAD: ['头'],
-    Swift: ['迅速'],
-    Rust: ['锈'],
-    'Claude Code': ['Claude·科德'],
-    'Git AI Author': ['Git AI 作者']
-  },
-  ja: {
-    Codex: ['法典', 'コーデックス'],
-    Gemini: ['双子座'],
-    Claude: ['クロード'],
-    Grok: ['グロック'],
-    Orca: ['シャチ', '逆戟鲸', 'オルカ'],
-    Cursor: ['カーソル'],
-    OpenCode: ['オープンコード', 'オープン・コード'],
-    OpenClaw: ['オープンクロー'],
-    OpenClaude: ['オープンクロード'],
-    Antigravity: ['反重力'],
-    Continue: ['続ける', '続行'],
-    Charm: ['魅力'],
-    Goose: ['ガチョウ', '雁'],
-    Pi: ['円周率'],
-    Droid: ['ロボット', 'ドロイド'],
-    'GitHub Copilot': ['GitHub コパイロット', 'コパイロット'],
-    Discord: ['不和'],
-    Linear: ['線形'],
-    Agent: ['エージェント'],
-    Agents: ['エージェント'],
-    agent: ['エージェント'],
-    agents: ['エージェント'],
-    Commit: ['コミット'],
-    Commits: ['コミット'],
-    commit: ['コミット'],
-    commits: ['コミット'],
-    Markdown: ['マークダウン'],
-    markdown: ['マークダウン'],
-    Repo: ['リポジトリ', 'リポ'],
-    Repos: ['リポジトリ', 'リポ'],
-    repo: ['リポジトリ', 'リポ'],
-    repos: ['リポジトリ', 'リポ'],
-    Terminal: ['ターミナル', '端子'],
-    Terminals: ['ターミナル', '端子'],
-    terminal: ['ターミナル', '端子'],
-    terminals: ['ターミナル', '端子']
-  },
-  es: {
-    Codex: ['códice', 'Códice'],
-    Gemini: ['Géminis'],
-    Claude: ['claudia', 'Claudia'],
-    Orca: ['orca', 'Orcas', 'orcas'],
-    OpenCode: ['código abierto', 'Código abierto'],
-    OpenClaude: ['Openclaude'],
-    Antigravity: ['antigravedad', 'Antigravedad'],
-    'GitHub Copilot': ['Copiloto de GitHub'],
-    Discord: ['discordia'],
-    Linear: ['lineal', 'Lineal'],
-    Jira: ['jira'],
-    Agent: ['Agente', 'agente'],
-    Agents: ['Agentes', 'agentes'],
-    agent: ['agente'],
-    agents: ['agentes'],
-    Commit: ['Confirmación', 'confirmación', 'Confirmar', 'Comprometerse'],
-    Commits: ['Confirmaciones', 'confirmaciones', 'Compromisos', 'compromisos', 'Se compromete'],
-    commit: ['confirmación', 'confirmar', 'comprometerse', 'compromiso'],
-    commits: ['confirmaciones', 'compromisos'],
-    Markdown: ['Reducción', 'reducción', 'Rebaja', 'rebaja', 'rebajas'],
-    markdown: ['reducción', 'rebaja', 'rebajas'],
-    Repo: ['Repositorio', 'repositorio'],
-    Repos: ['Repositorios', 'repositorios'],
-    repo: ['repositorio'],
-    repos: ['repositorios']
-  }
-}
 
 export const NATIVE_PICKER_LABELS = {
   zh: { chinese: '中文（简体）', korean: '한국어', japanese: '日本語', spanish: 'Español' },
@@ -354,6 +239,9 @@ export function shouldPreserveEnglishValue(enValue, key = '') {
   if (isEnglishOnlyKey(key)) {
     return true
   }
+  if (isStyleValue(enValue)) {
+    return true
+  }
   return NEVER_TRANSLATE_VALUES.has(enValue)
 }
 
@@ -366,6 +254,18 @@ function includesPreservedLatinTerm(value, term) {
     return value.includes(term)
   }
   return new RegExp(`(^|[^A-Za-z_])${escapeRegExp(term)}($|[^A-Za-z_])`).test(value)
+}
+
+function replaceMistranslatedForm(value, wrong, brand, locale) {
+  let result = ''
+  let cursor = 0
+  for (let at = value.indexOf(wrong); at !== -1; at = value.indexOf(wrong, cursor)) {
+    const end = at + wrong.length
+    result += value.slice(cursor, at)
+    result += overlapsCanonicalRendering(brand, locale, value, at, end) ? wrong : brand
+    cursor = end
+  }
+  return result + value.slice(cursor)
 }
 
 function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
@@ -383,9 +283,6 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
     if (isScreenCursorContext(brand, enValue, key)) {
       continue
     }
-    if (isLocalizedProseTermContext(brand, key)) {
-      continue
-    }
     if (includesPreservedLatinTerm(result, brand)) {
       continue
     }
@@ -393,11 +290,16 @@ function applyBrandMistranslationFixes(enValue, localeValue, locale, key = '') {
       if (!result.includes(wrong)) {
         continue
       }
+      // Why: #12113 — a generic term's correct translation is not a mistranslation; reverting it
+      // rewrote ~2000 translated values back to English on every repair run.
+      if (isCanonicalGenericRendering(brand, locale, wrong)) {
+        continue
+      }
       // Why: "Copy identifier" legitimately uses 사본/复制 — only swap when English names the brand.
       if (brand === 'Codex' && /\bCopy\b/i.test(enValue)) {
         continue
       }
-      result = result.replaceAll(wrong, brand)
+      result = replaceMistranslatedForm(result, wrong, brand, locale)
     }
   }
 
@@ -548,6 +450,11 @@ export function repairCatalog(enCatalog, localeCatalog, locale) {
 
   for (const leaf of leaves) {
     const current = leaf.key.split('.').reduce((cursor, part) => cursor?.[part], localeCatalog)
+    // Why: en.json carries keys the locale catalog has not been bootstrapped with yet; repair only
+    // rewrites values that already exist, so skip instead of crashing on undefined.
+    if (typeof current !== 'string') {
+      continue
+    }
     const next = repairTranslatedValue({
       key: leaf.key,
       enValue: leaf.value,

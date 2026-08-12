@@ -113,7 +113,9 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(rendered.textContent).toContain('Agent skill:')
     expect(rendered.textContent).toContain('orca-linear')
     expect(rendered.textContent).toContain('Not installed')
-    expect(rendered.textContent).toContain('Let your agents read and edit Linear tasks.')
+    expect(rendered.textContent).toContain(
+      'Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
+    )
     expect(rendered.textContent).toContain(
       'npx skills add https://github.com/stablyai/orca --skill orca-linear --global'
     )

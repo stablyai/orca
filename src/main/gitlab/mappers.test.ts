@@ -38,8 +38,9 @@ describe('mapPipelineJobStatusToConclusion', () => {
     expect(mapPipelineJobStatusToConclusion('skipped')).toBe('skipped')
   })
 
-  it("maps 'manual' to neutral so it doesn't stall pending forever", () => {
+  it('keeps manual gates neutral while action-required stays actionable', () => {
     expect(mapPipelineJobStatusToConclusion('manual')).toBe('neutral')
+    expect(mapPipelineJobStatusToConclusion('action_required')).toBe('action_required')
   })
 
   it('maps active lifecycle states to pending', () => {
@@ -153,6 +154,7 @@ describe('mapMRInfo', () => {
       pipelineStatus: 'success',
       updatedAt: '2026-05-05T10:00:00Z',
       mergeable: 'MERGEABLE',
+      mergeStateStatus: 'mergeable',
       headSha: 'deadbeef'
     })
   })
@@ -169,12 +171,47 @@ describe('mapMRInfo', () => {
       'pending'
     )
     expect(info.mergeable).toBe('CONFLICTING')
+    expect(info.mergeStateStatus).toBe('conflict')
   })
 
   it('marks UNKNOWN when detailed_merge_status is non-mergeable but not a conflict', () => {
     const info = mapMRInfo(
       { iid: 1, title: 't', state: 'opened', detailed_merge_status: 'checking' },
       'pending'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('checking')
+  })
+
+  // Why: GitLab < 15.6 has no detailed_merge_status. Without the legacy fallback these MRs stay
+  // UNKNOWN, and the merge UI (which gates on MERGEABLE) shows "Checking" with no merge button.
+  it('falls back to legacy merge_status when detailed_merge_status is absent', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'can_be_merged' },
+      'success'
+    )
+    expect(info.mergeable).toBe('MERGEABLE')
+  })
+
+  it('does not let legacy merge_status override a present detailed_merge_status', () => {
+    const info = mapMRInfo(
+      {
+        iid: 1,
+        title: 't',
+        state: 'opened',
+        detailed_merge_status: 'not_approved',
+        merge_status: 'can_be_merged'
+      },
+      'success'
+    )
+    expect(info.mergeable).toBe('UNKNOWN')
+    expect(info.mergeStateStatus).toBe('not_approved')
+  })
+
+  it('keeps legacy cannot_be_merged as UNKNOWN rather than guessing a conflict', () => {
+    const info = mapMRInfo(
+      { iid: 1, title: 't', state: 'opened', merge_status: 'cannot_be_merged' },
+      'success'
     )
     expect(info.mergeable).toBe('UNKNOWN')
   })
@@ -227,7 +264,23 @@ describe('derivePipelineStatus', () => {
     expect(derivePipelineStatus('success')).toBe('success')
     expect(derivePipelineStatus('failed')).toBe('failure')
     expect(derivePipelineStatus('running')).toBe('pending')
-    expect(derivePipelineStatus('manual')).toBe('neutral')
+    // Why: pipeline-level `manual` means GitLab blocked the pipeline on a human trigger — it is
+    // outstanding, not broken (red) and not resolved (which would paint the MR card green while
+    // "Pipelines must succeed" still refuses the merge).
+    expect(derivePipelineStatus('manual')).toBe('pending')
+    expect(derivePipelineStatus({ status: 'manual' })).toBe('pending')
+  })
+
+  // Why: pins the two remaining string/array divergences. The job rollup calls skipped jobs
+  // passing and canceled jobs failing, but `head_pipeline.status` is the only production entry
+  // point and GitLab paints both pipeline states grey — flipping either card tone needs product
+  // sign-off, so these assertions exist so neither flip can land silently.
+  it('keeps skipped and canceled pipeline strings neutral (deferred tone changes)', () => {
+    expect(derivePipelineStatus('skipped')).toBe('neutral')
+    expect(derivePipelineStatus({ status: 'skipped' })).toBe('neutral')
+    expect(derivePipelineStatus('canceled')).toBe('neutral')
+    expect(derivePipelineStatus('canceling')).toBe('neutral')
+    expect(derivePipelineStatus([{ status: 'canceled' }])).toBe('failure')
   })
 
   it('rolls up an array of jobs', () => {
@@ -238,9 +291,38 @@ describe('derivePipelineStatus', () => {
 
   it('failure beats pending in the rollup', () => {
     expect(derivePipelineStatus([{ status: 'failed' }, { status: 'running' }])).toBe('failure')
+    expect(derivePipelineStatus([{ status: 'action_required' }, { status: 'success' }])).toBe(
+      'failure'
+    )
+  })
+
+  it('keeps a manual deploy gate from failing an otherwise green pipeline', () => {
+    expect(derivePipelineStatus([{ status: 'manual' }, { status: 'success' }])).toBe('success')
+  })
+
+  it('leaves a manual-only pipeline unresolved rather than green', () => {
+    expect(derivePipelineStatus([{ status: 'manual' }])).toBe('neutral')
+    expect(derivePipelineStatus([{ status: 'manual' }, { status: 'manual' }])).toBe('neutral')
+  })
+
+  it('counts skipped jobs as passing', () => {
+    expect(derivePipelineStatus([{ status: 'skipped' }, { status: 'skipped' }])).toBe('success')
   })
 
   it('handles a single object with status', () => {
     expect(derivePipelineStatus({ status: 'success' })).toBe('success')
+  })
+
+  it('keeps malformed and unknown array jobs neutral', () => {
+    expect(derivePipelineStatus([{ status: 'future_status' }])).toBe('neutral')
+    expect(derivePipelineStatus([{}])).toBe('neutral')
+  })
+
+  // Why: matches the shared rollup rule — one unresolved job must not demote a pipeline that has
+  // a passing job, or the same MR reads green in the Checks tab and grey on the card.
+  it('lets a passing job outweigh an unknown one', () => {
+    expect(derivePipelineStatus([{ status: 'success' }, { status: 'future_status' }])).toBe(
+      'success'
+    )
   })
 })

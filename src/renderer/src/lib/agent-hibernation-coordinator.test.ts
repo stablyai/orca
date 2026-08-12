@@ -356,6 +356,35 @@ describe('agent sleep coordinator', () => {
     expect(shutdown).not.toHaveBeenCalled()
   })
 
+  it('rechecks dispatch settlement before shutdown', async () => {
+    vi.useFakeTimers()
+    const completed = {
+      ...entry(),
+      orchestration: {
+        taskId: 'task-1',
+        dispatchId: 'ctx-1',
+        dispatchStatus: 'completed' as const
+      }
+    }
+    const shutdown = installEligibleState(vi.fn().mockResolvedValue(undefined), {
+      agentStatusByPaneKey: { [completed.paneKey]: completed }
+    })
+    startAgentHibernationCoordinator({ intervalMs: 1000, now: () => NOW })
+
+    await vi.advanceTimersByTimeAsync(1000)
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        [completed.paneKey]: {
+          ...completed,
+          orchestration: { ...completed.orchestration, dispatchStatus: 'dispatched' }
+        }
+      }
+    })
+    await vi.advanceTimersByTimeAsync(1000)
+
+    expect(shutdown).not.toHaveBeenCalled()
+  })
+
   it('restarts confirmation when a foreground terminal visit refreshes idle state', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)

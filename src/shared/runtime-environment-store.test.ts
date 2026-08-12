@@ -13,12 +13,13 @@ import {
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
-function pairingCode(endpoint = 'ws://127.0.0.1:6768'): string {
+function pairingCode(endpoint = 'ws://127.0.0.1:6768', pairedDeviceId?: string): string {
   return encodePairingOffer({
     v: 2,
     endpoint,
     deviceToken: 'device-token',
-    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64')
+    publicKeyB64: Buffer.from(new Uint8Array(32).fill(1)).toString('base64'),
+    ...(pairedDeviceId ? { pairedDeviceId } : {})
   })
 }
 
@@ -87,6 +88,29 @@ describe('runtime environment store', () => {
     ]).toEqual([101, 102, 200])
   })
 
+  it('keeps SSH-tunnel metadata only while the pairing endpoint is loopback', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'tunneled box',
+      pairingCode: pairingCode(),
+      connectionDependency: 'ssh-tunnel'
+    })
+    expect(environment.connectionDependency).toBe('ssh-tunnel')
+
+    const updated = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+      pairingCode: pairingCode('ws://192.0.2.10:6768')
+    })
+    expect(updated).not.toHaveProperty('connectionDependency')
+
+    const direct = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'direct box',
+      pairingCode: pairingCode('ws://192.0.2.11:6768'),
+      connectionDependency: 'ssh-tunnel'
+    })
+    expect(direct).not.toHaveProperty('connectionDependency')
+  })
+
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
     tempDirs.push(userDataPath)
@@ -125,6 +149,31 @@ describe('runtime environment store', () => {
     expect(listEnvironments(userDataPath)[0]).toMatchObject({
       lastUsedAt: 2_000,
       runtimeId: 'runtime-2'
+    })
+  })
+
+  it('persists paired device identity from pairing and status backfill', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const paired = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'paired box',
+      pairingCode: pairingCode('ws://127.0.0.1:6768', 'device-from-offer'),
+      now: 1_000
+    })
+    const legacy = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'legacy box',
+      pairingCode: pairingCode('ws://192.0.2.10:6768'),
+      now: 1_000
+    })
+
+    expect(paired.pairedDeviceId).toBe('device-from-offer')
+    markEnvironmentUsed(userDataPath, legacy.id, {
+      pairedDeviceId: 'device-from-status',
+      now: 2_000
+    })
+    expect(listEnvironments(userDataPath).find((entry) => entry.id === legacy.id)).toMatchObject({
+      pairedDeviceId: 'device-from-status',
+      lastUsedAt: 2_000
     })
   })
 

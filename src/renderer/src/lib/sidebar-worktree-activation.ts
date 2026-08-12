@@ -5,11 +5,21 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 
-export async function activateWorktreeFromSidebar(worktreeId: string): Promise<void> {
+export async function activateWorktreeFromSidebar(
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): Promise<void> {
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+    if (executionHostId) {
+      activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId, {
+        executionHostId
+      })
+    } else {
+      activateAndRevealFolderWorkspace(workspaceScope.folderWorkspaceId)
+    }
     return
   }
 
@@ -37,5 +47,8 @@ export async function activateWorktreeFromSidebar(worktreeId: string): Promise<v
 
   // Why: sidebar clicks already happen on a visible row; revealing again can
   // jump duplicate pinned/canonical entries back to the first mounted copy.
-  activateAndRevealWorktree(worktreeId, { revealInSidebar: false })
+  activateAndRevealWorktree(worktreeId, {
+    revealInSidebar: false,
+    ...(executionHostId ? { executionHostId } : {})
+  })
 }

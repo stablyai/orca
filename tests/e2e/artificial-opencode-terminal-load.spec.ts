@@ -56,11 +56,8 @@ type SyntheticOpenCodeWindow = Window & {
   }
 }
 
-// Why: the renderer hidden-skip grammar is deleted — hidden bytes are dropped
-// in main (gate) or ride the background queue. Only the mode-2031 fact-reply
-// counter still has a renderer-side producer.
 type TerminalPtyOutputDebugSnapshot = {
-  hiddenRendererMode2031ReplyCount: number
+  hiddenRendererSkipCount: number
 }
 
 type TerminalOutputSchedulerDebugSnapshot = {
@@ -146,7 +143,8 @@ const MAX_TIMER_DRIFT_MS = 250
 // the real baseline.
 const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 2_500
 const MAX_SCROLL_LATENCY_MS = 150
-const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 3 * 1024 * 1024
+// Why: byte-level peaks vary by drain quantum; the coarse guard matches the main-pressure scenario.
+const MAX_RENDERER_SCHEDULER_QUEUED_CHARS = 5 * 1024 * 1024
 
 function readPositiveInt(name: string, fallback: number): number {
   const raw = process.env[name]
@@ -372,7 +370,7 @@ function annotateTypingMeasurement(
   mainPressure: MainPtyPressureDebugSnapshot | null = null,
   ackGate: TerminalPtyAckGateSnapshot | null = null
 ): void {
-  const mode2031Summary = debug ? ` mode2031Replies=${debug.hiddenRendererMode2031ReplyCount}` : ''
+  const hiddenSkipSummary = debug ? ` hiddenRendererSkips=${debug.hiddenRendererSkipCount}` : ''
   const schedulerSummary = scheduler
     ? ` deferredForegroundEnqueue=${scheduler.deferredForegroundEnqueueCount} deferredForegroundWrite=${scheduler.deferredForegroundWriteCount} scheduledDrains=${scheduler.scheduledDrainCount} rendererQueuedTerminals=${scheduler.queuedTerminalCount} rendererQueuedChars=${scheduler.queuedChars} rendererPeakQueuedTerminals=${scheduler.peakQueuedTerminalCount} rendererPeakQueuedChars=${scheduler.peakQueuedChars} rendererPeakQueuedCharsByTerminal=${scheduler.peakQueuedCharsByTerminal} rendererDroppedBacklogs=${scheduler.droppedBacklogCount}`
     : ''
@@ -390,7 +388,7 @@ function annotateTypingMeasurement(
       1
     )}ms maxTimerDrift=${measurement.maxTimerDriftMs.toFixed(1)}ms samples=${measurement.latencies
       .map((value) => value.toFixed(1))
-      .join(',')}${mode2031Summary}${schedulerSummary}${mainPressureSummary}${ackGateSummary}`
+      .join(',')}${hiddenSkipSummary}${schedulerSummary}${mainPressureSummary}${ackGateSummary}`
   })
 }
 

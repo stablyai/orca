@@ -6,15 +6,15 @@ import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugin-language-packs'
 import { translate } from '@/i18n/i18n'
 import { resolveUiLocale } from '@/i18n/supported-languages'
+import { FULL_DISK_ACCESS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import {
   dismissMacosTccPromptNotice,
   subscribeToMacosTccPromptNotice
 } from './macos-tcc-prompt-notice-subscription'
 
 /**
- * Shows the Full Disk Access hint only after macOS has repeatedly raised its
- * consent dialog naming Orca (#9756). The main process counts the dialogs, so
- * users who never see one never see this.
+ * Shows the Full Disk Access hint after macOS raises a consent dialog naming
+ * Orca (#9756). Users who never see one never see this.
  */
 export function useMacosTccPromptNotice(): void {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
@@ -38,23 +38,29 @@ export function useMacosTccPromptNotice(): void {
     if (!localeReady) {
       return
     }
-    return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, () => {
+    return subscribeToMacosTccPromptNotice(window.api?.macosTccPrompts, (_, acknowledge) => {
       toast.warning(
         translate(
           'auto.hooks.useMacosTccPromptNotice.title',
-          'Reduce repeated macOS file-access prompts'
+          'Seeing “Orca would like to access…” prompts?'
         ),
         {
           description: translate(
             'auto.hooks.useMacosTccPromptNotice.description',
-            'macOS attributes file access by your agents and terminal tools to Orca. Granting Full Disk Access reduces these prompts.'
+            'Permission messages from macOS may appear when an agent or terminal tool running in Orca attempts to access protected files. Grant Full Disk Access in Settings to reduce these prompts.'
           ),
-          duration: 12_000,
+          duration: Infinity,
+          onDismiss: acknowledge,
           action: {
             label: translate('auto.hooks.useMacosTccPromptNotice.openSettings', 'Open Settings'),
             onClick: () => {
+              acknowledge()
               openSettingsPage()
-              openSettingsTarget({ pane: 'developer-permissions', repoId: null })
+              openSettingsTarget({
+                pane: 'developer-permissions',
+                repoId: null,
+                sectionId: FULL_DISK_ACCESS_SETTINGS_TARGET_ID
+              })
             }
           },
           cancel: {

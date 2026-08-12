@@ -34,6 +34,17 @@ export function isGestureMouseTrackingMode(
   return mode === 'x10' || mode === 'vt200' || mode === 'drag' || mode === 'any'
 }
 
+export function isTerminalPhoneDisplayMode(
+  handle: string | null,
+  terminalModes: ReadonlyMap<string, 'auto' | 'phone' | 'desktop'>
+): boolean {
+  if (!handle) {
+    return false
+  }
+  const mode = terminalModes.get(handle)
+  return mode === undefined || mode === 'auto' || mode === 'phone'
+}
+
 export function getActiveTabIdForHandle(
   tabs: ReadonlyArray<{ id: string; type: string; terminal?: string | null }>,
   terminalHandle: string | null

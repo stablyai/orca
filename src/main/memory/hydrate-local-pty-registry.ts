@@ -19,7 +19,7 @@ import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { splitWorktreeId } from '../../shared/worktree-id'
 import type { Store } from '../persistence'
 
-// Why: attachMainWindowServices reruns on every macOS dock re-activation; guard against re-running git I/O + daemon RPC.
+// Why: macOS dock reactivation reruns setup; avoid repeating Git I/O and daemon RPC.
 let hasHydrated = false
 
 /**
@@ -42,7 +42,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     // Why: flip only after a provider exists; retrying a failed RPC on the same socket won't help.
     hasHydrated = true
 
-    // Why: defer git worktree enumeration to only repos with a live session; scanning all repos is background subprocess churn.
+    // Why: enumerate Git worktrees only for live-session repos.
     const reposById = new Map(store.getRepos().map((repo) => [repo.id, repo]))
     // Why: verify via live git that a referenced worktree still exists, to avoid resurrecting removed ones.
     const liveLocalWorktreeIds = new Set<string>()
@@ -51,7 +51,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
     let sessionInfos = await collectSessionInfos(provider)
     let alreadyRegistered = new Set(listRegisteredPtys().map((p) => p.ptyId))
 
-    // Why: git enumeration is slow, so re-read daemon+registry each pass to avoid resurrecting exited sessions; terminates as each pass resolves >=1 new repo.
+    // Why: re-read live sessions each pass to avoid resurrecting exited sessions.
     for (;;) {
       const newlyReferencedRepos = new Map<string, ReturnType<(typeof store)['getRepos']>[number]>()
       for (const info of sessionInfos) {
@@ -65,7 +65,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
         }
         const repo = reposById.get(parsedWorktreeId.repoId)
         if (!repo || (repo.connectionId ?? null)) {
-          // Why: unknown or SSH repos can't be proven local; resolve without git enumeration so they can't extend the loop.
+          // Why: unknown and SSH repos cannot be proven local, so do not enumerate them.
           resolvedRepoIds.add(parsedWorktreeId.repoId)
           continue
         }
@@ -95,7 +95,7 @@ export async function hydrateLocalPtyRegistryAtBoot(store: Pick<Store, 'getRepos
       if (!worktreeId) {
         continue
       }
-      // Why: only register proven-local worktrees, mirroring the spawn-time !connectionId gate in src/main/ipc/pty.ts.
+      // Why: register only proven-local worktrees, matching the spawn-time gate.
       if (!liveLocalWorktreeIds.has(worktreeId)) {
         continue
       }

@@ -109,7 +109,8 @@ function ptyMapForTabs(tabsByWorktree: Record<string, TerminalTab[]>): Record<st
  * Sort helper: builds the attention map and runs the smart comparator. Mirrors
  * what callers do in production (visible-worktrees, WorktreeList).
  */
-function sortSmart(
+function sortSmartAt(
+  now: number,
   worktrees: Worktree[],
   tabsByWorktree: Record<string, TerminalTab[]>,
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
@@ -120,9 +121,17 @@ function sortSmart(
     agentStatusByPaneKey,
     {},
     ptyMapForTabs(tabsByWorktree),
-    NOW
+    now
   )
-  return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, NOW, attention))
+  return [...worktrees].sort(buildWorktreeComparator('smart', repoMap, now, attention))
+}
+
+function sortSmart(
+  worktrees: Worktree[],
+  tabsByWorktree: Record<string, TerminalTab[]>,
+  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+): Worktree[] {
+  return sortSmartAt(NOW, worktrees, tabsByWorktree, agentStatusByPaneKey)
 }
 
 describe('smart sort — class invariants', () => {
@@ -351,6 +360,62 @@ describe('smart sort — interrupted and stale handling', () => {
     const sorted = sortSmart([stale, fresh], tabs, entries)
     // fresh is Class 2; stale falls to Class 4.
     expect(sorted.map((w) => w.id)).toEqual(['fresh', 'stale'])
+  })
+})
+
+describe('smart sort — completed-agent eligibility clock', () => {
+  // Captured regression (docs/smart-sort-agent-activity-findings.md): a `done` row whose
+  // updatedAt was 3m04s newer than its completion outranked two live spinners.
+  const SCREENSHOT_AT = new Date('2026-03-27T21:44:39.000Z').getTime()
+  const at = (hhmmss: string): number => new Date(`2026-03-27T${hhmmss}.000Z`).getTime()
+
+  function capturedFixture(workingUpdatedAt = at('21:44:30')) {
+    const done = makeWorktree({ id: 'fix-linear-persistent', displayName: 'fix-linear-persistent' })
+    const workingA = makeWorktree({ id: 'allow-editing', displayName: 'allow-editing' })
+    const workingB = makeWorktree({ id: 'resume-terminal', displayName: 'resume-terminal' })
+    const tabs = {
+      [done.id]: [makeTab({ id: 'tab-done', worktreeId: done.id })],
+      [workingA.id]: [makeTab({ id: 'tab-a', worktreeId: workingA.id })],
+      [workingB.id]: [makeTab({ id: 'tab-b', worktreeId: workingB.id })]
+    }
+    const entries = {
+      [paneKey('tab-done', '1')]: makeEntry({
+        paneKey: paneKey('tab-done', '1'),
+        state: 'done',
+        stateStartedAt: at('21:12:09'),
+        // Same-state `done` writes pushed updatedAt 3m04s past the completion.
+        updatedAt: at('21:15:13')
+      }),
+      [paneKey('tab-a', '1')]: makeEntry({
+        paneKey: paneKey('tab-a', '1'),
+        state: 'working',
+        stateStartedAt: workingUpdatedAt - 68_000,
+        updatedAt: workingUpdatedAt
+      }),
+      [paneKey('tab-b', '1')]: makeEntry({
+        paneKey: paneKey('tab-b', '1'),
+        state: 'working',
+        stateStartedAt: workingUpdatedAt - 145_000,
+        updatedAt: workingUpdatedAt - 5_000
+      })
+    }
+    return { worktrees: [done, workingA, workingB], tabs, entries }
+  }
+
+  it('ranks the two spinners above the 32-minute-old completion', () => {
+    const { worktrees, tabs, entries } = capturedFixture()
+    const sorted = sortSmartAt(SCREENSHOT_AT, worktrees, tabs, entries)
+    expect(sorted.map((w) => w.id)).toEqual([
+      'allow-editing',
+      'resume-terminal',
+      'fix-linear-persistent'
+    ])
+  })
+
+  it('still ranks that completion above the spinners inside its own window', () => {
+    const { worktrees, tabs, entries } = capturedFixture(at('21:39:50'))
+    const sorted = sortSmartAt(at('21:40:00'), worktrees, tabs, entries)
+    expect(sorted[0].id).toBe('fix-linear-persistent')
   })
 })
 

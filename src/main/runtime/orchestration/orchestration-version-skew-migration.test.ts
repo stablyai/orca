@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
-import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { LEGACY_CONTRACT_VERSION, LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { resolveOrchestrationMigrationStartVersion } from './orchestration-schema-version-skew'
 
 describe('OrchestrationDb version-skew migration', () => {
   let db: OrchestrationDb | undefined
@@ -11,12 +12,14 @@ describe('OrchestrationDb version-skew migration', () => {
 
   afterEach(() => {
     db?.close()
+    db = undefined
     if (tempDir) {
       rmSync(tempDir, { recursive: true, force: true })
+      tempDir = undefined
     }
   })
 
-  function createLegacySchemaClaimingVersion17(): string {
+  function createLegacySchemaClaimingVersion(claimedVersion = 17): string {
     tempDir = mkdtempSync(join(tmpdir(), 'orca-db-version-skew-'))
     const dbPath = join(tempDir, 'orchestration.db')
     const raw = new Database(dbPath)
@@ -126,20 +129,28 @@ describe('OrchestrationDb version-skew migration', () => {
         'gate_legacy', 'task_legacy', 'retained gate'
       );
     `)
-    raw.pragma('user_version = 17')
+    raw.pragma(`user_version = ${claimedVersion}`)
     raw.close()
     return dbPath
   }
 
   it('repairs retained v6 rows when the database already claims v17', () => {
-    const dbPath = createLegacySchemaClaimingVersion17()
+    const dbPath = createLegacySchemaClaimingVersion()
     db = new OrchestrationDb(dbPath)
 
+    const adoptedRunId = db.getLegacyAdoption()?.adopted_run_id
+    expect(adoptedRunId).toBeTruthy()
     expect(db.getRun(LEGACY_RUN_ID)).toMatchObject({ legacy: 1 })
-    expect(db.getMessageById('msg_legacy')).toMatchObject({ run_id: LEGACY_RUN_ID })
-    expect(db.getTask('task_legacy')).toMatchObject({ run_id: LEGACY_RUN_ID })
-    expect(db.getDispatchContextById('ctx_legacy')).toMatchObject({ run_id: LEGACY_RUN_ID })
-    expect(db.getGate('gate_legacy')).toMatchObject({ run_id: LEGACY_RUN_ID })
+    expect(db.getMessageById('msg_legacy')).toMatchObject({
+      run_id: adoptedRunId,
+      delivery_contract: 'legacy_direct'
+    })
+    expect(db.getTask('task_legacy')).toMatchObject({ run_id: adoptedRunId })
+    expect(db.getDispatchContextById('ctx_legacy')).toMatchObject({
+      run_id: adoptedRunId,
+      contract_version: LEGACY_CONTRACT_VERSION
+    })
+    expect(db.getGate('gate_legacy')).toMatchObject({ run_id: adoptedRunId })
 
     const run = db.createRun({
       objective: 'verify repaired orchestration',
@@ -164,8 +175,18 @@ describe('OrchestrationDb version-skew migration', () => {
     db.close()
     db = undefined
     db = new OrchestrationDb(dbPath)
-    expect(db.listTasks({ runId: LEGACY_RUN_ID }).map((row) => row.id)).toEqual(['task_legacy'])
+    expect(db.listTasks({ runId: adoptedRunId }).map((row) => row.id)).toEqual(['task_legacy'])
     expect(db.getRun(run.id)).toBeDefined()
     expect(db.getQuestion(question.message.id)).toMatchObject({ status: 'pending' })
+  })
+
+  it('does not repair an incomplete schema written by a future binary', () => {
+    const dbPath = createLegacySchemaClaimingVersion(20)
+    const raw = new Database(dbPath)
+
+    expect(resolveOrchestrationMigrationStartVersion(raw, 20, 19)).toBe(20)
+    expect(raw.pragma('user_version', { simple: true })).toBe(20)
+
+    raw.close()
   })
 })

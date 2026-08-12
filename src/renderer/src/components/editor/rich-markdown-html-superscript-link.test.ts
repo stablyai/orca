@@ -29,6 +29,7 @@ import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard
 import { resolveRichMarkdownWorktreeRoot } from './useRichMarkdownSuperscriptLinkSetup'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
+import type { FolderWorkspace } from '../../../../shared/types'
 import {
   inspectRichMarkdownSourceOwningSlice,
   RICH_MARKDOWN_SOURCE_OWNING_PASTE_LIMIT
@@ -309,7 +310,7 @@ describe('rich Markdown HTML superscript links', () => {
 
   it('uses a folder workspace path as the citation source root', () => {
     const state = {
-      folderWorkspaces: [{ id: 'folder-1', folderPath: '/workspace/platform' }],
+      folderWorkspaces: [{ id: 'folder-1', folderPath: '/workspace/platform' } as FolderWorkspace],
       worktreesByRepo: {}
     } as Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>
     expect(resolveRichMarkdownWorktreeRoot(state, folderWorkspaceKey('folder-1'))).toBe(

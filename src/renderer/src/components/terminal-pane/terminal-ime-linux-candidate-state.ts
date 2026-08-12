@@ -118,7 +118,7 @@ function isPlainAsciiDigitKey(event: XtermBypassEvent): boolean {
 /** Tracks legacy desktop Linux IME candidate-selection event sequences. */
 export function createTerminalImeLinuxCandidateState(
   now: () => number = () => Date.now(),
-  pendingPlainLetterKeydownsByCode: Set<string> = new Set()
+  pendingPlainLetterKeydownsByCode = new Set<string>()
 ): TerminalImeLinuxCandidateState {
   let candidateDigitUntil = 0
 

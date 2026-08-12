@@ -4,6 +4,7 @@ export function pickRemoteCliEnv(env: NodeJS.ProcessEnv): Record<string, string>
     'ORCA_TERMINAL_HANDLE',
     'ORCA_WORKTREE_ID',
     'ORCA_PANE_KEY',
+    'ORCA_AGENT_LAUNCH_TOKEN',
     'ORCA_WORKSPACE_ID',
     'ORCA_USER_DATA_PATH',
     'PATH',

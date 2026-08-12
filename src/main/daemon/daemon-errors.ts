@@ -20,3 +20,35 @@ export class SessionNotFoundError extends Error {
     this.name = 'SessionNotFoundError'
   }
 }
+
+export class TerminalSessionOwnerUnverifiedError extends Error {
+  constructor(sessionId: string) {
+    super(`Terminal session owner could not be verified: ${sessionId}`)
+    this.name = 'TerminalSessionOwnerUnverifiedError'
+  }
+}
+
+export class TerminalHostGoneError extends Error {
+  constructor() {
+    super('terminal_host_gone')
+    this.name = 'TerminalHostGoneError'
+  }
+}
+
+// Connect ENOENT/ECONNREFUSED proves the endpoint is absent; open ENOENT can be a missing token file.
+export function isDaemonEndpointGoneError(err: unknown): boolean {
+  const candidate = err as { code?: unknown; syscall?: unknown } | null
+  return (
+    typeof candidate === 'object' &&
+    candidate !== null &&
+    candidate.syscall === 'connect' &&
+    (candidate.code === 'ENOENT' || candidate.code === 'ECONNREFUSED')
+  )
+}
+
+export function decodeDaemonResponseError(message: string): Error {
+  const prefix = 'Session not found: '
+  return message.startsWith(prefix)
+    ? new SessionNotFoundError(message.slice(prefix.length))
+    : new DaemonProtocolError(message)
+}

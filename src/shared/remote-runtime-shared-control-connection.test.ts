@@ -20,7 +20,10 @@ import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepa
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
+import {
+  AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
+  SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY
+} from './protocol-version'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
 
@@ -62,13 +65,47 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(server.auths).toContainEqual({
       type: 'e2ee_auth',
       deviceToken: 'device-token',
-      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      clientCapabilities: [
+        SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+        AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY
+      ]
     })
     expect(server.requests.map((request) => request.method)).toEqual([
       'worktree.ps',
       'session.tabs.listAll'
     ])
 
+    connection.close()
+  })
+
+  it('preserves orchestration authority fields on shared-control requests', async () => {
+    const server = await createServer()
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const envelope = {
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'request-1',
+      compatibilityInvocationId: 'compatibility-1',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term-1',
+        paneKey: 'pane-1',
+        launchToken: 'launch-1'
+      },
+      id: 'forged-id',
+      deviceToken: 'forged-token',
+      method: 'orchestration.federationAck',
+      params: { dispatchId: 'forged-dispatch' }
+    }
+
+    await connection.request('orchestration.federationPull', {}, 1000, envelope)
+
+    expect(server.requests).toContainEqual({
+      ...envelope,
+      id: expect.any(String),
+      deviceToken: 'device-token',
+      method: 'orchestration.federationPull',
+      params: {}
+    })
     connection.close()
   })
 
@@ -136,6 +173,29 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(cleanup).toHaveBeenCalledOnce()
     expect(close).toHaveBeenCalledOnce()
     expect(open).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a waiting request alive when a reachability probe replaces its pre-ready socket', async () => {
+    const server = await createServer({ suppressReadyFrameCount: 1 })
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+
+    const response = connection.request('worktree.ps', undefined, 1000)
+    await vi.waitFor(() => expect(server.connectionCount()).toBe(1))
+
+    connection.reconnectNow()
+
+    await expect(response).resolves.toMatchObject({
+      ok: true,
+      result: { method: 'worktree.ps' }
+    })
+    expect(server.connectionCount()).toBe(2)
+    expect(server.requests.map(({ method }) => method)).toEqual(['worktree.ps'])
+    expect(connection.getDiagnostics().pendingRequestCount).toBe(0)
+    expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
+      pendingRequestCount: 0,
+      retainedBytes: 0
+    })
+    connection.close()
   })
 
   it('logs unknown response ids without breaking pending requests', async () => {
@@ -665,6 +725,7 @@ async function createServer(
     closeAfterFirstStreamingResponse?: boolean
     closeBeforeResponse?: boolean
     suppressReadyFrame?: boolean
+    suppressReadyFrameCount?: number
     // Why: half-open simulation — the socket stays open but never answers
     // protocol pings, like a wedged tunnel that swallows frames silently.
     disableAutoPong?: boolean
@@ -696,7 +757,10 @@ async function createServer(
           serverKeyPair.secretKey,
           publicKeyFromBase64(hello.publicKeyB64)
         )
-        if (options.suppressReadyFrame) {
+        if (
+          options.suppressReadyFrame ||
+          connectionCount <= (options.suppressReadyFrameCount ?? 0)
+        ) {
           return
         }
         ws.send(JSON.stringify({ type: 'e2ee_ready' }))

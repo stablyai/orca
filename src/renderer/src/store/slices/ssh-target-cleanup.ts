@@ -200,10 +200,7 @@ export function buildRemovedSshTargetCleanupPatch(
   const nextTransientClearedConnections = {
     ...state.transientClearedAgentStatusConnectionIds
   }
-  const removedTransientClearBlock = Object.prototype.hasOwnProperty.call(
-    nextTransientClearedConnections,
-    targetId
-  )
+  const removedTransientClearBlock = Object.hasOwn(nextTransientClearedConnections, targetId)
   delete nextTransientClearedConnections[targetId]
   const nextConnectionStates = new Map(state.sshConnectionStates)
   const removedConnectionState = nextConnectionStates.delete(targetId)
@@ -211,18 +208,9 @@ export function buildRemovedSshTargetCleanupPatch(
   const removedLabel = nextLabels.delete(targetId)
   const nextHydrated = new Set(state.remoteWorkspaceHydratedTargetIds)
   const removedHydrated = nextHydrated.delete(targetId)
-  const removedSyncStatus = Object.prototype.hasOwnProperty.call(
-    state.remoteWorkspaceSyncStatusByTargetId,
-    targetId
-  )
-  const removedPortForwards = Object.prototype.hasOwnProperty.call(
-    state.portForwardsByConnection,
-    targetId
-  )
-  const removedDetectedPorts = Object.prototype.hasOwnProperty.call(
-    state.detectedPortsByConnection,
-    targetId
-  )
+  const removedSyncStatus = Object.hasOwn(state.remoteWorkspaceSyncStatusByTargetId, targetId)
+  const removedPortForwards = Object.hasOwn(state.portForwardsByConnection, targetId)
+  const removedDetectedPorts = Object.hasOwn(state.detectedPortsByConnection, targetId)
   const nextSyncStatus = { ...state.remoteWorkspaceSyncStatusByTargetId }
   delete nextSyncStatus[targetId]
   const nextPortForwards = { ...state.portForwardsByConnection }

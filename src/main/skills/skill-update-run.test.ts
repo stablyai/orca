@@ -1,6 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { SkillUpdateRun } from '../../shared/skill-freshness'
+import {
+  getSpawnArgsForWindows,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+} from '../../shared/windows-batch-spawn'
 import { CANCEL_RELEASE_TIMEOUT_MS, SkillUpdateRunner } from './skill-update-run'
 
 class FakeChild extends EventEmitter {
@@ -293,6 +297,24 @@ describe('SkillUpdateRunner', () => {
     expect(run.state).toBe('error')
     expect(run.state === 'error' && run.failedNames).toEqual(['orca-cli'])
     expect(states.at(-1)?.state).toBe('error')
+    // Why: the message used to name a character set the guard no longer matches.
+    expect(run.state === 'error' && run.message).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
+  })
+
+  it('spawns npx from a Program Files (x86) install instead of refusing it', () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+      const { runner, spawnCalls } = makeRunner({
+        resolveCommand: () => npx,
+        buildSpawnArgs: getSpawnArgsForWindows
+      })
+
+      expect(runner.start(['orca-cli']).started).toBe(true)
+      expect(spawnCalls[0]?.args.slice(0, 3)).toEqual(['/d', '/c', npx])
+    } finally {
+      platform.mockRestore()
+    }
   })
 
   it('coalesces progress frames into one push instead of one per chunk', async () => {

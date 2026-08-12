@@ -4,6 +4,7 @@ import {
   getProjectHostSetupsForProject,
   getProjectHostSetupWorktreeMeta,
   isGitHubBackedRepo,
+  getProjectIdForProviderIdentity,
   isProjectRemoteIdentityPending
 } from './project-host-setup-projection'
 import type { Repo } from './types'
@@ -507,6 +508,22 @@ describe('isGitHubBackedRepo', () => {
 
   it('is false for a plain local repo with no provider signal', () => {
     expect(isGitHubBackedRepo(repo({ id: 'r', path: '/r', displayName: 'r' }))).toBe(false)
+  })
+})
+
+describe('getProjectIdForProviderIdentity', () => {
+  it('uses the same normalized identity key as project projection', () => {
+    expect(
+      getProjectIdForProviderIdentity({ provider: 'github', owner: 'PyTorch', repo: 'PyTorch' })
+    ).toBe('github:pytorch/pytorch')
+    expect(
+      getProjectIdForProviderIdentity({
+        provider: 'github',
+        owner: 'Acme',
+        repo: 'Orca',
+        host: 'GITHUB.ACME.TEST:8443'
+      })
+    ).toBe('github:github.acme.test:8443/acme/orca')
   })
 })
 

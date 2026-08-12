@@ -12,6 +12,8 @@ import { useContextualTour } from '@/components/contextual-tours/use-contextual-
 import TabBar from '@/components/tab-bar/TabBar'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
 import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
+import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
+import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
 import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
 import { isTerminalImeInputContextRefreshing } from '@/components/terminal-pane/terminal-ime-input-context-refresh'
 import { Button } from '@/components/ui/button'
@@ -70,9 +72,7 @@ import {
 import { useAppStore } from '@/store'
 import type { OpenFile } from '@/store/slices/editor'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
-import {
-  createTerminalPaneHandleRegistry
-} from './terminal-pane-handle-registry'
+import { createTerminalPaneHandleRegistry } from './terminal-pane-handle-registry'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   keybindingMatchesAction,
@@ -95,22 +95,29 @@ export { FloatingTerminalToggleButton } from './FloatingTerminalToggleButton'
 import {
   anchorFloatingTerminalPanelBounds,
   clampFloatingTerminalBounds,
-  getDefaultFloatingTerminalCommittedBounds,
   getDefaultFloatingTerminalBounds,
+  getDefaultFloatingTerminalCommittedBounds,
   getMaximizedFloatingTerminalBounds,
   persistFloatingTerminalPanelBounds,
   readPersistedFloatingTerminalPanelBounds,
-  resolveFloatingTerminalPanelCommittedBounds,
   resolveFloatingTerminalPanelBounds,
+  resolveFloatingTerminalPanelCommittedBounds,
   shouldReconcileFloatingTerminalPanelBounds,
   type FloatingTerminalPanelBounds,
-  type FloatingTerminalPanelCommittedBounds,
-  type FloatingTerminalPanelBoundsSource
+  type FloatingTerminalPanelBoundsSource,
+  type FloatingTerminalPanelCommittedBounds
 } from './floating-terminal-panel-bounds'
+import {
+  persistFloatingTerminalPanelMaximized,
+  readPersistedFloatingTerminalPanelViewState
+} from './floating-terminal-panel-view-state'
+import { useSettledPanelViewport } from './use-settled-panel-viewport'
+import { shouldRestoreMaximizedPanelBounds } from './floating-terminal-panel-restore-geometry'
 import { translate } from '@/i18n/i18n'
 import { consumeFloatingTerminalOpenMaximizedIntent } from '@/lib/floating-terminal'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 const LOCAL_RUNTIME_SETTINGS = { activeRuntimeEnvironmentId: null } as const
+const NO_ACTIVITY_TERMINAL_PORTALS = []
 
 const EditorPanel = lazy(() => import('@/components/editor/EditorPanel'))
 
@@ -161,6 +168,17 @@ function readInitialPanelBounds(): FloatingTerminalPanelBoundsState {
   const defaultCommittedBounds = getDefaultFloatingTerminalCommittedBounds()
   const defaultRenderedBounds = getDefaultFloatingTerminalBounds()
   const persistedBounds = readPersistedFloatingTerminalPanelBounds()
+  if (shouldRestoreMaximizedPanelBounds(readPersistedFloatingTerminalPanelViewState())) {
+    // Why maximized wins the RENDERED rect while the committed rect stays the restore
+    // target: the first paint must already be final geometry, or the panes fit at the
+    // smaller size and the later maximize reflows them. Un-maximizing still returns to
+    // the user's own bounds because those remain committed.
+    return {
+      committedBounds: persistedBounds ?? defaultCommittedBounds,
+      renderedBounds: getMaximizedFloatingTerminalBounds(),
+      source: persistedBounds ? 'user' : 'default'
+    }
+  }
   return persistedBounds
     ? {
         committedBounds: persistedBounds,
@@ -267,7 +285,10 @@ export function FloatingTerminalPanel({
     initialBoundsStateRef.current.committedBounds
   )
   const [bounds, setBounds] = useState(initialBoundsStateRef.current.renderedBounds)
-  const [maximized, setMaximized] = useState(false)
+  const [maximized, setMaximized] = useState(
+    () => readPersistedFloatingTerminalPanelViewState()?.maximized === true
+  )
+  const panelViewportSettled = useSettledPanelViewport()
   const [orchestrationDialogOpen, setOrchestrationDialogOpen] = useState(false)
   const [showOrchestrationSetup, setShowOrchestrationSetup] = useState(
     () => !hasOrchestrationSetupMarker() && !isOrchestrationSetupDismissed()
@@ -351,6 +372,28 @@ export function FloatingTerminalPanel({
       ? activeTab.entityId
       : null
   const terminalTabById = useMemo(() => new Map(tabs.map((tab) => [tab.id, tab])), [tabs])
+  const terminalAssignments = useMemo(() => {
+    const assignments = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
+    for (const tab of unifiedTabs) {
+      if (tab.contentType === 'terminal') {
+        assignments.set(tab.entityId, {
+          groupId: tab.groupId,
+          isActiveInGroup: tab.entityId === activeTerminalId
+        })
+      }
+    }
+    return assignments
+  }, [activeTerminalId, unifiedTabs])
+  const parkedTerminalTabIds = useTerminalTabColdParking({
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    terminalTabs: tabs,
+    assignments: terminalAssignments,
+    isWorktreeActive: open,
+    activeTerminalTabId: activeTerminalId,
+    coldParkTerminalPanes: false,
+    shouldMeasureHiddenWorktree: false,
+    activityTerminalPortals: NO_ACTIVITY_TERMINAL_PORTALS
+  })
   const terminalItems = useMemo<(TerminalTab & { unifiedTabId: string })[]>(
     () =>
       groupTabs
@@ -1093,9 +1136,9 @@ export function FloatingTerminalPanel({
   const toggleMaximized = useCallback(() => {
     if (maximized) {
       const restoredState = restoreBoundsRef.current ?? {
-        committedBounds: getDefaultFloatingTerminalCommittedBounds(),
-        renderedBounds: getDefaultFloatingTerminalBounds(),
-        source: 'default' as const
+        committedBounds: committedBoundsRef.current,
+        renderedBounds: resolveFloatingTerminalPanelCommittedBounds(committedBoundsRef.current),
+        source: boundsSourceRef.current
       }
       restoreBoundsRef.current = null
       boundsSourceRef.current = restoredState.source
@@ -1106,6 +1149,7 @@ export function FloatingTerminalPanel({
       stagedBoundsRef.current = null
       setBounds(restoredBounds)
       setMaximized(false)
+      persistFloatingTerminalPanelMaximized(false)
       return
     }
     restoreBoundsRef.current = {
@@ -1116,6 +1160,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   const maximizePanel = useCallback(() => {
@@ -1133,6 +1178,7 @@ export function FloatingTerminalPanel({
     stagedBoundsRef.current = null
     setBounds(getMaximizedFloatingTerminalBounds())
     setMaximized(true)
+    persistFloatingTerminalPanelMaximized(true)
   }, [bounds, maximized])
 
   useEffect(() => {
@@ -1818,34 +1864,48 @@ export function FloatingTerminalPanel({
             hasVisibleFloatingTabs ? 'floating-workspace-surface' : undefined
           }
         >
-          {cwd
-            ? tabs.map((tab) => {
-                const isActive = tab.id === activeTerminalId
-                return (
-                  <div
-                    key={`${tab.id}-${tab.generation ?? 0}`}
-                    className={isActive ? 'absolute inset-0' : 'absolute inset-0 hidden'}
-                    aria-hidden={!isActive}
-                  >
-                    <TerminalPane
-                      ref={terminalPaneRegistry.getRefCallback(tab.id)}
-                      tabId={tab.id}
-                      worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-                      cwd={cwd}
-                      isActive={isActive}
-                      // Why: the closed panel is only CSS-hidden, so gate
-                      // visibility on `open` too. This routes the floating
-                      // terminal through the standard hidden-terminal
-                      // suspend/resume path: no live WebGL context (or glyph
-                      // atlas to corrupt) while hidden, and the resume on
-                      // reopen rebuilds the renderer from scratch.
-                      isVisible={isActive && open}
-                      onPtyExit={() => closeTab(tab.id, { reason: 'pty-exit' })}
-                      onCloseTab={() => closeFloatingItemConfirmed(tab.id)}
-                    />
-                  </div>
-                )
-              })
+          {/* Why also gated on a settled viewport: a restored-maximized panel derives its
+              rect from the live viewport, so mounting terminals before the window finishes
+              maximizing fits them to a grid it is about to leave, and the correcting fit
+              reflows the buffer under a live TUI. */}
+          {cwd && panelViewportSettled
+            ? tabs
+                .filter((tab) => !parkedTerminalTabIds.has(tab.id))
+                .map((tab) => {
+                  const isActive = tab.id === activeTerminalId
+                  return (
+                    <div
+                      key={`${tab.id}-${tab.generation ?? 0}`}
+                      className={isActive ? 'absolute inset-0' : 'absolute inset-0 hidden'}
+                      aria-hidden={!isActive}
+                    >
+                      <TerminalPane
+                        ref={terminalPaneRegistry.getRefCallback(tab.id)}
+                        tabId={tab.id}
+                        worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                        cwd={cwd}
+                        isActive={isActive}
+                        // Why: the closed panel is only CSS-hidden, so gate
+                        // visibility on `open` too. This routes the floating
+                        // terminal through the standard hidden-terminal
+                        // suspend/resume path: no live WebGL context (or glyph
+                        // atlas to corrupt) while hidden, and the resume on
+                        // reopen rebuilds the renderer from scratch.
+                        isVisible={isActive && open}
+                        onPtyExit={(ptyId) => {
+                          if (shouldDeferParkedPtyExitTabClose(tab.id, ptyId)) {
+                            return
+                          }
+                          closeTerminalTab(tab.id, {
+                            reason: 'pty-exit',
+                            lifecyclePtyId: ptyId
+                          })
+                        }}
+                        onCloseTab={() => closeFloatingItemConfirmed(tab.id)}
+                      />
+                    </div>
+                  )
+                })
             : null}
           {browserTabs.map((tab) => {
             const isActive = tab.id === activeBrowserTab?.id
@@ -1888,6 +1948,7 @@ export function FloatingTerminalPanel({
                 <EditorPanel
                   activeFileId={activeEditorFile.id}
                   activeViewStateId={activeEditorUnifiedId}
+                  isVisible={open}
                   markdownAnnotationsEnabled={false}
                 />
               </Suspense>

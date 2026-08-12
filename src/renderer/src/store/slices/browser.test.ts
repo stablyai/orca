@@ -164,6 +164,21 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
+  it('opens a local sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
+  })
+
   it('clears page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
@@ -178,6 +193,31 @@ describe('createBrowserSlice annotations', () => {
     store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
 
     expect(store.getState().browserAnnotationsByPageId[pageId]).toBeUndefined()
+  })
+
+  it('can commit a navigation URL without hiding an active recovery error', () => {
+    const store = createTestStore()
+    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
+    const pageId = tab.activePageId
+    if (!pageId) {
+      throw new Error('Expected a new browser page')
+    }
+    const recoveryError = {
+      code: -720,
+      description: 'Recovery is still pending',
+      validatedUrl: 'https://example.com'
+    }
+
+    store.getState().updateBrowserPageState(pageId, { loadError: recoveryError })
+    store
+      .getState()
+      .setBrowserPageUrl(pageId, 'https://example.com/committed', { preserveLoadError: true })
+
+    const page = store.getState().browserPagesByWorkspace[tab.id]?.find(({ id }) => id === pageId)
+    expect(page).toMatchObject({
+      url: 'https://example.com/committed',
+      loadError: recoveryError
+    })
   })
 
   it('keeps certificate challenges transient across navigation, success, and close', () => {
@@ -558,6 +598,37 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('forwards profile UA options to the active runtime environment', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'remote-google',
+      scope: 'isolated' as const,
+      partition: 'persist:remote-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    runtimeEnvironmentCall.mockResolvedValueOnce({
+      id: 'rpc-create',
+      ok: true,
+      result: { profile },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ settings: settingsWithRuntime('env-1') })
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'browser.profileCreate',
+      params: { scope: 'isolated', label: 'Google', userAgentMode: 'native' },
+      timeoutMs: 15_000
+    })
   })
 
   it('keeps browser profile lists separate per host', async () => {
@@ -972,6 +1043,38 @@ describe('createBrowserSlice runtime guard', () => {
     )
   })
 
+  it('opens a remote sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      environmentId: 'env-1',
+      url: 'https://accounts.google.com/',
+      profileId: 'profile-1'
+    })
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+  })
+
   it('does not create a local fallback tab when remote browser creation throws', async () => {
     const store = createTestStore()
     createWebRuntimeSessionBrowserTabMock.mockRejectedValueOnce(new Error('remote down'))
@@ -1034,6 +1137,30 @@ describe('createBrowserSlice runtime guard', () => {
         source: null
       }
     ])
+  })
+
+  it('forwards profile UA options to local browser IPC', async () => {
+    const store = createTestStore()
+    const profile = {
+      id: 'local-google',
+      scope: 'isolated' as const,
+      partition: 'persist:local-google',
+      label: 'Google',
+      source: null,
+      userAgentMode: 'native' as const
+    }
+    mockApi.browser.sessionCreateProfile.mockResolvedValueOnce(profile)
+
+    await expect(
+      store
+        .getState()
+        .createBrowserSessionProfile('isolated', 'Google', { userAgentMode: 'native' })
+    ).resolves.toEqual(profile)
+    expect(mockApi.browser.sessionCreateProfile).toHaveBeenCalledWith({
+      scope: 'isolated',
+      label: 'Google',
+      userAgentMode: 'native'
+    })
   })
 
   it('does not notify the local browser manager when selecting tabs under runtime', () => {

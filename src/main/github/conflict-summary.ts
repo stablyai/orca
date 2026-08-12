@@ -6,7 +6,7 @@ import {
 import { gitExecFileAsync } from '../git/runner'
 import {
   clearGitCapabilityStateForTests,
-  getLocalGitCapabilityCache
+  withLocalGitCapabilityCacheForExecution
 } from '../git/git-capability-state'
 import {
   __resetPRConflictSummaryDerivationCachesForTests,
@@ -219,10 +219,6 @@ async function loadConflictingFiles(
   baseOid: string,
   localGitOptions: LocalGitExecOptions
 ): Promise<string[]> {
-  const capabilities = getLocalGitCapabilityCache({
-    cwd: repoPath,
-    wslDistro: localGitOptions.wslDistro
-  })
   const modernArgs = [
     'merge-tree',
     '--write-tree',
@@ -244,40 +240,44 @@ async function loadConflictingFiles(
     baseOid
   ]
 
-  return capabilities.runWithFallback(
-    'merge-tree-write-tree',
-    () =>
+  return withLocalGitCapabilityCacheForExecution(
+    { cwd: repoPath, wslDistro: localGitOptions.wslDistro },
+    (capabilities) =>
       capabilities.runWithFallback(
-        'merge-tree-merge-base',
+        'merge-tree-write-tree',
+        () =>
+          capabilities.runWithFallback(
+            'merge-tree-merge-base',
+            async () => {
+              try {
+                const result = await gitExecFileAsync(modernArgs, {
+                  cwd: repoPath,
+                  ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
+                })
+                return parseMergeTreeNameOnlyOutput(result.stdout)
+              } catch (error) {
+                if (isUnsupportedMergeTreeWriteTreeError(error)) {
+                  throw error
+                }
+                // Why: `git merge-tree --write-tree` exits 1 for conflicts but still
+                // writes the useful file list; only option rejection reaches fallback.
+                const stdoutFromError = getGitErrorOutput(error, 'stdout')
+                if (stdoutFromError) {
+                  return parseMergeTreeNameOnlyOutput(stdoutFromError)
+                }
+                throw error
+              }
+            },
+            () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
+            isUnsupportedMergeTreeMergeBaseError
+          ),
         async () => {
-          try {
-            const result = await gitExecFileAsync(modernArgs, {
-              cwd: repoPath,
-              ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-            })
-            return parseMergeTreeNameOnlyOutput(result.stdout)
-          } catch (error) {
-            if (isUnsupportedMergeTreeWriteTreeError(error)) {
-              throw error
-            }
-            // Why: `git merge-tree --write-tree` exits 1 for conflicts but still
-            // writes the useful file list; only option rejection reaches fallback.
-            const stdoutFromError = getGitErrorOutput(error, 'stdout')
-            if (stdoutFromError) {
-              return parseMergeTreeNameOnlyOutput(stdoutFromError)
-            }
-            throw error
-          }
+          // Why: Git before 2.38 cannot derive a reliable real-merge conflict list;
+          // fail closed without respawning the same rejected command every refresh.
+          throw new Error('Git merge-tree --write-tree is unavailable on this execution host.')
         },
-        () => loadConflictingFilesWithLegacyMergeTree(repoPath, legacyArgs, localGitOptions),
-        isUnsupportedMergeTreeMergeBaseError
-      ),
-    async () => {
-      // Why: Git before 2.38 cannot derive a reliable real-merge conflict list;
-      // fail closed without respawning the same rejected command every refresh.
-      throw new Error('Git merge-tree --write-tree is unavailable on this execution host.')
-    },
-    isUnsupportedMergeTreeWriteTreeError
+        isUnsupportedMergeTreeWriteTreeError
+      )
   )
 }
 

@@ -145,6 +145,21 @@ describe('ProviderSegment monthly window', () => {
     }
   })
 
+  it('shows the footer bar only in verbose mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits = grokMonthlyLimits('ok')
+
+    const verbose = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
+    const compact = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
+    )
+
+    expect(verbose).toContain('data-usage-bar')
+    expect(compact).not.toContain('data-usage-bar')
+  })
+
   it('restores every inline window in verbose mode', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const limits: ProviderRateLimits = {

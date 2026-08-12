@@ -39,7 +39,10 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  /** Settings has no ambient workspace to imply scope from, so it opens the
+   *  Advanced section up front. In-workspace entry points leave it collapsed. */
+  defaultAdvancedOpen?: boolean
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }
@@ -63,6 +66,7 @@ export function TerminalQuickCommandDialog({
   mode,
   command,
   repos = EMPTY_REPOS,
+  defaultAdvancedOpen = false,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
@@ -76,7 +80,7 @@ export function TerminalQuickCommandDialog({
   const lastRepoScopeIdRef = useRef<string | null>(
     initialScope.type === 'repo' ? initialScope.repoId : null
   )
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [advancedOpen, setAdvancedOpen] = useState(defaultAdvancedOpen)
   const selectedAction = getTerminalQuickCommandAction(draft)
   const selectedScope = getTerminalQuickCommandScope(draft)
   const isAgentAction = isTerminalAgentQuickCommand(draft)
@@ -95,7 +99,7 @@ export function TerminalQuickCommandDialog({
     draftMemoryRef.current = createTerminalQuickCommandDialogDraftMemory(command, fallbackAgent)
     const commandScope = getTerminalQuickCommandScope(command)
     lastRepoScopeIdRef.current = commandScope.type === 'repo' ? commandScope.repoId : null
-    setAdvancedOpen(false)
+    setAdvancedOpen(defaultAdvancedOpen)
     setDraft({ ...command })
   }
 
@@ -164,9 +168,12 @@ export function TerminalQuickCommandDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md sm:max-w-md" showCloseButton={false}>
+      <DialogContent
+        className="max-h-[min(88vh,54rem)] grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-xl"
+        showCloseButton={false}
+      >
         <DialogHeader>
-          <DialogTitle className="text-sm">
+          <DialogTitle>
             {mode === 'edit'
               ? translate(
                   'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.f9b184fc16',
@@ -177,7 +184,7 @@ export function TerminalQuickCommandDialog({
                   'Add Quick Command'
                 )}
           </DialogTitle>
-          <DialogDescription className="text-xs">
+          <DialogDescription>
             {translate(
               'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ed04233b3e',
               'Save terminal commands or agent prompts for quick access.'
@@ -185,8 +192,11 @@ export function TerminalQuickCommandDialog({
           </DialogDescription>
         </DialogHeader>
 
+        {/* Why -mx-3/px-3: overflow clips at the padding box, so the padding has
+            to cover the widest negative margin inside (Advanced's -ml-2) plus a
+            focus ring. The matching negative margin keeps children aligned. */}
         <div
-          className="space-y-4"
+          className="-mx-3 min-h-0 space-y-4 overflow-y-auto px-3 py-1 scrollbar-sleek"
           onKeyDown={(event) => {
             if (isScreenSubmitShortcut(event) && canSave) {
               event.preventDefault()

@@ -21,7 +21,6 @@ beforeEach(() => {
   testState.home = mkdtempSync(join(tmpdir(), 'orca-codex-e-home-'))
   for (const key of [
     'ORCA_USER_DATA_PATH',
-    'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
     'ORCA_DISABLE_CODEX_TRUST_RPC',
     'CODEX_HOME',
     'ORCA_CODEX_HOME'
@@ -179,9 +178,10 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     rmSync(accountAuthPath)
     writeFileSync(sharedAuthPath(), laterShared, 'utf-8')
 
-    expect(service.prepareForCodexLaunch()).toBeNull()
+    expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
+    expect(service.prepareForRateLimitFetch()).toBe(account.managedHomePath)
     expect(existsSync(accountAuthPath)).toBe(false)
-    expect(settings.activeCodexManagedAccountId).toBeNull()
+    expect(settings.activeCodexManagedAccountId).toBe(account.id)
     expect(readFileSync(sharedAuthPath(), 'utf-8')).toBe(laterShared)
     expect(readFileSync(systemAuthPath(), 'utf-8')).toBe('system auth sentinel\n')
   })

@@ -31,7 +31,8 @@ import {
 import {
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
+  WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../shared/protocol-version'
 import {
   FOLDER_WORKSPACE_PATH_STATUS_TTL_MS,
@@ -64,14 +65,17 @@ import {
 import {
   assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
-  getActiveRuntimeTarget
+  getActiveRuntimeTarget,
+  hasRuntimeRpcErrorCode,
+  settingsForRuntimeOwner
 } from '../../runtime/runtime-rpc-client'
 import { syncRuntimeGitForkDefaultBranch } from '../../runtime/runtime-git-client'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
+import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
-import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
+import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill-discovery'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -101,6 +105,14 @@ const ERROR_TOAST_DURATION = 60_000
 const SAFE_AUTO_FORK_SYNC_COOLDOWN_MS = 10 * 60 * 1000
 const safeAutoForkSyncAttempts = new Map<string, { attemptedAt: number; promise?: Promise<void> }>()
 const runtimeRepoFetchGenerationByEnvironment = new Map<string, number>()
+type HostCatalogKind = 'project-groups' | 'folder-workspaces'
+type HostCatalogFence = {
+  key: string
+  generation: number
+  target: ReturnType<typeof getActiveRuntimeTarget>
+  sshStateGeneration: number | null
+  runtimeConnectionGeneration: number | null
+}
 
 export type RepoUpdate = Partial<
   Pick<
@@ -136,6 +148,7 @@ type FolderWorkspaceUpdates = Partial<
     | 'name'
     | 'folderPath'
     | 'linkedTask'
+    | 'linkedTaskSourceContext'
     | 'comment'
     | 'isArchived'
     | 'isUnread'
@@ -175,6 +188,11 @@ function getFolderWorkspaceUpdateCoordinator(
 type NestedRepoScanControls = {
   scanId?: string
   onProgress?: (scan: NestedRepoScanResult) => void
+  runtimeEnvironmentId?: string | null
+}
+
+type NestedRepoScanCancelOptions = {
+  runtimeEnvironmentId?: string | null
 }
 
 export type FolderWorkspacePathStatusCacheEntry = {
@@ -841,26 +859,90 @@ function mergeFetchedProjectCompatibilityForHost({
   }
 }
 
-function mergeById<T extends { id: string }>(base: readonly T[], overlay: readonly T[]): T[] {
-  const merged = [...base]
-  const indexById = new Map(merged.map((entry, index) => [entry.id, index]))
-  for (const entry of overlay) {
-    const index = indexById.get(entry.id)
-    if (index === undefined) {
-      indexById.set(entry.id, merged.length)
-      merged.push(entry)
-    } else {
-      merged[index] = entry
-    }
+function isPlainCatalogObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) {
+    return false
   }
-  return merged
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
+}
+
+// Why: catalog fetches rebuild every entry from IPC, so identity alone never matches;
+// structural equality is what lets an unchanged refetch stay a no-op.
+function areCatalogEntriesEqual(a: unknown, b: unknown): boolean {
+  if (a === b) {
+    return true
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((entry, index) => areCatalogEntriesEqual(entry, b[index]))
+    )
+  }
+  if (!isPlainCatalogObject(a) || !isPlainCatalogObject(b)) {
+    return false
+  }
+  const keys = Object.keys(a)
+  if (keys.length !== Object.keys(b).length) {
+    return false
+  }
+  return keys.every((key) => Object.hasOwn(b, key) && areCatalogEntriesEqual(a[key], b[key]))
+}
+
+// Why: returning `base` unchanged keeps referential-equality selectors quiet, so a
+// `repos:changed` echo doesn't re-force folder path-status fetches for every row.
+function mergeByIdentity<T>(
+  base: readonly T[],
+  overlay: readonly T[],
+  getIdentity: (entry: T) => string
+): readonly T[] {
+  const merged = [...base]
+  const indexById = new Map(merged.map((entry, index) => [getIdentity(entry), index]))
+  let changed = false
+  for (const entry of overlay) {
+    const identity = getIdentity(entry)
+    const index = indexById.get(identity)
+    if (index === undefined) {
+      indexById.set(identity, merged.length)
+      merged.push(entry)
+      changed = true
+      continue
+    }
+    if (areCatalogEntriesEqual(merged[index], entry)) {
+      continue
+    }
+    merged[index] = entry
+    changed = true
+  }
+  return changed ? merged : base
+}
+
+// Why: `preserved` keeps `previous`'s order and element refs, so an equal-length no-op
+// merge can hand the original store array straight back.
+function unchangedMergeSource<T>(
+  previous: readonly T[],
+  preserved: readonly T[],
+  merged: readonly T[]
+): readonly T[] {
+  return merged === preserved && preserved.length === previous.length ? previous : merged
+}
+
+// Why: the sidebar effect watching these catalog arrays is the only thing that refills the
+// folder path-status cache, so a no-op refetch must not wipe it — nothing would repopulate it.
+function catalogRowsUnchanged<T>(next: readonly T[], previous: readonly T[]): boolean {
+  return (
+    next === previous ||
+    (next.length === previous.length && next.every((row, index) => row === previous[index]))
+  )
 }
 
 function mergeFetchedReposForHost(
   previous: readonly Repo[],
-  fetched: Repo[],
+  fetched: readonly Repo[],
   hostId: string
-): Repo[] {
+): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
   const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
   const preserved = previous.filter((repo) => {
@@ -938,17 +1020,70 @@ function getProjectGroupHostId(group: Pick<ProjectGroup, 'connectionId' | 'execu
   return group.connectionId ? toSshExecutionHostId(group.connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
+function getProjectGroupHostIdentity(group: ProjectGroup): string {
+  return JSON.stringify([getProjectGroupHostId(group), group.id])
+}
+
+function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
+  if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
+    return catalogHostId === rowHostId
+  }
+  return parseExecutionHostId(rowHostId)?.kind !== 'runtime'
+}
+
 function mergeFetchedProjectGroupsForHost(
   previous: readonly ProjectGroup[],
   fetched: ProjectGroup[],
   hostId: string
-): ProjectGroup[] {
-  const fetchedIds = new Set(fetched.map((group) => group.id))
+): readonly ProjectGroup[] {
+  const fetchedIdentities = new Set(fetched.map(getProjectGroupHostIdentity))
   const preserved = previous.filter((group) => {
     const existingHostId = getProjectGroupHostId(group)
-    return existingHostId !== hostId || fetchedIds.has(group.id)
+    return (
+      !catalogOwnsHost(hostId, existingHostId) ||
+      fetchedIdentities.has(getProjectGroupHostIdentity(group))
+    )
   })
-  return mergeById(preserved, fetched)
+  return unchangedMergeSource(
+    previous,
+    preserved,
+    mergeByIdentity(preserved, fetched, getProjectGroupHostIdentity)
+  )
+}
+
+function getFolderWorkspaceHostId(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[]
+): ExecutionHostId {
+  const explicitHostId = parseExecutionHostId(workspace.executionHostId)?.id
+  if (explicitHostId) {
+    return explicitHostId
+  }
+  if (workspace.connectionId) {
+    return toSshExecutionHostId(workspace.connectionId)
+  }
+  const matchingHosts = new Set(
+    projectGroups
+      .filter((group) => group.id === workspace.projectGroupId)
+      .map(getProjectGroupHostId)
+  )
+  return matchingHosts.size === 1
+    ? ([...matchingHosts][0] as ExecutionHostId)
+    : LOCAL_EXECUTION_HOST_ID
+}
+
+function getFolderWorkspaceHostIdentity(
+  workspace: FolderWorkspace,
+  projectGroups: readonly ProjectGroup[]
+): string {
+  return JSON.stringify([getFolderWorkspaceHostId(workspace, projectGroups), workspace.id])
+}
+
+function getFolderWorkspaceUpdateIdentity(
+  hostId: ExecutionHostId,
+  folderWorkspaceId: string
+): string {
+  return `${hostId}\0${folderWorkspaceId}`
 }
 
 function mergeFetchedFolderWorkspacesForHost({
@@ -961,20 +1096,28 @@ function mergeFetchedFolderWorkspacesForHost({
   fetched: FolderWorkspace[]
   projectGroups: readonly ProjectGroup[]
   hostId: string
-}): FolderWorkspace[] {
-  const fetchedIds = new Set(fetched.map((workspace) => workspace.id))
-  const projectGroupHostIds = new Map(
-    projectGroups.map((group) => [group.id, getProjectGroupHostId(group)])
+}): readonly FolderWorkspace[] {
+  const fetchedIdentities = new Set(
+    fetched.map((workspace) => getFolderWorkspaceHostIdentity(workspace, projectGroups))
   )
   const preserved = previous.filter((workspace) => {
-    const existingHostId = projectGroupHostIds.get(workspace.projectGroupId)
-    return existingHostId === undefined || existingHostId !== hostId || fetchedIds.has(workspace.id)
+    const existingHostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    return (
+      !catalogOwnsHost(hostId, existingHostId) ||
+      fetchedIdentities.has(getFolderWorkspaceHostIdentity(workspace, projectGroups))
+    )
   })
-  return mergeById(preserved, fetched)
+  return unchangedMergeSource(
+    previous,
+    preserved,
+    mergeByIdentity(preserved, fetched, (workspace) =>
+      getFolderWorkspaceHostIdentity(workspace, projectGroups)
+    )
+  )
 }
 
 type FetchedRepoCatalog = {
-  repos: Repo[]
+  repos: readonly Repo[]
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }
@@ -989,21 +1132,26 @@ type FetchedFolderWorkspaceCatalog = {
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 }
 
-function getFolderWorkspaceCatalogReplacementIds(
+function getFolderWorkspaceCatalogReplacementIdentities(
   catalog: FetchedFolderWorkspaceCatalog,
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): Set<string> {
-  const replacedIds = new Set(catalog.folderWorkspaces.map((workspace) => workspace.id))
-  const projectGroupHostIds = new Map(
-    projectGroups.map((group) => [group.id, getProjectGroupHostId(group)])
+  const replacedIdentities = new Set(
+    catalog.folderWorkspaces.map((workspace) =>
+      getFolderWorkspaceUpdateIdentity(
+        getFolderWorkspaceHostId(workspace, projectGroups),
+        workspace.id
+      )
+    )
   )
   for (const workspace of currentFolderWorkspaces) {
-    if (projectGroupHostIds.get(workspace.projectGroupId) === catalog.hostId) {
-      replacedIds.add(workspace.id)
+    const hostId = getFolderWorkspaceHostId(workspace, projectGroups)
+    if (catalogOwnsHost(catalog.hostId, hostId)) {
+      replacedIdentities.add(getFolderWorkspaceUpdateIdentity(hostId, workspace.id))
     }
   }
-  return replacedIds
+  return replacedIdentities
 }
 
 async function fetchRepoCatalogForTarget(
@@ -1030,7 +1178,7 @@ function mergeFetchedRepoCatalog(
   catalog: FetchedRepoCatalog,
   currentRepos: readonly Repo[]
 ): {
-  repos: Repo[]
+  repos: readonly Repo[]
   projectHostSetupCompatibility: ProjectHostSetupProjection
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
@@ -1159,7 +1307,7 @@ async function fetchProjectGroupCatalogForTarget(
 function mergeFetchedProjectGroupCatalog(
   catalog: FetchedProjectGroupCatalog,
   currentProjectGroups: readonly ProjectGroup[]
-): { projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
+): { projectGroups: readonly ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> } {
   return {
     projectGroups: mergeFetchedProjectGroupsForHost(
       currentProjectGroups,
@@ -1170,18 +1318,9 @@ function mergeFetchedProjectGroupCatalog(
   }
 }
 
-async function fetchProjectGroupsForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>,
-  currentProjectGroups: readonly ProjectGroup[]
-): Promise<{ projectGroups: ProjectGroup[]; hostId: ReturnType<typeof getRuntimeTargetHostId> }> {
-  return mergeFetchedProjectGroupCatalog(
-    await fetchProjectGroupCatalogForTarget(target),
-    currentProjectGroups
-  )
-}
-
 async function fetchFolderWorkspaceCatalogForTarget(
-  target: ReturnType<typeof getActiveRuntimeTarget>
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  projectGroups: readonly ProjectGroup[]
 ): Promise<FetchedFolderWorkspaceCatalog> {
   const fetchedFolderWorkspaces =
     target.kind === 'local'
@@ -1195,8 +1334,24 @@ async function fetchFolderWorkspaceCatalogForTarget(
           )
         ).folderWorkspaces
   return {
-    folderWorkspaces: fetchedFolderWorkspaces,
+    folderWorkspaces: fetchedFolderWorkspaces.map((workspace) =>
+      folderWorkspaceWithFetchedOwner(workspace, target, projectGroups)
+    ),
     hostId: getRuntimeTargetHostId(target)
+  }
+}
+
+function folderWorkspaceWithFetchedOwner(
+  workspace: FolderWorkspace,
+  target: ReturnType<typeof getActiveRuntimeTarget>,
+  projectGroups: readonly ProjectGroup[]
+): FolderWorkspace {
+  return {
+    ...workspace,
+    executionHostId:
+      target.kind === 'environment'
+        ? getRuntimeTargetHostId(target)
+        : getFolderWorkspaceHostId(workspace, projectGroups)
   }
 }
 
@@ -1205,7 +1360,7 @@ function mergeFetchedFolderWorkspaceCatalog(
   currentFolderWorkspaces: readonly FolderWorkspace[],
   projectGroups: readonly ProjectGroup[]
 ): {
-  folderWorkspaces: FolderWorkspace[]
+  folderWorkspaces: readonly FolderWorkspace[]
   hostId: ReturnType<typeof getRuntimeTargetHostId>
 } {
   return {
@@ -1222,14 +1377,19 @@ function mergeFetchedFolderWorkspaceCatalog(
 async function reconcileFailedFolderWorkspaceUpdate(args: {
   target: ReturnType<typeof getActiveRuntimeTarget>
   folderWorkspaceId: string
+  updateIdentity: string
+  ownerHostId: ExecutionHostId
   ticket: FolderWorkspaceUpdateTicket<FolderWorkspaceUpdateField>
   coordinator: FolderWorkspaceUpdateCoordinatorInstance
   set: Parameters<StateCreator<AppState>>[0]
   get: Parameters<StateCreator<AppState>>[1]
 }): Promise<void> {
   try {
-    const catalog = await fetchFolderWorkspaceCatalogForTarget(args.target)
-    const latestFields = args.coordinator.latestFields(args.folderWorkspaceId, args.ticket)
+    const catalog = await fetchFolderWorkspaceCatalogForTarget(
+      args.target,
+      args.get().projectGroups
+    )
+    const latestFields = args.coordinator.latestFields(args.updateIdentity, args.ticket)
     if (latestFields.length === 0) {
       return
     }
@@ -1239,11 +1399,16 @@ async function reconcileFailedFolderWorkspaceUpdate(args: {
     args.set((state) => ({
       folderWorkspaces: refreshed
         ? state.folderWorkspaces.map((workspace) =>
-            workspace.id === args.folderWorkspaceId
+            workspace.id === args.folderWorkspaceId &&
+            getFolderWorkspaceHostId(workspace, state.projectGroups) === args.ownerHostId
               ? mergeFolderWorkspaceUpdateResponse(workspace, refreshed, latestFields)
               : workspace
           )
-        : state.folderWorkspaces.filter((workspace) => workspace.id !== args.folderWorkspaceId),
+        : state.folderWorkspaces.filter(
+            (workspace) =>
+              workspace.id !== args.folderWorkspaceId ||
+              getFolderWorkspaceHostId(workspace, state.projectGroups) !== args.ownerHostId
+          ),
       ...(folderWorkspaceUpdateInvalidatesPathStatus(latestFields) || !refreshed
         ? { folderWorkspacePathStatuses: {} }
         : {})
@@ -1311,6 +1476,7 @@ function getRuntimeTargetCachePrefix(
 
 type FolderWorkspacePathStatusRouteOptions = { runtimeEnvironmentId?: string | null }
 type AddRepoPathRouteOptions = { runtimeEnvironmentId?: string | null }
+type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
 
 function getFolderWorkspacePathStatusRouteSettings(
   options: FolderWorkspacePathStatusRouteOptions | undefined,
@@ -1521,23 +1687,24 @@ function getFolderWorkspacePathStatusRequestSnapshotForRead(
 }
 
 export type RepoSlice = {
-  repos: Repo[]
+  repos: readonly Repo[]
   projects: Project[]
   projectHostSetups: ProjectHostSetup[]
-  projectGroups: ProjectGroup[]
-  folderWorkspaces: FolderWorkspace[]
+  projectGroups: readonly ProjectGroup[]
+  folderWorkspaces: readonly FolderWorkspace[]
   folderWorkspacePathStatuses: Record<string, FolderWorkspacePathStatusCacheEntry>
   activeRepoId: string | null
-  // Monotonic sequence so an overlapping fetchRepos can drop its own stale result (#7020).
+  // Monotonic sequence so overlapping catalog fetches can drop stale same-host results (#7020).
   reposFetchGeneration: number
   pendingSshRepoReadoptions: SshRepoReadoption[]
   recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
-  fetchRepos: () => Promise<void>
+  fetchRepos: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchReposForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
+  awaitLocalRepoCatalogSettlement: () => Promise<void>
   fetchRuntimeEnvironmentRepos: (environmentId: string) => Promise<Repo[]>
-  fetchProjectGroups: () => Promise<void>
+  fetchProjectGroups: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchProjectGroupsForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
-  fetchFolderWorkspaces: () => Promise<void>
+  fetchFolderWorkspaces: (options?: RuntimeCatalogFetchOptions) => Promise<void>
   fetchFolderWorkspacesForAllHosts: (options?: AllHostCatalogFetchOptions) => Promise<void>
   addRepo: () => Promise<Repo | null>
   addRepoPath: (
@@ -1564,13 +1731,14 @@ export type RepoSlice = {
     connectionId?: string,
     controls?: NestedRepoScanControls
   ) => Promise<NestedRepoScanResult | null>
-  cancelNestedRepoScan: (scanId: string) => Promise<boolean>
+  cancelNestedRepoScan: (scanId: string, options?: NestedRepoScanCancelOptions) => Promise<boolean>
   importNestedRepos: (args: {
     parentPath: string
     groupName: string
     projectPaths: string[]
     connectionId?: string
     scanId?: string
+    runtimeEnvironmentId?: string | null
     mode: 'group' | 'separate'
   }) => Promise<ProjectGroupImportResult | null>
   createProjectGroup: (name: string) => Promise<ProjectGroup | null>
@@ -1581,6 +1749,7 @@ export type RepoSlice = {
       folderPath?: string | null
       connectionId?: string | null
       linkedTask?: FolderWorkspace['linkedTask']
+      linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
       createdWithAgent?: FolderWorkspace['createdWithAgent']
       pendingFirstAgentMessageRename?: boolean
     },
@@ -1600,7 +1769,8 @@ export type RepoSlice = {
   ) => Promise<FolderWorkspacePathStatus | null>
   updateFolderWorkspace: (
     folderWorkspaceId: string,
-    updates: FolderWorkspaceUpdates
+    updates: FolderWorkspaceUpdates,
+    options?: { executionHostId?: ExecutionHostId }
   ) => Promise<boolean>
   deleteFolderWorkspace: (folderWorkspaceId: string) => Promise<boolean>
   updateProjectGroup: (
@@ -1618,7 +1788,11 @@ export type RepoSlice = {
     order?: number
   ) => Promise<boolean>
   // options.hostId disambiguates which host's row to remove when the id exists on multiple hosts; else the focused host is assumed.
-  removeProject: (projectId: string, options?: { hostId?: ExecutionHostId }) => Promise<void>
+  // options.errorFeedback defaults to 'silent' so bulk/background callers keep their own aggregate reporting.
+  removeProject: (
+    projectId: string,
+    options?: { hostId?: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+  ) => Promise<void>
   updateProject: (projectId: string, updates: ProjectUpdate) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the focused host is assumed.
   updateRepo: (
@@ -1628,6 +1802,108 @@ export type RepoSlice = {
   ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
   reorderRepos: (orderedIds: string[]) => Promise<void>
+}
+
+type LocalRepoCatalogFetchOutcome =
+  | { status: 'fulfilled' }
+  | { status: 'rejected'; reason: unknown }
+
+const latestLocalRepoCatalogFetchByStore = new WeakMap<
+  () => AppState,
+  Promise<LocalRepoCatalogFetchOutcome>
+>()
+const latestRepoCatalogGenerationByHostByStore = new WeakMap<() => AppState, Map<string, number>>()
+const latestAllHostRepoCatalogGenerationByStore = new WeakMap<() => AppState, number>()
+const latestHostCatalogGenerationByStore = new WeakMap<() => AppState, Map<string, number>>()
+
+function claimHostCatalogFence(
+  get: () => AppState,
+  kind: HostCatalogKind,
+  target: ReturnType<typeof getActiveRuntimeTarget>
+): HostCatalogFence {
+  const key = `${kind}:${getRuntimeTargetHostId(target)}`
+  let generations = latestHostCatalogGenerationByStore.get(get)
+  if (!generations) {
+    generations = new Map()
+    latestHostCatalogGenerationByStore.set(get, generations)
+  }
+  const generation = (generations.get(key) ?? 0) + 1
+  generations.set(key, generation)
+  return {
+    key,
+    generation,
+    target,
+    sshStateGeneration:
+      target.kind === 'environment' ? getEnvironmentSshStateGeneration(target.environmentId) : null,
+    runtimeConnectionGeneration:
+      target.kind === 'environment'
+        ? getRuntimeEnvironmentConnectionGeneration(target.environmentId)
+        : null
+  }
+}
+
+function isHostCatalogFenceCurrent(get: () => AppState, fence: HostCatalogFence): boolean {
+  if (latestHostCatalogGenerationByStore.get(get)?.get(fence.key) !== fence.generation) {
+    return false
+  }
+  if (fence.target.kind !== 'environment') {
+    return true
+  }
+  return (
+    !isRemovedRuntimeHostId(
+      getRuntimeTargetHostId(fence.target),
+      get().removedRuntimeEnvironmentIds
+    ) &&
+    getEnvironmentSshStateGeneration(fence.target.environmentId) === fence.sshStateGeneration &&
+    getRuntimeEnvironmentConnectionGeneration(fence.target.environmentId) ===
+      fence.runtimeConnectionGeneration
+  )
+}
+
+function startLocalRepoCatalogFetch(
+  get: () => AppState
+): (outcome: LocalRepoCatalogFetchOutcome) => void {
+  let settle: (outcome: LocalRepoCatalogFetchOutcome) => void = () => undefined
+  const settlement = new Promise<LocalRepoCatalogFetchOutcome>((resolve) => {
+    settle = resolve
+  })
+  latestLocalRepoCatalogFetchByStore.set(get, settlement)
+  return settle
+}
+
+async function awaitLatestLocalRepoCatalogFetch(get: () => AppState): Promise<void> {
+  while (true) {
+    const pending = latestLocalRepoCatalogFetchByStore.get(get)
+    if (!pending) {
+      return
+    }
+    const outcome = await pending
+    if (latestLocalRepoCatalogFetchByStore.get(get) === pending) {
+      if (outcome.status === 'rejected') {
+        throw outcome.reason
+      }
+      return
+    }
+  }
+}
+
+function claimRepoCatalogGeneration(get: () => AppState, hostId: string, generation: number): void {
+  let generations = latestRepoCatalogGenerationByHostByStore.get(get)
+  if (!generations) {
+    generations = new Map()
+    latestRepoCatalogGenerationByHostByStore.set(get, generations)
+  }
+  if ((generations.get(hostId) ?? 0) < generation) {
+    generations.set(hostId, generation)
+  }
+}
+
+function isLatestRepoCatalogGeneration(
+  get: () => AppState,
+  hostId: string,
+  generation: number
+): boolean {
+  return latestRepoCatalogGenerationByHostByStore.get(get)?.get(hostId) === generation
 }
 
 export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, get) => ({
@@ -1666,18 +1942,25 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
     }),
 
-  fetchRepos: async () => {
+  fetchRepos: async (options) => {
+    const target = getActiveRuntimeTarget(
+      settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+    )
+    const settleLocalCatalog: (outcome: LocalRepoCatalogFetchOutcome) => void =
+      target.kind === 'local' ? startLocalRepoCatalogFetch(get) : () => undefined
+    let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
     // Why: overlapping repos:changed fetches can resolve out of order; a stale one must not overwrite a newer result and resurrect deleted projects (#7020).
     let generation = 0
     set((s) => {
       generation = s.reposFetchGeneration + 1
       return { reposFetchGeneration: generation }
     })
+    const targetHostId = getRuntimeTargetHostId(target)
+    claimRepoCatalogGeneration(get, targetHostId, generation)
     try {
-      const target = getActiveRuntimeTarget(get().settings)
       const catalog = await fetchRepoCatalogForTarget(target)
-      // A newer fetchRepos superseded us while we awaited — drop this stale result.
-      if (get().reposFetchGeneration !== generation) {
+      // A newer same-host fetch superseded us while we awaited — drop this stale result.
+      if (!isLatestRepoCatalogGeneration(get, targetHostId, generation)) {
         return
       }
       let finalizedHostRepos: Repo[] = []
@@ -1691,6 +1974,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const reconciliation = reconcileSupersededSshRepos(result.repos, s)
         const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
         const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
+        const validRepoHostIdentities = new Set(prunedRepos.map(getRepoHostIdentity))
         const projectCompatibility = projectCompatibilityForReconciledRepos(
           prunedRepos,
           catalog.projectHostSetupCompatibility
@@ -1716,18 +2000,23 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
-          folderWorkspacePathStatuses: {},
+          ...(catalogRowsUnchanged(prunedRepos, s.repos)
+            ? {}
+            : { folderWorkspacePathStatuses: {} }),
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
             s.setupScriptPromptDismissedRepoIds,
-            validRepoIds
+            validRepoHostIdentities
           )
         }
       })
       scheduleSafeAutoForkSync(get, finalizedHostRepos)
     } catch (err) {
+      localCatalogOutcome = { status: 'rejected', reason: err }
       console.error('Failed to fetch repos:', err)
+    } finally {
+      settleLocalCatalog(localCatalogOutcome)
     }
   },
 
@@ -1736,11 +2025,19 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     runtimeRepoFetchGenerationByEnvironment.set(environmentId, requestGeneration)
     const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
     const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+    let catalogGeneration = 0
+    set((s) => {
+      catalogGeneration = s.reposFetchGeneration + 1
+      return { reposFetchGeneration: catalogGeneration }
+    })
+    const target = { kind: 'environment' as const, environmentId }
+    const targetHostId = getRuntimeTargetHostId(target)
+    claimRepoCatalogGeneration(get, targetHostId, catalogGeneration)
     try {
-      const target = { kind: 'environment' as const, environmentId }
       const catalog = await fetchRepoCatalogForTarget(target)
       if (
         runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+        !isLatestRepoCatalogGeneration(get, targetHostId, catalogGeneration) ||
         getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
         getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
       ) {
@@ -1750,6 +2047,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       set((s) => {
         if (
           runtimeRepoFetchGenerationByEnvironment.get(environmentId) !== requestGeneration ||
+          !isLatestRepoCatalogGeneration(get, targetHostId, catalogGeneration) ||
           getEnvironmentSshStateGeneration(environmentId) !== connectionGeneration ||
           getRuntimeEnvironmentConnectionGeneration(environmentId) !== runtimeConnectionGeneration
         ) {
@@ -1763,6 +2061,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const reconciliation = reconcileSupersededSshRepos(result.repos, s)
         const finalizedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
         const validRepoIds = new Set(finalizedRepos.map((repo) => repo.id))
+        const validRepoHostIdentities = new Set(finalizedRepos.map(getRepoHostIdentity))
         const projectCompatibility = projectCompatibilityForReconciledRepos(
           finalizedRepos,
           catalog.projectHostSetupCompatibility
@@ -1792,7 +2091,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
             s.setupScriptPromptDismissedRepoIds,
-            validRepoIds
+            validRepoHostIdentities
           )
         }
       })
@@ -1805,15 +2104,21 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   },
 
   fetchReposForAllHosts: async (options) => {
+    const settleLocalCatalog = startLocalRepoCatalogFetch(get)
     let generation = 0
     set((s) => {
       generation = s.reposFetchGeneration + 1
       return { reposFetchGeneration: generation }
     })
+    latestAllHostRepoCatalogGenerationByStore.set(get, generation)
+    claimRepoCatalogGeneration(get, LOCAL_EXECUTION_HOST_ID, generation)
     // Why: fetching only the active host hides every other host's repos ("my projects vanished"); load local + all runtime envs, each failing soft.
     const applyCatalog = (catalog: FetchedRepoCatalog): void => {
       // Why: a concurrent all-host refresh must not let the older catalog resurrect a migrated SSH owner.
-      if (get().reposFetchGeneration !== generation) {
+      if (
+        latestAllHostRepoCatalogGenerationByStore.get(get) !== generation ||
+        !isLatestRepoCatalogGeneration(get, catalog.hostId, generation)
+      ) {
         return
       }
       let hostRepos: Repo[] = []
@@ -1848,7 +2153,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
           pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
           ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
           ...mergedProjectCompatibility,
-          folderWorkspacePathStatuses: {},
+          ...(catalogRowsUnchanged(finalizedRepos, s.repos)
+            ? {}
+            : { folderWorkspacePathStatuses: {} }),
           activeRepoId: s.activeRepoId,
           filterRepoIds: s.filterRepoIds,
           setupScriptPromptDismissedRepoIds: s.setupScriptPromptDismissedRepoIds
@@ -1860,12 +2167,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const validateRepoScopedUi = (): void => {
       set((s) => {
         const validRepoIds = new Set(s.repos.map((repo) => repo.id))
+        const validRepoHostIdentities = new Set(s.repos.map(getRepoHostIdentity))
         return {
           activeRepoId: s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
           filterRepoIds: s.filterRepoIds.filter((projectId) => validRepoIds.has(projectId)),
           setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
             s.setupScriptPromptDismissedRepoIds,
-            validRepoIds
+            validRepoHostIdentities
           ),
           trustedOrcaHooks: filterTrustedOrcaHooksToValidRepos(s.trustedOrcaHooks, validRepoIds)
         }
@@ -1874,13 +2182,20 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
     // Local first so local repos are present even if a remote fetch stalls.
     let failed = false
+    let localCatalogOutcome: LocalRepoCatalogFetchOutcome = { status: 'fulfilled' }
     try {
       applyCatalog(await fetchRepoCatalogForTarget({ kind: 'local' }))
     } catch (err) {
       failed = true
+      localCatalogOutcome = { status: 'rejected', reason: err }
       console.error('Failed to fetch local repos for all-host load:', err)
     }
-    if (get().reposFetchGeneration !== generation) {
+    // Why: startup hydration needs the newest local catalog, not unreachable remote hosts.
+    settleLocalCatalog(localCatalogOutcome)
+    if (
+      get().reposFetchGeneration !== generation &&
+      !isLatestRepoCatalogGeneration(get, LOCAL_EXECUTION_HOST_ID, generation)
+    ) {
       return
     }
     if (options?.remoteHosts === 'skip') {
@@ -1891,13 +2206,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     // Why: unreachable remotes can spend the full connect timeout; merge each resolved host via the state updater so parallel loads don't clobber.
     await Promise.all(
       environments.map(async (environment) => {
+        const target = {
+          kind: 'environment' as const,
+          environmentId: environment.id
+        }
+        claimRepoCatalogGeneration(get, getRuntimeTargetHostId(target), generation)
         try {
-          applyCatalog(
-            await fetchRepoCatalogForTarget({
-              kind: 'environment',
-              environmentId: environment.id
-            })
-          )
+          applyCatalog(await fetchRepoCatalogForTarget(target))
         } catch (err) {
           failed = true
           console.warn(`Skipped repos for runtime environment ${environment.id}:`, err)
@@ -1910,13 +2225,29 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  fetchProjectGroups: async () => {
+  awaitLocalRepoCatalogSettlement: () => awaitLatestLocalRepoCatalogFetch(get),
+
+  fetchProjectGroups: async (options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
-      const { projectGroups } = await fetchProjectGroupsForTarget(target, [])
-      set({
-        projectGroups,
-        folderWorkspacePathStatuses: {}
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
+      const fence = claimHostCatalogFence(get, 'project-groups', target)
+      const catalog = await fetchProjectGroupCatalogForTarget(target)
+      if (!isHostCatalogFenceCurrent(get, fence)) {
+        return
+      }
+      set((current) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return current
+        }
+        const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, current.projectGroups)
+        return {
+          projectGroups,
+          ...(catalogRowsUnchanged(projectGroups, current.projectGroups)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
       })
     } catch (err) {
       console.error('Failed to fetch project groups:', err)
@@ -1925,15 +2256,28 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   fetchProjectGroupsForAllHosts: async (options) => {
     // Why: startup renders an all-host sidebar; replacing groups with only the active host leaves other hosts' repos visible but ungrouped.
-    const applyCatalog = (catalog: FetchedProjectGroupCatalog): void => {
-      set((s) => ({
-        projectGroups: mergeFetchedProjectGroupCatalog(catalog, s.projectGroups).projectGroups,
-        folderWorkspacePathStatuses: {}
-      }))
+    const applyCatalog = (catalog: FetchedProjectGroupCatalog, fence: HostCatalogFence): void => {
+      if (!isHostCatalogFenceCurrent(get, fence)) {
+        return
+      }
+      set((s) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return s
+        }
+        const { projectGroups } = mergeFetchedProjectGroupCatalog(catalog, s.projectGroups)
+        return {
+          projectGroups,
+          ...(catalogRowsUnchanged(projectGroups, s.projectGroups)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
+      })
     }
 
     try {
-      applyCatalog(await fetchProjectGroupCatalogForTarget({ kind: 'local' }))
+      const target = { kind: 'local' as const }
+      const fence = claimHostCatalogFence(get, 'project-groups', target)
+      applyCatalog(await fetchProjectGroupCatalogForTarget(target), fence)
     } catch (err) {
       console.error('Failed to fetch local project groups for all-host load:', err)
     }
@@ -1944,13 +2288,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
     await Promise.all(
       environments.map(async (environment) => {
+        const target = {
+          kind: 'environment' as const,
+          environmentId: environment.id
+        }
+        const fence = claimHostCatalogFence(get, 'project-groups', target)
         try {
-          applyCatalog(
-            await fetchProjectGroupCatalogForTarget({
-              kind: 'environment',
-              environmentId: environment.id
-            })
-          )
+          applyCatalog(await fetchProjectGroupCatalogForTarget(target), fence)
         } catch (err) {
           console.warn(`Skipped project groups for runtime environment ${environment.id}:`, err)
         }
@@ -1958,25 +2302,40 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     )
   },
 
-  fetchFolderWorkspaces: async () => {
+  fetchFolderWorkspaces: async (options) => {
     try {
       const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
-      const target = getActiveRuntimeTarget(get().settings)
-      const catalog = await fetchFolderWorkspaceCatalogForTarget(target)
-      const current = get()
-      folderWorkspaceUpdates.recordCatalogReplacement(
-        getFolderWorkspaceCatalogReplacementIds(
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
+      const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
+      const catalog = await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups)
+      if (!isHostCatalogFenceCurrent(get, fence)) {
+        return
+      }
+      set((current) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return current
+        }
+        folderWorkspaceUpdates.recordCatalogReplacement(
+          getFolderWorkspaceCatalogReplacementIdentities(
+            catalog,
+            current.folderWorkspaces,
+            current.projectGroups
+          )
+        )
+        const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
           catalog,
           current.folderWorkspaces,
           current.projectGroups
         )
-      )
-      const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
-        catalog,
-        [],
-        current.projectGroups
-      )
-      set({ folderWorkspaces, folderWorkspacePathStatuses: {} })
+        return {
+          folderWorkspaces,
+          ...(catalogRowsUnchanged(folderWorkspaces, current.folderWorkspaces)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
+        }
+      })
     } catch (err) {
       console.error('Failed to fetch folder workspaces:', err)
     }
@@ -1985,29 +2344,43 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
   fetchFolderWorkspacesForAllHosts: async (options) => {
     const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
     // Why: folder workspaces are owned through their project groups; fetch groups first, then merge each host's folder slice.
-    const applyCatalog = (catalog: FetchedFolderWorkspaceCatalog): void => {
+    const applyCatalog = (
+      catalog: FetchedFolderWorkspaceCatalog,
+      fence: HostCatalogFence
+    ): void => {
+      if (!isHostCatalogFenceCurrent(get, fence)) {
+        return
+      }
       set((current) => {
+        if (!isHostCatalogFenceCurrent(get, fence)) {
+          return current
+        }
         folderWorkspaceUpdates.recordCatalogReplacement(
-          getFolderWorkspaceCatalogReplacementIds(
+          getFolderWorkspaceCatalogReplacementIdentities(
             catalog,
             current.folderWorkspaces,
             current.projectGroups
           )
         )
+        const { folderWorkspaces } = mergeFetchedFolderWorkspaceCatalog(
+          catalog,
+          current.folderWorkspaces,
+          current.projectGroups
+        )
         return {
-          folderWorkspaces: mergeFetchedFolderWorkspaceCatalog(
-            catalog,
-            current.folderWorkspaces,
-            current.projectGroups
-          ).folderWorkspaces,
-          folderWorkspacePathStatuses: {}
+          folderWorkspaces,
+          ...(catalogRowsUnchanged(folderWorkspaces, current.folderWorkspaces)
+            ? {}
+            : { folderWorkspacePathStatuses: {} })
         }
       })
     }
 
     let failed = false
     try {
-      applyCatalog(await fetchFolderWorkspaceCatalogForTarget({ kind: 'local' }))
+      const target = { kind: 'local' as const }
+      const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
+      applyCatalog(await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups), fence)
     } catch (err) {
       failed = true
       console.error('Failed to fetch local folder workspaces for all-host load:', err)
@@ -2019,12 +2392,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     const environments = await listRuntimeEnvironmentsForAllHostLoad()
     await Promise.all(
       environments.map(async (environment) => {
+        const target = {
+          kind: 'environment' as const,
+          environmentId: environment.id
+        }
+        const fence = claimHostCatalogFence(get, 'folder-workspaces', target)
         try {
           applyCatalog(
-            await fetchFolderWorkspaceCatalogForTarget({
-              kind: 'environment',
-              environmentId: environment.id
-            })
+            await fetchFolderWorkspaceCatalogForTarget(target, get().projectGroups),
+            fence
           )
         } catch (err) {
           failed = true
@@ -2100,7 +2476,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   scanNestedRepos: async (path, connectionId, controls) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, controls?.runtimeEnvironmentId)
+      )
       if (target.kind === 'local') {
         const unsubscribe =
           controls?.scanId && controls.onProgress
@@ -2137,9 +2515,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  cancelNestedRepoScan: async (scanId) => {
+  cancelNestedRepoScan: async (scanId, options) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, options?.runtimeEnvironmentId)
+      )
       if (target.kind !== 'local') {
         return false
       }
@@ -2152,7 +2532,9 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
 
   importNestedRepos: async (args) => {
     try {
-      const target = getActiveRuntimeTarget(get().settings)
+      const target = getActiveRuntimeTarget(
+        settingsForRuntimeOwner(get().settings, args.runtimeEnvironmentId)
+      )
       const result =
         target.kind === 'local'
           ? await window.api.projectGroups.importNested(args)
@@ -2168,9 +2550,15 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
               },
               { timeoutMs: 60_000 }
             )
-      await get().fetchProjectGroups()
-      await get().fetchFolderWorkspaces()
-      await get().fetchRepos()
+      const catalogOptions =
+        'runtimeEnvironmentId' in args
+          ? { runtimeEnvironmentId: args.runtimeEnvironmentId }
+          : undefined
+      await get().fetchProjectGroups(catalogOptions)
+      await get().fetchFolderWorkspaces(catalogOptions)
+      await (args.runtimeEnvironmentId
+        ? get().fetchRuntimeEnvironmentRepos(args.runtimeEnvironmentId)
+        : get().fetchRepos(catalogOptions))
       set({ folderWorkspacePathStatuses: {} })
       return result
     } catch (err) {
@@ -2220,6 +2608,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const target = getActiveRuntimeTarget(
         getFolderWorkspacePathStatusRouteSettings(options, get().settings)
       )
+      if (
+        target.kind === 'environment' &&
+        (args.linkedTask?.provider === 'jira' || args.linkedTaskSourceContext?.provider === 'jira')
+      ) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+          'Update the remote runtime to link Jira'
+        )
+      }
       const workspace =
         target.kind === 'local'
           ? await window.api.folderWorkspaces.create(args)
@@ -2231,11 +2629,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 { timeoutMs: 15_000 }
               )
             ).folderWorkspace
+      const ownedWorkspace = folderWorkspaceWithFetchedOwner(workspace, target, get().projectGroups)
       set((s) => ({
-        folderWorkspaces: [workspace, ...s.folderWorkspaces],
+        folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
         folderWorkspacePathStatuses: {}
       }))
-      return workspace
+      return ownedWorkspace
     } catch (err) {
       console.error('Failed to create folder workspace:', err)
       const { title, description } = formatFolderWorkspaceCreateError(err)
@@ -2243,17 +2642,40 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     }
   },
 
-  updateFolderWorkspace: async (folderWorkspaceId, updates) => {
+  updateFolderWorkspace: async (folderWorkspaceId, updates, options) => {
     const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
     const state = get()
-    if (!findFolderWorkspaceOwner(state, folderWorkspaceId)) {
+    const executionHostId =
+      options?.executionHostId ??
+      (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+        ? (state.activeWorkspaceExecutionHostId ?? undefined)
+        : undefined)
+    if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
       return false
     }
-    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(state, folderWorkspaceId)
+    const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
+      state,
+      folderWorkspaceId,
+      executionHostId
+    )
     // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
     const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+    const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
+    const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
+    // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
+    if (
+      target.kind === 'environment' &&
+      (updates.linkedTask?.provider === 'jira' ||
+        updates.linkedTaskSourceContext?.provider === 'jira')
+    ) {
+      await assertRuntimeEnvironmentCapability(
+        target.environmentId,
+        WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
+        'Update the remote runtime to link Jira'
+      )
+    }
     const updateTicket = folderWorkspaceUpdates.begin(
-      folderWorkspaceId,
+      updateIdentity,
       Object.keys(updates) as FolderWorkspaceUpdateField[]
     )
     try {
@@ -2272,6 +2694,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         await reconcileFailedFolderWorkspaceUpdate({
           target,
           folderWorkspaceId,
+          updateIdentity,
+          ownerHostId,
           ticket: updateTicket,
           coordinator: folderWorkspaceUpdates,
           set,
@@ -2279,12 +2703,13 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         })
         return false
       }
-      const latestFields = folderWorkspaceUpdates.latestFields(folderWorkspaceId, updateTicket)
-      const catalogChanged = folderWorkspaceUpdates.catalogChanged(folderWorkspaceId, updateTicket)
+      const latestFields = folderWorkspaceUpdates.latestFields(updateIdentity, updateTicket)
+      const catalogChanged = folderWorkspaceUpdates.catalogChanged(updateIdentity, updateTicket)
       if (latestFields.length > 0) {
         set((s) => ({
           folderWorkspaces: s.folderWorkspaces.map((workspace) =>
-            workspace.id === folderWorkspaceId
+            workspace.id === folderWorkspaceId &&
+            getFolderWorkspaceHostId(workspace, s.projectGroups) === ownerHostId
               ? mergeFolderWorkspaceUpdateResponse(workspace, updated, latestFields, {
                   rejectOlderResponse: catalogChanged
                 })
@@ -2301,6 +2726,8 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       await reconcileFailedFolderWorkspaceUpdate({
         target,
         folderWorkspaceId,
+        updateIdentity,
+        ownerHostId,
         ticket: updateTicket,
         coordinator: folderWorkspaceUpdates,
         set,
@@ -2308,7 +2735,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
       return false
     } finally {
-      folderWorkspaceUpdates.finish(folderWorkspaceId, updateTicket)
+      folderWorkspaceUpdates.finish(updateIdentity, updateTicket)
     }
   },
 
@@ -2642,14 +3069,19 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
     try {
       const target = getProjectSetupRuntimeTarget(args.hostId)
       await assertProjectHostSetupMutationRuntimeCapabilities(target)
+      const projectProviderIdentity =
+        args.projectProviderIdentity ??
+        get().projects.find((project) => project.id === args.projectId)?.providerIdentity
+      // Why: the target host may not have a project record yet; carry the selected source-host identity across the boundary.
+      const setupArgs = projectProviderIdentity ? { ...args, projectProviderIdentity } : args
       const result =
         target.kind === 'local'
-          ? await window.api.projects.setupExistingFolder(args)
+          ? await window.api.projects.setupExistingFolder(setupArgs)
           : (
               await callRuntimeRpc<{ result: ProjectHostSetupResult }>(
                 target,
                 'projectHostSetup.setupExistingFolder',
-                args,
+                setupArgs,
                 { timeoutMs: 15_000 }
               )
             ).result
@@ -2905,8 +3337,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       }
       await markOnboardingProjectAdded('addedFolder')
       // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
-      await get().fetchWorktrees(repo.id)
-      const folderWorktree = get().worktreesByRepo[repo.id]?.[0]
+      const executionHostId =
+        options?.runtimeEnvironmentId === undefined
+          ? undefined
+          : options.runtimeEnvironmentId
+            ? toRuntimeExecutionHostId(options.runtimeEnvironmentId)
+            : LOCAL_EXECUTION_HOST_ID
+      await get().fetchWorktrees(repo.id, executionHostId ? { executionHostId } : undefined)
+      const folderWorktree = get().worktreesByRepo[repo.id]?.find(
+        (worktree) => executionHostId === undefined || worktree.hostId === executionHostId
+      )
       if (folderWorktree) {
         const { activateAndRevealWorktree } = await import('../../lib/worktree-activation')
         const onboarding = await window.api.onboarding.get().catch(() => null)
@@ -2914,10 +3354,12 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const startup = buildDismissedOnboardingFolderAgentStartup(
           get().settings,
           onboarding,
-          hadProjectBeforeAdd
+          hadProjectBeforeAdd,
+          isNativeChatTranscriptLocalReadable(repo.connectionId)
         )
         activateAndRevealWorktree(folderWorktree.id, {
           sidebarRevealBehavior: 'auto',
+          ...(executionHostId ? { executionHostId } : {}),
           ...(startup ? { startup } : {})
         })
       }
@@ -2957,11 +3399,18 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       const idExistsOnOtherHost = get().repos.some(
         (repo) => repo.id === projectId && getRepoExecutionHostId(repo) !== ownerHostId
       )
-      await (target.kind === 'local'
-        ? idExistsOnOtherHost
-          ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
-          : window.api.repos.remove({ repoId: projectId })
-        : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+      try {
+        await (target.kind === 'local'
+          ? idExistsOnOtherHost
+            ? window.api.repos.removeForHost({ repoId: projectId, hostId: ownerHostId })
+            : window.api.repos.remove({ repoId: projectId })
+          : callRuntimeRpc(target, 'repo.rm', { repo: projectId }, { timeoutMs: 15_000 }))
+      } catch (err) {
+        // Why: the owner already dropped this project, so purge the local ghost row instead of aborting (#11994).
+        if (!hasRuntimeRpcErrorCode(err, 'repo_not_found')) {
+          throw err
+        }
+      }
 
       get().clearOrcaHookTrustForRepo(projectId)
       const repoPath = get().repos.find((repo) =>
@@ -3096,6 +3545,7 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
                 activeView: 'terminal' as const,
                 activeWorktreeId: null,
                 activeWorkspaceKey: null,
+                activeWorkspaceExecutionHostId: null,
                 activeRepoId: null
               }
             : {})
@@ -3103,6 +3553,16 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
       })
     } catch (err) {
       console.error('Failed to remove repo:', err)
+      // Why: bulk and background callers aggregate their own failures, so only opted-in single-project entry points toast (#11994).
+      if (options?.errorFeedback === 'toast') {
+        toast.error(
+          translate('auto.store.slices.repos.removeProjectFailed', 'Failed to remove project'),
+          {
+            description: err instanceof Error ? err.message : String(err),
+            duration: ERROR_TOAST_DURATION
+          }
+        )
+      }
     }
   },
 
@@ -3171,7 +3631,11 @@ export const createRepoSlice: StateCreator<AppState, [], [], RepoSlice> = (set, 
         const target = ownerTarget
         const updatedRepo =
           target.kind === 'local'
-            ? await window.api.repos.update({ repoId: projectId, updates: sanitizedUpdates })
+            ? await window.api.repos.update({
+                repoId: projectId,
+                updates: sanitizedUpdates,
+                ...(ownerHasExplicitHost ? { hostId: ownerHostId } : {})
+              })
             : (
                 await callRuntimeRpc<{ repo: Repo }>(
                   target,

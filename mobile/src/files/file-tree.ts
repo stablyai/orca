@@ -1,5 +1,6 @@
 // Pure tree projection for the mobile file explorer. Mobile mirrors desktop
 // browse semantics by flattening cached files.readDir results as folders open.
+import { compareFileNames } from '../../../src/shared/file-name-sort'
 
 export type MobileDirEntry = {
   name: string
@@ -118,7 +119,7 @@ function compareDirectoryEntries(a: MobileDirEntry, b: MobileDirEntry): number {
   if (a.isDirectory !== b.isDirectory) {
     return a.isDirectory ? -1 : 1
   }
-  return a.name.localeCompare(b.name)
+  return compareFileNames(a.name, b.name)
 }
 
 export function shouldIncludeMobileFileExplorerEntry(entry: MobileDirEntry): boolean {
@@ -131,7 +132,7 @@ export function getDirectoryCacheState(
 ): DirectoryState | undefined {
   // Why: repository paths are arbitrary object keys; inherited keys like
   // "constructor" must not masquerade as loaded directory state.
-  return Object.prototype.hasOwnProperty.call(cache, relativePath) ? cache[relativePath] : undefined
+  return Object.hasOwn(cache, relativePath) ? cache[relativePath] : undefined
 }
 
 export function joinRelativePath(parentPath: string, name: string): string {

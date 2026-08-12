@@ -1,14 +1,11 @@
 import { View, Text, Pressable, TextInput, StyleSheet, ActivityIndicator } from 'react-native'
-import { Pencil, Plus, Search, Trash2, Check, Play } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { Check, Plus, Search } from 'lucide-react-native'
+import { colors, spacing } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { MOBILE_AGENT_CATALOG } from '../tasks/mobile-agent-catalog'
 import type { TerminalQuickCommand, TuiAgent } from '../../../src/shared/types'
-import {
-  getQuickCommandDisplayPreview,
-  isAgentQuickCommand,
-  supportsTerminalAgentQuickCommand
-} from '../terminal/quick-commands'
+import { supportsTerminalAgentQuickCommand } from '../terminal/quick-commands'
+import { QuickCommandRow } from './QuickCommandRow'
 
 export const QUICK_COMMAND_SUPPORTED_AGENTS = MOBILE_AGENT_CATALOG.filter((entry) =>
   supportsTerminalAgentQuickCommand(entry.id)
@@ -162,67 +159,6 @@ function QuickCommandGroup({
   )
 }
 
-function QuickCommandRow({
-  command,
-  first,
-  onLaunch,
-  onEdit,
-  onDelete,
-  disabled
-}: {
-  command: TerminalQuickCommand
-  first: boolean
-  onLaunch: (command: TerminalQuickCommand) => void
-  onEdit: (command: TerminalQuickCommand) => void
-  onDelete: (command: TerminalQuickCommand) => void
-  disabled: boolean
-}) {
-  const isAgent = isAgentQuickCommand(command)
-  return (
-    <View style={[styles.row, !first && styles.rowBorder, disabled && styles.disabled]}>
-      <Pressable
-        style={({ pressed }) => [styles.rowMain, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onLaunch(command)}
-        accessibilityRole="button"
-        accessibilityLabel={`Run ${command.label}`}
-      >
-        <View style={styles.rowIcon}>
-          {isAgent ? (
-            <MobileAgentIcon agentId={command.agent} size={16} />
-          ) : (
-            <Play size={14} color={colors.textPrimary} fill={colors.textPrimary} />
-          )}
-        </View>
-        <View style={styles.rowText}>
-          <Text style={styles.rowLabel} numberOfLines={1}>
-            {command.label}
-          </Text>
-          <Text style={[styles.rowPreview, !isAgent && styles.mono]} numberOfLines={1}>
-            {getQuickCommandDisplayPreview(command)}
-          </Text>
-        </View>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onEdit(command)}
-        accessibilityLabel={`Edit ${command.label}`}
-      >
-        <Pencil size={15} color={colors.textSecondary} />
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [styles.rowAction, pressed && !disabled && styles.pressed]}
-        disabled={disabled}
-        onPress={() => onDelete(command)}
-        accessibilityLabel={`Delete ${command.label}`}
-      >
-        <Trash2 size={15} color={colors.statusRed} />
-      </Pressable>
-    </View>
-  )
-}
-
 export function QuickCommandAgentPicker({
   selected,
   onSelect
@@ -292,15 +228,6 @@ const styles = StyleSheet.create({
   group: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center' },
   rowBorder: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderSubtle },
-  rowMain: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-    paddingLeft: spacing.md,
-    minWidth: 0
-  },
   rowIcon: {
     width: 26,
     height: 26,
@@ -309,11 +236,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center'
   },
-  rowText: { flex: 1, minWidth: 0 },
-  rowLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-  rowPreview: { fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  mono: { fontFamily: typography.monoFamily },
-  rowAction: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   agentLabel: { flex: 1, fontSize: 14, color: colors.textPrimary },
   addRow: {
     flexDirection: 'row',

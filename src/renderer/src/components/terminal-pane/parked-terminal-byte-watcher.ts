@@ -5,18 +5,18 @@
 import { isClaudeAgent } from '../../../../shared/agent-detection'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
-import {
-  mode2031SequenceFor,
-  resolveTerminalColorSchemeMode
-} from '../../../../shared/terminal-color-scheme-protocol'
 import { createTerminalGitHubPRLinkDetector } from '../../../../shared/terminal-github-pr-link-detector'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import {
   AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS,
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from './agent-task-complete-policy'
-import { startParkedTerminalMode2031Responder } from './parked-terminal-mode2031-responder'
+import { createCommandCodeOutputStatusDetector } from '../../../../shared/command-code-output-status'
+import { createOsc133CommandFinishedScanner } from '../../../../shared/terminal-osc133-command-finished'
+import {
+  createParkedTerminalCommandStatusPolicy,
+  readInFlightCommandCodeTurn
+} from './parked-terminal-command-status'
 import { subscribeToPtyData } from './pty-data-sidecar-subscriptions'
 import { createPtyOutputProcessor } from './pty-transport'
 import { isRendererHiddenPtyDeliveryGateEnabled } from './terminal-hidden-delivery-gate'
@@ -26,6 +26,7 @@ import {
 } from './terminal-side-effect-facts-handler'
 import { dispatchTerminalNotification } from './use-notification-dispatch'
 import { acquireHiddenRendererPtyDeliveryClaim } from './pty-renderer-delivery-claims'
+import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 
 // Why: keep the live path's BEL-vs-completion race window so notification behavior is identical whether a tab is parked or mounted.
 const PARKED_NOTIFICATION_GRACE_MS = AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS
@@ -54,8 +55,6 @@ export type ParkedTerminalByteWatcherOptions = {
   initialTitle?: string
   /** Pull main's title-only snapshot when a watcher starts before its pane ever mounted (ordinary park cycles already have a title). */
   restoreTitleOnRegister?: boolean
-  /** Out-of-band reply channel to the PTY (mode-2031 color-scheme answers). */
-  sendInput: (data: string) => void
 }
 
 const parkedWatcherDisposersByPtyId = new Map<string, () => void>()
@@ -63,7 +62,8 @@ const parkedWatcherDisposersByPtyId = new Map<string, () => void>()
 export function startParkedTerminalByteWatcher(
   options: ParkedTerminalByteWatcherOptions
 ): () => void {
-  const { ptyId, tabId, worktreeId, paneId, sendInput } = options
+  const { ptyId, tabId, worktreeId, paneId } = options
+  const remoteRuntimePty = isRemoteRuntimePtyId(ptyId)
   const drivesTabTitle = options.drivesTabTitle ?? true
   const paneKey = makePaneKey(tabId, options.leafId)
 
@@ -187,85 +187,111 @@ export function startParkedTerminalByteWatcher(
     }
   }
 
-  // Why: with the authority switch on, the fact consumer is the single policy consumer — registering byte parsers too would double-fire bells.
-  const mainSideEffectAuthority = isMainTerminalSideEffectAuthorityForPty({
-    settings: useAppStore.getState().settings,
-    runtimeEnvironmentId: null
+  // Why: command-lifecycle signals drive store-level policy only (git nudge, SSH same-turn
+  // status drop, Command Code seed/settle); the pane-coupled parts stay with the mounted pane.
+  const commandStatusPolicy = createParkedTerminalCommandStatusPolicy({
+    ptyId,
+    worktreeId,
+    tabId,
+    paneId,
+    paneKey
   })
-  // Why: decided once at watcher start — it picks which 2031 responder (byte sidecar vs fact reply) exists, so it must never flip per chunk.
+
+  // Why: with the authority switch on, the fact consumer is the single policy consumer — registering byte parsers too would double-fire bells.
+  const mainSideEffectAuthority =
+    !remoteRuntimePty &&
+    isMainTerminalSideEffectAuthorityForPty({
+      settings: useAppStore.getState().settings,
+      runtimeEnvironmentId: null
+    })
+  const factSideEffectAuthority = mainSideEffectAuthority || remoteRuntimePty
   const hiddenDeliveryGateActive =
     mainSideEffectAuthority &&
     isRendererHiddenPtyDeliveryGateEnabled(useAppStore.getState().settings)
 
-  const sendMode2031Reply = (): void => {
-    const settings = useAppStore.getState().settings
-    sendInput(mode2031SequenceFor(resolveTerminalColorSchemeMode(settings, getSystemPrefersDark())))
-  }
-
   // Why (byte-parser mode only): reuse the transport's output processor to keep exact live-path parsing semantics.
   // initialAgentTitle: an agent already working at park time still produces a working→idle transition.
-  const processor = mainSideEffectAuthority
+  const processor = factSideEffectAuthority
     ? null
     : createPtyOutputProcessor({
         ...(options.initialTitle !== undefined ? { initialAgentTitle: options.initialTitle } : {}),
         ...sideEffectCallbacks
       })
   // Why (byte-parser mode only): under main authority, byte-scanning PR links too would observe every link twice (facts already carry them).
-  const observeTerminalGitHubPRLink = mainSideEffectAuthority
+  const observeTerminalGitHubPRLink = factSideEffectAuthority
     ? null
     : createTerminalGitHubPRLinkDetector()
-  const unregisterFactConsumer = mainSideEffectAuthority
+  // Why (byte-parser mode only): mode parity — main's tracker emits these as facts; the byte
+  // path scans the same shared parsers the mounted kill-switch-off pane uses.
+  const commandFinishedScanner = factSideEffectAuthority
+    ? null
+    : createOsc133CommandFinishedScanner(commandStatusPolicy.onCommandFinished)
+  // Why the seed: this detector is recreated per park cycle with no startup command
+  // to fast-arm it, and a Command Code TUI parked mid-turn is long past its banner —
+  // unseeded it would never scrape the turn's return to the idle composer.
+  const commandCodeOutputStatusDetector = factSideEffectAuthority
+    ? null
+    : createCommandCodeOutputStatusDetector({
+        inFlightTurn: readInFlightCommandCodeTurn(paneKey),
+        onWorking: commandStatusPolicy.onCommandCodeWorking,
+        onDone: commandStatusPolicy.onCommandCodeDone
+      })
+  const unregisterFactConsumer = factSideEffectAuthority
     ? registerTerminalSideEffectFactConsumer({
         ptyId,
         // Why: ordinary park already has a pane-owned title; the flag below requests a snapshot only when no pane did.
         callbacks: {
           ...sideEffectCallbacks,
+          onCommandFinished: commandStatusPolicy.onCommandFinished,
+          onCommandCodeWorking: commandStatusPolicy.onCommandCodeWorking,
+          onCommandCodeDone: commandStatusPolicy.onCommandCodeDone,
           onPrLink: (link) =>
-            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link),
-          // Why (gate mode only): the 2031 subscribe arrives as a fact, but the reply stays here — query authority stays with the view/watcher (invariant 6).
-          ...(hiddenDeliveryGateActive ? { onMode2031Subscribe: sendMode2031Reply } : {})
+            useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
         },
         // Why: activation-deferred tabs can start a watcher before any pane restored the title; ordinary parked tabs avoid this IPC.
         restoreTitleOnRegister: options.restoreTitleOnRegister === true
       })
     : null
 
-  // Why: no xterm answers DECSET 2031 while parked; with the gate ON, the responder's sidecar would force-feed bytes to the gated PTY, so skip it.
-  const stopMode2031Responder = hiddenDeliveryGateActive
-    ? null
-    : startParkedTerminalMode2031Responder({ ptyId, sendInput })
-
   // Why: parked tabs are the canonical hidden view — mark the PTY gated so main stops renderer byte delivery.
   const releaseHiddenDeliveryClaim = hiddenDeliveryGateActive
     ? acquireHiddenRendererPtyDeliveryClaim(ptyId)
     : null
 
-  // Why (byte-parser mode only): under main authority, registering byte parsers here would double-fire policy already carried by facts.
+  const processLiveData = (data: string): void => {
+    if (!processor) {
+      return
+    }
+    processor.processData(data, {})
+    commandFinishedScanner?.scan(data)
+    commandCodeOutputStatusDetector?.observe(data)
+    if (observeTerminalGitHubPRLink) {
+      for (const link of observeTerminalGitHubPRLink(data)) {
+        useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
+      }
+    }
+  }
+  // Why: paired hosts forward derived facts over the one environment event
+  // stream; parked PTYs never consume terminal multiplex slots or raw bytes.
   const unsubscribeByteParsers =
-    processor === null
-      ? null
-      : subscribeToPtyData(ptyId, (data) => {
-          // Why: empty pane callbacks — no xterm to deliver bytes to, the watcher wants only the parser side effects.
-          processor.processData(data, {})
-          if (observeTerminalGitHubPRLink) {
-            for (const link of observeTerminalGitHubPRLink(data)) {
-              useAppStore.getState().observeTerminalGitHubPullRequestLink(worktreeId, link)
-            }
-          }
-        })
+    processor === null ? null : subscribeToPtyData(ptyId, processLiveData)
 
   const dispose = (): void => {
     if (disposed) {
       return
     }
     disposed = true
+    // Why first: each park/reveal cycle owns a distinct processor gauge, and the store/IPC
+    // teardown below must not be able to throw its way past the census drop.
+    processor?.disposePendingSideEffectGauge()
     // Why: unhide BEFORE the reveal remount registers pane handlers, so main resumes delivery and emits the restore marker the pane consumes.
     releaseHiddenDeliveryClaim?.()
-    stopMode2031Responder?.()
     unsubscribeByteParsers?.()
     unregisterFactConsumer?.()
     // Why: clears tracker/timer/detector state so the watcher can't fire after the revealed pane's live parsers take over.
     processor?.clearAccumulatedState()
+    commandFinishedScanner?.reset()
+    commandStatusPolicy.dispose()
     clearBellNotificationTimer()
     clearAgentTaskCompleteTimer()
     pendingBellNotification = false

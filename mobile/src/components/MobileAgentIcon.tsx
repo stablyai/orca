@@ -32,7 +32,7 @@ function OmpIcon({ size = 16 }: { size?: number }) {
       <Defs>
         <LinearGradient id="ompMarkGradient" x1="0" y1="0" x2="1" y2="1">
           <Stop offset="0" stopColor="#ed4abf" />
-          <Stop offset=".5" stopColor="#9b4dff" />
+          <Stop offset="0.5" stopColor="#9b4dff" />
           <Stop offset="1" stopColor="#5ad8e6" />
         </LinearGradient>
       </Defs>
