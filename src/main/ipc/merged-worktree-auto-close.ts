@@ -54,6 +54,7 @@ export async function autoCloseMergedWorktreesForRepo(
   })
   const closed: string[] = []
   const failed: MergedWorktreeAutoCloseResult['failed'] = []
+  const outcomeByWorktreeId = new Map<string, string>()
 
   for (const decision of decisions) {
     if (decision.action !== 'close') {
@@ -64,15 +65,42 @@ export async function autoCloseMergedWorktreesForRepo(
       // for a workspace that turned dirty between the scan and this call.
       await runtime.removeManagedWorktree(`id:${decision.worktreeId}`, false, false, false)
       closed.push(decision.worktreeId)
+      outcomeByWorktreeId.set(decision.worktreeId, 'closed')
     } catch (error) {
-      failed.push({
-        worktreeId: decision.worktreeId,
-        error: error instanceof Error ? error.message : String(error)
-      })
+      const message = error instanceof Error ? error.message : String(error)
+      failed.push({ worktreeId: decision.worktreeId, error: message })
+      outcomeByWorktreeId.set(decision.worktreeId, `close-failed(${message})`)
     }
   }
 
+  logMergedWorktreeAutoCloseSweep(repo, decisions, outcomeByWorktreeId)
   return { closed, failed, decisions }
+}
+
+/**
+ * Report every sweep, including the all-skipped ones.
+ *
+ * Why unconditional: this ran silently for weeks while never reaching the
+ * removal at all, and no log distinguished "swept and kept everything" from
+ * "never swept". One line per sweep per repo, rate-limited by the cooldown.
+ */
+function logMergedWorktreeAutoCloseSweep(
+  repo: Repo,
+  decisions: MergedWorktreeAutoCloseDecision[],
+  outcomeByWorktreeId: Map<string, string>
+): void {
+  const outcomes = decisions
+    .map((decision) => {
+      const outcome =
+        decision.action === 'close'
+          ? (outcomeByWorktreeId.get(decision.worktreeId) ?? 'close')
+          : `skip:${decision.reason}`
+      return `${decision.branch || decision.path}=${outcome}`
+    })
+    .join(', ')
+  console.info(
+    `[worktree-auto-close] swept "${repo.displayName}" (${repo.id}): ${outcomes || 'no workspaces'}`
+  )
 }
 
 /**

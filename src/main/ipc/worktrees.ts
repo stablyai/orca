@@ -1809,6 +1809,29 @@ export function registerWorktreeHandlers(
   options?: { onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void }
 ): void {
   const detectedWorktreeCancellations = createSenderScopedRequestCancellations()
+  /**
+   * Run the landed-workspace sweep behind a workspace list.
+   *
+   * Why not only `worktrees:list`: the desktop renderer lists through
+   * `worktrees:listDetected` and only falls back to `worktrees:list` when the
+   * preload has no `listDetected`. Wiring the sweep into the fallback alone
+   * left it never running on desktop.
+   *
+   * Never awaited — a list must not wait on Git merge probes — and
+   * cooldown-gated inside the scheduler.
+   */
+  const scheduleMergedWorktreeAutoCloseForListedRepo = (
+    repoId: string,
+    executionHostId?: ExecutionHostId
+  ): void => {
+    if (executionHostId !== undefined && executionHostId !== LOCAL_EXECUTION_HOST_ID) {
+      return
+    }
+    const repo = findExactRepoOwner(store, repoId)
+    if (repo) {
+      void scheduleMergedWorktreeAutoCloseForRepo(store, runtime, repo)
+    }
+  }
   // Remove previously registered handlers so re-register works when macOS re-activates and creates a new window.
   ipcMain.removeHandler('worktrees:listAll')
   ipcMain.removeHandler('worktrees:list')
@@ -2121,9 +2144,13 @@ export function registerWorktreeHandlers(
                 }
               : undefined
           )
-          return abortedResult
+          const listed = abortedResult
             ? await Promise.race([providerResult, abortedResult])
             : await providerResult
+          if (listed.status === 'complete') {
+            scheduleMergedWorktreeAutoCloseForListedRepo(args.repoId, args.executionHostId)
+          }
+          return listed
         } finally {
           if (timeout) {
             clearTimeout(timeout)
@@ -2157,6 +2184,9 @@ export function registerWorktreeHandlers(
               isCurrentSshProviderAuthority(authority))),
         provider
       )
+      if (result && !('providerAbortStatus' in result) && result.authoritative) {
+        scheduleMergedWorktreeAutoCloseForListedRepo(repo.id)
+      }
       return result && !('providerAbortStatus' in result)
         ? result
         : {

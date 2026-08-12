@@ -74,6 +74,36 @@ describe('autoCloseMergedWorktreesForRepo', () => {
     expect(result.failed).toEqual([])
   })
 
+  it('reports every workspace it swept, including the ones it kept', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+    await autoCloseMergedWorktreesForRepo(createStore(true), runtime, REPO, {
+      now: NOW,
+      scan: scanReturning([CLOSE_DECISION, KEEP_DECISION])
+    })
+
+    expect(info).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-auto-close] swept "Repo" (repo-1)')
+    )
+    const line = info.mock.calls[0]?.[0] as string
+    expect(line).toContain('feature=closed')
+    expect(line).toContain('wip=skip:dirty-files')
+    info.mockRestore()
+  })
+
+  it('reports the error when a removal was refused', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+    removeManagedWorktree.mockRejectedValue(new Error('Worktree is busy.'))
+
+    await autoCloseMergedWorktreesForRepo(createStore(true), runtime, REPO, {
+      now: NOW,
+      scan: scanReturning([CLOSE_DECISION])
+    })
+
+    expect(info.mock.calls[0]?.[0]).toContain('feature=close-failed(Worktree is busy.)')
+    info.mockRestore()
+  })
+
   it('reports a removal that Git refused instead of throwing', async () => {
     removeManagedWorktree.mockRejectedValue(
       new Error('Worktree has uncommitted or untracked changes.')

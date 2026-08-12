@@ -224,6 +224,14 @@ vi.mock('../terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
+const { scheduleMergedWorktreeAutoCloseForRepoMock } = vi.hoisted(() => ({
+  scheduleMergedWorktreeAutoCloseForRepoMock: vi.fn()
+}))
+
+vi.mock('./merged-worktree-auto-close', () => ({
+  scheduleMergedWorktreeAutoCloseForRepo: scheduleMergedWorktreeAutoCloseForRepoMock
+}))
+
 const { advertisedUrlWatcherForgetWorktreeMock } = vi.hoisted(() => ({
   advertisedUrlWatcherForgetWorktreeMock: vi.fn()
 }))
@@ -2412,6 +2420,81 @@ describe('registerWorktreeHandlers', () => {
       branchNameOverride: 'feature/add-feature',
       pushTarget: { remoteName: 'origin', branchName: 'feature/add-feature' }
     })
+  })
+
+  it('sweeps landed workspaces behind the local host-qualified detected list', async () => {
+    // Why this path: the desktop renderer lists through `worktrees:listDetected`
+    // with an execution host, so a sweep wired only into `worktrees:list` never
+    // ran in the app.
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    const result = await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-sweep' as ProviderRequestId,
+      repoId: 'repo-1',
+      executionHostId: LOCAL_EXECUTION_HOST_ID
+    })
+
+    expect(result).toMatchObject({ status: 'complete' })
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledTimes(1)
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledWith(
+      store,
+      runtimeStub,
+      expect.objectContaining({ id: 'repo-1' })
+    )
+  })
+
+  it('sweeps landed workspaces behind the legacy detected list', async () => {
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/repo',
+        head: 'def456',
+        branch: 'refs/heads/main',
+        isBare: false,
+        isMainWorktree: true
+      }
+    ])
+
+    await handlers['worktrees:listDetected'](null, { repoId: 'repo-1' })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('never sweeps a local repo behind an SSH-host detected list', async () => {
+    scheduleMergedWorktreeAutoCloseForRepoMock.mockClear()
+    const sshHostId = toSshExecutionHostId('target-a')
+    const provider = { listWorktrees: vi.fn().mockResolvedValue([]) }
+    store.getRepos.mockImplementation(() => [
+      {
+        id: 'repo-1',
+        path: '/remote/repo',
+        displayName: 'remote repo',
+        badgeColor: '#000',
+        addedAt: 0,
+        connectionId: 'target-a'
+      }
+    ])
+    getSshGitProviderMock.mockImplementation((targetId) =>
+      targetId === 'target-a' ? provider : undefined
+    )
+
+    await handlers['worktrees:listDetected'](ipcEvent, {
+      providerRequestId: 'request-ssh-sweep' as ProviderRequestId,
+      repoId: 'repo-1',
+      executionHostId: sshHostId,
+      expectedAuthority: getSshProviderAuthority('target-a')
+    })
+
+    expect(scheduleMergedWorktreeAutoCloseForRepoMock).not.toHaveBeenCalled()
   })
 
   it('lists detected worktrees through the selected WSL project runtime', async () => {
