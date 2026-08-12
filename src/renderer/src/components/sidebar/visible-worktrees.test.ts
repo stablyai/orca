@@ -252,6 +252,20 @@ describe('computeVisibleWorktreeIds', () => {
     expect(result).toEqual([inProgress.id, unset.id])
   })
 
+  it('shows every workspace when the status catalog is missing', () => {
+    // Why: without definitions every workspace resolves to the built-in default
+    // status, so hiding that default must not sweep the whole list.
+    const wt = makeWorktree('unset')
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [wt] },
+      [wt.id],
+      visibleOptions({ hiddenWorkspaceStatusIds: ['in-progress'] })
+    )
+
+    expect(result).toEqual([wt.id])
+  })
+
   it('keeps CLI-created workspaces visible while the CLI filter is off', () => {
     const manual = makeWorktree('manual')
     const cliCreated = {

@@ -6,7 +6,7 @@ import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition
 } from '../../../../shared/types'
-import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
+import { isWorkspaceStatusHidden } from './workspace-status-visibility'
 import { buildWorktreeComparator, sortWorktreesSmart } from './smart-sort'
 import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
 import { useAppStore } from '@/store'
@@ -266,11 +266,9 @@ export function computeVisibleWorktreeIds(
     all = all.filter((w) => !isDetachedHeadWorkspace(w))
   }
 
-  if (opts.hiddenWorkspaceStatusIds && opts.hiddenWorkspaceStatusIds.length > 0) {
-    const hiddenStatusIds = new Set(opts.hiddenWorkspaceStatusIds)
-    const statuses = opts.workspaceStatuses ?? []
-    all = all.filter((w) => !hiddenStatusIds.has(getWorkspaceStatus(w, statuses)))
-  }
+  all = all.filter(
+    (w) => !isWorkspaceStatusHidden(w, opts.hiddenWorkspaceStatusIds, opts.workspaceStatuses)
+  )
 
   const visibleHostIds =
     opts.visibleWorkspaceHostIds ??

@@ -129,6 +129,7 @@ import {
   setVisibleWorktreeIds,
   sidebarHasActiveFilters
 } from './visible-worktrees'
+import { isWorkspaceStatusHidden } from './workspace-status-visibility'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   filterFolderWorkspacesFromOtherDevices,
@@ -5701,20 +5702,25 @@ const WorktreeList = React.memo(function WorktreeList({
       visibleHostIdSet,
       defaultHostId
     )
-    if (!hideWorkspacesFromOtherDevices) {
-      return hostVisibleWorkspaces
-    }
-    return filterFolderWorkspacesFromOtherDevices(
-      hostVisibleWorkspaces,
-      pairedDeviceIdsByEnvironment
+    const deviceVisibleWorkspaces = hideWorkspacesFromOtherDevices
+      ? filterFolderWorkspacesFromOtherDevices(hostVisibleWorkspaces, pairedDeviceIdsByEnvironment)
+      : hostVisibleWorkspaces
+    // Why the extra pass: folder workspaces never reach
+    // computeVisibleWorktreeIds, so the status filter has to be applied here or
+    // unchecking a status would silently skip them.
+    return deviceVisibleWorkspaces.filter(
+      (folderWorkspace) =>
+        !isWorkspaceStatusHidden(folderWorkspace, hiddenWorkspaceStatusIds, workspaceStatuses)
     )
   }, [
     defaultHostId,
     folderWorkspaces,
+    hiddenWorkspaceStatusIds,
     hideWorkspacesFromOtherDevices,
     pairedDeviceIdsByEnvironment,
     projectGroups,
-    visibleHostIdSet
+    visibleHostIdSet,
+    workspaceStatuses
   ])
   const repoOrder = useMemo(() => {
     return getLogicalRepoOrderRankById(repos.map((repo) => repo.id))
