@@ -12095,6 +12095,15 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "FileExplorerOpenWithSubmenu": {
+            "openFailed": "Could not open the file with the selected application.",
+            "openWith": "Open With",
+            "loading": "Looking for applications...",
+            "unavailable": "Applications are unavailable for this file.",
+            "noApplications": "No applications found",
+            "defaultBadge": "Default",
+            "chooseAnotherApp": "Choose another app..."
           }
         }
       },

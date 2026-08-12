@@ -27,3 +27,27 @@ export type ShellOpenExternalEditorResult =
   | { ok: true }
   | { ok: false; reason: Exclude<ShellOpenPathFailureReason, 'ssh-alias-required'> }
   | { ok: false; reason: 'ssh-alias-required'; host: string; port: number }
+
+export type ShellOpenWithApplication = {
+  id: string
+  name: string
+  isDefault?: boolean
+}
+
+export type ShellListOpenWithApplicationsResult =
+  | {
+      ok: true
+      applications: ShellOpenWithApplication[]
+      supportsChooserDialog: boolean
+    }
+  | { ok: false; reason: ShellOpenLocalPathFailureReason }
+
+export type ShellOpenPathWithApplicationRequest = {
+  path: string
+  applicationId: string
+}
+
+// Why: the Windows "How do you want to open this file?" dialog is offered as a
+// synthetic entry so the renderer needs a stable id that can never collide
+// with a discovered application id (those are prefixed by platform).
+export const OPEN_WITH_CHOOSER_APPLICATION_ID = 'system:open-with-chooser'

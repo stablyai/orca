@@ -3,10 +3,16 @@ import { constants, copyFile, readFile, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, normalize, posix, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type {
+  ShellListOpenWithApplicationsResult,
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenPathWithApplicationRequest
 } from '../../shared/shell-open-types'
+import {
+  launchOpenWithApplication,
+  listOpenWithApplications
+} from '../open-with/open-with-applications'
 import { MAX_REPO_ICON_UPLOAD_BYTES } from '../../shared/repo-icon'
 import type { Store } from '../persistence'
 import {
@@ -171,6 +177,39 @@ export function registerShellHandlers(store: Store): void {
   ipcMain.handle('shell:openFilePath', async (_event, filePath: string): Promise<boolean> => {
     return openWithSystemDefault(filePath)
   })
+
+  ipcMain.handle(
+    'shell:listOpenWithApplications',
+    async (_event, filePath: string): Promise<ShellListOpenWithApplicationsResult> => {
+      if (hasActiveRuntime(store)) {
+        return { ok: false, reason: 'remote-runtime-unsupported' }
+      }
+      const target = await validateLocalPathTarget(filePath)
+      if (!target.ok) {
+        return target
+      }
+      const listing = await listOpenWithApplications(target.path)
+      return { ok: true, ...listing }
+    }
+  )
+
+  ipcMain.handle(
+    'shell:openPathWithApplication',
+    async (
+      _event,
+      request: ShellOpenPathWithApplicationRequest
+    ): Promise<ShellOpenLocalPathResult> => {
+      if (hasActiveRuntime(store)) {
+        return { ok: false, reason: 'remote-runtime-unsupported' }
+      }
+      const target = await validateLocalPathTarget(request.path)
+      if (!target.ok) {
+        return target
+      }
+      const launched = await launchOpenWithApplication(request.applicationId, target.path)
+      return launched ? { ok: true } : { ok: false, reason: 'launch-failed' }
+    }
+  )
 
   ipcMain.handle('shell:openFileUri', async (_event, rawUri: string) => {
     let parsed: URL

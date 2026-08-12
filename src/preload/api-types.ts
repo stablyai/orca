@@ -402,9 +402,11 @@ import type {
 import type { ResolvedSourceControlAiGenerationParams } from '../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../shared/source-control-ai-types'
 import type {
+  ShellListOpenWithApplicationsResult,
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
-  ShellOpenLocalPathResult
+  ShellOpenLocalPathResult,
+  ShellOpenPathWithApplicationRequest
 } from '../shared/shell-open-types'
 import type { SkillDiscoveryResult, SkillDiscoveryTarget } from '../shared/skills'
 import type {
@@ -2547,6 +2549,10 @@ export type PreloadApi = {
     ) => Promise<ShellOpenExternalEditorResult>
     openUrl: (url: string) => Promise<void>
     openFilePath: (path: string) => Promise<boolean>
+    listOpenWithApplications: (path: string) => Promise<ShellListOpenWithApplicationsResult>
+    openPathWithApplication: (
+      request: ShellOpenPathWithApplicationRequest
+    ) => Promise<ShellOpenLocalPathResult>
     openFileUri: (uri: string) => Promise<void>
     pathExists: (path: string) => Promise<boolean>
     pickAttachment: () => Promise<string | null>

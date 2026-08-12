@@ -45,6 +45,10 @@ import {
 } from '@/lib/workspace-file-drag'
 import type { GitFileStatus } from '../../../../shared/types'
 import { STATUS_LABELS } from './status-display'
+import {
+  FileExplorerOpenWithSubmenu,
+  shouldShowOpenWithSubmenu
+} from './file-explorer-open-with-submenu'
 import { RENAME_HOTSPOT_ATTR } from './file-explorer-dir-toggle-timing'
 import type { TreeNode } from './file-explorer-types'
 import { useFileExplorerRowDrag } from './useFileExplorerRowDrag'
@@ -482,6 +486,9 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const activeRuntimeEnvironmentId = useAppStore(
+    (s) => s.settings?.activeRuntimeEnvironmentId ?? null
+  )
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
@@ -772,6 +779,9 @@ export function FileExplorerRow({
               'Open in Orca Browser'
             )}
           </ContextMenuItem>
+        )}
+        {shouldShowOpenWithSubmenu(node, connectionId, { activeRuntimeEnvironmentId }) && (
+          <FileExplorerOpenWithSubmenu filePath={node.path} />
         )}
         {!node.isDirectory && activeWorktreeId && detectLanguage(node.path) === 'markdown' && (
           <ContextMenuItem

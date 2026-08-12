@@ -3218,6 +3218,12 @@ function createShellApi(): NonNullable<Partial<PreloadApi>['shell']> {
     openInExternalEditor: () => Promise.resolve(openResult),
     openUrl: (url) => Promise.resolve(window.open(url, '_blank', 'noopener,noreferrer') as never),
     openFilePath: () => Promise.resolve(false),
+    // Why: OS handler discovery needs the desktop main process; the web client
+    // hides the Open With menu, so these stubs only satisfy the API surface.
+    listOpenWithApplications: () =>
+      Promise.resolve({ ok: false, reason: 'remote-runtime-unsupported' as const }),
+    openPathWithApplication: () =>
+      Promise.resolve({ ok: false, reason: 'remote-runtime-unsupported' as const }),
     openFileUri: (uri) =>
       Promise.resolve(window.open(uri, '_blank', 'noopener,noreferrer') as never),
     pathExists: async (path) => {
