@@ -4234,8 +4234,43 @@ export function connectPanePty(
   // stays a passive viewer so it cannot take ownership from the active client.
   const claimsRemoteRuntimeViewport = (ptyId: string | null | undefined): boolean =>
     isRemoteRuntimePtyId(ptyId) && deps.isVisibleRef.current
-  // Why: the attach claim waits for this PTY's first driver frame; teardown must drop that listener.
+  // Why: paired-runtime ownership is unknown until the subscription's first driver frame. One waiter
+  // follows the transport's current PTY across recovery/rebind and teardown drops it.
+  let settledInitialDriverStatePtyId: string | null = null
+  let waitingForInitialDriverStatePtyId: string | null = null
   let stopWaitingForInitialDriverState: (() => void) | null = null
+  const afterInitialDriverState = (ptyId: string, callback: () => void): void => {
+    if (settledInitialDriverStatePtyId === ptyId || waitingForInitialDriverStatePtyId === ptyId) {
+      return
+    }
+    stopWaitingForInitialDriverState?.()
+    waitingForInitialDriverStatePtyId = ptyId
+    stopWaitingForInitialDriverState = onDriverChange((event) => {
+      if (event.ptyId !== ptyId) {
+        return
+      }
+      stopWaitingForInitialDriverState?.()
+      stopWaitingForInitialDriverState = null
+      waitingForInitialDriverStatePtyId = null
+      settledInitialDriverStatePtyId = ptyId
+      callback()
+    })
+  }
+  const claimCurrentRemoteViewport = (ptyId: string): void => {
+    if (
+      disposed ||
+      transport.getPtyId() !== ptyId ||
+      !claimsRemoteRuntimeViewport(ptyId) ||
+      shouldSuppressDesktopPtyResize()
+    ) {
+      return
+    }
+    const cols = pane.terminal.cols
+    const rows = pane.terminal.rows
+    if (cols > 0 && rows > 0) {
+      transport.resize(cols, rows, { claim: true })
+    }
+  }
 
   const forwardPtyResize = (cols: number, rows: number): void => {
     if (!isRendererPtyResizeAuthoritative()) {
@@ -4567,7 +4602,7 @@ export function connectPanePty(
           return
         }
         if (claimsRemoteRuntimeViewport(ptyId)) {
-          transport.resize(cols, rows, { claim: true })
+          afterInitialDriverState(ptyId, () => claimCurrentRemoteViewport(ptyId))
           return
         }
         transport.resize(cols, rows)
@@ -5873,46 +5908,21 @@ export function connectPanePty(
     // grid it measured instead of waiting for a manual resize; once per attach, so a later recovery
     // resubscribe does not re-take ownership on its own.
     type AttachCallbacks = Parameters<typeof transport.attach>[0]['callbacks']
-    const claimAttachedRemoteViewport = (attachedPtyId: string | null): void => {
-      if (
-        transport.getPtyId() !== attachedPtyId ||
-        !claimsRemoteRuntimeViewport(attachedPtyId) ||
-        shouldSuppressDesktopPtyResize()
-      ) {
-        return
-      }
-      const claimCols = pane.terminal.cols
-      const claimRows = pane.terminal.rows
-      if (claimCols > 0 && claimRows > 0) {
-        transport.resize(claimCols, claimRows, { claim: true })
-      }
-    }
     const claimRemoteViewportOnFirstConnect = (callbacks: AttachCallbacks): AttachCallbacks => {
-      let claimed = false
       return {
         ...callbacks,
         onConnect: (): void => {
           callbacks.onConnect?.()
-          if (claimed || disposed) {
+          if (disposed) {
             return
           }
-          claimed = true
           const attachedPtyId = transport.getPtyId()
-          if (!isRemoteRuntimePtyId(attachedPtyId)) {
+          if (typeof attachedPtyId !== 'string' || !isRemoteRuntimePtyId(attachedPtyId)) {
             return
           }
-          // Why: the runtime completes the subscription before it sends this PTY's first driver
-          // frame, and an unknown local driver reads as idle — claiming now would take the grid from
-          // a phone already driving it. Wait for that frame, then re-test every ownership term.
-          stopWaitingForInitialDriverState?.()
-          stopWaitingForInitialDriverState = onDriverChange((event) => {
-            if (event.ptyId !== attachedPtyId) {
-              return
-            }
-            stopWaitingForInitialDriverState?.()
-            stopWaitingForInitialDriverState = null
-            claimAttachedRemoteViewport(attachedPtyId)
-          })
+          // Why: settlement, not connect occurrence, is the one-shot boundary. Recovery can replace
+          // the PTY before its first driver frame, so each connect retargets the one current waiter.
+          afterInitialDriverState(attachedPtyId, () => claimCurrentRemoteViewport(attachedPtyId))
         }
       }
     }
@@ -9423,6 +9433,7 @@ export function connectPanePty(
       terminalRecoveryInstance.unregister()
       stopWaitingForInitialDriverState?.()
       stopWaitingForInitialDriverState = null
+      waitingForInitialDriverStatePtyId = null
       unregisterUndeliverableWriteHandler()
       unsubscribeRemoteDesktopActivationClaim()
       cancelHiddenOutputSnapshotScrollRestore()

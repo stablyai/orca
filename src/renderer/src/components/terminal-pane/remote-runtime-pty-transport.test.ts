@@ -5161,6 +5161,35 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects claims and acknowledged input after a fatal transport close', async () => {
+    const unsubscribe = vi.fn()
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: NonNullable<typeof subscriptionCallbacks>) => {
+        subscriptionCallbacks = callbacks
+        queueMicrotask(emitMultiplexReady)
+        return { unsubscribe, sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    subscriptionSendBinary.mockClear()
+
+    subscriptionCallbacks?.onError?.({
+      code: 'unauthorized',
+      message: 'Remote Orca runtime rejected the pairing token.'
+    })
+
+    expect(transport.claimViewport?.(101, 33)).toBe(false)
+    await expect(transport.sendInputAccepted?.('x')).resolves.toBe(false)
+    expect(subscriptionSendBinary).not.toHaveBeenCalled()
+    expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
+  })
+
   it('recovers repeated partitions without changing PTY identity or accepting detached input', async () => {
     const callbacksByEpoch: NonNullable<typeof subscriptionCallbacks>[] = []
     const unsubscribeByEpoch: ReturnType<typeof vi.fn>[] = []

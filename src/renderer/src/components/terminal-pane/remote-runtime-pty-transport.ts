@@ -1357,14 +1357,14 @@ export function createRemoteRuntimePtyTransport(
     publishedHandleWaitEpoch = null
   }
 
-  function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
+  function isSameRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
     return (
-      !destroyed &&
-      connected &&
-      handle === targetHandle &&
-      remotePtyId === targetPtyId &&
-      targetPtyId !== null
+      !destroyed && handle === targetHandle && remotePtyId === targetPtyId && targetPtyId !== null
     )
+  }
+
+  function isCurrentRemoteTerminal(targetHandle: string, targetPtyId: string | null): boolean {
+    return connected && isSameRemoteTerminal(targetHandle, targetPtyId)
   }
 
   function retireRemoteTerminalId(): void {
@@ -1509,7 +1509,7 @@ export function createRemoteRuntimePtyTransport(
     targetHandle: string,
     targetPtyId: string | null
   ): boolean {
-    if (!isCurrentRemoteTerminal(targetHandle, targetPtyId)) {
+    if (!isSameRemoteTerminal(targetHandle, targetPtyId)) {
       return true
     }
     if (multiplexedStreamHandle !== targetHandle) {
@@ -1891,7 +1891,9 @@ export function createRemoteRuntimePtyTransport(
               scheduleResubscribeAfterTransportClose()
             }
           } else {
+            connected = false
             connecting = false
+            clearPendingViewportClaim()
             recovery.cancel()
             setAttachmentUnavailable()
             emitRecoveryState()

@@ -5257,6 +5257,52 @@ describe('connectPanePty', () => {
     }
   })
 
+  it('defers the post-spawn claim until the initial driver state shows mobile owns the PTY', async () => {
+    const frameCallbacks: FrameRequestCallback[] = []
+    globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+      frameCallbacks.push(callback)
+      return frameCallbacks.length
+    })
+    const runNextFrame = (): void => {
+      const callback = frameCallbacks.shift()
+      if (!callback) {
+        throw new Error('expected a queued animation frame')
+      }
+      callback(0)
+    }
+
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    const ptyId = 'remote:env-1@@pty-post-spawn-driver-late-mobile'
+    const transport = createMockTransport(ptyId)
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-1': [] }
+    }
+    const pane = createPane(1)
+    pane.terminal.cols = 80
+    pane.terminal.rows = 24
+
+    connectPanePty(pane as never, createManager(1) as never, createDeps() as never)
+    runNextFrame()
+    await flushAsyncTicks()
+
+    pane.terminal.cols = 96
+    pane.terminal.rows = 30
+    runNextFrame()
+    expect(transport.resize).not.toHaveBeenCalledWith(96, 30, { claim: true })
+
+    try {
+      setDriverForPty(ptyId, { kind: 'mobile', clientId: 'phone-1' })
+      await flushAsyncTicks(4)
+      expect(transport.resize).not.toHaveBeenCalledWith(96, 30, { claim: true })
+    } finally {
+      setDriverForPty(ptyId, { kind: 'idle' })
+    }
+  })
+
   it('claims the viewport when the post-spawn reconcile settles a paired-runtime grid', async () => {
     // Why: a paired-runtime client advertises explicit viewport claims, so a plain Resize frame only
     // registers passive viewer geometry. Without a claim the PTY stays at the runtime's spawn grid
@@ -5275,6 +5321,7 @@ describe('connectPanePty', () => {
     }
 
     const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
     const ptyId = 'remote:env-1@@pty-post-spawn-claim'
     const transport = createMockTransport(ptyId)
     transportFactoryQueue.push(transport)
@@ -5294,8 +5341,17 @@ describe('connectPanePty', () => {
     pane.terminal.cols = 96
     pane.terminal.rows = 30
     runNextFrame()
+    expect(transport.resize).not.toHaveBeenCalledWith(96, 30, { claim: true })
 
-    expect(transport.resize).toHaveBeenCalledWith(96, 30, { claim: true })
+    setDriverForPty(ptyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+    setDriverForPty(ptyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    const claims = (
+      transport.resize.mock.calls as [number, number, { claim?: boolean } | undefined][]
+    ).filter((call) => call[2]?.claim === true)
+    expect(claims).toEqual([[96, 30, { claim: true }]])
   })
 
   it('waits for setup-split geometry before spawning the initial startup command', async () => {
@@ -9422,6 +9478,47 @@ describe('connectPanePty', () => {
     setDriverForPty(remotePtyId, { kind: 'idle' })
     await flushAsyncTicks(4)
     setDriverForPty(remotePtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+
+    const claims = (
+      transport.resize.mock.calls as [number, number, { claim?: boolean } | undefined][]
+    ).filter((call) => call[2]?.claim === true)
+    expect(claims).toEqual([[120, 40, { claim: true }]])
+  })
+
+  it('retargets the unsettled attach claim when recovery replaces the PTY', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { setDriverForPty } = await import('@/lib/pane-manager/mobile-driver-state')
+    enableActiveRuntimeEnvironment('env-1')
+    const firstPtyId = 'remote:env-1@@tab-pty-driver-first'
+    const successorPtyId = 'remote:env-1@@tab-pty-driver-successor'
+    const transport = createMockTransport(firstPtyId)
+    let attachCallbacks: ConnectCallbacks | undefined
+    transport.attach.mockImplementation(
+      ({ existingPtyId, callbacks }: { existingPtyId: string; callbacks?: ConnectCallbacks }) => {
+        attachCallbacks = callbacks
+        transport.getPtyId.mockReturnValue(existingPtyId)
+        callbacks?.onConnect?.()
+      }
+    )
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: firstPtyId }] }
+    } as StoreState
+    const deps = createDeps({
+      restoredLeafId: LEAF_1,
+      restoredPtyIdByLeafId: { [LEAF_1]: firstPtyId }
+    })
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks(20)
+
+    transport.getPtyId.mockReturnValue(successorPtyId)
+    attachCallbacks?.onConnect?.()
+    setDriverForPty(successorPtyId, { kind: 'idle' })
+    await flushAsyncTicks(4)
+    setDriverForPty(firstPtyId, { kind: 'idle' })
     await flushAsyncTicks(4)
 
     const claims = (
