@@ -37,7 +37,7 @@ import { useAppStore } from '@/store'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { detectLanguage } from '@/lib/language-detect'
 import { getFileTypeIcon } from '@/lib/file-type-icons'
-import { openFileInBrowserTab } from '@/lib/file-preview'
+import { canShowWorkspaceFileBrowserAction, openFileInBrowserTab } from '@/lib/file-preview'
 import {
   encodeWorkspaceFilePaths,
   WORKSPACE_FILE_PATH_MIME,
@@ -482,6 +482,9 @@ export function FileExplorerRow({
 }: FileExplorerRowProps): React.JSX.Element {
   const openMarkdownPreview = useAppStore((s) => s.openMarkdownPreview)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const canOpenInOrcaBrowser = useAppStore((s) =>
+    activeWorktreeId ? canShowWorkspaceFileBrowserAction(s, activeWorktreeId) : false
+  )
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
@@ -764,7 +767,7 @@ export function FileExplorerRow({
             {translate('auto.components.right.sidebar.FileExplorerRow.1d8e182c32', 'View File')}
           </ContextMenuItem>
         )}
-        {!node.isDirectory && activeWorktreeId && (
+        {!node.isDirectory && activeWorktreeId && canOpenInOrcaBrowser && (
           <ContextMenuItem onSelect={handleOpenInOrcaBrowser}>
             <Globe />
             {translate(

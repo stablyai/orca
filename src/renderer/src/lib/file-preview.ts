@@ -1,16 +1,28 @@
 import { toast } from 'sonner'
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId, getConnectionIdFromState } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
 
 export type PreviewableLanguage = 'html'
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
 const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
+
+export function canShowWorkspaceFileBrowserAction(state: AppState, worktreeId: string): boolean {
+  const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+  if (availability.state !== 'enabled') {
+    return false
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  return environmentId
+    ? availability.provider === 'paired-runtime'
+    : getConnectionIdFromState(state, worktreeId) === null
+}
 
 function reportRemoteFileBrowserOpen(result: Promise<boolean>, onFailure?: () => void): void {
   void result

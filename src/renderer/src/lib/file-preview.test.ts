@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
+  canShowWorkspaceFileBrowserAction,
   getWorkspaceFileBrowserOpenTarget,
   openFileInBrowserTab,
   openFilePreviewToSide
 } from './file-preview'
+
+function browserActionState(connectionId: string | null = null): never {
+  return {
+    repos: [{ id: 'repo-1', connectionId }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] }
+  } as never
+}
 
 const mocks = vi.hoisted(() => ({
   browserAvailability: {
@@ -193,6 +201,22 @@ describe('openFileInBrowserTab', () => {
       message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE
     })
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
+  })
+})
+
+describe('canShowWorkspaceFileBrowserAction', () => {
+  it('hides incapable paired providers and permits capable runtime providers', () => {
+    mocks.environmentId = 'runtime-1'
+    mocks.browserAvailability = { state: 'hidden', reason: 'streaming unavailable' }
+    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(false)
+
+    mocks.browserAvailability = { state: 'enabled', provider: 'paired-runtime' }
+    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(true)
+  })
+
+  it('permits local files but hides SSH paths from the local browser provider', () => {
+    expect(canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1')).toBe(true)
+    expect(canShowWorkspaceFileBrowserAction(browserActionState('ssh-1'), 'wt-1')).toBe(false)
   })
 })
 
