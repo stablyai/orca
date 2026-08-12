@@ -350,15 +350,14 @@ export function SpreadsheetGrid({
                         ? (rows[valueRowIndex]?.[valueColumnIndex] ?? '')
                         : ''
                   const cellStyle = cellStyles?.[valueRowIndex]?.[valueColumnIndex]
-                  // Why: a left-aligned label runs across empty neighbours the way
-                  // a spreadsheet draws it, instead of being clipped to its column.
+                  // Why: a label runs across empty neighbours the way a spreadsheet
+                  // draws it, instead of being clipped to its column — to the right
+                  // when it is left-aligned, to the left when it is right-aligned.
                   const overflowWidth =
-                    cellStyle?.wrapText === true ||
-                    mergePlacement !== null ||
-                    cell === '' ||
-                    resolveSpreadsheetCellAlignment(cell, cellStyle) !== 'left'
+                    cellStyle?.wrapText === true || mergePlacement !== null || cell === ''
                       ? null
                       : computeSpreadsheetTextOverflowWidth({
+                          alignment: resolveSpreadsheetCellAlignment(cell, cellStyle),
                           row: rows[valueRowIndex] ?? [],
                           columnIndex,
                           columnCount,

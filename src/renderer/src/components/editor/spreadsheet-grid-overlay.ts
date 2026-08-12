@@ -3,6 +3,7 @@ import type { XlsxSheetDrawing } from './xlsx-drawings'
 import type { XlsxMergedRange } from './xlsx-worksheet-layout'
 import type { SpreadsheetMergeIndex } from './spreadsheet-merged-cells'
 import type { SpreadsheetCellStyle } from './SpreadsheetCell'
+import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow'
 
 export type SpreadsheetOverlayRect = {
   left: number
@@ -160,12 +161,46 @@ export function buildSpreadsheetOverlayPlacements({
     if (text === '') {
       continue
     }
+    const style = cellStyles?.[merge.rowIndex]?.[merge.columnIndex]
+    const rect = rectFor(mergeRange(merge))
+    // Why: a merge does not confine its text either. Excel spills a merged label
+    // into the empty columns beside it just as it does an ordinary cell's, which
+    // is how a wide title fits in a merge narrower than itself.
+    const lastColumn = merge.columnIndex + merge.columnSpan - 1
+    const spilled =
+      style?.wrapText === true
+        ? null
+        : computeSpreadsheetTextOverflowWidth({
+            row: rows?.[merge.rowIndex] ?? [],
+            columnIndex: merge.columnIndex,
+            throughColumnIndex: lastColumn,
+            columnCount: columnWidths.length,
+            columnWidths,
+            isMerged: (index) =>
+              index < merge.columnIndex || index > lastColumn
+                ? mergeIndex.find(merge.rowIndex, index) !== undefined
+                : false,
+            alignment: style?.horizontalAlignment ?? 'left'
+          })
     mergedTexts.push({
       rowIndex: merge.rowIndex,
       columnIndex: merge.columnIndex,
       text,
-      style: cellStyles?.[merge.rowIndex]?.[merge.columnIndex],
-      ...rectFor(mergeRange(merge))
+      style,
+      ...rect,
+      ...(spilled === null
+        ? {}
+        : {
+            // Why: a right-aligned label spills leftwards, so the box has to move
+            // as well as grow; a centred one grows evenly on both sides.
+            left:
+              style?.horizontalAlignment === 'right'
+                ? rect.left - (spilled - rect.width)
+                : style?.horizontalAlignment === 'center'
+                  ? rect.left - (spilled - rect.width) / 2
+                  : rect.left,
+            width: spilled
+          })
     })
   }
 

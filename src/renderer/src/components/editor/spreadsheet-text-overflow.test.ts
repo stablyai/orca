@@ -4,14 +4,26 @@ import { computeSpreadsheetTextOverflowWidth } from './spreadsheet-text-overflow
 function width(
   row: string[],
   columnIndex: number,
-  { merged = [] as number[], widths = [80, 80, 80, 80, 80] } = {}
+  {
+    merged = [] as number[],
+    widths = [80, 80, 80, 80, 80],
+    alignment,
+    throughColumnIndex
+  }: {
+    merged?: number[]
+    widths?: number[]
+    alignment?: 'left' | 'right' | 'center'
+    throughColumnIndex?: number
+  } = {}
 ): number | null {
   return computeSpreadsheetTextOverflowWidth({
     row,
     columnIndex,
     columnCount: widths.length,
     columnWidths: widths,
-    isMerged: (index) => merged.includes(index)
+    isMerged: (index) => merged.includes(index),
+    alignment,
+    throughColumnIndex
   })
 }
 
@@ -103,5 +115,104 @@ describe('computeSpreadsheetTextOverflowWidth', () => {
         isMerged: () => false
       })
     ).toBe(1300)
+  })
+})
+
+describe('computeSpreadsheetTextOverflowWidth alignment', () => {
+  it('spills rightwards when no alignment is given', () => {
+    expect(width(['', 'Presupuesto mensual', '', '', ''], 1)).toBe(320)
+  })
+
+  it('spills only rightwards when aligned left', () => {
+    expect(width(['', 'Presupuesto mensual', '', '', ''], 1, { alignment: 'left' })).toBe(320)
+  })
+
+  it('spills only leftwards when aligned right', () => {
+    expect(width(['', '', '', 'SALDO INICIAL', ''], 3, { alignment: 'right' })).toBe(320)
+  })
+
+  it('reports no overflow when aligned right and the previous column is occupied', () => {
+    expect(width(['', '', 'Previsto', 'SALDO INICIAL', ''], 3, { alignment: 'right' })).toBeNull()
+  })
+
+  it('reports no overflow when aligned right on the first column', () => {
+    expect(width(['SALDO INICIAL', '', '', '', ''], 0, { alignment: 'right' })).toBeNull()
+  })
+
+  it('adds both sides when centred', () => {
+    expect(width(['', '', 'Resumen anual', '', ''], 2, { alignment: 'center' })).toBe(400)
+  })
+
+  it('adds only the free side when centred beside an occupied column', () => {
+    expect(width(['Gastos', '', 'Resumen anual', '', ''], 2, { alignment: 'center' })).toBe(320)
+  })
+
+  it('reports no overflow when centred between two occupied columns', () => {
+    expect(
+      width(['', 'Gastos', 'Resumen anual', 'Previsto', ''], 2, { alignment: 'center' })
+    ).toBeNull()
+  })
+
+  it('stops the leftward reach at a column that holds something', () => {
+    expect(width(['', '', 'Previsto', '', 'Total'], 4, { alignment: 'right' })).toBe(160)
+  })
+
+  it('stops the leftward reach at a merged column', () => {
+    expect(width(['', '', '', '', 'Total'], 4, { alignment: 'right', merged: [2] })).toBe(160)
+  })
+
+  it('bounds each direction separately when centred', () => {
+    const emptyRow = Array.from({ length: 40 }, () => '')
+    emptyRow[20] = 'Título'
+
+    expect(
+      computeSpreadsheetTextOverflowWidth({
+        row: emptyRow,
+        columnIndex: 20,
+        columnCount: 40,
+        columnWidths: Array.from({ length: 40 }, () => 100),
+        isMerged: () => false,
+        alignment: 'center'
+      })
+    ).toBe(2500)
+  })
+
+  it('runs over merely filled neighbours in both directions', () => {
+    expect(width(['', '', 'Ganancias', '', ''], 2, { alignment: 'center' })).toBe(400)
+    expect(width(['', '', '', '', 'Ganancias'], 4, { alignment: 'right' })).toBe(400)
+  })
+})
+
+describe('computeSpreadsheetTextOverflowWidth throughColumnIndex', () => {
+  it('behaves as if absent when it equals the starting column', () => {
+    expect(width(['Título', '', '', '', ''], 0, { throughColumnIndex: 0 })).toBe(400)
+  })
+
+  it('counts every column the text already covers as its own width', () => {
+    expect(
+      width(['Título', '', '', '', ''], 0, {
+        throughColumnIndex: 2,
+        widths: [50, 120, 30, 80, 80]
+      })
+    ).toBe(360)
+  })
+
+  it('starts the rightward reach past the last covered column', () => {
+    expect(width(['Título', '', 'oculto', '', ''], 0, { throughColumnIndex: 2 })).toBe(400)
+  })
+
+  it('starts the leftward reach at the starting column when aligned right', () => {
+    expect(width(['', '', 'Total', '', ''], 2, { alignment: 'right', throughColumnIndex: 3 })).toBe(
+      320
+    )
+  })
+
+  it('reports no overflow when the covered range leaves no free neighbour', () => {
+    expect(width(['Título', '', '', '', ''], 0, { throughColumnIndex: 4 })).toBeNull()
+    expect(width(['Título', '', '', 'Previsto', ''], 0, { throughColumnIndex: 2 })).toBeNull()
+  })
+
+  it('falls back to the starting column when it points before it', () => {
+    expect(width(['', '', 'Título', '', ''], 2, { throughColumnIndex: 0 })).toBe(240)
   })
 })
