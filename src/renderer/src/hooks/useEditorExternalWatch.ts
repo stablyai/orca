@@ -85,6 +85,10 @@ type ExternalWatchNotification = {
   relativePath: string
   runtimeEnvironmentId: string | null
   allowLocalWindowsWslAliases?: true
+  indexedOpenFiles?: {
+    source: OpenFile[]
+    matches: OpenFile[]
+  }
 }
 
 function localWslAliasOption(
@@ -602,6 +606,7 @@ export function createExternalWatchEventHandler(
 
     for (const change of batchPaths.changes) {
       const relativePath = change.relativePath
+      const matching = batchPaths.matchingOpenFiles(change)
       const notification = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
@@ -609,8 +614,10 @@ export function createExternalWatchEventHandler(
         runtimeEnvironmentId: target.runtimeEnvironmentId,
         ...localWslAliasOption(target)
       }
+      Object.defineProperty(notification, 'indexedOpenFiles', {
+        value: { source: openFilesAtStart, matches: matching }
+      })
       const absolutePath = change.absolutePath
-      const matching = batchPaths.matchingOpenFiles(change)
       if (matching.length === 0) {
         // Why: combined-diff tab has no in-memory content to clobber and guards its own reload, so notify it directly without self-write suppression.
         if (batchPaths.hasCombinedDiffConsumer) {
