@@ -15,25 +15,31 @@ import { createZombieRuntimeRelay } from './helpers/zombie-runtime-relay'
 
 function createGitRepo(): string {
   const repoPath = mkdtempSync(path.join(os.tmpdir(), 'orca-pr10235-repo-'))
-  execFileSync('git', ['init'], { cwd: repoPath, stdio: 'ignore' })
-  writeFileSync(path.join(repoPath, 'README.md'), '# PR 10235 relay oracle\n')
-  execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'ignore' })
-  execFileSync(
-    'git',
-    [
-      '-c',
-      'user.name=Orca E2E',
-      '-c',
-      'user.email=orca-e2e@example.invalid',
-      // Why: ambient commit.gpgsign=true would fail the seed commit opaquely.
-      '-c',
-      'commit.gpgsign=false',
-      'commit',
-      '-m',
-      'seed'
-    ],
-    { cwd: repoPath, stdio: 'ignore' }
-  )
+  // Why: a git failure after mkdtempSync must not orphan the temp directory.
+  try {
+    execFileSync('git', ['init'], { cwd: repoPath, stdio: 'ignore' })
+    writeFileSync(path.join(repoPath, 'README.md'), '# PR 10235 relay oracle\n')
+    execFileSync('git', ['add', 'README.md'], { cwd: repoPath, stdio: 'ignore' })
+    execFileSync(
+      'git',
+      [
+        '-c',
+        'user.name=Orca E2E',
+        '-c',
+        'user.email=orca-e2e@example.invalid',
+        // Why: ambient commit.gpgsign=true would fail the seed commit opaquely.
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '-m',
+        'seed'
+      ],
+      { cwd: repoPath, stdio: 'ignore' }
+    )
+  } catch (error) {
+    rmSync(repoPath, { recursive: true, force: true })
+    throw error
+  }
   return repoPath
 }
 
@@ -103,9 +109,12 @@ async function runStaleSubscriptionOracle(args: {
     await relay.close()
     throw error
   })
-  const addedRepoPath = createGitRepo()
+  // Why: created inside try so a git failure still disposes the client/relay.
+  let repoPathToCleanUp: string | null = null
 
   try {
+    const addedRepoPath = createGitRepo()
+    repoPathToCleanUp = addedRepoPath
     await client.page.evaluate(async (environmentId) => {
       const store = window.__store
       if (!store) {
@@ -197,9 +206,13 @@ async function runStaleSubscriptionOracle(args: {
       })}`
     )
   } finally {
-    await client.dispose()
-    await relay.close()
-    rmSync(addedRepoPath, { recursive: true, force: true })
+    // Why: a rejected teardown step must not skip the others or replace the
+    // assertion error that actually failed the test.
+    await client.dispose().catch(() => {})
+    await relay.close().catch(() => {})
+    if (repoPathToCleanUp) {
+      rmSync(repoPathToCleanUp, { recursive: true, force: true })
+    }
   }
 }
 
@@ -260,7 +273,7 @@ test('self-heals a headless serve worktree subscription behind a zombie relay', 
       topology: 'headless'
     })
   } finally {
-    await host.dispose()
+    await host.dispose().catch(() => {})
     rmSync(initialRepoPath, { recursive: true, force: true })
   }
 })
