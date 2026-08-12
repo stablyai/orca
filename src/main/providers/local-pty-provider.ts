@@ -13,6 +13,7 @@ import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
   updateHistFileForFallback,
@@ -1048,10 +1049,14 @@ export class LocalPtyProvider implements IPtyProvider {
     ptyDisposables.set(id, disposables)
 
     if (args.command && !startupCommandDeliveredInShellArgs) {
-      // Why: only POSIX bash/zsh have bracketed-paste armed so multiline startup prompts paste literally; others use raw submit.
+      // Why: shells with bracketed paste armed take a multiline startup prompt literally; others use raw submit.
       const spawnedShellName = getSpawnedShellName(shellPath).toLowerCase()
       const bracketedPasteSafe =
-        process.platform !== 'win32' && (spawnedShellName === 'bash' || spawnedShellName === 'zsh')
+        process.platform !== 'win32' &&
+        isBracketedPasteSafeShell({
+          shellName: spawnedShellName,
+          waitsForShellReady: shellReadyLaunch?.supportsReadyMarker === true
+        })
       writeStartupCommandWhenShellReady(
         shellReadyPromise,
         proc,

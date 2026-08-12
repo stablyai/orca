@@ -117,7 +117,7 @@ function settingsForWorktreeOwner(state: AppState, worktreeId: string): AppState
 }
 
 // Why: IPC writes aren't ordered, so serialize per worktree to stop an older snapshot from overwriting a newer one on disk.
-const persistQueueByWorktree: Map<string, Promise<void>> = new Map()
+const persistQueueByWorktree = new Map<string, Promise<void>>()
 
 // Why: chain each write onto the prior promise so writes land in call order; both then handlers keep the chain alive past a failure.
 // Why: queued work reads the latest list at dequeue time, and the returned promise settles for THIS write so callers can roll back.

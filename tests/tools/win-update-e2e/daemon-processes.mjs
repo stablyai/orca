@@ -148,7 +148,7 @@ function normalizeArray(raw) {
 
 function parseUserDataArg(argv) {
   const idx = argv.indexOf('--user-data')
-  return idx >= 0 && argv[idx + 1] ? argv[idx + 1] : defaultUserDataDir()
+  return idx !== -1 && argv[idx + 1] ? argv[idx + 1] : defaultUserDataDir()
 }
 
 function runStandalone(argv) {
@@ -161,7 +161,7 @@ function runStandalone(argv) {
   console.log(JSON.stringify(pidFiles, null, 2))
 
   const scopeIdx = argv.indexOf('--scope')
-  const scope = scopeIdx >= 0 && argv[scopeIdx + 1] ? argv[scopeIdx + 1] : ''
+  const scope = scopeIdx !== -1 && argv[scopeIdx + 1] ? argv[scopeIdx + 1] : ''
   const processes = findDaemonProcesses(scope)
   console.log(
     `[daemon-processes] live daemon processes${scope ? ` scoped to "${scope}"` : ''} (${processes.length}):`

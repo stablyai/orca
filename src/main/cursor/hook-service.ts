@@ -216,7 +216,7 @@ export class CursorHookService {
     return this.getStatus()
   }
 
-  // Installs managed Cursor hooks on an SSH remote (POSIX-only). See docs/design/agent-status-over-ssh.md §8.
+  // Installs managed Cursor hooks on an SSH remote (POSIX-only); the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`

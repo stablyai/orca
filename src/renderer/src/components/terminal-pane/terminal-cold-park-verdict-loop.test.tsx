@@ -154,6 +154,7 @@ function OverlayHost(): React.JSX.Element | null {
     terminalTabs,
     assignments: EMPTY_ASSIGNMENTS,
     isWorktreeActive: false,
+    activeTerminalTabId: null,
     coldParkTerminalPanes: false,
     shouldMeasureHiddenWorktree: false,
     activityTerminalPortals: EMPTY_PORTALS,

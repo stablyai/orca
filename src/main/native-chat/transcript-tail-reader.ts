@@ -202,7 +202,7 @@ async function findLastCompleteLineEnd(
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, start)
     signal?.throwIfAborted()
     const newline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a)
-    if (newline >= 0) {
+    if (newline !== -1) {
       return start + newline + 1
     }
     cursor = start

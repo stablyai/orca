@@ -321,8 +321,8 @@ function shouldIncludeOpenTabInRecentSection({
   worktree: Worktree
   row: RecentWorkspaceTabRow
   paneSources: TabPaneInputSources
-  unreadTerminalTabs: Record<string, true | boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, true | boolean | undefined>
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
   now: number
 }): boolean {
   if (worktree.isArchived) {

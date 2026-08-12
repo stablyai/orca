@@ -66,7 +66,7 @@ export type {
 
 export class PaneManager {
   private root: HTMLElement
-  private panes: Map<number, ManagedPaneInternal> = new Map()
+  private panes = new Map<number, ManagedPaneInternal>()
   private activePaneId: number | null = null
   private nextPaneId = FIRST_PANE_ID
   private options: PaneManagerOptions

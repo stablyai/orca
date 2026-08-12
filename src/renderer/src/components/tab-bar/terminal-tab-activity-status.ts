@@ -223,8 +223,8 @@ export function terminalTabHasUnreadActivity({
   unreadAgentCompletionPanes
 }: {
   terminalTabId: string
-  unreadTerminalTabs: Record<string, true | boolean | undefined>
-  unreadAgentCompletionPanes: Record<string, true | boolean | undefined>
+  unreadTerminalTabs: Record<string, boolean | undefined>
+  unreadAgentCompletionPanes: Record<string, boolean | undefined>
 }): boolean {
   return (
     unreadTerminalTabs[terminalTabId] === true ||
@@ -234,7 +234,7 @@ export function terminalTabHasUnreadActivity({
 
 /** Match pane-level unread completion markers to their owning terminal tab. */
 export function hasUnreadAgentCompletionForTerminalTab(
-  unreadAgentCompletionPanes: Record<string, true | boolean | undefined> | undefined,
+  unreadAgentCompletionPanes: Record<string, boolean | undefined> | undefined,
   tabId: string
 ): boolean {
   for (const [paneKey, unread] of Object.entries(unreadAgentCompletionPanes ?? {})) {

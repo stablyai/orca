@@ -66,7 +66,7 @@ function fullRemoteFetchOptions(cwd: string): { cwd: string; timeout: number } {
   return { cwd, timeout: 60_000 }
 }
 
-function mockFetchResults(results: (Promise<unknown> | unknown)[]): void {
+function mockFetchResults(results: unknown[]): void {
   let fetchIndex = 0
   gitExecFileAsyncMock.mockImplementation((argv: string[]) => {
     if (argv[0] === 'rev-parse') {

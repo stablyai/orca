@@ -41,9 +41,7 @@ function areValuesEqual(a: unknown, b: unknown): boolean {
     return false
   }
   return keys.every(
-    (key) =>
-      Object.prototype.hasOwnProperty.call(bRecord, key) &&
-      areValuesEqual(aRecord[key], bRecord[key])
+    (key) => Object.hasOwn(bRecord, key) && areValuesEqual(aRecord[key], bRecord[key])
   )
 }
 
@@ -56,7 +54,7 @@ function areReposEqual(a: Repo, b: Repo): boolean {
     return false
   }
   for (const key of keys) {
-    if (!Object.prototype.hasOwnProperty.call(b, key)) {
+    if (!Object.hasOwn(b, key)) {
       return false
     }
     if (!areValuesEqual(a[key], b[key])) {

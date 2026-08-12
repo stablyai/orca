@@ -289,7 +289,7 @@ function reportLateWorkspaceCleanupResult(
 
 function removeArrayEntry<T>(entries: T[], entry: T): void {
   const index = entries.indexOf(entry)
-  if (index >= 0) {
+  if (index !== -1) {
     entries.splice(index, 1)
   }
 }

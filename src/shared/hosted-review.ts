@@ -94,6 +94,14 @@ export type CreateHostedReviewArgs = CreateHostedReviewInput & {
   connectionId?: string | null
 }
 
+export type CreateStackedHostedReviewInput = CreateHostedReviewInput
+
+export type CreateStackedHostedReviewArgs = CreateStackedHostedReviewInput & {
+  repoPath: string
+  repoId?: string
+  connectionId?: string | null
+}
+
 export type CreateHostedReviewErrorCode =
   | 'auth_required'
   | 'unsupported_provider'
@@ -111,6 +119,21 @@ export type CreateHostedReviewResult =
       code: CreateHostedReviewErrorCode
       error: string
       existingReview?: HostedReviewSummary
+    }
+
+export type CreateStackedHostedReviewResult =
+  | {
+      ok: true
+      number: number
+      url: string
+      stackNumber: number
+      parentReview: HostedReviewSummary
+    }
+  | {
+      ok: false
+      code: CreateHostedReviewErrorCode
+      error: string
+      createdReview?: HostedReviewSummary
     }
 
 export type HostedReviewCreationBlockedReason =
@@ -158,6 +181,8 @@ export type HostedReviewCreationEligibility = {
   head?: string | null
   title?: string | null
   body?: string | null
+  /** Present only when the executing host supports GitHub stack creation. */
+  stackedCreationSupported?: boolean
 }
 
 export type HostedReviewCreationEligibilityArgs = {

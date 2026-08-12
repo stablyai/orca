@@ -1,0 +1,162 @@
+import { translate } from '@/i18n/i18n'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { SEARCH_ENGINE_LABELS, type SearchEngine } from '../../../shared/browser-url'
+import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+
+export type WorkspaceBrowserTabIntent = { kind: 'url' } | { kind: 'search'; engine: SearchEngine }
+
+export type OpenWorkspaceBrowserTabRequest = {
+  workspaceId: string
+  targetGroupId?: string
+  url: string
+  intent: WorkspaceBrowserTabIntent
+}
+
+// Why: concurrent URL tabs are indistinguishable under a shared "Open URL"
+// label until the page title loads; the query string stays out so a typed URL
+// does not park credentials or tokens in persisted tab state.
+function urlTabTitle(url: string): string | null {
+  try {
+    // host, not hostname: localhost:3000 and localhost:5173 are different tabs.
+    const parsed = new URL(url)
+    return `${parsed.host}${parsed.pathname === '/' ? '' : parsed.pathname}`
+  } catch {
+    return null
+  }
+}
+
+function intentPresentation(
+  intent: WorkspaceBrowserTabIntent,
+  url: string
+): {
+  error: string
+  title: string
+} {
+  if (intent.kind === 'url') {
+    return {
+      error: translate('auto.lib.workspace.browser.tab.open.urlFailed', 'Unable to open URL.'),
+      title:
+        urlTabTitle(url) ??
+        translate('auto.components.tab.bar.TabBarCreateEntry.7cdf8ee0c8', 'Open URL')
+    }
+  }
+  const engine = SEARCH_ENGINE_LABELS[intent.engine]
+  return {
+    error: translate(
+      'auto.lib.workspace.browser.tab.open.searchFailed',
+      'Unable to search with {{value0}}.',
+      { value0: engine }
+    ),
+    title: translate(
+      'auto.components.tab.bar.TabBarCreateEntry.searchProvider',
+      'Search {{value0}}',
+      { value0: engine }
+    )
+  }
+}
+
+// Why: the UI string stays friendly and query-free, but the diagnosable reason
+// rides along as `cause` so a failed open is not indistinguishable in logs.
+function openFailure(message: string, reason: string, cause?: unknown): Error {
+  // Why: callers only surface `message`, so log the reason here or a failed open
+  // leaves no trace at all. The reason alone — never `cause` — keeps the typed
+  // URL and search query out of the console.
+  console.warn(`[workspace-browser-tab-open] ${reason}`)
+  return new Error(message, {
+    cause: new Error(reason, cause === undefined ? undefined : { cause })
+  })
+}
+
+function validateTarget(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && !!parsed.hostname
+  } catch {
+    return false
+  }
+}
+
+function createClientBrowserTab(
+  state: AppState,
+  request: OpenWorkspaceBrowserTabRequest,
+  hostId: ExecutionHostId,
+  presentation: { error: string; title: string }
+): void {
+  try {
+    state.createBrowserTab(request.workspaceId, request.url, {
+      activate: true,
+      browserRuntimeEnvironmentId: null,
+      focusAddressBar: false,
+      sessionProfileId:
+        state.defaultBrowserSessionProfileIdByHostId[hostId] ??
+        state.defaultBrowserSessionProfileId,
+      targetGroupId: request.targetGroupId,
+      title: presentation.title
+    })
+  } catch (error) {
+    throw openFailure(presentation.error, 'client tab creation rejected', error)
+  }
+}
+
+export async function openWorkspaceBrowserTab(
+  request: OpenWorkspaceBrowserTabRequest
+): Promise<void> {
+  const presentation = intentPresentation(request.intent, request.url)
+  if (!validateTarget(request.url)) {
+    throw openFailure(presentation.error, 'target is not an http(s) URL')
+  }
+  const state = useAppStore.getState()
+  const route = resolveWorktreeOperationRoute(state, request.workspaceId)
+  if (!route) {
+    throw openFailure(presentation.error, 'no active worktree route')
+  }
+  const environmentId = route.runtimeEnvironmentId?.trim() || null
+  const host = parseExecutionHostId(route.executionHostId)
+  if (!environmentId) {
+    if (!host || host.kind === 'runtime') {
+      throw openFailure(presentation.error, `unresolved client host: ${route.executionHostId}`)
+    }
+    createClientBrowserTab(state, request, host.id, presentation)
+    return
+  }
+  if (
+    route.executionHostId &&
+    (!host || (host.kind === 'runtime' && host.environmentId !== environmentId))
+  ) {
+    throw openFailure(
+      presentation.error,
+      `host ${route.executionHostId} does not own runtime ${environmentId}`
+    )
+  }
+  let created = false
+  try {
+    created = await createWebRuntimeSessionBrowserTab({
+      worktreeId: request.workspaceId,
+      environmentId,
+      url: request.url,
+      targetGroupId: request.targetGroupId,
+      // Why: the tab is opened from this workspace's tab bar, so surface that
+      // workspace — otherwise a background worktree looks like nothing happened.
+      selectWorktree: true,
+      stagedTitle: presentation.title,
+      stagedFocusAddressBar: false,
+      failureLogMode: 'operation-only'
+    })
+  } catch (error) {
+    throw openFailure(presentation.error, 'runtime browser tab creation failed', error)
+  }
+  if (!created) {
+    // Why: a soft runtime failure still opens client-side, so keep the
+    // workspace's own session profile rather than collapsing every remote
+    // host onto the local cookie jar.
+    const fallbackHostId = host && host.kind !== 'runtime' ? host.id : LOCAL_EXECUTION_HOST_ID
+    createClientBrowserTab(state, request, fallbackHostId, presentation)
+  }
+}

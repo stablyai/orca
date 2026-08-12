@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util'
 import type { WorkspaceSessionState } from '../../shared/types'
 
 const MISSING = Symbol('missing')
-type RollbackValue = unknown | typeof MISSING
+type RollbackValue = unknown
 
 function isRecord(value: RollbackValue): value is Record<string, unknown> {
   return (

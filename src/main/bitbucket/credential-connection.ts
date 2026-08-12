@@ -5,7 +5,7 @@ import {
   hasAuth,
   type BitbucketAuthConfig
 } from './bitbucket-auth-config'
-import { accountNameFromUser, fetchBitbucketUser } from './user-request'
+import { accountNameFromUser, fetchBitbucketUserResult } from './user-request'
 import {
   clearStoredBitbucketCredential,
   getStoredBitbucketMetadata,
@@ -51,14 +51,19 @@ export async function connectBitbucket(
           : 'Enter both an email and an API token.'
     }
   }
-  const user = await fetchBitbucketUser(config, VERIFY_TIMEOUT_MS)
-  if (!user) {
+  const result = await fetchBitbucketUserResult(config, VERIFY_TIMEOUT_MS)
+  if (!result.ok) {
     return {
       ok: false,
-      error: 'Could not authenticate with Bitbucket. Check the credentials and try again.'
+      // Why (STA-3944): telling someone their token is invalid when the network
+      // is down sends them to regenerate a credential that was fine.
+      error:
+        result.reason === 'rejected'
+          ? 'Bitbucket rejected these credentials. Check the email and token, then try again.'
+          : 'Could not reach Bitbucket. Check your connection or the API base URL, then try again.'
     }
   }
-  const account = accountNameFromUser(user)
+  const account = accountNameFromUser(result.user)
   saveBitbucketCredential({
     authMode: input.authMode,
     email: config.email,

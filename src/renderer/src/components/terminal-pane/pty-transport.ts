@@ -66,6 +66,7 @@ export type {
   LocalPtySessionMetadata,
   PtyBufferSnapshot,
   PtyConnectResult,
+  PtyReplayDataMeta,
   PtyTransport
 } from './pty-transport-types'
 export { extractLastOscTitle } from '../../../../shared/agent-detection'
@@ -104,6 +105,9 @@ type ProcessPtyOutputOptions = {
   clearBeforeReplay?: boolean
   // Why: a mid-escape tail; the replay consumer writes it LAST (after the post-replay reset) so the next live chunk completes it, not renders it literally (#7329).
   pendingEscapeTailAnsi?: string
+  /** Kitty flags the snapshot owner proved at `snapshotSeq`. */
+  kittyKeyboardFlags?: number
+  snapshotSeq?: number
 }
 
 type PendingPtySideEffect = {
@@ -496,7 +500,13 @@ export function createPtyOutputProcessor({
         ...(options.clearBeforeReplay === false ? { clearBeforeReplay: false } : {}),
         ...(options.pendingEscapeTailAnsi
           ? { pendingEscapeTailAnsi: options.pendingEscapeTailAnsi }
-          : {})
+          : {}),
+        // Why forwarded together: the flags are only valid for the boundary the
+        // image describes, so they never travel without their sequence.
+        ...(options.kittyKeyboardFlags !== undefined
+          ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
+          : {}),
+        ...(options.snapshotSeq !== undefined ? { snapshotSeq: options.snapshotSeq } : {})
       }
       // Why: preserve the bare-data call shape when there's no replay metadata, so eager-buffer replay (which passes none) is unchanged.
       if (Object.keys(replayMeta).length > 0) {

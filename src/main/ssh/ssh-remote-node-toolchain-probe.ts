@@ -50,7 +50,7 @@ export function nodeToolchainVersionsMeetRequirements(versionOutput: string): bo
 function markedVersionMajor(output: string, marker: string): number | null {
   const lines = output.split(/\r?\n/)
   const markerIndex = lines.indexOf(marker)
-  if (markerIndex < 0) {
+  if (markerIndex === -1) {
     return null
   }
   for (const line of lines.slice(markerIndex + 1)) {

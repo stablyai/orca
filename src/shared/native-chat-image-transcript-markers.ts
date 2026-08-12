@@ -21,7 +21,7 @@ function stripImagePromptMarkersFromFirstText(
   blocks: readonly NativeChatBlock[]
 ): NativeChatBlock[] {
   const textIndex = blocks.findIndex(isTextBlock)
-  if (textIndex < 0) {
+  if (textIndex === -1) {
     return blocks as NativeChatBlock[]
   }
   const block = blocks[textIndex]

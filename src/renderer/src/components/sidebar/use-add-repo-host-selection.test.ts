@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
     runtimeEnvironments: [] as { id: string; name: string; source?: 'manual' | 'ephemeral-vm' }[]
   },
   sshConnect: vi.fn(),
-  sshGetState: vi.fn()
+  sshGetState: vi.fn(),
+  isWebClient: false
 }))
 
 vi.mock('react', async (importOriginal) => {
@@ -64,6 +65,10 @@ vi.mock('./use-sidebar-host-scope-options', () => ({
   useSidebarHostScopeOptions: () => ({ hostOptions: mocks.hostOptions })
 }))
 
+vi.mock('@/lib/web-client-location', () => ({
+  isWebClientLocation: () => mocks.isWebClient
+}))
+
 describe('useAddRepoHostSelection', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -103,6 +108,7 @@ describe('useAddRepoHostSelection', () => {
     mocks.storeState.runtimeEnvironments = []
     mocks.sshConnect.mockReset()
     mocks.sshGetState.mockReset()
+    mocks.isWebClient = false
     vi.stubGlobal('window', {
       api: {
         ssh: {
@@ -135,6 +141,35 @@ describe('useAddRepoHostSelection', () => {
     expect(mocks.storeState.setActiveRuntimeEnvironmentPreference).not.toHaveBeenCalled()
     expect(mocks.stateSetters[0]).toHaveBeenCalledWith('runtime:env-1')
     expect(setStep).toHaveBeenCalledWith('add')
+  })
+
+  it('uses the paired runtime as the only local filesystem authority in web clients', async () => {
+    mocks.isWebClient = true
+    mocks.stateValues = ['local', false]
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(result.hostOptions.map((host) => host.id)).toEqual(['ssh:ssh-1', 'runtime:env-1'])
+    expect(result.selectedHostId).toBe('runtime:env-1')
+    expect(result.selectedParsedHost).toMatchObject({
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+  })
+
+  it('has no local fallback while a paired web runtime is loading', async () => {
+    mocks.isWebClient = true
+    mocks.stateValues = ['local', false]
+    mocks.hostOptions = [mocks.hostOptions[0]]
+    const { useAddRepoHostSelection } = await import('./use-add-repo-host-selection')
+
+    const result = useAddRepoHostSelection({ isOpen: true, setStep: vi.fn() })
+
+    expect(result.hostOptions).toEqual([])
+    expect(result.selectedHostId).toBeNull()
+    expect(result.selectedParsedHost).toBeNull()
+    expect(mocks.stateSetters[0]).not.toHaveBeenCalledWith('local')
   })
 
   it('selects a local or SSH host without changing the durable active server', async () => {

@@ -71,11 +71,11 @@ function pickShell(): string | null {
 function parseCapturedPath(stdout: string, pathDelimiter: string = delimiter): string[] {
   const cleaned = stdout.replace(ANSI_RE, '')
   const first = cleaned.indexOf(DELIMITER)
-  if (first < 0) {
+  if (first === -1) {
     return []
   }
   const second = cleaned.indexOf(DELIMITER, first + DELIMITER.length)
-  if (second < 0) {
+  if (second === -1) {
     return []
   }
   const value = cleaned.slice(first + DELIMITER.length, second).trim()

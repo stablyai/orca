@@ -1286,7 +1286,7 @@ if (typeof window !== 'undefined' && window.api?.gh?.onWorkItemMutated) {
     invalidateWorkItemDetailsCacheByMatch(payload)
   })
 }
-if (typeof import.meta !== 'undefined' && import.meta.hot) {
+if (import.meta !== undefined && import.meta.hot) {
   import.meta.hot.dispose(() => {
     workItemMutatedUnsub?.()
     workItemDetailsCacheEventUnsub?.()

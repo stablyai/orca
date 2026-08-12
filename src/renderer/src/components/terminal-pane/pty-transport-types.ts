@@ -41,6 +41,21 @@ export type PtyBufferSnapshot = {
    *  before post-snapshot live chunks — so the continuation completes it
    *  exactly as live instead of rendering literal (Bug E / #7329). */
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags the owner of this image proved at `seq`. Absent
+   *  means unknown; never rewrite that silence into a known `0`. */
+  kittyKeyboardFlags?: number
+}
+
+/** Metadata for one authoritative replay payload. */
+export type PtyReplayDataMeta = {
+  clearBeforeReplay?: boolean
+  pendingEscapeTailAnsi?: string
+  /** Kitty flags the snapshot's owner PROVED at `snapshotSeq`. Absent means
+   *  unknown; the pane tracker must stay unproven rather than assume zero. */
+  kittyKeyboardFlags?: number
+  /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
+   *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
+  snapshotSeq?: number
 }
 
 export type LocalPtySessionMetadata = {
@@ -67,6 +82,11 @@ export type PtyConnectResult = {
   snapshotFrameAnsi?: string
   /** Live state to append when omitting `snapshotFrameAnsi`. */
   snapshotFrameRestoreAnsi?: string
+  /** Kitty keyboard flags the daemon snapshot proved, paired with the renderer-
+   *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
+   *  means unknown, never a proven inactive protocol. */
+  snapshotKittyKeyboardFlags?: number
+  snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
   coldRestore?: { scrollback: string; cwd: string; cols?: number; rows?: number }
@@ -86,10 +106,7 @@ type PtyCallbacks = {
   onConnect?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
-  onReplayData?: (
-    data: string,
-    meta?: { clearBeforeReplay?: boolean; pendingEscapeTailAnsi?: string }
-  ) => void
+  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
   onStatus?: (shell: string) => void
   onError?: (message: string, errors?: string[]) => void
   onExit?: (code: number) => void

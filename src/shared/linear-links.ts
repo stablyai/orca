@@ -88,7 +88,7 @@ export function parseLinearIssueInput(input: string): ParsedLinearIssueInput | n
     const parts = parsed.pathname.split('/').filter(Boolean)
     const issueIndex = parts.indexOf('issue')
     const organizationUrlKey = parts[0]
-    const rawIdentifier = issueIndex >= 0 ? parts[issueIndex + 1] : undefined
+    const rawIdentifier = issueIndex !== -1 ? parts[issueIndex + 1] : undefined
     if (!organizationUrlKey || !rawIdentifier) {
       return null
     }

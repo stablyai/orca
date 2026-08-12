@@ -805,6 +805,29 @@ describe('agent status tool + assistant fields', () => {
     expect(store.getState().sortEpoch).toBe(firstSortEpoch)
   })
 
+  it('bumps sort epoch when a same-state done update changes completion eligibility', () => {
+    vi.useFakeTimers()
+    const store = createTestStore()
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:1',
+        { state: 'done', prompt: 'p1', agentType: 'claude', interrupted: true },
+        'claude',
+        { updatedAt: 1_000, stateStartedAt: 1_000 }
+      )
+    const firstSortEpoch = store.getState().sortEpoch
+
+    store
+      .getState()
+      .setAgentStatus('tab-1:1', { state: 'done', prompt: 'p1', agentType: 'claude' }, 'claude', {
+        updatedAt: 2_000,
+        stateStartedAt: 1_000
+      })
+
+    expect(store.getState().sortEpoch).toBe(firstSortEpoch + 1)
+  })
+
   it('bumps global epochs when a stale same-state entry refreshes', () => {
     vi.useFakeTimers()
     const store = createTestStore()

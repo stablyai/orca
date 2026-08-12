@@ -3,6 +3,7 @@ import { Import } from 'lucide-react'
 import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { Button } from '@/components/ui/button'
+import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -100,7 +101,8 @@ export function BrowserImportHintButton({
               value1: browser?.label ?? browserFamily,
               value2: browserProfile ? ` (${browserProfile})` : ''
             }
-          )
+          ),
+          result.profileId
         )
         return
       }
@@ -120,7 +122,8 @@ export function BrowserImportHintButton({
           'auto.components.browser.pane.BrowserImportHintButton.d40d584769',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
-        )
+        ),
+        result.profileId
       )
       return
     }
@@ -257,6 +260,7 @@ export function BrowserImportHintButton({
                     'From File…'
                   )}
                 </DropdownMenuItem>
+                <BrowserCookieImportDisclosure />
               </DropdownMenuContent>
             </DropdownMenu>
 

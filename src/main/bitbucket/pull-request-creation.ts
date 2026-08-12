@@ -8,8 +8,9 @@ import {
   requestHostedReviewJson
 } from '../source-control/hosted-review-api-request'
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
-import { authHeaders, hasAuth } from './bitbucket-auth-config'
+import { authHeaders, getEnvAuthConfig, hasAuth } from './bitbucket-auth-config'
 import { resolveBitbucketAuthConfig } from './resolve-auth'
+import { hasStoredBitbucketCredential } from './credential-store'
 import { getBitbucketPullRequestForBranch } from './client'
 import { mapBitbucketPullRequest, type RawBitbucketPullRequest } from './pull-request-mappers'
 import { getBitbucketRepoRef, type BitbucketRepoRef } from './repository-ref'
@@ -18,8 +19,12 @@ import { getHostedReviewLocalGitOptions } from '../source-control/hosted-review-
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
 
+// Why: eligibility is evaluated proactively for the sidebar, so this must not
+// decrypt — forcing the secret open here would pop an OS keychain prompt just
+// from opening a worktree. Presence is enough; the create call itself still
+// fails closed if the credential turns out to be unusable.
 export function isBitbucketReviewCreationAuthenticated(): boolean {
-  return hasAuth(resolveBitbucketAuthConfig())
+  return hasAuth(getEnvAuthConfig()) || hasStoredBitbucketCredential()
 }
 
 function encodedRepoPath(repo: BitbucketRepoRef): string {

@@ -69,7 +69,7 @@ function resolveSnapshotSessionLabel(
   if (parsed) {
     const tabs = ctx.tabsByWorktree[worktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === parsed.tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {
@@ -94,7 +94,7 @@ function resolveDaemonSessionLabel(
   if (tabId && resolvedWorktreeId) {
     const tabs = ctx.tabsByWorktree[resolvedWorktreeId] ?? []
     const tabIndex = tabs.findIndex((t) => t.id === tabId)
-    const tab = tabIndex >= 0 ? tabs[tabIndex] : undefined
+    const tab = tabIndex !== -1 ? tabs[tabIndex] : undefined
     if (tab) {
       const custom = tab.customTitle?.trim()
       if (custom) {

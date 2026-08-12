@@ -97,7 +97,7 @@ function attrValue(tag: string, name: string): string {
     const valueStart = cursor
     if (quote) {
       const valueEnd = tag.indexOf(quote, cursor)
-      if (valueEnd < 0) {
+      if (valueEnd === -1) {
         return ''
       }
       cursor = valueEnd + 1

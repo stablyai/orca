@@ -1079,6 +1079,7 @@ export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
   skippedCookies: number
+  googleCookiesSkipped?: number
   domains: string[]
   warning?: {
     code: 'restart-fallback-unavailable'
@@ -1497,8 +1498,8 @@ export type PRCheckJob = {
 
 export type PRCheckRunDetails = {
   name: string
-  status: PRCheckDetail['status'] | string | null
-  conclusion: PRCheckDetail['conclusion'] | string | null
+  status: PRCheckDetail['status'] | (string & {}) | null
+  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null
   url: string | null
   detailsUrl: string | null
   startedAt: string | null
@@ -1749,7 +1750,7 @@ export type LinearWorkspace = LinearViewer & {
   credentialRevision?: number
 }
 
-export type LinearWorkspaceSelection = string | 'all'
+export type LinearWorkspaceSelection = (string & {}) | 'all'
 export type LinearWorkspaceSelector = LinearWorkspaceSelection | undefined
 export type LinearConcreteWorkspaceId = string
 

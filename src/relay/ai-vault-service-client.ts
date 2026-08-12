@@ -123,7 +123,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
         continue
       }
       const index = this.queue.findIndex((call) => call.lane === lane)
-      if (index < 0) {
+      if (index === -1) {
         continue
       }
       const call = this.queue.splice(index, 1)[0]!
@@ -241,7 +241,7 @@ export class RelayAiVaultServiceClient implements RelayAiVaultServiceApi {
 
   private cancel(call: RelayAiVaultServiceCall): void {
     const index = this.queue.indexOf(call)
-    if (index >= 0) {
+    if (index !== -1) {
       this.queue.splice(index, 1)
       settleRelayAiVaultServiceCall(call, relayAiVaultAbortError())
       this.pump()

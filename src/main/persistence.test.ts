@@ -9176,6 +9176,149 @@ describe('Store', () => {
     )
   })
 
+  it('admits a split binding only while the exact source still owns its layout leaf', async () => {
+    for (const hostId of [undefined, 'ssh:ssh-1']) {
+      const store = await createStore()
+      store.setWorkspaceSession(
+        {
+          ...getDefaultWorkspaceSession(),
+          tabsByWorktree: {
+            wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-source' })]
+          },
+          terminalLayoutsByTabId: {
+            tab1: {
+              root: { type: 'leaf', leafId: TEST_LEAF_1 },
+              activeLeafId: TEST_LEAF_1,
+              expandedLeafId: null,
+              ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-source' }
+            }
+          }
+        },
+        hostId
+      )
+      const staleRendererSession = structuredClone(store.getWorkspaceSession(hostId))
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'different-target-tab',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-split',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'tab1',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(false)
+      expect(
+        store
+          .getWorkspaceSession(hostId)
+          .tabsByWorktree.wt1.some((tab) => tab.id === 'different-target-tab')
+      ).toBe(false)
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt-canonical',
+            tabId: 'tab1',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-split',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'tab1',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(true)
+      const admitted = store.getWorkspaceSession(hostId)
+      expect(admitted.terminalTopologyRevisionByRepoId?.wt1).toBe(1)
+      expect(admitted.terminalLayoutsByTabId.tab1.ptyIdsByLeafId).toMatchObject({
+        [TEST_LEAF_1]: 'pty-source',
+        [TEST_LEAF_2]: 'pty-split'
+      })
+
+      store.setWorkspaceSession(staleRendererSession, hostId)
+      expect(
+        store.getWorkspaceSession(hostId).terminalLayoutsByTabId.tab1.ptyIdsByLeafId
+      ).toMatchObject({
+        [TEST_LEAF_1]: 'pty-source',
+        [TEST_LEAF_2]: 'pty-split'
+      })
+
+      expect(
+        store.persistPtyBinding(
+          {
+            worktreeId: 'wt1',
+            tabId: 'rejected-tab',
+            leafId: TEST_LEAF_2,
+            ptyId: 'pty-rejected',
+            expectedSourceBinding: {
+              worktreeId: 'wt1',
+              tabId: 'missing-source-tab',
+              leafId: TEST_LEAF_1,
+              ptyId: 'pty-source'
+            }
+          },
+          hostId
+        )
+      ).toBe(false)
+      expect(
+        store
+          .getWorkspaceSession(hostId)
+          .tabsByWorktree.wt1.some((tab) => tab.id === 'rejected-tab')
+      ).toBe(false)
+      expect(
+        store.getWorkspaceSession(hostId).terminalLayoutsByTabId['rejected-tab']
+      ).toBeUndefined()
+    }
+  })
+
+  it('rejects a split source incarnation mismatch', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        wt1: [makeTerminalTab({ id: 'tab1', worktreeId: 'wt1', ptyId: 'pty-source' })]
+      },
+      terminalLayoutsByTabId: {
+        tab1: {
+          root: { type: 'leaf', leafId: TEST_LEAF_1 },
+          activeLeafId: TEST_LEAF_1,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-source' }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [`tab1:${TEST_LEAF_1}`]: 'persisted-incarnation' }
+    })
+
+    expect(
+      store.persistPtyBinding({
+        worktreeId: 'wt1',
+        tabId: 'tab1',
+        leafId: TEST_LEAF_2,
+        ptyId: 'pty-split',
+        expectedSourceBinding: {
+          tabId: 'tab1',
+          leafId: TEST_LEAF_1,
+          ptyId: 'pty-source',
+          incarnationId: 'different-incarnation'
+        }
+      })
+    ).toBe(false)
+    expect(store.getWorkspaceSession().terminalLayoutsByTabId.tab1.root).toEqual({
+      type: 'leaf',
+      leafId: TEST_LEAF_1
+    })
+  })
+
   it('rejects competing PTY and incarnation changes during reconciliation', async () => {
     const store = await createStore()
     const paneKey = `tab1:${TEST_LEAF_1}`

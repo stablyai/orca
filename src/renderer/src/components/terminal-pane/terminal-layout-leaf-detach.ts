@@ -44,7 +44,7 @@ function omitLeafRecord(
   source: Record<string, string> | undefined,
   leafId: string
 ): Record<string, string> | undefined {
-  if (!source || !Object.prototype.hasOwnProperty.call(source, leafId)) {
+  if (!source || !Object.hasOwn(source, leafId)) {
     return source
   }
   const next = { ...source }

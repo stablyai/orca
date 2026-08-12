@@ -393,7 +393,7 @@ export function ingestGitGrepLine(
   const secondNullIdx = rest.indexOf('\0')
   let lineNumberText: string
   let lineContent: string
-  if (secondNullIdx >= 0) {
+  if (secondNullIdx !== -1) {
     lineNumberText = rest.substring(0, secondNullIdx)
     lineContent = rest.substring(secondNullIdx + 1).replace(/\n$/, '')
   } else {

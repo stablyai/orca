@@ -164,6 +164,21 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().recordFeatureInteraction).toHaveBeenCalledWith('browser-tab-created')
   })
 
+  it('opens a local sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(store.getState().browserTabsByWorktree['wt-1']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
+  })
+
   it('clears page annotations when the browser page URL changes', () => {
     const store = createTestStore()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
@@ -1026,6 +1041,38 @@ describe('createBrowserSlice runtime guard', () => {
     expect(store.getState().recordFeatureInteraction).not.toHaveBeenCalledWith(
       'browser-tab-created'
     )
+  })
+
+  it('opens a remote sign-in tab with the imported browser profile', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(createWebRuntimeSessionBrowserTabMock).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      environmentId: 'env-1',
+      url: 'https://accounts.google.com/',
+      profileId: 'profile-1'
+    })
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
   })
 
   it('does not create a local fallback tab when remote browser creation throws', async () => {
