@@ -1,5 +1,10 @@
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../../shared/types'
-import { PINNED_GROUP_KEY, type Row } from './worktree-list-groups'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { PINNED_GROUP_KEY } from './worktree-list/grouping/group-keys'
+import type { Row } from './worktree-list/grouping/row-types'
 import type { HostSectionRow } from './host-section-rows'
 
 export function repo(id: string, connectionId?: string | null): Repo {
@@ -46,8 +51,8 @@ export function header(key: string, label = key): Extract<Row, { type: 'header' 
 }
 
 export function pinnedHeader(
-  counts: ReadonlyMap<'local' | 'ssh:ssh-1', number>,
-  idsByHost?: ReadonlyMap<'local' | 'ssh:ssh-1', readonly string[]>
+  counts: ReadonlyMap<ExecutionHostId, number>,
+  idsByHost?: ReadonlyMap<ExecutionHostId, readonly string[]>
 ): Extract<Row, { type: 'header' }> {
   return {
     ...header(PINNED_GROUP_KEY, 'Pinned'),
@@ -95,7 +100,8 @@ export function pinnedItem(
 
 export function folderWorkspaceRow(
   connectionId: string | null,
-  groupExecutionHostId?: string
+  groupExecutionHostId?: ExecutionHostId,
+  folderExecutionHostId?: ExecutionHostId
 ): Extract<Row, { type: 'folder-workspace' }> {
   const projectGroup: ProjectGroup = {
     id: 'group-1',
@@ -117,6 +123,7 @@ export function folderWorkspaceRow(
     name: 'Folder workspace',
     folderPath: '/srv/project',
     connectionId,
+    ...(folderExecutionHostId ? { executionHostId: folderExecutionHostId } : {}),
     linkedTask: null,
     comment: '',
     isArchived: false,

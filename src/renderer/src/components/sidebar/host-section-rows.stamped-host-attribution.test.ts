@@ -56,6 +56,30 @@ describe('addHostSectionRows stamped host attribution', () => {
     ])
   })
 
+  it('lets a folder workspace stamp override a conflicting project-group host', () => {
+    const macOwned: Repo = { ...repo('mac-project'), executionHostId: 'runtime:mac-mini' }
+    const rows: Row[] = [
+      repoHeader(macOwned),
+      item('mac-wt', macOwned),
+      folderWorkspaceRow(null, 'runtime:mac-mini', 'runtime:devbox')
+    ]
+
+    const sectioned = addHostSectionRows({
+      rows,
+      hostOptions: TWO_RUNTIME_HOSTS,
+      workspaceHostScope: 'all',
+      defaultHostId: 'runtime:mac-mini'
+    })
+
+    expect(sectioned.map(rowKey)).toEqual([
+      'host:runtime:devbox',
+      'folder-workspace:folder-1',
+      'host:runtime:mac-mini',
+      'repo:mac-project',
+      'mac-wt'
+    ])
+  })
+
   it('attributes a repo-less project-group header to its stamped host instead of buffering it', () => {
     const macOwned: Repo = { ...repo('mac-project'), executionHostId: 'runtime:mac-mini' }
     const folderRow = folderWorkspaceRow(null, 'runtime:devbox')
