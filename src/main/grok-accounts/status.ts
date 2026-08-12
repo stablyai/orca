@@ -1,8 +1,7 @@
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
-import { isGrokAccessTokenFresh, readGrokAuthSession } from '../rate-limits/grok-auth'
+import { isGrokAccessTokenFresh, type GrokAuthReadResult } from '../rate-limits/grok-auth'
 
-export function getGrokAccountStatus(): GrokAccountStatus {
-  const readResult = readGrokAuthSession()
+export function getGrokAccountStatus(readResult: GrokAuthReadResult): GrokAccountStatus {
   if (readResult.status === 'missing') {
     return {
       signedIn: false,

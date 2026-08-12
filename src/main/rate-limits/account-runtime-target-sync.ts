@@ -3,10 +3,11 @@ import type { RateLimitState } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
 import { getInitialClaudeRateLimitTarget } from './claude-rate-limit-target'
 import { getInitialCodexRateLimitTarget } from './codex-rate-limit-target'
+import { getGrokRuntimeTarget } from '../grok/grok-runtime-home'
 
 type AccountRuntimeRateLimitService = Pick<
   RateLimitService,
-  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget'
+  'getState' | 'refreshClaudeForTarget' | 'refreshCodexForTarget' | 'refreshGrokForTarget'
 >
 
 type RuntimeTarget = {
@@ -29,8 +30,9 @@ export function createAccountRuntimeTargetSettingsSync(
     const nextSettingsTargets = getSettingsTargets(settings, platform)
     const claudePolicyChanged = !isSameTarget(settingsTargets.claude, nextSettingsTargets.claude)
     const codexPolicyChanged = !isSameTarget(settingsTargets.codex, nextSettingsTargets.codex)
+    const grokPolicyChanged = !isSameTarget(settingsTargets.grok, nextSettingsTargets.grok)
     settingsTargets = nextSettingsTargets
-    if (!claudePolicyChanged && !codexPolicyChanged) {
+    if (!claudePolicyChanged && !codexPolicyChanged && !grokPolicyChanged) {
       return
     }
 
@@ -42,6 +44,9 @@ export function createAccountRuntimeTargetSettingsSync(
     if (codexPolicyChanged && !isSameTarget(current.codexTarget, nextSettingsTargets.codex)) {
       refreshes.push(rateLimits.refreshCodexForTarget(nextSettingsTargets.codex))
     }
+    if (grokPolicyChanged) {
+      refreshes.push(rateLimits.refreshGrokForTarget(nextSettingsTargets.grok))
+    }
 
     await Promise.all(refreshes)
   }
@@ -50,7 +55,8 @@ export function createAccountRuntimeTargetSettingsSync(
 function getSettingsTargets(settings: GlobalSettings, platform: NodeJS.Platform) {
   return {
     claude: getInitialClaudeRateLimitTarget(settings, platform),
-    codex: getInitialCodexRateLimitTarget(settings, platform)
+    codex: getInitialCodexRateLimitTarget(settings, platform),
+    grok: getGrokRuntimeTarget(settings, platform)
   }
 }
 

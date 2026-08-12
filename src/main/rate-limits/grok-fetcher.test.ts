@@ -10,14 +10,13 @@ vi.mock('electron', () => ({
   net: { fetch: netFetchMock }
 }))
 
-vi.mock('node:fs', () => ({
-  existsSync: () => authState.file !== null,
-  readFileSync: () => {
+vi.mock('node:fs/promises', () => ({
+  readFile: async () => {
     if (authState.readError) {
       throw authState.readError
     }
     if (authState.file === null) {
-      throw new Error('ENOENT')
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
     }
     return authState.file
   }
@@ -246,8 +245,7 @@ describe('fetchGrokRateLimits', () => {
     })
 
     const resultPromise = fetchGrokRateLimits({ signal: controller.signal })
-    await Promise.resolve()
-
+    await vi.waitFor(() => expect(requestSignal).toBeDefined())
     expect(requestSignal?.aborted).toBe(false)
     controller.abort()
     expect(requestSignal?.aborted).toBe(true)

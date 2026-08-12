@@ -49,7 +49,8 @@ vi.mock('./grok-fetcher', () => ({
 }))
 
 vi.mock('./grok-auth', () => ({
-  readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+  isGrokAccessTokenFresh: vi.fn(() => true),
+  readGrokAuthSession: vi.fn(async () => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -65,8 +66,8 @@ describe('RateLimitService', () => {
     resetRateLimitProviderMocks()
   })
 
-  it('does not reread Grok auth when callers read state snapshots', () => {
-    vi.mocked(readGrokAuthSession).mockReturnValue({
+  it('does not reread Grok auth when callers read state snapshots', async () => {
+    vi.mocked(readGrokAuthSession).mockResolvedValue({
       status: 'ok',
       session: {
         accessToken: 'token',
@@ -78,6 +79,7 @@ describe('RateLimitService', () => {
       }
     })
     const service = new RateLimitService()
+    await service.refreshGrok()
     vi.mocked(readGrokAuthSession).mockClear()
 
     expect(service.getState().grokAuthConfigured).toBe(true)
@@ -98,15 +100,22 @@ describe('RateLimitService', () => {
         oidcClientId: null
       }
     }
-    vi.mocked(readGrokAuthSession).mockReturnValue(authReadResult)
+    vi.mocked(readGrokAuthSession).mockResolvedValue(authReadResult)
     vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 42))
     const service = new RateLimitService()
+    const home = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.grok'
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver(async () => ({ runtime: 'wsl', wslDistro: 'Ubuntu', path: home }))
 
     await service.refreshGrok()
 
     expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchGrokRateLimits).toHaveBeenCalledWith({
       authReadResult,
+      signal: expect.any(AbortSignal)
+    })
+    expect(readGrokAuthSession).toHaveBeenCalledWith({
+      home,
       signal: expect.any(AbortSignal)
     })
     expect(fetchClaudeRateLimits).not.toHaveBeenCalled()
@@ -117,6 +126,139 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('discards a Grok result when the runtime changes during fetch', async () => {
+    const authReadResult = {
+      status: 'ok' as const,
+      session: {
+        accessToken: 'token',
+        userId: null,
+        email: null,
+        teamId: null,
+        expiresAtMs: null,
+        oidcClientId: null
+      }
+    }
+    const ubuntuFetch = deferred<ProviderRateLimits>()
+    vi.mocked(readGrokAuthSession).mockResolvedValue(authReadResult)
+    vi.mocked(fetchGrokRateLimits)
+      .mockImplementationOnce(() => ubuntuFetch.promise)
+      .mockResolvedValueOnce(okProvider('grok', 22))
+    const service = new RateLimitService()
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver(async (target) => ({
+      ...target,
+      path: `\\\\wsl.localhost\\${target.wslDistro}\\home\\dev\\.grok`
+    }))
+
+    const ubuntuRefresh = service.refreshGrok()
+    await vi.waitFor(() => expect(fetchGrokRateLimits).toHaveBeenCalledOnce())
+    const debianRefresh = service.refreshGrokForTarget({
+      runtime: 'wsl',
+      wslDistro: 'Debian'
+    })
+    ubuntuFetch.resolve(okProvider('grok', 11))
+
+    await Promise.all([ubuntuRefresh, debianRefresh])
+    expect(fetchGrokRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().grok?.session?.usedPercent).toBe(22)
+  })
+
+  it('uses the resolved WSL home for Grok account status', async () => {
+    const home = '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.grok'
+    vi.mocked(readGrokAuthSession).mockResolvedValue({
+      status: 'ok',
+      session: {
+        accessToken: 'secret-token',
+        userId: null,
+        email: 'dev@example.com',
+        teamId: 'team-1',
+        expiresAtMs: null,
+        oidcClientId: null
+      }
+    })
+    const service = new RateLimitService()
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver(async () => ({ runtime: 'wsl', wslDistro: 'Ubuntu', path: home }))
+
+    await expect(service.getGrokAccountStatus()).resolves.toEqual({
+      signedIn: true,
+      email: 'dev@example.com',
+      teamId: 'team-1',
+      tokenFresh: true,
+      error: null
+    })
+    expect(readGrokAuthSession).toHaveBeenCalledWith({ home, signal: undefined })
+    expect(fetchGrokRateLimits).not.toHaveBeenCalled()
+  })
+
+  it('publishes the initial Grok auth presence after installing the resolver', async () => {
+    vi.mocked(readGrokAuthSession).mockResolvedValue({
+      status: 'ok',
+      session: {
+        accessToken: 'secret-token',
+        userId: null,
+        email: null,
+        teamId: null,
+        expiresAtMs: null,
+        oidcClientId: null
+      }
+    })
+    const service = new RateLimitService()
+    const listener = vi.fn()
+    service.onStateChange(listener)
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver(async (target) => ({
+      ...target,
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.grok'
+    }))
+
+    await vi.waitFor(() => expect(service.getState().grokAuthConfigured).toBe(true))
+    expect(listener).toHaveBeenCalled()
+  })
+
+  it('retries account status when the Grok runtime changes during resolution', async () => {
+    const ubuntuResolution = deferred<{
+      runtime: 'wsl'
+      wslDistro: string
+      path: string
+    }>()
+    vi.mocked(readGrokAuthSession).mockImplementation(async (options) => ({
+      status: 'ok',
+      session: {
+        accessToken: 'secret-token',
+        userId: null,
+        email: options?.home?.includes('Debian') ? 'debian@example.com' : 'ubuntu@example.com',
+        teamId: null,
+        expiresAtMs: null,
+        oidcClientId: null
+      }
+    }))
+    const service = new RateLimitService()
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    service.setGrokHomeResolver((target) =>
+      target.wslDistro === 'Ubuntu'
+        ? ubuntuResolution.promise
+        : Promise.resolve({
+            runtime: 'wsl',
+            wslDistro: 'Debian',
+            path: '\\\\wsl.localhost\\Debian\\home\\dev\\.grok'
+          })
+    )
+
+    const status = service.getGrokAccountStatus()
+    service.setGrokFetchTarget({ runtime: 'wsl', wslDistro: 'Debian' })
+    ubuntuResolution.resolve({
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      path: '\\\\wsl.localhost\\Ubuntu\\home\\dev\\.grok'
+    })
+
+    await expect(status).resolves.toMatchObject({
+      signedIn: true,
+      email: 'debian@example.com'
+    })
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
@@ -341,8 +483,7 @@ describe('RateLimitService', () => {
     )
 
     const activeFetch = serviceInternals(service).fetchAll()
-    await Promise.resolve()
-    await Promise.resolve()
+    await vi.waitFor(() => expect(fetchGrokRateLimits).toHaveBeenCalledOnce())
 
     const queuedRefresh = service.refresh()
     await Promise.resolve()

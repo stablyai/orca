@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { getGrokAccountStatus } from '../grok-accounts/status'
+import type { RateLimitService } from '../rate-limits/service'
 
-export function registerGrokAccountHandlers(): void {
-  ipcMain.handle('grokAccounts:getStatus', () => getGrokAccountStatus())
+export function registerGrokAccountHandlers(rateLimits: RateLimitService): void {
+  ipcMain.handle('grokAccounts:getStatus', () => rateLimits.getGrokAccountStatus())
 }

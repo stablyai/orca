@@ -1,14 +1,19 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
+import { join, win32 as pathWin32 } from 'node:path'
 import { resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import {
+  createAuthFilesystemOperation,
+  type SharedAuthFilesystemOperation
+} from './auth-filesystem-operation'
 
 // Why: when GROK_HOME is set, auth.json must be the same path Grok CLI uses.
 export function getGrokHome(): string {
   return resolveGrokHomeDir()
 }
 
-export function getGrokAuthPath(): string {
-  return join(getGrokHome(), 'auth.json')
+export function getGrokAuthPath(home: string = getGrokHome()): string {
+  return parseWslUncPath(home) ? pathWin32.join(home, 'auth.json') : join(home, 'auth.json')
 }
 
 export type GrokAuthSession = {
@@ -35,6 +40,15 @@ export type GrokAuthReadResult =
   | { status: 'missing' }
   | { status: 'error'; error: string }
   | { status: 'ok'; session: GrokAuthSession }
+
+const AUTH_READ_TIMEOUT_MS = 5_000
+const authReadByPath = new Map<string, SharedAuthFilesystemOperation<GrokAuthReadResult>>()
+
+type GrokAuthReadOptions = {
+  home?: string | null
+  signal?: AbortSignal
+  timeoutMs?: number
+}
 
 function getGrokAuthReadError(err: unknown): string {
   if (err instanceof SyntaxError) {
@@ -82,13 +96,9 @@ function isPreferredGrokAuthKey(key: string): boolean {
   return key === PREFERRED_GROK_AUTH_ISSUER || key.startsWith(`${PREFERRED_GROK_AUTH_ISSUER}::`)
 }
 
-export function readGrokAuthSession(): GrokAuthReadResult {
-  const path = getGrokAuthPath()
-  if (!existsSync(path)) {
-    return { status: 'missing' }
-  }
+function parseGrokAuthContents(raw: string): GrokAuthReadResult {
   try {
-    const parsed: unknown = JSON.parse(readFileSync(path, 'utf-8'))
+    const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Grok auth file is invalid' }
     }
@@ -110,23 +120,62 @@ export function readGrokAuthSession(): GrokAuthReadResult {
         expiredPreferred ??= session
         continue
       }
-      if (!fallback) {
-        fallback = session
-      }
+      fallback ??= session
     }
     // Why: alternate issuers are compatibility fallbacks only when no default entry exists.
     const selectedSession = expiredPreferred ?? (preferredKeySeen ? null : fallback)
     if (selectedSession) {
       return { status: 'ok', session: selectedSession }
     }
-    // Why: a token-less file (e.g. after grok logout) means signed out, not a
-    // failure — 'error' would keep a status-bar alert visible for that user.
     return { status: 'missing' }
-  } catch (err) {
-    return {
-      status: 'error',
-      error: getGrokAuthReadError(err)
+  } catch (error) {
+    return { status: 'error', error: getGrokAuthReadError(error) }
+  }
+}
+
+function isMissingPathError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | null)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
+function getGrokAuthRead(path: string): SharedAuthFilesystemOperation<GrokAuthReadResult> {
+  const existing = authReadByPath.get(path)
+  if (existing) {
+    return existing
+  }
+  // Why: a timed-out UNC read can keep a native thread occupied; share it until settlement.
+  const read = createAuthFilesystemOperation(path, async (): Promise<GrokAuthReadResult> => {
+    try {
+      return parseGrokAuthContents(await readFile(path, 'utf-8'))
+    } catch (error) {
+      return isMissingPathError(error)
+        ? { status: 'missing' }
+        : { status: 'error', error: getGrokAuthReadError(error) }
     }
+  })
+  authReadByPath.set(path, read)
+  const clearRead = (): void => {
+    if (authReadByPath.get(path) === read) {
+      authReadByPath.delete(path)
+    }
+  }
+  void read.result.then(clearRead, clearRead)
+  return read
+}
+
+export async function readGrokAuthSession(
+  options: GrokAuthReadOptions = {}
+): Promise<GrokAuthReadResult> {
+  const home = options.home === undefined ? getGrokHome() : options.home
+  if (!home) {
+    return { status: 'error', error: 'Unable to resolve Grok auth home' }
+  }
+  const timeoutSignal = AbortSignal.timeout(options.timeoutMs ?? AUTH_READ_TIMEOUT_MS)
+  const signal = options.signal ? AbortSignal.any([options.signal, timeoutSignal]) : timeoutSignal
+  try {
+    return await getGrokAuthRead(getGrokAuthPath(home)).wait(signal)
+  } catch (error) {
+    return { status: 'error', error: getGrokAuthReadError(error) }
   }
 }
 

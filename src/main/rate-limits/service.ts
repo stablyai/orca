@@ -2,11 +2,13 @@
 import type { BrowserWindow } from 'electron'
 import type {
   CodexRateLimitResetResult,
+  GrokAccountStatus,
   RateLimitState,
   ProviderRateLimits,
   InactiveAccountUsage,
   RateLimitRuntimeTarget
 } from '../../shared/rate-limit-types'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { fetchClaudeRateLimits, fetchManagedAccountUsage } from './claude-fetcher'
 import type { InactiveClaudeAccountInfo } from './claude-fetcher'
 import { mapClaudeUsageWindow } from './claude-usage-window'
@@ -22,8 +24,10 @@ import {
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
+import type { GrokHomeResolver } from '../grok/grok-runtime-home'
+import { getGrokAccountStatus as buildGrokAccountStatus } from '../grok-accounts/status'
 import { fetchGrokRateLimits } from './grok-fetcher'
-import { readGrokAuthSession } from './grok-auth'
+import { readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
@@ -166,6 +170,19 @@ function isSameUsageWindow(
   return a.usedPercent === b.usedPercent && a.resetsAt === b.resetsAt
 }
 
+function normalizeGrokFetchTarget(target: LocalAccountRuntimeTarget): LocalAccountRuntimeTarget {
+  return target.runtime === 'wsl'
+    ? { runtime: 'wsl', wslDistro: target.wslDistro?.trim() || null }
+    : { runtime: 'host', wslDistro: null }
+}
+
+function isSameGrokTarget(
+  current: LocalAccountRuntimeTarget,
+  next: LocalAccountRuntimeTarget
+): boolean {
+  return current.runtime === next.runtime && current.wslDistro === next.wslDistro
+}
+
 export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
@@ -177,7 +194,7 @@ export class RateLimitService {
     minimax: null,
     grok: null
   }
-  private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  private grokAuthConfigured = false
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -214,6 +231,7 @@ export class RateLimitService {
   private fetchIdleResolvers: (() => void)[] = []
   private codexFetchGeneration = 0
   private claudeFetchGeneration = 0
+  private grokFetchGeneration = 0
   // Why: statusline ingest must attribute live windows to the selected account without re-running the side-effectful auth sync per post.
   private lastClaudeAuthSnapshot: { configDir: string | null; provenance: string } | null = null
   private opencodeFetchGeneration = 0
@@ -227,6 +245,11 @@ export class RateLimitService {
   }
   // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
   private kimiHomeResolver: KimiHomeResolver | null = null
+  private grokHomeResolver: GrokHomeResolver | null = null
+  private grokFetchTarget: LocalAccountRuntimeTarget = {
+    runtime: 'host',
+    wslDistro: null
+  }
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
@@ -296,6 +319,63 @@ export class RateLimitService {
 
   setClaudeAuthPreparationResolver(resolver: ClaudeAuthPreparationResolver): void {
     this.claudeAuthPreparationResolver = resolver
+  }
+
+  setGrokFetchTarget(target: LocalAccountRuntimeTarget): void {
+    const nextTarget = normalizeGrokFetchTarget(target)
+    if (isSameGrokTarget(this.grokFetchTarget, nextTarget)) {
+      return
+    }
+    this.grokFetchTarget = nextTarget
+    this.grokFetchGeneration += 1
+    this.grokAuthConfigured = false
+  }
+
+  setGrokHomeResolver(resolver: GrokHomeResolver): void {
+    this.grokHomeResolver = resolver
+    void this.refreshGrokAuthConfigured()
+  }
+
+  private async readResolvedGrokAuthSession(
+    target: LocalAccountRuntimeTarget,
+    signal?: AbortSignal
+  ): Promise<GrokAuthReadResult> {
+    const resolution = await this.grokHomeResolver?.(target)
+    return readGrokAuthSession({ home: resolution?.path, signal })
+  }
+
+  private isCurrentGrokTarget(generation: number, target: LocalAccountRuntimeTarget): boolean {
+    return generation === this.grokFetchGeneration && isSameGrokTarget(target, this.grokFetchTarget)
+  }
+
+  private async refreshGrokAuthConfigured(): Promise<void> {
+    const generation = this.grokFetchGeneration
+    const target = this.grokFetchTarget
+    const readResult = await this.readResolvedGrokAuthSession(target)
+    if (!this.isCurrentGrokTarget(generation, target)) {
+      return
+    }
+    const configured = readResult.status === 'ok'
+    if (configured === this.grokAuthConfigured) {
+      return
+    }
+    this.grokAuthConfigured = configured
+    this.updateState({ ...this.state })
+  }
+
+  async getGrokAccountStatus(): Promise<GrokAccountStatus> {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const generation = this.grokFetchGeneration
+      const target = this.grokFetchTarget
+      const readResult = await this.readResolvedGrokAuthSession(target)
+      if (this.isCurrentGrokTarget(generation, target)) {
+        return buildGrokAccountStatus(readResult)
+      }
+    }
+    return buildGrokAccountStatus({
+      status: 'error',
+      error: 'Grok runtime changed while reading account status'
+    })
   }
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
@@ -415,6 +495,19 @@ export class RateLimitService {
   }
 
   async refreshGrok(): Promise<RateLimitState> {
+    await this.fetchGrokOnly({ force: true })
+    return this.getState()
+  }
+
+  async refreshGrokForTarget(target: LocalAccountRuntimeTarget): Promise<RateLimitState> {
+    const nextTarget = normalizeGrokFetchTarget(target)
+    const targetChanged = !isSameGrokTarget(this.grokFetchTarget, nextTarget)
+    this.setGrokFetchTarget(nextTarget)
+    this.activeFailureStreakByProvider.grok = 0
+    this.updateState({
+      ...this.state,
+      grok: this.withFetchingStatus(targetChanged ? null : this.state.grok, 'grok')
+    })
     await this.fetchGrokOnly({ force: true })
     return this.getState()
   }
@@ -1633,9 +1726,10 @@ export class RateLimitService {
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
     const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
-    // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const grokTarget = this.grokFetchTarget
+    const grokGeneration = this.grokFetchGeneration
+    // Why: start the async WSL probe before other providers so it runs concurrently.
+    const grokAuthReadPromise = this.readResolvedGrokAuthSession(grokTarget, signal)
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1676,13 +1770,18 @@ export class RateLimitService {
 
     const missingWslCodexHome =
       codexFetchGated || codexHomePath ? null : this.getMissingWslCodexHomeResult(codexTarget)
-    const grokResultPromise = fetchGrokRateLimits({
-      signal,
-      authReadResult: grokAuthReadResult
-    }).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
-    )
+    const grokResultPromise = grokAuthReadPromise
+      .then((authReadResult) => {
+        if (signal.aborted || !this.isCurrentGrokTarget(grokGeneration, grokTarget)) {
+          throw new Error('Stale Grok fetch target')
+        }
+        this.grokAuthConfigured = authReadResult.status === 'ok'
+        return fetchGrokRateLimits({ signal, authReadResult })
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
@@ -1896,6 +1995,9 @@ export class RateLimitService {
             error: grokResult.reason instanceof Error ? grokResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
+    if (!this.isCurrentGrokTarget(grokGeneration, grokTarget)) {
+      return
+    }
     this.trackActiveFailureStreak('grok', grok)
     this.updateState({
       ...this.state,
@@ -2051,13 +2153,19 @@ export class RateLimitService {
       return
     }
     const previousState = this.state
-    const grokAuthReadResult = readGrokAuthSession()
-    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const grokTarget = this.grokFetchTarget
+    const grokGeneration = this.grokFetchGeneration
 
     this.updateState({
       ...previousState,
       grok: this.withFetchingStatus(previousState.grok, 'grok')
     })
+
+    const grokAuthReadResult = await this.readResolvedGrokAuthSession(grokTarget, signal)
+    if (signal.aborted || !this.isCurrentGrokTarget(grokGeneration, grokTarget)) {
+      return
+    }
+    this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
 
     const grok = await fetchGrokRateLimits({
       signal,
@@ -2073,7 +2181,7 @@ export class RateLimitService {
       })
     )
 
-    if (signal.aborted) {
+    if (signal.aborted || !this.isCurrentGrokTarget(grokGeneration, grokTarget)) {
       return
     }
 
