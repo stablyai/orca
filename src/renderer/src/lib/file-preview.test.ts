@@ -217,6 +217,9 @@ describe('canShowWorkspaceFileBrowserAction', () => {
     expect(
       canShowWorkspaceFileBrowserAction(browserActionState(), 'wt-1', '/repo/report.html')
     ).toBe(true)
+    expect(
+      canShowWorkspaceFileBrowserAction(browserActionState('ssh-1'), 'wt-1', '/repo/report.html')
+    ).toBe(false)
   })
 
   it('permits local files but hides SSH paths from the local browser provider', () => {
@@ -260,6 +263,9 @@ describe('canShowWorkspaceFileBrowserAction', () => {
     ).toBe(true)
     expect(
       canShowWorkspaceFileBrowserAction(state, workspaceId, '/workspace/remote/report.html')
+    ).toBe(false)
+    expect(
+      canShowWorkspaceFileBrowserAction(state, workspaceId, '/workspace/unknown/report.html')
     ).toBe(false)
   })
 })

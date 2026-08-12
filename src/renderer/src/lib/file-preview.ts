@@ -40,11 +40,7 @@ export function canShowWorkspaceFileBrowserAction(
   filePath: string
 ): boolean {
   const mode = getWorkspaceFileBrowserActionMode(state, worktreeId)
-  return (
-    mode === 'paired-runtime' ||
-    (mode === 'local-client' &&
-      getConnectionIdForFileFromState(state, worktreeId, filePath) === null)
-  )
+  return mode !== null && getConnectionIdForFileFromState(state, worktreeId, filePath) === null
 }
 
 export function useWorkspaceFileBrowserActionPredicate(
@@ -61,9 +57,8 @@ export function useWorkspaceFileBrowserActionPredicate(
   )
   return useCallback(
     (filePath: string) =>
-      inputs.mode === 'paired-runtime' ||
-      (inputs.mode === 'local-client' &&
-        getConnectionIdForFileFromState(inputs, worktreeId, filePath) === null),
+      inputs.mode !== null &&
+      getConnectionIdForFileFromState(inputs, worktreeId, filePath) === null,
     [inputs, worktreeId]
   )
 }
