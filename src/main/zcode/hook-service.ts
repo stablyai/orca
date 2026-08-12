@@ -1,3 +1,4 @@
+import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -25,12 +26,19 @@ import {
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   applyManagedZcodeHooks,
+  getPreInstallZcodeHooksEnabledState,
   isZcodeHooksEnabled,
   readManagedZcodeHookEvents,
   removeManagedZcodeHooks,
   ZCODE_HOOK_EVENTS,
-  type ZcodeConfig
+  type ZcodeConfig,
+  type ZcodeHooksEnabledState
 } from './zcode-hook-config'
+
+type ZcodeHookState = {
+  schemaVersion: 1
+  previousHooksEnabled: ZcodeHooksEnabledState
+}
 
 function getConfigPath(): string {
   return join(homedir(), '.zcode', 'cli', 'config.json')
@@ -42,6 +50,40 @@ function getManagedScriptFileName(): string {
 
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
+}
+
+function getManagedStatePath(): string {
+  return getSharedManagedScriptPath('zcode-hook-state.json')
+}
+
+function readManagedState(): ZcodeHookState | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(getManagedStatePath(), 'utf-8'))
+    if (
+      typeof parsed !== 'object' ||
+      parsed === null ||
+      (parsed as ZcodeHookState).schemaVersion !== 1 ||
+      !['missing', 'enabled', 'disabled'].includes((parsed as ZcodeHookState).previousHooksEnabled)
+    ) {
+      return null
+    }
+    return parsed as ZcodeHookState
+  } catch {
+    return null
+  }
+}
+
+function writeManagedState(previousHooksEnabled: ZcodeHooksEnabledState): void {
+  writeHooksJson(getManagedStatePath(), {
+    schemaVersion: 1,
+    previousHooksEnabled
+  })
+}
+
+function removeManagedState(): void {
+  const statePath = getManagedStatePath()
+  rmSync(statePath, { force: true })
+  rmSync(`${statePath}.bak`, { force: true })
 }
 
 function getManagedCommand(scriptPath: string): string {
@@ -157,6 +199,9 @@ export class ZcodeHookService {
       }
     }
     const scriptPath = getManagedScriptPath()
+    if (!readManagedState()) {
+      writeManagedState(getPreInstallZcodeHooksEnabledState(config))
+    }
     const next = applyManagedZcodeHooks(
       config,
       getManagedCommand(scriptPath),
@@ -215,10 +260,18 @@ export class ZcodeHookService {
         detail: 'Could not parse ZCode cli/config.json'
       }
     }
+    const managedState = readManagedState()
     writeHooksJson(
       configPath,
-      asHooksConfig(removeManagedZcodeHooks(config, getManagedScriptFileName()))
+      asHooksConfig(
+        removeManagedZcodeHooks(
+          config,
+          getManagedScriptFileName(),
+          managedState?.previousHooksEnabled
+        )
+      )
     )
+    removeManagedState()
     return this.getStatus()
   }
 }
