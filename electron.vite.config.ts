@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
+import { createWebFaviconPlugin } from './config/build-plugins/web-favicon'
 import packageJson from './package.json' with { type: 'json' }
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
@@ -293,7 +294,7 @@ export const electronViteConfig: UserConfig = {
         '@': resolve('src/renderer/src')
       }
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), createWebFaviconPlugin()],
     worker: {
       format: 'es'
     },
