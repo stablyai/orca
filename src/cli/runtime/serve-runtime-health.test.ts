@@ -55,6 +55,46 @@ describe('serve runtime health', () => {
     expect(connectWebSocket).toHaveBeenCalledWith('ws://127.0.0.1:6768')
   })
 
+  it('reports missing runtime metadata before probing RPC health', async () => {
+    const getStatus = vi.fn(async () => readyStatus())
+
+    await expect(
+      probeServeRuntimeHealth('/profile', {
+        readMetadata: () => null,
+        getStatus
+      })
+    ).resolves.toEqual({ healthy: false, reason: 'metadata_missing' })
+    expect(getStatus).not.toHaveBeenCalled()
+  })
+
+  it('rejects a reachable runtime whose identity differs from metadata', async () => {
+    const connectWebSocket = vi.fn(async () => true)
+    const status = readyStatus()
+    status.result.runtime.runtimeId = 'runtime-replaced'
+
+    await expect(
+      probeServeRuntimeHealth('/profile', {
+        readMetadata: () => metadata,
+        getStatus: async () => status,
+        connectWebSocket
+      })
+    ).resolves.toEqual({ healthy: false, reason: 'runtime_changed' })
+    expect(connectWebSocket).not.toHaveBeenCalled()
+  })
+
+  it('requires runtime metadata to publish a WebSocket transport', async () => {
+    const connectWebSocket = vi.fn(async () => true)
+
+    await expect(
+      probeServeRuntimeHealth('/profile', {
+        readMetadata: () => ({ ...metadata, transports: metadata.transports.slice(0, 1) }),
+        getStatus: async () => readyStatus(),
+        connectWebSocket
+      })
+    ).resolves.toEqual({ healthy: false, reason: 'websocket_missing' })
+    expect(connectWebSocket).not.toHaveBeenCalled()
+  })
+
   it.each([
     {
       name: 'runtime RPC is unreachable',

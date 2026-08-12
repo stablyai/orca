@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath,
+  parseServeSupervisorMessage,
   parseServeUpdateHandoffState
 } from '../shared/serve-update-handoff'
 import { SERVE_SUPERVISOR_ENV } from '../shared/serve-supervision'
@@ -81,6 +82,21 @@ describe('serve update handoff', () => {
 
     expect(hasServeUpdateSupervisor()).toBe(false)
     expect(requestServeUpdateHandoff('1.0.61')).toBe(false)
+  })
+
+  it.each([
+    { websocket: ['ready'], runtime: 'ready', graph: 'ready' },
+    { websocket: 'ready', runtime: ['ready'], graph: 'ready' },
+    { websocket: 'ready', runtime: 'ready', graph: ['ready'] }
+  ])('rejects non-string supervisor health values', (health) => {
+    expect(
+      parseServeSupervisorMessage({
+        type: 'orca:serve-ready',
+        version: '1.4.181',
+        runtimeId: 'runtime-ready',
+        health
+      })
+    ).toBeNull()
   })
 
   it.runIf(process.platform === 'darwin')(

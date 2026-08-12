@@ -4,6 +4,7 @@ import type { ServeRuntimeHealth } from './serve-runtime-health'
 
 export const SERVE_REPLACEMENT_READY_TIMEOUT_MS = 60_000
 export const SERVE_HEALTH_CHECK_INTERVAL_MS = 10_000
+export const SERVE_HEALTH_PROBE_TIMEOUT_MS = 5_000
 export const SERVE_HEALTH_FAILURE_LIMIT = 3
 
 type ServeReadiness = 'not-expected' | 'pending' | 'verified' | 'failed'
@@ -17,6 +18,7 @@ export type ExpectedServeReadiness = {
 export type ServeChildMonitorOptions = {
   healthProbe?: () => Promise<ServeRuntimeHealth>
   healthCheckIntervalMs: number
+  healthProbeTimeoutMs: number
   healthFailureLimit: number
 }
 
@@ -90,11 +92,28 @@ export function waitForForegroundServeChild(
       }, options.healthCheckIntervalMs)
       healthTimer.unref?.()
     }
+    const probeHealthWithDeadline = async (): Promise<ServeRuntimeHealth> =>
+      await new Promise((resolveHealth) => {
+        let completed = false
+        const finish = (health: ServeRuntimeHealth): void => {
+          if (completed) {
+            return
+          }
+          completed = true
+          clearTimeout(timeout)
+          resolveHealth(health)
+        }
+        const timeout = setTimeout(
+          () => finish({ healthy: false, reason: 'runtime_unreachable' }),
+          options.healthProbeTimeoutMs
+        )
+        timeout.unref?.()
+        void Promise.resolve()
+          .then(() => options.healthProbe!())
+          .then(finish, () => finish({ healthy: false, reason: 'runtime_unreachable' }))
+      })
     const runHealthCheck = async (runtimeId: string): Promise<void> => {
-      const health = await options.healthProbe!().catch(() => ({
-        healthy: false as const,
-        reason: 'runtime_unreachable' as const
-      }))
+      const health = await probeHealthWithDeadline()
       if (settled || readiness !== 'verified') {
         return
       }
@@ -115,6 +134,7 @@ export function waitForForegroundServeChild(
       terminateChild()
     }
     const verifyReadyMessage = async (runtimeId: string): Promise<void> => {
+      // The readiness timer bounds this probe, and the pending guard ignores late completion.
       const health = options.healthProbe ? await options.healthProbe() : null
       if (settled || readiness !== 'pending') {
         return

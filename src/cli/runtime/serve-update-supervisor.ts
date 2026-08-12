@@ -14,6 +14,7 @@ import type { ServeSingletonRecoveryResult } from './serve-singleton-recovery'
 import {
   SERVE_HEALTH_CHECK_INTERVAL_MS,
   SERVE_HEALTH_FAILURE_LIMIT,
+  SERVE_HEALTH_PROBE_TIMEOUT_MS,
   waitForForegroundServeChild
 } from './serve-child-monitor'
 import { serveSignalExitError } from './serve-signal-exit-diagnostic'
@@ -25,6 +26,7 @@ export { SERVE_SUPERVISOR_STOP_EXIT_CODE } from '../../shared/serve-supervision'
 export {
   SERVE_HEALTH_CHECK_INTERVAL_MS,
   SERVE_HEALTH_FAILURE_LIMIT,
+  SERVE_HEALTH_PROBE_TIMEOUT_MS,
   SERVE_REPLACEMENT_READY_TIMEOUT_MS
 } from './serve-child-monitor'
 
@@ -42,6 +44,7 @@ type ServeSupervisorArgs = {
   sleep?: (delayMs: number) => Promise<void>
   restartDelaysMs?: readonly number[]
   healthCheckIntervalMs?: number
+  healthProbeTimeoutMs?: number
   healthFailureLimit?: number
   stableRunResetMs?: number
 }
@@ -93,6 +96,7 @@ export async function superviseForegroundServe(
       {
         healthProbe: args.healthProbe,
         healthCheckIntervalMs: args.healthCheckIntervalMs ?? SERVE_HEALTH_CHECK_INTERVAL_MS,
+        healthProbeTimeoutMs: args.healthProbeTimeoutMs ?? SERVE_HEALTH_PROBE_TIMEOUT_MS,
         healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
       }
     )
@@ -162,7 +166,10 @@ export async function superviseForegroundServe(
       }
       const recovery = await args.recoverSingleton()
       if (recovery.state !== 'recovered') {
-        const reason = recovery.state === 'active-owner' ? 'active_owner' : recovery.reason
+        const reason =
+          recovery.state === 'active-owner'
+            ? 'active_owner'
+            : `${recovery.reason}${recovery.errorCode ? `:${recovery.errorCode}` : ''}`
         process.stderr.write(
           `[serve] singleton recovery refused (${reason}); leaving the profile unchanged.\n`
         )
@@ -192,8 +199,9 @@ export async function superviseForegroundServe(
 
     const delayMs = restartDelays[restartIndex]
     restartIndex += 1
+    const healthDetail = result.healthFailureReason ? ` (${result.healthFailureReason})` : ''
     process.stderr.write(
-      `[serve] main process became unavailable; restarting in ${delayMs}ms (${restartIndex}/${restartDelays.length}).\n`
+      `[serve] main process became unavailable${healthDetail}; restarting in ${delayMs}ms (${restartIndex}/${restartDelays.length}).\n`
     )
     await sleep(delayMs)
     const replacement = await spawnRestartChild(args)

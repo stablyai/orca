@@ -25,7 +25,10 @@ export type ServeSingletonRecoveryResult =
         | 'owner_process_alive'
         | 'owner_changed'
         | 'recovery_in_progress'
+        | 'recovery_mutex_failed'
+        | 'health_probe_failed'
         | 'quarantine_failed'
+      errorCode?: string
     }
 
 type ServeSingletonRecoveryOptions = {
@@ -35,6 +38,7 @@ type ServeSingletonRecoveryOptions = {
   isProcessAlive?: (pid: number) => boolean
   wait?: (delayMs: number) => Promise<void>
   quarantineSuffix?: string
+  createMutexLink?: (target: string, path: string) => Promise<void>
 }
 
 type SingletonOwner = { hostname: string; pid: number }
@@ -48,7 +52,10 @@ export async function recoverStaleServeSingleton(
   }
 
   const probeHealth = options.probeHealth ?? probeServeRuntimeHealth
-  const initialHealth = await probeHealth(userDataPath)
+  const initialHealth = await probeRecoveryHealth(probeHealth, userDataPath)
+  if (!initialHealth) {
+    return { state: 'not-recoverable', reason: 'health_probe_failed' }
+  }
   if (initialHealth.healthy) {
     return { state: 'active-owner', runtimeId: initialHealth.runtimeId }
   }
@@ -62,13 +69,24 @@ export async function recoverStaleServeSingleton(
   }
 
   await (options.wait ?? defaultWait)(OWNER_CONFIRMATION_DELAY_MS)
-  const mutex = await acquireRecoveryMutex(userDataPath, isProcessAlive)
-  if (!mutex) {
-    return { state: 'not-recoverable', reason: 'recovery_in_progress' }
+  const mutex = await acquireRecoveryMutex(
+    userDataPath,
+    isProcessAlive,
+    options.createMutexLink ?? symlink
+  )
+  if (!mutex.acquired) {
+    return {
+      state: 'not-recoverable',
+      reason: mutex.reason,
+      ...(mutex.errorCode ? { errorCode: mutex.errorCode } : {})
+    }
   }
 
   try {
-    const confirmedHealth = await probeHealth(userDataPath)
+    const confirmedHealth = await probeRecoveryHealth(probeHealth, userDataPath)
+    if (!confirmedHealth) {
+      return { state: 'not-recoverable', reason: 'health_probe_failed' }
+    }
     if (confirmedHealth.healthy) {
       return { state: 'active-owner', runtimeId: confirmedHealth.runtimeId }
     }
@@ -93,6 +111,17 @@ export async function recoverStaleServeSingleton(
     return { state: 'recovered', ownerPid: confirmedOwner.pid, quarantined }
   } finally {
     await mutex.release()
+  }
+}
+
+async function probeRecoveryHealth(
+  probeHealth: (userDataPath: string) => Promise<ServeRuntimeHealth>,
+  userDataPath: string
+): Promise<ServeRuntimeHealth | null> {
+  try {
+    return await probeHealth(userDataPath)
+  } catch {
+    return null
   }
 }
 
@@ -160,22 +189,37 @@ async function quarantineSingletonArtifacts(
 
 async function acquireRecoveryMutex(
   userDataPath: string,
-  isProcessAlive: (pid: number) => boolean
-): Promise<{ release: () => Promise<void> } | null> {
+  isProcessAlive: (pid: number) => boolean,
+  createLink: (target: string, path: string) => Promise<void>
+): Promise<
+  | { acquired: true; release: () => Promise<void> }
+  | {
+      acquired: false
+      reason: 'recovery_in_progress' | 'recovery_mutex_failed'
+      errorCode?: string
+    }
+> {
   const path = join(userDataPath, RECOVERY_MUTEX_NAME)
   const owner = String(process.pid)
-  let acquired = await createMutex(path, owner)
-  if (!acquired) {
+  let creation = await createMutex(path, owner, createLink)
+  if (creation.state === 'failed') {
+    return { acquired: false, reason: 'recovery_mutex_failed', errorCode: creation.errorCode }
+  }
+  if (creation.state === 'exists') {
     const ownerPid = Number(await readlink(path).catch(() => ''))
     if (Number.isSafeInteger(ownerPid) && ownerPid > 0 && !isProcessAlive(ownerPid)) {
       await unlink(path).catch(() => undefined)
-      acquired = await createMutex(path, owner)
+      creation = await createMutex(path, owner, createLink)
     }
   }
-  if (!acquired) {
-    return null
+  if (creation.state === 'failed') {
+    return { acquired: false, reason: 'recovery_mutex_failed', errorCode: creation.errorCode }
+  }
+  if (creation.state === 'exists') {
+    return { acquired: false, reason: 'recovery_in_progress' }
   }
   return {
+    acquired: true,
     release: async () => {
       const currentOwner = await readlink(path).catch(() => null)
       if (currentOwner === owner) {
@@ -185,12 +229,19 @@ async function acquireRecoveryMutex(
   }
 }
 
-async function createMutex(path: string, owner: string): Promise<boolean> {
+async function createMutex(
+  path: string,
+  owner: string,
+  createLink: (target: string, path: string) => Promise<void>
+): Promise<{ state: 'created' } | { state: 'exists' } | { state: 'failed'; errorCode?: string }> {
   try {
-    await symlink(owner, path)
-    return true
-  } catch {
-    return false
+    await createLink(owner, path)
+    return { state: 'created' }
+  } catch (error) {
+    const errorCode = (error as NodeJS.ErrnoException).code
+    return errorCode === 'EEXIST'
+      ? { state: 'exists' }
+      : { state: 'failed', ...(errorCode ? { errorCode } : {}) }
   }
 }
 

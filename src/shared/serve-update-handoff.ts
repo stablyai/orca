@@ -90,8 +90,8 @@ function isServeSupervisorHealth(value: unknown): boolean {
   }
   const health = value as Record<string, unknown>
   return (
-    ['ready', 'unavailable'].includes(String(health.websocket)) &&
-    ['ready', 'unavailable'].includes(String(health.runtime)) &&
-    ['ready', 'reloading', 'unavailable'].includes(String(health.graph))
+    (health.websocket === 'ready' || health.websocket === 'unavailable') &&
+    (health.runtime === 'ready' || health.runtime === 'unavailable') &&
+    (health.graph === 'ready' || health.graph === 'reloading' || health.graph === 'unavailable')
   )
 }

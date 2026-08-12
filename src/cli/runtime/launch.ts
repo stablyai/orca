@@ -5,10 +5,7 @@ import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
 } from '../../shared/serve-update-handoff'
-import {
-  SERVE_SUPERVISOR_ENV,
-  SERVE_SUPERVISOR_STOP_EXIT_CODE
-} from '../../shared/serve-supervision'
+import * as serveSupervision from '../../shared/serve-supervision'
 import {
   getEphemeralVmRecipeResultConnection,
   parseEphemeralVmRecipeResult
@@ -137,7 +134,7 @@ export function serveOrcaApp(
       throw error
     }
     process.stderr.write(`[serve] ${error.message}\n`)
-    return Promise.resolve(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+    return Promise.resolve(serveSupervision.SERVE_SUPERVISOR_STOP_EXIT_CODE)
   }
   const handoffPath =
     args.recipeJson !== true && getMacAppBundlePath(executable)
@@ -147,7 +144,7 @@ export function serveOrcaApp(
   const childEnv = applyServeTempDirectory(stripElectronRunAsNode(process.env), tempDirectory)
   delete childEnv.ORCA_APPIMAGE_NO_SANDBOX
   if (useCrashSupervisor) {
-    childEnv[SERVE_SUPERVISOR_ENV] = '1'
+    childEnv[serveSupervision.SERVE_SUPERVISOR_ENV] = '1'
   }
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath

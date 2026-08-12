@@ -11,20 +11,24 @@ async function pathExists(path: string): Promise<boolean> {
   )
 }
 
-describe('serve singleton recovery', () => {
+describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => {
   const roots: string[] = []
 
   afterEach(async () => {
     await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
   })
 
-  async function createProfile(ownerPid: number): Promise<string> {
+  async function createProfileWithLockTarget(lockTarget: string): Promise<string> {
     const root = await mkdtemp(join(tmpdir(), 'orca-singleton-recovery-'))
     roots.push(root)
-    await symlink(`${hostname()}-${ownerPid}`, join(root, 'SingletonLock'))
+    await symlink(lockTarget, join(root, 'SingletonLock'))
     await symlink('/tmp/orca-stale/SingletonSocket', join(root, 'SingletonSocket'))
     await symlink('synthetic-cookie', join(root, 'SingletonCookie'))
     return root
+  }
+
+  async function createProfile(ownerPid: number): Promise<string> {
+    return createProfileWithLockTarget(`${hostname()}-${ownerPid}`)
   }
 
   it('quarantines a confirmed stale local owner', async () => {
@@ -35,6 +39,7 @@ describe('serve singleton recovery', () => {
     }))
 
     const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
       probeHealth,
       isProcessAlive: () => false,
       wait: async () => undefined,
@@ -53,6 +58,7 @@ describe('serve singleton recovery', () => {
     const root = await createProfile(4101)
 
     const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
       probeHealth: async () => ({ healthy: true, runtimeId: 'runtime-live' }),
       isProcessAlive: () => true,
       wait: async () => undefined,
@@ -68,6 +74,7 @@ describe('serve singleton recovery', () => {
     const root = await createProfile(4101)
 
     const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
       probeHealth: async () => ({ healthy: false, reason: 'graph_not_ready' }),
       isProcessAlive: () => true,
       wait: async () => undefined,
@@ -76,5 +83,119 @@ describe('serve singleton recovery', () => {
 
     expect(result).toMatchObject({ state: 'not-recoverable', reason: 'owner_process_alive' })
     expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-4101`)
+  })
+
+  it.each([
+    { lockTarget: 'other-host-4101', reason: 'remote_host_owner' },
+    { lockTarget: 'invalid-owner', reason: 'invalid_lock' }
+  ])('does not touch a $reason singleton owner', async ({ lockTarget, reason }) => {
+    const root = await createProfileWithLockTarget(lockTarget)
+
+    const result = await recoverStaleServeSingleton(root, {
+      platform: 'linux',
+      probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+      isProcessAlive: () => false,
+      wait: async () => undefined,
+      quarantineSuffix: 'must-not-exist'
+    })
+
+    expect(result).toEqual({ state: 'not-recoverable', reason })
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(lockTarget)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
+  })
+
+  it('uses explicit Linux recovery semantics independently of the test host', async () => {
+    const root = await createProfile(987_654)
+    const platformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+
+    try {
+      const result = await recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+        isProcessAlive: () => false,
+        wait: async () => undefined,
+        quarantineSuffix: 'test-host-independent'
+      })
+
+      expect(result).toMatchObject({ state: 'recovered', ownerPid: 987_654 })
+    } finally {
+      Object.defineProperty(process, 'platform', platformDescriptor)
+    }
+  })
+
+  it('fails closed when the initial runtime health probe rejects', async () => {
+    const root = await createProfile(987_654)
+
+    await expect(
+      recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth: async () => {
+          throw new Error('runtime metadata unavailable')
+        },
+        isProcessAlive: () => false,
+        wait: async () => undefined,
+        quarantineSuffix: 'must-not-exist'
+      })
+    ).resolves.toEqual({ state: 'not-recoverable', reason: 'health_probe_failed' })
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
+  })
+
+  it('fails closed and releases the mutex when the confirmation health probe rejects', async () => {
+    const root = await createProfile(987_654)
+    const probeHealth = vi
+      .fn()
+      .mockResolvedValueOnce({ healthy: false, reason: 'metadata_missing' })
+      .mockRejectedValueOnce(new Error('runtime RPC failed'))
+
+    await expect(
+      recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth,
+        isProcessAlive: () => false,
+        wait: async () => undefined,
+        quarantineSuffix: 'must-not-exist'
+      })
+    ).resolves.toEqual({ state: 'not-recoverable', reason: 'health_probe_failed' })
+    expect(await pathExists(join(root, 'SingletonRecoveryLock'))).toBe(false)
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
+  })
+
+  it('reports a non-EEXIST mutex creation failure', async () => {
+    const root = await createProfile(987_654)
+
+    await expect(
+      recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+        isProcessAlive: () => false,
+        wait: async () => undefined,
+        createMutexLink: async () => {
+          throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' })
+        }
+      })
+    ).resolves.toEqual({
+      state: 'not-recoverable',
+      reason: 'recovery_mutex_failed',
+      errorCode: 'ENOSPC'
+    })
+  })
+
+  it('treats an existing live mutex as recovery in progress', async () => {
+    const root = await createProfile(987_654)
+    await symlink(String(process.pid), join(root, 'SingletonRecoveryLock'))
+
+    await expect(
+      recoverStaleServeSingleton(root, {
+        platform: 'linux',
+        probeHealth: async () => ({ healthy: false, reason: 'metadata_missing' }),
+        isProcessAlive: (pid) => pid === process.pid,
+        wait: async () => undefined,
+        quarantineSuffix: 'must-not-exist'
+      })
+    ).resolves.toEqual({ state: 'not-recoverable', reason: 'recovery_in_progress' })
+    expect(await readlink(join(root, 'SingletonLock'))).toBe(`${hostname()}-987654`)
+    expect(await pathExists(join(root, 'SingletonLock.must-not-exist'))).toBe(false)
   })
 })

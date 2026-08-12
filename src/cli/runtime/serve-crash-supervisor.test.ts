@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
+import { SERVE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/serve-supervision'
 import {
   SERVE_SUPERVISOR_STOP_EXIT_CODE,
   superviseForegroundServe
@@ -22,12 +23,20 @@ const readyMessage = {
   health: { websocket: 'ready', runtime: 'ready', graph: 'ready' }
 }
 
-function supervisorArgs(child: FakeChildProcess, overrides: Record<string, unknown> = {}) {
+type SupervisorArgs = Parameters<typeof superviseForegroundServe>[0]
+type SupervisorOverrides = Partial<Omit<SupervisorArgs, 'child' | 'expectedHandoff' | 'spawnChild'>>
+type TestSupervisorArgs = SupervisorArgs & { spawnChildMock: ReturnType<typeof vi.fn> }
+
+function supervisorArgs(
+  child: FakeChildProcess,
+  overrides: SupervisorOverrides = {}
+): TestSupervisorArgs {
+  const spawnChildMock = vi.fn()
   return {
     executable: '/opt/orca/orca',
     childArgs: ['--serve'],
     spawnOptions: {},
-    spawnChild: vi.fn(),
+    spawnChild: spawnChildMock as SupervisorArgs['spawnChild'],
     handoffPath: null,
     expectedHandoff: null,
     child: child as never,
@@ -39,7 +48,8 @@ function supervisorArgs(child: FakeChildProcess, overrides: Record<string, unkno
     sleep: vi.fn(async () => undefined),
     restartDelaysMs: [10, 20],
     healthCheckIntervalMs: 60_000,
-    ...overrides
+    ...overrides,
+    spawnChildMock
   }
 }
 
@@ -48,13 +58,13 @@ describe('foreground serve crash supervisor', () => {
     const first = new FakeChildProcess(4101)
     const replacement = new FakeChildProcess(4102)
     const args = supervisorArgs(first)
-    args.spawnChild.mockReturnValue(replacement as never)
+    args.spawnChildMock.mockReturnValue(replacement as never)
 
     const result = superviseForegroundServe(args)
     first.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalled())
     first.emit('exit', null, 'SIGSEGV')
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
     replacement.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledTimes(2))
     replacement.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
@@ -75,13 +85,41 @@ describe('foreground serve crash supervisor', () => {
       healthCheckIntervalMs: 1,
       healthFailureLimit: 1
     })
-    args.spawnChild.mockReturnValue(replacement as never)
+    args.spawnChildMock.mockReturnValue(replacement as never)
 
     const result = superviseForegroundServe(args)
     first.emit('message', readyMessage)
     await vi.waitFor(() => expect(first.kill).toHaveBeenCalledWith('SIGTERM'))
     first.emit('exit', 0, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
+    replacement.emit('message', readyMessage)
+    await vi.waitFor(() => expect(healthProbe).toHaveBeenCalledTimes(3))
+    replacement.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
+
+    await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
+  })
+
+  it('counts a hung runtime health probe as a failed check', async () => {
+    const first = new FakeChildProcess(4101)
+    const replacement = new FakeChildProcess(4102)
+    const healthProbe = vi
+      .fn()
+      .mockResolvedValueOnce({ healthy: true, runtimeId: 'runtime-ready' })
+      .mockImplementationOnce(() => new Promise<never>(() => undefined))
+      .mockResolvedValue({ healthy: true, runtimeId: 'runtime-ready' })
+    const args = supervisorArgs(first, {
+      healthProbe,
+      healthCheckIntervalMs: 1,
+      healthProbeTimeoutMs: 5,
+      healthFailureLimit: 1
+    })
+    args.spawnChildMock.mockReturnValue(replacement as never)
+
+    const result = superviseForegroundServe(args)
+    first.emit('message', readyMessage)
+    await vi.waitFor(() => expect(first.kill).toHaveBeenCalledWith('SIGTERM'))
+    first.emit('exit', 0, null)
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
     replacement.emit('message', readyMessage)
     await vi.waitFor(() => expect(healthProbe).toHaveBeenCalledTimes(3))
     replacement.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
@@ -94,13 +132,13 @@ describe('foreground serve crash supervisor', () => {
     const second = new FakeChildProcess(4102)
     const third = new FakeChildProcess(4103)
     const args = supervisorArgs(first)
-    args.spawnChild.mockReturnValueOnce(second as never).mockReturnValueOnce(third as never)
+    args.spawnChildMock.mockReturnValueOnce(second as never).mockReturnValueOnce(third as never)
 
     const result = superviseForegroundServe(args)
     first.emit('exit', 1, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledTimes(1))
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(1))
     second.emit('exit', 1, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(2))
     third.emit('exit', 1, null)
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
@@ -116,7 +154,7 @@ describe('foreground serve crash supervisor', () => {
     child.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
-    expect(args.spawnChild).not.toHaveBeenCalled()
+    expect(args.spawnChildMock).not.toHaveBeenCalled()
     expect(args.sleep).not.toHaveBeenCalled()
   })
 
@@ -124,13 +162,13 @@ describe('foreground serve crash supervisor', () => {
     const first = new FakeChildProcess(4101)
     const replacement = new FakeChildProcess(4102)
     const args = supervisorArgs(first)
-    args.spawnChild.mockReturnValue(replacement as never)
+    args.spawnChildMock.mockReturnValue(replacement as never)
 
     const result = superviseForegroundServe(args)
     first.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledOnce())
     first.emit('exit', 0, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
     replacement.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
@@ -140,11 +178,11 @@ describe('foreground serve crash supervisor', () => {
     const first = new FakeChildProcess(4101)
     const replacement = new FakeChildProcess(4102)
     const args = supervisorArgs(first, { restartDelaysMs: [10] })
-    args.spawnChild.mockReturnValue(replacement as never)
+    args.spawnChildMock.mockReturnValue(replacement as never)
 
     const result = superviseForegroundServe(args)
     first.emit('error', new Error('spawn EAGAIN'))
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledOnce())
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
     replacement.emit('error', new Error('spawn EAGAIN'))
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
@@ -163,24 +201,28 @@ describe('foreground serve crash supervisor', () => {
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
     expect(beforeRestart).toHaveBeenCalledOnce()
-    expect(args.spawnChild).not.toHaveBeenCalled()
+    expect(args.spawnChildMock).not.toHaveBeenCalled()
   })
 
   it('isolates a stale singleton and retries lock acquisition only once', async () => {
     const first = new FakeChildProcess(4101)
     const retry = new FakeChildProcess(4102)
-    const recoverSingleton = vi.fn(async () => ({ state: 'recovered' as const, ownerPid: 4000 }))
+    const recoverSingleton = vi.fn(async () => ({
+      state: 'recovered' as const,
+      ownerPid: 4000,
+      quarantined: ['SingletonLock.test']
+    }))
     const args = supervisorArgs(first, { recoverSingleton })
-    args.spawnChild.mockReturnValue(retry as never)
+    args.spawnChildMock.mockReturnValue(retry as never)
 
     const result = superviseForegroundServe(args)
-    first.emit('exit', 3, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledOnce())
-    retry.emit('exit', 3, null)
+    first.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledOnce())
+    retry.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
 
-    await expect(result).resolves.toBe(3)
+    await expect(result).resolves.toBe(SERVE_ALREADY_RUNNING_EXIT_CODE)
     expect(recoverSingleton).toHaveBeenCalledOnce()
-    expect(args.spawnChild).toHaveBeenCalledOnce()
+    expect(args.spawnChildMock).toHaveBeenCalledOnce()
   })
 
   it('allows one stale-lock retry again after a recovered child becomes healthy', async () => {
@@ -194,20 +236,20 @@ describe('foreground serve crash supervisor', () => {
       quarantined: ['SingletonLock.test']
     }))
     const args = supervisorArgs(collisionOne, { recoverSingleton })
-    args.spawnChild
+    args.spawnChildMock
       .mockReturnValueOnce(healthyOne as never)
       .mockReturnValueOnce(collisionTwo as never)
       .mockReturnValueOnce(healthyTwo as never)
 
     const result = superviseForegroundServe(args)
-    collisionOne.emit('exit', 3, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledTimes(1))
+    collisionOne.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(1))
     healthyOne.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledOnce())
     healthyOne.emit('exit', 1, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledTimes(2))
-    collisionTwo.emit('exit', 3, null)
-    await vi.waitFor(() => expect(args.spawnChild).toHaveBeenCalledTimes(3))
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(2))
+    collisionTwo.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
+    await vi.waitFor(() => expect(args.spawnChildMock).toHaveBeenCalledTimes(3))
     healthyTwo.emit('message', readyMessage)
     await vi.waitFor(() => expect(args.healthProbe).toHaveBeenCalledTimes(2))
     healthyTwo.emit('exit', SERVE_SUPERVISOR_STOP_EXIT_CODE, null)
@@ -225,10 +267,10 @@ describe('foreground serve crash supervisor', () => {
     const args = supervisorArgs(child, { recoverSingleton })
 
     const result = superviseForegroundServe(args)
-    child.emit('exit', 3, null)
+    child.emit('exit', SERVE_ALREADY_RUNNING_EXIT_CODE, null)
 
-    await expect(result).resolves.toBe(3)
-    expect(args.spawnChild).not.toHaveBeenCalled()
+    await expect(result).resolves.toBe(SERVE_ALREADY_RUNNING_EXIT_CODE)
+    expect(args.spawnChildMock).not.toHaveBeenCalled()
     expect(recoverSingleton).toHaveBeenCalledOnce()
   })
 })
