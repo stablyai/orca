@@ -2,10 +2,9 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
-// Why: opencode2 runs sessions in a shared background service whose endpoint
-// is registered in service.json (XDG state dir, same contract as the v2
-// client's Service.discover). Electron-free so it can be unit-tested in
-// isolation. See docs/adr/0002-opencode2-hooks-via-service-event-stream.md.
+// Why: the opencode2 daemon registers at <XDG state>/opencode/service.json, the
+// same contract as the v2 client's Service.discover; electron-free for tests.
+// See ADR 0002.
 
 export type OpenCode2ServiceInfo = {
   id?: string

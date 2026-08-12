@@ -56,10 +56,7 @@ export function listOpenCodeSqliteSessionsViaWorker(args: {
   return getSharedClient().list(args)
 }
 
-/**
- * List opencode2 session candidates (v2 channel-scoped DB schema) through the
- * shared worker client.
- */
+/** List opencode2 session candidates (v2 channel-scoped schema) via the shared worker client. */
 export function listOpenCode2SqliteSessionsViaWorker(args: {
   dbPaths: readonly string[]
   limit: number
@@ -83,10 +80,7 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   return getSharedClient().parse(args)
 }
 
-/**
- * Parse one opencode2 session (v2 channel-scoped DB schema) through the shared
- * worker client.
- */
+/** Parse one opencode2 session (v2 channel-scoped schema) via the shared worker client. */
 export function parseOpenCode2SqliteSessionViaWorker(args: {
   dbPath: string
   sessionId: string

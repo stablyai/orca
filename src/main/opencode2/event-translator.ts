@@ -1,7 +1,5 @@
-// Why: translates opencode2 service events into the opencode-family hook event
-// vocabulary the shared listener already normalizes (SessionBusy/Idle,
-// MessagePart, PermissionRequest). Pure module so translation is unit-testable
-// without a live service; the watcher lifecycle lives in hook-service.ts.
+// Why: v2 events translate to the opencode-family hook vocabulary the shared
+// listener already normalizes; pure module keeps translation unit-testable.
 
 import {
   normalizeAgentStatusPayload,
@@ -55,12 +53,7 @@ const TOOL_EVENTS = new Set(['session.tool.input.started', 'session.tool.called'
 const WAITING_EVENTS = new Set(['permission.asked', 'question.asked', 'form.created'])
 const USER_PROMPT_EVENTS = new Set(['session.input.promoted', 'session.input.admitted'])
 
-/**
- * Accumulates streaming text fragments per assistant message so `text.ended`
- * can deliver the full reply even when intermediate deltas were throttled.
- * Bounded: entry count and per-entry length are capped so a never-ending
- * stream cannot grow the map without bound.
- */
+/** Assembles streamed text per assistant message so text.ended has the full reply; bounded in count and length. */
 export class OpenCode2TextAccumulator {
   private readonly pending = new Map<string, string>()
   private readonly maxEntries: number

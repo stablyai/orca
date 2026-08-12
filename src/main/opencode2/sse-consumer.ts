@@ -1,5 +1,5 @@
-// Why: SSE parsing for the opencode2 service /api/event stream, kept separate
-// from the hook-service lifecycle so neither file needs a max-lines disable.
+// Why: SSE parsing for the opencode2 service /api/event stream, split out so
+// hook-service.ts stays under the max-lines limit.
 
 export type OpenCode2SseEnvelope = {
   event: string
@@ -7,9 +7,8 @@ export type OpenCode2SseEnvelope = {
 }
 
 /**
- * Read an SSE body line by line and emit each complete `data:` payload.
- * The stream is volatile by contract; `onClose` always runs once the read
- * loop settles so the caller can reconnect while its terminals remain.
+ * Emit each complete `data:` payload from an SSE body. The stream is volatile
+ * by contract; `onClose` always runs so the caller can reconnect.
  */
 export async function consumeOpenCode2EventStream(
   body: ReadableStream<Uint8Array>,

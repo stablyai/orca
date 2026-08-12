@@ -64,8 +64,7 @@ async function flush(): Promise<void> {
 }
 
 beforeEach(() => {
-  // Why: a fresh instance keeps every test free of cache/stream state from
-  // earlier tests (the module singleton would order-couple them).
+  // Why: a fresh instance keeps every test free of earlier cache/stream state.
   service = new OpenCode2HookService()
   agentHookServerMock.onInterruptInferred = null
   agentHookServerMock.ingestTerminalStatus.mockClear()

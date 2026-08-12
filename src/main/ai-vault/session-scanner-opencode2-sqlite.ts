@@ -13,20 +13,16 @@ import { normalizeTitleText } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
-// Why: opencode2 (beta) stores sessions in a channel-scoped SQLite DB with its
-// own schema — `session_v2` rows plus `session_message` rows whose `data`
-// column holds tagged message JSON (user/assistant/system/tool/…), with no
-// `part` table like opencode v1. The v2 schema is explicitly unstable during
-// beta, so every read is column-guarded and any drift fails soft to a null
-// session. Electron-free so the worker entry can import it.
+// Why: opencode2 (beta) sessions live in a channel-scoped SQLite DB with its
+// own schema — `session_v2` rows plus `session_message` rows holding tagged
+// message JSON, no `part` table like v1. The schema is beta-unstable, so every
+// read is column-guarded and drift fails soft to null. Electron-free for the worker.
 
 const OPENCODE2_SESSION_TABLE = 'session_v2'
 const OPENCODE2_MESSAGE_TABLE = 'session_message'
 
 const OPENCODE2_PREVIEW_LIMIT = 5
-// Why: v2 stores the full message JSON inline in one column, so the preview
-// window can stay small; a heavy session's assistant content can still hold
-// large tool blobs.
+// Why: v2 keeps full message JSON inline, so a small window covers the preview.
 const OPENCODE2_PREVIEW_MESSAGE_WINDOW = 100
 
 type SessionRow = {

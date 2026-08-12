@@ -8,10 +8,8 @@ import { discoverOpenCodeSessions } from './session-scanner-opencode-sqlite-disc
 import { listOpenCode2SqliteSessionsViaWorker } from './session-scanner-opencode-sqlite-worker-spawn'
 import type { AiVaultScanOptions, SessionFileDiscovery } from './session-scanner-types'
 
-// Why: opencode2 (beta) stores sessions in channel-scoped DBs
-// (opencode-next.db / opencode-local.db) alongside the v1 opencode.db. Both
-// match the `opencode*.db` glob, so paths are split by basename here: the v1
-// discovery never sees v2 DBs (different, beta-unstable schema) and vice versa.
+// Why: opencode2's channel-scoped DBs share the v1 `opencode*.db` glob but not
+// its schema — split by basename so each discovery only sees its own store.
 
 function splitDatabasePaths(dbPaths: readonly string[]): {
   v1Paths: string[]

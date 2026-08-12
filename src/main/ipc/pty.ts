@@ -5328,8 +5328,8 @@ export function registerPtyHandlers(
         }
         // Why: runtime-owned CLI PTYs bypass the renderer pty:spawn handler; record paneKey here too since hook titles and cache cleanup need this reverse lookup.
         const paneKey = rememberPaneKeyForPty(result.id, env?.ORCA_PANE_KEY)
-        // Why: same opencode2 watcher registration as the pty:spawn path —
-        // headless/CLI spawns must attribute daemon sessions too.
+        // Why: runtime/CLI spawns bypass pty:spawn — register the watcher here
+        // too so headless terminals attribute daemon sessions.
         if (
           !args.connectionId &&
           paneKey &&
@@ -6932,11 +6932,9 @@ export function registerPtyHandlers(
           ? rememberPaneKeyForPty(result.id, validatedPaneKey)
           : null
         // Why: opencode2 sessions live in the shared service daemon, so the
-        // status watcher needs each opencode2 terminal's cwd + pane key to
-        // attribute daemon sessions back to the right Orca tab
-        // (docs/adr/0003-opencode2-shared-daemon-launch.md). Derived from the
-        // launch agent (renderer/CLI spawns) or the launch command itself
-        // (typed-in-shell starts), not just telemetry.
+        // status watcher needs each opencode2 terminal's cwd + pane key for
+        // attribution (ADR 0003). Derived from launchAgent or the launch
+        // command so typed-in-shell starts register too.
         if (
           !args.connectionId &&
           rememberedPaneKey &&

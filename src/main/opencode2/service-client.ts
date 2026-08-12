@@ -1,6 +1,5 @@
-// Why: direct opencode2 service API calls (session lookup, interrupt) kept
-// separate from the SSE watcher so hook-service.ts stays under the max-lines
-// limit and both calls share the auth/cancel-body discipline.
+// Why: direct service API calls (session lookup, interrupt) share auth and
+// cancel-body discipline.
 
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 import { buildOpenCode2AuthHeaders, type OpenCode2ServiceInfo } from './service-discovery'
@@ -50,6 +49,6 @@ export async function postOpenCode2SessionInterrupt(
     )
     await cancelUnreadResponseBody(response)
   } catch {
-    // best-effort; the TUI's own Escape handling remains the fallback
+    // best-effort; the TUI's own Escape handling is the fallback
   }
 }

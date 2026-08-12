@@ -554,10 +554,8 @@ export async function scanOpenCodeUsageDatabases(
   sessions: OpenCodeUsageSession[]
   dailyAggregates: OpenCodeUsageDailyAggregate[]
 }> {
-  // Why: this shared list feeds both ai-vault discovery (which routes v2 DBs
-  // to the opencode2 scanner) and the v1 usage parser (which must never see
-  // the v2 schema) — the v2 exclusion applies only at the usage consumption
-  // site below.
+  // Why: the shared list also feeds ai-vault discovery, which routes v2 DBs to
+  // the opencode2 scanner; only the v1 usage parser must exclude them.
   const dbPaths = (await listOpenCodeDatabases()).filter(
     (dbPath) => !isOpenCodeV2DatabaseName(basename(dbPath))
   )

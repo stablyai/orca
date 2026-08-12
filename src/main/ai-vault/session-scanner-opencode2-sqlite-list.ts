@@ -8,11 +8,11 @@ import { errorMessage } from './session-scanner-values'
 import SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
-// Why: the opencode2 beta stores sessions in a channel-scoped SQLite DB
+// Why: opencode2 (beta) sessions live in a channel-scoped SQLite DB
 // (opencode-next.db / opencode-local.db) with its own schema — `session_v2`
-// rows plus `session_message` parts, no `part` table. Its schema is explicitly
-// unstable during beta, so every read is column-guarded and any drift fails
-// soft to "no sessions". Electron-free so the worker entry can import it.
+// rows plus `session_message` parts, no `part` table. Beta-unstable schema, so
+// every read is column-guarded and drift fails soft to no sessions.
+// Electron-free so the worker entry can import it.
 
 const OPENCODE2_SESSION_TABLE = 'session_v2'
 

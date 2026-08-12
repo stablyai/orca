@@ -22,13 +22,9 @@ import {
 } from './sse-consumer'
 import { OpenCode2SessionDirectoryCache } from './session-directory-cache'
 
-// Why: opencode2 keeps sessions in a shared background service, so status
-// events come from the service's `/api/event` SSE stream instead of an
-// injected plugin (docs/adr/0002-opencode2-hooks-via-service-event-stream.md).
-// Sessions are attributed to Orca terminals by workspace directory; events for
-// sessions outside Orca's opencode2 terminals are ignored. All reads are
-// best-effort — a missing service, beta API drift, or schema change degrades
-// to "no status" without affecting the terminal.
+// Why: opencode2 status comes from the shared service's /api/event SSE stream,
+// not an injected plugin (ADR 0002); sessions attribute to Orca terminals by
+// workspace directory, and every read fails soft.
 
 const TEXT_INGEST_THROTTLE_MS = 150
 const STREAM_RETRY_MS = 5000
@@ -40,9 +36,7 @@ export type OpenCode2TerminalRegistration = {
   worktreeId?: string
 }
 
-// Why: Windows and macOS filesystems compare paths case-insensitively, and the
-// daemon can report POSIX-style separators while the pane cwd uses backslashes.
-// Compare both sides on a shared, case-normalized, separator-unified form.
+// Why: daemon paths may mix separators and case (win32/darwin FS); compare on a normalized form.
 function comparableDirectoryPath(value: string, platform: NodeJS.Platform): string {
   let normalized = value.replace(/\\/g, '/')
   normalized = normalized.replace(/\/{2,}/g, '/')
@@ -52,10 +46,8 @@ function comparableDirectoryPath(value: string, platform: NodeJS.Platform): stri
   return platform === 'win32' || platform === 'darwin' ? normalized.toLowerCase() : normalized
 }
 
-// Why: attribute a daemon session to the terminal whose cwd is the session's
-// directory or an ancestor of it (sessions launched from a worktree subdir).
-// The reverse (session directory is an ancestor of the pane cwd) is a
-// different workspace and must not flip this pane's status.
+// Why: a session launched from the pane cwd or a subdir attributes to the pane;
+// an ancestor directory is a different workspace.
 function isSessionDirectoryInCwd(
   cwd: string,
   directory: string,
@@ -77,9 +69,7 @@ export class OpenCode2HookService {
   private readonly lastTextIngestAtByPaneKey = new Map<string, number>()
   private controller: AbortController | null = null
   private retryTimer: NodeJS.Timeout | null = null
-  // Why: openStream assigns `this.controller` only after `await fetch`
-  // resolves; this flag closes the window where concurrent registerTerminal
-  // calls would both pass ensureStreaming and open two SSE streams.
+  // Why: controller is set only after await fetch — this flag stops concurrent registerTerminal opening two streams.
   private streamOpening = false
   private attachedInterruptListener = false
 
@@ -238,9 +228,8 @@ export class OpenCode2HookService {
       return
     }
 
-    // Why: text deltas can arrive many times per second during streaming;
-    // throttle per pane like the v1 plugin did, but always deliver the final
-    // `session.text.ended` full text.
+    // Why: deltas stream at high rate — throttle per pane like the v1 plugin,
+    // but always deliver the final text.ended text.
     if (event === 'session.text.delta') {
       const lastIngest = this.lastTextIngestAtByPaneKey.get(paneKey) ?? 0
       const now = Date.now()

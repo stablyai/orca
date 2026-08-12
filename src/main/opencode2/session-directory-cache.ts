@@ -1,6 +1,5 @@
-// Why: sessionID → directory resolution state for the opencode2 watcher,
-// including failed-lookup backoff. Kept out of hook-service.ts to stay under
-// the max-lines limit and to unit-test the eviction policy in isolation.
+// Why: sessionID → directory resolution state with failed-lookup backoff,
+// split out of hook-service.ts.
 
 const MAX_ENTRIES = 512
 const FAILED_RETRY_MS = 60_000
