@@ -67,6 +67,7 @@ import {
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
+import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -321,11 +322,13 @@ function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
-  const send = (channel: string, ...args: unknown[]): void => {
-    if (!mainWindow.isDestroyed()) {
-      mainWindow.webContents.send(channel, ...args)
-    }
-  }
+  const mainWebContents = mainWindow.webContents
+  const rendererNotifications = createRuntimeRendererNotificationSender({
+    isWindowDestroyed: () => mainWindow.isDestroyed(),
+    webContents: mainWebContents,
+    onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
+  })
+  const send = rendererNotifications.send
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
@@ -404,7 +407,7 @@ function registerRuntimeWindowLifecycle(
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
-        send('ui:createTerminal', {
+        const sent = send('ui:createTerminal', {
           requestId,
           worktreeId,
           ptyId: opts.ptyId,
@@ -427,6 +430,11 @@ function registerRuntimeWindowLifecycle(
             : {}),
           ...(opts.focus !== undefined ? { focus: opts.focus } : {})
         })
+        if (!sent) {
+          clearTimeout(timer)
+          ipcMain.removeListener('terminal:tabCreateReply', handler)
+          reject(new Error('runtime_unavailable'))
+        }
       }),
     resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
       send('agentStatus:legacyWorkerTerminalRecovery', {
@@ -493,10 +501,21 @@ function registerRuntimeWindowLifecycle(
       send('runtime:browserDriverChanged', { browserPageId, driver })
   })
   // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
-  mainWindow.webContents.on('did-start-loading', () => {
+  mainWebContents.on('did-start-loading', () => {
+    if (!mainWebContents.isLoadingMainFrame()) {
+      return
+    }
+    rendererNotifications.onMainFrameReloadStarted()
     runtime.markRendererReloading(mainWindow.id)
   })
+  mainWebContents.on('did-finish-load', () => {
+    rendererNotifications.onMainFrameLoadFinished()
+  })
+  mainWebContents.on('render-process-gone', () => {
+    rendererNotifications.onRendererProcessGone()
+  })
   mainWindow.on('closed', () => {
+    rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.

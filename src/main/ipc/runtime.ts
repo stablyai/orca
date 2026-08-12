@@ -33,6 +33,11 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
       }
+      if (event.senderFrame !== event.sender.mainFrame) {
+        // Why: a disposed main frame can leave an invoke queued after its
+        // replacement starts. It must not settle the replacement generation.
+        throw new Error('Runtime graph sync must originate from the current main frame')
+      }
       return runtime.syncWindowGraph(window.id, graph)
     }
   )

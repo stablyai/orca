@@ -66,6 +66,7 @@ import {
   resolveWorktreeScanCacheTtlMs,
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
+import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from './runtime-graph-reload-lifecycle'
 import {
   appendRecentPtyPathCandidates,
   recentTerminalPathCandidatesIncludePath,
@@ -2495,6 +2496,96 @@ describe('OrcaRuntimeService', () => {
       authoritativeWindowId: null,
       rendererGraphEpoch: 2
     })
+  })
+
+  it('restores headless graph authority after a promoted renderer reload times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createRuntime()
+      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+        tabId: 'host-tab',
+        leafId: HEADLESS_LEAF_ID
+      })
+      runtime.attachWindow(TEST_WINDOW_ID)
+
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
+
+      expect(runtime.getStatus()).toMatchObject({
+        authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+        graphStatus: 'ready'
+      })
+      expect((await runtime.listTerminals()).terminals).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ptyId: 'persisted-pty', connected: true, writable: true })
+        ])
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('moves a desktop graph to unavailable when its reload times out', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createRuntime()
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.markGraphReady(TEST_WINDOW_ID)
+      runtime.markRendererReloading(TEST_WINDOW_ID)
+
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
+
+      expect(runtime.getStatus()).toMatchObject({
+        authoritativeWindowId: TEST_WINDOW_ID,
+        graphStatus: 'unavailable',
+        rendererGraphEpoch: 1
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('recovers a failed headless promotion and accepts a later renderer generation', () => {
+    const runtime = createRuntime()
+    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+    runtime.attachWindow(TEST_WINDOW_ID)
+
+    runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+
+    runtime.markRendererReloading(TEST_WINDOW_ID)
+    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+
+    expect(runtime.getStatus()).toMatchObject({
+      authoritativeWindowId: TEST_WINDOW_ID,
+      graphStatus: 'ready'
+    })
+  })
+
+  it('does not let a superseded reload timeout overwrite a newer renderer graph', async () => {
+    vi.useFakeTimers()
+    try {
+      const runtime = createRuntime()
+      runtime.attachWindow(TEST_WINDOW_ID)
+      runtime.markGraphReady(TEST_WINDOW_ID)
+      runtime.markRendererReloading(TEST_WINDOW_ID)
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS / 2)
+      runtime.markRendererReloading(TEST_WINDOW_ID)
+      runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
+
+      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
+
+      expect(runtime.getStatus()).toMatchObject({
+        authoritativeWindowId: TEST_WINDOW_ID,
+        graphStatus: 'ready'
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('stays unavailable during initial loads before a graph is published', () => {
