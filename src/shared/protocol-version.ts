@@ -58,6 +58,10 @@ export const LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY =
 // Why: older hosts lack the beads.* RPCs; clients must show an unavailability
 // notice instead of treating a missing method as an empty issue list.
 export const BEADS_TASK_SOURCE_RUNTIME_CAPABILITY = 'beads-task-source.v1' as const
+// Why: hosts without this strip beads.listIssues' statusScope/assignee params
+// (zod drops unknown keys), so a closed/all query would silently come back as
+// open-only. Clients must reject instead of presenting that as "no closed issues".
+export const BEADS_QUERY_FILTER_RUNTIME_CAPABILITY = 'beads-query-filter.v1' as const
 // Why: signals the host exposes the Agent Session History scanner over RPC
 // (aiVault.listSessions). Registered unconditionally for every build, so it is a
 // STATIC capability advertised by getStatus() automatically — NOT a runtime
@@ -133,6 +137,7 @@ export const RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_RUNTIME_CAPABILITY,
   BEADS_TASK_SOURCE_RUNTIME_CAPABILITY,
+  BEADS_QUERY_FILTER_RUNTIME_CAPABILITY,
   AI_VAULT_RUNTIME_CAPABILITY,
   AI_VAULT_SESSION_TITLES_RUNTIME_CAPABILITY,
   TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY,

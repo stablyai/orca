@@ -1,7 +1,8 @@
 // Why: beads twin of PRFilterDropdowns — one "Filters" button opening a popover
 // of Status / Priority / Type / Label / Assignee sections, with active filters
-// surfacing as inline removable pills. Facets apply client-side over the
-// fetched list; class strings mirror the GitHub filter UI exactly.
+// surfacing as inline removable pills. Like the GitHub popover, every change
+// reads the parsed query and writes back through withBeadsQualifier, so the
+// query bar stays the single source of truth.
 import React, { useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 
@@ -14,18 +15,19 @@ import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
-import type { BeadsIssueStatus } from '../../../shared/beads-types'
 import {
-  hasActiveBeadsFacetFilters,
-  type TaskPageBeadsFacetFilters,
-  type TaskPageBeadsFacetOptions
-} from './task-page-beads-issues'
+  hasBeadsFacetQualifiers,
+  parseBeadsTaskQuery,
+  withBeadsQualifier,
+  type BeadsTaskQueryFilterKey
+} from '../../../shared/beads-task-query'
+import type { TaskPageBeadsFacetOptions } from './task-page-beads-issues'
 import { BEADS_STATUS_ORDER, getBeadsStatusLabels } from './task-page-beads-status-visuals'
 
 type Props = {
-  filters: TaskPageBeadsFacetFilters
+  query: string
   options: TaskPageBeadsFacetOptions
-  onChange: (next: TaskPageBeadsFacetFilters) => void
+  onChange: (nextQuery: string) => void
 }
 
 type BeadsFilterSectionKey = 'status' | 'priority' | 'type' | 'label' | 'assignee'
@@ -69,13 +71,18 @@ function ActivePill({
 }
 
 export default function TaskPageBeadsFilterDropdowns({
-  filters,
+  query,
   options,
   onChange
 }: Props): React.JSX.Element {
   const [openSection, setOpenSection] = useState<BeadsFilterSectionKey | null>(null)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const statusLabels = getBeadsStatusLabels()
+  const filters = useMemo(() => parseBeadsTaskQuery(query), [query])
+
+  const apply = (key: BeadsTaskQueryFilterKey, value: string | string[] | null): void => {
+    onChange(withBeadsQualifier(query, key, value))
+  }
 
   const statusOpts = useMemo<PickerOption[]>(
     () => BEADS_STATUS_ORDER.map((status) => ({ key: status, primary: statusLabels[status] })),
@@ -202,19 +209,24 @@ export default function TaskPageBeadsFilterDropdowns({
                   </span>
                 </button>
               ))}
-              {hasActiveBeadsFacetFilters(filters) ? (
+              {hasBeadsFacetQualifiers(filters) ? (
                 <>
                   <div className="my-1 h-px bg-border" />
                   <button
                     type="button"
                     onClick={() => {
-                      onChange({
-                        statuses: [],
-                        priorities: [],
-                        types: [],
-                        labels: [],
-                        assignee: null
-                      })
+                      // Clears the facet qualifiers while preserving is:ready and free text.
+                      let next = query
+                      for (const key of [
+                        'statuses',
+                        'priorities',
+                        'types',
+                        'labels',
+                        'assignee'
+                      ] as const) {
+                        next = withBeadsQualifier(next, key, null)
+                      }
+                      onChange(next)
                       setPopoverOpen(false)
                     }}
                     className="w-full px-3 py-1.5 text-left text-muted-foreground transition hover:bg-muted/50 hover:text-foreground"
@@ -247,9 +259,7 @@ export default function TaskPageBeadsFilterDropdowns({
                     'auto.components.TaskPage.beadsFilterStatusPlaceholder',
                     'Filter statuses...'
                   )}
-                  onChange={(next) =>
-                    onChange({ ...filters, statuses: next as BeadsIssueStatus[] })
-                  }
+                  onChange={(next) => apply('statuses', next)}
                 />
               ) : null}
               {openSection === 'priority' ? (
@@ -262,9 +272,7 @@ export default function TaskPageBeadsFilterDropdowns({
                     'auto.components.TaskPage.searchPriority',
                     'Filter priority…'
                   )}
-                  onChange={(next) =>
-                    onChange({ ...filters, priorities: next.map((value) => Number(value)) })
-                  }
+                  onChange={(next) => apply('priorities', next)}
                 />
               ) : null}
               {openSection === 'type' ? (
@@ -277,7 +285,7 @@ export default function TaskPageBeadsFilterDropdowns({
                     'auto.components.TaskPage.beadsFilterTypePlaceholder',
                     'Filter types...'
                   )}
-                  onChange={(next) => onChange({ ...filters, types: next })}
+                  onChange={(next) => apply('types', next)}
                 />
               ) : null}
               {openSection === 'label' ? (
@@ -291,7 +299,7 @@ export default function TaskPageBeadsFilterDropdowns({
                     'auto.components.github.PRFilterSections.de26e2eb06',
                     'No labels'
                   )}
-                  onChange={(next) => onChange({ ...filters, labels: next })}
+                  onChange={(next) => apply('labels', next)}
                 />
               ) : null}
               {openSection === 'assignee' ? (
@@ -309,7 +317,7 @@ export default function TaskPageBeadsFilterDropdowns({
                     'No users'
                   )}
                   onSelect={(value) => {
-                    onChange({ ...filters, assignee: value })
+                    apply('assignee', value)
                     setOpenSection(null)
                   }}
                 />
@@ -322,35 +330,35 @@ export default function TaskPageBeadsFilterDropdowns({
         <ActivePill
           label={translate('auto.components.github.PRFilterDropdowns.13b3ac0a84', 'Status')}
           value={statusValue}
-          onClear={() => onChange({ ...filters, statuses: [] })}
+          onClear={() => apply('statuses', [])}
         />
       ) : null}
       {priorityValue ? (
         <ActivePill
           label={translate('auto.components.TaskPage.c8d5bec5f7', 'Priority')}
           value={priorityValue}
-          onClear={() => onChange({ ...filters, priorities: [] })}
+          onClear={() => apply('priorities', [])}
         />
       ) : null}
       {typeValue ? (
         <ActivePill
           label={translate('auto.components.TaskPage.beadsFilterType', 'Type')}
           value={typeValue}
-          onClear={() => onChange({ ...filters, types: [] })}
+          onClear={() => apply('types', [])}
         />
       ) : null}
       {labelValue ? (
         <ActivePill
           label={translate('auto.components.github.PRFilterDropdowns.9d0f2eda6d', 'Label')}
           value={labelValue}
-          onClear={() => onChange({ ...filters, labels: [] })}
+          onClear={() => apply('labels', [])}
         />
       ) : null}
       {filters.assignee ? (
         <ActivePill
           label={translate('auto.components.github.PRFilterDropdowns.979be3cf6b', 'Assignee')}
           value={filters.assignee}
-          onClear={() => onChange({ ...filters, assignee: null })}
+          onClear={() => apply('assignee', null)}
         />
       ) : null}
     </div>

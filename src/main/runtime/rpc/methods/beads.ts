@@ -9,7 +9,11 @@ const RepoSelector = z.object({
 
 const IssuesList = RepoSelector.extend({
   preset: z.enum(['open', 'assigned', 'ready']).optional(),
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  // beads-query-filter.v1: explicit fetch scope; 'all' includes closed issues.
+  statusScope: z.enum(['open', 'all', 'ready']).optional(),
+  // '@me' resolves to the repo host's actor.
+  assignee: z.string().optional()
 })
 
 const Issue = RepoSelector.extend({
@@ -30,7 +34,10 @@ export const BEADS_METHODS: RpcMethod[] = [
     name: 'beads.listIssues',
     params: IssuesList,
     handler: async (params, { runtime }) =>
-      runtime.beadsListIssues(params.repoId, params.preset, params.limit)
+      runtime.beadsListIssues(params.repoId, params.preset, params.limit, {
+        ...(params.statusScope !== undefined ? { statusScope: params.statusScope } : {}),
+        ...(params.assignee !== undefined ? { assignee: params.assignee } : {})
+      })
   }),
   defineMethod({
     name: 'beads.getIssue',

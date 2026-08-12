@@ -70,36 +70,72 @@ function isBdIssueNotFoundOutput(output: string): boolean {
   return /no issues? found matching/i.test(output)
 }
 
-async function listArgsForPreset(
+export type BeadsListStatusScope = 'open' | 'all' | 'ready'
+
+export type BeadsListRequest = {
+  /** Legacy route for clients predating beads-query-filter.v1. */
+  preset?: BeadsIssuePreset
+  /** 'all' includes closed issues; 'ready' is the bd-ready unblocked view. */
+  statusScope?: BeadsListStatusScope
+  /** '@me' resolves to the repo host's actor; anything else passes to `-a` verbatim. */
+  assignee?: string
+  limit?: number
+}
+
+type BeadsListPlan = { scope: BeadsListStatusScope; assignee: string | null }
+
+/** Pure fetch routing: the query-filter params win entirely; else legacy preset semantics. */
+export function resolveBeadsListPlan(request: BeadsListRequest): BeadsListPlan {
+  if (request.statusScope !== undefined || request.assignee !== undefined) {
+    return { scope: request.statusScope ?? 'open', assignee: request.assignee ?? null }
+  }
+  switch (request.preset ?? 'open') {
+    case 'open':
+      return { scope: 'open', assignee: null }
+    case 'assigned':
+      return { scope: 'open', assignee: '@me' }
+    case 'ready':
+      return { scope: 'ready', assignee: null }
+  }
+}
+
+async function listArgsForPlan(
   target: BeadsExecutionTarget,
-  preset: BeadsIssuePreset,
+  plan: BeadsListPlan,
   limit: number
 ): Promise<string[] | null> {
-  switch (preset) {
-    case 'open':
-      return ['list', '--json', '-n', String(limit)]
-    case 'assigned': {
-      const actor = await resolveBeadsActor(target)
-      // Why: no resolvable actor means "assigned to me" has no answer; an
-      // unfiltered list would silently show the wrong preset.
-      return actor ? ['list', '--json', '-n', String(limit), '-a', actor] : null
-    }
-    case 'ready':
-      // bd ready has no -n flag; the result is truncated after parsing.
-      return ['ready', '--json']
+  if (plan.scope === 'ready') {
+    // bd ready has no -n or -a flags; ready results are filtered/truncated after parsing.
+    return ['ready', '--json']
   }
+  const args = ['list', '--json']
+  if (plan.scope === 'all') {
+    // Probed on bd 1.1.2: plain `bd list` omits only closed; --all restores them.
+    args.push('--all')
+  }
+  args.push('-n', String(limit))
+  if (plan.assignee) {
+    const actor = plan.assignee === '@me' ? await resolveBeadsActor(target) : plan.assignee
+    // Why: no resolvable actor means "assigned to me" has no answer; an
+    // unfiltered list would silently show the wrong view.
+    if (!actor) {
+      return null
+    }
+    args.push('-a', actor)
+  }
+  return args
 }
 
 export async function listBeadsIssues(
   target: BeadsExecutionTarget,
-  preset: BeadsIssuePreset,
-  limit = BEADS_ISSUE_LIST_MAX_LIMIT
+  request: BeadsListRequest
 ): Promise<BeadsListIssuesResult> {
+  const limit = clampBeadsIssueLimit(request.limit)
   const info = await getBdVersionInfo(target)
   if (!info.installed || !info.supported) {
     return { issues: [], status: workspaceStatusFromVersion(info, false) }
   }
-  const args = await listArgsForPreset(target, preset, limit)
+  const args = await listArgsForPlan(target, resolveBeadsListPlan(request), limit)
   if (args === null) {
     const probe = await runBd(target, ['list', '--json', '-n', '1'])
     return { issues: [], status: workspaceStatusFromVersion(info, probe.exitCode === 0) }

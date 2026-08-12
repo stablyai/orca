@@ -3,7 +3,15 @@ import { create } from 'zustand'
 import type { AppState } from '../types'
 import type { BeadsIssue, BeadsWorkspaceStatus } from '../../../../shared/beads-types'
 import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
+import type { BeadsIssueFetchPlan } from '../../../../shared/beads-task-query'
 import { beadsIssueListCacheKey, createBeadsSlice } from './beads'
+
+const OPEN_PLAN: BeadsIssueFetchPlan = { statusScope: 'open', assignee: null, legacyPreset: 'open' }
+const READY_PLAN: BeadsIssueFetchPlan = {
+  statusScope: 'ready',
+  assignee: null,
+  legacyPreset: 'ready'
+}
 
 // Why: vi.mock factories run during hoisted imports, before module-body class initialization.
 const { beadsListIssues, beadsUpdateIssue, MockBeadsUnsupportedError } = vi.hoisted(() => {
@@ -69,38 +77,59 @@ describe('beads slice', () => {
     beadsUpdateIssue.mockReset()
   })
 
-  it('caches per scope+preset and dedupes reads within the TTL', async () => {
+  it('caches per scope+plan and dedupes reads within the TTL', async () => {
     const context = makeContext()
     const result = { issues: [makeIssue('orca-a1')], status: READY_STATUS }
     beadsListIssues.mockResolvedValue(result)
 
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).resolves.toEqual(result)
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).resolves.toEqual(result)
     expect(beadsListIssues).toHaveBeenCalledTimes(1)
     expect(beadsListIssues).toHaveBeenCalledWith(context, {
       repoId: 'repo-1',
       preset: 'open',
-      limit: 200
+      limit: 200,
+      statusScope: 'open'
     })
 
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).resolves.toEqual(result)
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).resolves.toEqual(result)
     expect(beadsListIssues).toHaveBeenCalledTimes(1)
 
-    await store.getState().fetchBeadsIssues(context, 'ready')
+    await store.getState().fetchBeadsIssues(context, READY_PLAN)
     expect(beadsListIssues).toHaveBeenCalledTimes(2)
     expect(beadsListIssues).toHaveBeenLastCalledWith(context, {
       repoId: 'repo-1',
       preset: 'ready',
-      limit: 200
+      limit: 200,
+      statusScope: 'ready'
+    })
+  })
+
+  it('passes the plan assignee over the wire and omits it when null', async () => {
+    const context = makeContext()
+    beadsListIssues.mockResolvedValue({ issues: [], status: READY_STATUS })
+
+    await store.getState().fetchBeadsIssues(context, {
+      statusScope: 'all',
+      assignee: '@me',
+      legacyPreset: 'assigned'
+    })
+
+    expect(beadsListIssues).toHaveBeenCalledWith(context, {
+      repoId: 'repo-1',
+      preset: 'assigned',
+      limit: 200,
+      statusScope: 'all',
+      assignee: '@me'
     })
   })
 
   it('returns stale data immediately and refreshes it in the background', async () => {
     const context = makeContext()
-    const cacheKey = beadsIssueListCacheKey(context, 'open')
+    const cacheKey = beadsIssueListCacheKey(context, OPEN_PLAN)
     const staleResult = { issues: [makeIssue('orca-a1')], status: READY_STATUS }
     const freshResult = { issues: [makeIssue('orca-b2')], status: READY_STATUS }
     beadsListIssues.mockResolvedValueOnce(staleResult)
-    await store.getState().fetchBeadsIssues(context, 'open')
+    await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
     store.setState((s) => ({
       beadsListCache: {
         ...s.beadsListCache,
@@ -109,7 +138,9 @@ describe('beads slice', () => {
     }))
 
     beadsListIssues.mockResolvedValueOnce(freshResult)
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).resolves.toEqual(staleResult)
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).resolves.toEqual(
+      staleResult
+    )
     expect(beadsListIssues).toHaveBeenCalledTimes(2)
     await vi.waitFor(() => {
       expect(store.getState().beadsListCache[cacheKey]?.data).toEqual(freshResult)
@@ -120,20 +151,20 @@ describe('beads slice', () => {
     const context = makeContext()
     beadsListIssues.mockRejectedValue(new MockBeadsUnsupportedError('old host'))
 
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).rejects.toBeInstanceOf(
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).rejects.toBeInstanceOf(
       MockBeadsUnsupportedError
     )
-    const entry = store.getState().beadsListCache[beadsIssueListCacheKey(context, 'open')]
+    const entry = store.getState().beadsListCache[beadsIssueListCacheKey(context, OPEN_PLAN)]
     expect(entry?.error).toBe('missing-task-source-capability')
     expect(entry?.data).toBeNull()
   })
 
   it('keeps the last good list when a background refresh fails', async () => {
     const context = makeContext()
-    const cacheKey = beadsIssueListCacheKey(context, 'open')
+    const cacheKey = beadsIssueListCacheKey(context, OPEN_PLAN)
     const goodResult = { issues: [makeIssue('orca-a1')], status: READY_STATUS }
     beadsListIssues.mockResolvedValueOnce(goodResult)
-    await store.getState().fetchBeadsIssues(context, 'open')
+    await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
     store.setState((s) => ({
       beadsListCache: {
         ...s.beadsListCache,
@@ -142,7 +173,7 @@ describe('beads slice', () => {
     }))
 
     beadsListIssues.mockRejectedValueOnce(new Error('bd exploded'))
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).resolves.toEqual(goodResult)
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).resolves.toEqual(goodResult)
     await vi.waitFor(() => {
       expect(store.getState().beadsListCache[cacheKey]?.error).toBe('load-failed')
     })
@@ -157,7 +188,7 @@ describe('beads slice', () => {
         resolveRead = resolve
       })
     )
-    const pending = store.getState().fetchBeadsIssues(context, 'open')
+    const pending = store.getState().fetchBeadsIssues(context, OPEN_PLAN)
     store.getState().invalidateBeadsIssues()
     resolveRead({ issues: [makeIssue('orca-late')], status: READY_STATUS })
     await pending
@@ -166,7 +197,7 @@ describe('beads slice', () => {
 
   it('rejects a context without a repoId', async () => {
     const context = { ...makeContext(), repoId: null }
-    await expect(store.getState().fetchBeadsIssues(context, 'open')).rejects.toThrow(/repoId/)
+    await expect(store.getState().fetchBeadsIssues(context, OPEN_PLAN)).rejects.toThrow(/repoId/)
     expect(beadsListIssues).not.toHaveBeenCalled()
   })
 
@@ -174,8 +205,8 @@ describe('beads slice', () => {
     async function seedOpenList(issues: BeadsIssue[]) {
       const context = makeContext()
       beadsListIssues.mockResolvedValueOnce({ issues, status: READY_STATUS })
-      await store.getState().fetchBeadsIssues(context, 'open')
-      return { context, cacheKey: beadsIssueListCacheKey(context, 'open') }
+      await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
+      return { context, cacheKey: beadsIssueListCacheKey(context, OPEN_PLAN) }
     }
 
     it('calls through with repoId, id, and status, and resolves with the refreshed issue', async () => {
@@ -228,7 +259,7 @@ describe('beads slice', () => {
 
       // The reconciled entry is stale, so the next fetch refetches (SWR).
       beadsListIssues.mockResolvedValueOnce({ issues: [], status: READY_STATUS })
-      await store.getState().fetchBeadsIssues(context, 'open')
+      await store.getState().fetchBeadsIssues(context, OPEN_PLAN)
       expect(beadsListIssues).toHaveBeenCalledTimes(2)
     })
 

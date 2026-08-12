@@ -35,6 +35,11 @@ import {
   normalizeManualRepoOrder
 } from '../../../../shared/manual-repo-order'
 import { isTopLevelView } from '../../../../shared/top-level-view'
+import {
+  getBeadsFetchPlan,
+  getBeadsPresetQuery,
+  parseBeadsTaskQuery
+} from '../../../../shared/beads-task-query'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
 import type { UsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import {
@@ -1450,7 +1455,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
     }
     if (resolvedSource === 'beads' && typeof state.prefetchBeadsIssues === 'function') {
-      const preset = state.taskResumeState?.beadsPreset ?? 'open'
+      // Why: must mint the same fetch plan TaskPage derives from the resume query,
+      // or the warm cache entries live under keys the page never reads.
+      const resumeQuery =
+        state.taskResumeState?.beadsQuery ||
+        getBeadsPresetQuery(state.taskResumeState?.beadsPreset ?? 'open')
+      const plan = getBeadsFetchPlan(parseBeadsTaskQuery(resumeQuery))
       // Why: must match TaskPage's repo-picker eligibility, or the warm entries cover repos the page never fetches.
       const eligibleRepos = getTaskEligibleRepos(state.repos)
       const selectedRepos = (() => {
@@ -1468,11 +1478,12 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         }
         return eligibleRepos
       })()
-      // Why: beads search filters client-side, so the warmed list serves any resume query.
+      // Why: qualifiers beyond the fetch scope filter client-side, so the warmed
+      // list serves any resume query with the same plan.
       for (const repo of selectedRepos) {
         const context = buildBeadsRepoPrefetchContext(repo)
         if (context) {
-          state.prefetchBeadsIssues(context, preset)
+          state.prefetchBeadsIssues(context, plan)
         }
       }
     }

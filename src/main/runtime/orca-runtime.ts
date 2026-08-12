@@ -933,6 +933,7 @@ import {
   updateBeadsIssueStatus,
   type BeadsGetIssueResult,
   type BeadsListIssuesResult,
+  type BeadsListStatusScope,
   type BeadsUpdateIssueResult
 } from '../beads/issues'
 import type {
@@ -36656,10 +36657,17 @@ export class OrcaRuntimeService {
   async beadsListIssues(
     repoSelector: string,
     preset: BeadsIssuePreset = 'open',
-    limit?: number
+    limit?: number,
+    // beads-query-filter.v1 params; when present they override the preset route.
+    filter?: { statusScope?: BeadsListStatusScope; assignee?: string }
   ): Promise<BeadsListIssuesResult> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    return listBeadsIssues(this.beadsTargetForRepo(repo), preset, clampBeadsIssueLimit(limit))
+    return listBeadsIssues(this.beadsTargetForRepo(repo), {
+      preset,
+      ...(filter?.statusScope !== undefined ? { statusScope: filter.statusScope } : {}),
+      ...(filter?.assignee !== undefined ? { assignee: filter.assignee } : {}),
+      limit: clampBeadsIssueLimit(limit)
+    })
   }
 
   async beadsGetIssue(repoSelector: string, id: string): Promise<BeadsGetIssueResult> {

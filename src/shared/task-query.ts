@@ -10,12 +10,12 @@ export type ParsedTaskQuery = {
   freeText: string
 }
 
-type SearchQueryToken = {
+export type SearchQueryToken = {
   value: string
   raw: string
 }
 
-function tokenizeSearchQueryWithRaw(rawQuery: string): SearchQueryToken[] {
+export function tokenizeSearchQueryWithRaw(rawQuery: string): SearchQueryToken[] {
   const tokens: SearchQueryToken[] = []
   let value = ''
   let raw = ''

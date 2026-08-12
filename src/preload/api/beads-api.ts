@@ -11,6 +11,10 @@ export type BeadsApi = {
     repoId: string
     preset?: BeadsIssuePreset
     limit?: number
+    /** beads-query-filter.v1 route: 'all' includes closed; 'ready' = bd ready. */
+    statusScope?: 'open' | 'all' | 'ready'
+    /** '@me' resolves to the repo host's actor. */
+    assignee?: string
   }) => Promise<{ issues: BeadsIssue[]; status: BeadsWorkspaceStatus }>
   getIssue: (args: { repoId: string; id: string }) => Promise<{ issue: BeadsIssue | null }>
   updateIssue: (args: {

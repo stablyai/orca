@@ -2045,6 +2045,8 @@ const api = {
       repoId: string
       preset?: 'open' | 'assigned' | 'ready'
       limit?: number
+      statusScope?: 'open' | 'all' | 'ready'
+      assignee?: string
     }): Promise<unknown> => ipcRenderer.invoke('beads:listIssues', args),
 
     getIssue: (args: { repoId: string; id: string }): Promise<unknown> =>

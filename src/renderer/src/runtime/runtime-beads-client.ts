@@ -9,7 +9,10 @@ import {
   getTaskSourceRuntimeSettings,
   type TaskSourceContext
 } from '../../../shared/task-source-context'
-import { BEADS_TASK_SOURCE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  BEADS_QUERY_FILTER_RUNTIME_CAPABILITY,
+  BEADS_TASK_SOURCE_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
   getActiveRuntimeTarget,
@@ -51,13 +54,20 @@ const BD_UNAVAILABLE_STATUS: BeadsWorkspaceStatus = {
   initialized: false
 }
 
+export type BeadsListIssuesArgs = {
+  repoId: string
+  /** Legacy route: hosts predating beads-query-filter.v1 strip the two params below. */
+  preset: BeadsIssuePreset
+  limit?: number
+  /** 'all' includes closed issues; 'ready' = bd ready. */
+  statusScope?: 'open' | 'all' | 'ready'
+  /** '@me' resolves to the repo host's actor. */
+  assignee?: string
+}
+
 type BeadsPreloadNamespace = {
   getStatus: (args: { repoId: string }) => Promise<BeadsStatusResult>
-  listIssues: (args: {
-    repoId: string
-    preset: BeadsIssuePreset
-    limit?: number
-  }) => Promise<BeadsListIssuesResult>
+  listIssues: (args: BeadsListIssuesArgs) => Promise<BeadsListIssuesResult>
   getIssue: (args: { repoId: string; id: string }) => Promise<BeadsIssueResult>
   // Optional: absent in the browser build's preload replacement.
   updateIssue?: (args: {
@@ -129,13 +139,29 @@ export async function beadsGetStatus(
     : { status: BD_UNAVAILABLE_STATUS }
 }
 
+const QUERY_FILTER_UNSUPPORTED_MESSAGE =
+  'This remote runtime must be updated to search closed Beads issues.'
+
 export async function beadsListIssues(
   settings: RuntimeBeadsSettings,
-  args: { repoId: string; preset: BeadsIssuePreset; limit?: number }
+  args: BeadsListIssuesArgs
 ): Promise<BeadsListIssuesResult> {
   const target = getBeadsRuntimeTarget(settings)
   if (target.kind === 'environment') {
     await assertBeadsRuntimeCapability(target.environmentId)
+    // Why: an old host strips statusScope and would answer an "include closed"
+    // query with open issues only — which the user reads as "no closed issues".
+    // 'ready' and assignee degrade safely via the legacy preset, 'all' cannot.
+    if (args.statusScope === 'all') {
+      const supported = await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        BEADS_QUERY_FILTER_RUNTIME_CAPABILITY,
+        30_000
+      )
+      if (!supported) {
+        throw new BeadsTaskSourceUnsupportedError(QUERY_FILTER_UNSUPPORTED_MESSAGE)
+      }
+    }
     return normalizeBeadsListIssuesResult(
       await callRuntimeRpc<unknown>(target, 'beads.listIssues', args, { timeoutMs: 30_000 })
     )

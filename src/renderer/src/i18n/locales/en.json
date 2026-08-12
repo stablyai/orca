@@ -2052,7 +2052,7 @@
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
         "linearWorktreesColumn": "Workspaces",
         "beadsRefreshIssues": "Refresh Beads issues",
-        "beadsSearchPlaceholder": "Filter by title, id, or label...",
+        "beadsSearchPlaceholder": "Search Beads issues...",
         "beadsIssuesHeading": "Beads issues",
         "beadsStatusInProgress": "In Progress",
         "beadsStatusBlocked": "Blocked",

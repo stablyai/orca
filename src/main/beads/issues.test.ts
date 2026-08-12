@@ -33,6 +33,7 @@ import {
   getBeadsIssue,
   isBeadsIssueStatus,
   listBeadsIssues,
+  resolveBeadsListPlan,
   updateBeadsIssueStatus
 } from './issues'
 
@@ -96,6 +97,29 @@ describe('clampBeadsIssueLimit', () => {
   })
 })
 
+describe('resolveBeadsListPlan', () => {
+  it('maps legacy presets when no query-filter params are present', () => {
+    expect(resolveBeadsListPlan({ preset: 'open' })).toEqual({ scope: 'open', assignee: null })
+    expect(resolveBeadsListPlan({ preset: 'assigned' })).toEqual({
+      scope: 'open',
+      assignee: '@me'
+    })
+    expect(resolveBeadsListPlan({ preset: 'ready' })).toEqual({ scope: 'ready', assignee: null })
+    expect(resolveBeadsListPlan({})).toEqual({ scope: 'open', assignee: null })
+  })
+
+  it('lets the query-filter params override the preset entirely', () => {
+    expect(resolveBeadsListPlan({ preset: 'assigned', statusScope: 'all' })).toEqual({
+      scope: 'all',
+      assignee: null
+    })
+    expect(resolveBeadsListPlan({ preset: 'open', assignee: 'alice' })).toEqual({
+      scope: 'open',
+      assignee: 'alice'
+    })
+  })
+})
+
 describe('listBeadsIssues', () => {
   it('lists open issues sorted by updated_at desc', async () => {
     queueVersionOk()
@@ -105,7 +129,7 @@ describe('listBeadsIssues', () => {
       stderr: ''
     })
 
-    const result = await listBeadsIssues(LOCAL_TARGET, 'open', 200)
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
 
     expect(result.status).toEqual({
       bdInstalled: true,
@@ -132,7 +156,7 @@ describe('listBeadsIssues', () => {
       stdout: ''
     })
 
-    const result = await listBeadsIssues(LOCAL_TARGET, 'open', 200)
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
 
     expect(result.issues).toEqual([])
     expect(result.status.initialized).toBe(false)
@@ -142,7 +166,7 @@ describe('listBeadsIssues', () => {
   it('reports bd as not installed when the binary is missing', async () => {
     commandExecFileAsyncMock.mockRejectedValueOnce({ code: 'ENOENT', message: 'spawn bd ENOENT' })
 
-    const result = await listBeadsIssues(LOCAL_TARGET, 'open', 200)
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
 
     expect(result.status).toEqual({
       bdInstalled: false,
@@ -156,7 +180,7 @@ describe('listBeadsIssues', () => {
   it('returns no issues for an unsupported bd version', async () => {
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'bd version 1.0.0\n', stderr: '' })
 
-    const result = await listBeadsIssues(LOCAL_TARGET, 'open', 200)
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'open', limit: 200 })
 
     expect(result.status.versionSupported).toBe(false)
     expect(result.issues).toEqual([])
@@ -169,7 +193,7 @@ describe('listBeadsIssues', () => {
     queueVersionOk()
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
 
-    await listBeadsIssues(LOCAL_TARGET, 'assigned', 100)
+    await listBeadsIssues(LOCAL_TARGET, { preset: 'assigned', limit: 100 })
 
     expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
@@ -184,7 +208,7 @@ describe('listBeadsIssues', () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'Config Name\n', stderr: '' })
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
 
-    await listBeadsIssues(LOCAL_TARGET, 'assigned', 200)
+    await listBeadsIssues(LOCAL_TARGET, { preset: 'assigned', limit: 200 })
 
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['config', 'user.name'],
@@ -207,7 +231,7 @@ describe('listBeadsIssues', () => {
     }))
     commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: JSON.stringify(issues), stderr: '' })
 
-    const result = await listBeadsIssues(LOCAL_TARGET, 'ready', 2)
+    const result = await listBeadsIssues(LOCAL_TARGET, { preset: 'ready', limit: 2 })
 
     expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
@@ -217,6 +241,57 @@ describe('listBeadsIssues', () => {
     )
     expect(result.issues).toHaveLength(2)
     expect(result.issues[0].id).toBe('probe-2')
+  })
+
+  it('adds --all for the all scope so closed issues are included (bd 1.1.2 probe)', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+
+    await listBeadsIssues(LOCAL_TARGET, { statusScope: 'all', limit: 150 })
+
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'bd',
+      ['list', '--json', '--all', '-n', '150'],
+      expect.objectContaining({ cwd: '/repo' })
+    )
+  })
+
+  it('routes the ready scope through bd ready', async () => {
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+
+    await listBeadsIssues(LOCAL_TARGET, { statusScope: 'ready', limit: 200 })
+
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'bd',
+      ['ready', '--json'],
+      expect.anything()
+    )
+  })
+
+  it('resolves assignee:@me to the host actor and passes others verbatim', async () => {
+    process.env.BEADS_ACTOR = 'octocat'
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+    await listBeadsIssues(LOCAL_TARGET, { statusScope: 'all', assignee: '@me', limit: 200 })
+    expect(commandExecFileAsyncMock).toHaveBeenNthCalledWith(
+      2,
+      'bd',
+      ['list', '--json', '--all', '-n', '200', '-a', 'octocat'],
+      expect.anything()
+    )
+
+    queueVersionOk()
+    commandExecFileAsyncMock.mockResolvedValueOnce({ stdout: '[]', stderr: '' })
+    _resetBdVersionCache()
+    await listBeadsIssues(LOCAL_TARGET, { statusScope: 'open', assignee: 'alice', limit: 200 })
+    expect(commandExecFileAsyncMock).toHaveBeenLastCalledWith(
+      'bd',
+      ['list', '--json', '-n', '200', '-a', 'alice'],
+      expect.anything()
+    )
   })
 
   it('runs bd on the SSH host for connection-backed repos', async () => {
@@ -241,8 +316,7 @@ describe('listBeadsIssues', () => {
 
     const result = await listBeadsIssues(
       { repoPath: '/remote/repo', connectionId: 'ssh-1' },
-      'open',
-      200
+      { preset: 'open', limit: 200 }
     )
 
     expect(execNonInteractive).toHaveBeenCalledWith('bd', ['version'], '/remote/repo', 15_000)
@@ -261,8 +335,7 @@ describe('listBeadsIssues', () => {
 
     const result = await listBeadsIssues(
       { repoPath: '/remote/repo', connectionId: 'ssh-1' },
-      'open',
-      200
+      { preset: 'open', limit: 200 }
     )
 
     expect(result.issues).toEqual([])

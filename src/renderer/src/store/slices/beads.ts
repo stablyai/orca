@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { BeadsIssue, BeadsIssuePreset, BeadsIssueStatus } from '../../../../shared/beads-types'
+import type { BeadsIssue, BeadsIssueStatus } from '../../../../shared/beads-types'
+import type { BeadsIssueFetchPlan } from '../../../../shared/beads-task-query'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
@@ -28,9 +29,9 @@ export type BeadsListCacheEntry = {
 /** Cache/subscription key for one repo-scoped beads list; TaskPage selects `beadsListCache[key]`. */
 export function beadsIssueListCacheKey(
   sourceContext: TaskSourceContext,
-  preset: BeadsIssuePreset
+  plan: BeadsIssueFetchPlan
 ): string {
-  return `${getTaskSourceCacheScope(sourceContext)}::${preset}`
+  return `${getTaskSourceCacheScope(sourceContext)}::${plan.statusScope}:a=${plan.assignee ?? ''}`
 }
 
 type InflightBeadsListRequest = {
@@ -61,10 +62,10 @@ export type BeadsSlice = {
   beadsListCache: Record<string, BeadsListCacheEntry>
   fetchBeadsIssues: (
     sourceContext: TaskSourceContext,
-    preset: BeadsIssuePreset,
+    plan: BeadsIssueFetchPlan,
     options?: { force?: boolean; limit?: number }
   ) => Promise<BeadsListIssuesResult>
-  prefetchBeadsIssues: (sourceContext: TaskSourceContext, preset: BeadsIssuePreset) => void
+  prefetchBeadsIssues: (sourceContext: TaskSourceContext, plan: BeadsIssueFetchPlan) => void
   invalidateBeadsIssues: (sourceContext?: TaskSourceContext | null) => void
   /** Optimistic status mutation; resolves with the refreshed issue, rolls back and rethrows on failure. */
   updateBeadsIssueStatus: (
@@ -77,12 +78,12 @@ export type BeadsSlice = {
 export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set, get) => ({
   beadsListCache: {},
 
-  fetchBeadsIssues: async (sourceContext, preset, options) => {
+  fetchBeadsIssues: async (sourceContext, plan, options) => {
     const repoId = sourceContext.repoId
     if (!repoId) {
       throw new Error('Beads is repo-backed; the task source context must carry a repoId.')
     }
-    const cacheKey = beadsIssueListCacheKey(sourceContext, preset)
+    const cacheKey = beadsIssueListCacheKey(sourceContext, plan)
     const cached = get().beadsListCache[cacheKey]
     const goodData = cached !== undefined && cached.error === undefined ? cached.data : null
     const reusable = options?.force ? null : goodData
@@ -96,10 +97,14 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
     }
     const generation = beadsReadGeneration
     let requestEntry: InflightBeadsListRequest
+    // Why: the legacy preset rides along so pre-query-filter hosts (which strip
+    // statusScope/assignee) still run the closest supported bd view.
     const promise = beadsListIssues(sourceContext, {
       repoId,
-      preset,
-      limit: options?.limit ?? BEADS_ISSUE_FETCH_LIMIT
+      preset: plan.legacyPreset,
+      limit: options?.limit ?? BEADS_ISSUE_FETCH_LIMIT,
+      statusScope: plan.statusScope,
+      ...(plan.assignee !== null ? { assignee: plan.assignee } : {})
     })
       .then((result) => {
         if (
@@ -150,9 +155,9 @@ export const createBeadsSlice: StateCreator<AppState, [], [], BeadsSlice> = (set
     return promise
   },
 
-  prefetchBeadsIssues: (sourceContext, preset) => {
+  prefetchBeadsIssues: (sourceContext, plan) => {
     get()
-      .fetchBeadsIssues(sourceContext, preset)
+      .fetchBeadsIssues(sourceContext, plan)
       .catch(() => {})
   },
 

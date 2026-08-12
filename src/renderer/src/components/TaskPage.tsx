@@ -205,16 +205,20 @@ import BeadsItemDialog from '@/components/BeadsItemDialog'
 import TaskPageBeadsFilterDropdowns from '@/components/task-page-beads-filter-dropdowns'
 import { TaskPageBeadsIssueList } from '@/components/task-page-beads-issue-list'
 import {
-  EMPTY_BEADS_FACET_FILTERS,
   deriveTaskPageBeadsFacetOptions,
   deriveTaskPageBeadsListState,
   filterBeadsIssueRows,
   getBeadsTaskSourceHostAvailability,
-  hasActiveBeadsFacetFilters,
   useTaskPageBeadsIssues,
-  type TaskPageBeadsFacetFilters,
   type TaskPageBeadsIssueRow
 } from '@/components/task-page-beads-issues'
+import {
+  getBeadsFetchPlan,
+  getBeadsPresetForQuery,
+  getBeadsPresetQuery,
+  isBeadsTaskQueryFiltering,
+  parseBeadsTaskQuery
+} from '../../../shared/beads-task-query'
 import { deriveTaskPageBeadsRepoNotices } from '@/components/task-page-beads-list-notices'
 import {
   getSingleJiraProjectScope,
@@ -3400,22 +3404,29 @@ export default function TaskPage(): React.JSX.Element {
     },
     [hostRegistryById, taskSource]
   )
-  // Beads tab state — fetch/error state lives in the beads slice cache; search filters client-side.
-  const [activeBeadsPreset, setActiveBeadsPreset] = useState<BeadsIssuePreset>(
-    () => taskResumeState?.beadsPreset ?? 'open'
+  // Beads tab state — the GitHub-style query bar is the single source of truth;
+  // presets and the Filters popover both read/write the raw query string.
+  const [beadsSearchInput, setBeadsSearchInput] = useState(
+    () => taskResumeState?.beadsQuery || getBeadsPresetQuery(taskResumeState?.beadsPreset ?? 'open')
   )
-  const [beadsSearchInput, setBeadsSearchInput] = useState(() => taskResumeState?.beadsQuery ?? '')
   const [appliedBeadsSearch, setAppliedBeadsSearch] = useState(
-    () => taskResumeState?.beadsQuery ?? ''
+    () => taskResumeState?.beadsQuery || getBeadsPresetQuery(taskResumeState?.beadsPreset ?? 'open')
   )
   const [beadsRefreshNonce, setBeadsRefreshNonce] = useState(0)
-  const [beadsFacetFilters, setBeadsFacetFilters] =
-    useState<TaskPageBeadsFacetFilters>(EMPTY_BEADS_FACET_FILTERS)
+  const activeBeadsPreset = useMemo(
+    () => getBeadsPresetForQuery(beadsSearchInput),
+    [beadsSearchInput]
+  )
+  const parsedBeadsQuery = useMemo(
+    () => parseBeadsTaskQuery(appliedBeadsSearch),
+    [appliedBeadsSearch]
+  )
+  const beadsFetchPlan = useMemo(() => getBeadsFetchPlan(parsedBeadsQuery), [parsedBeadsQuery])
   const [openBeadsDetailRow, setOpenBeadsDetailRow] = useState<TaskPageBeadsIssueRow | null>(null)
   const beadsIssuesState = useTaskPageBeadsIssues({
     enabled: taskSource === 'beads',
     contexts: taskSource === 'beads' ? taskSourceRepoContexts : EMPTY_TASK_SOURCE_CONTEXTS,
-    preset: activeBeadsPreset,
+    plan: beadsFetchPlan,
     refreshNonce: beadsRefreshNonce
   })
   const beadsFacetOptions = useMemo(
@@ -3423,8 +3434,8 @@ export default function TaskPage(): React.JSX.Element {
     [beadsIssuesState.rows]
   )
   const displayedBeadsRows = useMemo(
-    () => filterBeadsIssueRows(beadsIssuesState.rows, appliedBeadsSearch, beadsFacetFilters),
-    [appliedBeadsSearch, beadsFacetFilters, beadsIssuesState.rows]
+    () => filterBeadsIssueRows(beadsIssuesState.rows, parsedBeadsQuery),
+    [parsedBeadsQuery, beadsIssuesState.rows]
   )
   const beadsListState = useMemo(
     () =>
@@ -3432,12 +3443,10 @@ export default function TaskPage(): React.JSX.Element {
         results: beadsIssuesState.results,
         filteredCount: displayedBeadsRows.length,
         totalCount: beadsIssuesState.rows.length,
-        queryActive:
-          appliedBeadsSearch.trim().length > 0 || hasActiveBeadsFacetFilters(beadsFacetFilters)
+        queryActive: isBeadsTaskQueryFiltering(parsedBeadsQuery)
       }),
     [
-      appliedBeadsSearch,
-      beadsFacetFilters,
+      parsedBeadsQuery,
       beadsIssuesState.results,
       beadsIssuesState.rows.length,
       displayedBeadsRows.length
@@ -4844,8 +4853,9 @@ export default function TaskPage(): React.JSX.Element {
     setJiraSearchInput(jiraQuery)
     setAppliedJiraSearch(jiraQuery)
 
-    const beadsQuery = taskResumeState?.beadsQuery ?? ''
-    setActiveBeadsPreset(taskResumeState?.beadsPreset ?? 'open')
+    // Why: a persisted preset without a query (pre-query-bar resume state) seeds the bar with the preset's query.
+    const beadsQuery =
+      taskResumeState?.beadsQuery || getBeadsPresetQuery(taskResumeState?.beadsPreset ?? 'open')
     setBeadsSearchInput(beadsQuery)
     setAppliedBeadsSearch(beadsQuery)
 
@@ -10220,17 +10230,16 @@ export default function TaskPage(): React.JSX.Element {
                     >
                       <div className="flex flex-wrap gap-1.5">
                         {getBeadsPresets().map((preset) => {
-                          const active = !beadsSearchInput && activeBeadsPreset === preset.id
+                          const active = activeBeadsPreset === preset.id
                           return (
                             <button
                               key={preset.id}
                               type="button"
                               onClick={() => {
-                                setBeadsSearchInput('')
-                                setAppliedBeadsSearch('')
-                                setBeadsFacetFilters(EMPTY_BEADS_FACET_FILTERS)
-                                setActiveBeadsPreset(preset.id)
-                                setTaskResumeState({ beadsPreset: preset.id, beadsQuery: '' })
+                                const query = getBeadsPresetQuery(preset.id)
+                                setBeadsSearchInput(query)
+                                setAppliedBeadsSearch(query)
+                                setTaskResumeState({ beadsPreset: preset.id, beadsQuery: query })
                               }}
                               className={cn(
                                 'rounded-md border px-2.5 py-1 text-xs font-medium transition',
@@ -10246,9 +10255,13 @@ export default function TaskPage(): React.JSX.Element {
                       </div>
                       <div className="flex min-w-0 flex-wrap items-center gap-2">
                         <TaskPageBeadsFilterDropdowns
-                          filters={beadsFacetFilters}
+                          query={beadsSearchInput}
                           options={beadsFacetOptions}
-                          onChange={setBeadsFacetFilters}
+                          onChange={(next) => {
+                            // Applies immediately like the GitHub popover; the persist effect stores it.
+                            setBeadsSearchInput(next)
+                            setAppliedBeadsSearch(next)
+                          }}
                         />
                         <div className="relative min-w-0 flex-1 basis-64">
                           <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -10257,7 +10270,7 @@ export default function TaskPage(): React.JSX.Element {
                             onChange={(e) => setBeadsSearchInput(e.target.value)}
                             placeholder={translate(
                               'auto.components.TaskPage.beadsSearchPlaceholder',
-                              'Filter by title, id, or label...'
+                              'Search Beads issues...'
                             )}
                             className="h-8 rounded-md border-border/60 bg-background pl-8 pr-8 text-xs text-foreground shadow-xs"
                           />
