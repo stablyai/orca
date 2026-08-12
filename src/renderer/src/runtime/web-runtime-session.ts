@@ -74,6 +74,10 @@ import {
 } from './web-session-browser-placement'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
+import {
+  pauseAfterE2eWebRuntimeBrowserCreate,
+  throwIfE2eWebRuntimeBrowserReconciliationFails
+} from './web-runtime-browser-creation-e2e-fault'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -527,6 +531,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       })) as RuntimeRpcResponse<BrowserTabCreateResult>
     )
     createdPageId = created.browserPageId
+    await pauseAfterE2eWebRuntimeBrowserCreate(created.browserPageId)
     if (created.browserPageId !== provisionalPageId) {
       moveWebSessionBrowserPlacement({
         environmentId,
@@ -712,6 +717,9 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       options.confirmAgentSessionHandoff || options.afterCurrentInFlight
         ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
         : listRemoteRuntimeSessionTabsDeduped
+    if (options.afterCurrentInFlight) {
+      throwIfE2eWebRuntimeBrowserReconciliationFails()
+    }
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,

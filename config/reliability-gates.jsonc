@@ -1599,37 +1599,59 @@
         "paired remote HTML file preview",
         "background preview creation and explicit browser activation",
         "client-only split placement",
+        "post-create reconciliation failure and compensating rollback",
         "remote browser close convergence"
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "A headed macOS desktop host and separate paired web client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, and browser close. Unit contracts cover owning-runtime routing, one-shot split placement, focused and unfocused creation, manual moves, overlapping opens, failure cleanup, and teardown. Linux, Windows, and a live headless-server journey remain gaps.",
+      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, and a forced post-create reconciliation timeout. The same fault oracle passes against a live headless server. Unit contracts cover owning-runtime routing, one-shot split placement, exact client materialization, focused and unfocused creation, manual moves, overlapping opens, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
       "motivatingLinks": [
         "https://linear.app/stably/issue/STA-3872/unable-to-open-html-files-in-remote-server",
+        "https://linear.app/stably/issue/STA-4025/p1-browser-create-reports-success-when-tab-reconcile-fails-after-pr",
         "https://github.com/stablyai/orca/pull/13876"
       ],
-      "invariant": "Opening one HTML preview from a paired client creates exactly one browser page on the worktree-owning runtime and exactly one mirrored client browser workspace. The preview remains in the requested client-side split without taking focus from the editor, an explicit browser click activates it authoritatively, and closing it removes only the browser identities while the source editor and terminal survive.",
-      "oracle": "Open a real HTML file through Explorer on a separate client paired to an isolated headed desktop host. Require one new host browser tab, one client browser workspace and unified tab, two visible split groups, an exact client-handle-to-host-page identity, rendered fixture DOM, editor focus after preview creation, host and client browser focus only after an explicit click, and browser-only close convergence with the editor and terminal still visible. Run the byte-identical Electron test on latest main, the candidate, and the candidate with the claimed fix disabled.",
+      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. If post-create reconciliation fails before materialization, exact host-page rollback and a confirming snapshot must complete before failure is reported; ambiguous rollback must reject without local fallback. Preview focus and close preserve the source editor and terminal.",
+      "oracle": "Open a real HTML file through Explorer on a separate client paired to an isolated headed desktop host. Require one new host browser tab, one client browser workspace and unified tab, two visible split groups, exact client-handle-to-host-page identity, rendered fixture DOM, stable focus, and browser-only close convergence. Separately hold immediately after host creation, suppress the armed browser publication, prove the exact page exists only on the host while the client has one reserved empty split, then force the post-create session-tabs reconciliation timeout. Require a failure result, exact host close, confirming host absence, removal of only the empty split, no local browser fallback, and surviving editor and terminal. Repeat the fault oracle against headless serve and run the byte-identical contract test on latest main, candidate, and candidate with the fix disabled.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
         "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+        "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
       "testFiles": [
         "src/main/runtime/orca-runtime-browser.test.ts",
         "src/main/runtime/rpc/methods/browser.test.ts",
         "src/renderer/src/lib/file-preview.test.ts",
         "src/renderer/src/runtime/web-session-browser-placement.test.ts",
+        "src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
         "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
         "src/renderer/src/runtime/remote-server-parity.test.ts",
-        "tests/e2e/paired-remote-html-browser-focus.spec.ts"
+        "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+        "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
+          "assertions": [
+            "success requires the exact environment and remote page handle plus a unified browser tab",
+            "a requested client group must contain the materialized browser tab"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-runtime-session.test.ts",
+          "assertions": [
+            "a post-create timeout returns false only after exact host close and a confirming snapshot",
+            "unconfirmed cleanup rejects so callers cannot create a competing local fallback",
+            "the canonical placement and a newly-created empty split are released on rollback"
+          ]
+        },
         {
           "file": "src/renderer/src/runtime/web-session-browser-placement.test.ts",
           "assertions": [
@@ -1658,9 +1680,35 @@
             "the source editor and remote frame remain visible in separate groups",
             "preview creation leaves the editor active, an explicit browser click is authoritative, and close preserves the editor and terminal"
           ]
+        },
+        {
+          "file": "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts",
+          "assertions": [
+            "the exact created page exists on the host while publication is held and no browser tab materializes on the client",
+            "a forced post-create reconciliation timeout closes the exact host page and removes only the reserved empty split",
+            "headed and headless hosts preserve the unrelated editor and terminal without local fallback"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 24.3,
+          "summary": "A visible desktop host and separate paired Electron client held one exact host page before client materialization, forced the post-create timeout, then proved exact host rollback, empty-split removal, failure UI, no local fallback, and surviving editor and terminal."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 18.5,
+          "summary": "The same exact-page hold, timeout, rollback, client cleanup, no-fallback, editor, and terminal oracle passed against isolated headless serve."
+        },
         {
           "date": "2026-08-12",
           "runner": "local",
@@ -1744,8 +1792,8 @@
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 60,
-        "scope": "seven focused host/renderer contracts plus one isolated headed paired-runtime journey"
+        "p95Seconds": 90,
+        "scope": "focused host/renderer contracts plus normal and faulted headed/headless paired-runtime journeys"
       },
       "flakeHistory": {
         "status": "unknown",
@@ -1757,16 +1805,15 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The change adds no timer, polling, retry, subprocess, RPC method, stream opcode, receipt ledger, or host publication. Side previews install no focus listener and record no focus intent. Focused browser creation performs one bounded scan of the current worktree's local tabs. Pending client placements are capped at 128 and cleared on adoption, failure, or worktree/environment teardown."
+        "evidence": "The transaction adds no timer, polling, retry, subprocess, RPC method, stream opcode, or host publication. A successful creation adds one post-operation session-tabs list and bounded scans of only the target worktree's browser workspaces/pages/unified tabs. Failure adds one exact close and one confirming list; ambiguous cleanup does not retry. The E2E-only one-shot fault seam is build-gated, holds one promise and a bounded page-id set for the armed test, and resets after each run. Pending client placements remain capped at 128 and clear on adoption, failure, or teardown."
       },
       "promotionCriteria": [
         "Collect Linux and physical Windows paired-server evidence.",
-        "Collect a live headless-serve HTML preview journey.",
         "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake."
       ],
       "knownGaps": [
         "Live paired-server validation currently covers macOS only.",
-        "A live headless-serve journey and multiple simultaneous viewers are not exercised by the Electron journey.",
+        "Multiple simultaneous viewers are not exercised by the Electron journey.",
         "Direct SSH remote file URLs remain intentionally unsupported and local file previews retain their existing path."
       ],
       "demotionRule": "Demote if one paired HTML action can create duplicate client or host browser identities, lose the requested split, steal editor focus before an explicit browser click, lose browser focus after that click, or remove unrelated editor or terminal state on close."
@@ -3636,17 +3683,22 @@
       "providers": ["local", "remote-runtime", "ssh", "wsl"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "remote-runtime", "ssh", "wsl"],
-      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project owner capture and stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus a separate paired Electron client proves real Git, plain-folder, Clone, Create, nested import, runtime-switch, disconnect, reconnect, concurrently visible same-ID local/runtime repo/worktree/group/folder rows, reversed catalog order, reversed refresh completion, local-after-runtime catalog refresh routing, and first paired-terminal activation without local fallback; hidden-window parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/9687"],
-      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project scan, add, import, catalog refresh, and worktree refresh must stay on the host selected when that operation began, even if the durable preference changes or the repo catalog is not hydrated. Generic settings mutation cannot bypass the dedicated preference IPC.",
-      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat with multiple clients and servers, browser host switches, remote-owned and local-owned workspaces, pairing/connect/disconnect, and generic settings writes. In a separate paired Electron client, select a non-default headed runtime and add a real Git repo, plain folder, clone, created project, and nested repos while switching the preference and disconnecting/reconnecting. Before Git Add, plain-folder Add, Clone, and Create completion, insert a same-ID local repo/worktree decoy; require final activation to remain on the captured runtime. Merge same-ID local/runtime repo, worktree, group, and folder rows, reverse same-host refresh completions, overlap refresh with reconnect, issue ordinary unqualified local refreshes, then create the first paired runtime terminal while the same-ID local/runtime worktrees remain visible. Require only the selected server inventory to change, exact runtime ownership in the client store, preserved host-qualified catalogs, authoritative direct-SSH pruning without runtime sibling loss, visible projects, and zero direct SSH fallback. Assert only the dedicated validated preference method changes activeRuntimeEnvironmentId and stale host-operation completions cannot overwrite the newly selected transient host.",
+      "coverageNotes": "Platform-neutral deterministic tests separate the durable Active Server preference from per-client connection, selected-workspace, browser-session, Add Project, and execution-host routing. The composed regression models Local desktop -> connect/navigate Windows 2 -> reveal a local terminal -> restart. Multi-client browser host overrides, multi-server profile caches, generic settings IPC rejection, local and remote workspace ownership, Add Project eligibility/owner capture/stale-result fencing, host-qualified group/folder/worktree identity, and restart reset of transient routing are covered. A visible macOS Orca desktop server plus separate paired Electron and web clients prove selected-runtime Add Project operations and disabled creation when the only listed host is blocked or unavailable; headless-server parity also passed. Live Linux, Windows, WSL, and SSH Add Project journeys remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/9687",
+        "https://linear.app/stably/issue/STA-4024/p1-paired-web-add-project-enables-unavailable-host-fallback-after-pr"
+      ],
+      "invariant": "Only an explicit user change in Settings > Remote Orca Servers > Advanced > Active Server may mutate activeRuntimeEnvironmentId. Connecting, pairing, disconnecting, selecting or revealing a workspace or terminal, browser/mobile handoff, remote navigation, and reconnect must use transient or target-owner routing and must never rewrite the durable preference. Every Add Project selected host must satisfy canSelectAddRepoHost; paired web has no local filesystem fallback, so no valid host means Browse, Clone, and Create remain disabled. Every operation stays on the host selected when it began, even if preference or catalog state changes. Generic settings mutation cannot bypass the dedicated preference IPC.",
+      "oracle": "Start with Active Server=Local desktop, connect and navigate Windows 2, then reveal a local terminal and assert it succeeds while the persisted preference remains local before and after restart. Repeat transient routing and selected-runtime Add Project operations with exact-ID host decoys and completion reordering. Separately pair the real web client to an isolated headed host, then make its sole still-listed runtime compatibility-blocked and unavailable. Require a null authoritative selection, a disabled host option, and disabled Browse, Clone, and Create actions with no local fallback. Repeat against headless serve. Run the byte-identical selector/action contract on latest main, candidate, and candidate with the eligibility seam disabled.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
-        "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
+        "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
       "testFiles": [
         "src/main/ipc/settings.test.ts",
@@ -3683,13 +3735,15 @@
         "src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts",
         "src/renderer/src/store/slices/worktrees.test.ts",
         "src/renderer/src/runtime/web-runtime-session.test.ts",
-        "tests/e2e/pr11346-selected-runtime-add.spec.ts"
+        "tests/e2e/pr11346-selected-runtime-add.spec.ts",
+        "tests/e2e/paired-web-add-project-unavailable-host.spec.ts"
       ],
       "assertionRefs": [
         {
           "file": "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
           "assertions": [
-            "paired web hides the viewing computer as an Add Project filesystem authority and selects the paired runtime"
+            "paired web hides the viewing computer as an Add Project filesystem authority and selects only an eligible paired runtime",
+            "a sole blocked or errored runtime remains listed but produces no selected Add Project host"
           ]
         },
         {
@@ -3821,9 +3875,35 @@
             "keeps every expanded selected-runtime Add Project path in hidden-window desktop parity",
             "creates the first paired runtime terminal while same-ID local/runtime worktrees remain visible without clearing the selected runtime owner"
           ]
+        },
+        {
+          "file": "tests/e2e/paired-web-add-project-unavailable-host.spec.ts",
+          "assertions": [
+            "a version-blocked sole host stays visible and non-selectable while Browse, Clone, and Create are disabled",
+            "an unavailable sole host has the same disabled action contract without a local fallback",
+            "the rendered contract passes against headed desktop and headless serve hosts"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 12.3,
+          "summary": "A real paired web client against a visible desktop host kept the sole blocked and unavailable runtime listed but non-selectable, with Browse, Clone, and Create disabled and no local host fallback."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-web-add-project-unavailable-host.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 5.8,
+          "summary": "The same present-but-blocked and present-but-unavailable Add Project action oracle passed against isolated headless serve."
+        },
         {
           "date": "2026-07-22",
           "runner": "local",

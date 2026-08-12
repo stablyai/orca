@@ -98,6 +98,7 @@ import {
   resetWebSessionBrowserPlacementsForTests,
   takeWebSessionBrowserPlacementGroup
 } from './web-session-browser-placement'
+import { suppressE2eWebRuntimeBrowserSnapshot } from './web-runtime-browser-creation-e2e-fault'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -2318,6 +2319,9 @@ function applyWebSessionTabsSnapshotWithContext(
   now = Date.now(),
   batchContext?: WebSessionTabsBatchContext
 ): WebSessionTabsSyncState | Partial<WebSessionTabsSyncState> {
+  if (suppressE2eWebRuntimeBrowserSnapshot(rawSnapshot)) {
+    return state
+  }
   const worktreeId = rawSnapshot.worktree
   if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
     return state
