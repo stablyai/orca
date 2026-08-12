@@ -14,7 +14,9 @@ export const ZCODE_HOOK_EVENTS = [
   'Stop'
 ] as const
 
-export const ORCA_PREVIOUS_HOOKS_ENABLED_KEY = 'orcaPreviousHooksEnabled'
+const LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY = 'orcaPreviousHooksEnabled'
+
+export type ZcodeHooksEnabledState = 'missing' | 'enabled' | 'disabled'
 
 export type ZcodeHookCommand = {
   type?: string
@@ -39,6 +41,23 @@ export type ZcodeHooksRoot = {
 export type ZcodeConfig = {
   hooks?: ZcodeHooksRoot
   [key: string]: unknown
+}
+
+export function getZcodeHooksEnabledState(config: ZcodeConfig): ZcodeHooksEnabledState {
+  if (!isPlainObject(config.hooks) || !Object.hasOwn(config.hooks, 'enabled')) {
+    return 'missing'
+  }
+  return config.hooks.enabled === true ? 'enabled' : 'disabled'
+}
+
+export function getPreInstallZcodeHooksEnabledState(config: ZcodeConfig): ZcodeHooksEnabledState {
+  if (
+    isPlainObject(config.hooks) &&
+    Object.hasOwn(config.hooks, LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY)
+  ) {
+    return config.hooks[LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY] === true ? 'enabled' : 'disabled'
+  }
+  return getZcodeHooksEnabledState(config)
 }
 
 function asDefinitionArray(value: unknown): ZcodeHookDefinition[] {
@@ -108,21 +127,33 @@ export function applyManagedZcodeHooks(
     events[eventName] = [...current, { matcher: '*', hooks: [buildManagedHookCommand(command)] }]
   }
 
-  if (!(ORCA_PREVIOUS_HOOKS_ENABLED_KEY in hooksRoot)) {
-    hooksRoot[ORCA_PREVIOUS_HOOKS_ENABLED_KEY] = hooksRoot.enabled === true
-  }
+  // Why: ZCode validates config.json strictly. Orca state belongs in its own
+  // sidecar, and this also repairs configs written by the initial integration.
+  delete hooksRoot[LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY]
   hooksRoot.enabled = true
   hooksRoot.events = events
   return { ...config, hooks: hooksRoot }
 }
 
-export function removeManagedZcodeHooks(config: ZcodeConfig, scriptFileName: string): ZcodeConfig {
+export function removeManagedZcodeHooks(
+  config: ZcodeConfig,
+  scriptFileName: string,
+  previousHooksEnabled?: ZcodeHooksEnabledState
+): ZcodeConfig {
   if (!isPlainObject(config.hooks) || !isPlainObject(config.hooks.events)) {
     return config
   }
   const isManagedCommand = createManagedCommandMatcher(scriptFileName)
   const hooksRoot: ZcodeHooksRoot = { ...config.hooks }
   const events: Record<string, ZcodeHookDefinition[]> = { ...hooksRoot.events }
+  const legacyPreviousHooksEnabled = Object.hasOwn(
+    hooksRoot,
+    LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY
+  )
+    ? hooksRoot[LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY] === true
+      ? 'enabled'
+      : 'disabled'
+    : undefined
 
   for (const [eventName, definitions] of Object.entries(events)) {
     const cleaned = stripManagedCommands(asDefinitionArray(definitions), isManagedCommand)
@@ -134,9 +165,12 @@ export function removeManagedZcodeHooks(config: ZcodeConfig, scriptFileName: str
   }
 
   hooksRoot.events = events
-  if (ORCA_PREVIOUS_HOOKS_ENABLED_KEY in hooksRoot) {
-    hooksRoot.enabled = hooksRoot[ORCA_PREVIOUS_HOOKS_ENABLED_KEY] === true
-    delete hooksRoot[ORCA_PREVIOUS_HOOKS_ENABLED_KEY]
+  delete hooksRoot[LEGACY_ORCA_PREVIOUS_HOOKS_ENABLED_KEY]
+  const restoredState = previousHooksEnabled ?? legacyPreviousHooksEnabled
+  if (restoredState === 'missing') {
+    delete hooksRoot.enabled
+  } else if (restoredState !== undefined) {
+    hooksRoot.enabled = restoredState === 'enabled'
   }
   return { ...config, hooks: hooksRoot }
 }

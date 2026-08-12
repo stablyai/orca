@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyManagedZcodeHooks,
   isZcodeHooksEnabled,
-  ORCA_PREVIOUS_HOOKS_ENABLED_KEY,
   readManagedZcodeHookEvents,
   removeManagedZcodeHooks,
   ZCODE_HOOK_EVENTS
@@ -19,6 +18,7 @@ describe('zcode-hook-config', () => {
     expect([...readManagedZcodeHookEvents(next, COMMAND)].sort()).toEqual(
       [...ZCODE_HOOK_EVENTS].sort()
     )
+    expect(next.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
   })
 
   it('preserves user hooks and strips only managed ones on remove', () => {
@@ -45,7 +45,7 @@ describe('zcode-hook-config', () => {
     expect(pre[0]?.hooks?.[0]?.command).toBe('echo keep-me')
     expect(readManagedZcodeHookEvents(removed, COMMAND).size).toBe(0)
     expect(removed.hooks?.enabled).toBe(true)
-    expect(removed.hooks?.[ORCA_PREVIOUS_HOOKS_ENABLED_KEY]).toBeUndefined()
+    expect(removed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
   })
 
   it('preserves user definitions without a hooks array', () => {
@@ -59,21 +59,38 @@ describe('zcode-hook-config', () => {
     expect(removed.hooks?.events?.PreToolUse).toEqual([{ matcher: 'Read', custom: 'keep-me' }])
   })
 
-  it('restores the pre-install hooks.enabled value on remove', () => {
+  it('restores a disabled pre-install hooks.enabled value on remove', () => {
     const installed = applyManagedZcodeHooks(
       { hooks: { enabled: false, events: {} } },
       COMMAND,
       SCRIPT
     )
     expect(installed.hooks?.enabled).toBe(true)
-    expect(installed.hooks?.[ORCA_PREVIOUS_HOOKS_ENABLED_KEY]).toBe(false)
+    expect(installed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
 
     const reinstalled = applyManagedZcodeHooks(installed, COMMAND, SCRIPT)
-    expect(reinstalled.hooks?.[ORCA_PREVIOUS_HOOKS_ENABLED_KEY]).toBe(false)
+    expect(reinstalled.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
 
-    const removed = removeManagedZcodeHooks(reinstalled, SCRIPT)
+    const removed = removeManagedZcodeHooks(reinstalled, SCRIPT, 'disabled')
     expect(removed.hooks?.enabled).toBe(false)
-    expect(removed.hooks?.[ORCA_PREVIOUS_HOOKS_ENABLED_KEY]).toBeUndefined()
+    expect(removed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
+  })
+
+  it('restores an absent pre-install hooks.enabled value on remove', () => {
+    const installed = applyManagedZcodeHooks({ hooks: { events: {} } }, COMMAND, SCRIPT)
+    expect(installed.hooks?.enabled).toBe(true)
+
+    const removed = removeManagedZcodeHooks(installed, SCRIPT, 'missing')
+    expect(Object.hasOwn(removed.hooks ?? {}, 'enabled')).toBe(false)
+  })
+
+  it('removes legacy Orca metadata from the strict ZCode config schema', () => {
+    const installed = applyManagedZcodeHooks(
+      { hooks: { enabled: true, events: {}, orcaPreviousHooksEnabled: false } },
+      COMMAND,
+      SCRIPT
+    )
+    expect(installed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
   })
 
   it('is idempotent across reinstall', () => {

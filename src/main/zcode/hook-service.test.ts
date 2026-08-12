@@ -7,11 +7,14 @@ import { ZCODE_HOOK_EVENTS } from './zcode-hook-config'
 
 let home: string
 let originalHome: string | undefined
+let originalUserProfile: string | undefined
 
 beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'orca-zcode-hook-'))
   originalHome = process.env.HOME
+  originalUserProfile = process.env.USERPROFILE
   process.env.HOME = home
+  process.env.USERPROFILE = home
 })
 
 afterEach(() => {
@@ -20,11 +23,22 @@ afterEach(() => {
   } else {
     process.env.HOME = originalHome
   }
+  if (originalUserProfile === undefined) {
+    delete process.env.USERPROFILE
+  } else {
+    process.env.USERPROFILE = originalUserProfile
+  }
   rmSync(home, { recursive: true, force: true })
 })
 
 const configPath = (): string => join(home, '.zcode', 'cli', 'config.json')
-const scriptPath = (): string => join(home, '.orca', 'agent-hooks', 'zcode-hook.sh')
+const scriptPath = (): string =>
+  join(
+    home,
+    '.orca',
+    'agent-hooks',
+    process.platform === 'win32' ? 'zcode-hook.cmd' : 'zcode-hook.sh'
+  )
 
 describe('ZcodeHookService', () => {
   it('reports not_installed before install', () => {
@@ -37,18 +51,24 @@ describe('ZcodeHookService', () => {
     expect(status.managedHooksPresent).toBe(true)
 
     const config = JSON.parse(readFileSync(configPath(), 'utf-8')) as {
-      hooks?: { enabled?: boolean; events?: Record<string, unknown[]> }
+      hooks?: { enabled?: boolean; events?: Record<string, unknown[]>; [key: string]: unknown }
     }
     expect(config.hooks?.enabled).toBe(true)
+    expect(config.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
     for (const event of ZCODE_HOOK_EVENTS) {
       expect(config.hooks?.events?.[event]).toBeDefined()
     }
 
     const script = readFileSync(scriptPath(), 'utf-8')
     expect(script).toContain('/hook/zcode')
-    expect(script).toContain('printf \'%s\' "$payload" | curl')
-    expect(script).toContain('--data-urlencode "payload@-"')
-    expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    if (process.platform === 'win32') {
+      expect(script).toContain('curl.exe')
+      expect(script).toContain('--data-urlencode "payload@-"')
+    } else {
+      expect(script).toContain('printf \'%s\' "$payload" | curl')
+      expect(script).toContain('--data-urlencode "payload@-"')
+      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
+    }
   })
 
   it('keeps user config across install, reinstall, and remove', () => {
@@ -100,5 +120,25 @@ describe('ZcodeHookService', () => {
         (definition) => definition.hooks?.[0]?.command === 'echo user-hook'
       )
     ).toBe(true)
+  })
+
+  it('restores an absent hooks.enabled field on remove without writing private metadata', () => {
+    const dir = join(home, '.zcode', 'cli')
+    mkdirSync(dir, { recursive: true })
+    writeFileSync(configPath(), `${JSON.stringify({ hooks: { events: {} } }, null, 2)}\n`)
+
+    const service = new ZcodeHookService()
+    expect(service.install().state).toBe('installed')
+    const installed = JSON.parse(readFileSync(configPath(), 'utf-8')) as {
+      hooks?: Record<string, unknown>
+    }
+    expect(installed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
+
+    expect(service.remove().state).toBe('not_installed')
+    const removed = JSON.parse(readFileSync(configPath(), 'utf-8')) as {
+      hooks?: Record<string, unknown>
+    }
+    expect(removed.hooks).not.toHaveProperty('enabled')
+    expect(removed.hooks).not.toHaveProperty('orcaPreviousHooksEnabled')
   })
 })
