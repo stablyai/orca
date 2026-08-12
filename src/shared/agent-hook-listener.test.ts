@@ -836,9 +836,7 @@ describe('shared agent-hook-listener', () => {
   })
 
   it('maps OMP ask tool_execution_start to blocked with interactivePrompt', () => {
-    // Why: omp's question tool is named `ask` (not ask_user_question) and its
-    // options are { label } objects; orca-agent-status emits tool_execution_start
-    // while the agent is parked on the user's answer, so the pane must go blocked.
+    // Why: OMP emits tool_execution_start while it waits for the user's answer.
     const questions = {
       questions: [
         {
