@@ -29,6 +29,7 @@ import {
 } from './web-agent-session-handoff'
 import {
   _getWebSessionTabsTrackingCountsForTest,
+  _mergeMirroredHostTabOrderForTest,
   acceptReplayedWebSessionTabsSnapshot,
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
@@ -1694,6 +1695,30 @@ describe('applyWebSessionTabsSnapshot', () => {
       localBrowserTab.id,
       secondTerminalId
     ])
+    expect(patch.groupsByWorktree?.[WT]?.[0]?.tabOrder).toEqual([
+      firstTerminalId,
+      localBrowserTab.id,
+      secondTerminalId
+    ])
+  })
+
+  it('does not consume host order for stale mirrored entries before live tabs', () => {
+    const staleMirroredId = toWebTerminalSurfaceTabId('host-tab-stale')
+    const firstTerminalId = toWebTerminalSurfaceTabId('host-tab-1')
+    const secondTerminalId = toWebTerminalSurfaceTabId('host-tab-2')
+    const localFileTabId = 'local-file-tab'
+    const currentOrder = [staleMirroredId, localFileTabId, firstTerminalId]
+    const mirroredIds = new Set([staleMirroredId, firstTerminalId, secondTerminalId])
+    const validIds = new Set([localFileTabId, firstTerminalId, secondTerminalId])
+
+    expect(
+      _mergeMirroredHostTabOrderForTest(
+        currentOrder,
+        [firstTerminalId, secondTerminalId],
+        mirroredIds,
+        validIds
+      )
+    ).toEqual([localFileTabId, firstTerminalId, secondTerminalId])
   })
 
   it('keeps retained local-only groups reachable when applying a host layout', () => {

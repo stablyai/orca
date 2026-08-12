@@ -1736,6 +1736,37 @@ function updateHostSessionTabIdMappings(args: {
   }
 }
 
+function mergeMirroredHostTabOrder(
+  currentTabOrder: readonly string[],
+  hostTabOrder: readonly string[],
+  mirroredUnifiedIds: ReadonlySet<string>,
+  validUnifiedTabIds: ReadonlySet<string>
+): string[] {
+  const merged: string[] = []
+  const seen = new Set<string>()
+  let hostIndex = 0
+  for (const tabId of currentTabOrder) {
+    if (!validUnifiedTabIds.has(tabId)) {
+      continue
+    }
+    const nextTabId = mirroredUnifiedIds.has(tabId) ? hostTabOrder[hostIndex++] : tabId
+    if (nextTabId && validUnifiedTabIds.has(nextTabId) && !seen.has(nextTabId)) {
+      merged.push(nextTabId)
+      seen.add(nextTabId)
+    }
+  }
+  for (; hostIndex < hostTabOrder.length; hostIndex += 1) {
+    const tabId = hostTabOrder[hostIndex]
+    if (tabId && !seen.has(tabId)) {
+      merged.push(tabId)
+      seen.add(tabId)
+    }
+  }
+  return merged
+}
+
+export const _mergeMirroredHostTabOrderForTest = mergeMirroredHostTabOrder
+
 function buildMirroredHostGroups({
   currentGroups,
   hostGroups,
@@ -1773,13 +1804,17 @@ function buildMirroredHostGroups({
 
   for (const hostGroup of hostGroups) {
     const existing = groupsById.get(hostGroup.id)
+    const currentGroup = currentGroups.find((group) => group.id === hostGroup.id)
     const localHostOrder = hostGroup.tabOrder
       .map((tabId) => hostToLocalTabId.get(tabId))
       .filter((tabId): tabId is string => tabId !== undefined && validUnifiedTabIds.has(tabId))
-    const hostTabOrder = [
-      ...(existing?.tabOrder.filter((tabId) => !localHostOrder.includes(tabId)) ?? []),
-      ...localHostOrder
-    ]
+    // Why: keep local file tabs in their existing slots while applying the host's order to mirrored tabs.
+    const hostTabOrder = mergeMirroredHostTabOrder(
+      currentGroup?.tabOrder ?? existing?.tabOrder ?? [],
+      localHostOrder,
+      mirroredUnifiedIds,
+      validUnifiedTabIds
+    )
     // Why: a pending client reorder wins over a stale pre-move host order until the host echoes the move (or membership changes).
     const tabOrder = resolveWebSessionReorderedOrder(
       { environmentId },
