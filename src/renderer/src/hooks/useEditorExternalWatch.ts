@@ -2,9 +2,7 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore, type AppState } from '@/store'
 import { basename, joinPath } from '@/lib/path'
-import { getExternalFileChangeRelativePath } from '@/components/right-sidebar/useFileExplorerWatch'
 import {
-  areLocalWindowsWslPathAliases,
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
 } from '../../../shared/cross-platform-path'
@@ -12,9 +10,9 @@ import {
   canAutoSaveOpenFile,
   getOpenFilesForExternalFileChange,
   isExternalReloadableEditorTab,
-  isWorkingTreeCombinedDiffTab,
   notifyEditorExternalFileChange
 } from '@/components/editor/editor-autosave'
+import { indexEditorExternalWatchBatchPaths } from '@/components/editor/editor-external-watch-path-index'
 import {
   clearSelfWrite,
   getRecentSelfWrite,
@@ -95,26 +93,6 @@ function localWslAliasOption(
   return isLocalWindowsDesktopClient() && target.allowLocalWindowsWslAliases === true
     ? { allowLocalWindowsWslAliases: true }
     : {}
-}
-
-function findMatchingWatchedPath(
-  watchedPaths: ReadonlyMap<string, string>,
-  filePath: string,
-  allowLocalWslAliases?: true
-): string | undefined {
-  const directMatch = watchedPaths.get(normalizeRuntimePathForComparison(filePath))
-  if (directMatch !== undefined) {
-    return directMatch
-  }
-  if (allowLocalWslAliases !== true || !isLocalWindowsDesktopClient()) {
-    return undefined
-  }
-  for (const watchedPath of watchedPaths.values()) {
-    if (areLocalWindowsWslPathAliases(filePath, watchedPath)) {
-      return watchedPath
-    }
-  }
-  return undefined
 }
 
 function isLocalHostStamp(value: string | null | undefined): boolean {
@@ -525,19 +503,15 @@ export function createExternalWatchEventHandler(
       )
     }
 
-    // Why: collect create/update paths first to cancel any pending same-path delete — this absorbs the macOS atomic-write delete→create split across two payloads.
-    const createOrUpdatePaths = new Map<string, string>()
-    for (const evt of payload.events) {
-      if (evt.isDirectory === true) {
-        continue
-      }
-      if (evt.kind === 'create' || evt.kind === 'update') {
-        createOrUpdatePaths.set(
-          normalizeRuntimePathForComparison(evt.absolutePath),
-          evt.absolutePath
-        )
-      }
-    }
+    // Why: one batch index keeps local WSL alias normalization out of event×tab loops.
+    const openFilesAtStart = useAppStore.getState().openFiles
+    const batchPaths = indexEditorExternalWatchBatchPaths(payload, openFilesAtStart, {
+      worktreeId: target.worktreeId,
+      worktreePath: target.worktreePath,
+      runtimeEnvironmentId: target.runtimeEnvironmentId,
+      ...localWslAliasOption(target)
+    })
+    const createOrUpdatePaths = batchPaths.createOrUpdatePaths
     for (const createdPath of createOrUpdatePaths.keys()) {
       const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, createdPath)
       const existing = pendingDeletes.get(key)
@@ -548,25 +522,16 @@ export function createExternalWatchEventHandler(
     }
 
     // Why: mark editor tabs deleted/renamed instead of closing them so the user keeps in-memory content; a paired create means rename, a lone delete is hard.
-    // Why: snapshot openFiles once so the delete/rename helpers share a consistent view without N store reads per payload.
-    const openFilesAtStart = useAppStore.getState().openFiles
-    const deletedOpenEditorIdsRaw = collectDeletedOpenEditorIds(
-      payload,
-      target.worktreeId,
-      target.runtimeEnvironmentId,
-      openFilesAtStart,
-      target.allowLocalWindowsWslAliases
-    )
+    // Why: snapshot openFiles once so delete, rename, and update matching share one indexed view.
+    const deletedOpenEditorsRaw = batchPaths.deletedOpenEditors
     // Only pay the per-id lookup to suppress a move's own source-delete while a move is live; else the batch stays O(deletes).
-    const deletedOpenEditorIds = hasActiveEditorPathMoves()
-      ? deletedOpenEditorIdsRaw.filter((fileId) => {
-          const file = openFilesAtStart.find((f) => f.id === fileId)
-          return (
-            !file ||
+    const deletedOpenEditors = hasActiveEditorPathMoves()
+      ? deletedOpenEditorsRaw.filter(
+          ({ file }) =>
             !isActiveMoveSourcePath(target.worktreeId, target.runtimeEnvironmentId, file.filePath)
-          )
-        })
-      : deletedOpenEditorIdsRaw
+        )
+      : deletedOpenEditorsRaw
+    const deletedOpenEditorIds = deletedOpenEditors.map(({ file }) => file.id)
     // Why: correlate creates to deletes by basename to avoid mislabelling unrelated create+delete pairs as "renamed"; default to 'deleted' when we can't correlate.
     const hasPairedCreate =
       deletedOpenEditorIds.length > 0 &&
@@ -580,19 +545,9 @@ export function createExternalWatchEventHandler(
         }
       } else {
         // Why: defer the 'deleted' tombstone so a follow-up same-path create in the next payload can cancel it (macOS atomic write).
-        const deletePathByFileId = buildDeletePathByFileId(
-          payload,
-          target.worktreeId,
-          target.runtimeEnvironmentId,
-          deletedOpenEditorIds,
-          openFilesAtStart,
-          target.allowLocalWindowsWslAliases
-        )
-        for (const fileId of deletedOpenEditorIds) {
-          const absolutePath = deletePathByFileId.get(fileId)
-          if (!absolutePath) {
-            continue
-          }
+        for (const { file, normalizedDeletePath } of deletedOpenEditors) {
+          const fileId = file.id
+          const absolutePath = normalizedDeletePath
           const key = pendingKey(target.worktreeId, target.runtimeEnvironmentId, absolutePath)
           const existing = pendingDeletes.get(key)
           if (existing) {
@@ -622,61 +577,31 @@ export function createExternalWatchEventHandler(
           openFileRuntimeOwner(file) === target.runtimeEnvironmentId &&
           (file.mode === 'edit' || file.mode === 'markdown-preview') &&
           (file.externalMutation === 'deleted' || file.externalMutation === 'renamed') &&
-          findMatchingWatchedPath(
-            createOrUpdatePaths,
-            file.filePath,
-            target.allowLocalWindowsWslAliases
-          ) !== undefined
+          batchPaths.matchesCreateOrUpdate(file)
         ) {
           state.setExternalMutation(file.id, null)
         }
       }
     }
 
-    const changedFiles = new Set<string>()
+    let overflowed = false
     for (const evt of payload.events) {
       if (evt.kind === 'overflow') {
         // Why: overflow omits per-path info, so conservatively clear stale tombstones or a file that reappeared during the overrun stays struck through.
         for (const notification of getOverflowExternalReloadTargets(target)) {
           scheduleDebouncedExternalReload(notification)
         }
-        // Why: `break` not `return` — changedFiles is empty so the rest early-returns anyway, and this is more robust to code added after the loop.
+        overflowed = true
         break
-      }
-
-      if (evt.kind === 'update' && evt.isDirectory === true) {
-        continue
-      }
-
-      if (evt.kind === 'delete') {
-        // Why: deletes are tombstoned above; feeding them into reload would read the ENOENT path and replace in-memory content with an error, losing the user's view.
-        continue
-      }
-
-      const relativePath = getExternalFileChangeRelativePath(
-        target.worktreePath,
-        evt.absolutePath,
-        evt.isDirectory
-      )
-      if (relativePath) {
-        changedFiles.add(relativePath)
       }
     }
 
-    if (changedFiles.size === 0) {
+    if (overflowed || batchPaths.changes.length === 0) {
       return
     }
 
-    // Why: read openFiles once per payload to avoid N store reads on large batches; consumers skip dirty tabs so external writes don't destroy unsaved work.
-    const openFilesSnapshot = useAppStore.getState().openFiles
-    // Why: the combined "Changes" tab is per-worktree not per-path, so compute it once instead of rescanning openFiles per changed file in a large batched payload.
-    const hasCombinedDiffConsumer = openFilesSnapshot.some(
-      (f) =>
-        f.worktreeId === target.worktreeId &&
-        openFileRuntimeOwner(f) === target.runtimeEnvironmentId &&
-        isWorkingTreeCombinedDiffTab(f)
-    )
-    for (const relativePath of changedFiles) {
+    for (const change of batchPaths.changes) {
+      const relativePath = change.relativePath
       const notification = {
         worktreeId: target.worktreeId,
         worktreePath: target.worktreePath,
@@ -684,11 +609,11 @@ export function createExternalWatchEventHandler(
         runtimeEnvironmentId: target.runtimeEnvironmentId,
         ...localWslAliasOption(target)
       }
-      const absolutePath = joinPath(notification.worktreePath, notification.relativePath)
-      const matching = getOpenFilesForExternalFileChange(openFilesSnapshot, notification)
+      const absolutePath = change.absolutePath
+      const matching = batchPaths.matchingOpenFiles(change)
       if (matching.length === 0) {
         // Why: combined-diff tab has no in-memory content to clobber and guards its own reload, so notify it directly without self-write suppression.
-        if (hasCombinedDiffConsumer) {
+        if (batchPaths.hasCombinedDiffConsumer) {
           scheduleDebouncedExternalReload(notification)
         }
         continue
@@ -717,7 +642,7 @@ export function createExternalWatchEventHandler(
           scheduleChangedOnDiskMark(target, notification, dirtyIds)
         }
         if (dirtyMatches.length === matching.length) {
-          if (hasCombinedDiffConsumer) {
+          if (batchPaths.hasCombinedDiffConsumer) {
             scheduleDebouncedExternalReload(notification)
           }
           continue
@@ -1031,79 +956,6 @@ export function getOverflowExternalReloadTargets(
   }
 
   return notifications
-}
-
-function buildDeletePathByFileId(
-  payload: FsChangedPayload,
-  worktreeId: string,
-  runtimeEnvironmentId: string | null,
-  deletedOpenEditorIds: string[],
-  openFiles: OpenFile[],
-  allowLocalWindowsWslAliases?: true
-): Map<string, string> {
-  const deletePaths = new Map<string, string>()
-  for (const evt of payload.events) {
-    if (evt.kind === 'delete') {
-      deletePaths.set(normalizeRuntimePathForComparison(evt.absolutePath), evt.absolutePath)
-    }
-  }
-  const result = new Map<string, string>()
-  if (deletePaths.size === 0) {
-    return result
-  }
-  const deletedIdSet = new Set(deletedOpenEditorIds)
-  for (const file of openFiles) {
-    if (
-      !deletedIdSet.has(file.id) ||
-      file.worktreeId !== worktreeId ||
-      openFileRuntimeOwner(file) !== runtimeEnvironmentId
-    ) {
-      continue
-    }
-    const deletePath = findMatchingWatchedPath(
-      deletePaths,
-      file.filePath,
-      allowLocalWindowsWslAliases
-    )
-    if (deletePath) {
-      result.set(file.id, normalizeRuntimePathForComparison(deletePath))
-    }
-  }
-  return result
-}
-
-function collectDeletedOpenEditorIds(
-  payload: FsChangedPayload,
-  worktreeId: string,
-  runtimeEnvironmentId: string | null,
-  openFiles: OpenFile[],
-  allowLocalWindowsWslAliases?: true
-): string[] {
-  const deletePaths = new Map<string, string>()
-  for (const evt of payload.events) {
-    if (evt.kind === 'delete') {
-      deletePaths.set(normalizeRuntimePathForComparison(evt.absolutePath), evt.absolutePath)
-    }
-  }
-  if (deletePaths.size === 0) {
-    return []
-  }
-  const result: string[] = []
-  for (const file of openFiles) {
-    if (
-      file.worktreeId !== worktreeId ||
-      openFileRuntimeOwner(file) !== runtimeEnvironmentId ||
-      (file.mode !== 'edit' && file.mode !== 'markdown-preview')
-    ) {
-      continue
-    }
-    if (
-      findMatchingWatchedPath(deletePaths, file.filePath, allowLocalWindowsWslAliases) !== undefined
-    ) {
-      result.push(file.id)
-    }
-  }
-  return result
 }
 
 /**
