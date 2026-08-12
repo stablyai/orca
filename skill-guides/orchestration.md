@@ -270,6 +270,34 @@ Recovery is conditional, never a fixed destructive sequence:
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
 
+## Cross-Runtime Federation
+
+Federation runs a worker on a **separate paired Orca runtime** — a laptop coordinating a worker on a VPS, or the reverse. The Run, Tasks, and coordinator stay on the home runtime; only the worker's terminal and worktree live on the peer. This is the `--on <saved-environment>` path above, named: the home runtime is the coordinator, the peer runtime is the worker server.
+
+Register the peer before you can target it. `--on` resolves a **saved environment**, not a live socket, so a runtime that is only paired for remote-desktop control still reports `Unknown environment`. On the peer, run `orca serve` and copy its **runtime-scope** pairing code (the `orca://pair?code=...` link it prints, not the mobile QR from `--mobile-pairing`); on the coordinator, save it once. `orca serve` binds all interfaces (`0.0.0.0`) with no bind-restrict flag, so keep its port behind a host or network firewall:
+
+```bash
+# On the peer (the worker server): prints a runtime-scope pairing link
+orca serve --pairing-address <peer-reachable-address>
+# On the coordinator (the Run home): persist the peer as a named environment
+orca environment add --name <peer> --pairing-code "orca://pair?code=..." --json
+orca environment list --json
+```
+
+Federation is directional per Dispatch: the coordinator dials the worker server, never the reverse. For either runtime to coordinate the other, register the peer on **both** — each saves the other as an environment. Both runtimes must run matching builds so the peer advertises the federation capability; a peer that does not is refused before any worktree or terminal is created on it.
+
+Start, observe, and stop a federated worker exactly like a local one, routing every follow-up by Dispatch ID and never repeating `--on`. Issue the command from a Run-bound coordinator terminal — its `--from` handle must name a pane bound to the Task Run, the same binding every coordinator needs:
+
+```bash
+orca orchestration worker-start --task <task_id> --on <peer> --worktree new-top-level --repo <exact_remote_repo_selector> --name <worktree_name> --agent <agent> --from <coordinator_handle> --json
+orca orchestration worker-show --dispatch <dispatch_id> --json
+orca orchestration worker-read --dispatch <dispatch_id> --limit 50 --json
+orca orchestration send --to dispatch:<dispatch_id> --subject "Follow-up" --body "<attempt-specific guidance>" --json
+orca orchestration worker-stop --dispatch <dispatch_id> --json
+```
+
+A new worktree requires `--name`; `--from` must name your Run-bound coordinator pane (omitting it auto-binds a pane that may be busy). Remote `current` and `new-child` stay invalid because those words are ambiguous across runtimes; supply an exact discovered remote worktree selector or `new-top-level` with an explicit remote repo selector. The worker's `orchestration check` receives coordinator mail across the federation link as normal inbox delivery, not prompt injection, so `worker_done`, `question`, and `escalation` flow home unchanged — but only while the Dispatch is active: after `worker_done`, `send --to dispatch:<id>` returns `dispatch_inactive`. Give a new worker ~60s before judging it stuck: for the first ~20s `worker-read` shows the preamble and task sitting in the agent's input box with no assistant turn, which is the TUI still starting — the runtime submits the prompt itself, so do not inject a keystroke to "help" (a premature `terminal send` races that submit). The one case that genuinely needs a keystroke is a peer whose agent has not trusted the worktree path: it stalls on the folder-trust prompt before the agent's first turn while `worker-show` still reads `ready`. Answer that from the coordinator with a single `orca terminal send --terminal <peer_terminal_handle> --environment <peer> --text "1" --enter`, then wait. If the peer is re-paired mid-Dispatch its identity key rotates and in-flight federated workers become unreachable until you refresh the saved environment with `orca environment add`.
+
 ## Gates And Legacy Inspection
 
 ```bash
