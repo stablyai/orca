@@ -29,7 +29,9 @@ describe('isKnownHarnessInjectedUserTurnText', () => {
       '<bash-input>ls</bash-input>',
       '<bash-stdout>file.txt</bash-stdout>',
       '<bash-stderr>err</bash-stderr>',
-      '<user-prompt-submit-hook>hook context</user-prompt-submit-hook>'
+      '<user-prompt-submit-hook>hook context</user-prompt-submit-hook>',
+      '<codex_internal_context source="goal">\nContinue working toward the active thread goal.\n</codex_internal_context>',
+      '<goal_context>keep going</goal_context>'
     ]
     for (const text of injected) {
       expect(isKnownHarnessInjectedUserTurnText(text), text).toBe(true)

@@ -247,4 +247,132 @@ describe('Codex transcript history modes', () => {
       blocks: [{ type: 'tool-result', output: 'ok' }]
     })
   })
+
+  // Why: goal mode writes Active-goal / handoff digests as response_item
+  // final_answer with output_text only — no event_msg twin — so the prior
+  // claudeContentBlocks path dropped them and mobile showed only "agent is working".
+  it('keeps goal-mode final_answer digests from response_item output_text', async () => {
+    const filePath = await writeCodexFixture([
+      {
+        timestamp: '2026-08-11T17:00:00.000Z',
+        type: 'session_meta',
+        payload: { id: 'session-1', history_mode: 'legacy' }
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'thread_goal_updated',
+          goal: { objective: 'Process all assigned PRs and issues' }
+        }
+      },
+      {
+        type: 'event_msg',
+        payload: { type: 'user_message', message: 'Continue' }
+      },
+      {
+        type: 'event_msg',
+        payload: {
+          type: 'agent_message',
+          phase: 'commentary',
+          message: 'Resuming the supervised batch.'
+        }
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          phase: 'commentary',
+          content: [{ type: 'output_text', text: 'Resuming the supervised batch.' }]
+        }
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          id: 'goal-digest-1',
+          role: 'assistant',
+          phase: 'final_answer',
+          content: [
+            {
+              type: 'output_text',
+              text: '## Active goal\n\nProcess all assigned PRs and issues\n\n- 4 workers live'
+            }
+          ]
+        }
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: '<codex_internal_context source="goal">\nContinue working toward the active thread goal.\n</codex_internal_context>'
+            }
+          ]
+        }
+      }
+    ])
+
+    const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
+    expect(result).toMatchObject({
+      messages: [
+        {
+          role: 'system',
+          blocks: [{ type: 'text', text: 'Goal: Process all assigned PRs and issues' }]
+        },
+        { role: 'user', blocks: [{ type: 'text', text: 'Continue' }] },
+        {
+          role: 'assistant',
+          blocks: [{ type: 'text', text: 'Resuming the supervised batch.' }]
+        },
+        {
+          id: 'goal-digest-1',
+          role: 'assistant',
+          blocks: [
+            {
+              type: 'text',
+              text: '## Active goal\n\nProcess all assigned PRs and issues\n\n- 4 workers live'
+            }
+          ]
+        }
+      ]
+    })
+    expect('messages' in result && result.messages).toHaveLength(4)
+  })
+
+  it('does not double-render commentary response_item copies of event_msg', () => {
+    const commentary = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          phase: 'commentary',
+          content: [{ type: 'output_text', text: 'Still working' }]
+        }
+      }),
+      'fallback-commentary'
+    )
+    const finalAnswer = decodeCodexTranscriptLine(
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          phase: 'final_answer',
+          content: [{ type: 'output_text', text: '## Handoff summary\n\n### Goal\n\nDone' }]
+        }
+      }),
+      'fallback-final'
+    )
+
+    expect(commentary).toBeNull()
+    expect(finalAnswer).toMatchObject({
+      role: 'assistant',
+      blocks: [{ type: 'text', text: '## Handoff summary\n\n### Goal\n\nDone' }]
+    })
+  })
 })

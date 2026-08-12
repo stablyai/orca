@@ -11,8 +11,16 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
-import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
+import { toolResultOutput } from './transcript-record-blocks'
 import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
+
+// Why: Codex dual-writes mid-turn `commentary` to event_msg/agent_message, but
+// goal-mode digests (`## Active goal`, handoff summaries) often land only as
+// response_item messages with phase `final_answer` and Response-API
+// output_text blocks. claudeContentBlocks ignores those block types, so the
+// chat view kept the working indicator while the goal transcript looked empty.
+const CODEX_RESPONSE_MESSAGE_PHASE_FINAL = 'final_answer'
+const CODEX_RESPONSE_MESSAGE_PHASE_COMMENTARY = 'commentary'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -58,16 +66,7 @@ function codexResponseItem(
   timestamp: number | null
 ): NativeChatMessage | null {
   if (payload.type === 'message') {
-    const role =
-      payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : null
-    if (!role) {
-      return null
-    }
-    const blocks = claudeContentBlocks(payload.content)
-    if (blocks.length === 0) {
-      return null
-    }
-    return { id, role, blocks, timestamp, source: 'transcript' }
+    return codexResponseMessage(payload, id, timestamp)
   }
   if (payload.type === 'reasoning') {
     const text = extractString(payload.text) ?? codexSummaryText(payload.summary)
@@ -108,6 +107,50 @@ function codexResponseItem(
   return null
 }
 
+function codexResponseMessage(
+  payload: Record<string, unknown>,
+  id: string,
+  timestamp: number | null
+): NativeChatMessage | null {
+  const role =
+    payload.role === 'assistant' ? 'assistant' : payload.role === 'user' ? 'user' : null
+  if (!role) {
+    return null
+  }
+  const phase = extractString(payload.phase)
+  // commentary always has an event_msg twin; decoding both doubles the chat.
+  if (phase === CODEX_RESPONSE_MESSAGE_PHASE_COMMENTARY) {
+    return null
+  }
+  // Response-API text blocks (input_text/output_text) dual-write to event_msg
+  // or item_completed — except final_answer goal digests, which often do not.
+  // Skip the dual-written copy so chat does not render every turn twice.
+  if (
+    phase !== CODEX_RESPONSE_MESSAGE_PHASE_FINAL &&
+    contentUsesResponseApiTextBlocks(payload.content)
+  ) {
+    return null
+  }
+  const blocks = codexTurnItemBlocks(payload.content)
+  if (blocks.length === 0) {
+    return null
+  }
+  return { id, role, blocks, timestamp, source: 'transcript' }
+}
+
+function contentUsesResponseApiTextBlocks(content: unknown): boolean {
+  if (!Array.isArray(content)) {
+    return false
+  }
+  for (const value of content) {
+    const item = asRecord(value)
+    if (item?.type === 'input_text' || item?.type === 'output_text') {
+      return true
+    }
+  }
+  return false
+}
+
 function codexEventMessage(
   payload: Record<string, unknown>,
   id: string,
@@ -125,6 +168,9 @@ function codexEventMessage(
   if (payload.type === 'item_completed') {
     return codexCompletedTurnItem(payload, id, timestamp)
   }
+  if (payload.type === 'thread_goal_updated') {
+    return codexThreadGoalUpdated(payload, id, timestamp)
+  }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
     return text
@@ -138,6 +184,26 @@ function codexEventMessage(
       : null
   }
   return null
+}
+
+function codexThreadGoalUpdated(
+  payload: Record<string, unknown>,
+  id: string,
+  timestamp: number | null
+): NativeChatMessage | null {
+  const goal = asRecord(payload.goal)
+  const objective =
+    extractString(goal?.objective) ?? extractString(payload.objective) ?? extractString(payload.goal)
+  if (!objective?.trim()) {
+    return null
+  }
+  return {
+    id,
+    role: 'system',
+    blocks: [{ type: 'text', text: `Goal: ${objective.trim()}` }],
+    timestamp,
+    source: 'transcript'
+  }
 }
 
 function codexCompletedTurnItem(
