@@ -728,8 +728,15 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     if (!worktreeId) {
       return false
     }
+    const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+    if (browserAvailability.state !== 'enabled') {
+      return false
+    }
     const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
-    if (runtimeEnvironmentId) {
+    if (browserAvailability.provider === 'paired-runtime') {
+      if (!runtimeEnvironmentId) {
+        return false
+      }
       const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
       try {
         return await createWebRuntimeSessionBrowserTab({
@@ -746,7 +753,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         return false
       }
     }
-    get().createBrowserTab(worktreeId, url, { activate: true, sessionProfileId: profileId })
+    get().createBrowserTab(worktreeId, url, {
+      activate: true,
+      sessionProfileId: profileId,
+      ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+    })
     return true
   },
   closeBrowserTab: (tabId) => {

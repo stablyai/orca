@@ -22,7 +22,6 @@ export type ClientCreationActionProvider = 'local-client' | 'paired-runtime'
 export type ClientCreationActionAvailability =
   | { state: 'enabled'; provider: ClientCreationActionProvider }
   | { state: 'hidden'; reason: string }
-  | { state: 'disabled'; reason: string }
 
 export type ClientCreationActionPolicy = Record<
   ClientCreationAction,

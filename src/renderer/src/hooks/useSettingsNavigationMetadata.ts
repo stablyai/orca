@@ -1,6 +1,7 @@
 /* oxlint-disable max-lines */
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useShallow } from 'zustand/react/shallow'
 // Why: this registry mirrors the Settings sidebar in one neutral module so
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
@@ -90,6 +91,7 @@ import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabi
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
 import { translate } from '@/i18n/i18n'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
 
@@ -124,6 +126,8 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  managedBrowserCreationEnabled = !isWebClient,
+  mobileEmulatorCreationEnabled = !isWebClient,
   isDev = import.meta.env.DEV,
   isLinearConnected = false,
   repos
@@ -133,6 +137,8 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
   isWebClient: boolean
+  managedBrowserCreationEnabled?: boolean
+  mobileEmulatorCreationEnabled?: boolean
   isDev?: boolean
   isLinearConnected?: boolean
   repos: readonly Repo[]
@@ -504,7 +510,10 @@ export function buildSettingsNavigationMetadata({
         'Keyboard shortcuts for common actions.'
       ),
       icon: Keyboard,
-      searchEntries: getShortcutsPaneSearchEntries(),
+      searchEntries: getShortcutsPaneSearchEntries({
+        includeManagedBrowser: managedBrowserCreationEnabled,
+        includeMobileEmulator: mobileEmulatorCreationEnabled
+      }),
       group: 'interface'
     },
     {
@@ -676,6 +685,15 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const activeLocale = i18n.language
   const repos = useAppStore((state) => state.repos)
   const settings = useAppStore((state) => state.settings)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+    useShallow((state) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+      return [
+        policy['managed-browser'].state === 'enabled',
+        policy['mobile-emulator'].state === 'enabled'
+      ] as const
+    })
+  )
   const isMac = isMacUserAgent()
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
@@ -718,6 +736,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isLocalWindowsHost,
         isWindowsTerminalHost,
         isWebClient,
+        managedBrowserCreationEnabled,
+        mobileEmulatorCreationEnabled,
         isDev: import.meta.env.DEV,
         isLinearConnected,
         repos
@@ -729,6 +749,8 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isLocalWindowsHost,
       isWindowsTerminalHost,
       isWebClient,
+      managedBrowserCreationEnabled,
+      mobileEmulatorCreationEnabled,
       isLinearConnected,
       repos,
       activeLocale

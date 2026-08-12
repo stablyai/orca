@@ -1120,6 +1120,7 @@ describe('createBrowserSlice runtime guard', () => {
     store.setState({
       activeWorktreeId: 'wt-remote',
       settings: { activeRuntimeEnvironmentId: 'env-1' } as AppState['settings'],
+      runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1']),
       worktreesByRepo: {
         'repo-1': [
           {
@@ -1144,6 +1145,66 @@ describe('createBrowserSlice runtime guard', () => {
       url: 'https://accounts.google.com/',
       profileId: 'profile-1'
     })
+    expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
+  })
+
+  it('opens a local desktop sign-in tab when the remote host cannot stream browsers', async () => {
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(true)
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
+    expect(store.getState().browserTabsByWorktree['wt-remote']?.[0]).toMatchObject({
+      url: 'https://accounts.google.com/',
+      sessionProfileId: 'profile-1'
+    })
+  })
+
+  it('rejects a paired-web sign-in tab when the remote host cannot stream browsers', async () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const store = createTestStore()
+    store.setState({
+      activeWorktreeId: 'wt-remote',
+      settings: settingsWithRuntime('env-1'),
+      runtimeStatusByEnvironmentId: runtimeStatuses([]),
+      worktreesByRepo: {
+        'repo-1': [
+          {
+            id: 'wt-remote',
+            repoId: 'repo-1',
+            hostId: 'local',
+            runtimeOwnerEnvironmentId: 'env-1'
+          } as never
+        ]
+      }
+    })
+
+    await expect(
+      store
+        .getState()
+        .openBrowserProfileTabInActiveWorkspace('https://accounts.google.com/', 'profile-1')
+    ).resolves.toBe(false)
+
+    expect(createWebRuntimeSessionBrowserTabMock).not.toHaveBeenCalled()
     expect(store.getState().browserTabsByWorktree['wt-remote']).toBeUndefined()
   })
 

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   findKeybindingConflictsForDefinitions,
   formatKeybindingList,
@@ -60,14 +61,15 @@ export function ShortcutsPane(): React.JSX.Element {
   const resetKeybindingOverride = useAppStore((state) => state.resetKeybindingOverride)
   const disableKeybindingAction = useAppStore((state) => state.disableKeybindingAction)
   const pluginCommands = useEditablePluginCommands()
-  const managedBrowserCreationEnabled = useAppStore((state) => {
-    const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
-    return policy['managed-browser'].state === 'enabled'
-  })
-  const mobileEmulatorCreationEnabled = useAppStore((state) => {
-    const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
-    return policy['mobile-emulator'].state === 'enabled'
-  })
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
+    useShallow((state) => {
+      const policy = getClientCreationActionPolicy(state, state.activeWorktreeId)
+      return [
+        policy['managed-browser'].state === 'enabled',
+        policy['mobile-emulator'].state === 'enabled'
+      ] as const
+    })
+  )
   const mountedRef = useMountedRef()
   const [errors, setErrors] = useState<Partial<Record<KeybindingActionId, string>>>({})
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)

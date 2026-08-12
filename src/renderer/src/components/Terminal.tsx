@@ -1678,10 +1678,14 @@ function Terminal(): React.JSX.Element | null {
         }).catch(showClientCreationActionError)
         return
       }
-      createBrowserTab(activeWorktreeId, source.url, {
-        ...buildDuplicatedBrowserTabOptions(source),
-        ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
-      })
+      try {
+        createBrowserTab(activeWorktreeId, source.url, {
+          ...buildDuplicatedBrowserTabOptions(source),
+          ...(runtimeEnvironmentId ? { browserRuntimeEnvironmentId: null } : {})
+        })
+      } catch (error) {
+        showClientCreationActionError(error)
+      }
     },
     [activeWorktreeId, createBrowserTab]
   )
@@ -2056,7 +2060,11 @@ function Terminal(): React.JSX.Element | null {
       if (!e.repeat && matchShortcut('tab.reopenClosed')) {
         e.preventDefault()
         notifyTerminalCapture('tab.reopenClosed')
-        useAppStore.getState().reopenClosedTab(activeWorktreeId)
+        try {
+          useAppStore.getState().reopenClosedTab(activeWorktreeId)
+        } catch (error) {
+          showClientCreationActionError(error)
+        }
         return
       }
 

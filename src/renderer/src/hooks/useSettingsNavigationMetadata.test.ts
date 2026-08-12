@@ -149,6 +149,28 @@ describe('settings navigation metadata', () => {
     expect(floatingWorkspace?.searchEntries.flatMap((entry) => entry.keywords)).not.toContain(
       'browser'
     )
+    const shortcuts = webSections.find((section) => section.id === 'shortcuts')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
+    expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'New mobile emulator tab'
+    )
+  })
+
+  it('keeps the Browser shortcut searchable for a capable web runtime', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: true,
+      managedBrowserCreationEnabled: true,
+      mobileEmulatorCreationEnabled: false,
+      repos: [repo]
+    })
+    const shortcutTitles = sections
+      .find((section) => section.id === 'shortcuts')
+      ?.searchEntries.map((entry) => entry.title)
+
+    expect(shortcutTitles).toContain('New browser tab')
+    expect(shortcutTitles).not.toContain('New mobile emulator tab')
   })
 
   it('does not mark installable AI capabilities as beta in the sidebar metadata', () => {

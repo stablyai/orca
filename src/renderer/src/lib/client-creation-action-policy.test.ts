@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/execution-host'
+import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   FLOATING_BROWSER_UNAVAILABLE_MESSAGE,
   LOCAL_BROWSER_UNAVAILABLE_MESSAGE,
@@ -164,5 +166,45 @@ describe('client creation action guards', () => {
         'managed-browser'
       ]
     ).toEqual({ state: 'hidden', reason: FLOATING_BROWSER_UNAVAILABLE_MESSAGE })
+  })
+
+  it('uses folder and SSH workspace ownership instead of the focused runtime', () => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', true)
+    const capableStatus = runtimeStatus(['browser.screencast.v1'])
+    const state = {
+      settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
+      folderWorkspaces: [
+        {
+          id: 'remote-folder',
+          projectGroupId: 'remote-group',
+          executionHostId: toRuntimeExecutionHostId('folder-owner')
+        }
+      ],
+      projectGroups: [
+        { id: 'remote-group', executionHostId: toRuntimeExecutionHostId('folder-owner') }
+      ],
+      worktreesByRepo: {
+        repo: [
+          {
+            id: 'ssh-worktree',
+            repoId: 'repo',
+            hostId: toSshExecutionHostId('ssh-owner')
+          }
+        ]
+      },
+      runtimeStatusByEnvironmentId: new Map([
+        ['folder-owner', { status: capableStatus, checkedAt: 1 }],
+        ['focused-runtime', { status: capableStatus, checkedAt: 1 }]
+      ])
+    }
+
+    expect(
+      getClientCreationActionPolicy(state as never, folderWorkspaceKey('remote-folder'))[
+        'managed-browser'
+      ]
+    ).toEqual({ state: 'enabled', provider: 'paired-runtime' })
+    expect(
+      getClientCreationActionPolicy(state as never, 'ssh-worktree')['managed-browser']
+    ).toEqual({ state: 'hidden', reason: MANAGED_BROWSER_UNAVAILABLE_MESSAGE })
   })
 })
