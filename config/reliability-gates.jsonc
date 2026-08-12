@@ -1362,6 +1362,189 @@
       "demotionRule": "Demote if a retired runtime transport can leave a renderer subscription without a close event, if a close is delivered more than once, if one failing teardown strands its sibling subscriptions, if payload frames from a retired transport reach the renderer, or if a revealed remote terminal can stay blank or reject input after a reconnect."
     },
     {
+      "id": "browser-session.remote-html-preview-ownership",
+      "title": "Paired HTML previews keep one host page and one stable client split",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "renderer-paired-runtime-reconciliation",
+      "surfaces": [
+        "paired remote HTML file preview",
+        "background preview creation and explicit browser activation",
+        "client-only split placement",
+        "remote browser close convergence"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "A headed macOS desktop host and separate paired web client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, and browser close. Unit contracts cover owning-runtime routing, one-shot split placement, focused and unfocused creation, manual moves, overlapping opens, failure cleanup, and teardown. Linux, Windows, and a live headless-server journey remain gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-3872/unable-to-open-html-files-in-remote-server",
+        "https://github.com/stablyai/orca/pull/13876"
+      ],
+      "invariant": "Opening one HTML preview from a paired client creates exactly one browser page on the worktree-owning runtime and exactly one mirrored client browser workspace. The preview remains in the requested client-side split without taking focus from the editor, an explicit browser click activates it authoritatively, and closing it removes only the browser identities while the source editor and terminal survive.",
+      "oracle": "Open a real HTML file through Explorer on a separate client paired to an isolated headed desktop host. Require one new host browser tab, one client browser workspace and unified tab, two visible split groups, an exact client-handle-to-host-page identity, rendered fixture DOM, editor focus after preview creation, host and client browser focus only after an explicit click, and browser-only close convergence with the editor and terminal still visible. Run the byte-identical Electron test on latest main, the candidate, and the candidate with the claimed fix disabled.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
+        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/runtime/orca-runtime-browser.test.ts",
+        "src/main/runtime/rpc/methods/browser.test.ts",
+        "src/renderer/src/lib/file-preview.test.ts",
+        "src/renderer/src/runtime/web-session-browser-placement.test.ts",
+        "src/renderer/src/runtime/web-runtime-session.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+        "src/renderer/src/runtime/remote-server-parity.test.ts",
+        "tests/e2e/paired-remote-html-browser-focus.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/runtime/web-session-browser-placement.test.ts",
+          "assertions": [
+            "pending page placements are bounded and independently reserve shared groups",
+            "worktree and environment teardown clear only their own placement state"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+          "assertions": [
+            "a host browser page stays in its exact client-owned preview group",
+            "a reserved empty split survives a pre-publication host snapshot",
+            "later client moves supersede initial preview placement"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/remote-server-parity.test.ts",
+          "assertions": [
+            "a caller-created browser gains focus when the exact predecessor tab is still visible"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+          "assertions": [
+            "one HTML open produces one client workspace, one client unified tab, and one host page",
+            "the source editor and remote frame remain visible in separate groups",
+            "preview creation leaves the editor active, an explicit browser click is authoritative, and close preserves the editor and terminal"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
+          "result": "passed",
+          "durationSeconds": 3.48,
+          "summary": "Seven focused host and renderer contract files passed 183/183 tests, covering owning-runtime routing, focused and unfocused creation, placement, reconciliation, failure cleanup, and teardown."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 16.1,
+          "summary": "The candidate passed exact host/client cardinality, split stability, rendered DOM, focus authority, close convergence, and surviving editor and terminal."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 11.6,
+          "summary": "Latest-main a90a18d43da333e1cc327779a3f9912a78308848 failed the byte-identical 5806b23f oracle because the HTML preview collapsed into the source editor group instead of retaining its requested split."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 6.5,
+          "summary": "Rebased candidate b7de9c0961a4edf389a29079b2b4d5250184b57e passed the byte-identical 5806b23f oracle: one host page, one client workspace, requested split, rendered DOM, stable focus, and browser-only close."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 10.9,
+          "summary": "Rebased candidate b7de9c0961a4edf389a29079b2b4d5250184b57e with only the side-preview owning-runtime routing seam disabled failed the byte-identical 5806b23f oracle with two client workspaces."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 7.6,
+          "summary": "Final candidate d5767481b982b736e7cc5b4653b2a32a61280638 on merge-base 36d45af062ec4022265aabac8fc6a9d36eecedf1 passed the byte-identical 5806b23f oracle after final review and rebase: one host page, one client workspace, requested split, rendered DOM, stable focus, and browser-only close."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 11.8,
+          "summary": "Latest-main 346e59c879 failed the byte-identical 2ec1dcf1 oracle with two client HTML browser workspaces instead of one."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 8.4,
+          "summary": "Candidate d05217c40d passed the byte-identical 2ec1dcf1 oracle: one host page, one client workspace, stable split, rendered DOM, editor focus after creation, explicit-click browser focus, and browser-only close."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "failed",
+          "durationSeconds": 12.3,
+          "summary": "Candidate d05217c40d with only the side-preview focusOnCreate:false call disabled failed the byte-identical 2ec1dcf1 oracle because preview creation activated the browser instead of preserving editor focus."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "seven focused host/renderer contracts plus one isolated headed paired-runtime journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The candidate passed isolated local macOS Electron runs before and after the final rebase; longer CI and soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical 2ec1dcf1 Electron oracle is red on latest main 346e59c879, green on candidate d05217c40d, and red when only the candidate's side-preview focusOnCreate:false call is disabled. Latest main created two client browser workspaces; the disabled candidate focused the browser before an explicit click. Historical 5806b23f evidence separately proves the owning-runtime routing seam."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The change adds no timer, polling, retry, subprocess, RPC method, stream opcode, receipt ledger, or host publication. Side previews install no focus listener and record no focus intent. Focused browser creation performs one bounded scan of the current worktree's local tabs. Pending client placements are capped at 128 and cleared on adoption, failure, or worktree/environment teardown."
+      },
+      "promotionCriteria": [
+        "Collect Linux and physical Windows paired-server evidence.",
+        "Collect a live headless-serve HTML preview journey.",
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake."
+      ],
+      "knownGaps": [
+        "Live paired-server validation currently covers macOS only.",
+        "A live headless-serve journey and multiple simultaneous viewers are not exercised by the Electron journey.",
+        "Direct SSH remote file URLs remain intentionally unsupported and local file previews retain their existing path."
+      ],
+      "demotionRule": "Demote if one paired HTML action can create duplicate client or host browser identities, lose the requested split, steal editor focus before an explicit browser click, lose browser focus after that click, or remove unrelated editor or terminal state on close."
+    },
+    {
       "id": "browser-stream.bounded-reconnect",
       "title": "Remote browser streams recover within a bounded retry budget",
       "maturity": "experimental",
@@ -2440,7 +2623,7 @@
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-transport.test.ts",
           "result": "passed",
-          "durationSeconds": 0.4,
+          "durationSeconds": 0.34,
           "summary": "1 test file passed, 58 tests passed; covers cwdFallback forwarding only for local fresh spawns and metadata handoff."
         },
         {
@@ -3233,6 +3416,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/settings.test.ts src/main/ipc/runtime-environments.test.ts src/renderer/src/store/slices/settings.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/components/settings/browser-session-host-selection.test.ts src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts src/renderer/src/components/status-bar/SshStatusSegment.test.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/hooks/useIpcEvents.test.ts src/renderer/src/web/web-preload-api.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/runtime/runtime-server-directory-browser.test.ts src/renderer/src/store/slices/repos-paired-runtime-add.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts src/renderer/src/components/sidebar/project-added-default-checkout.test.ts src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts src/renderer/src/components/sidebar/useAddRepoNestedImportFlow.test.ts src/renderer/src/components/sidebar/useAddRepoServerPathFlow.test.ts src/renderer/src/components/sidebar/useAddRepoCloneFlow.test.ts src/renderer/src/components/sidebar/useCreateRepo.default-checkout.test.ts src/renderer/src/components/sidebar/worktree-list-host-filtering.test.ts src/renderer/src/lib/resolved-worktree-execution-host.test.ts src/renderer/src/lib/worktree-runtime-owner.test.ts src/renderer/src/store/selectors.test.ts src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts src/renderer/src/store/slices/repos-project-groups.test.ts src/renderer/src/store/slices/repos-selected-owner-routing.test.ts src/renderer/src/store/slices/selected-host-active-workspace-identity.test.ts src/renderer/src/store/slices/worktrees.test.ts src/renderer/src/runtime/web-runtime-session.test.ts --maxWorkers=1",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "pnpm run ensure:electron-runtime && npx playwright test tests/e2e/pr11346-selected-runtime-add.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
@@ -3246,11 +3430,14 @@
         "src/renderer/src/components/settings/RuntimeEnvironmentsPane.test.ts",
         "src/renderer/src/components/status-bar/SshStatusSegment.test.ts",
         "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
+        "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
         "src/renderer/src/hooks/useIpcEvents.test.ts",
         "src/renderer/src/web/web-preload-api.test.ts",
         "src/renderer/src/components/sidebar/AddProjectFromFolderDialog.test.tsx",
         "src/renderer/src/components/sidebar/NonGitFolderDialog.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoDialog.default-checkout.test.ts",
+        "src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx",
+        "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
         "src/renderer/src/components/sidebar/AddRepoSteps.default-checkout.test.ts",
         "src/renderer/src/components/sidebar/project-added-default-checkout.test.ts",
         "src/renderer/src/components/sidebar/useAddRepoLocalFolderFlow.test.ts",
@@ -3262,6 +3449,7 @@
         "src/renderer/src/lib/resolved-worktree-execution-host.test.ts",
         "src/renderer/src/lib/worktree-runtime-owner.test.ts",
         "src/renderer/src/store/selectors.test.ts",
+        "src/renderer/src/store/slices/repos-paired-runtime-add.test.ts",
         "src/renderer/src/store/slices/repos-all-hosts-folder-workspaces.test.ts",
         "src/renderer/src/store/slices/repos-project-groups.test.ts",
         "src/renderer/src/store/slices/repos-selected-owner-routing.test.ts",
@@ -3271,6 +3459,34 @@
         "tests/e2e/pr11346-selected-runtime-add.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/sidebar/use-add-repo-host-selection.test.ts",
+          "assertions": [
+            "paired web hides the viewing computer as an Add Project filesystem authority and selects the paired runtime"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/add-repo-browse-authority.test.ts",
+          "assertions": [
+            "paired runtime browsing opens the host browser without invoking native pickFolders while desktop local and SSH routes remain intact"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/AddRepoDialogStepContent.test.tsx",
+          "assertions": ["paired runtime browsing renders the in-app host filesystem browser"]
+        },
+        {
+          "file": "src/renderer/src/components/sidebar/AddRepoStartSteps.test.tsx",
+          "assertions": [
+            "host-scoped Add Project actions remain disabled until a paired runtime is selectable"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/repos-paired-runtime-add.test.ts",
+          "assertions": [
+            "an explicitly selected paired runtime submits repo.add to that runtime without native repo or folder-picker calls"
+          ]
+        },
         {
           "file": "src/main/ipc/settings.test.ts",
           "assertions": [
@@ -6701,7 +6917,7 @@
     },
     {
       "id": "terminal-input.ime-and-synthetic-forwarding",
-      "title": "IME, native text, and synthetic input commit exactly once and do not leak preedit bytes",
+      "title": "IME, native text, and synthetic input commit exactly once, do not leak preedit bytes, and pair every claimed press with one release",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "terminal-input",
@@ -6718,18 +6934,19 @@
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
       "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": [],
-      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, and Electron/CDP live-PTY Sogou-style repros. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
+      "coverageNotes": "Local macOS and containerized Linux evidence, deterministic renderer-unit coverage for the Linux/Sogou candidate-key policy including the legacy orphaned-keyup fallback, Electron/CDP live-PTY Sogou-style repros, and a macOS renderer/main slice for Preview kitty commits: claimed press/release pairing in both keyup orderings, and snapshot flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts from daemon through the sequenced remote SnapshotStart frame. Real Linux/Sogou OS IME automation, Windows ConPTY post-agent reset, and the CJK/Vietnamese/Arabic matrix remain registered gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/6699",
         "https://github.com/stablyai/orca/pull/6682",
         "https://github.com/stablyai/orca/pull/6513",
         "https://github.com/stablyai/orca/pull/6999"
       ],
-      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY.",
-      "oracle": "The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
+      "invariant": "Composition, native text forwarding, synthetic input, paste, and platform keyboard bypass paths must not send preedit/control bytes before commit and must commit text exactly once to the intended PTY. When the snapshot source proves kitty state, macOS Preview commits must use the application's effective flags after the sequenced snapshot and every proven replay/live transition, and a claimed press delivered under report_event_types must produce exactly one matching release regardless of whether keyup arrives before or after insertText and regardless of xterm's defensive internal reset.",
+      "oracle": "Exact outbound bytes from the REAL native-text forwarder behind installPreviewImeBridge after initial snapshot restore, replacement resync, live transitions, and both keydown->insertText->keyup and keydown->keyup->insertText orderings; a wiring-only mock is supporting evidence, not the oracle. The current renderer-unit slice asserts native text commits route to the intended PTY once, composition/preedit bookkeeping does not leak premature text, input-source classification handles synthetic/native paths, paste/runtime forwarding avoids duplicate terminal payloads for covered fixtures, and Linux/Sogou candidate Space/digit selectors do not leak keydown/keypress/keyup while ordinary and long-held letter-to-digit typing remains available. The Electron/CDP live-PTY repro verifies Sogou-style Space and digit selectors submit only the committed Chinese text, while the legacy orphaned-letter-keyup sequence sends no selector byte to the PTY. Real legacy IME commit preservation and the full CJK/Vietnamese/Arabic/JIS-yen matrix run in follow-up platform soak where automation is possible.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-native-text-forwarder.test.ts src/renderer/src/components/terminal-pane/terminal-ime-substituted-text-commit.test.ts src/renderer/src/components/terminal-pane/terminal-ime-macos-keybinding-dict-trace.test.ts src/renderer/src/components/terminal-pane/terminal-paste-runtime.test.ts src/renderer/src/components/terminal-pane/terminal-ime-composition-tracker.test.ts src/renderer/src/components/terminal-pane/terminal-ime-candidate-key-release-guard.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
         "pnpm run test:e2e -- tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "testFiles": [
@@ -6742,6 +6959,14 @@
         "src/renderer/src/components/terminal-pane/terminal-ime-linux-candidate-state.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy-non-mac.test.ts",
         "src/renderer/src/components/terminal-pane/xterm-bypass-policy.test.ts",
+        "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
+        "src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts",
+        "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+        "src/shared/terminal-kitty-keyboard-mode-tracker.test.ts",
+        "src/main/ipc/terminal-preview.test.ts",
+        "src/main/ipc/terminal-preview-output-stream.test.ts",
+        "src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts",
+        "src/main/daemon/daemon-pty-adapter.test.ts",
         "tests/e2e/chinese-ime-chat-input-repro.spec.ts"
       ],
       "assertionRefs": [
@@ -6807,6 +7032,65 @@
           ]
         },
         {
+          "file": "src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts",
+          "assertions": [
+            "the real forwarder behind the Preview bridge encodes the commit from the snapshot-proven flags before any live output",
+            "flags 0/1 commit raw text, flags 2 add one CSI-u release, flags 8 emit one CSI-u press, and flags 10 emit a CSI-u press followed by exactly one release",
+            "both keydown->insertText->keyup and keydown->keyup->insertText orderings produce the same bytes",
+            "the release is emitted by the forwarder while xterm's internal kitty flags stay 0",
+            "the mutable flags getter is read exactly once, at commit time, never on keydown or keyup",
+            "auto-repeat, two-key rollover, a swallowed commit, a retired claim, blur, and disposal each emit at most one release and never synthesize one"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts",
+          "assertions": [
+            "a Preview opened on a snapshot carrying flags 8 adopts 8 before any live output",
+            "a replacement snapshot whose ANSI carries no kitty bytes keeps its proven flags, and a proven 0 clears an earlier 8",
+            "a missing field leaves the mirror unproven at the raw-text fallback and a later live negotiation still upgrades it",
+            "restored flags land on the screen the snapshot scan selected",
+            "a proven post-snapshot suffix advances the stack while redelivered bytes apply idempotently"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx",
+          "assertions": [
+            "the Preview hands the forwarder the live kitty mirror seeded from the snapshot's proven flags"
+          ]
+        },
+        {
+          "file": "src/shared/terminal-kitty-keyboard-mode-tracker.test.ts",
+          "assertions": [
+            "a fresh PTY's known 0 is distinguishable from a snapshot's unproven 0 fallback",
+            "restoreSnapshotFlags proves only the active screen and rejects non-safe-integer values",
+            "provenance survives absolute sets, screen switches, RIS and DECSTR, but a pop past omitted push history returns to unknown rather than a manufactured 0"
+          ]
+        },
+        {
+          "file": "src/main/ipc/terminal-preview.test.ts",
+          "assertions": [
+            "terminalPreview:connect returns image, sequence, and kitty flags from the same capture, including after an overflow retry"
+          ]
+        },
+        {
+          "file": "src/main/ipc/terminal-preview-output-stream.test.ts",
+          "assertions": [
+            "fully covered chunks are dropped, a sliced or strictly newer sequenced suffix gets live mode semantics, and an unsliceable or metadata-less overlap gets replay semantics"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts",
+          "assertions": [
+            "SnapshotStart decodes proven 0 and 8 with their seq into requested and host-pushed snapshot paths",
+            "negative, fractional, unsafe, and non-numeric values are treated as absent rather than clamped",
+            "an old host that omits the field stays usable and is never coerced to a proven 0"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-pty-adapter.test.ts",
+          "assertions": ["daemon provider snapshots publish proven kitty flags including a known 0"]
+        },
+        {
           "file": "tests/e2e/chinese-ime-chat-input-repro.spec.ts",
           "assertions": [
             "Sogou-style Space candidate selection submits only the committed Chinese character",
@@ -6817,6 +7101,15 @@
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/dashboard-popout/preview-terminal-ime-bridge-kitty-bytes.test.ts src/renderer/src/components/dashboard-popout/preview-terminal-snapshot-replay.test.ts src/renderer/src/components/dashboard-popout/AgentTerminalPreview.test.tsx src/shared/terminal-kitty-keyboard-mode-tracker.test.ts src/main/ipc/terminal-preview.test.ts src/main/ipc/terminal-preview-output-stream.test.ts src/renderer/src/runtime/remote-runtime-terminal-snapshot-kitty-flags.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "result": "passed",
+          "durationSeconds": 9.84,
+          "summary": "8 test file(s) passed, 288 tests, covering the Preview kitty slice: real forwarder bytes at snapshot-proven flags, press/release pairing across both keyup/insertText orderings, and flag provenance where a proven 0, a proven non-zero, and an absent field stay three distinct facts — asserted on the daemon snapshot and on a host-pushed remote snapshot that carries the flags with their sequence. The emitter-side rule that a remote SnapshotStart withholds flags without a seq has no direct assertion yet; the client-side gate is what these files pin."
+        },
         {
           "date": "2026-08-09",
           "runner": "local",
@@ -6882,7 +7175,7 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, and live-PTY Sogou-style candidate commits. Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
+        "evidence": "Focused tests cover existing native-text, input-source, paste/runtime forwarding, Linux/Sogou candidate selector, post-composition guard contracts, live-PTY Sogou-style candidate commits, and the Preview kitty slice (press/release pairing in both keyup orderings, and snapshot flag provenance separating a proven 0 from an absent field). Needs intentional-break proof for duplicate native text forwarding and composition preedit leakage, plus the broader language/platform matrix."
       },
       "performanceBudget": {
         "required": true,
@@ -6895,7 +7188,9 @@
       ],
       "knownGaps": [
         "Current commands include renderer-unit coverage and a CDP-driven Electron repro; real OS IME automation may need manual or soak evidence.",
-        "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage."
+        "Backspace/Enter during composition, JIS yen, Arabic/RTL, paste edge cases, and Windows ConPTY post-agent key reset still need representative gate coverage.",
+        "An older remote host omits the optional SnapshotStart kitty field, so a new client falls back to raw commits until live negotiation is observed.",
+        "Snapshot authorities expose only the active screen's effective flags, not kitty's complete two-screen push stacks; a pop that crosses the restored boundary degrades to unknown rather than a proven value."
       ],
       "demotionRule": "Cannot promote if success is based only on DOM text without PTY byte/cell evidence."
     },
@@ -7507,19 +7802,25 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A deterministic service-state-machine oracle now models a current-contract worker and coordinator whose renderer graph identities disappear across an app/runtime update. It exercises the production verifier with restored PTY and hydrated hook commitments, proves authenticated completion replay across a fresh runtime, explicit takeover, ordinary mail routing, remote-attachment process fencing, retained Task/Dispatch/terminal identity, and unchanged fixture marker bytes, and rejects foreign pane evidence. Other deterministic units cover authority-aware legacy formatting, exact legacy worker identity planning, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, creator pane/process/Run-generation fencing, indexed retained-Run lookup scaling, the SSH in-process CLI fallback, and federated non-reveal. Two isolated macOS Electron journeys launch fake Codex workers through the real RPC path and record append-only spawn/interruption ledgers. They assert immediate inactive presentation, one live agent PID, stable PTY/incarnation/tab/leaf/worktree/Task/Dispatch identity, and no interruption after workspace re-entry; the restart journey additionally removes renderer ownership, marks the Dispatch legacy, retains the daemon process across an app restart, and proves exact background adoption with readable ACK output and no resume replay. Distinct A/B artifacts plus live SSH, WSL, folder, remote-runtime, Linux, and Windows cutover journeys remain explicit gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/11107#discussion_r3663321387"],
-      "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. After an app update or restart, an exact live legacy worker must fence automatic provider resume, adopt its original PTY into its original background pane, retain readable output, and clear the resume record without spawning, writing, signalling, interrupting, replacing, or focusing the worker. A current-contract worker whose renderer graph identity is temporarily absent must retain its Dispatch capability and settle exactly once from exact hook-attested handle, pane, and process evidence; otherwise only an exact attested coordinator may take over. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata. A nested worker's creator edge requires the current creator pane, process incarnation, and owning Run generation; reminting and rebinding that pane to another Run must remove the stale edge. Explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
+      "coverageNotes": "A deterministic service-state-machine oracle now models a current-contract worker and coordinator whose renderer graph identities disappear across an app/runtime update. It exercises the production verifier with restored PTY and hydrated hook commitments, proves authenticated completion replay across a fresh runtime, explicit takeover, ordinary mail routing, remote-attachment process fencing, retained Task/Dispatch/terminal identity, and unchanged fixture marker bytes, and rejects foreign pane evidence. Other deterministic units cover authority-aware legacy formatting, exact legacy worker identity planning, local worker presentation, retained-output reads after adoption, reveal-failure warnings, stable-pane Run/Dispatch routing, creator pane/process/Run-generation fencing, indexed retained-Run lookup scaling, the SSH in-process CLI fallback, exact legacy Task/Dispatch/report-receipt verification, JSON rejection envelopes, and capability-negotiated Run-home settlement with lost-ack replay. Three isolated macOS Electron journeys launch fake Codex workers through the real RPC path. The compiled-CLI journey spawns fresh out/cli processes for rejected and accepted worker_done plus worker-release, then independently verifies runtime and SQLite state. The presentation and restart journeys assert immediate inactive presentation, one live agent PID, stable PTY/incarnation/tab/leaf/worktree/Task/Dispatch identity, and no interruption after workspace re-entry; the restart journey additionally proves exact background adoption with readable ACK output and no resume replay. Distinct A/B artifacts plus live SSH, WSL, folder, remote-runtime, Linux, and Windows cutover journeys remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/11107#discussion_r3663321387",
+        "https://github.com/stablyai/orca/issues/13858"
+      ],
+      "invariant": "Starting a worker in the coordinator's current workspace must materialize one inactive terminal tab before worker-start returns, preserve coordinator focus, and remain exactly once after workspace re-entry. After an app update or restart, an exact live legacy worker must fence automatic provider resume, adopt its original PTY into its original background pane, retain readable output, and clear the resume record without spawning, writing, signalling, interrupting, replacing, or focusing the worker. A current-contract worker whose renderer graph identity is temporarily absent must retain its Dispatch capability and settle exactly once from exact hook-attested handle, pane, and process evidence; otherwise only an exact attested coordinator may take over. A worker_done caller may report success only after the owning runtime returns an explicit lifecycle verdict or authoritative reads prove that the exact Task, Dispatch, and worker report receipt settled the expected outcome. A federated worker may accept only the Run-home runtime's settlement verdict. An exact existing target workspace must receive a discoverable tab without stealing coordinator focus; if renderer reveal fails, worker-start must expose that the live worker remains background-only. Run and Dispatch checks must resolve through the caller's stable pane identity when a terminal handle is reminted, while a live handle outranks mismatched pane metadata. A nested worker's creator edge requires the current creator pane, process incarnation, and owning Run generation; reminting and rebinding that pane to another Run must remove the stale edge. Explicit legacy terminal inspection remains handle-scoped, and remote or headless worker presentation remains background-only.",
       "oracle": "Drive Run create, Task create, and worker-start through production Electron runtimes with a deterministic Codex fixture. Require append-only ledgers with one still-live PID and no interruption, a visible inactive worker tab while the coordinator stays active, Run delivery through stable pane identity, and stable PTY/incarnation, tab, leaf, worktree, Task, and Dispatch across workspace re-entry. In a restart journey, retain the original daemon PTY and PID, remove renderer ownership, retain sleeping-session evidence, mark the Dispatch legacy, relaunch, and require exact inactive tab adoption, readable ACK output, cleared resume state, one spawn, and no resume argv or Conversation interrupted text after another workspace round trip. The service oracle removes renderer lookup identity from current-contract callers while retaining real restored-PTY and hook commitments, replays authenticated completion and takeover across fresh runtimes, and requires one Task, Dispatch, terminal authority, message, mutation, ordinary-mail delivery, remote process fencing, and unchanged fixture marker bytes while foreign pane evidence remains rejected. Unit tests separately remint a creator pane and process from Run A into Run B, require the nested Run A worker to fall back to its current coordinator, require indexed query plans, and bound 300 Task reads with 50,000 retained Runs. They also assert authority-specific legacy affordances, exact identity and owner matching, retained-output fallback, pane-stable routing, federated non-activation, and SSH fallback parity.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration.test.ts src/cli/handlers/orchestration-check-identity.test.ts src/cli/handlers/orchestration-worker-cli.test.ts src/main/runtime/rpc/methods/orchestration.test.ts src/main/ssh/ssh-remote-orca-cli.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/formatter.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-legacy-worker-terminal-recovery.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/orchestration-creator-authority-performance.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm run test:e2e -- tests/e2e/orchestration-worker-terminal-visibility.spec.ts --workers=1",
-        "pnpm run test:e2e -- tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --workers=1"
+        "pnpm run test:e2e -- tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts --workers=1",
+        "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/rpc/orchestration-runtime-update-settlement.test.ts",
@@ -7528,13 +7829,18 @@
         "src/main/runtime/orchestration/orchestration-creator-authority-performance.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/cli/handlers/orchestration.test.ts",
+        "src/cli/handlers/orchestration-lifecycle-rejection.test.ts",
+        "src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts",
+        "src/cli/handlers/orchestration-migration.test.ts",
         "src/cli/handlers/orchestration-check-identity.test.ts",
         "src/cli/handlers/orchestration-worker-cli.test.ts",
         "src/main/runtime/rpc/methods/orchestration.test.ts",
         "src/main/runtime/rpc/methods/orchestration-federation.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts",
         "src/main/ssh/ssh-remote-orca-cli.test.ts",
         "tests/e2e/orchestration-worker-terminal-visibility.spec.ts",
-        "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts"
+        "tests/e2e/orchestration-legacy-worker-restart-recovery.spec.ts",
+        "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
       ],
       "assertionRefs": [
         {
@@ -7578,6 +7884,27 @@
           ]
         },
         {
+          "file": "src/cli/handlers/orchestration-lifecycle-rejection.test.ts",
+          "assertions": [
+            "an explicit current worker_done verdict completes without a compatibility read",
+            "a worker_done response without a lifecycle verdict checks the exact authoritative Dispatch and report receipt",
+            "legacy succeeded and failed reports require matching terminal Task and Dispatch state",
+            "stopped or stale Dispatches cannot impersonate report settlement",
+            "an idempotent retry accepts the first authoritative report from the same worker",
+            "a Run-home relay rejection reaches the CLI error boundary"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts",
+          "assertions": ["a rejected lifecycle verdict is emitted as a JSON ok=false envelope"]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-migration.test.ts",
+          "assertions": [
+            "first and replayed legacy worker_done settlements are accepted from their authoritative runtime verdict"
+          ]
+        },
+        {
           "file": "src/cli/handlers/orchestration-check-identity.test.ts",
           "assertions": [
             "implicit check carries the caller pane key with a potentially stale environment handle",
@@ -7598,6 +7925,20 @@
             "Run delivery resolves through a stable coordinator pane after handle remint",
             "Dispatch delivery resolves through a stable worker pane after handle remint",
             "a live handle cannot be retargeted by mismatched pane metadata"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts",
+          "assertions": [
+            "a remote worker_done waits for Run-home settlement even when an older CLI omits the wait hint",
+            "older negotiated federation protocols reject before queueing",
+            "a committed settlement is replayed after an acknowledgment is lost",
+            "an aborted settlement wait returns operation_unknown instead of accepted success",
+            "an already-aborted signal registers no settlement waiter",
+            "a Run-home terminal verdict settles the remote attachment and revokes its capability",
+            "a terminal verdict cannot settle an unrelated relay item",
+            "a terminal verdict cannot contradict the exact queued worker report outcome",
+            "a rejected report replays its exact verdict without mutating durable rejection mail twice"
           ]
         },
         {
@@ -7630,9 +7971,27 @@
             "sleeping-session, resume-claim, and pending-startup state are cleared after adoption",
             "no second spawn, resume argv, input, signal, interruption, or duplicate tab occurs after workspace re-entry"
           ]
+        },
+        {
+          "file": "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts",
+          "assertions": [
+            "a compiled CLI worker_done with the wrong identity exits nonzero with ok=false",
+            "the exact Task and Dispatch remain dispatched after rejection",
+            "the correct worker identity receives an explicit completed lifecycle verdict",
+            "an independent runtime read observes the Dispatch completed"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 20,
+          "summary": "The combined candidate passed one real Electron and compiled-CLI journey: wrong worker identity exited nonzero with ok=false while Dispatch stayed dispatched, the exact worker received an explicit completed verdict, and runtime state independently reached completed."
+        },
         {
           "date": "2026-08-03",
           "runner": "local",
@@ -7679,6 +8038,24 @@
           "summary": "Five focused files passed with 216 tests, covering visible inactive local worker creation, reveal-failure warnings, stable-pane mailbox routing, live-handle precedence, and SSH fallback parity."
         },
         {
+          "date": "2026-08-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/handlers/orchestration-lifecycle-rejection.test.ts src/cli/handlers/orchestration-lifecycle-json-rejection.test.ts src/cli/handlers/orchestration-migration.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.4,
+          "summary": "Three focused files passed 12 deterministic tests covering explicit current and Run-home verdicts, JSON failure output, exact report and terminal-state verification for stripped responses, stale/stopped rejection, idempotent retry, and first/replayed attested legacy settlements."
+        },
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 4.58,
+          "summary": "Nine deterministic tests passed for protocol negotiation, Run-home completion and rejection, already-aborted waits, authoritative remote-attachment settlement bound to the exact queued worker_done outcome, and exact verdict replay after lost acknowledgments without mutating durable rejection mail twice."
+        },
+        {
           "date": "2026-07-28",
           "runner": "local",
           "platform": "macos",
@@ -7712,11 +8089,11 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "The deterministic units and two isolated Electron journeys pass locally; CI and soak history are not yet available."
+        "evidence": "The deterministic units and three isolated Electron journeys pass locally; CI and soak history are not yet available."
       },
       "redGreenEvidence": {
-        "status": "partial",
-        "evidence": "The byte-identical 5f45c270f1 service oracle is red as the sole overlay 063340a8ba on origin/main@34291f07e9, green on candidate@2748b0b29b, red with current-authority propagation actually disabled in child 08a7db37bf, and green again after revert d2a4e2e024. The focused presentation and stale-handle tests failed against the earlier pre-fix implementation. The restart journey additionally failed first on empty retained output while the original PTY/PID remained live, then passed after the scoped recovered-worker snapshot fallback. The live incident and pre-fix Electron topology showed workspace re-entry replaying provider resume against a worker whose tab binding was missing. Distinct installed A/B and CI artifacts are still needed."
+        "status": "complete",
+        "evidence": "The byte-identical compiled-CLI Electron oracle failed on latest main 5ea7df1a5b because a wrong worker identity exited zero with ok=true while Dispatch stayed dispatched, passed on combined candidate d697666ce8 with a nonzero ok=false rejection and explicit completed verdict for the exact worker, and reproduced the main failure when the claimed production files were disabled at merge-base 64aec94cb2. The earlier byte-identical service oracle was also red on main, green on candidate, red with authority propagation disabled, and green after restore. Distinct installed A/B and CI artifacts are still needed."
       },
       "performanceBudget": {
         "required": true,
@@ -7877,24 +8254,42 @@
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
-      "coveredProviders": ["local"],
-      "coverageNotes": "Deterministic service tests cover release-versus-reuse ordering, transactional retain and takeover cancellation, exact host/pane/process identity, conservative schema-v23 backfill, immutable transcript and bounded terminal archives, mutation restart, reset cleanup, replay idempotency, and 50-resource accounting. Live SSH, WSL, Windows, paired-runtime, and provider-close lost-ack journeys remain explicit gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/12355", "STA-905"],
-      "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
-      "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
+      "coveredProviders": ["local", "ssh"],
+      "coverageNotes": "Deterministic service tests cover release-versus-reuse ordering, transactional retain and takeover cancellation, exact host/pane/process identity, dead external/user-owned/transferred/stopped/abandoned reconciliation, conservative unknown provider and legacy metadata handling, immutable transcript and bounded terminal archives, mutation restart, reset cleanup, replay idempotency, and 50-resource accounting. A macOS Electron journey invokes the freshly compiled worker-release CLI after the worker process disappears, then independently checks released SQLite state and coordinator liveness. Injected inventories cover local and SSH provider routing; live SSH, WSL, Windows, paired-runtime, and provider-close lost-ack journeys remain explicit gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/12355",
+        "https://github.com/stablyai/orca/issues/13860",
+        "STA-905",
+        "STA-3932"
+      ],
+      "invariant": "A settled Dispatch may close only its one coordinator-created terminal lease. Explicit reuse, real user input, retain, identity or host change, ambiguity, and another resource for the same exact host/pane/process must fence closure. Once the authoritative owning provider positively excludes the resource's exact immutable process incarnation, even an external, user-owned, or transferred dead resource must converge to released without any process close. Unknown host scope, missing incarnation metadata, or unavailable inventory must remain retained. Output preservation and the requested-to-releasing transition are atomic, archives remain readable without the provider file, retries resume idempotently, and orchestration reset removes archive and authority state.",
+      "oracle": "Record release intent for a settled owner, attempt exact reuse before close, and require worker-start to fail with terminal_release_in_progress while the terminal stays open; then release the original owner exactly once. Race retain and real user input against a controlled archive promise and require no committed archive or close. For retained external, user-owned, transferred, stopped, and abandoned resources, run one fresh inventory against the exact local/WSL or SSH provider: an exact live incarnation and every unknown inventory shape stay retained, while positive absence atomically sets ownership_state and release_state to released with processAction none and zero closeTerminal calls. Change host or process identity and inject duplicate resource evidence to require retention. Freeze a structured transcript, delete its source file, and require archived worker-read to return the same bounded redacted messages. Restart a pending mutation, reset orchestration state, and create 50 resources while asserting replay convergence, zero orphan rows, two-query worker listing, and no unrelated close.",
       "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose"
+        "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/completed-worker-retirement-resume.unit.test.ts --reporter=verbose",
+        "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
+        "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
         "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
         "src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts",
         "src/main/runtime/rpc/orchestration-mutation-ledger.test.ts",
         "src/main/runtime/orchestration/worker-transcript-read.test.ts",
         "src/renderer/src/lib/worker-terminal-takeover-report.test.ts",
-        "tests/e2e/completed-worker-retirement-resume.unit.test.ts"
+        "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
+        "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
+          "assertions": [
+            "classifies only an exact incarnation as live on its owning provider",
+            "keeps missing or malformed identity and unavailable inventory unknown",
+            "does not inspect an unproven host scope",
+            "uses the local provider inventory for local and WSL scopes"
+          ]
+        },
         {
           "file": "tests/e2e/completed-worker-retirement-resume.unit.test.ts",
           "assertions": [
@@ -7904,6 +8299,10 @@
         {
           "file": "src/main/runtime/rpc/methods/orchestration-worker-release.test.ts",
           "assertions": [
+            "reconciles a dead external terminal without closing a process",
+            "reconciles a dead user-taken-over terminal without closing a process",
+            "reconciles a dead stopped or abandoned worker without closing a process",
+            "reconciles dead transferred ownership after the current owner settles",
             "rejects exact reuse after release intent instead of closing the new worker",
             "lets an explicit retain cancel a release while output capture is pending",
             "retains when the terminal host scope changed instead of closing",
@@ -7923,9 +8322,36 @@
             "coalesces overlapping reconciliation passes and closes each resource once",
             "keeps live terminals bounded across 50 settled workers while controls survive"
           ]
+        },
+        {
+          "file": "tests/e2e/orchestration-worker-settlement-release-cli.spec.ts",
+          "assertions": [
+            "compiled worker-release reconciles a dead external retained resource to released",
+            "the CLI reports processAction none instead of closing a process",
+            "SQLite independently records released ownership and release state",
+            "the unrelated coordinator terminal remains live"
+          ]
         }
       ],
       "evidenceRuns": [
+        {
+          "date": "2026-08-12",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm run build:cli && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/orchestration-worker-settlement-release-cli.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 20,
+          "summary": "The combined candidate's compiled worker-release returned released with processAction none after positive process absence; an independent SQLite read showed both states released and the coordinator terminal remained live."
+        },
+        {
+          "date": "2026-08-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-worker-release.test.ts src/main/runtime/rpc/methods/orchestration-worker-release-recovery.test.ts src/main/runtime/rpc/orchestration-mutation-ledger.test.ts src/main/runtime/orchestration/worker-transcript-read.test.ts src/renderer/src/lib/worker-terminal-takeover-report.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 4.98,
+          "summary": "Six focused files passed 67 tests on the rebased candidate, covering dead external, user-owned, stopped, abandoned, and transferred reconciliation; exact local/WSL/SSH provider routing; malformed, missing, and unavailable inventory retention; zero process closes; existing lease, archive, recovery, mutation, and renderer-input contracts."
+        },
         {
           "date": "2026-08-03",
           "runner": "local",
@@ -7937,20 +8363,20 @@
         }
       ],
       "runtimeBudget": {
-        "p95Seconds": 8,
-        "scope": "deterministic runtime, SQLite, transcript, renderer-input, and mutation contracts"
+        "p95Seconds": 45,
+        "scope": "deterministic runtime, SQLite, transcript, renderer-input, mutation contracts, and one compiled-CLI Electron journey"
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "First local deterministic run only; focused CI and soak history are not yet available."
+        "evidence": "Repeated local deterministic runs pass; focused CI and soak history are not yet available."
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical 56-test oracle produced 12 deterministic failures and 44 passes with production restored to exact PR head 4aa66b62e3, including ready reuse during release, unsafe migration, stale archives, mutable transcript output, host/identity close gaps, and mutation replay loss. Candidate 457bc4edd1 passed all 56; restoring the same five production files to 4aa66b62e3 reproduced the same red state."
+        "evidence": "The byte-identical compiled-CLI Electron oracle left the dead resource external/retained on latest main 5ea7df1a5b, passed on combined candidate d697666ce8 with released/released SQLite state and processAction none, and reproduced external/retained after disabling the claimed production files at merge-base 64aec94cb2. The earlier unchanged three-case dead external/user-owned/transferred service oracle likewise failed 3/3 on main, passed 3/3 on candidate, and failed 3/3 with production restored; every run asserted durable state and zero terminal close calls."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Release performs constant-count indexed resource and identity queries plus one bounded archive capture. Worker-list uses two set queries rather than one resource lookup per worker. Reconciliation remains serial and adds no polling, timers, subprocesses, renderer subscriptions, or provider-wide listing."
+        "evidence": "Normal owned release performs constant-count indexed resource and identity queries plus one bounded archive capture. A retained release performs exactly one bounded inventory against its authoritative local/WSL or specific SSH provider, with no retry, polling, timer, subprocess, renderer subscription, or per-session follow-up fanout. Worker-list uses two set queries rather than one resource lookup per worker."
       },
       "promotionCriteria": [
         "Collect 100 consecutive focused CI passes or 14 days of soak history.",
@@ -7961,7 +8387,7 @@
       "knownGaps": [
         "Provider close has no durable cross-process operation receipt, so a crash after host mutation but before SQLite settlement remains release_pending until exact inventory returns.",
         "Federated release remains explicitly unsupported and retained.",
-        "Mobile/direct remote input takeover and live Linux, Windows, WSL, SSH, headed, and headless paired-runtime release are not exercised."
+        "Mobile/direct remote input takeover and live Linux, Windows, WSL, SSH, headed, and headless paired-runtime release are not exercised; the current fix changes provider inventory classification and SQLite state only, not ConPTY, filesystem, update, sleep, firewall, or window lifecycle semantics."
       ],
       "demotionRule": "Keep experimental or demote if release can overlap exact reuse, close a conflicting lease, lose immutable output, retain reset archives, fan out per worker, or any focused ordering test flakes without a product or harness defect."
     },

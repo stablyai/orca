@@ -5,6 +5,8 @@ import {
   type WorkerReportOutcome
 } from './types'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import type { FederatedLifecycleSettlement } from './federation-lifecycle-settlement'
+import { ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION } from '../../../shared/protocol-version'
 import { OrchestrationError } from './orchestration-error'
 import {
   acquireFederationAckLease,
@@ -58,6 +60,8 @@ export async function syncFederatedDispatch(
     )
   }
   const ackLease = acquireFederationAckLease(runtime, dispatchId)
+  const supportsLifecycleSettlement =
+    federated.protocol_version >= ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
 
   const pulled = (await runtime.callOrchestrationWorkerServer(
     federated.environment_id,
@@ -65,12 +69,17 @@ export async function syncFederatedDispatch(
     {
       dispatchId,
       afterSequence: federated.to_home_imported_sequence,
+      ...(supportsLifecycleSettlement ? { replayUnacknowledged: true } : {}),
       limit: 50
     },
     15_000
   )) as { runtimeEpoch: string; items: PulledRelayItem[] }
-  let cursor = federated.to_home_imported_sequence
+  let cursor =
+    supportsLifecycleSettlement && pulled.items.length > 0
+      ? pulled.items[0].sequence - 1
+      : federated.to_home_imported_sequence
   let imported = 0
+  const settlements: { sequence: number; lifecycle: FederatedLifecycleSettlement }[] = []
   for (const item of pulled.items) {
     if (item.dispatch_id !== dispatchId || item.sequence !== cursor + 1) {
       throw new OrchestrationError(
@@ -96,6 +105,18 @@ export async function syncFederatedDispatch(
       },
       lifecycle: parseFederatedLifecycle(message, item.message_id, dispatchId, dispatch.task_id)
     })
+    if (stored.lifecycle && supportsLifecycleSettlement) {
+      settlements.push({
+        sequence: item.sequence,
+        lifecycle:
+          stored.lifecycle.action === 'settled'
+            ? {
+                action: stored.lifecycle.outcome === 'succeeded' ? 'completed' : 'failed',
+                authority: 'run_home'
+              }
+            : { ...stored.lifecycle, authority: 'run_home' }
+      })
+    }
     cursor = item.sequence
     runtime.notifyMessageArrived(stored.message.to_handle, stored.message.type)
     imported += stored.duplicate ? 0 : 1
@@ -110,7 +131,11 @@ export async function syncFederatedDispatch(
     await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
-      { dispatchId, throughSequence: cursor },
+      {
+        dispatchId,
+        throughSequence: cursor,
+        ...(settlements.length > 0 ? { settlements } : {})
+      },
       15_000,
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` }
     )

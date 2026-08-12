@@ -610,8 +610,6 @@ describePosix('daemon shell-ready launch config', () => {
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
     const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
-    const primeWrapperLine =
-      'command prime-agent --extension "${ORCA_PRIME_AGENT_STATUS_EXTENSION}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -633,9 +631,12 @@ describePosix('daemon shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
-    expect(zshrc).toContain(primeWrapperLine)
-    expect(zlogin).toContain(primeWrapperLine)
-    expect(bashRc).toContain(primeWrapperLine)
+    for (const wrapperFile of [zshrc, zlogin, bashRc]) {
+      expect(wrapperFile).not.toContain('prime-agent()')
+      expect(wrapperFile).not.toContain('__orca_prime_agent')
+      expect(wrapperFile).not.toContain('ORCA_PRIME_AGENT_STATUS_EXTENSION')
+      expect(wrapperFile).not.toContain('command prime-agent --extension')
+    }
   })
 
   // Why: regression guard for issue #2422 — bash wrapper must emit OSC 133 C/D so SSH sessions clear stale 'working' agent rows.

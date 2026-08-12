@@ -6,6 +6,7 @@ import {
   isClaudeManagementTitle,
   isCursorAgentTitle,
   isCursorNativeAgentTitle,
+  isOpenCodeNativeTitle,
   isShellProcess,
   normalizeTerminalTitle
 } from '../../shared/agent-detection'
@@ -39,6 +40,7 @@ import type {
 } from '../../shared/terminal-side-effect-facts'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 import { TerminalKittyKeyboardModeTracker } from '../../shared/terminal-kitty-keyboard-mode-tracker'
+import { parseTerminalKittyKeyboardFlags } from '../../shared/terminal-kitty-keyboard-flags'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   isFreshNonDoneAgentStatus,
@@ -117,6 +119,11 @@ import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
+import {
+  classifyWorkerTerminalProcessIncarnation,
+  parseWorkerTerminalHostScope,
+  type WorkerTerminalHostScope
+} from './orchestration/worker-terminal-process-liveness'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from './workspace-session-failed-write-rollback'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import {
@@ -1618,6 +1625,9 @@ type RuntimeTerminalBufferSnapshot = {
   alternateScreen?: boolean
   scrollbackAnsi?: string
   pendingEscapeTailAnsi?: string
+  /** Effective kitty flags proven at this snapshot's own `seq`. Absent means
+   *  the winning source could not prove them. */
+  kittyKeyboardFlags?: number
 }
 
 type HeadlessSeedMetadata = {
@@ -1731,7 +1741,14 @@ type RuntimePtyController = {
   serializeBuffer?(
     ptyId: string,
     opts?: { scrollbackRows?: number; altScreenForcesZeroRows?: boolean }
-  ): Promise<{ data: string; cols: number; rows: number; seq?: number; lastTitle?: string } | null>
+  ): Promise<{
+    data: string
+    cols: number
+    rows: number
+    seq?: number
+    lastTitle?: string
+    kittyKeyboardFlags?: number
+  } | null>
   /** Authoritative provider-owned snapshot for restored PTYs with no mounted renderer. */
   serializeProviderBuffer?(
     ptyId: string,
@@ -1985,10 +2002,7 @@ export type OrchestrationCompatibilityTerminalAuthority = {
   processIncarnation: string | null
   paneKey: string | null
   launchTokenHash: string | null
-  hostScope:
-    | { kind: 'local'; hostId: 'local' }
-    | { kind: 'wsl'; hostId: 'local'; distro: string }
-    | { kind: 'ssh'; targetId: string }
+  hostScope: WorkerTerminalHostScope
 }
 
 export type LegacyWorkerTerminalRecoveryResult = {
@@ -11602,6 +11616,7 @@ export class OrcaRuntimeService {
     oscLinks?: TerminalOscLinkRange[]
     alternateScreen?: boolean
     pendingEscapeTailAnsi?: string
+    kittyKeyboardFlags?: number
   } | null> {
     if (this.providerSnapshotPreferredPtys.has(ptyId)) {
       // Why: pre-attach stream bytes only form a suffix of restored state. A
@@ -11651,6 +11666,7 @@ export class OrcaRuntimeService {
     lastTitle?: string
     source?: 'renderer'
     oscLinks?: TerminalOscLinkRange[]
+    kittyKeyboardFlags?: number
   } | null> {
     if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
       return null
@@ -11663,6 +11679,7 @@ export class OrcaRuntimeService {
       cwd?: string | null
       lastTitle?: string
       oscLinks?: TerminalOscLinkRange[]
+      kittyKeyboardFlags?: number
     } | null = null
     try {
       // Why: recovery/read fallback wants visible alt-screen content (e.g. an
@@ -12045,6 +12062,7 @@ export class OrcaRuntimeService {
     oscLinks?: TerminalOscLinkRange[]
     alternateScreen?: boolean
     scrollbackAnsi?: string
+    kittyKeyboardFlags?: number
     // Why: dangling mid-escape tail the restorer must write LAST, after any
     // reset, so the next live chunk completes it instead of rendering it
     // literally (Bug E / #7329).
@@ -12073,6 +12091,12 @@ export class OrcaRuntimeService {
           source: 'headless' as const,
           oscLinks: snapshot.oscLinks,
           scrollbackAnsi: snapshot.scrollbackAnsi,
+          // Why beside outputSequence and never re-read later: the flags must
+          // describe the same stream position as the image, or replay would
+          // apply push/pop transitions twice or out of order.
+          ...(parseTerminalKittyKeyboardFlags(snapshot.modes?.kittyKeyboardFlags) !== undefined
+            ? { kittyKeyboardFlags: snapshot.modes.kittyKeyboardFlags }
+            : {}),
           ...(snapshot.pendingEscapeTailAnsi
             ? { pendingEscapeTailAnsi: snapshot.pendingEscapeTailAnsi }
             : {}),
@@ -15515,6 +15539,24 @@ export class OrcaRuntimeService {
     }
   }
 
+  async inspectTerminalProcessIncarnationLiveness(
+    processIncarnation: string,
+    serializedHostScope: string | null
+  ): Promise<'live' | 'dead' | 'unknown'> {
+    const hostScope = parseWorkerTerminalHostScope(serializedHostScope)
+    if (!hostScope || !this.ptyController?.listProcesses) {
+      return 'unknown'
+    }
+    const listed = await withTimeoutResult(
+      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
+      PTY_CONTROLLER_LIST_TIMEOUT_MS
+    )
+    if (!listed.ok) {
+      return 'unknown'
+    }
+    return classifyWorkerTerminalProcessIncarnation(processIncarnation, listed.value)
+  }
+
   private getTerminalTopologyRevision(worktreeId: string): number {
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     return (
@@ -16725,7 +16767,8 @@ export class OrcaRuntimeService {
     const liveTitleClearsBlockedText =
       terminal.titleStatusIsLive &&
       terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission'
+      terminal.titleStatus !== 'permission' &&
+      !isOpenCodeNativeTitle(terminal.title)
     if (terminal.titleStatus === 'permission' && terminal.titleStatusIsLive) {
       return { handle, isRunningAgent: true, status: 'permission' }
     }
@@ -16752,6 +16795,15 @@ export class OrcaRuntimeService {
       }
     }
     if (terminal.titleStatus) {
+      if (isOpenCodeNativeTitle(terminal.title)) {
+        const isRunningAgent = await this.isTerminalRunningAgent(handle)
+        this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+        return {
+          handle,
+          isRunningAgent,
+          status: isRunningAgent ? terminal.titleStatus : null
+        }
+      }
       return { handle, isRunningAgent: true, status: terminal.titleStatus }
     }
 
@@ -31491,16 +31543,17 @@ export class OrcaRuntimeService {
       // Why: check the leaf pane title and the tab title, which already carries OSC-enriched agent indicators (e.g. ✳ prefix).
       const paneTitle = getLatestLeafTitle(leaf, null)
       const paneTitleClassification = classifyAgentTitle(paneTitle)
-      if (paneTitleClassification === 'agent') {
+      if (paneTitleClassification === 'agent' && !isOpenCodeNativeTitle(paneTitle)) {
         return true
       }
       const tabTitle = this.tabs.get(leaf.tabId)?.title?.trim() || null
       const tabTitleClassification = paneTitle === null ? classifyAgentTitle(tabTitle) : 'neutral'
-      if (tabTitleClassification === 'agent') {
+      if (tabTitleClassification === 'agent' && !isOpenCodeNativeTitle(tabTitle)) {
         return true
       }
+      const openCodeMarkerTitle = paneTitle ?? tabTitle
       const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (isKnownReadyPromptPreview(waitText)) {
+      if (!isOpenCodeNativeTitle(openCodeMarkerTitle) && isKnownReadyPromptPreview(waitText)) {
         return true
       }
       const hasCurrentTitleEvidence = paneTitle !== null || tabTitle !== null
@@ -31544,7 +31597,7 @@ export class OrcaRuntimeService {
         )
       : null
     const leafTitleClassification = classifyAgentTitle(leafTitle)
-    if (leafTitleClassification === 'agent') {
+    if (leafTitleClassification === 'agent' && !isOpenCodeNativeTitle(leafTitle)) {
       return true
     }
     const ptyTitle = getLatestAgentCandidateTitle(
@@ -31552,15 +31605,23 @@ export class OrcaRuntimeService {
       { title: pty.lastOscTitle, updatedAt: pty.lastOscTitleAt }
     )
     const ptyTitleClassification = classifyAgentTitle(ptyTitle)
-    if (leafTitle === null && ptyTitleClassification === 'agent') {
+    if (
+      leafTitle === null &&
+      ptyTitleClassification === 'agent' &&
+      !isOpenCodeNativeTitle(ptyTitle)
+    ) {
       return true
     }
     const managementTitleClassification = classifyLatestAgentTitle({
       title: pty.managementTitle,
       updatedAt: pty.managementTitleAt
     })
+    const openCodeMarkerTitle = leafTitle ?? ptyTitle
+    if (isOpenCodeNativeTitle(openCodeMarkerTitle) && pty.launchAgent === 'opencode') {
+      return true
+    }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (isKnownReadyPromptPreview(waitText)) {
+    if (!isOpenCodeNativeTitle(openCodeMarkerTitle) && isKnownReadyPromptPreview(waitText)) {
       return true
     }
     // Why: stale status is a fallback only when no current title evidence exists; neutral titles (shells) clear it.
@@ -36804,6 +36865,8 @@ function detectExplicitIdleStatusFromTitle(title: string): AgentStatus | null {
   // Why: launch titles like "Codex YOLO" contain an agent name but aren't readiness signals; terminal.wait needs explicit idle evidence.
   if (
     EXPLICIT_IDLE_TITLE_RE.test(title) ||
+    // Why: unblock hookless remote waits; guarded writes corroborate this marker.
+    isOpenCodeNativeTitle(title) ||
     title.startsWith(CLAUDE_IDLE_PREFIX) ||
     title.startsWith('* ') ||
     title.includes(GEMINI_IDLE_PREFIX) ||
@@ -36941,7 +37004,7 @@ function isTerminalWaitWhitespace(value: string, index: number): boolean {
 }
 
 const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
-  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust/i
+  /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always/i
 
 function findTerminalWaitBlockedSignal(
   normalized: string
@@ -37009,6 +37072,20 @@ function findTerminalWaitBlockedSignal(
     )
     if (!hasSpecificPromptInContext) {
       candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
+    }
+  }
+  const permissionPromptIndex = Math.max(
+    normalized.lastIndexOf('permission required'),
+    normalized.lastIndexOf('requires permission')
+  )
+  if (permissionPromptIndex !== -1) {
+    const permissionSegment = normalized.slice(permissionPromptIndex, permissionPromptIndex + 1_500)
+    const decisionCount = ['allow once', 'allow always', 'reject', 'deny'].filter((choice) =>
+      permissionSegment.includes(choice)
+    ).length
+    if (decisionCount >= 2) {
+      // Why: preserve the existing remote receipt value for mixed-version clients.
+      candidates.push({ reason: 'codex-interactive-prompt', index: permissionPromptIndex })
     }
   }
   return candidates.length > 0

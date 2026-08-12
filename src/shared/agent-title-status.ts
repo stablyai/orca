@@ -23,6 +23,7 @@ import {
   isPiTerminalTitle
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
+import { isOpenCodeNativeTitle } from './opencode-terminal-title'
 import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 
@@ -160,6 +161,10 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
     return null
   }
 
+  if (isOpenCodeNativeTitle(title)) {
+    return containsAgentSpinnerGlyph(title) ? 'working' : 'idle'
+  }
+
   if (title.includes(GEMINI_PERMISSION)) {
     return 'permission'
   }
@@ -186,7 +191,6 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
   if (containsAgentSpinnerGlyph(title)) {
     return 'working'
   }
-
   const hasDroidAgentName = DROID_AGENT_NAME_RE.test(title)
   const hasHermesAgentName = HERMES_AGENT_NAME_RE.test(title)
   const hasAgyAgentName = AGY_AGENT_NAME_RE.test(title)

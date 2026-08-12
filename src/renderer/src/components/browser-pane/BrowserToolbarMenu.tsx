@@ -206,7 +206,8 @@ export function BrowserToolbarMenu({
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily
               }
-            )
+            ),
+        result.profileId
       )
     } else {
       toast.error(result.reason)
@@ -222,7 +223,8 @@ export function BrowserToolbarMenu({
           'auto.components.browser.pane.BrowserToolbarMenu.53bbe3dab4',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
-        )
+        ),
+        result.profileId
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)

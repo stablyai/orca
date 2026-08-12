@@ -1079,6 +1079,7 @@ export type BrowserCookieImportSummary = {
   totalCookies: number
   importedCookies: number
   skippedCookies: number
+  googleCookiesSkipped?: number
   domains: string[]
   warning?: {
     code: 'restart-fallback-unavailable'

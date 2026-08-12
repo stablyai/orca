@@ -102,6 +102,7 @@ docs/**
 !docs/reference/linux-glibc-compatibility.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/remote-wire-compatibility.md
+!docs/reference/renderer-agent-status-performance.md
 !docs/reference/windows-setup-shell.md
 
 # Stably CLI (only docs/ are tracked)
