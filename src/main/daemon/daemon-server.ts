@@ -1317,7 +1317,10 @@ export class DaemonServer {
           authenticatedClient.streamSocket !== null &&
           this.clients.size === 1 &&
           this.createOrAttachInFlight === 0 &&
-          this.host.listSessions().length === 0 &&
+          // Why ownsNothing and not an empty listSessions(): the live list hides exited-but-unreaped
+          // and mid-teardown sessions, whose surviving descendants keep a cwd open inside the worktree.
+          // Retiring on the weaker check is how a "session-free" daemon later blocks a worktree delete.
+          this.host.ownsNothing() &&
           [...this.transportSockets].every(
             (transport) =>
               transport === authenticatedClient.controlSocket ||

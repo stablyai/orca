@@ -20,6 +20,11 @@ export class TerminalSessionTeardown {
     return this.operations.get(sessionId)?.promise
   }
 
+  /** A teardown in flight still owns a subprocess whose descendants can hold the worktree open. */
+  hasPending(): boolean {
+    return this.operations.size > 0
+  }
+
   requestImmediate(sessionId: string): Promise<void> | undefined {
     const pending = this.operations.get(sessionId)
     if (pending) {

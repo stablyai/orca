@@ -224,6 +224,16 @@ export class TerminalHost {
     return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
   }
 
+  /**
+   * Owns nothing at all — stricter than an empty listSessions(), which hides sessions that already
+   * exited but have not been reaped and sessions mid-teardown. Those still hold a subprocess handle,
+   * and their surviving descendants keep a cwd open inside the worktree, which is what makes a later
+   * worktree delete fail. Retirement must use this, never the live-session list.
+   */
+  ownsNothing(): boolean {
+    return this.sessions.size === 0 && !this.sessionTeardown.hasPending()
+  }
+
   dispose(): Promise<void> {
     this.creationFenced = true
     if (this.disposePromise) {

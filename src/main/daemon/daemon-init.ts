@@ -1386,30 +1386,29 @@ export async function createLegacyDaemonAdapters(
   runtimeDir: string,
   historyPath = getHistoryDir()
 ): Promise<DaemonPtyAdapter[]> {
-  const adapters: DaemonPtyAdapter[] = []
-  for (const protocolVersion of PREVIOUS_DAEMON_PROTOCOL_VERSIONS) {
-    const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
-    const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
-    if (!(await probeSocket(socketPath))) {
-      // Why: a recycled stale pid later turns an identity check into a PowerShell spawn, so delete leaked pid/token files — but only when the pid-process is provably gone (a live daemon can transiently fail the probe, and dropping its token makes its sessions permanently unadoptable).
-      if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
-        for (const stalePath of [
-          getDaemonPidPath(runtimeDir, protocolVersion),
-          getDaemonTokenPath(runtimeDir, protocolVersion)
-        ]) {
-          try {
-            unlinkSync(stalePath)
-          } catch {
-            // Best-effort
+  const adapters = await Promise.all(
+    PREVIOUS_DAEMON_PROTOCOL_VERSIONS.map(async (protocolVersion) => {
+      const socketPath = getDaemonSocketPath(runtimeDir, protocolVersion)
+      const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
+      if (!(await probeSocket(socketPath))) {
+        // Why: a recycled stale pid later turns an identity check into a PowerShell spawn, so delete leaked pid/token files — but only when the pid-process is provably gone (a live daemon can transiently fail the probe, and dropping its token makes its sessions permanently unadoptable).
+        if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
+          for (const stalePath of [
+            getDaemonPidPath(runtimeDir, protocolVersion),
+            getDaemonTokenPath(runtimeDir, protocolVersion)
+          ]) {
+            try {
+              unlinkSync(stalePath)
+            } catch {
+              // Best-effort
+            }
           }
         }
+        return null
       }
-      continue
-    }
-    // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).
-    // historyPath is still needed for cleanup — without it a later v4 session reusing the same ID could false-restore stale scrollback.bin.
-    adapters.push(
-      new DaemonPtyAdapter({
+      // Keep old-protocol PTYs routed to their original daemon during upgrade; legacy adapters never respawn (new code would recreate stale env semantics).
+      // historyPath is still needed for cleanup — without it a later v4 session reusing the same ID could false-restore stale scrollback.bin.
+      const adapter = new DaemonPtyAdapter({
         socketPath,
         tokenPath,
         pidPath: getDaemonPidPath(runtimeDir, protocolVersion),
@@ -1417,7 +1416,9 @@ export async function createLegacyDaemonAdapters(
         protocolVersion,
         historyPath
       })
-    )
-  }
-  return adapters
+      // Why: bounded parallel retirement keeps multiple stranded generations off the serial startup path.
+      return (await adapter.retireIfEmpty()) ? null : adapter
+    })
+  )
+  return adapters.filter((candidate): candidate is DaemonPtyAdapter => candidate !== null)
 }

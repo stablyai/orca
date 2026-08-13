@@ -2497,6 +2497,37 @@ export class DaemonPtyAdapter implements IPtyProvider {
     await this.respawnPromise
   }
 
+  /** Retire a superseded daemon that owns nothing; win32 has no other retirement path. Fail closed:
+   *  anything unproven keeps the daemon alive and routed. Bounded — this runs on the startup path. */
+  async retireIfEmpty(budgetMs = 1_000): Promise<boolean> {
+    if (this.protocolVersion < CLEAN_DISCONNECT_PROTOCOL_VERSION) {
+      return false
+    }
+    const deadlineMs = Date.now() + budgetMs
+    const remaining = (): number => Math.max(1, deadlineMs - Date.now())
+    try {
+      if (!this.client.isConnected()) {
+        await this.client.ensureConnectedWithin(remaining())
+      }
+      // Why: the daemon proves emptiness itself — no sessions, no in-flight create, no foreign
+      // transport — and fences creates before answering, so a client-side inventory check would be a
+      // weaker duplicate with a race between the two calls.
+      const retirement = await this.client.request<{ retiring: boolean }>(
+        'shutdownIfIdle',
+        undefined,
+        remaining()
+      )
+      if (!retirement.retiring) {
+        return false
+      }
+    } catch {
+      return false
+    }
+    this.respawnAdoptionClosed = true
+    this.client.disconnect()
+    return true
+  }
+
   private async getDaemonLiveSessionCount(): Promise<number | null> {
     try {
       await this.client.ensureConnected()
