@@ -29,7 +29,7 @@
         "opencodeGoToggleDescription": "显示当前工作区的 OpenCode Go Token 与费用消耗情况。",
         "kimiToggleDescription": "显示当前工作区的 Kimi 订阅使用情况。",
         "minimaxToggleDescription": "显示当前工作区的 MiniMax 订阅使用情况。",
-        "sshToggleDescription": "当有可用的 SSH 和远程 Orca 主机时显示它们。",
+        "sshToggleDescription": "当有可用的已配置 SSH 和远程 Orca 主机时显示它们。",
         "resourceUsageToggleDescription": "显示资源管理器。点击可查看 CPU、内存、会话、守护进程控制和工作区磁盘扫描。",
         "portsToggleDescription": "显示实时工作区端口。点击可查看工作区范围的端口和外部监听器。",
         "antigravityToggleDescription": "显示当前工作区的 Antigravity 订阅使用情况。",
@@ -46,7 +46,7 @@
     "settings": "设置",
     "exploreOrca": "探索 Orca",
     "gettingStarted": "Orca 入门",
-    "reportCrash": "发送错误报告...",
+    "reportCrash": "发送崩溃报告...",
     "file": "文件",
     "exit": "退出",
     "edit": "编辑",
@@ -61,7 +61,7 @@
     "view": "查看",
     "reload": "重新加载",
     "forceReload": "强制重新加载",
-    "resetSize": "重置尺寸",
+    "resetSize": "重置大小",
     "zoomIn": "放大",
     "zoomOut": "缩小",
     "openWorktreePalette": "打开工作树面板",
@@ -78,7 +78,7 @@
       "body": "Orca 仍在系统托盘中运行"
     },
     "activityWaiting": "Orca - 活动等待中",
-    "activityWaitingSuffix": "activity waiting"
+    "activityWaitingSuffix": "活动等待中"
   },
   "worktreeJumpPalette": {
     "matchLabel": {
@@ -14297,18 +14297,18 @@
         "pastedImageLabel": "粘贴的图片",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
-        "uploadingAttachments": "正在上传 {{value0}} 个文件到远程…",
+        "uploadingAttachments": "正在将 {{value0}} 个文件上传到远端…",
         "model": "模型",
         "effort": "推理强度",
         "fastMode": "快速模式",
-        "thinking": "思考",
+        "thinking": "思考中",
         "options": "选项",
         "sessionOptions": "会话选项",
-        "chooseInAgentPicker": "在代理选择器中选择…",
+        "chooseInAgentPicker": "在智能体选择器中选择…",
         "toggleOption": "切换{{value0}}",
         "pillAccessibleName": "{{value0}} {{value1}}",
         "valueUnknown": "当前值未知 — 请选择开或关",
-        "sentNotConfirmed": "已发送给代理 — 尚未确认",
+        "sentNotConfirmed": "已发送给智能体 — 尚未确认",
         "setWhenSessionStarts": "请在会话开始时设置。",
         "availableAfterSessionStarts": "会话开始后可用。",
         "optionUpdateFailed": "无法更新选项",
@@ -14327,11 +14327,11 @@
         "commands": "命令",
         "skills": "技能",
         "loadingSkills": "正在加载技能…",
-        "skillsUnavailableHost": "此主机不可用技能",
+        "skillsUnavailableHost": "此主机上无法使用技能",
         "skillsLoadFailed": "无法从此主机加载技能",
         "retrySkills": "重试",
-        "skillCommandCollision": "也是技能名称 - 由代理决定",
-        "skillMultipleSources": "{{sourceCount}} 个来源 - 由代理解析",
+        "skillCommandCollision": "也是技能名称 — 由智能体决定",
+        "skillMultipleSources": "{{sourceCount}} 个来源 — 由智能体处理",
         "skillScopeProject": "项目",
         "skillScopePersonal": "个人",
         "skillScopeBuiltIn": "内置",
@@ -14363,7 +14363,7 @@
         "pairHost": "配对主机以查看智能体聊天记录。",
         "notAgent": {
           "title": "这里没有对话",
-          "subtitle": "此终端未运行可识别的编码智能体。"
+          "subtitle": "此终端未运行可识别的编程智能体。"
         },
         "empty": {
           "title": "开始与 {{value0}} 聊天",
@@ -14415,7 +14415,7 @@
     "workspace": {
       "cleanup": {
         "presentationFixtures": {
-          "reviewAlphaCleanup": "评审 Alpha 清理"
+          "reviewAlphaCleanup": "审查 Alpha 清理"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
@@ -14435,11 +14435,11 @@
       "detectionFailed": "无法检测此工作区主机上的智能体。",
       "noAgents": "未在此工作区主机上检测到已启用的智能体。",
       "context": "上下文",
-      "modeFocused": "聚焦续接（推荐）",
+      "modeFocused": "聚焦交接（推荐）",
       "modeFocusedDescription": "使用最新进度和当前工作区，仅在需要时读取更早的会话细节。",
       "modeFull": "完整会话记录",
       "modeFullDescription": "让新智能体在继续前读取完整的已保存会话。这可能需要更长时间，并消耗大量上下文、套餐用量或 API 额度。",
-      "startsIn": "启动目录：",
+      "startsIn": "将在…后开始：",
       "startSession": "启动新会话",
       "starting": "正在启动…",
       "noContext": "没有可用于在新会话中继续的上下文。",
@@ -14470,12 +14470,12 @@
       "canvasLabel": "项目、工作区和智能体的嵌套关系图",
       "zoomOut": "缩小",
       "zoomIn": "放大",
-      "fit": "适应",
+      "fit": "适合屏幕",
       "projectCount": "{{agents}} 个智能体 · {{workspaces}} 个工作区",
       "agentCount": "{{count}} 个智能体"
     },
     "placeholder": {
-      "title": "Agent dashboard",
+      "title": "智能体仪表盘",
       "description": "你的所有智能体都会在这里一览无余。看板即将上线。"
     },
     "recoverableError": {
@@ -14483,16 +14483,16 @@
       "description": "看板未能完成渲染。请重试以重新挂载，或重新打开。"
     },
     "bucket": {
-      "attention": "Needs You",
-      "working": "Working",
-      "idle": "Idle",
-      "empty": "None",
+      "attention": "需要你",
+      "working": "工作中",
+      "idle": "空闲",
+      "empty": "无",
       "done": "已完成"
     },
-    "title": "Agents",
-    "total": "{{count}} total",
+    "title": "智能体",
+    "total": "共 {{count}} 个",
     "card": {
-      "you": "You",
+      "you": "你",
       "time": {
         "justNow": "刚刚",
         "minutes": "{{count}} 分钟",
@@ -14500,20 +14500,20 @@
         "days": "{{count}} 天"
       },
       "review": {
-        "open": "开放的评审",
-        "draft": "草稿评审",
-        "merged": "已合并的评审",
-        "closed": "已关闭的评审"
+        "open": "开放的审查",
+        "draft": "草稿审查",
+        "merged": "已合并的审查",
+        "closed": "已关闭的审查"
       },
-      "subagents_one": "{{count}} 个子代理",
-      "subagents_other": "{{count}} 个子代理"
+      "subagents_one": "{{count}} 个子智能体",
+      "subagents_other": "{{count}} 个子智能体"
     },
     "terminal": {
       "closed": "没有活动的终端 — 该智能体的窗格已关闭。",
-      "focusWorktree": "Open worktree",
-      "close": "Close"
+      "focusWorktree": "打开工作树",
+      "close": "关闭"
     },
-    "close": "Close dashboard",
+    "close": "关闭仪表盘",
     "settingsTooltip": "看板设置",
     "filters": {
       "remove": "移除 {{label}} 筛选条件",
@@ -14524,9 +14524,9 @@
         "draft": "草稿",
         "merged": "已合并",
         "closed": "已关闭",
-        "none": "无评审"
+        "none": "无审查"
       },
-      "reviewChip": "评审：{{state}}",
+      "reviewChip": "审查：{{state}}",
       "label": "筛选",
       "project": "项目",
       "workspaceStatus": "工作区状态",
