@@ -133,6 +133,117 @@ describe('addWorktreeOp', () => {
     ])
     warnSpy.mockRestore()
   })
+
+  it('treats a post-checkout hook failure as success when the SSH worktree was created', async () => {
+    // Why: mirrors the local salvage — overcommit/husky hooks fail after
+    // `git worktree add` fully created the worktree and branch.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree') {
+        throw new Error('overcommit: command not found')
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') {
+        return { stdout: 'feature/test\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main'
+      })
+    ).resolves.toBeUndefined()
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('post-checkout hook failed'),
+      expect.any(Error)
+    )
+    warnSpy.mockRestore()
+  })
+
+  it('never salvages a timed-out SSH worktree add even when the probe would pass', async () => {
+    // Why: a killed git skips its own junk cleanup — a half-populated checkout
+    // can look registered and clean, so timeout kills must stay fatal.
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree') {
+        throw Object.assign(new Error('Command failed: git worktree add'), {
+          killed: true,
+          signal: 'SIGTERM'
+        })
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') {
+        return { stdout: 'feature/test\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main'
+      })
+    ).rejects.toThrow('Command failed')
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'rev-parse',
+      '--abbrev-ref',
+      'HEAD'
+    ])
+  })
+
+  it('never salvages an aborted SSH worktree add even when the probe would pass', async () => {
+    const abortError = Object.assign(new Error('The operation was aborted'), {
+      name: 'AbortError'
+    })
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree') {
+        throw abortError
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') {
+        return { stdout: 'feature/test\n', stderr: '' }
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main'
+      })
+    ).rejects.toThrow('aborted')
+    expect(git.mock.calls.map((call) => call[0])).not.toContainEqual([
+      'rev-parse',
+      '--abbrev-ref',
+      'HEAD'
+    ])
+  })
+
+  it('still fails when the SSH worktree add dies before checkout completes', async () => {
+    const git = vi.fn<GitExec>(async (args) => {
+      if (args[0] === 'worktree') {
+        throw new Error("fatal: could not create work tree dir '/repo-feature'")
+      }
+      if (args[0] === 'rev-parse' && args[1] === '--abbrev-ref') {
+        throw new Error('fatal: not a git repository')
+      }
+      return { stdout: '', stderr: '' }
+    })
+
+    await expect(
+      addWorktreeOp(git, {
+        repoPath: '/repo',
+        branchName: 'feature/test',
+        targetDir: '/repo-feature',
+        base: 'origin/main'
+      })
+    ).rejects.toThrow('could not create work tree dir')
+  })
 })
 
 describe('removeWorktreeOp', () => {

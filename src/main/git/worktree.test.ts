@@ -782,6 +782,41 @@ describe('addWorktree', () => {
     ])
   })
 
+  it('treats a post-checkout hook failure as success when the worktree was created', async () => {
+    // Why: overcommit/husky hooks run after `git worktree add` fully creates
+    // the worktree; a broken hook must not surface as a creation failure.
+    resolveRemoteBase()
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      Object.assign(new Error('overcommit: command not found'), { code: 1 })
+    ) // worktree add — hook exit code propagated after creation succeeded
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'feature/test\n' }) // rev-parse --abbrev-ref HEAD
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // status --porcelain
+    resolveCreationBaseConfigWrite()
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: 'true\n' }) // push.autoSetupRemote already set
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    ).resolves.toEqual({})
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('post-checkout hook failed'),
+      expect.any(Error)
+    )
+  })
+
+  it('still fails when worktree add dies before the checkout completes', async () => {
+    resolveRemoteBase()
+    gitExecFileAsyncMock.mockRejectedValueOnce(
+      new Error("fatal: could not create work tree dir '/repo-feature'")
+    ) // worktree add — real failure, git cleaned up the junk worktree
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('fatal: not a git repository')) // rev-parse in missing worktree
+
+    await expect(
+      addWorktree('/repo', '/repo-feature', 'feature/test', 'origin/main')
+    ).rejects.toThrow('could not create work tree dir')
+  })
+
   it('checks out a selected existing local branch without creating a new branch', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree add
 
@@ -1023,7 +1058,10 @@ describe('addWorktree', () => {
           'refs/remotes/origin/main'
         ],
         { cwd: '/repo', timeout: WORKTREE_ADD_TIMEOUT_MS }
-      ]
+      ],
+      // Why: the post-checkout-hook salvage probes the worktree once before
+      // concluding the add really failed; no config writes may follow.
+      [['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: '/repo-feature' }]
     ])
   })
 

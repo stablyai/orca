@@ -28,6 +28,39 @@ async function persistRelayWorktreeCreationBase(
   }
 }
 
+// Why: mirrors src/main/git/worktree.ts isPostCheckoutHookOnlyFailure — a
+// failing post-checkout hook (overcommit, husky, ...) makes `git worktree add`
+// exit non-zero after the worktree and branch were fully created. Expected
+// branch + clean tree means only the hook failed.
+async function isPostCheckoutHookOnlyFailure(
+  error: unknown,
+  git: GitExec,
+  targetDir: string,
+  branchName: string
+): Promise<boolean> {
+  // Why: the relay executor is Node execFile — a timeout kills the child
+  // (killed/signal set, no "timed out" message) and an abort rejects with
+  // AbortError. A killed git skips its own junk cleanup and can leave a
+  // half-populated checkout that would pass the probe, so never salvage.
+  if (
+    (error as { killed?: unknown })?.killed === true ||
+    typeof (error as { signal?: unknown })?.signal === 'string' ||
+    (error instanceof Error && error.name === 'AbortError')
+  ) {
+    return false
+  }
+  try {
+    const { stdout: head } = await git(['rev-parse', '--abbrev-ref', 'HEAD'], targetDir)
+    if (head.trim() !== branchName) {
+      return false
+    }
+    const { stdout: status } = await git(['status', '--porcelain'], targetDir)
+    return status.trim() === ''
+  } catch {
+    return false
+  }
+}
+
 export async function addWorktreeOp(git: GitExec, params: Record<string, unknown>): Promise<void> {
   const repoPath = params.repoPath as string
   const branchName = params.branchName as string
@@ -72,7 +105,18 @@ export async function addWorktreeOp(git: GitExec, params: Record<string, unknown
     args.push(effectiveBase)
   }
 
-  await git(args, repoPath)
+  try {
+    await git(args, repoPath)
+  } catch (error) {
+    // Why: --no-checkout runs no post-checkout hook, so its failures are real.
+    if (noCheckout || !(await isPostCheckoutHookOnlyFailure(error, git, targetDir, branchName))) {
+      throw error
+    }
+    console.warn(
+      `relay addWorktree: post-checkout hook failed for ${targetDir}; worktree and branch were created`,
+      error
+    )
+  }
 
   if (checkoutExistingBranch) {
     return
