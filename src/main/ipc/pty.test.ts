@@ -4814,21 +4814,33 @@ describe('registerPtyHandlers', () => {
         registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
-        await controller.spawn({
-          cols: 80,
-          rows: 24,
-          worktreeId: 'wt-runtime',
-          command: 'claude',
-          env: {
-            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca'
-          },
-          envToDelete: ['TERM_PROGRAM']
-        })
+        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
+        // the promotion below has something to beat instead of passing trivially.
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prevPackaged = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            worktreeId: 'wt-runtime',
+            command: 'claude',
+            env: {
+              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'Orca'
+            },
+            envToDelete: ['TERM_PROGRAM']
+          })
+        } finally {
+          mockedApp.isPackaged = prevPackaged
+        }
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
-        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
+        const spawnedPath = spawnOptions.env.PATH.split(delimiter)
+        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
@@ -4851,22 +4863,35 @@ describe('registerPtyHandlers', () => {
       })
 
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
-        const spawnOptions = await daemonSpawnAndGetOptions(
-          {
-            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca'
-          },
-          undefined,
-          undefined,
-          undefined,
-          {
-            command: 'claude',
-            envToDelete: ['TERM_PROGRAM']
-          }
-        )
+        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
+        // the promotion below has something to beat instead of passing trivially.
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prevPackaged = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        let spawnOptions: Awaited<ReturnType<typeof daemonSpawnAndGetOptions>>
+        try {
+          spawnOptions = await daemonSpawnAndGetOptions(
+            {
+              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'Orca'
+            },
+            undefined,
+            undefined,
+            undefined,
+            {
+              command: 'claude',
+              envToDelete: ['TERM_PROGRAM']
+            }
+          )
+        } finally {
+          mockedApp.isPackaged = prevPackaged
+        }
 
-        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
+        const spawnedPath = spawnOptions.env.PATH.split(delimiter)
+        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
         expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })

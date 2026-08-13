@@ -25,10 +25,10 @@ describe('locale-translation-policy es PR glossary', () => {
   it('rewrites PR inside longer sentences', () => {
     expect(
       repairEs(
-        'Show PRs and issues in the sidebar.',
-        'Mostrar relaciones públicas y problemas en la barra lateral.'
+        'Split a large change into smaller PRs',
+        'Dividir un cambio grande en relaciones públicas más pequeños'
       )
-    ).toBe('Mostrar PR y problemas en la barra lateral.')
+    ).toBe('Dividir un cambio grande en PR más pequeños')
     expect(
       repairEs(
         'Open the PR details to view current reviewers.',

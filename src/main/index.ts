@@ -185,6 +185,7 @@ import {
   logStartupMilestone
 } from './startup/startup-diagnostics'
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
+import { removeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
 import {
   createServeDesktopActivationGate,
@@ -1305,6 +1306,8 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
   if (!keybindings) {
     throw new Error('Keybinding service must be initialized before opening the main window')
   }
+
+  removeLegacyTerminalShimDir(app.getPath('userData'))
 
   // Why: Chromium's BrowserWindow ctor resets userData to a Protected DACL, breaking writes; re-grant ACEs (marker-gated to avoid a ~60s startup stall).
   if (process.platform === 'win32') {
