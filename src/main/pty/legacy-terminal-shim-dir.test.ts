@@ -84,6 +84,10 @@ describe('legacy terminal shim neutralization', () => {
     expect(cmd).toContain(
       'if defined orca_real for %%G in ("%orca_real%") do if /I "%%~dpG"=="%~dp0" set "orca_real="'
     )
+    // Why: a captured path that no longer exists must be cleared, or the where.exe fallback below
+    // is skipped and the wrapper execs a missing binary.
+    expect(cmd).toContain('if defined orca_real if not exist "%orca_real%" set "orca_real="')
+    expect(cmd.indexOf('if not exist "%orca_real%"')).toBeLessThan(cmd.indexOf('where.exe git.exe'))
     const powershell = readFileSync(join(win32Dir, 'git-wrapper.ps1'), 'utf8')
     expect(powershell).toContain('[StringComparison]::OrdinalIgnoreCase')
     expect(powershell).toContain('$realCommand = $null')
@@ -172,7 +176,10 @@ describe('legacy terminal shim neutralization', () => {
       expect(messages.filter((message) => message.includes('neutralization attempt'))).toHaveLength(
         5
       )
-      expect(messages.some((message) => message.includes('gave up neutralizing'))).toBe(true)
+      // Why: the give-up count must agree with the last per-attempt line, not the retry counter.
+      expect(
+        messages.some((message) => message.includes('gave up neutralizing after 5 attempts'))
+      ).toBe(true)
 
       // Exhausted means quiet: no further timers, so no further warnings.
       warn.mockClear()

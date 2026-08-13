@@ -135,8 +135,9 @@ function scheduleNeutralizationRetry(userDataPath: string): void {
   if (neutralizationRetryAttempt >= NEUTRALIZATION_RETRY_DELAYS_MS.length) {
     // Why: retries stop here for the process lifetime; without this the give-up is invisible and a
     // host left holding live wrappers is undiagnosable.
+    // Why: +1 counts the initial attempt, so this agrees with the per-attempt line above.
     console.warn(
-      `[legacy-terminal-shim] gave up neutralizing after ${neutralizationRetryAttempt} attempts; legacy git/gh wrappers may remain until the next launch`
+      `[legacy-terminal-shim] gave up neutralizing after ${neutralizationRetryAttempt + 1} attempts; legacy git/gh wrappers may remain until the next launch`
     )
     return
   }
