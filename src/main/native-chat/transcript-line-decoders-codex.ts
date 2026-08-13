@@ -12,7 +12,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { claudeContentBlocks, toolResultOutput } from './transcript-record-blocks'
-import { CODEX_EVENT_TURN_ABORTED } from './transcript-turn-markers'
+import { CODEX_EVENT_TURN_ABORTED, CODEX_EVENT_TURN_COMPLETE } from './transcript-turn-markers'
 
 export function decodeCodexTranscriptLine(
   line: string,
@@ -122,19 +122,47 @@ function codexEventMessage(
       source: 'transcript'
     }
   }
+  if (payload.type === CODEX_EVENT_TURN_COMPLETE) {
+    // Why: provider failures (quota exhaustion included) arrive as `task_complete.error`, not as a
+    // chat message. Surfacing them as runtime-authored system text is what lets consumers treat the
+    // words as provider evidence instead of trusting model-authored assistant output.
+    const error = asRecord(payload.error)
+    const errorText = error ? extractString(error.message) : extractString(payload.error)
+    return errorText
+      ? {
+          id,
+          role: 'system',
+          blocks: [{ type: 'text', text: errorText }],
+          timestamp,
+          source: 'transcript'
+        }
+      : null
+  }
   if (payload.type === 'item_completed') {
     return codexCompletedTurnItem(payload, id, timestamp)
   }
   if (payload.type === 'user_message') {
     const text = extractString(payload.message)
     return text
-      ? { id, role: 'user', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+      ? {
+          id,
+          role: 'user',
+          blocks: [{ type: 'text', text }],
+          timestamp,
+          source: 'transcript'
+        }
       : null
   }
   if (payload.type === 'agent_message') {
     const text = extractString(payload.message)
     return text
-      ? { id, role: 'assistant', blocks: [{ type: 'text', text }], timestamp, source: 'transcript' }
+      ? {
+          id,
+          role: 'assistant',
+          blocks: [{ type: 'text', text }],
+          timestamp,
+          source: 'transcript'
+        }
       : null
   }
   return null

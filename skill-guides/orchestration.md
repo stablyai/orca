@@ -180,6 +180,14 @@ Dispatch rules:
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
 
+When the user has explicitly authorized an ordered Codex account fallback, use `worker-supervise` instead of building a polling and account-switching loop in shell. Pass exact managed-account selectors in priority order. Orca switches accounts only after exact provider quota evidence; setup failures, worker failures, questions, and escalations stop for coordinator attention instead of consuming the next account:
+
+```bash
+orca orchestration worker-supervise --task <task_id> --accounts "#3,#2,#1" --worktree current --json
+```
+
+Managed account selection belongs to the local Orca runtime, so `worker-supervise` rejects `--on`; run it on the worker server instead. The runtime must advertise managed-account recording support, or `worker-supervise` refuses to start rather than let an older runtime silently drop the account from the receipt. Orca verifies the selected account readback before starting each worker, and the runtime proves the actual launch account from the PTY launch-account registry at start — a worker whose launch account cannot be proven to match the requested managed account fails to start instead of producing a receipt that vouches for the wrong account. Quota evidence is accepted only from runtime-authored system transcript messages (decoded from the provider's structured error) or a start error; assistant text never qualifies. If a quota-blocked worker cannot be provably stopped and released, supervision stops instead of starting the next account in the same worktree. The receipt records every account and Dispatch attempt. A successful `worker_done` returns `awaiting_acceptance`; it is not coordinator acceptance and does not close or delete the worktree.
+
 Create the Run and every independent Task first, then start all independent workers before waiting:
 
 ```bash
@@ -233,15 +241,19 @@ Wait until every expected Dispatch settles, not for a fixed number of batches:
 
 ```bash
 orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json
-# Process every message. For each accepted worker_done that is not immediately reused:
-orca orchestration worker-release --dispatch <dispatch_id> --json
+# Review every succeeded worker_done, then record exact evidence and release its terminal:
+orca orchestration worker-accept --dispatch <dispatch_id> --evidence "<tests, review, and handoff evidence>" --json
+# Failed worker_done reports have no accepted result; release after inspection:
+orca orchestration worker-release --dispatch <failed_dispatch_id> --json
 # Acknowledge only after every message and required release decision is handled:
 orca orchestration check --ack <delivery_id> --wait --types worker_done,escalation,question --timeout-ms 900000 --json
 ```
 
-After processing each accepted `worker_done`, choose the terminal's next owner before you acknowledge the Delivery or wait again. If the same exact agent has an immediate follow-up Task, read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`, then run `orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca transfers cleanup ownership to the new Dispatch. Otherwise run `orca orchestration worker-release --dispatch <dispatch_id> --json`.
+For a succeeded `worker_done`, inspect the exact worktree and result before accepting it. `worker-accept` writes a durable coordinator-to-Dispatch status receipt first, then archives and releases the exact worker terminal. Its worktree receipt says `closeable: true` only when the exact worktree has a complete clean Git status on a fully pushed branch (no in-progress merge/rebase/cherry-pick, no unpushed commits), records the worktree HEAD SHA, and always says `removed: false`. Only released/already_released report `accepted`; release_pending and release_unknown exit 1 with the recovery obligation preserved. The coordinator may explicitly archive or remove a closeable worktree afterward, but Orca never treats `worker_done` alone as permission to delete it.
 
-Run `worker-release` after both succeeded and failed `worker_done` reports unless the user explicitly asked to keep that worker live. Release is post-completion cleanup, not cancellation: Orca first preserves inspectable output, then closes only the exact agent terminal owned by that settled Dispatch. Reused or pre-existing terminals, setup terminals, coordinators, active workers, user-taken-over terminals, and identities Orca cannot prove are retained. If the user explicitly asks to keep the live terminal for debugging, record that exception with `orca orchestration worker-retain --dispatch <dispatch_id> --json` instead of silently skipping cleanup. When the user is finished, the same Dispatch can be passed to `worker-release`, which clears the requested retention and releases the terminal.
+If the same exact agent has an immediate follow-up Task, do not release it first. Read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`, then run `orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca transfers cleanup ownership to the new Dispatch. Record the result review in the coordinator's Run before transfer; `worker-accept` is the terminal-release path, not the reuse path.
+
+Run `worker-release` directly for failed `worker_done` reports unless the user explicitly asked to keep that worker live. Release is post-completion cleanup, not cancellation: Orca first preserves inspectable output, then closes only the exact agent terminal owned by that settled Dispatch. Reused or pre-existing terminals, setup terminals, coordinators, active workers, user-taken-over terminals, and identities Orca cannot prove are retained. If the user explicitly asks to keep the live terminal for debugging, record that exception with `orca orchestration worker-retain --dispatch <dispatch_id> --json` instead of silently skipping cleanup. When the user is finished, the same Dispatch can be passed to `worker-release`, which clears the requested retention and releases the terminal.
 
 Do not release a worker because of a timeout, TUI idle state, heartbeat, status, question, escalation, or rejected/stale `worker_done`. If release returns `release_pending` or `release_unknown`, do not substitute `terminal close`; follow the exact recovery action in the receipt. A replayed Delivery may repeat `worker-release` safely.
 
@@ -386,7 +398,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
   `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
-- Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
+- Coordinators must account for every settled worker terminal before waiting again or ending the turn: review and accept succeeded results with `worker-accept`, immediately reuse the exact worker for a new Dispatch after recording the review in the Run, explicitly retain it at the user's request with `worker-retain`, or release a failed result with `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
 
 ## Example
@@ -401,6 +413,6 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 ## Next Action
 
-Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
+Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` or explicitly authorized `worker-supervise` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. A succeeded `worker_done` still requires review: record evidence with `worker-accept` to send the acceptance receipt and release the terminal, or record the review in the Run before transferring that terminal to an immediate follow-up Dispatch. Only the acceptance receipt's complete clean-and-pushed Git check can mark a worktree closeable, and it never removes the worktree.
 
 Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

@@ -242,22 +242,22 @@ describe('orchestration skill guidance', () => {
     const nextAction = getSection(skill, 'Next Action')
 
     expect(workerLoop).toContain(
-      '# Process every message. For each accepted worker_done that is not immediately reused:\n' +
-        'orca orchestration worker-release --dispatch <dispatch_id> --json'
+      '# Review every succeeded worker_done, then record exact evidence and release its terminal:\n' +
+        'orca orchestration worker-accept --dispatch <dispatch_id> --evidence "<tests, review, and handoff evidence>" --json'
     )
     expect(workerLoop).toContain(
       'Acknowledge only after every message and required release decision is handled'
     )
     expect(workerLoop).toContain(
-      'read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`'
+      'Read the `worker.agent_terminal_handle` field of `worker-show --dispatch <dispatch_id> --json`'
     )
     expect(workerLoop).toContain(
       'orca orchestration worker-start --task <next_task_id> --terminal <handle> --json` so Orca ' +
         'transfers cleanup ownership to the new Dispatch'
     )
     expect(workerLoop).toContain(
-      'Run `worker-release` after both succeeded and failed `worker_done` reports unless the user ' +
-        'explicitly asked to keep that worker live.'
+      'Run `worker-release` directly for failed `worker_done` reports unless the user explicitly ' +
+        'asked to keep that worker live.'
     )
     expect(workerLoop).toContain('Release is post-completion cleanup, not cancellation')
     expect(workerLoop).toContain('orca orchestration worker-retain --dispatch <dispatch_id> --json')
@@ -268,11 +268,31 @@ describe('orchestration skill guidance', () => {
       'Coordinators must account for every settled worker terminal before waiting again or ending ' +
         'the turn'
     )
+    expect(agentGuidance).toContain('review and accept succeeded results with `worker-accept`')
     expect(agentGuidance).toContain('released workers remain readable through `worker-read`')
     expect(nextAction).toContain(
-      'After every accepted `worker_done`, either transfer the exact terminal to an immediate ' +
-        'follow-up Dispatch or run `worker-release` before the next wait.'
+      "Only the acceptance receipt's complete clean-and-pushed Git check can mark a worktree " +
+        'closeable, and it never removes the worktree.'
     )
+  })
+
+  it('documents exact quota failover and the worker_done acceptance boundary', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain(
+      'orca orchestration worker-supervise --task <task_id> --accounts "#3,#2,#1"'
+    )
+    expect(workerLoop).toContain('switches accounts only after exact provider quota evidence')
+    expect(workerLoop).toContain('`worker-supervise` rejects `--on`')
+    expect(workerLoop).toContain('verifies the selected account readback')
+    expect(workerLoop).toContain('returns `awaiting_acceptance`')
+    expect(workerLoop).toContain('always says `removed: false`')
+    expect(workerLoop).toContain('records the worktree HEAD SHA')
+    expect(workerLoop).toContain('release_pending and release_unknown exit 1')
+    expect(workerLoop).toContain(
+      'proves the actual launch account from the PTY launch-account registry'
+    )
+    expect(workerLoop).toContain('never treats `worker_done` alone as permission to delete it')
   })
 
   it('documents per-invocation model and effort for supervised workers', () => {

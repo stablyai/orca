@@ -18,6 +18,10 @@ import {
   persistWorkerReadinessStage,
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
+import {
+  assertManagedAccountRequestSupported,
+  verifyWorkerLaunchAccount
+} from './orchestration-worker-account-verification'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
@@ -42,6 +46,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           `Task ${params.task} was not found in Run ${run.id}.`
         )
       }
+
+      // Why: the guard must run before the federated branch — a direct RPC with --on would
+      // otherwise bypass it entirely while the federated path silently ignores managedAccount.
+      assertManagedAccountRequestSupported({
+        managedAccount: params.managedAccount,
+        terminal: params.terminal,
+        agent: params.agent,
+        on: params.on
+      })
 
       if (params.on) {
         return startFederatedWorker({
@@ -100,6 +113,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         baseBranch: params.baseBranch ?? null,
         terminal: params.terminal ?? null,
         agent: agent ?? null,
+        managedAccount: params.managedAccount ?? null,
         launch: launch.receipt,
         timeoutMs: params.timeoutMs ?? 60_000,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
@@ -208,6 +222,18 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
               ? `Agent startup blocked: ${wait.blockedReason}`
               : `Agent did not become ready (${wait.status}).`
           )
+        }
+        if (params.managedAccount) {
+          failedStage = 'account_verification'
+          await verifyWorkerLaunchAccount({
+            runtime,
+            db,
+            dispatchId: started.dispatch.id,
+            worktreeId: resolvedWorktree.id,
+            terminalHandle,
+            managedAccountId: params.managedAccount.id,
+            effects
+          })
         }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({

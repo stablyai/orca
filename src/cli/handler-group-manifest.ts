@@ -19,7 +19,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   {
     name: 'account',
-    keys: ['account add', 'account list'],
+    keys: ['account add', 'account list', 'account select'],
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
@@ -116,11 +116,13 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration task-list',
       'orchestration task-update',
       'orchestration worker-start',
+      'orchestration worker-supervise',
       'orchestration worker-show',
       'orchestration worker-read',
       'orchestration worker-stop',
       'orchestration worker-abandon',
       'orchestration worker-release',
+      'orchestration worker-accept',
       'orchestration worker-retain',
       'orchestration worker-list',
       'orchestration dispatch',

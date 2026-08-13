@@ -28,6 +28,7 @@ import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
 } from './interactive-login-interruption'
+import { selectManagedAccount } from './account-selection'
 
 // Why: add returns just that provider's state; list returns the full snapshot.
 type AccountsListSnapshot = {
@@ -38,7 +39,7 @@ type AccountsListSnapshot = {
 // Why: Claude and Codex managed-account summaries both carry id+email+active id,
 // so one formatter renders either provider's block.
 type AccountsBlock = {
-  accounts: readonly { id: string; email: string }[]
+  accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: {
     host: string | null
@@ -57,7 +58,8 @@ function formatAccountsBlock(label: string, block: AccountsBlock): string {
     ...Object.values(block.activeAccountIdsByRuntime?.wsl ?? {})
   ])
   const lines = block.accounts.map(
-    (account) => `  ${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
+    (account) =>
+      `  ${account.workspaceLabel ? `${account.workspaceLabel} — ` : ''}${account.email}${activeAccountIds.has(account.id) ? ' (active)' : ''}`
   )
   return `Managed ${label} accounts (${block.accounts.length}):\n${lines.join('\n')}`
 }
@@ -280,7 +282,7 @@ async function assertAccountImportSupported({ client }: HandlerContext): Promise
   }
 }
 
-/** CLI handlers for `orca account add [--agent claude|codex]` and `orca account list`. */
+/** CLI handlers for managed account login, listing, and exact local selection. */
 export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
   'account add': async (ctx) => {
     const agentFlag = ctx.flags.get('agent')
@@ -319,5 +321,9 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
       (snapshot) =>
         `${formatAccountsBlock('Claude', snapshot.claude)}\n\n${formatAccountsBlock('Codex', snapshot.codex)}`
     )
+  },
+  'account select': async (ctx) => {
+    rejectRemoteSelectionFlags(ctx, 'orca account select')
+    await selectManagedAccount(ctx)
   }
 }

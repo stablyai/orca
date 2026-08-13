@@ -24,6 +24,13 @@ export const WorkerStartParams = z.object({
   agent: OptionalString,
   model: OptionalWorkerLaunchPreference,
   effort: OptionalWorkerLaunchPreference,
+  managedAccount: z
+    .object({
+      provider: z.literal('codex'),
+      id: requiredString('Missing managed Codex account ID'),
+      label: OptionalString
+    })
+    .optional(),
   retryOf: OptionalString,
   timeoutMs: OptionalFiniteNumber,
   devMode: z.boolean().optional()

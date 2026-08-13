@@ -296,4 +296,311 @@ describe('orchestration worker-start CLI contract', () => {
       source: 'transcript'
     })
   })
+
+  it('records coordinator acceptance before releasing and never removes the worktree', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    callMock.mockImplementation((method: string) => {
+      if (method === 'orchestration.workerShow') {
+        return Promise.resolve({
+          result: {
+            dispatch: {
+              id: 'dispatch-2',
+              task_id: 'task-1',
+              run_id: 'run-1',
+              status: 'completed'
+            },
+            worker: {
+              state: 'succeeded',
+              stage: 'settled',
+              agent_terminal_handle: 'term-worker',
+              worktree_id: 'worktree-1',
+              startOptions: {
+                managedAccount: {
+                  provider: 'codex',
+                  id: 'account-2',
+                  label: 'Codex #2｜H Team'
+                }
+              }
+            }
+          }
+        })
+      }
+      if (method === 'git.status') {
+        return Promise.resolve({
+          result: {
+            entries: [],
+            conflictOperation: 'unknown',
+            didHitLimit: false,
+            head: 'abc1234def5678',
+            upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+          }
+        })
+      }
+      if (method === 'orchestration.send') {
+        return Promise.resolve({ result: { message: { id: 'acceptance-1', run_id: 'run-1' } } })
+      }
+      if (method === 'orchestration.workerRelease') {
+        return Promise.resolve({
+          result: {
+            dispatchId: 'dispatch-2',
+            state: 'released',
+            processAction: 'closed',
+            archive: { source: 'transcript', status: 'saved' }
+          }
+        })
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-accept']({
+      flags: new Map([
+        ['dispatch', 'dispatch-2'],
+        ['evidence', 'tests 42/42; review clean'],
+        ['from', 'term-coordinator']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    const sendIndex = callMock.mock.calls.findIndex(([method]) => method === 'orchestration.send')
+    const releaseIndex = callMock.mock.calls.findIndex(
+      ([method]) => method === 'orchestration.workerRelease'
+    )
+    const send = callMock.mock.calls[sendIndex]
+    expect(send?.[1]).toEqual(
+      expect.objectContaining({
+        to: 'dispatch:dispatch-2',
+        payload: expect.stringContaining('"accountLabel":"Codex #2｜H Team"')
+      })
+    )
+    expect(send?.[1]).toEqual(
+      expect.objectContaining({ payload: expect.stringContaining('"removed":false') })
+    )
+    // 回執必須記錄被接手的 worktree HEAD SHA。
+    expect(send?.[1]).toEqual(
+      expect.objectContaining({ payload: expect.stringContaining('"sha":"abc1234def5678"') })
+    )
+    expect(sendIndex).toBeGreaterThanOrEqual(0)
+    expect(sendIndex).toBeLessThan(releaseIndex)
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"closeable": true'))
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('"removed": false'))
+    logSpy.mockRestore()
+  })
+
+  it('release_pending 不得回報 accepted，exit 1 並保留恢復義務', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    callMock.mockImplementation((method: string) => {
+      if (method === 'orchestration.workerShow') {
+        return Promise.resolve({
+          result: {
+            dispatch: { id: 'dispatch-2', task_id: 'task-1', run_id: 'run-1', status: 'completed' },
+            worker: {
+              state: 'succeeded',
+              stage: 'settled',
+              agent_terminal_handle: 'term-worker',
+              worktree_id: 'worktree-1'
+            }
+          }
+        })
+      }
+      if (method === 'git.status') {
+        return Promise.resolve({
+          result: {
+            entries: [],
+            conflictOperation: 'unknown',
+            didHitLimit: false,
+            head: 'abc1234def5678',
+            upstreamStatus: { hasUpstream: true, ahead: 0, behind: 0 }
+          }
+        })
+      }
+      if (method === 'orchestration.send') {
+        return Promise.resolve({ result: { message: { id: 'acceptance-1', run_id: 'run-1' } } })
+      }
+      if (method === 'orchestration.workerRelease') {
+        return Promise.resolve({
+          result: {
+            dispatchId: 'dispatch-2',
+            state: 'release_pending',
+            processAction: 'none',
+            archive: null,
+            recovery: 'orca orchestration worker-release --dispatch dispatch-2 --retry-request <id>'
+          }
+        })
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-accept']({
+      flags: new Map([
+        ['dispatch', 'dispatch-2'],
+        ['evidence', 'tests pass'],
+        ['from', 'term-coordinator']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(logSpy).toHaveBeenCalledWith(
+      expect.stringContaining('"state": "acceptance_recorded_release_pending"')
+    )
+    expect(process.exitCode).toBe(1)
+    logSpy.mockRestore()
+  })
+
+  it('首呼即帶確定性 send id；release 未帶旗標時由 client 自產 id', async () => {
+    callMock.mockImplementation((method: string) => {
+      if (method === 'orchestration.workerShow') {
+        return Promise.resolve({
+          result: {
+            dispatch: { id: 'dispatch-2', task_id: 'task-1', run_id: 'run-1', status: 'completed' },
+            worker: { state: 'succeeded', stage: 'settled', agent_terminal_handle: 'term-worker' }
+          }
+        })
+      }
+      if (method === 'orchestration.send') {
+        return Promise.resolve({ result: { message: { id: 'acceptance-1', run_id: 'run-1' } } })
+      }
+      if (method === 'orchestration.workerRelease') {
+        return Promise.resolve({
+          result: {
+            dispatchId: 'dispatch-2',
+            state: 'released',
+            processAction: 'closed',
+            archive: null
+          }
+        })
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-accept']({
+      flags: new Map([
+        ['dispatch', 'dispatch-2'],
+        ['evidence', 'tests pass'],
+        ['from', 'term-coordinator']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    const send = callMock.mock.calls.find(([method]) => method === 'orchestration.send')
+    const release = callMock.mock.calls.find(([method]) => method === 'orchestration.workerRelease')
+    // 確定性 id：任何一次執行（首呼或重跑）都命中同一 ledger receipt，不會重寫回執。
+    expect(send?.[2]).toEqual({ orchestrationRequestId: 'worker-accept-acceptance-dispatch-2' })
+    // 未帶旗標＝首呼；client 對 mutation 自產隨機 id，handler 不傳第三參數。
+    expect(release?.[2]).toBeUndefined()
+  })
+
+  it('release recovery：send 以確定性 id 冪等重放、release 用回報的原 id', async () => {
+    callMock.mockImplementation((method: string) => {
+      if (method === 'orchestration.workerShow') {
+        return Promise.resolve({
+          result: {
+            dispatch: { id: 'dispatch-2', task_id: 'task-1', run_id: 'run-1', status: 'completed' },
+            worker: { state: 'succeeded', stage: 'settled', agent_terminal_handle: 'term-worker' }
+          }
+        })
+      }
+      if (method === 'orchestration.send') {
+        return Promise.resolve({ result: { message: { id: 'acceptance-1', run_id: 'run-1' } } })
+      }
+      if (method === 'orchestration.workerRelease') {
+        return Promise.resolve({
+          result: {
+            dispatchId: 'dispatch-2',
+            state: 'released',
+            processAction: 'closed',
+            archive: null
+          }
+        })
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-accept']({
+      flags: new Map([
+        ['dispatch', 'dispatch-2'],
+        ['evidence', 'tests pass'],
+        ['from', 'term-coordinator'],
+        ['retry-release-request', 'release-id-1']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    const send = callMock.mock.calls.find(([method]) => method === 'orchestration.send')
+    expect(send?.[2]).toEqual({ orchestrationRequestId: 'worker-accept-acceptance-dispatch-2' })
+    const release = callMock.mock.calls.find(([method]) => method === 'orchestration.workerRelease')
+    expect(release?.[2]).toEqual({ orchestrationRequestId: 'release-id-1' })
+  })
+
+  it('legacy --retry-request 等同 release id；send 照常以確定性 id 執行', async () => {
+    callMock.mockImplementation((method: string) => {
+      if (method === 'orchestration.workerShow') {
+        return Promise.resolve({
+          result: {
+            dispatch: { id: 'dispatch-2', task_id: 'task-1', run_id: 'run-1', status: 'completed' },
+            worker: { state: 'succeeded', stage: 'settled', agent_terminal_handle: 'term-worker' }
+          }
+        })
+      }
+      if (method === 'orchestration.send') {
+        return Promise.resolve({ result: { message: { id: 'acceptance-1', run_id: 'run-1' } } })
+      }
+      if (method === 'orchestration.workerRelease') {
+        return Promise.resolve({
+          result: {
+            dispatchId: 'dispatch-2',
+            state: 'released',
+            processAction: 'closed',
+            archive: null
+          }
+        })
+      }
+      throw new Error(`Unexpected method ${method}`)
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-accept']({
+      flags: new Map([
+        ['dispatch', 'dispatch-2'],
+        ['evidence', 'tests pass'],
+        ['from', 'term-coordinator'],
+        ['retry-request', 'legacy-release-id']
+      ]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    const send = callMock.mock.calls.find(([method]) => method === 'orchestration.send')
+    expect(send?.[2]).toEqual({ orchestrationRequestId: 'worker-accept-acceptance-dispatch-2' })
+    const release = callMock.mock.calls.find(([method]) => method === 'orchestration.workerRelease')
+    expect(release?.[2]).toEqual({ orchestrationRequestId: 'legacy-release-id' })
+  })
+
+  it('獨立 worker-release：release_pending 也 exit 1（恢復義務未了）', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        dispatchId: 'ctx_1',
+        state: 'release_pending',
+        processAction: 'none',
+        archive: null,
+        recovery: 'retry with --retry-request'
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-release']({
+      flags: new Map<string, string | boolean>([['dispatch', 'ctx_1']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(process.exitCode).toBe(1)
+  })
 })
