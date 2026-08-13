@@ -796,6 +796,38 @@ describe('fetchWorktrees', () => {
     expect(result).toBe(false)
   })
 
+  it('keeps renderer tabs and skips teardown when a failed local/WSL scan is non-authoritative', async () => {
+    const store = createTestStore()
+    const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const tab = { id: 'tab-1', worktreeId: existing.id }
+
+    mockApi.worktrees.listDetected.mockResolvedValueOnce(
+      makeDetectedResult('repo1', [], {
+        authoritative: false,
+        source: 'metadata-fallback'
+      })
+    )
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/path/repo1', displayName: 'R', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [existing] },
+      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [existing]) },
+      tabsByWorktree: { [existing.id]: [tab] },
+      sortEpoch: 7
+    } as unknown as Partial<AppState>)
+
+    const result = await store.getState().fetchWorktrees('repo1')
+
+    expect(result).toBe(false)
+    expect(store.getState().worktreesByRepo.repo1).toEqual([existing])
+    expect(store.getState().tabsByWorktree[existing.id]).toEqual([tab])
+    expect(store.getState().sortEpoch).toBe(7)
+    expect(mockApi.runtime.call).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'worktree.teardownMissingTerminals' })
+    )
+  })
+
   it('reports unchanged non-authoritative refreshes as not fully refreshed', async () => {
     const store = createTestStore()
     const existing = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
