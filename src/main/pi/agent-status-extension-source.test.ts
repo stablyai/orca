@@ -826,10 +826,11 @@ describe('getPiAgentStatusExtensionSource', () => {
     }
   })
 
-  it('keeps reporting Pi-compatible agents once their agent_end handlers settle', async () => {
+  it('keeps reporting Pi-family agents once their agent_end handlers settle', async () => {
     vi.useFakeTimers()
     try {
-      for (const kind of ['pi', 'omp', 'prime-agent'] as const) {
+      // Why: OMP uses the willContinue contract instead; covered separately below.
+      for (const kind of ['pi', 'prime-agent'] as const) {
         const harness = createHarness({ kind })
         let idle = false
         const context = { isIdle: vi.fn(() => idle) }
@@ -853,6 +854,46 @@ describe('getPiAgentStatusExtensionSource', () => {
 
     await harness.callHook('agent_end')
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+  })
+
+  it.each<[string, Parameters<typeof createHarness>[0], unknown]>([
+    ['omp kind without willContinue', { kind: 'omp' }, undefined],
+    ['runtime-detected omp', { kind: 'pi', argv: ['node', '/usr/bin/omp'] }, undefined]
+  ])(
+    'posts a terminal agent_end for %s while isIdle stays false',
+    async (_label, harnessArgs, event) => {
+      // Why: OMP signals its settle via willContinue; isIdle can stay false through completion.
+      const harness = createHarness(harnessArgs)
+      const context = { isIdle: vi.fn(() => false) }
+      await harness.callHook('agent_end', event, context)
+      await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+      expect(JSON.parse(String(harness.fetchMock.mock.calls[0]?.[1]?.body)).payload).toEqual({
+        hook_event_name: 'agent_end'
+      })
+    }
+  )
+
+  it('keeps an OMP pane active while agent_end schedules a continuation', async () => {
+    vi.useFakeTimers()
+    try {
+      const harness = createHarness({ kind: 'omp' })
+      const context = { isIdle: vi.fn(() => false) }
+
+      await harness.callHook('agent_end', { willContinue: true }, context)
+      await vi.advanceTimersByTimeAsync(2_000)
+      expect(vi.getTimerCount()).toBe(0)
+
+      // The continuation's next loop re-arms working via agent_start; its terminal settle posts once.
+      await harness.callHook('agent_start')
+      await harness.callHook('agent_end', { willContinue: false }, context)
+      await vi.advanceTimersByTimeAsync(0)
+      const events = harness.fetchMock.mock.calls.map(
+        (call) => JSON.parse(String(call[1]?.body)).payload.hook_event_name
+      )
+      expect(events).toEqual(['agent_start', 'agent_end'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not treat WSLENV alone as WSL evidence', async () => {
