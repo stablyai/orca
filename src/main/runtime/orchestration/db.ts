@@ -3780,11 +3780,7 @@ export class OrchestrationDb {
       }
     }
     const id = generateId('task')
-    const deps = task.deps ?? []
-    const depsJson = JSON.stringify(deps)
-    // Why: late-created dependents never see a completion event; reuse the all-completed rule.
-    const status: TaskStatus =
-      deps.length > 0 && !this.areTaskDependenciesSatisfied(deps) ? 'pending' : 'ready'
+    const depsJson = JSON.stringify(task.deps ?? [])
     const display = buildOrchestrationTaskDisplayMetadata({
       spec: task.spec,
       taskTitle: task.taskTitle,
@@ -3796,7 +3792,18 @@ export class OrchestrationDb {
            id, run_id, parent_id, created_by_terminal_handle, created_by_pane_key,
            created_by_process_incarnation, created_by_run_generation,
            task_title, display_name, spec, status, deps
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         ) VALUES (
+           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN EXISTS (
+             SELECT 1
+             FROM json_each(?) requested
+             LEFT JOIN tasks dependency ON dependency.id = requested.value
+             WHERE dependency.id IS NULL
+                OR dependency.run_id <> ?
+                OR dependency.status <> 'completed'
+           ) THEN 'pending' ELSE 'ready' END,
+           ?
+         )`
       )
       .run(
         id,
@@ -3809,7 +3816,8 @@ export class OrchestrationDb {
         display.taskTitle || null,
         display.displayName || null,
         task.spec,
-        status,
+        depsJson,
+        runId,
         depsJson
       )
     return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow
@@ -3927,10 +3935,6 @@ export class OrchestrationDb {
     return this.getTask(id)
   }
 
-  private areTaskDependenciesSatisfied(deps: string[]): boolean {
-    return deps.every((depId) => this.getTask(depId)?.status === 'completed')
-  }
-
   // Why: runs in the status-update transaction, so a completed task never leaves its ready children unpromoted.
   private promoteReadyTasks(completedTaskId: string): void {
     const candidates = this.db
@@ -3942,7 +3946,12 @@ export class OrchestrationDb {
       if (!deps.includes(completedTaskId)) {
         continue
       }
-      if (this.areTaskDependenciesSatisfied(deps)) {
+
+      const allDepsCompleted = deps.every((depId) => {
+        const dep = this.getTask(depId)
+        return dep?.status === 'completed'
+      })
+      if (allDepsCompleted) {
         this.db.prepare("UPDATE tasks SET status = 'ready' WHERE id = ?").run(task.id)
       }
     }
