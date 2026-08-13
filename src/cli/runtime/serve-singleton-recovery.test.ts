@@ -3,6 +3,7 @@ import { lstat, mkdir, mkdtemp, readlink, rm, symlink } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { removeServeSingletonQuarantine } from './serve-singleton-quarantine'
 import { recoverStaleServeSingleton, SINGLETON_ARTIFACT_NAMES } from './serve-singleton-recovery'
 
 async function pathExists(path: string): Promise<boolean> {
@@ -48,10 +49,18 @@ describe.skipIf(process.platform === 'win32')('serve singleton recovery', () => 
     })
 
     expect(result).toMatchObject({ state: 'recovered', ownerPid: 987_654 })
+    if (result.state !== 'recovered') {
+      throw new Error('Expected stale singleton recovery')
+    }
     expect(probeHealth).toHaveBeenCalledTimes(2)
     for (const name of SINGLETON_ARTIFACT_NAMES) {
       expect(await pathExists(join(root, name))).toBe(false)
       expect(await pathExists(join(root, `${name}.test-stale`))).toBe(true)
+    }
+
+    await removeServeSingletonQuarantine(root, result.quarantined)
+    for (const name of SINGLETON_ARTIFACT_NAMES) {
+      expect(await pathExists(join(root, `${name}.test-stale`))).toBe(false)
     }
   })
 

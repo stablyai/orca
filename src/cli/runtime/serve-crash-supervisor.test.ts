@@ -235,7 +235,11 @@ describe('foreground serve crash supervisor', () => {
       ownerPid: 4000,
       quarantined: ['SingletonLock.test']
     }))
-    const args = supervisorArgs(collisionOne, { recoverSingleton })
+    const cleanupSingletonQuarantine = vi.fn(async () => undefined)
+    const args = supervisorArgs(collisionOne, {
+      recoverSingleton,
+      cleanupSingletonQuarantine
+    })
     args.spawnChildMock
       .mockReturnValueOnce(healthyOne as never)
       .mockReturnValueOnce(collisionTwo as never)
@@ -256,6 +260,8 @@ describe('foreground serve crash supervisor', () => {
 
     await expect(result).resolves.toBe(SERVE_SUPERVISOR_STOP_EXIT_CODE)
     expect(recoverSingleton).toHaveBeenCalledTimes(2)
+    expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(1, ['SingletonLock.test'])
+    expect(cleanupSingletonQuarantine).toHaveBeenNthCalledWith(2, ['SingletonLock.test'])
   })
 
   it('does not retry or isolate when a healthy owner holds the lock', async () => {

@@ -1,5 +1,5 @@
 import { link, lstat, readlink, rename, symlink, unlink } from 'node:fs/promises'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 
 export const SINGLETON_ARTIFACT_NAMES = [
   'SingletonSocket',
@@ -13,6 +13,27 @@ export type SingletonQuarantineResult =
   | { state: 'failed' }
 
 type MovedArtifact = { source: string; target: string; name: string }
+
+export async function removeServeSingletonQuarantine(
+  userDataPath: string,
+  paths: readonly string[]
+): Promise<void> {
+  await Promise.all(
+    paths.map(async (path) => {
+      if (
+        basename(path) !== path ||
+        !SINGLETON_ARTIFACT_NAMES.some((name) => path.startsWith(`${name}.`))
+      ) {
+        throw new Error(`Invalid singleton quarantine path: ${path}`)
+      }
+      await unlink(join(userDataPath, path)).catch((error) => {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error
+        }
+      })
+    })
+  )
+}
 
 export async function quarantineSingletonArtifacts(
   userDataPath: string,

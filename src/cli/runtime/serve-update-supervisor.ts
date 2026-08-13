@@ -40,6 +40,7 @@ type ServeSupervisorArgs = {
   handoffPath: string | null
   healthProbe?: () => Promise<ServeRuntimeHealth>
   recoverSingleton?: () => Promise<ServeSingletonRecoveryResult>
+  cleanupSingletonQuarantine?: (paths: readonly string[]) => Promise<void>
   beforeRestart?: () => Promise<void>
   sleep?: (delayMs: number) => Promise<void>
   restartDelaysMs?: readonly number[]
@@ -78,6 +79,7 @@ export async function superviseForegroundServe(
   let expectedHandoff = args.expectedHandoff
   let restartIndex = 0
   let singletonRetryUsed = false
+  let pendingSingletonQuarantine: string[] = []
   const restartDelays = args.restartDelaysMs ?? SERVE_CRASH_RESTART_DELAYS_MS
   const sleep = args.sleep ?? defaultSleep
 
@@ -100,6 +102,21 @@ export async function superviseForegroundServe(
         healthFailureLimit: args.healthFailureLimit ?? SERVE_HEALTH_FAILURE_LIMIT
       }
     )
+
+    if (
+      result.readiness === 'verified' &&
+      pendingSingletonQuarantine.length > 0 &&
+      args.cleanupSingletonQuarantine
+    ) {
+      try {
+        await args.cleanupSingletonQuarantine(pendingSingletonQuarantine)
+        pendingSingletonQuarantine = []
+      } catch (error) {
+        process.stderr.write(
+          `[serve] could not remove stale singleton quarantine: ${error instanceof Error ? error.message : String(error)}\n`
+        )
+      }
+    }
 
     if (expectedHandoff && result.readiness === 'failed') {
       return 1
@@ -176,6 +193,7 @@ export async function superviseForegroundServe(
         return SERVE_ALREADY_RUNNING_EXIT_CODE
       }
       singletonRetryUsed = true
+      pendingSingletonQuarantine.push(...recovery.quarantined)
       process.stderr.write(
         `[serve] quarantined stale Linux singleton artifacts for exited pid ${recovery.ownerPid}; retrying once.\n`
       )

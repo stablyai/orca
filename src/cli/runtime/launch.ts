@@ -14,6 +14,7 @@ import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
 import { probeServeRuntimeHealth } from './serve-runtime-health'
 import { recoverStaleServeSingleton } from './serve-singleton-recovery'
+import { removeServeSingletonQuarantine } from './serve-singleton-quarantine'
 import {
   applyServeTempDirectory,
   prepareServeTempDirectory,
@@ -166,10 +167,9 @@ export function serveOrcaApp(
     ? {
         healthProbe: () => probeServeRuntimeHealth(userDataPath),
         recoverSingleton: () => recoverStaleServeSingleton(userDataPath),
+        cleanupSingletonQuarantine: (paths) => removeServeSingletonQuarantine(userDataPath, paths),
         beforeRestart: async () => {
-          prepareServeTempDirectory({
-            env: { [SERVE_TEMP_DIRECTORY_ENV]: tempDirectory }
-          })
+          prepareServeTempDirectory({ env: { [SERVE_TEMP_DIRECTORY_ENV]: tempDirectory } })
         }
       }
     : {}
