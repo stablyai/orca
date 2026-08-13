@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { aggregateAgentStatus } from './discord-presence-activity'
+import { aggregateAgentStatus, buildDiscordActivity } from './discord-presence-activity'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
+import type { DiscordPresenceSnapshot } from './discord-presence-activity'
 
 // Helper: build a minimal IPC payload with only the fields aggregateAgentStatus reads.
 function entry(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
@@ -100,5 +101,90 @@ describe('aggregateAgentStatus', () => {
       entry({ state: 'blocked', agentType: 'codex', receivedAt: 1000 })
     ])
     expect(snap.agentTypes).toEqual(['claude', 'codex'])
+  })
+})
+
+// ─── buildDiscordActivity ────────────────────────────────────────────
+
+function snap(overrides: Partial<DiscordPresenceSnapshot> = {}): DiscordPresenceSnapshot {
+  return {
+    working: 0,
+    blocked: 0,
+    waiting: 0,
+    done: 0,
+    active: 0,
+    total: 0,
+    agentTypes: [],
+    startedAt: 0,
+    ...overrides
+  }
+}
+
+describe('buildDiscordActivity', () => {
+  const ASSET = 'orca'
+
+  it('returns null when no active agents', () => {
+    expect(buildDiscordActivity(snap(), ASSET)).toBeNull()
+  })
+
+  it('returns null when only done agents', () => {
+    expect(buildDiscordActivity(snap({ done: 3, total: 3 }), ASSET)).toBeNull()
+  })
+
+  it('builds activity for single working agent', () => {
+    const activity = buildDiscordActivity(
+      snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'], startedAt: 1000 }),
+      ASSET
+    )
+    expect(activity).toEqual({
+      details: '1 agent working',
+      state: 'Claude',
+      assets: { large_image: 'orca', large_text: 'Orca' },
+      timestamps: { start: 1000 }
+    })
+  })
+
+  it('builds activity for multiple working agents', () => {
+    const activity = buildDiscordActivity(
+      snap({ working: 3, active: 3, total: 3, agentTypes: ['claude', 'codex', 'gemini'], startedAt: 2000 }),
+      ASSET
+    )
+    expect(activity?.details).toBe('3 agents working')
+    expect(activity?.state).toBe('Claude · Codex · Gemini')
+  })
+
+  it('truncates agent list when more than 3 types', () => {
+    const activity = buildDiscordActivity(
+      snap({
+        working: 4,
+        active: 4,
+        total: 4,
+        agentTypes: ['claude', 'codex', 'gemini', 'opencode']
+      }),
+      ASSET
+    )
+    expect(activity?.state).toBe('Claude · Codex · Gemini · …')
+  })
+
+  it('shows blocked signal in state', () => {
+    const activity = buildDiscordActivity(
+      snap({
+        working: 2,
+        blocked: 1,
+        active: 3,
+        total: 3,
+        agentTypes: ['claude', 'codex']
+      }),
+      ASSET
+    )
+    expect(activity?.state).toBe('Claude · Codex · 1 waiting for you')
+  })
+
+  it('omits timestamps when startedAt is 0', () => {
+    const activity = buildDiscordActivity(
+      snap({ working: 1, active: 1, total: 1, agentTypes: ['claude'] }),
+      ASSET
+    )
+    expect(activity?.timestamps).toBeUndefined()
   })
 })

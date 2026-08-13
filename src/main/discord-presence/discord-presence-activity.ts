@@ -12,6 +12,13 @@ export type DiscordPresenceSnapshot = {
   currentTool?: string
 }
 
+export type DiscordActivity = {
+  details: string
+  state: string
+  assets: { large_image: string; large_text: string }
+  timestamps?: { start: number }
+}
+
 export function aggregateAgentStatus(
   entries: readonly AgentStatusIpcPayload[]
 ): DiscordPresenceSnapshot {
@@ -66,4 +73,42 @@ export function aggregateAgentStatus(
     startedAt,
     ...(currentTool !== undefined ? { currentTool } : {})
   }
+}
+
+export function buildDiscordActivity(
+  snapshot: DiscordPresenceSnapshot,
+  assetKey: string
+): DiscordActivity | null {
+  if (snapshot.active === 0) return null
+
+  const details = `${snapshot.working} agent${snapshot.working !== 1 ? 's' : ''} working`
+
+  // Build state: agent types (up to 3) + optional blocked signal
+  const parts: string[] = []
+  const displayed = snapshot.agentTypes.slice(0, 3)
+  parts.push(...displayed)
+  if (snapshot.agentTypes.length > 3) parts.push('…')
+
+  if (snapshot.blocked > 0) {
+    parts.push(`${snapshot.blocked} waiting for you`)
+  }
+
+  const state = parts.map(capitalize).join(' · ')
+
+  const activity: DiscordActivity = {
+    details,
+    state,
+    assets: { large_image: assetKey, large_text: 'Orca' }
+  }
+
+  if (snapshot.startedAt > 0) {
+    activity.timestamps = { start: snapshot.startedAt }
+  }
+
+  return activity
+}
+
+function capitalize(s: string): string {
+  if (s.length === 0) return s
+  return s[0].toUpperCase() + s.slice(1)
 }
