@@ -107,7 +107,9 @@ export function attachMainWindowServices(
   }
 ): void {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
-  registerRepoHandlers(mainWindow, store)
+  registerRepoHandlers(mainWindow, store, {
+    fetchRemoteWithCache: (repoPath, remote) => runtime.fetchRemoteWithCache(repoPath, remote)
+  })
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {

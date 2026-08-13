@@ -118,6 +118,7 @@ import { isAbsolute, join, resolve } from 'node:path'
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeBroadFetchRemoteName } from '../../shared/worktree-broad-fetch-remote'
 import { OrchestrationDb } from './orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import {
@@ -22376,8 +22377,13 @@ export class OrcaRuntimeService {
     ) {
       // Why: local bases keep legacy best-effort fetch behavior. Verified PR
       // SHA bases already have the commit object needed by `git worktree add`.
+      // Prefer the recorded canonical remote (forks often use `upstream`).
       try {
-        await this.fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
+        await this.fetchRemoteWithCache(
+          repo.path,
+          resolveWorktreeBroadFetchRemoteName(repo),
+          ...localWorktreeGitOptionArgs
+        )
       } catch {
         // Why: belt-and-suspenders. fetchRemoteWithCache already logs and does
         // not throw; the outer try/catch guarantees create-path tolerance even

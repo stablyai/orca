@@ -1,5 +1,6 @@
 import { isFolderRepo } from '../shared/repo-kind'
 import type { Repo } from '../shared/types'
+import { resolveWorktreeBroadFetchRemoteName } from '../shared/worktree-broad-fetch-remote'
 import { hasLocalCommitObject, isFullGitObjectId } from './git/commit-object-ref'
 import { hasWorktreeBaseCommitRef } from './git/worktree-base-ref-probe'
 import { getBaseRefDefault } from './git/repo'
@@ -89,7 +90,8 @@ async function prefetchLocalWorktreeCreateBase(
 
   // Why: keep optimistic prefetch on the same best-effort fallback path as
   // create so the real create can reuse the runtime's remote fetch cache.
-  await runtime.fetchRemoteWithCache(repo.path, 'origin')
+  // Prefer the repo's canonical remote (often `upstream` on forks), not a hardcoded origin.
+  await runtime.fetchRemoteWithCache(repo.path, resolveWorktreeBroadFetchRemoteName(repo))
 }
 
 export async function prefetchWorktreeCreateBase(args: {

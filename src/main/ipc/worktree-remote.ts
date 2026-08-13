@@ -33,6 +33,7 @@ import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeBroadFetchRemoteName } from '../../shared/worktree-broad-fetch-remote'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
 import type { ForgeProviderId } from '../source-control/forge-provider'
 import { validateGitPushTarget } from '../git/push-target-validation'
@@ -2025,8 +2026,10 @@ export async function createLocalWorktree(
       !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
     ) {
       // Why: non-remote-prefix bases (plain main/master/local) keep the legacy best-effort fetch; verified PR SHA bases already have the object.
+      // Prefer the recorded canonical remote (forks often use `upstream`).
+      const broadFetchRemote = resolveWorktreeBroadFetchRemoteName(repo)
       legacyFetchPromise = runtime
-        .fetchRemoteWithCache(repo.path, 'origin', ...localWorktreeGitOptionArgs)
+        .fetchRemoteWithCache(repo.path, broadFetchRemote, ...localWorktreeGitOptionArgs)
         .then(() => undefined)
         .catch(() => undefined)
       emitCreateWorktreeProgress(mainWindow, 'fetching', args.creationId)
@@ -2035,7 +2038,8 @@ export async function createLocalWorktree(
     if (
       !(await hasLocalWorktreeBaseRefWithOptions(repo.path, baseBranch, localWorktreeGitOptions))
     ) {
-      legacyFetchPromise = gitExecFileAsync(['fetch', 'origin'], {
+      const broadFetchRemote = resolveWorktreeBroadFetchRemoteName(repo)
+      legacyFetchPromise = gitExecFileAsync(['fetch', broadFetchRemote], {
         ...localGitExecOptions,
         timeout: CREATE_BASE_FALLBACK_FETCH_TIMEOUT_MS
       })

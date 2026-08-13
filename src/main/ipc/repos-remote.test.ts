@@ -96,7 +96,8 @@ vi.mock('../git/repo', async () => {
     getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop()),
     getBaseRefDefault: vi.fn().mockResolvedValue('origin/main'),
     getRemoteCount: vi.fn().mockResolvedValue(1),
-    searchBaseRefs: vi.fn().mockResolvedValue([])
+    searchBaseRefs: vi.fn().mockResolvedValue([]),
+    searchBaseRefDetails: vi.fn().mockResolvedValue([])
   }
 })
 
@@ -3281,5 +3282,83 @@ describe('repos:searchBaseRefs SSH relay', () => {
     })
 
     expect(result).toEqual([])
+  })
+})
+
+describe('repos:searchBaseRefs local catalog refresh', () => {
+  const handlers = new Map<string, (_event: unknown, args: unknown) => unknown>()
+  const mockWindow = {
+    isDestroyed: () => false,
+    webContents: { send: vi.fn() }
+  }
+  const fetchRemoteWithCache = vi.fn().mockResolvedValue(undefined)
+
+  beforeEach(async () => {
+    handlers.clear()
+    handleMock.mockReset()
+    handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    })
+    mockStore.getRepo.mockReset()
+    fetchRemoteWithCache.mockClear()
+    const repoModule = await import('../git/repo')
+    vi.mocked(repoModule.searchBaseRefDetails)
+      .mockReset()
+      .mockResolvedValue([
+        { refName: 'upstream/release-1.4.156', localBranchName: 'release-1.4.156' }
+      ])
+    registerRepoHandlers(mockWindow as never, mockStore as never, { fetchRemoteWithCache })
+  })
+
+  it('fetches the canonical remote before enumerating local refs', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/Users/me/fork',
+      kind: 'git',
+      gitRemoteIdentity: {
+        remoteName: 'upstream',
+        remoteUrl: 'https://github.com/stablyai/orca.git',
+        canonicalKey: 'github.com/stablyai/orca'
+      }
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'release'
+    })
+
+    expect(fetchRemoteWithCache).toHaveBeenCalledWith('/Users/me/fork', 'upstream')
+    expect(result).toEqual(['upstream/release-1.4.156'])
+  })
+
+  it('falls back to origin when gitRemoteIdentity is unset', async () => {
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/Users/me/repo',
+      kind: 'git'
+    })
+
+    await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'main'
+    })
+
+    expect(fetchRemoteWithCache).toHaveBeenCalledWith('/Users/me/repo', 'origin')
+  })
+
+  it('still returns local refs when the discovery fetch fails', async () => {
+    fetchRemoteWithCache.mockRejectedValueOnce(new Error('offline'))
+    mockStore.getRepo.mockReturnValue({
+      id: 'r1',
+      path: '/Users/me/repo',
+      kind: 'git'
+    })
+
+    const result = await handlers.get('repos:searchBaseRefs')!(null, {
+      repoId: 'r1',
+      query: 'release'
+    })
+
+    expect(result).toEqual(['upstream/release-1.4.156'])
   })
 })
