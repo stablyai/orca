@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
+/** Runs the zh-TW repair policy for repository terminology test cases. */
 const repairZhTw = (enValue, localeValue) =>
   repairTranslatedValue({
     key: 'auto.components.test.zh-tw-repository-glossary',
