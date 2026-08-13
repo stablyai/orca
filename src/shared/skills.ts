@@ -20,7 +20,6 @@ export type DiscoveredSkill = {
   directoryPath: string
   skillFilePath: string
   installed: boolean
-  fileCount: number
   updatedAt: number | null
 }
 

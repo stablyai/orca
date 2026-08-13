@@ -2,12 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  countPackageFiles,
-  findSkillFiles,
-  MAX_SKILL_PACKAGE_DEPTH,
-  MAX_SKILL_PACKAGE_FILES
-} from './skill-root-file-walk'
+import { findSkillFiles } from './skill-root-file-walk'
 
 async function makeTree(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'orca-skill-walk-'))
@@ -17,45 +12,6 @@ async function writeFileAt(path: string, content = 'x'): Promise<void> {
   await mkdir(join(path, '..'), { recursive: true })
   await writeFile(path, content)
 }
-
-describe('countPackageFiles', () => {
-  it('prunes node_modules so a vendored dependency tree is not the file count', async () => {
-    const pkg = join(await makeTree(), 'skill')
-    await writeFileAt(join(pkg, 'SKILL.md'))
-    for (let index = 0; index < 50; index += 1) {
-      await writeFileAt(join(pkg, 'node_modules', `dep-${index}`, 'index.js'))
-    }
-
-    expect(await countPackageFiles(pkg)).toBe(1)
-  })
-
-  it('stops at the depth bound instead of walking an arbitrarily deep payload', async () => {
-    const pkg = join(await makeTree(), 'skill')
-    await writeFileAt(join(pkg, 'SKILL.md'))
-    const deep = join(pkg, ...Array.from({ length: MAX_SKILL_PACKAGE_DEPTH + 2 }, () => 'nested'))
-    await writeFileAt(join(deep, 'buried.txt'))
-    const reachable = join(pkg, ...Array.from({ length: MAX_SKILL_PACKAGE_DEPTH }, () => 'ok'))
-    await writeFileAt(join(reachable, 'shallow.txt'))
-
-    // The reachable file is counted; the one past the bound is not.
-    expect(await countPackageFiles(pkg)).toBe(2)
-  })
-
-  // Why: discovery counts `dirname(SKILL.md)`, and a package can vanish between
-  // being found and being counted — an uninstall mid-scan is exactly that race.
-  it('returns zero for a directory it cannot read', async () => {
-    expect(await countPackageFiles(join(await makeTree(), 'absent'))).toBe(0)
-  })
-
-  it('stops at the file bound', async () => {
-    const pkg = join(await makeTree(), 'skill')
-    for (let index = 0; index < MAX_SKILL_PACKAGE_FILES + 25; index += 1) {
-      await writeFileAt(join(pkg, `file-${index}.txt`))
-    }
-
-    expect(await countPackageFiles(pkg)).toBe(MAX_SKILL_PACKAGE_FILES)
-  })
-})
 
 describe('findSkillFiles', () => {
   it('finds packages inside the depth bound and ignores deeper ones', async () => {

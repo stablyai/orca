@@ -21,7 +21,6 @@ function discoveryResult(skillName: string): SkillDiscoveryResult {
         directoryPath: `/home/dev/.agents/skills/${skillName}`,
         skillFilePath: `/home/dev/.agents/skills/${skillName}/SKILL.md`,
         installed: true,
-        fileCount: 1,
         updatedAt: null
       }
     ],

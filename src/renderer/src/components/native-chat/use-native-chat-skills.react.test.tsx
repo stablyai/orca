@@ -73,7 +73,6 @@ describe('useNativeChatSkills', () => {
           directoryPath: '/home/test/.agents/skills/browser',
           skillFilePath: '/home/test/.agents/skills/browser/SKILL.md',
           installed: true,
-          fileCount: 1,
           updatedAt: null
         }
       ],

@@ -17,7 +17,7 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSources } from './claude-plugin-skill-sources'
-import { countPackageFiles, findSkillFiles } from './skill-root-file-walk'
+import { findSkillFiles } from './skill-root-file-walk'
 import { runSkillCandidateTasks } from './skill-candidate-concurrency'
 import { SkillScanCoalescer, type SkillScanOutcome } from './skill-scan-coalescer'
 
@@ -119,7 +119,6 @@ async function scanRoot(root: SkillScanRoot): Promise<ScannedSkill[]> {
         directoryPath,
         skillFilePath,
         installed: true,
-        fileCount: await countPackageFiles(directoryPath),
         updatedAt: summary.updatedAt,
         canonicalSkillFilePath
       } satisfies ScannedSkill
