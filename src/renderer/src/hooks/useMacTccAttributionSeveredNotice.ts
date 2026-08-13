@@ -66,13 +66,13 @@ export function useMacTccAttributionSeveredNotice(): void {
         toast.warning(
           translate(
             'auto.hooks.useMacTccAttributionSeveredNotice.title',
-            'macOS permissions may not reach your terminals'
+            'macOS permissions may not reach Orca terminals'
           ),
           {
             id: SEVERED_TCC_NOTICE_ID,
             description: translate(
               'auto.hooks.useMacTccAttributionSeveredNotice.description',
-              'These terminals are running under a previous Orca installation, so macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions. Restart the daemon from Manage Sessions to restore access. Running terminals will close.'
+              'Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.'
             ),
             duration: Infinity,
             action: {

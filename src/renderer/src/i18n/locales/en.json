@@ -937,8 +937,8 @@
         "dismiss": "Don't show again"
       },
       "useMacTccAttributionSeveredNotice": {
-        "title": "macOS permissions may not reach your terminals",
-        "description": "These terminals are running under a previous Orca installation, so macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions. Restart the daemon from Manage Sessions to restore access. Running terminals will close.",
+        "title": "macOS permissions may not reach Orca terminals",
+        "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",
         "openManageSessions": "Open Manage Sessions",
         "dismiss": "Dismiss"
       }
