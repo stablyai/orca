@@ -362,7 +362,7 @@ export function buildSettingsNavigationMetadata({
       ),
       description: translate(
         'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
-        'Branch naming, base refs, attribution, and Git AI Author.'
+        'Branch naming, base refs, and Git AI Author.'
       ),
       icon: GitBranch,
       // Why: Git AI Author is rendered inside Git, so shared

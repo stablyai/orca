@@ -80,7 +80,6 @@ function makeSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
     localBaseRefSuggestionDismissed: false,
     branchPrefix: 'none',
     branchPrefixCustom: '',
-    enableGitHubAttribution: false,
     theme: 'system',
     appFontFamily: 'Geist',
     editorAutoSave: false,

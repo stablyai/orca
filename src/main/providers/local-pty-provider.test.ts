@@ -710,8 +710,8 @@ describe('LocalPtyProvider', () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {
           env.TERM_PROGRAM = 'Orca'
-          env.ORCA_ATTRIBUTION_SHIM_DIR = '/tmp/orca-attribution'
-          env.PATH = `/tmp/orca-attribution:${env.PATH ?? ''}`
+          env.ORCA_STALE_TEST_ENV = '/tmp/orca-stale'
+          env.PATH = `/tmp/orca-stale:${env.PATH ?? ''}`
           return env
         }
       })
@@ -724,7 +724,7 @@ describe('LocalPtyProvider', () => {
           PATH: '/tmp/orca-agent-teams-bin:/usr/bin',
           ORCA_AGENT_TEAMS_TEAM_ID: 'team-test'
         },
-        envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
       })
 
       const spawnCall = spawnMock.mock.calls.at(-1)!
@@ -732,7 +732,7 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[2].env.TERM).toBe('screen-256color')
       expect(spawnCall[2].env.PATH.split(':')[0]).toBe('/tmp/orca-agent-teams-bin')
       expect(spawnCall[2].env.TERM_PROGRAM).toBeUndefined()
-      expect(spawnCall[2].env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(spawnCall[2].env.ORCA_STALE_TEST_ENV).toBeUndefined()
     })
 
     it('drops stale inherited Git config indices behind a smaller explicit count', async () => {
@@ -842,9 +842,9 @@ describe('LocalPtyProvider', () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({
         buildSpawnEnv: (_id, env) => {
-          // Why: attribution collapses Windows PATH onto `Path` and prepends its own shim dir.
+          // Why: host env collapses Windows PATH onto `Path` and prepends its own shim dir.
           delete env.PATH
-          env.Path = `/tmp/orca-attribution:${env.Path ?? ''}`
+          env.Path = `/tmp/orca-stale:${env.Path ?? ''}`
           return env
         }
       })

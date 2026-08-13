@@ -110,14 +110,6 @@ fi
 # Why: preserve bash's normal login-shell contract. Many users already source
 # ~/.bashrc from ~/.bash_profile; forcing ~/.bashrc again here would duplicate
 # PATH edits, hooks, and prompt init in Orca startup-command shells.
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-__orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -226,14 +218,6 @@ ${getZshStartupFileSourceBlock({
   interactiveOnly: true,
   skipWhenHomeIsCurrentZdotdir: true
 })}
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-[[ ! -o login ]] && __orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -287,14 +271,6 @@ ${getZshStartupFileSourceBlock({ fileName: '.zprofile' })}
   const zshRc = getZshShellReadyRcfileContent()
   const zshLogin = `# Orca zsh shell-ready wrapper
 ${getZshStartupFileSourceBlock({ fileName: '.zlogin', interactiveOnly: true })}
-__orca_restore_attribution_path() {
-  [[ -n "\${ORCA_ATTRIBUTION_SHIM_DIR:-}" ]] || return 0
-  case "$PATH" in
-    "\${ORCA_ATTRIBUTION_SHIM_DIR}"|"\${ORCA_ATTRIBUTION_SHIM_DIR}:"*) return 0 ;;
-  esac
-  export PATH="\${ORCA_ATTRIBUTION_SHIM_DIR}:$PATH"
-}
-__orca_restore_attribution_path
 __orca_restore_agent_teams_path() {
   [[ -n "\${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
   case "$PATH" in
@@ -402,7 +378,7 @@ function getWrappedShellLaunchConfig(
     }
   }
 
-  // Why: mirrors daemon/shell-ready.ts; attribution-only fish stays unwrapped.
+  // Why: mirrors daemon/shell-ready.ts; markerless fish stays unwrapped.
   if (shellName === 'fish' && options.emitReadyMarker) {
     return {
       args: ['-l', '-C', getFishShellReadyInitCommand(SHELL_READY_MARKER_ESCAPED)],
@@ -422,7 +398,7 @@ export function getShellReadyLaunchConfig(shellPath: string): ShellReadyLaunchCo
   return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: true })
 }
 
-export function getAttributionShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
+export function getMarkerlessShellLaunchConfig(shellPath: string): ShellReadyLaunchConfig {
   return getWrappedShellLaunchConfig(shellPath, { emitReadyMarker: false })
 }
 

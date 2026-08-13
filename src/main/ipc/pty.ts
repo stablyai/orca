@@ -110,10 +110,6 @@ import {
   markClaudePtyExited,
   markClaudePtySpawned
 } from '../claude-accounts/live-pty-gate'
-import {
-  applyTerminalAttributionEnv,
-  resolveAttributionShellFamily
-} from '../attribution/terminal-attribution'
 import { ensureLinuxTerminalOrcaCliShimDir } from '../cli/linux-terminal-orca-cli-shim'
 import { registerPty, unregisterPty } from '../memory/pty-registry'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
@@ -1123,7 +1119,6 @@ export type BuildPtyHostEnvOptions = {
    *  and strip only an inherited Orca-owned override so nested Orca panes do not
    *  leak the parent's managed home. A user-set CODEX_HOME is preserved. */
   stripInheritedOrcaCodexHome?: boolean
-  githubAttributionEnabled: boolean
   /** Launch command the renderer chose (e.g. 'pi', 'omp', 'claude'); resolves the per-agent
    *  extension target for Pi/OMP. Undefined for bare shells → defaults to Pi. NEVER infer from
    *  disk presence (cross-agent shadowing when both dirs exist). */
@@ -1892,23 +1887,6 @@ export function buildPtyHostEnv(
       : bundledCliBin
   }
 
-  // Why: PATH shims keep GitHub attribution scoped to Orca's own PTYs without rewriting user git config.
-  if (!opts.githubAttributionEnabled) {
-    delete baseEnv.ORCA_ENABLE_GIT_ATTRIBUTION
-    delete baseEnv.ORCA_GIT_COMMIT_TRAILER
-    delete baseEnv.ORCA_GH_PR_FOOTER
-    delete baseEnv.ORCA_GH_ISSUE_FOOTER
-    delete baseEnv.ORCA_ATTRIBUTION_SHIM_DIR
-  }
-  applyTerminalAttributionEnv(baseEnv, {
-    enabled: opts.githubAttributionEnabled,
-    userDataPath: opts.userDataPath,
-    shellFamily: resolveAttributionShellFamily({
-      shellPath: opts.shellPath,
-      isWsl: opts.isWsl
-    })
-  })
-
   return baseEnv
 }
 
@@ -2454,7 +2432,6 @@ export function registerPtyHandlers(
             skipCodexHomeEnv,
             settings: getSettings?.()
           }),
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand: ctx?.command,
           launchAgent: ctx?.launchAgent,
           shellPath: ctx?.shellPath,
@@ -4683,7 +4660,6 @@ export function registerPtyHandlers(
           selectedCodexHomePath,
           skipCodexHomeEnv,
           stripInheritedOrcaCodexHome,
-          githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
           launchCommand,
           launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
           shellPath: daemonShellOverride ?? process.env.COMSPEC,
@@ -6198,9 +6174,7 @@ export function registerPtyHandlers(
         const requestedAgentTeamsPath = baseEnv?.ORCA_AGENT_TEAMS_TEAM_ID
           ? baseEnv[resolvePathEnvKey(baseEnv, process.platform)]
           : undefined
-        const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv
-          ? ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-          : undefined
+        const agentTeamsEnvToDelete = shouldRefreshAgentTeamsEnv ? ['TERM_PROGRAM'] : undefined
         if (baseEnv && stablePaneKey) {
           baseEnv.ORCA_PANE_KEY = stablePaneKey
           if (typeof args.tabId === 'string') {
@@ -6339,7 +6313,6 @@ export function registerPtyHandlers(
               selectedCodexHomePath,
               skipCodexHomeEnv,
               stripInheritedOrcaCodexHome,
-              githubAttributionEnabled: getSettings?.()?.enableGitHubAttribution ?? false,
               launchCommand,
               launchAgent: isTuiAgent(args.launchAgent) ? args.launchAgent : undefined,
               shellPath: effectiveShellOverride ?? process.env.COMSPEC,

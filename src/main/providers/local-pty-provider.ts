@@ -27,7 +27,7 @@ import {
 } from './local-pty-utils'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import {
-  getAttributionShellLaunchConfig,
+  getMarkerlessShellLaunchConfig,
   getShellReadyLaunchConfig,
   createShellReadyScanState,
   drainShellReadyHeldBytes,
@@ -791,7 +791,6 @@ export class LocalPtyProvider implements IPtyProvider {
     if (!wslInfo && process.platform !== 'win32') {
       // Why: OpenCode/Codex PATH restoration and OMP's status wrapper need shell-ready code after user startup files run.
       const needsNoMarkerWrapper =
-        finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
         finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
         finalEnv.ORCA_MIMOCODE_HOME ||
         finalEnv.ORCA_OMP_STATUS_EXTENSION ||
@@ -808,16 +807,16 @@ export class LocalPtyProvider implements IPtyProvider {
         getFallbackShellReadyConfig = (shell) =>
           shouldWaitForShellReady
             ? getShellReadyLaunchConfig(shell)
-            : getAttributionShellLaunchConfig(shell)
+            : getMarkerlessShellLaunchConfig(shell)
         shellLaunch = shouldWaitForShellReady
           ? getShellReadyLaunchConfig(shellPath)
-          : getAttributionShellLaunchConfig(shellPath)
+          : getMarkerlessShellLaunchConfig(shellPath)
       } else if (args.command) {
         getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
         shellLaunch = getShellReadyLaunchConfig(shellPath)
       } else if (needsNoMarkerWrapper) {
-        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
-        shellLaunch = getAttributionShellLaunchConfig(shellPath)
+        getFallbackShellReadyConfig = (shell) => getMarkerlessShellLaunchConfig(shell)
+        shellLaunch = getMarkerlessShellLaunchConfig(shellPath)
       } else {
         getFallbackShellReadyConfig = undefined
       }

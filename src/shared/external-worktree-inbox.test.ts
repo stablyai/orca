@@ -76,7 +76,6 @@ function makeSettings(): GlobalSettings {
     localBaseRefSuggestionDismissed: false,
     branchPrefix: 'none',
     branchPrefixCustom: '',
-    enableGitHubAttribution: false,
     theme: 'system',
     appFontFamily: 'Geist',
     editorAutoSave: false,

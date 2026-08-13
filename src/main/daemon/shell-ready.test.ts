@@ -258,10 +258,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })

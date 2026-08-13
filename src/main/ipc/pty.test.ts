@@ -26,14 +26,6 @@ const expectedOmpStatusExtension = posix.join(
   'omp-managed-status-extension',
   'orca-agent-status.ts'
 )
-function expectedAttributionShimDir(): string {
-  return join(
-    '/tmp/orca-user-data',
-    'orca-terminal-attribution',
-    process.platform === 'win32' ? 'win32' : 'posix'
-  )
-}
-
 const {
   handleMock,
   onMock,
@@ -1873,7 +1865,6 @@ describe('registerPtyHandlers', () => {
       launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
     ) => string | null,
     getSettings?: () => {
-      enableGitHubAttribution?: boolean
       agentStatusHooksEnabled?: boolean
       httpProxyUrl?: string
       httpProxyBypassRules?: string
@@ -1971,7 +1962,6 @@ describe('registerPtyHandlers', () => {
               isPackaged: true,
               userDataPath: '/tmp/orca-user-data',
               selectedCodexHomePath: null,
-              githubAttributionEnabled: false,
               agentStatusHooksEnabled: false,
               isWsl: context?.isWsl,
               wslDistro: context?.wslDistro
@@ -3135,59 +3125,6 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
     })
 
-    it('prepends local git/gh attribution shims when attribution is enabled', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
-        enableGitHubAttribution: true
-      }))
-
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
-      expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.PATH).toContain(expectedAttributionShimDir())
-    })
-
-    it('skips git/gh attribution shims when attribution is disabled', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
-        enableGitHubAttribution: false
-      }))
-
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
-      expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
-      expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
-      expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
-    })
-
-    it('prepends git/gh attribution shims for daemon-backed local PTYs', async () => {
-      const daemonSpawn = vi.fn(async (options) => ({ id: 'daemon-pty', pid: 123, ...options }))
-      setLocalPtyProvider({
-        spawn: daemonSpawn,
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(),
-        shutdown: vi.fn(),
-        onData: vi.fn(() => vi.fn()),
-        onExit: vi.fn(() => vi.fn()),
-        listProcesses: vi.fn(async () => []),
-        getForegroundProcess: vi.fn(async () => null)
-      } as never)
-      handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
-        enableGitHubAttribution: true
-      })) as never)
-
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        env: {}
-      })
-
-      const env = daemonSpawn.mock.calls.at(-1)![0].env
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.PATH).toContain(expectedAttributionShimDir())
-    })
-
     it('overrides ambient CODEX_HOME with the Orca-managed home for system default', async () => {
       const env = await spawnAndGetEnv(
         undefined,
@@ -3489,7 +3426,6 @@ describe('registerPtyHandlers', () => {
           launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
         ) => string | null,
         getSettings?: () => {
-          enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
         },
@@ -3551,7 +3487,6 @@ describe('registerPtyHandlers', () => {
           launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
         ) => string | null,
         getSettings?: () => {
-          enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
         },
@@ -4876,9 +4811,7 @@ describe('registerPtyHandlers', () => {
           onPtyData: vi.fn()
         }
         handlers.clear()
-        registerPtyHandlers(mainWindow as never, runtime as never, undefined, (() => ({
-          enableGitHubAttribution: true
-        })) as never)
+        registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
         await controller.spawn({
@@ -4889,20 +4822,15 @@ describe('registerPtyHandlers', () => {
           env: {
             PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
             ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca',
-            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+            TERM_PROGRAM: 'Orca'
           },
-          envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+          envToDelete: ['TERM_PROGRAM']
         })
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-        expect(spawnOptions.envToDelete).toEqual(
-          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
-        )
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
 
       it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
@@ -4922,38 +4850,25 @@ describe('registerPtyHandlers', () => {
         }
       })
 
-      it('prepends attribution shims on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
-          enableGitHubAttribution: true
-        }))
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-        expect(env.PATH).toContain(expectedAttributionShimDir())
-      })
-
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
         const spawnOptions = await daemonSpawnAndGetOptions(
           {
             PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
             ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca',
-            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+            TERM_PROGRAM: 'Orca'
           },
           undefined,
-          () => ({ enableGitHubAttribution: true }),
+          undefined,
           undefined,
           {
             command: 'claude',
-            envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+            envToDelete: ['TERM_PROGRAM']
           }
         )
 
         expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-        expect(spawnOptions.envToDelete).toEqual(
-          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
-        )
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
 
       it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
@@ -5168,14 +5083,6 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/ambient/pi/agent')
       })
 
-      it('skips attribution shims on the daemon path when the setting is disabled', async () => {
-        const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' }, undefined, () => ({
-          enableGitHubAttribution: false
-        }))
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
-      })
-
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
         // Why: the handler clones baseEnv so IPC-provided env stays pristine; a regression would leak Orca host env back into the renderer's reused copy.
         const daemonSpawn = setupDaemonAdapter()
@@ -5353,7 +5260,6 @@ describe('registerPtyHandlers', () => {
         // Why: host-local vars must be absent over SSH (they point at the local host/disk) — shipping them is useless or a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
@@ -8187,8 +8093,7 @@ describe('registerPtyHandlers', () => {
         TMUX: '/tmp/orca-claude-agent-teams/team-stale,0,1',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale',
         ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
-        TERM_PROGRAM: 'Orca',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+        TERM_PROGRAM: 'Orca'
       },
       launchConfig: {
         agentCommand: 'claude --teammate-mode auto',
@@ -8221,7 +8126,6 @@ describe('registerPtyHandlers', () => {
     })
     expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/fresh-agent-teams')
     expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     expect(result.launchConfig?.agentEnv).toMatchObject({
       CLAUDE_PROFILE: 'captured',
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',

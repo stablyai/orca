@@ -2799,16 +2799,16 @@ describe('PtyHandler', () => {
     handler.addEnvAugmenter(() => ({
       TERM: 'augmenter-term',
       TERM_PROGRAM: 'augmenter-terminal',
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/augmenter-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/augmenter-stale'
     }))
 
     await dispatcher.callRequest('pty.spawn', {
       env: {
         TERM: 'screen-256color',
         TERM_PROGRAM: 'renderer-terminal',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/renderer-attribution'
+        ORCA_STALE_TEST_ENV: '/tmp/renderer-stale'
       },
-      envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['TERM_PROGRAM', 'ORCA_STALE_TEST_ENV']
     })
 
     const spawnEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -2820,7 +2820,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.env.COLORTERM).toBe('truecolor')
     expect(spawnEnv.env.FORCE_HYPERLINK).toBe('1')
     expect(spawnEnv.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(spawnEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('replaces an ambient TERM=dumb when no explicit TERM is supplied', async () => {
@@ -3185,7 +3185,7 @@ describe('PtyHandler', () => {
   it('normalizes an explicit empty TERM and preserves sanitized env deletions on revive', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: '' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR', '', 42]
+      envToDelete: ['ORCA_STALE_TEST_ENV', '', 42]
     })
 
     const initialEnv = mockPtySpawn.mock.calls[0][2] as {
@@ -3201,14 +3201,14 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
 
     await handler.dispose({ waitForPhysicalExit: false })
     mockPtySpawn.mockClear()
     dispatcher = createMockDispatcher()
     handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/revived-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/revived-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -3223,7 +3223,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('drops legacy empty explicit TERM metadata after revive', async () => {
@@ -3235,11 +3235,11 @@ describe('PtyHandler', () => {
         rows: 24,
         cwd: process.cwd(),
         explicitTerm: '',
-        envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+        envToDelete: ['ORCA_STALE_TEST_ENV']
       }
     ])
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-empty-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-empty-stale'
     }))
     const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
     try {
@@ -3254,7 +3254,7 @@ describe('PtyHandler', () => {
     }
     expect(revivedEnv.name).toBe('xterm-256color')
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
 
     const serializedState = (await dispatcher.callRequest('pty.serialize', {
       ids: ['pty-8']
@@ -3264,13 +3264,13 @@ describe('PtyHandler', () => {
       envToDelete?: string[]
     }[]
     expect(serialized.explicitTerm).toBeUndefined()
-    expect(serialized.envToDelete).toEqual(['ORCA_ATTRIBUTION_SHIM_DIR'])
+    expect(serialized.envToDelete).toEqual(['ORCA_STALE_TEST_ENV'])
   })
 
   it('preserves explicit TERM and env deletions through repeated revive cycles', async () => {
     await dispatcher.callRequest('pty.spawn', {
       env: { TERM: 'screen-256color' },
-      envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+      envToDelete: ['ORCA_STALE_TEST_ENV']
     })
     let state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
 
@@ -3281,7 +3281,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/first-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/first-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
 
@@ -3291,12 +3291,12 @@ describe('PtyHandler', () => {
       }
       expect(firstRevivedEnv.name).toBe('screen-256color')
       expect(firstRevivedEnv.env.TERM).toBe('screen-256color')
-      expect(firstRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+      expect(firstRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
       state = (await dispatcher.callRequest('pty.serialize', { ids: ['pty-1'] })) as string
       expect(JSON.parse(state)).toMatchObject([
         {
           explicitTerm: 'screen-256color',
-          envToDelete: ['ORCA_ATTRIBUTION_SHIM_DIR']
+          envToDelete: ['ORCA_STALE_TEST_ENV']
         }
       ])
 
@@ -3305,7 +3305,7 @@ describe('PtyHandler', () => {
       dispatcher = createMockDispatcher()
       handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
       handler.addEnvAugmenter(() => ({
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/second-revive'
+        ORCA_STALE_TEST_ENV: '/tmp/second-revive'
       }))
       await dispatcher.callRequest('pty.revive', { state })
     } finally {
@@ -3318,12 +3318,12 @@ describe('PtyHandler', () => {
     }
     expect(secondRevivedEnv.name).toBe('screen-256color')
     expect(secondRevivedEnv.env.TERM).toBe('screen-256color')
-    expect(secondRevivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
+    expect(secondRevivedEnv.env.ORCA_STALE_TEST_ENV).toBeUndefined()
   })
 
   it('revives legacy serialized entries with default TERM and no env deletions', async () => {
     handler.addEnvAugmenter(() => ({
-      ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/legacy-attribution'
+      ORCA_STALE_TEST_ENV: '/tmp/legacy-stale'
     }))
     const state = JSON.stringify([
       {
@@ -3343,7 +3343,7 @@ describe('PtyHandler', () => {
 
     const revivedEnv = mockPtySpawn.mock.calls[0][2] as { env: Record<string, string> }
     expect(revivedEnv.env.TERM).toBe('xterm-256color')
-    expect(revivedEnv.env.ORCA_ATTRIBUTION_SHIM_DIR).toBe('/tmp/legacy-attribution')
+    expect(revivedEnv.env.ORCA_STALE_TEST_ENV).toBe('/tmp/legacy-stale')
   })
 
   it('revive preserves attach identity metadata without exporting hook identity env', async () => {
