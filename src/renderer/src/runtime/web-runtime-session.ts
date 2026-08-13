@@ -67,7 +67,7 @@ import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
-  completeWebSessionBrowserPlacementGroup,
+  claimWebSessionBrowserPlacementGroupCleanup,
   forgetWebSessionBrowserPlacement,
   moveWebSessionBrowserPlacement,
   recordWebSessionBrowserPlacement,
@@ -616,18 +616,16 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
     }
     unsubscribeFocusGuard()
-    completeWebSessionBrowserPlacementGroup(args.worktreeId, args.clientTargetGroupId)
     return true
   } catch (error) {
     unsubscribeFocusGuard()
     let recoveryError: unknown = null
     const createOutcomeUnknown = !createdPageId && !isDefinitiveBrowserCreateFailure(error)
-    const shouldCloseClientGroup = args.clientTargetGroupId
+    const ownsClientGroupCleanup = args.clientTargetGroupId
       ? releaseWebSessionBrowserPlacementGroup({
           environmentId,
           worktreeId: args.worktreeId,
           remotePageId: guardedPageId,
-          groupId: args.clientTargetGroupId,
           callerCreatedGroup: args.clientTargetGroupCreated === true
         })
       : false
@@ -679,7 +677,14 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     if (shouldFocusOnCreate) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
     }
-    if (args.clientTargetGroupId && shouldCloseClientGroup) {
+    if (
+      args.clientTargetGroupId &&
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: args.worktreeId,
+        groupId: args.clientTargetGroupId,
+        ownsGroupCleanup: ownsClientGroupCleanup
+      })
+    ) {
       useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
     }
     if (args.failureLogMode === 'operation-only') {

@@ -943,6 +943,78 @@ describe('createWebRuntimeSessionBrowserTab', () => {
     expect(mocks.closeEmptyGroup).toHaveBeenCalledWith(WORKTREE_ID, 'client-preview-group')
   })
 
+  it('rechecks split reservations after delayed host rollback', async () => {
+    mocks.getState.mockReturnValue({
+      ...mocks.getState(),
+      runtimeStatusByEnvironmentId: new Map(
+        [ENVIRONMENT_ID, SECOND_ENVIRONMENT_ID].map((environmentId) => [
+          environmentId,
+          { status: { capabilities: ['browser.screencast.v1'] }, checkedAt: 1 }
+        ])
+      )
+    })
+    let resolveClose!: (response: unknown) => void
+    const closeResponse = new Promise((resolve) => {
+      resolveClose = resolve
+    })
+    let createCount = 0
+    let listCount = 0
+    const runtimeCall = vi.fn((request: { method: string }) => {
+      if (request.method === 'browser.tabCreate') {
+        createCount += 1
+        return Promise.resolve({
+          id: `create-${createCount}`,
+          ok: true,
+          result: { browserPageId: `remote-browser-page-${createCount}` }
+        })
+      }
+      if (request.method === 'browser.tabClose') {
+        return closeResponse
+      }
+      listCount += 1
+      return Promise.resolve(
+        listCount === 1
+          ? {
+              id: 'first-list',
+              ok: false,
+              error: { code: 'remote_runtime_timeout', message: 'first preview timed out' }
+            }
+          : { id: `list-${listCount}`, ok: true, result: makeSnapshot() }
+      )
+    })
+    mocks.hasMaterializedWebRuntimeBrowserPage.mockImplementation(
+      (_state, _environmentId, _worktreeId, remotePageId) =>
+        remotePageId === 'remote-browser-page-2'
+    )
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call: runtimeCall } } })
+
+    const first = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: true,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() =>
+      expect(
+        runtimeCall.mock.calls.some(([request]) => request.method === 'browser.tabClose')
+      ).toBe(true)
+    )
+    const second = createWebRuntimeSessionBrowserTab({
+      worktreeId: WORKTREE_ID,
+      environmentId: SECOND_ENVIRONMENT_ID,
+      clientTargetGroupId: 'client-preview-group',
+      clientTargetGroupCreated: false,
+      focusOnCreate: false
+    })
+    await vi.waitFor(() => expect(createCount).toBe(2))
+
+    resolveClose({ id: 'close', ok: true, result: { closed: true } })
+    await expect(second).resolves.toBe(true)
+    await expect(first).resolves.toBe(false)
+    expect(mocks.closeEmptyGroup).not.toHaveBeenCalled()
+  })
+
   it('accepts subscription materialization when the eager reconciliation fails', async () => {
     const runtimeCall = vi
       .fn()

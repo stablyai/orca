@@ -1685,6 +1685,7 @@
           "assertions": [
             "pending page placements are bounded and reserve worktree groups across environment ownership changes",
             "caller-created cleanup transfers to the last failed overlapping reservation",
+            "capacity rejects a new placement without evicting an active reservation or its cleanup ownership",
             "worktree and environment teardown clear only their own placement state"
           ]
         },

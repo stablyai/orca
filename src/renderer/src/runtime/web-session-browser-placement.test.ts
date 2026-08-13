@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
+  claimWebSessionBrowserPlacementGroupCleanup,
   clearWebSessionBrowserPlacementsForEnvironment,
   clearWebSessionBrowserPlacementsForWorktree,
   forgetWebSessionBrowserPlacement,
@@ -66,28 +67,81 @@ describe('web session browser placement', () => {
       groupId: 'preview-group'
     })
 
+    const creatorOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      callerCreatedGroup: true
+    })
     expect(
-      releaseWebSessionBrowserPlacementGroup({
-        environmentId: ENVIRONMENT_ID,
+      claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
-        remotePageId: 'page-1',
         groupId: 'preview-group',
-        callerCreatedGroup: true
+        ownsGroupCleanup: creatorOwnsCleanup
       })
     ).toBe(false)
+    const followerOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: 'environment-2',
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-2',
+      callerCreatedGroup: false
+    })
     expect(
-      releaseWebSessionBrowserPlacementGroup({
-        environmentId: 'environment-2',
+      claimWebSessionBrowserPlacementGroupCleanup({
         worktreeId: WORKTREE_ID,
-        remotePageId: 'page-2',
         groupId: 'preview-group',
-        callerCreatedGroup: false
+        ownsGroupCleanup: followerOwnsCleanup
+      })
+    ).toBe(true)
+  })
+
+  it('retains transferred cleanup when one overlapping environment clears', () => {
+    for (const [environmentId, remotePageId, callerCreatedGroup] of [
+      [ENVIRONMENT_ID, 'page-1', true],
+      ['environment-2', 'page-2', false],
+      ['environment-3', 'page-3', false]
+    ] as const) {
+      recordWebSessionBrowserPlacement({
+        environmentId,
+        worktreeId: WORKTREE_ID,
+        remotePageId,
+        groupId: 'preview-group',
+        callerCreatedGroup
+      })
+    }
+    const ownsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: ENVIRONMENT_ID,
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-1',
+      callerCreatedGroup: true
+    })
+    expect(
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group',
+        ownsGroupCleanup: ownsCleanup
+      })
+    ).toBe(false)
+
+    clearWebSessionBrowserPlacementsForEnvironment('environment-2')
+    const remainingOwnsCleanup = releaseWebSessionBrowserPlacementGroup({
+      environmentId: 'environment-3',
+      worktreeId: WORKTREE_ID,
+      remotePageId: 'page-3',
+      callerCreatedGroup: false
+    })
+    expect(remainingOwnsCleanup).toBe(true)
+    expect(
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: WORKTREE_ID,
+        groupId: 'preview-group',
+        ownsGroupCleanup: remainingOwnsCleanup
       })
     ).toBe(true)
   })
 
   it('bounds pending page placements', () => {
-    for (let index = 0; index < 129; index += 1) {
+    for (let index = 0; index < 128; index += 1) {
       recordWebSessionBrowserPlacement({
         environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
@@ -96,13 +150,22 @@ describe('web session browser placement', () => {
       })
     }
 
+    expect(() =>
+      recordWebSessionBrowserPlacement({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-128',
+        groupId: 'group-128'
+      })
+    ).toThrow('Too many paired browser placements are pending')
+
     expect(
       takeWebSessionBrowserPlacementGroup({
         environmentId: ENVIRONMENT_ID,
         worktreeId: WORKTREE_ID,
         remotePageId: 'page-0'
       })
-    ).toBeUndefined()
+    ).toBe('group-0')
     expect(
       isWebSessionBrowserPlacementGroupReserved({
         worktreeId: WORKTREE_ID,
@@ -115,7 +178,7 @@ describe('web session browser placement', () => {
         worktreeId: WORKTREE_ID,
         remotePageId: 'page-128'
       })
-    ).toBe('group-128')
+    ).toBeUndefined()
   })
 
   it('refreshes existing entries at capacity without evicting another placement', () => {
