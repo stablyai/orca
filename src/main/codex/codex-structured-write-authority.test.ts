@@ -102,6 +102,20 @@ async function issue(
 }
 
 describe('CodexStructuredWriteAuthority', () => {
+  it('retires the bound mutation epoch when Codex completes that turn', async () => {
+    const fixture = linkedWorktree()
+    const gate = authority({})
+    await issue(gate, fixture.root)
+    expect(gate.activeTurn(SESSION)).toEqual({ threadId: THREAD, turnId: TURN })
+
+    gate.observeNotification(SESSION, 'turn/completed', {
+      threadId: THREAD,
+      turn: { id: TURN, status: 'completed' }
+    })
+
+    expect(gate.activeTurn(SESSION)).toBeNull()
+  })
+
   it('admits one file change and emits a bounded before/after receipt', async () => {
     const fixture = linkedWorktree()
     const target = join(fixture.root, 'source.txt')

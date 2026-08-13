@@ -48,6 +48,7 @@ import {
   type StructuredAgentSessionHostHandoff
 } from './structured-agent-session-host-handoff'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
+import { refuseEffectIsolatedHandoff } from './structured-agent-session-effect-isolation'
 import { listStructuredAgentSessionTabs } from './structured-agent-session-host-tabs'
 import { pinnedAgentSessionLaunchEnv } from './structured-agent-session-launch-env'
 import { StructuredAgentSessionReadableRestorer } from './structured-agent-session-readable-restorer'
@@ -280,6 +281,12 @@ export class StructuredAgentSessionHost {
     params: AgentSessionHandoffRequest
   ): Promise<AgentSessionMutationResult<AgentSessionHandoffResult>> {
     this.requireSession(params.envelope.sessionId)
+    const isolationRefusal = refuseEffectIsolatedHandoff(
+      this.deps.store.getRecord(params.envelope.sessionId)
+    )
+    if (isolationRefusal) {
+      return Promise.resolve(isolationRefusal)
+    }
     return this.serialize(params.envelope.sessionId, () =>
       this.handoffs.request(caller.callerKey, params)
     )

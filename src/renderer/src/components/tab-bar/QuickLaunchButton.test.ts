@@ -94,6 +94,15 @@ vi.mock('@/lib/launch-agent-in-new-tab', () => ({
   launchAgentInNewTab: vi.fn()
 }))
 
+vi.mock('../native-chat/use-structured-agent-session-create', () => ({
+  useStructuredAgentSessionCreate: () => ({
+    supported: true,
+    writerSupported: true,
+    creating: false,
+    create: vi.fn()
+  })
+}))
+
 function renderAgentMenuItems(): string {
   return renderToStaticMarkup(
     React.createElement(QuickLaunchAgentMenuItems, {
@@ -128,6 +137,13 @@ beforeEach(() => {
 })
 
 describe('QuickLaunchAgentMenuItems', () => {
+  it('offers normal chat and the explicitly isolated writer as separate choices', () => {
+    const html = renderAgentMenuItems()
+
+    expect(html).toContain('Chat session')
+    expect(html).toContain('Writer session')
+  })
+
   it('renders the new-agent shortcut next to the configured default agent only', () => {
     shortcutLabelMock.mockReturnValue('⌘⌥T')
 

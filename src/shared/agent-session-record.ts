@@ -14,6 +14,8 @@ import {
 } from './agent-session-provider-handle'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 1 as const
+/** Writer records use a version older hosts reject instead of resuming without effect isolation. */
+export const AGENT_SESSION_EFFECT_ISOLATED_RECORD_SCHEMA_VERSION = 2 as const
 
 export type AgentSessionWorkspaceKind = 'git-worktree' | 'folder'
 
@@ -41,6 +43,9 @@ export type AgentSessionAccountHome = {
 export type AgentSessionLaunchEnv = Record<string, string>
 
 export type AgentSessionOwnerRuntimeKind = 'native' | 'tui'
+
+/** Process-level effect isolation pinned when the host creates the session. */
+export type AgentSessionEffectIsolation = 'local-structured-write'
 
 export type AgentSessionHandoffStage =
   | 'preparing'
@@ -103,12 +108,16 @@ export type AgentSessionLease = {
 }
 
 export type AgentSessionRecord = {
-  schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
+  schemaVersion:
+    | typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
+    | typeof AGENT_SESSION_EFFECT_ISOLATED_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
   providerHandleChain: AgentSessionProviderHandleLink[]
   accountHome: AgentSessionAccountHome
+  /** Optional for records created before effect-scoped sessions existed. */
+  effectIsolation?: AgentSessionEffectIsolation
   /** Provider options acknowledged for the next turn, restored across owner replacement. */
   options?: Record<string, string>
   launchEnv?: AgentSessionLaunchEnv
@@ -307,13 +316,20 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     return false
   }
   const record = value as Partial<AgentSessionRecord>
+  const schemaValid =
+    (record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
+      record.effectIsolation === undefined) ||
+    (record.schemaVersion === AGENT_SESSION_EFFECT_ISOLATED_RECORD_SCHEMA_VERSION &&
+      record.effectIsolation === 'local-structured-write')
   const shapeValid =
-    record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
+    schemaValid &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
     (record.provider === 'claude' || record.provider === 'codex') &&
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
+    (record.effectIsolation === undefined ||
+      (record.effectIsolation === 'local-structured-write' && record.provider === 'codex')) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
     (record.launchEnv === undefined || isAgentSessionLaunchEnv(record.launchEnv)) &&
     isAgentSessionLease(record.lease) &&
@@ -327,6 +343,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
   const head = validated.providerHandleChain.at(-1)
   return (
     validated.providerHandleChain.every((link) => link.handle.provider === validated.provider) &&
+    (validated.effectIsolation === undefined || validated.lease.runtimeKind === 'native') &&
     (validated.lease.claimStatus !== 'live' ||
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&

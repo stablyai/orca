@@ -43,6 +43,8 @@ export type CodexStructuredSessionAdapterDeps = {
   mintLinkId?: () => string
   now?: () => number
   requestTimeoutMs?: number
+  /** Bound for proving an interrupted writer turn actually reached terminal state. */
+  writerInterruptSettleTimeoutMs?: number
   /** Opt-in host admission. Absent means the existing structured session behavior is unchanged. */
   writeAuthority?: CodexStructuredWriteAuthority
   releaseStructuredWriteHome?: (sessionId: string, isolatedHomePath: string) => Promise<void>
@@ -59,6 +61,7 @@ export type CodexSession = {
   turnIdWaiters: ((turnId: string) => void)[]
   translator: CodexJournalTranslator | null
   isolatedHomePath: string | null
+  effectIsolation?: 'local-structured-write' | null
 }
 
 export type CodexAcquisitionAttempt = {

@@ -69,6 +69,7 @@ export function attachParamsForRecord(
     provider: 'codex',
     agent: 'codex',
     accountHome: record.accountHome,
+    ...(record.effectIsolation ? { effectIsolation: record.effectIsolation } : {}),
     runtimeKind: input.runtimeKind ?? record.lease.runtimeKind
   }
   return {

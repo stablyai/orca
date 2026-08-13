@@ -14,10 +14,12 @@ import {
 } from '../../shared/agent-session-operation-ledger'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import {
+  AGENT_SESSION_EFFECT_ISOLATED_RECORD_SCHEMA_VERSION,
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   agentSessionExecutionLocationsEqual,
   isAgentSessionLaunchEnv,
   type AgentSessionAccountHome,
+  type AgentSessionEffectIsolation,
   type AgentSessionExecutionLocation,
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
@@ -34,6 +36,7 @@ export type AgentSessionReserveRequest = {
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
+  effectIsolation?: AgentSessionEffectIsolation
   launchEnv?: AgentSessionLaunchEnv
   runtimeKind: AgentSessionReservation['runtimeKind']
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
@@ -99,6 +102,14 @@ export function applyAgentSessionReservation(
   if (request.launchEnv && !isAgentSessionLaunchEnv(request.launchEnv)) {
     throw new Error('agent_session_launch_env_invalid')
   }
+  if (
+    request.effectIsolation &&
+    (request.provider !== 'codex' ||
+      request.accountHome.variable !== 'CODEX_HOME' ||
+      request.runtimeKind !== 'native')
+  ) {
+    throw new Error('agent_session_operation_invalid')
+  }
   const reservation: AgentSessionReservation = {
     runtimeKind: request.runtimeKind,
     spawnToken: request.spawnToken,
@@ -121,7 +132,8 @@ export function applyAgentSessionReservation(
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
     existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    existing.accountHome.path !== request.accountHome.path ||
+    existing.effectIsolation !== request.effectIsolation
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw new Error('agent_session_conflict')
@@ -146,12 +158,15 @@ function createAgentSessionRecord(
   reservation: AgentSessionReservation
 ): AgentSessionRecord {
   return {
-    schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
+    schemaVersion: request.effectIsolation
+      ? AGENT_SESSION_EFFECT_ISOLATED_RECORD_SCHEMA_VERSION
+      : AGENT_SESSION_RECORD_SCHEMA_VERSION,
     sessionId: request.sessionId,
     location: request.location,
     provider: request.provider,
     providerHandleChain: [],
     accountHome: request.accountHome,
+    ...(request.effectIsolation ? { effectIsolation: request.effectIsolation } : {}),
     ...(request.launchEnv ? { launchEnv: { ...request.launchEnv } } : {}),
     createdAt: request.now,
     updatedAt: request.now,

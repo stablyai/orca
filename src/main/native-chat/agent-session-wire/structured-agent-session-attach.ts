@@ -14,6 +14,7 @@ import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease
 import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import type {
   AgentSessionAccountHome,
+  AgentSessionEffectIsolation,
   AgentSessionExecutionLocation,
   AgentSessionLaunchEnv,
   AgentSessionOwnerRuntimeKind,
@@ -51,6 +52,8 @@ export type AgentSessionAttachParams = {
   provider: AgentSessionHandleProvider
   agent: AgentType
   accountHome: AgentSessionAccountHome
+  /** Host-selected process boundary; clients may only request it through create intent. */
+  effectIsolation?: AgentSessionEffectIsolation
   runtimeKind: AgentSessionOwnerRuntimeKind
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
@@ -74,6 +77,7 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     provider: params.provider,
     agent: params.agent,
     accountHome: params.accountHome,
+    effectIsolation: params.effectIsolation,
     runtimeKind: params.runtimeKind,
     providerHandle: params.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
@@ -179,6 +183,7 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.effectIsolation ? { effectIsolation: params.effectIsolation } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,
     expectedFence: params.envelope.expectedRuntimeFence,

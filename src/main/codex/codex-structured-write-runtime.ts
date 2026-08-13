@@ -4,6 +4,10 @@ import { CodexStructuredWriteLeaseRegistry } from './codex-structured-write-leas
 import { CodexStructuredWriteReceiptStore } from './codex-structured-write-receipt-store'
 import { LOCAL_STRUCTURED_WRITE_EFFECT } from './codex-structured-write-types'
 
+export function isCodexStructuredWriteEnabled(value: string | undefined): boolean {
+  return value !== '0'
+}
+
 export async function createCodexStructuredWriteAuthority(input: {
   stateDirectory: string
   onTraceError?: (error: unknown) => void

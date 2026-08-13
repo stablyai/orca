@@ -207,6 +207,22 @@ afterEach(async () => {
 })
 
 describe('structured session handoff options', () => {
+  it('refuses to widen an effect-isolated writer into a TUI owner', async () => {
+    const readRecord = store.getRecord.bind(store)
+    const record = readRecord(SESSION)
+    expect(record).not.toBeNull()
+    const getRecord = vi.spyOn(store, 'getRecord').mockImplementation((sessionId) => {
+      const current = readRecord(sessionId)
+      return current ? { ...current, effectIsolation: 'local-structured-write' } : null
+    })
+
+    await expect(host.requestHandoff(CALLER, handoff('to-tui'))).resolves.toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_invalid' }
+    })
+    getRecord.mockRestore()
+  })
+
   it('settles a pre-mutation rejection so a fresh retry can succeed', async () => {
     optionFailure = new AgentSessionOptionRejectedError('model list unavailable')
     const fields = { key: 'model', value: PICKED_MODEL }

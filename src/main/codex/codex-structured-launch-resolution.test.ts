@@ -28,15 +28,15 @@ function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord
 function resolverFor(
   value: AgentSessionRecord | null,
   resolveWorkspacePath: (workspaceId: string) => Promise<string> = async (id) => `/repos/${id}`,
-  localStructuredWriteOnly = false
+  structuredWriteEnabled = false
 ) {
   return createCodexStructuredLaunchResolver({
     store: { getRecord: () => value } as unknown as AgentSessionRecordStore,
     resolveWorkspacePath,
     resolveCommand: () => '/usr/local/bin/codex',
     canonicalizePath: async (path) => path,
-    localStructuredWriteOnly,
-    ...(localStructuredWriteOnly
+    structuredWriteEnabled,
+    ...(structuredWriteEnabled
       ? {
           resolveStructuredWriteSourceHome: async () => '/home/work/.codex',
           prepareStructuredWriteHome: async (sessionId: string) => `/isolated-codex/${sessionId}`
@@ -72,7 +72,11 @@ describe('codex structured launch resolution', () => {
   })
 
   it('starts the opt-in writer with every other effect surface disabled', async () => {
-    const launch = await resolverFor(record(), undefined, true)({ identity: IDENTITY })
+    const launch = await resolverFor(
+      record({ effectIsolation: 'local-structured-write' }),
+      undefined,
+      true
+    )({ identity: IDENTITY })
 
     expect(launch.effectIsolation).toBe('local-structured-write')
     expect(launch.codexHome).toBe('/isolated-codex/session-1')
@@ -105,28 +109,36 @@ describe('codex structured launch resolution', () => {
     }
   })
 
+  it('fails closed when a writer record reaches a host without writer support', async () => {
+    await expect(
+      resolverFor(record({ effectIsolation: 'local-structured-write' }))({ identity: IDENTITY })
+    ).rejects.toThrow('not enabled on this execution host')
+  })
+
   it('fails closed when writer isolation has no credential-home provider', async () => {
     const resolver = createCodexStructuredLaunchResolver({
-      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      store: {
+        getRecord: () => record({ effectIsolation: 'local-structured-write' })
+      } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async () => '/repos/workspace-1',
       resolveCommand: () => '/usr/local/bin/codex',
-      localStructuredWriteOnly: true,
+      structuredWriteEnabled: true,
       resolveStructuredWriteSourceHome: async () => '/home/work/.codex'
     })
 
     await expect(resolver({ identity: IDENTITY })).rejects.toThrow('isolated Codex home provider')
   })
 
-  it('fails closed instead of resuming a thread with unknown prior effect isolation', async () => {
+  it('does not isolate a normal session merely because writer support is enabled', async () => {
     const existing = record({
       providerHandleChain: [
         { handle: { provider: 'codex', threadId: 'thread-existing' } }
       ] as AgentSessionRecord['providerHandleChain']
     })
 
-    await expect(resolverFor(existing, undefined, true)({ identity: IDENTITY })).rejects.toThrow(
-      'cannot resume a thread'
-    )
+    const launch = await resolverFor(existing, undefined, true)({ identity: IDENTITY })
+    expect(launch).toMatchObject({ args: ['app-server'], resumeThreadId: 'thread-existing' })
+    expect(launch).not.toHaveProperty('effectIsolation')
   })
 
   it('rejects a client-recorded credential path that differs from the host registry', async () => {
@@ -134,12 +146,15 @@ describe('codex structured launch resolution', () => {
     const resolver = createCodexStructuredLaunchResolver({
       store: {
         getRecord: () =>
-          record({ accountHome: { variable: 'CODEX_HOME', path: '/client/selected/home' } })
+          record({
+            accountHome: { variable: 'CODEX_HOME', path: '/client/selected/home' },
+            effectIsolation: 'local-structured-write'
+          })
       } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async () => '/repos/workspace-1',
       resolveCommand: () => '/usr/local/bin/codex',
       canonicalizePath: async (path) => path,
-      localStructuredWriteOnly: true,
+      structuredWriteEnabled: true,
       resolveStructuredWriteSourceHome: async () => '/host/registry/home',
       prepareStructuredWriteHome: async () => {
         prepared = true
@@ -199,13 +214,15 @@ describe('codex structured launch resolution', () => {
   it('does not materialise credentials when the selected workspace is stale', async () => {
     let prepared = false
     const resolver = createCodexStructuredLaunchResolver({
-      store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+      store: {
+        getRecord: () => record({ effectIsolation: 'local-structured-write' })
+      } as unknown as AgentSessionRecordStore,
       resolveWorkspacePath: async () => {
         throw new Error('workspace is stale')
       },
       resolveCommand: () => '/usr/local/bin/codex',
       canonicalizePath: async (path) => path,
-      localStructuredWriteOnly: true,
+      structuredWriteEnabled: true,
       resolveStructuredWriteSourceHome: async () => '/home/work/.codex',
       prepareStructuredWriteHome: async () => {
         prepared = true

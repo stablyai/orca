@@ -95,22 +95,20 @@ export const AttachParams = z
   })
   .strict()
 
-export const CreateIntentParams = z
-  .object({
-    envelope: MutationEnvelope,
-    worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
-  })
-  .strict()
+export const CreateIntentParams = z.strictObject({
+  envelope: MutationEnvelope,
+  worktree: Identifier('Invalid worktree selector'),
+  agent: z.literal('codex'),
+  effectAuthority: z.enum(AGENT_SESSION_EFFECT_AUTHORITIES).optional()
+})
 
 export const CreateParams = z.union([AttachParams, CreateIntentParams])
 
-export const CreateSupportParams = z
-  .object({
-    worktree: Identifier('Invalid worktree selector'),
-    agent: z.literal('codex')
-  })
-  .strict()
+export const CreateSupportParams = z.strictObject({
+  worktree: Identifier('Invalid worktree selector'),
+  agent: z.literal('codex'),
+  effectAuthority: z.enum(AGENT_SESSION_EFFECT_AUTHORITIES).optional()
+})
 
 /** Clients may only author user turns. Accepting an assistant or tool role here
  *  would let one client write words into the agent's mouth in another's

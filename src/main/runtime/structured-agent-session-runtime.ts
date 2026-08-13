@@ -120,9 +120,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   let homeIsolation: CodexStructuredHomeIsolation | null = null
   try {
     if (writeAuthority) {
-      if (!deps.resolveCodexStructuredWriteSourceHome) {
-        throw new Error('structured writer has no host-owned credential source provider')
-      }
       homeIsolation = await CodexStructuredHomeIsolation.open(
         join(deps.stateDirectory, 'codex-structured-homes')
       )
@@ -132,10 +129,16 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       resolveLaunch: createCodexStructuredLaunchResolver({
         store,
         resolveWorkspacePath: deps.resolveWorkspacePath,
-        localStructuredWriteOnly: writeAuthority !== undefined,
-        ...(deps.resolveCodexStructuredWriteSourceHome
-          ? { resolveStructuredWriteSourceHome: deps.resolveCodexStructuredWriteSourceHome }
-          : {}),
+        structuredWriteEnabled: writeAuthority !== undefined,
+        resolveStructuredWriteSourceHome:
+          deps.resolveCodexStructuredWriteSourceHome ??
+          ((sessionId) => {
+            const record = store.getRecord(sessionId)
+            if (!record || record.effectIsolation !== 'local-structured-write') {
+              throw new Error('structured writer has no host-pinned credential source')
+            }
+            return record.accountHome.path
+          }),
         ...(structuredHomeIsolation
           ? {
               prepareStructuredWriteHome: (sessionId, sourceHome) =>

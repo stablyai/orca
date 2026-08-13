@@ -12,6 +12,11 @@ import {
   type CodexStructuredWriteLease
 } from './codex-structured-write-types'
 import { CodexStructuredWriteReceiptEmitter } from './codex-structured-write-receipts'
+import {
+  notificationCompletesStructuredWriteTurn,
+  structuredWriteItemKey,
+  type CodexStructuredWriteTurn
+} from './codex-structured-write-turn-lifecycle'
 
 export type { CodexStructuredFileManifestEntry } from './codex-structured-write-manifest'
 export { digestRequest, LOCAL_STRUCTURED_WRITE_EFFECT }
@@ -129,6 +134,12 @@ export class CodexStructuredWriteAuthority {
   }
 
   observeNotification(sessionId: string, method: string, params: unknown): void {
+    if (method === 'turn/completed') {
+      if (notificationCompletesStructuredWriteTurn(this.activeTurn(sessionId), params)) {
+        this.revokeTurn(sessionId)
+      }
+      return
+    }
     if (method === 'item/started') {
       const record = asRecord(params)
       const item = asRecord(record.item)
@@ -141,7 +152,7 @@ export class CodexStructuredWriteAuthority {
       if (!threadId || !turnId || !changes) {
         return
       }
-      this.fileChanges.set(this.itemKey(sessionId, item.id), {
+      this.fileChanges.set(structuredWriteItemKey(sessionId, item.id), {
         sessionId,
         threadId,
         turnId,
@@ -181,7 +192,9 @@ export class CodexStructuredWriteAuthority {
     const threadId = readString(request, 'threadId')
     const turnId = readString(request, 'turnId')
     const lease = this.leases.get(sessionId)
-    const observed = itemId ? this.fileChanges.get(this.itemKey(sessionId, itemId)) : undefined
+    const observed = itemId
+      ? this.fileChanges.get(structuredWriteItemKey(sessionId, itemId))
+      : undefined
     if (!lease || !observed || !itemId || !threadId || !turnId) {
       return { handled: true, result: { decision: 'decline' } }
     }
@@ -218,10 +231,11 @@ export class CodexStructuredWriteAuthority {
     this.revokeTurn(sessionId)
   }
 
-  invalidateForNewTurn(sessionId: string): void {
-    this.requireRoot(sessionId)
-    this.epochs.set(sessionId, (this.epochs.get(sessionId) ?? 0) + 1)
-    this.revokeTurn(sessionId)
+  activeTurn(sessionId: string): CodexStructuredWriteTurn | null {
+    const lease = this.leases.get(sessionId)
+    return lease && lease.state !== 'revoked' && lease.threadId && lease.turnId
+      ? { threadId: lease.threadId, turnId: lease.turnId }
+      : null
   }
 
   async flushReceipts(): Promise<void> {
@@ -237,7 +251,7 @@ export class CodexStructuredWriteAuthority {
     if (item.type !== 'fileChange' || typeof item.id !== 'string') {
       return
     }
-    const key = this.itemKey(sessionId, item.id)
+    const key = structuredWriteItemKey(sessionId, item.id)
     const observed = this.fileChanges.get(key)
     const threadId = readString(record, 'threadId')
     const turnId = readString(record, 'turnId')
@@ -291,10 +305,6 @@ export class CodexStructuredWriteAuthority {
   private trackCompletion(completion: Promise<void>): void {
     this.pendingCompletions.add(completion)
     void completion.finally(() => this.pendingCompletions.delete(completion))
-  }
-
-  private itemKey(sessionId: string, itemId: string): string {
-    return `${encodeURIComponent(sessionId)}:${encodeURIComponent(itemId)}`
   }
 }
 

@@ -44,6 +44,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
+import { cursorOf, itemsOf } from './structured-agent-session-integration-test-helpers'
 
 const SESSION = 'session-integration-1'
 const THREAD = 'thread-integration'
@@ -469,7 +470,7 @@ describe('a structured codex session over agentSession.*', () => {
     )
     expect(sent.submission).toMatchObject({
       dispatchState: 'rejected',
-      reason: 'local structured write is not enabled on this execution host'
+      reason: 'local structured write requires a dedicated writer session'
     })
     const remote = await call(
       'agentSession.send',
@@ -896,33 +897,3 @@ describe('a structured codex session over agentSession.*', () => {
     ).toBe(false)
   })
 })
-
-/** Every item the subscription has published, latest revision per id. */
-function itemsOf(frames: AgentSessionSubscribeEvent[]): AgentJournalRenderItem[] {
-  const items = new Map<string, AgentJournalRenderItem>()
-  for (const frame of frames) {
-    const published =
-      frame.type === 'snapshot' || frame.type === 'reset'
-        ? frame.snapshot.items
-        : frame.type === 'batch'
-          ? frame.batch.items
-          : []
-    for (const item of published) {
-      items.set(item.itemId, item)
-    }
-  }
-  return [...items.values()]
-}
-
-function cursorOf(frames: AgentSessionSubscribeEvent[]): { epoch: string; sequence: number } {
-  for (let index = frames.length - 1; index >= 0; index -= 1) {
-    const frame = frames[index] as AgentSessionSubscribeEvent
-    if (frame.type === 'batch') {
-      return frame.batch.cursor
-    }
-    if (frame.type === 'snapshot' || frame.type === 'reset') {
-      return frame.snapshot.cursor
-    }
-  }
-  throw new Error('subscription published no cursor')
-}

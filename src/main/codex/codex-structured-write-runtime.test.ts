@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCodexStructuredWriteAuthority } from './codex-structured-write-runtime'
+import {
+  createCodexStructuredWriteAuthority,
+  isCodexStructuredWriteEnabled
+} from './codex-structured-write-runtime'
 
 const roots: string[] = []
 
@@ -27,6 +30,12 @@ function fixture(): { state: string; worktree: string } {
 }
 
 describe('createCodexStructuredWriteAuthority', () => {
+  it('is production-enabled by default with an explicit fail-closed rollback switch', () => {
+    expect(isCodexStructuredWriteEnabled(undefined)).toBe(true)
+    expect(isCodexStructuredWriteEnabled('1')).toBe(true)
+    expect(isCodexStructuredWriteEnabled('0')).toBe(false)
+  })
+
   it('requires host request authority and refuses the same admitted turn after restart', async () => {
     const { state, worktree } = fixture()
     const first = await createCodexStructuredWriteAuthority({ stateDirectory: state })

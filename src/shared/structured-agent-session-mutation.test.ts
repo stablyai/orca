@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   showStructuredAgentSessionChoice,
+  structuredAgentSessionCreateFingerprint,
   structuredAgentSessionPayloadFingerprint
 } from './structured-agent-session-mutation'
 
@@ -50,5 +51,19 @@ describe('structured agent session client mutations', () => {
 
     expect(first).toBe(second)
     expect(first).toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('binds writer creation authority into the durable create fingerprint', () => {
+    const plain = structuredAgentSessionCreateFingerprint({
+      sessionId: 'session-1',
+      worktree: 'id:workspace-1'
+    })
+    const writer = structuredAgentSessionCreateFingerprint({
+      sessionId: 'session-1',
+      worktree: 'id:workspace-1',
+      effectAuthority: 'local_structured_write'
+    })
+
+    expect(writer).not.toBe(plain)
   })
 })

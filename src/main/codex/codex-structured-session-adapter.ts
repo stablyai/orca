@@ -36,7 +36,9 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   private readonly control: CodexStructuredSessionControl
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
-    this.control = new CodexStructuredSessionControl(this.sessions, deps)
+    this.control = new CodexStructuredSessionControl(this.sessions, deps, (sessionId) =>
+      this.closeSession(sessionId)
+    )
   }
 
   supportsLocation = supportsCodexStructuredLocation
@@ -71,17 +73,23 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         this.deps.releaseStructuredWriteHome
       )
       this.acquisitions.assertCurrent(sessionId, attempt)
-      if (this.deps.writeAuthority && !this.deps.releaseStructuredWriteHome) {
-        throw new AgentSessionPreSpawnError(
-          new Error('structured write authority requires an isolated-home release provider')
-        )
-      }
       const launch = await this.deps
         .resolveLaunch({ identity: input.identity })
         .catch((error: unknown) => {
           throw new AgentSessionPreSpawnError(error)
         })
-      if (this.deps.writeAuthority) {
+      const structuredWriter = launch.effectIsolation === 'local-structured-write'
+      if (structuredWriter) {
+        if (!this.deps.writeAuthority) {
+          throw new AgentSessionPreSpawnError(
+            new Error('effect-isolated Codex launch has no structured write authority')
+          )
+        }
+        if (!this.deps.releaseStructuredWriteHome) {
+          throw new AgentSessionPreSpawnError(
+            new Error('structured write authority requires an isolated-home release provider')
+          )
+        }
         // The resolver may already have created this home. Track it before
         // validating the rest of the launch so every fail-closed branch reaps it.
         unpublishedIsolatedHome = launch.isolatedHomePath ?? null
@@ -165,7 +173,8 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         reportedOptions: reportedCodexThreadOptions(opened),
         turnIdWaiters: [],
         translator,
-        isolatedHomePath: launch.isolatedHomePath ?? null
+        isolatedHomePath: launch.isolatedHomePath ?? null,
+        effectIsolation: launch.effectIsolation ?? null
       })
       unpublishedIsolatedHome = null
       for (const event of acquisition.drain()) {

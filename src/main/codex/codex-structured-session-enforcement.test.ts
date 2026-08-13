@@ -8,6 +8,7 @@ import type {
   CodexAppServerConnectionHandlers,
   openCodexAppServerConnection
 } from './codex-app-server-connection'
+import { CodexAppServerUnsupportedError } from './codex-app-server-session'
 import { CodexStructuredSessionAdapter } from './codex-structured-session-adapter'
 import {
   CodexStructuredWriteAuthority,
@@ -224,9 +225,11 @@ describe('Codex structured local-writer enforcement', () => {
     await adapter.closeAll()
   })
 
-  it('fails before spawning when the launch is not effect-isolated', async () => {
+  it('leaves normal sessions unchanged when writer support is installed', async () => {
     const root = linkedWorktree()
     const codex = fakeCodex()
+    const gate = authority([])
+    const revokePendingTurn = vi.spyOn(gate, 'revokePendingTurn')
     const adapter = new CodexStructuredSessionAdapter({
       resolveLaunch: async () => ({
         command: 'codex',
@@ -236,14 +239,146 @@ describe('Codex structured local-writer enforcement', () => {
         resumeThreadId: null
       }),
       openConnection: codex.openConnection,
-      writeAuthority: authority([]),
+      writeAuthority: gate,
       releaseStructuredWriteHome: async () => {}
     })
 
     await expect(
       adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
-    ).rejects.toThrow('effect-isolated Codex launch')
-    expect(codex.connections).toHaveLength(0)
+    ).resolves.toBeDefined()
+    expect(codex.connections).toHaveLength(1)
+    await expect(
+      adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId: 'client-normal',
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'write' }]
+        },
+        fence: 7,
+        requestAuthority: {
+          effectAuthority: 'local_structured_write',
+          requestReceiptId: 'a'.repeat(64)
+        }
+      })
+    ).resolves.toMatchObject({
+      state: 'rejected',
+      reason: 'local structured write requires a dedicated writer session'
+    })
+    await expect(
+      adapter.cancelTurn({ sessionId: SESSION, turnId: TURN, fence: 7 })
+    ).resolves.toEqual({ cancelled: true })
+    expect(revokePendingTurn).not.toHaveBeenCalled()
+    await adapter.closeAll()
+  })
+
+  it('interrupts the active writer turn before admitting a replacement turn', async () => {
+    const root = linkedWorktree()
+    const codex = fakeCodex()
+    const adapter = new CodexStructuredSessionAdapter({
+      resolveLaunch: async () => ({
+        command: 'codex',
+        args: ['app-server'],
+        cwd: root,
+        codexHome: root,
+        resumeThreadId: null,
+        effectIsolation: 'local-structured-write',
+        isolatedHomePath: root
+      }),
+      openConnection: codex.openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000,
+      writeAuthority: authority([]),
+      releaseStructuredWriteHome: async () => {}
+    })
+    await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'first write' }]
+    }
+    await adapter.dispatch({ sessionId: SESSION, clientMessageId: 'client-1', body, fence: 7 })
+    const connection = codex.connections[0]
+    const request = connection.request
+    connection.request = async (method, params, options) => {
+      const result = await request(method, params, options)
+      if (method === 'turn/interrupt') {
+        connection.handlers.onNotification?.('turn/completed', {
+          threadId: THREAD,
+          turn: { id: TURN, status: 'interrupted' }
+        })
+      }
+      return result
+    }
+    await adapter.dispatch({
+      sessionId: SESSION,
+      clientMessageId: 'client-2',
+      body: { ...body, blocks: [{ type: 'text', text: 'stop and do this instead' }] },
+      fence: 7
+    })
+
+    const turnCalls = codex.connections[0].calls.filter(({ method }) => method.startsWith('turn/'))
+    expect(turnCalls.map(({ method }) => method)).toEqual([
+      'turn/start',
+      'turn/interrupt',
+      'turn/start'
+    ])
+    expect(turnCalls[1]).toMatchObject({
+      params: { threadId: THREAD, turnId: TURN }
+    })
+    await adapter.closeAll()
+  })
+
+  it('closes the writer session when the active mutation turn cannot be interrupted', async () => {
+    const root = linkedWorktree()
+    const codex = fakeCodex()
+    const gate = authority([])
+    const adapter = new CodexStructuredSessionAdapter({
+      resolveLaunch: async () => ({
+        command: 'codex',
+        args: ['app-server'],
+        cwd: root,
+        codexHome: root,
+        resumeThreadId: null,
+        effectIsolation: 'local-structured-write',
+        isolatedHomePath: root
+      }),
+      openConnection: codex.openConnection,
+      readProcessStartTime: async () => 1_700_000_000_000,
+      writeAuthority: gate,
+      releaseStructuredWriteHome: async () => {}
+    })
+    await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-1' })
+    const body = {
+      kind: 'message' as const,
+      role: 'user' as const,
+      blocks: [{ type: 'text' as const, text: 'first write' }]
+    }
+    await adapter.dispatch({ sessionId: SESSION, clientMessageId: 'client-1', body, fence: 7 })
+    const connection = codex.connections[0]
+    const request = connection.request
+    connection.request = async (method, params, options) => {
+      if (method === 'turn/interrupt') {
+        throw new CodexAppServerUnsupportedError('turn/interrupt is unavailable')
+      }
+      return request(method, params, options)
+    }
+
+    await expect(
+      adapter.dispatch({
+        sessionId: SESSION,
+        clientMessageId: 'client-2',
+        body: { ...body, blocks: [{ type: 'text', text: 'replace the request' }] },
+        fence: 7
+      })
+    ).resolves.toEqual({
+      state: 'rejected',
+      reason: 'the previous writer turn could not be stopped; the writer session was closed'
+    })
+    expect(connection.closed).toBe(true)
+    await expect(
+      gate.openTurn({ sessionId: SESSION, clientMessageId: 'client-3', body, fence: 7 })
+    ).rejects.toThrow('no host-selected writable worktree')
   })
 
   it('snapshots the exact request before host admission can yield', async () => {

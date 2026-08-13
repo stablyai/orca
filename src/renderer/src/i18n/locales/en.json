@@ -3067,7 +3067,10 @@
             "8dea9b5cdf": "No enabled agents",
             "f378201fbd": "Could not create chat session",
             "a847779775": "Start Codex without a terminal",
-            "0ea6a78efb": "Chat session"
+            "0ea6a78efb": "Chat session",
+            "writerCreateFailed": "Could not create writer session",
+            "writerTitle": "Start an isolated Codex writer for this worktree",
+            "writerLabel": "Writer session"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "Switch Tab",
@@ -15081,6 +15084,7 @@
         "localAttachmentUnsupported": "Local attachments are not available for remote sessions.",
         "removeAttachment": "Remove attachment",
         "pastedImageLabel": "Pasted image",
+        "editSourceChangeRequired": "/edit requires a source-change request.",
         "imagePasteFailed": "Image paste failed.",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
         "uploadingAttachments": "Uploading {{value0}} file(s) to remote…",
@@ -15119,6 +15123,7 @@
       "status": {
         "responding": "Agent is responding"
       },
+      "providerFrameBytes": "· {{value0}} bytes",
       "handoff": {
         "mode": {
           "switching": "Switching",

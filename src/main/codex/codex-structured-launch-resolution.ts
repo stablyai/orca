@@ -84,7 +84,8 @@ export type CodexStructuredLaunchResolverDeps = {
   /** Overridden in tests; production scans PATH and version-manager dirs. */
   resolveCommand?: () => string
   canonicalizePath?: (path: string) => Promise<string>
-  localStructuredWriteOnly?: boolean
+  /** Enables records explicitly pinned to the local structured-writer boundary. */
+  structuredWriteEnabled?: boolean
   resolveStructuredWriteSourceHome?: (sessionId: string) => Promise<string> | string
   prepareStructuredWriteHome?: (sessionId: string, sourceHome: string) => Promise<string>
 }
@@ -113,7 +114,11 @@ export function createCodexStructuredLaunchResolver(
       throw new Error(`codex sessions pin CODEX_HOME, not ${accountHome.variable}`)
     }
     const command = (deps.resolveCommand ?? resolveCodexCommand)()
-    const appServerArgs = deps.localStructuredWriteOnly
+    const localStructuredWriteOnly = record.effectIsolation === 'local-structured-write'
+    if (localStructuredWriteOnly && !deps.structuredWriteEnabled) {
+      throw new Error('structured writer is not enabled on this execution host')
+    }
+    const appServerArgs = localStructuredWriteOnly
       ? [...CODEX_LOCAL_STRUCTURED_WRITE_ARGS]
       : CODEX_APP_SERVER_ARGS
     const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, appServerArgs)
@@ -121,12 +126,9 @@ export function createCodexStructuredLaunchResolver(
     // stale workspace must fail without leaving a secret-bearing temp home.
     const cwd = await deps.resolveWorkspacePath(location.workspaceId)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    if (deps.localStructuredWriteOnly && head) {
-      throw new Error('structured writer cannot resume a thread whose effect isolation is unknown')
-    }
     let codexHome = accountHome.path
     let isolatedHomePath: string | undefined
-    if (deps.localStructuredWriteOnly) {
+    if (localStructuredWriteOnly) {
       if (!deps.resolveStructuredWriteSourceHome) {
         throw new Error('structured writer has no host-owned credential source provider')
       }
@@ -150,7 +152,7 @@ export function createCodexStructuredLaunchResolver(
       // An empty chain is a session that has never proved a thread, so it
       // starts one; anything else resumes the last link this session proved.
       resumeThreadId: head?.handle.provider === 'codex' ? head.handle.threadId : null,
-      ...(deps.localStructuredWriteOnly
+      ...(localStructuredWriteOnly
         ? { effectIsolation: 'local-structured-write' as const, isolatedHomePath }
         : {})
     }

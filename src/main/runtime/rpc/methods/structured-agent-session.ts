@@ -125,7 +125,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
       if (!supportsStructuredSessions(ctx)) {
         throw new Error('structured_agent_session_unsupported')
       }
-      return ctx.runtime.getStructuredAgentSessionCreateSupport(params.worktree, params.agent)
+      assertLocalEffectAuthority(ctx, params.effectAuthority)
+      return ctx.runtime.getStructuredAgentSessionCreateSupport(
+        params.worktree,
+        params.agent,
+        params.effectAuthority
+      )
     }
   }),
   defineMethod({
@@ -137,10 +142,15 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
         throw new Error('agent_session_operation_invalid')
       }
       if ('worktree' in params) {
+        assertLocalEffectAuthority(ctx, params.effectAuthority)
         const intentFingerprint = computeAgentSessionPayloadFingerprint({
           method: 'agentSession.create',
           sessionId: params.envelope.sessionId,
-          fields: { worktree: params.worktree, agent: params.agent }
+          fields: {
+            worktree: params.worktree,
+            agent: params.agent,
+            effectAuthority: params.effectAuthority
+          }
         })
         const conflict = agentSessionFingerprintConflict(params.envelope, intentFingerprint)
         if (conflict) {
@@ -155,6 +165,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS: RpcAnyMethod[] = [
             provider: resolved.provider,
             agent: resolved.agent,
             accountHome: resolved.accountHome,
+            effectIsolation: resolved.effectIsolation,
             runtimeKind: resolved.runtimeKind,
             expectedRuntimeFence: null
           }

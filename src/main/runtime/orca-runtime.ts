@@ -9130,8 +9130,7 @@ export class OrcaRuntimeService {
         (await this.resolveRuntimeFileTarget(`id:${workspaceId}`)).worktree.path,
       ...(this.codexStructuredWriteAuthority
         ? {
-            codexStructuredWriteAuthority: this.codexStructuredWriteAuthority,
-            resolveCodexStructuredWriteSourceHome: () => getSystemCodexHomePath()
+            codexStructuredWriteAuthority: this.codexStructuredWriteAuthority
           }
         : {}),
       ...(this.codexStructuredWriteEnabled ? { codexStructuredWriteEnabled: true } : {}),
@@ -9716,10 +9715,18 @@ export class OrcaRuntimeService {
 
   async getStructuredAgentSessionCreateSupport(
     worktreeSelector: string,
-    agent: 'codex'
-  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' }> {
+    agent: 'codex',
+    effectAuthority?: 'local_structured_write'
+  ): Promise<{ supported: boolean; reason?: 'agent' | 'remote' | 'wsl' | 'effect' }> {
     if (agent !== 'codex') {
       return { supported: false, reason: 'agent' }
+    }
+    if (
+      effectAuthority &&
+      !this.codexStructuredWriteEnabled &&
+      !this.codexStructuredWriteAuthority
+    ) {
+      return { supported: false, reason: 'effect' }
     }
     const location = await this.resolveStructuredAgentSessionLocation(worktreeSelector)
     await this.ensureStructuredAgentSessionHost()
@@ -9762,8 +9769,13 @@ export class OrcaRuntimeService {
     envelope: { sessionId: string; clientOperationId: string }
     worktree: string
     agent: 'codex'
+    effectAuthority?: 'local_structured_write'
   }): Promise<AgentSessionAttachParams> {
-    const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
+    const support = await this.getStructuredAgentSessionCreateSupport(
+      input.worktree,
+      input.agent,
+      input.effectAuthority
+    )
     if (!support.supported) {
       throw new Error('structured_agent_session_unsupported')
     }
@@ -9792,6 +9804,7 @@ export class OrcaRuntimeService {
             : configuredHome?.trim()) ||
           getSystemCodexHomePath()
       },
+      ...(input.effectAuthority ? { effectIsolation: 'local-structured-write' as const } : {}),
       runtimeKind: 'native'
     }
   }

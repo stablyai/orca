@@ -27,6 +27,7 @@ import {
   deliverCodexUnhandledFrame
 } from './codex-structured-provider-events'
 import { dispatchCodexTurn, isCodexTurnOptionKey } from './codex-structured-turn-start'
+import { waitForStructuredWriteTurnEnd } from './codex-structured-write-turn-lifecycle'
 
 const MAX_STRUCTURED_WRITE_REQUEST_BYTES = 1024 * 1024
 
@@ -34,7 +35,8 @@ const MAX_STRUCTURED_WRITE_REQUEST_BYTES = 1024 * 1024
 export class CodexStructuredSessionControl {
   constructor(
     private readonly sessions: Map<string, CodexSession>,
-    private readonly deps: CodexStructuredSessionAdapterDeps
+    private readonly deps: CodexStructuredSessionAdapterDeps,
+    private readonly terminateSession: (sessionId: string) => Promise<void>
   ) {}
 
   handleNotification = (sessionId: string, method: string, params: unknown): void => {
@@ -42,7 +44,9 @@ export class CodexStructuredSessionControl {
     if (!session) {
       return
     }
-    this.deps.writeAuthority?.observeNotification(sessionId, method, params)
+    if (session.effectIsolation === 'local-structured-write') {
+      this.deps.writeAuthority?.observeNotification(sessionId, method, params)
+    }
     deliverCodexNotification(sessionId, session, method, params, (current, event) =>
       this.emit(current, event)
     )
@@ -56,7 +60,7 @@ export class CodexStructuredSessionControl {
     if (!session) {
       return
     }
-    if (this.deps.writeAuthority) {
+    if (session.effectIsolation === 'local-structured-write' && this.deps.writeAuthority) {
       const reviewed = await this.deps.writeAuthority.reviewServerRequest(
         sessionId,
         request.method,
@@ -103,11 +107,13 @@ export class CodexStructuredSessionControl {
       requestReceiptId: string
     }
   }): Promise<AgentSessionDispatchOutcome> => {
-    const authority = this.deps.writeAuthority
+    const session = this.session(input.sessionId)
+    const authority =
+      session.effectIsolation === 'local-structured-write' ? this.deps.writeAuthority : undefined
     if (input.requestAuthority && !authority) {
       return {
         state: 'rejected',
-        reason: 'local structured write is not enabled on this execution host'
+        reason: 'local structured write requires a dedicated writer session'
       }
     }
     let dispatchInput = input
@@ -115,16 +121,25 @@ export class CodexStructuredSessionControl {
       try {
         dispatchInput = snapshotStructuredWriterInput(input)
       } catch (error) {
-        authority.invalidateForNewTurn(input.sessionId)
+        authority.revokePendingTurn(input.sessionId)
         return {
           state: 'rejected',
           reason: error instanceof Error ? error.message : String(error)
         }
       }
     }
+    if (authority) {
+      const interrupted = await this.interruptActiveWriterTurn(input.sessionId, session, authority)
+      if (!interrupted) {
+        return {
+          state: 'rejected',
+          reason: 'the previous writer turn could not be stopped; the writer session was closed'
+        }
+      }
+    }
     const turnEpoch = authority ? await authority.openTurn(dispatchInput) : null
     const outcome = await dispatchCodexTurn(
-      this.session(dispatchInput.sessionId),
+      session,
       dispatchInput,
       this.deps.requestTimeoutMs,
       authority
@@ -159,7 +174,9 @@ export class CodexStructuredSessionControl {
     fence: number
   }): Promise<{ cancelled: boolean }> => {
     const session = this.session(input.sessionId)
-    this.deps.writeAuthority?.revokePendingTurn(input.sessionId)
+    if (session.effectIsolation === 'local-structured-write') {
+      this.deps.writeAuthority?.revokePendingTurn(input.sessionId)
+    }
     try {
       await session.connection.request(
         'turn/interrupt',
@@ -218,6 +235,45 @@ export class CodexStructuredSessionControl {
       throw new Error(`no live codex app-server for session ${sessionId}`)
     }
     return session
+  }
+
+  private async interruptActiveWriterTurn(
+    sessionId: string,
+    session: CodexSession,
+    authority: NonNullable<CodexStructuredSessionAdapterDeps['writeAuthority']>
+  ): Promise<boolean> {
+    const active = authority.activeTurn(sessionId)
+    if (!active) {
+      return true
+    }
+    try {
+      await session.connection.request(
+        'turn/interrupt',
+        { threadId: active.threadId, turnId: active.turnId },
+        { timeoutMs: this.deps.requestTimeoutMs }
+      )
+      if (
+        await waitForStructuredWriteTurnEnd(
+          () => authority.activeTurn(sessionId),
+          active,
+          this.deps.writerInterruptSettleTimeoutMs ?? 5_000
+        )
+      ) {
+        return true
+      }
+      authority.revokeSession(sessionId)
+      await this.terminateSession(sessionId).catch(() => undefined)
+      return false
+    } catch {
+      if (!authority.activeTurn(sessionId)) {
+        // A terminal notification can win the race with a refused interrupt.
+        // Only that provider evidence permits the replacement turn.
+        return true
+      }
+      authority.revokeSession(sessionId)
+      await this.terminateSession(sessionId).catch(() => undefined)
+      return false
+    }
   }
 }
 

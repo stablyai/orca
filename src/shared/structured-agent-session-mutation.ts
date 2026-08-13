@@ -42,11 +42,16 @@ export function structuredAgentSessionCreateFingerprint(input: {
   sessionId: string
   worktree: string
   agent?: 'codex'
+  effectAuthority?: 'local_structured_write'
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
     sessionId: input.sessionId,
-    fields: { worktree: input.worktree, agent: input.agent ?? 'codex' }
+    fields: {
+      worktree: input.worktree,
+      agent: input.agent ?? 'codex',
+      effectAuthority: input.effectAuthority
+    }
   })
 }
 
