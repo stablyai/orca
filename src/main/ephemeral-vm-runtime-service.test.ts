@@ -174,4 +174,44 @@ describe('ephemeral VM runtime service', () => {
     })
     expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
   })
+
+  it('destroys a provisioned resource when its checkout handshake is incompatible', async () => {
+    const userDataPath = makeDir('orca-ephemeral-vm-service-user-data-')
+    const repoPath = makeDir('orca-ephemeral-vm-service-repo-')
+    const startPath = join(repoPath, 'start.js')
+    const cleanupPath = join(repoPath, 'cleanup.js')
+    writeFileSync(
+      startPath,
+      `console.log(${JSON.stringify(
+        JSON.stringify({
+          schemaVersion: 1,
+          pairingCode: makePairingCode(),
+          projectRoot: '/workspace/repo'
+        })
+      )})`
+    )
+    writeFileSync(cleanupPath, "require('fs').writeFileSync('cleanup-ran.txt', 'yes')")
+
+    const provisioned = await provisionEphemeralVmRuntime({
+      userDataPath,
+      repoPath,
+      recipe: {
+        id: 'cloud-sandbox',
+        name: 'Cloud Sandbox',
+        checkoutMode: 'provisioned-root',
+        create: nodeCommand(startPath),
+        destroy: nodeCommand(cleanupPath)
+      }
+    })
+
+    expect(provisioned).toMatchObject({
+      ok: false,
+      start: {
+        error:
+          'Provisioned-root recipes must return schemaVersion 2 with checkoutMode "provisioned-root".'
+      }
+    })
+    expect(readFileSync(join(repoPath, 'cleanup-ran.txt'), 'utf8')).toBe('yes')
+    expect(listEphemeralVmRuntimes(userDataPath)).toEqual([])
+  })
 })

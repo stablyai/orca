@@ -114,6 +114,17 @@ export async function provisionEphemeralVmRuntime(
     onStderr: args.onStderr
   })
   if (!start.ok) {
+    if (start.recipeResult) {
+      await runEphemeralVmRecipeCleanup({
+        repoPath: args.repoPath,
+        recipe: args.recipe,
+        context: start.context,
+        recipeResult: start.recipeResult,
+        signal: args.signal,
+        onStdout: args.onStdout,
+        onStderr: args.onStderr
+      }).catch(() => undefined)
+    }
     return { ok: false, start }
   }
 

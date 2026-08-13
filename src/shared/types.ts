@@ -2218,10 +2218,13 @@ export type OrcaDefaultTabTemplate = {
   command?: string
 }
 
+export type EphemeralVmCheckoutMode = 'orca-worktree' | 'provisioned-root'
+
 export type OrcaVmRecipe = {
   id: string
   name: string
   create: string
+  checkoutMode?: EphemeralVmCheckoutMode
   description?: string
   suspend?: string
   resume?: string
