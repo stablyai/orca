@@ -5,7 +5,12 @@
  * sessions (see src/shared/agent-registry.ts for P0-1, the identity registry
  * this broker builds on). A message is always addressed by keyId — the same
  * identifier an agent uses to register itself in the registry.
+ *
+ * P1-1 adds a permission gate (src/shared/agent-consent-gate.ts) in front of
+ * delivery: the source's registered agentType must have been granted
+ * consent (src/shared/agent-consent.ts) to message the target's agentType.
  */
+import type { AgentConsentGateErrorCode } from './agent-consent-gate'
 
 /**
  * A single message routed through the broker.
@@ -65,19 +70,32 @@ export type AgentMessageSendRequest = {
 /**
  * Outcome of a send attempt.
  *
- * - 'delivered': the target is a live registered agent AND has at least one
- *   active in-process subscriber; the message was handed to every subscriber
- *   synchronously.
+ * - 'delivered': the target is a live registered agent, the source has been
+ *   granted consent (P1-1) to message the target's agentType, AND the
+ *   target has at least one active in-process subscriber; the message was
+ *   handed to every subscriber synchronously.
  * - 'target-not-found': targetKeyId is not a live entry in the P0-1 agent
  *   registry (never registered, unregistered, or TTL-expired). This is a
  *   routing-identity failure, independent of whether anyone is listening.
- * - 'target-not-subscribed': targetKeyId IS a live registered agent, but the
- *   broker currently has no subscriber for it (its process hasn't attached a
- *   listener, or attached one and has since detached). Distinguished from
- *   'target-not-found' because the caller may reasonably retry — the agent
- *   exists and may subscribe shortly.
+ * - 'permission-denied': the target exists, but the P1-1 consent gate
+ *   (src/shared/agent-consent-gate.ts) denied the send — either the source's
+ *   agentType was never granted consent to message the target's agentType
+ *   (deny-by-default), or it was explicitly denied. This also covers a
+ *   sourceKeyId that is not itself a live registered agent: with no
+ *   registry entry there is no agentType to resolve a decision for, which
+ *   the gate treats exactly like an unresolved decision — deny, not a free
+ *   pass.
+ * - 'target-not-subscribed': targetKeyId IS a live registered agent and the
+ *   send was permitted, but the broker currently has no subscriber for it
+ *   (its process hasn't attached a listener, or attached one and has since
+ *   detached). Distinguished from 'target-not-found' because the caller may
+ *   reasonably retry — the agent exists and may subscribe shortly.
  */
-export type AgentMessageDeliveryStatus = 'delivered' | 'target-not-found' | 'target-not-subscribed'
+export type AgentMessageDeliveryStatus =
+  | 'delivered'
+  | 'target-not-found'
+  | 'permission-denied'
+  | 'target-not-subscribed'
 
 /**
  * Result of a broker.send() call.
@@ -100,6 +118,17 @@ export type AgentMessageSendResult = {
    * Always 0 unless status === 'delivered'.
    */
   listenerCount: number
+
+  /**
+   * Present only when status === 'permission-denied'. Carries the P1-1
+   * gate's error code/message so a caller (and eventually a P1-2 consent
+   * UI) can distinguish "never asked" from "explicitly refused" without
+   * re-deriving it.
+   */
+  denial?: {
+    code: AgentConsentGateErrorCode
+    error: string
+  }
 }
 
 /**

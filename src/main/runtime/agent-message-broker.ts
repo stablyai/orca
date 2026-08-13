@@ -19,6 +19,26 @@
  * being used to message a keyId that never went through the identity
  * registry at all.
  *
+ * P1-1 adds a permission check between that registry lookup and delivery:
+ * send() resolves the *source*'s registered agentType (also via the P0-1
+ * registry — an unregistered source resolves to no agentType, which the
+ * gate treats as an unresolved decision), queries the P1-1 consent store
+ * (src/main/runtime/agent-consent-store.ts) for whether that agentType may
+ * message the target's agentType, and runs the result through the pure gate
+ * (src/shared/agent-consent-gate.ts). A denial short-circuits before the
+ * subscriber map is even consulted, reported as the new 'permission-denied'
+ * status rather than a thrown error — same "typed status, not an
+ * exception" philosophy the target-not-found/target-not-subscribed
+ * statuses already use.
+ *
+ * Ordering: target existence is still checked first (unchanged from P0-2) —
+ * a permission decision about a target that does not exist is meaningless,
+ * and target-not-found must stay a pure routing-identity signal independent
+ * of consent state. The consent gate then runs before the subscriber check,
+ * so a caller learns "you are not allowed to message this agent" rather
+ * than the weaker, misleading "nobody happens to be listening right now"
+ * for a send that would have been denied anyway.
+ *
  * Scope note (mirrors P0-1's documented scope discipline): this module only
  * provides the in-process subscribe/send primitive and its RPC send surface
  * (agent.message.send in rpc/methods/agent-message-broker.ts). It does not
@@ -38,7 +58,10 @@ import type {
   AgentMessageSendResult
 } from '../../shared/agent-message-broker'
 import { AGENT_MESSAGE_BROKER_CONFIG } from '../../shared/agent-message-broker'
+import type { AgentConsentQueryResult } from '../../shared/agent-consent'
+import { gateAgentMessageSend } from '../../shared/agent-consent-gate'
 import { getGlobalAgentRegistry } from './agent-registry'
+import { getGlobalAgentConsentStore } from './agent-consent-store'
 
 /**
  * In-memory message broker for live agent sessions.
@@ -95,11 +118,18 @@ export class AgentMessageBroker {
   /**
    * Send a message to `request.targetKeyId`.
    *
-   * Routing order matters: the registry check happens BEFORE the
-   * subscription check, so a keyId that was never registered (or expired)
-   * always reports 'target-not-found', even if something is coincidentally
-   * still subscribed under that same string (e.g. a listener that hasn't
-   * unsubscribed yet after its owner's registry entry expired).
+   * Routing order matters: the target registry check happens BEFORE the
+   * consent gate, which happens BEFORE the subscription check.
+   *
+   * - A keyId that was never registered (or expired) always reports
+   *   'target-not-found', even if something is coincidentally still
+   *   subscribed under that same string (e.g. a listener that hasn't
+   *   unsubscribed yet after its owner's registry entry expired).
+   * - Only once the target is known to exist does the P1-1 consent gate
+   *   run (see the class-level doc comment above for why source-not-found
+   *   also denies rather than bypassing the gate).
+   * - The subscriber check runs last, so a message the gate would have
+   *   denied never reports the weaker 'target-not-subscribed'.
    */
   send(request: AgentMessageSendRequest): AgentMessageSendResult {
     const message: AgentMessage = {
@@ -113,6 +143,28 @@ export class AgentMessageBroker {
     const target = getGlobalAgentRegistry().get(request.targetKeyId)
     if (!target) {
       return { status: 'target-not-found', message, listenerCount: 0 }
+    }
+
+    const source = getGlobalAgentRegistry().get(request.sourceKeyId)
+    // Why: an unregistered source has no agentType a consent decision could
+    // even be recorded against — treat it the same as "never decided"
+    // rather than special-casing it into either an allow or a distinct
+    // status. Deny-by-default applies equally to "we don't know who this
+    // is" as it does to "we know who this is but no one has said yes".
+    const consentDecision: AgentConsentQueryResult = source
+      ? getGlobalAgentConsentStore().query(source.agentType, target.agentType)
+      : 'unknown'
+    const gateResult = gateAgentMessageSend(
+      { decision: consentDecision },
+      { targetAgentType: target.agentType }
+    )
+    if (!gateResult.granted) {
+      return {
+        status: 'permission-denied',
+        message,
+        listenerCount: 0,
+        denial: { code: gateResult.code, error: gateResult.error }
+      }
     }
 
     const listeners = this.subscribers.get(request.targetKeyId)
