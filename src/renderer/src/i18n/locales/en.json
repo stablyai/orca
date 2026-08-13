@@ -937,8 +937,8 @@
         "dismiss": "Don't show again"
       },
       "useMacTccAttributionSeveredNotice": {
-        "title": "Terminal permissions may be broken after an Orca update",
-        "description": "The terminal daemon was started by a previous Orca install, so macOS may silently deny Accessibility, Automation, and some file access from terminals. Restart the daemon from Manage Sessions (running terminals will close).",
+        "title": "macOS permissions may not reach your terminals",
+        "description": "These terminals are running under a previous Orca installation, so macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions. Restart the daemon from Manage Sessions to restore access. Running terminals will close.",
         "openManageSessions": "Open Manage Sessions",
         "dismiss": "Dismiss"
       }
