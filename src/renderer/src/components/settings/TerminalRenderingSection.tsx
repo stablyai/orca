@@ -91,6 +91,71 @@ export function TerminalRenderingSection({
             }
           />
         </SearchableSetting>
+
+        <SearchableSetting
+          title={translate('auto.components.settings.TerminalPane.9a65e8871b', 'Font Smoothing')}
+          description={translate(
+            'auto.components.settings.TerminalPane.f770c58686',
+            'Anti-aliasing for terminal glyphs. Subpixel is closer to VS Code on light themes; Default inherits the app-wide grayscale smoothing.'
+          )}
+          keywords={[
+            'terminal',
+            'font',
+            'smoothing',
+            'antialiasing',
+            'antialiased',
+            'subpixel',
+            'rendering',
+            'glyph'
+          ]}
+        >
+          <SettingsRow
+            label={translate('auto.components.settings.TerminalPane.9a65e8871b', 'Font Smoothing')}
+            description={
+              settings.terminalFontSmoothing === 'subpixel'
+                ? translate(
+                    'auto.components.settings.TerminalPane.a8db93c1c8',
+                    'Browser-native subpixel smoothing; sharper on light themes, closer to VS Code.'
+                  )
+                : settings.terminalFontSmoothing === 'antialiased'
+                  ? translate(
+                      'auto.components.settings.TerminalPane.070d72021f',
+                      'Grayscale smoothing, pinned explicitly.'
+                    )
+                  : translate(
+                      'auto.components.settings.TerminalPane.eec52156ab',
+                      'Inherit the app-wide grayscale smoothing (default).'
+                    )
+            }
+            control={
+              <SettingsSegmentedControl
+                ariaLabel={translate(
+                  'auto.components.settings.TerminalPane.9a65e8871b',
+                  'Font Smoothing'
+                )}
+                value={settings.terminalFontSmoothing ?? 'default'}
+                onChange={(option) => updateSettings({ terminalFontSmoothing: option })}
+                options={[
+                  {
+                    value: 'default',
+                    label: translate('auto.components.settings.TerminalPane.4759ed5e7e', 'Default')
+                  },
+                  {
+                    value: 'antialiased',
+                    label: translate(
+                      'auto.components.settings.TerminalPane.2606e17fc0',
+                      'Antialiased'
+                    )
+                  },
+                  {
+                    value: 'subpixel',
+                    label: translate('auto.components.settings.TerminalPane.c023e28890', 'Subpixel')
+                  }
+                ]}
+              />
+            }
+          />
+        </SearchableSetting>
       </div>
     </section>
   )

@@ -1497,6 +1497,15 @@ function App(): React.JSX.Element {
     )
   }, [settings?.appFontFamily])
 
+  // Why: terminal font smoothing is a global (not per-pane) CSS toggle, so
+  // publish it once as a :root data attribute that terminal.css keys on.
+  useEffect(() => {
+    document.documentElement.setAttribute(
+      'data-terminal-font-smoothing',
+      settings?.terminalFontSmoothing ?? 'default'
+    )
+  }, [settings?.terminalFontSmoothing])
+
   // Refresh GitHub data (PR/issue status) when window regains focus
   useEffect(() => {
     const handler = (): void => {

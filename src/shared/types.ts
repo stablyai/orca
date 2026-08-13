@@ -2862,6 +2862,14 @@ export type GlobalSettings = {
    *  - 'on': always try xterm WebGL.
    *  - 'off': keep terminal rendering on xterm's DOM renderer. */
   terminalGpuAcceleration: 'auto' | 'on' | 'off'
+  /** Terminal glyph anti-aliasing mode.
+   *  - `'default'`: inherit the app-wide `-webkit-font-smoothing: antialiased`
+   *    (grayscale) — matches historical behavior, so existing users see no change.
+   *  - `'antialiased'`: explicitly pin grayscale smoothing.
+   *  - `'subpixel'`: macOS subpixel smoothing (`-webkit-font-smoothing: auto`).
+   *    On light terminal themes this renders closer to VS Code's terminal, which
+   *    keeps the browser-native subpixel path. Only affects `.xterm` glyphs. */
+  terminalFontSmoothing: 'default' | 'antialiased' | 'subpixel'
   /** Whether to enable programming-ligatures rendering via
    *  `@xterm/addon-ligatures`.
    *  - `'auto'` (default): enabled only when the configured font is known to
