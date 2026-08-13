@@ -1172,8 +1172,8 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/runtime-graph-reload-lifecycle.test.ts src/main/window/runtime-renderer-notification-sender.test.ts src/main/ipc/runtime.test.ts src/main/window/attach-main-window-services.test.ts src/main/runtime/orca-runtime.test.ts src/renderer/src/runtime/sync-runtime-graph-scheduling.test.ts src/renderer/src/runtime/sync-runtime-graph-payload-partition.test.ts",
         "pnpm exec electron-vite build --mode e2e",
-        "pnpm run test:e2e -- tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --workers=1",
-        "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
+        "SKIP_BUILD=1 pnpm exec playwright test e2e/renderer-crash-recovery-terminal-input.spec.ts tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "SKIP_BUILD=1 pnpm exec playwright test e2e/headless-serve-desktop-activation.spec.ts tests/e2e/headless-serve-desktop-activation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
         "src/main/runtime/runtime-graph-reload-lifecycle.test.ts",
@@ -1242,6 +1242,24 @@
           "result": "passed",
           "durationSeconds": 24,
           "summary": "Seven focused files passed with 1,154 tests and one pre-existing skip after the local rebase onto latest main. The suite covers exact reload settlement, timeout replacement, document and window authority, notification containment, preload IPC, and renderer publication scheduling."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test e2e/renderer-crash-recovery-terminal-input.spec.ts tests/e2e/renderer-crash-recovery-terminal-input.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18,
+          "summary": "Two forced renderer process deaths each produced a main-observed recovery load; the same daemon-backed PTY remained live through renderer transport and direct-write probes."
+        },
+        {
+          "date": "2026-08-13",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 pnpm exec playwright test e2e/headless-serve-desktop-activation.spec.ts tests/e2e/headless-serve-desktop-activation.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 10,
+          "summary": "The isolated headless serve owner promoted to a real renderer while preserving main owner, runtime, daemon, and PTY identity. Pre-promotion output remained visible and post-promotion terminal input/output succeeded; a full-window proof image records both markers."
         }
       ],
       "runtimeBudget": {
@@ -1250,7 +1268,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Fresh deterministic evidence is green; isolated Electron evidence and CI soak history are pending."
+        "evidence": "Fresh deterministic and two isolated Electron journeys are green; CI soak history is pending."
       },
       "redGreenEvidence": {
         "status": "complete",
@@ -1258,7 +1276,7 @@
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Pending the required delegated performance audit. The candidate adds one unref'd timer per active reload revision, one document-generation string on each already-coalesced local graph IPC, and constant-time generation/window comparisons; it adds no polling, subprocess, network request, remote frame, or steady-state fanout."
+        "evidence": "Fresh delegated audit passed with no blocking, major, or actionable minor findings. The candidate retains at most one unref'd timer, reuses the existing renderer document UUID, adds about 67 serialized bytes to each already-coalesced local graph IPC, and performs constant-time generation/window checks. It adds no polling, subprocess, network request, remote frame, provider scan, or steady-state fanout; a dedicated benchmark would measure existing graph/structured-clone noise rather than meaningful incremental work."
       },
       "promotionCriteria": [
         "Collect CI and soak history without unexplained flakes.",
