@@ -186,7 +186,7 @@ export function computeVisibleWorktreeIds(
   worktreesByRepo: Record<string, Worktree[]>,
   sortedIds: string[],
   opts: {
-    filterRepoIds: string[]
+    filterRepoIds: readonly string[]
     showSleepingWorkspaces: boolean
     tabsByWorktree: Record<string, Pick<TerminalTab, 'id'>[]> | null
     ptyIdsByTabId: Record<string, string[]> | null

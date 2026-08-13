@@ -4,10 +4,15 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../../../shared/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../shared/execution-host'
+import {
+  ALL_EXECUTION_HOSTS_SCOPE,
+  normalizeExecutionHostScope,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import { applyPublishedAiVaultList, EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
 import {
   aiVaultSessionResultCacheKey,
   cacheAiVaultSessionResult,
@@ -31,6 +36,12 @@ export const isAiVaultScanCancellation = isAiVaultScanCancelledError
 
 type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDepth?: boolean }
 
+// Mirrors how the main process routes the scan: this scope answers with a merge
+// of several hosts' legs rather than one scanner's result.
+function isMergedAiVaultHostScope(scope: ExecutionHostScope): boolean {
+  return normalizeExecutionHostScope(scope) === ALL_EXECUTION_HOSTS_SCOPE
+}
+
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
@@ -40,10 +51,10 @@ export function useAiVaultSessionRefresh(
   loading: boolean
   refresh: (args?: AiVaultRefreshArgs) => Promise<void>
   scanResult: AiVaultListResult | null
-  sessions: AiVaultSession[]
+  sessions: readonly AiVaultSession[]
 } {
-  const [sessions, setSessions] = useState<AiVaultSession[]>([])
   const [scanResult, setScanResult] = useState<AiVaultListResult | null>(null)
+  const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const requestTokenRef = useRef(crypto.randomUUID())
@@ -92,8 +103,7 @@ export function useAiVaultSessionRefresh(
         lastAppliedScanRef.current = { scopeKey: scanKey, scannedAt: cachedResult.scannedAt }
         setError(null)
         publicationGateRef.current.publish(cachedResult, (published) => {
-          setScanResult(published)
-          setSessions(published.sessions)
+          applyPublishedAiVaultList(published, setScanResult)
         })
         setLoading(false)
         return
@@ -145,7 +155,15 @@ export function useAiVaultSessionRefresh(
         }
         // A cache hit returns the snapshot already on screen; skip the state
         // updates so refocus flips don't force pointless re-renders.
+        // Single-host results carry one scanner's stamp minted when that scan
+        // finished, so an equal stamp does mean equal content. An 'all' result
+        // is a merge of legs on independent clocks stamped with the newest leg,
+        // so a lagging host's leg can change while the merged stamp stands
+        // still — there, only the structural reconcile below may decide.
+        // Normalized through the shared helper because that is what the main
+        // process routes on: an empty or unrecognized scope also merges.
         if (
+          !isMergedAiVaultHostScope(hostScope) &&
           lastAppliedScanRef.current?.scopeKey === scanKey &&
           lastAppliedScanRef.current.scannedAt === result.scannedAt
         ) {
@@ -161,8 +179,7 @@ export function useAiVaultSessionRefresh(
         })
         publicationGateRef.current.publish(result, (published) => {
           if (mountedRef.current && scanKey === currentScanScopeKey()) {
-            setScanResult(published)
-            setSessions(published.sessions)
+            applyPublishedAiVaultList(published, setScanResult)
           }
         })
       } catch (err) {

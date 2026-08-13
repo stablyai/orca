@@ -6,6 +6,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import type * as ShellReadyModule from './shell-ready'
 import { getZshShellReadyMarkerRegistrationBlock } from '../shell-templates'
 import { fishRequirementViolation, resolveFishBinary } from '../../shared/fish-binary-requirement'
+import {
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
+import { HeadlessEmulator } from './headless-emulator'
 
 async function importFreshShellReady(): Promise<typeof ShellReadyModule> {
   vi.resetModules()
@@ -258,10 +264,10 @@ describePosix('daemon shell-ready launch config', () => {
     expect(init).toContain('functions -e __orca_shell_ready_marker')
   })
 
-  it('keeps attribution-only fish spawns unwrapped', async () => {
-    const { getAttributionShellLaunchConfig } = await importFreshShellReady()
+  it('keeps markerless fish spawns unwrapped', async () => {
+    const { getMarkerlessShellLaunchConfig } = await importFreshShellReady()
 
-    const config = getAttributionShellLaunchConfig('/opt/homebrew/bin/fish')
+    const config = getMarkerlessShellLaunchConfig('/opt/homebrew/bin/fish')
 
     expect(config).toEqual({ args: null, env: {}, supportsReadyMarker: false })
   })
@@ -296,6 +302,8 @@ describePosix('daemon shell-ready launch config', () => {
           }
         })
         let output = ''
+        let scannedOutput = ''
+        const startupScanState = createShellStartupOutputScanState()
         let commandWritten = false
         let erasureProbeWritten = false
         let queryCarry = ''
@@ -321,6 +329,7 @@ describePosix('daemon shell-ready launch config', () => {
         }, 50)
         proc.onData((chunk) => {
           output += chunk
+          scannedOutput += scanShellStartupOutput(startupScanState, chunk).output
           // Why: fish stalls its first prompt 10s waiting on these and re-queries
           // each prompt, so answer every occurrence — an unanswered query makes
           // fish swallow the post-marker command as its reply.
@@ -350,9 +359,15 @@ describePosix('daemon shell-ready launch config', () => {
         clearTimeout(deadline)
         clearInterval(sentinelPoll)
         proc.kill()
+        scannedOutput += drainShellStartupOutputScanState(startupScanState)
 
         expect(output).toContain(SHELL_READY_MARKER_OUTPUT)
         expect(output.split(SHELL_READY_MARKER_OUTPUT)).toHaveLength(2)
+        expect(scannedOutput).toBe(output.replace(SHELL_READY_MARKER_OUTPUT, ''))
+        const rendered = new HeadlessEmulator({ cols: 80, rows: 24 })
+        expect(rendered.writeSync(scannedOutput)).toBe(true)
+        expect(rendered.getVisibleLines().join('\n')).not.toContain('[?2004h')
+        rendered.dispose()
         expect(existsSync(sentinel)).toBe(true)
         // Why: asserts the erase directly rather than inferring it from the marker
         // count, which only holds once enough prompts have been drawn to expose it.
@@ -462,6 +477,7 @@ describePosix('daemon shell-ready launch config', () => {
     const zshrc = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zshrc'), 'utf8')
     const zlogin = readFileSync(join(userDataPath, 'shell-ready', 'zsh', '.zlogin'), 'utf8')
     expect(zshenv).toContain('_orca_user_zdotdir="${_orca_spawn_orig_zdotdir:-$HOME}"')
+    expect(zshenv).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(zshenv).toContain('*/shell-ready/zsh) _orca_user_zdotdir="$HOME" ;;')
     expect(zshenv).toContain('""|*/shell-ready/zsh) export ORCA_ORIG_ZDOTDIR="$HOME" ;;')
     expectZdotdirSourceContext(zprofile, '.zprofile')
@@ -650,6 +666,7 @@ describePosix('daemon shell-ready launch config', () => {
     const bashRc = readFileSync(join(userDataPath, 'shell-ready', 'bash', 'rcfile'), 'utf8')
 
     expect(bashRc).toContain('printf "\\033]133;D;%s\\007"')
+    expect(bashRc).toContain('printf "\\033]777;orca-shell-start:%s\\007" "$$"')
     expect(bashRc).toContain('printf "\\033]133;C\\007"')
     // precmd is prepended (captures $? first), epilogue appended last, so a framework needing last position stays between them.
     expect(bashRc).toContain(

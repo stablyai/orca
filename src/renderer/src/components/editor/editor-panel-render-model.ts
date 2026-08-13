@@ -26,6 +26,7 @@ type EditorPanelRenderModelParams = {
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
   isChangesMode: boolean
+  canOpenWorkspaceFileBrowser: boolean
 }
 
 export function getEditorPanelRenderModel({
@@ -35,7 +36,8 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
-  isChangesMode
+  isChangesMode,
+  canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
     activeFile.mode === 'diff' &&
@@ -163,6 +165,7 @@ export function getEditorPanelRenderModel({
     // when the modified side still exists on disk (canOpen excludes deleted
     // files and commit diffs whose content may not match the working tree).
     canOpenPreviewToSide:
+      canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
     mdViewMode,

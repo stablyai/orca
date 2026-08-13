@@ -1,5 +1,6 @@
-import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
+import type { DashboardCard, DashboardWorkspace } from '../../../../shared/dashboard-snapshot'
 import type { AgentMapLayout, AgentMapStatusCounts } from './agent-map-layout'
+import { agentMapWorkspaceIdentity } from './agent-map-workspace-identity'
 import { agentMapDurationMinutes, agentMapNodeStatus } from './agent-map-node-metadata'
 
 function emptyStatusCounts(): AgentMapStatusCounts {
@@ -9,15 +10,25 @@ function emptyStatusCounts(): AgentMapStatusCounts {
 export function refreshAgentMapMetadata(
   geometry: AgentMapLayout,
   cards: DashboardCard[],
+  workspaces: DashboardWorkspace[],
   now: number
 ): AgentMapLayout {
   const cardsByPaneKey = new Map(cards.map((card) => [card.paneKey, card]))
+  const workspacesById = new Map(
+    workspaces.map((workspace) => [agentMapWorkspaceIdentity(workspace), workspace])
+  )
   const projects = geometry.projects.map((project) => {
     let projectName = project.name
     let agentCount = 0
     const worktrees = project.worktrees.map((worktree) => {
-      let worktreeName = worktree.name
-      let workspaceKind = worktree.workspaceKind
+      const workspace = workspacesById.get(worktree.id)
+      if (workspace) {
+        projectName = workspace.repoName
+      }
+      let worktreeName = workspace?.worktreeName ?? worktree.name
+      let workspaceKind = workspace?.workspaceKind ?? worktree.workspaceKind
+      let hostKind = workspace?.hostKind ?? worktree.hostKind
+      let hostLabel = workspace?.hostLabel ?? worktree.hostLabel
       const statusCounts = emptyStatusCounts()
       const agents = worktree.agents.flatMap((agent) => {
         const card = cardsByPaneKey.get(agent.card.paneKey)
@@ -27,6 +38,8 @@ export function refreshAgentMapMetadata(
         projectName = card.repoName
         worktreeName = card.worktreeName
         workspaceKind = card.workspaceKind ?? 'worktree'
+        hostKind = card.hostKind ?? hostKind
+        hostLabel = card.hostLabel ?? hostLabel
         agentCount += 1
         statusCounts[agentMapNodeStatus(card)] += 1
         return [
@@ -42,6 +55,8 @@ export function refreshAgentMapMetadata(
         ...worktree,
         name: worktreeName,
         workspaceKind,
+        hostKind,
+        hostLabel,
         agents,
         statusCounts,
         quiet: statusCounts.idle === agents.length

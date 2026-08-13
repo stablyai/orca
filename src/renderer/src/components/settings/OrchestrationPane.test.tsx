@@ -68,7 +68,6 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
         directoryPath: '/Users/test/.claude/skills/orchestration',
         skillFilePath: '/Users/test/.claude/skills/orchestration/SKILL.md',
         installed: true,
-        fileCount: 1,
         updatedAt: null
       }
     ],

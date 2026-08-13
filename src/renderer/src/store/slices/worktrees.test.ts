@@ -3187,6 +3187,71 @@ describe('fetchWorktrees', () => {
     expect(store.getState().sortEpoch).toBe(7)
   })
 
+  it('keeps remote lineage map identity when a cloned payload is unchanged', async () => {
+    const store = createTestStore()
+    const worktree = makeWorktree({
+      id: 'repo1::/remote/wt1',
+      repoId: 'repo1',
+      path: '/remote/wt1',
+      branch: 'refs/heads/remote',
+      hostId: 'runtime:env-1'
+    })
+    const lineage = makeLineage({
+      worktreeId: worktree.id,
+      parentWorktreeId: 'repo1::/remote/parent',
+      capture: { source: 'orchestration-context', confidence: 'explicit' },
+      taskId: 'task-42',
+      coordinatorHandle: 'coord-1'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+      parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+      childInstanceId: lineage.worktreeInstanceId,
+      parentInstanceId: lineage.parentWorktreeInstanceId,
+      origin: lineage.origin,
+      capture: lineage.capture,
+      taskId: lineage.taskId,
+      coordinatorHandle: lineage.coordinatorHandle,
+      createdAt: lineage.createdAt
+    })
+    const detected = makeDetectedResult('repo1', [worktree])
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [worktree] },
+      detectedWorktreesByRepo: { repo1: detected },
+      worktreeLineageById: { [lineage.worktreeId]: lineage },
+      workspaceLineageByChildKey: {
+        [workspaceLineage.childWorkspaceKey]: workspaceLineage
+      },
+      sortEpoch: 7
+    } as Partial<AppState>)
+    runtimeEnvironmentCall.mockImplementation(({ method }: RuntimeEnvironmentCallRequest) => {
+      const result =
+        method === 'worktree.lineageList'
+          ? structuredClone({
+              lineage: { [lineage.worktreeId]: lineage },
+              workspaceLineage: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+            })
+          : structuredClone(detected)
+      return Promise.resolve({
+        id: 'rpc-1',
+        ok: true,
+        result,
+        _meta: { runtimeId: 'runtime-remote' }
+      })
+    })
+    const before = store.getState()
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreeLineageById).toBe(before.worktreeLineageById)
+    expect(store.getState().workspaceLineageByChildKey).toBe(before.workspaceLineageByChildKey)
+    expect(store.getState().worktreeLineageById[lineage.worktreeId]).toBe(lineage)
+    expect(store.getState().workspaceLineageByChildKey[workspaceLineage.childWorkspaceKey]).toBe(
+      workspaceLineage
+    )
+  })
+
   it('defers remote lineage when a caller owns the final host refresh', async () => {
     const store = createTestStore()
     const worktree = makeWorktree({
@@ -3317,6 +3382,135 @@ describe('worktree lineage state', () => {
     expect(store.getState().workspaceLineageByChildKey).toEqual({
       [workspaceLineage.childWorkspaceKey]: workspaceLineage
     })
+  })
+
+  it('keeps lineage map and entry identity across a cloned no-op refresh', async () => {
+    const lineage = makeLineage({
+      capture: { source: 'orchestration-context', confidence: 'explicit' },
+      taskId: 'task-42',
+      coordinatorHandle: 'coord-1'
+    })
+    const workspaceLineage = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(lineage.worktreeId),
+      parentWorkspaceKey: worktreeWorkspaceKey(lineage.parentWorktreeId),
+      childInstanceId: lineage.worktreeInstanceId,
+      parentInstanceId: lineage.parentWorktreeInstanceId,
+      origin: lineage.origin,
+      capture: lineage.capture,
+      taskId: lineage.taskId,
+      coordinatorHandle: lineage.coordinatorHandle,
+      createdAt: lineage.createdAt
+    })
+    const store = createLocalLineageTestStore(lineage)
+    const payload = {
+      lineage: { [lineage.worktreeId]: lineage },
+      workspaceLineage: { [workspaceLineage.childWorkspaceKey]: workspaceLineage }
+    }
+    mockApi.worktrees.listLineage.mockImplementation(async () => structuredClone(payload))
+
+    await store.getState().fetchWorktreeLineage()
+    const afterFirst = store.getState()
+    const lineageById = afterFirst.worktreeLineageById
+    const workspaceByKey = afterFirst.workspaceLineageByChildKey
+    const lineageEntry = lineageById[lineage.worktreeId]
+    const workspaceEntry = workspaceByKey[workspaceLineage.childWorkspaceKey]
+    expect(lineageEntry).toEqual(lineage)
+    expect(lineageEntry).not.toBe(lineage)
+    const subscriber = vi.fn()
+    const unsubscribe = store.subscribe(subscriber)
+
+    await store.getState().fetchWorktreeLineage()
+    unsubscribe()
+
+    expect(store.getState().worktreeLineageById).toBe(lineageById)
+    expect(store.getState().workspaceLineageByChildKey).toBe(workspaceByKey)
+    expect(store.getState().worktreeLineageById[lineage.worktreeId]).toBe(lineageEntry)
+    expect(store.getState().workspaceLineageByChildKey[workspaceLineage.childWorkspaceKey]).toBe(
+      workspaceEntry
+    )
+    expect(subscriber).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.listLineage).toHaveBeenCalledTimes(2)
+  })
+
+  it('preserves other-host lineage row identity across a cloned same-host refresh', async () => {
+    const store = createTestStore()
+    const localWorktree = makeWorktree({
+      id: 'repo1::/local/child',
+      repoId: 'repo1',
+      hostId: LOCAL_EXECUTION_HOST_ID
+    })
+    const sshWorktree = makeWorktree({
+      id: 'repo2::/ssh/child',
+      repoId: 'repo2',
+      hostId: 'ssh:ssh-1'
+    })
+    const localLineage = makeLineage({
+      worktreeId: localWorktree.id,
+      parentWorktreeId: 'repo1::/local/parent',
+      capture: { source: 'orchestration-context', confidence: 'explicit' },
+      taskId: 'task-local',
+      coordinatorHandle: 'coord-local'
+    })
+    const sshLineage = makeLineage({
+      worktreeId: sshWorktree.id,
+      parentWorktreeId: 'repo2::/ssh/parent',
+      capture: { source: 'cwd-context', confidence: 'inferred' },
+      taskId: 'task-ssh',
+      coordinatorHandle: 'coord-ssh'
+    })
+    const localWorkspace = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(localWorktree.id),
+      parentWorkspaceKey: worktreeWorkspaceKey(localLineage.parentWorktreeId),
+      childInstanceId: localLineage.worktreeInstanceId,
+      parentInstanceId: localLineage.parentWorktreeInstanceId,
+      origin: localLineage.origin,
+      capture: localLineage.capture,
+      taskId: localLineage.taskId,
+      coordinatorHandle: localLineage.coordinatorHandle
+    })
+    const sshWorkspace = makeWorkspaceLineage({
+      childWorkspaceKey: worktreeWorkspaceKey(sshWorktree.id),
+      parentWorkspaceKey: worktreeWorkspaceKey(sshLineage.parentWorktreeId),
+      childInstanceId: sshLineage.worktreeInstanceId,
+      parentInstanceId: sshLineage.parentWorktreeInstanceId,
+      origin: sshLineage.origin,
+      capture: sshLineage.capture,
+      taskId: sshLineage.taskId,
+      coordinatorHandle: sshLineage.coordinatorHandle
+    })
+    store.setState({
+      worktreesByRepo: {
+        repo1: [localWorktree],
+        repo2: [sshWorktree]
+      },
+      worktreeLineageById: {
+        [localWorktree.id]: localLineage,
+        [sshWorktree.id]: sshLineage
+      },
+      workspaceLineageByChildKey: {
+        [localWorkspace.childWorkspaceKey]: localWorkspace,
+        [sshWorkspace.childWorkspaceKey]: sshWorkspace
+      }
+    } as Partial<AppState>)
+    const payload = {
+      lineage: { [localWorktree.id]: localLineage },
+      workspaceLineage: { [localWorkspace.childWorkspaceKey]: localWorkspace }
+    }
+    mockApi.worktrees.listLineage.mockImplementation(async () => structuredClone(payload))
+    const before = store.getState()
+
+    await store.getState().fetchWorktreeLineage()
+
+    expect(store.getState().worktreeLineageById).toBe(before.worktreeLineageById)
+    expect(store.getState().workspaceLineageByChildKey).toBe(before.workspaceLineageByChildKey)
+    expect(store.getState().worktreeLineageById[localWorktree.id]).toBe(localLineage)
+    expect(store.getState().worktreeLineageById[sshWorktree.id]).toBe(sshLineage)
+    expect(store.getState().workspaceLineageByChildKey[localWorkspace.childWorkspaceKey]).toBe(
+      localWorkspace
+    )
+    expect(store.getState().workspaceLineageByChildKey[sshWorkspace.childWorkspaceKey]).toBe(
+      sshWorkspace
+    )
   })
 
   it('clears workspace lineage on successful old-shape lineage refresh', async () => {

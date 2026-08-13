@@ -1,5 +1,7 @@
-import { createReadStream } from 'node:fs'
-import { open } from 'node:fs/promises'
+import {
+  openTranscriptReadStream,
+  readTranscriptSlice
+} from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { createAntigravitySessionResumeState } from './session-scanner-antigravity-parser'
 import { parseAgentSessionFile } from './session-scanner-agent-parser'
@@ -305,13 +307,8 @@ async function parseResumableCandidate(args: {
 // agent transcripts are append-only so that trade is accepted (worst case is
 // a stale vault row until the file is next truncated or the app restarts).
 async function endsWithNewlineAt(path: string, offset: number): Promise<boolean> {
-  const handle = await open(path, 'r')
-  try {
-    const { bytesRead, buffer } = await handle.read(Buffer.alloc(1), 0, 1, offset - 1)
-    return bytesRead === 1 && buffer[0] === NEWLINE_BYTE
-  } finally {
-    await handle.close()
-  }
+  const slice = await readTranscriptSlice(path, offset - 1, 1, 'scan')
+  return slice.length === 1 && slice[0] === NEWLINE_BYTE
 }
 
 type JsonlReadResult = {
@@ -336,7 +333,7 @@ async function consumeCompleteJsonlLines(args: {
   let remainderParts: Buffer[] = []
   let remainderLength = 0
 
-  const stream = createReadStream(args.path, { start: args.start })
+  const stream = openTranscriptReadStream(args.path, { start: args.start }, 'scan')
   for await (const chunk of stream as AsyncIterable<Buffer>) {
     bytesRead += chunk.length
     // Why check the chunk alone: the pieces held over are all mid-line, so none

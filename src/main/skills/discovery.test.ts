@@ -1,8 +1,8 @@
 import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import { buildSkillDiscoverySources, discoverSkills } from './discovery'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { buildSkillDiscoverySources, clearSkillRootScanCache, discoverSkills } from './discovery'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { Repo } from '../../shared/types'
 
@@ -17,6 +17,12 @@ function makeRepo(path: string, connectionId: string | null = null): Repo {
     connectionId
   }
 }
+
+beforeEach(() => {
+  // Roots are shared between scans for a few seconds; each case owns its own tree.
+  clearSkillRootScanCache()
+  vi.spyOn(console, 'info').mockImplementation(() => undefined)
+})
 
 describe('skill discovery', () => {
   it('discovers home and repo SKILL.md packages with provider metadata', async () => {

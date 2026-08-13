@@ -786,7 +786,7 @@
         "a9fb10afca": "Terminal",
         "5235c215ca": "Elige qué proveedores de tareas aparecen en la página Tareas y en la barra lateral.",
         "85f4fd7710": "Fuentes de tareas",
-        "ab4b21b58e": "Nombres de ramas, refs base, atribución y Git AI Author.",
+        "ab4b21b58e": "Nombres de rama, refs base y Git AI Author.",
         "09607cb0fe": "Git y Source Control",
         "33a5e1d597": "Conecta GitHub, GitLab, Linear y servicios de hosting de código.",
         "2b043783ef": "Integraciones",
@@ -2859,7 +2859,7 @@
             "removedBody": "El host SSH de este espacio de trabajo fue eliminado, por lo que ya no puede conectarse. Elimina el espacio de trabajo para limpiarlo — los archivos remotos permanecen intactos.",
             "removeWorkspaceButton": "Eliminar espacio de trabajo"
           },
-          "TerminalRemoteRuntimeReconnectBanner": {
+          "TerminalPaneDisconnectedBanner": {
             "retryingTitle": "Reconnecting to remote runtime",
             "disconnectedTitle": "Remote runtime disconnected",
             "retryingBody": "Orca will retry for up to one minute. This terminal will resume if the connection returns.",
@@ -3847,34 +3847,6 @@
         }
       },
       "skills": {
-        "SkillsPage": {
-          "cb142070b4": "Actualizar",
-          "984405683f": "Plugin",
-          "4d177feabd": "Incluido",
-          "aa59462502": "Repositorio",
-          "571c5818c1": "Inicio",
-          "0bc1379f4c": "Todas las fuentes",
-          "38e0951c3a": "Agent Skills",
-          "fb6bf60b52": "Claude",
-          "426be2aac6": "Codex",
-          "39b6998ddb": "Todos los proveedores",
-          "a68dee6a32": "Buscar skills",
-          "e46e162e2e": "de",
-          "b088e0785d": "Beta",
-          "f43ad6edf3": "Skills",
-          "7e828fb2c6": "Volver",
-          "ea72d6185b": "No se pudieron escanear los skills",
-          "dc4c3328ee": "Mostrar archivo",
-          "9963dff6d3": "No se encontró ninguna descripción.",
-          "995fde8337": "No se pudo mostrar el archivo del skill",
-          "ab5b777350": "Se comprobaron las carpetas de skills del home, del repositorio, incluidas y de plugins.",
-          "08a321a984": "Ajusta la búsqueda o los filtros.",
-          "4acd6d68ec": "No se encontraron skills",
-          "6a62a0168c": "No hay coincidencias",
-          "cd7893fbc1": "Escaneando skills",
-          "35b9a724a0": "Disponible",
-          "0c74e7ff34": "Instalado"
-        },
         "SkillFreshnessNudge": {
           "titleOne": "Una skill de Orca instalada está desactualizada",
           "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
@@ -4697,14 +4669,28 @@
           "bff3bdd00c": "Cambiar nombre del espacio de trabajo",
           "8df295a78d": "No se pudo cambiar el nombre del espacio de trabajo."
         },
+        "WorktreeVisibilityHelpPopover": {
+          "c41f2d7e90": "¿Qué worktrees se ocultan de forma predeterminada?",
+          "8db4e19a26": "Este ajuste nunca oculta los worktrees creados mediante Orca.",
+          "54a7c2f183": "En los repositorios recién añadidos, los worktrees creados manualmente o con otra herramienta se ocultan de forma predeterminada para evitar elementos inesperados en la barra lateral.",
+          "b9e0d43675": "«Mostrar siempre» incluye los worktrees ajenos a Orca actuales y futuros, incluidos los worktrees de agentes en .claude/worktrees/* y .gsd-workspaces/*. Cuando está desactivado, usa «Mostrar» abajo para añadir uno individualmente."
+        },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Worktrees que no son de Orca",
-          "f1f71b9f02": "Importar",
+          "f1f71b9f02": "Mostrar siempre",
           "759371df43": "Ocultar",
-          "25ddf19920": "{{value0}} disponible para importar",
+          "25ddf19920": "{{value0}} oculto actualmente",
           "8372e4bbd9": "{{value0}} mostrado actualmente",
           "5d02a5647f": "Oculto de la barra lateral",
-          "3e045d4cb8": "Mostrado en la barra lateral"
+          "3e045d4cb8": "Mostrado en la barra lateral",
+          "a3f19c07d2": "Comprobando…",
+          "b8d24e61f5": "No se pudieron listar los worktrees de este repositorio.",
+          "c5e70a93b1": "Reintentar",
+          "7d21c5e848": "Worktrees ocultos ({{value0}})",
+          "9b53f7a160": "Elige qué worktrees ocultos mostrar de forma individual.",
+          "2f80cd4b97": "Mostrando…",
+          "e64b81d3a9": "Mostrar",
+          "d40d436fc2": "No se pudo actualizar la visibilidad de los worktrees. Inténtalo de nuevo."
         },
         "add": {
           "repo": {
@@ -5979,14 +5965,6 @@
           "808f9a726e": "No se aplicará ningún prefijo"
         },
         "GitPane": {
-          "d2eede4c54": "Agrega la atribución de Orca a commits, PR e issues.",
-          "e02ea23a32": "Atribución de Orca",
-          "e71ce09c42": "orca",
-          "b9b5771bb1": "atribución",
-          "b5f534717a": "coautor",
-          "9838c921ed": "coautor",
-          "afada55042": "issue",
-          "b4ef5428a7": "pr",
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Encabezados actuales de límite de tasa REST de GitLab CLI cuando estén disponibles.",
@@ -6875,7 +6853,7 @@
           "3de4bbb841": "Terminal",
           "dd72ed437a": "Elige qué proveedores de tareas aparecen en la página Tareas y en la barra lateral.",
           "11faa2f7dd": "Fuentes de tareas",
-          "cfa34f4465": "Nombres de rama, refs base, atribución y Git AI Author.",
+          "cfa34f4465": "Nombres de rama, refs base y Git AI Author.",
           "70100f94c7": "Git y control de código fuente",
           "b07041697f": "Conecta GitHub, GitLab, Linear y servicios de alojamiento de código fuente.",
           "c9ca101a3b": "Integraciones",
@@ -8253,16 +8231,8 @@
         },
         "git": {
           "search": {
-            "61eab13403": "orca",
-            "1b93c1143c": "atribución",
-            "8461c908ae": "coautor",
-            "61f9f5d1fc": "coautor",
-            "af0a144bfb": "issue",
-            "6bdea421bb": "PR",
             "16f53f7323": "gh",
             "d088806071": "github",
-            "118c23484b": "Agrega la atribución de Orca a commits, PR e issues.",
-            "bc7d9f69ce": "Atribución de Orca",
             "40f9b815fd": "presupuesto API",
             "b7e52124c7": "límite de tasa",
             "ead733645f": "glab",
@@ -13647,9 +13617,7 @@
           "33741dd973": "Volver a carreras"
         },
         "AutomationSchedulePicker": {
-          "22359b186a": "mañana o tarde",
           "9e677335b0": "Minuto",
-          "6b802ecc99": "Hora",
           "d90981f766": "Tiempo",
           "6b914c5fbb": "Día",
           "233b8c94b6": "Cadencia",
@@ -13658,6 +13626,11 @@
           "57e83307d0": "Días laborables",
           "837d902bba": "Semanal",
           "ddba78647e": "Cron personalizado"
+        },
+        "AutomationTimeField": {
+          "39ec1383f6": "mañana o tarde",
+          "32a5e4e35e": "Minuto",
+          "aa593eb5e2": "Hora"
         },
         "AutomationSessionField": {
           "f3c76dce51": "Reutilizar",

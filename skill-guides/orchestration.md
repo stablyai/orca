@@ -195,7 +195,7 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --json
+orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
 
 `--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.

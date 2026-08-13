@@ -42,6 +42,8 @@ export function useTabBarCreateMenuController({
   resolvedGroupId,
   terminalOnly,
   mobileEmulatorEnabled,
+  managedBrowserCreationEnabled,
+  mobileEmulatorCreationEnabled,
   workspaceHasSimulatorTab,
   showWindowsShellMenu,
   projectRuntimeShellMenuMode,
@@ -60,6 +62,8 @@ export function useTabBarCreateMenuController({
   resolvedGroupId: string
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
+  managedBrowserCreationEnabled: boolean
+  mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
   showWindowsShellMenu: boolean
   projectRuntimeShellMenuMode: ReturnType<typeof getProjectRuntimeShellMenuMode>
@@ -155,14 +159,20 @@ export function useTabBarCreateMenuController({
       buildTabCreateMenuOptions({
         terminalOnly,
         windowsShellEntries,
-        hasNewBrowser: !terminalOnly,
+        hasNewBrowser: !terminalOnly && managedBrowserCreationEnabled,
         hasNewMarkdown: !terminalOnly && Boolean(onNewFileTab),
         hasOpenMarkdown: !terminalOnly && Boolean(onOpenFileTab),
-        hasSimulator: !terminalOnly && mobileEmulatorEnabled && Boolean(onNewSimulatorTab),
+        hasSimulator:
+          !terminalOnly &&
+          mobileEmulatorEnabled &&
+          mobileEmulatorCreationEnabled &&
+          Boolean(onNewSimulatorTab),
         simulatorIsGoTo: workspaceHasSimulatorTab
       }),
     [
       mobileEmulatorEnabled,
+      managedBrowserCreationEnabled,
+      mobileEmulatorCreationEnabled,
       onNewFileTab,
       onNewSimulatorTab,
       onOpenFileTab,

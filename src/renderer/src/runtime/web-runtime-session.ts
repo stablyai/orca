@@ -1,4 +1,5 @@
 /* eslint-disable max-lines */
+import { toast } from 'sonner'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type {
   BrowserTabCreateResult,
@@ -29,7 +30,7 @@ import type { TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
 import { createBrowserUuid } from '../lib/browser-uuid'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
-import { unwrapRuntimeRpcResult } from './runtime-rpc-client'
+import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId
@@ -67,11 +68,20 @@ import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
+  claimWebSessionBrowserPlacementGroupCleanup,
   forgetWebSessionBrowserPlacement,
-  isWebSessionBrowserPlacementGroupReserved,
+  markWebSessionBrowserPlacementGroupMaterialized,
   moveWebSessionBrowserPlacement,
-  recordWebSessionBrowserPlacement
+  recordWebSessionBrowserPlacement,
+  releaseWebSessionBrowserPlacementGroup
 } from './web-session-browser-placement'
+import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
+import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
+import {
+  pauseAfterE2eWebRuntimeBrowserCreate,
+  throwIfE2eWebRuntimeBrowserCapabilityUnavailable,
+  throwIfE2eWebRuntimeBrowserReconciliationFails
+} from './web-runtime-browser-creation-e2e-fault'
 
 export {
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -91,6 +101,22 @@ export function isWebRuntimeSessionActive(
 export type WebRuntimeTerminalCreateOutcome =
   | { status: 'created' }
   | { status: 'failed'; message: string }
+
+const DEFINITIVE_BROWSER_CREATE_FAILURE_CODES = [
+  'browser_error',
+  'capability_unsupported',
+  'invalid_argument',
+  'invalid_params',
+  'method_not_found',
+  'runtime_rpc_queue_overloaded',
+  'selector_ambiguous',
+  'selector_not_found',
+  'unauthorized'
+] as const
+
+function isDefinitiveBrowserCreateFailure(error: unknown): boolean {
+  return DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
+}
 
 const pendingWebRuntimeSplitMirrorTelemetry = new Map<string, Set<string>>()
 const WEB_RUNTIME_SPLIT_MIRROR_SUPPRESSION_TTL_MS = 30_000
@@ -454,26 +480,31 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const shouldSelectWorktree = args.selectWorktree !== false
   const provisionalPageId = createBrowserUuid()
-  if (args.clientTargetGroupId) {
-    recordWebSessionBrowserPlacement({
-      environmentId,
-      worktreeId: args.worktreeId,
-      remotePageId: provisionalPageId,
-      groupId: args.clientTargetGroupId
-    })
-  }
-  if (shouldSelectWorktree) {
-    selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
-  }
-  const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
-  const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
-  const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
-  const expectedCurrentLocalTabId = initialFocusState
-    ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
-    : null
   let unsubscribeFocusGuard = (): void => {}
   let guardedPageId = provisionalPageId
+  let createdPageId: string | null = null
+  let createAttempted = false
   try {
+    throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
+    assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
+    if (args.clientTargetGroupId) {
+      recordWebSessionBrowserPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        remotePageId: provisionalPageId,
+        groupId: args.clientTargetGroupId,
+        callerCreatedGroup: args.clientTargetGroupCreated
+      })
+    }
+    if (shouldSelectWorktree) {
+      selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
+    }
+    const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
+    const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
+    const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
+    const expectedCurrentLocalTabId = initialFocusState
+      ? resolveWebSessionVisibleTabId(initialFocusState, args.worktreeId)
+      : null
     if (shouldFocusOnCreate && matchesWebSessionIntentOwner(intentOwner)) {
       recordWebSessionFocusIntent(
         intentOwner,
@@ -506,6 +537,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         unsubscribeFocusGuard()
       })
     }
+    createAttempted = true
     const created = unwrapRuntimeRpcResult(
       (await callEnvironment({
         method: 'browser.tabCreate',
@@ -522,6 +554,8 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         timeoutMs: 15_000
       })) as RuntimeRpcResponse<BrowserTabCreateResult>
     )
+    createdPageId = created.browserPageId
+    await pauseAfterE2eWebRuntimeBrowserCreate(created.browserPageId)
     if (created.browserPageId !== provisionalPageId) {
       moveWebSessionBrowserPlacement({
         environmentId,
@@ -546,13 +580,33 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     try {
       await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
-        acceptCurrentSnapshot: true
+        acceptCurrentSnapshot: true,
+        afterCurrentInFlight: true,
+        errorMode: 'throw'
       })
     } catch (error) {
-      console.warn(
-        '[web-runtime-session] browser created but reconciliation failed:',
-        error instanceof Error ? error.message : String(error)
+      if (
+        !hasMaterializedWebRuntimeBrowserPage(
+          useAppStore.getState(),
+          environmentId,
+          args.worktreeId,
+          created.browserPageId,
+          args.clientTargetGroupId ?? args.targetGroupId
+        )
+      ) {
+        throw error
+      }
+    }
+    if (
+      !hasMaterializedWebRuntimeBrowserPage(
+        useAppStore.getState(),
+        environmentId,
+        args.worktreeId,
+        created.browserPageId,
+        args.clientTargetGroupId ?? args.targetGroupId
       )
+    ) {
+      throw new Error('The created browser tab did not materialize in the client.')
     }
     const remainingFocusIntent = shouldFocusOnCreate
       ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
@@ -564,26 +618,88 @@ export async function createWebRuntimeSessionBrowserTab(args: {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
     }
     unsubscribeFocusGuard()
-    return true
-  } catch (error) {
-    unsubscribeFocusGuard()
-    forgetWebSessionBrowserPlacement({
-      environmentId,
-      worktreeId: args.worktreeId,
-      remotePageId: provisionalPageId
-    })
-    if (shouldFocusOnCreate) {
-      clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, provisionalPageId)
-    }
-    if (args.clientTargetGroupId && args.clientTargetGroupCreated) {
-      const reserved = isWebSessionBrowserPlacementGroupReserved({
-        environmentId,
+    if (args.clientTargetGroupId) {
+      markWebSessionBrowserPlacementGroupMaterialized({
         worktreeId: args.worktreeId,
         groupId: args.clientTargetGroupId
       })
-      if (!reserved) {
-        useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
+    }
+    forgetWebSessionBrowserPlacement({
+      environmentId,
+      worktreeId: args.worktreeId,
+      remotePageId: guardedPageId
+    })
+    return true
+  } catch (error) {
+    unsubscribeFocusGuard()
+    let recoveryError: unknown = null
+    const createOutcomeUnknown = !createdPageId && !isDefinitiveBrowserCreateFailure(error)
+    const ownsClientGroupCleanup = args.clientTargetGroupId
+      ? releaseWebSessionBrowserPlacementGroup({
+          environmentId,
+          worktreeId: args.worktreeId,
+          remotePageId: guardedPageId,
+          groupId: args.clientTargetGroupId,
+          callerCreatedGroup: args.clientTargetGroupCreated === true
+        })
+      : false
+    if (!args.clientTargetGroupId) {
+      forgetWebSessionBrowserPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        remotePageId: guardedPageId
+      })
+    }
+    if (createdPageId) {
+      try {
+        const closeResult = unwrapRuntimeRpcResult(
+          (await callEnvironment({
+            method: 'browser.tabClose',
+            params: {
+              worktree: toRuntimeWorktreeSelector(args.worktreeId),
+              page: createdPageId
+            },
+            timeoutMs: 15_000
+          })) as RuntimeRpcResponse<{ closed: boolean }>
+        )
+        if (!closeResult.closed) {
+          throw new Error('The paired runtime did not close the unreconciled browser tab.')
+        }
+        await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
+          expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
+          afterCurrentInFlight: true,
+          errorMode: 'throw'
+        })
+        if (
+          hasMaterializedWebRuntimeBrowserPage(
+            useAppStore.getState(),
+            environmentId,
+            args.worktreeId,
+            createdPageId
+          )
+        ) {
+          throw new Error('The closed browser tab remained materialized in the client.')
+        }
+      } catch (cleanupError) {
+        recoveryError = cleanupError
+        console.warn(
+          '[web-runtime-session] failed to clean up unreconciled browser tab:',
+          cleanupError instanceof Error ? cleanupError.message : String(cleanupError)
+        )
       }
+    }
+    if (shouldFocusOnCreate) {
+      clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, guardedPageId)
+    }
+    if (
+      args.clientTargetGroupId &&
+      claimWebSessionBrowserPlacementGroupCleanup({
+        worktreeId: args.worktreeId,
+        groupId: args.clientTargetGroupId,
+        ownsGroupCleanup: ownsClientGroupCleanup
+      })
+    ) {
+      useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
     }
     if (args.failureLogMode === 'operation-only') {
       console.warn('[web-runtime-session] failed to create browser tab')
@@ -592,6 +708,19 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         '[web-runtime-session] failed to create browser tab:',
         error instanceof Error ? error.message : String(error)
       )
+    }
+    if (recoveryError) {
+      throw new Error('The paired runtime could not recover the failed browser creation.', {
+        cause: recoveryError
+      })
+    }
+    if (!createAttempted) {
+      throw error
+    }
+    if (createOutcomeUnknown) {
+      throw new Error('The paired runtime did not confirm whether the browser tab was created.', {
+        cause: error
+      })
     }
     return false
   }
@@ -622,6 +751,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       hostTabId: string
       hostTerminalHandle: string
     }
+    afterCurrentInFlight?: boolean
+    errorMode?: 'warn' | 'throw'
   } = {}
 ): Promise<void> {
   const expectedEnvironmentPairingRevision =
@@ -637,9 +768,13 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       // re-accept its current version after the exact provisional handoff is known.
       acceptReplayedWebSessionTabsSnapshot(environmentId, worktreeId)
     }
-    const listSessionTabs = options.confirmAgentSessionHandoff
-      ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
-      : listRemoteRuntimeSessionTabsDeduped
+    const listSessionTabs =
+      options.confirmAgentSessionHandoff || options.afterCurrentInFlight
+        ? listRemoteRuntimeSessionTabsAfterCurrentInFlight
+        : listRemoteRuntimeSessionTabsDeduped
+    if (options.afterCurrentInFlight) {
+      throwIfE2eWebRuntimeBrowserReconciliationFails()
+    }
     const snapshot = await listSessionTabs({
       environmentId,
       worktreeId,
@@ -677,6 +812,9 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       return patch === state ? state : patch
     })
   } catch (error) {
+    if (options.errorMode === 'throw') {
+      throw error
+    }
     // Why: host creation already succeeded; the long-lived session.tabs subscription catches up if this eager refresh fails.
     console.warn(
       '[web-runtime-session] failed to refresh session-tabs snapshot:',
@@ -1064,10 +1202,11 @@ export function splitWebRuntimeTerminal(
     })
     .catch((error) => {
       releasePendingMirrorSuppression()
-      console.warn(
-        '[web-runtime-session] failed to split terminal:',
-        error instanceof Error ? error.message : String(error)
-      )
+      const message = error instanceof Error ? error.message : String(error)
+      // Why: a split that fails only in the console leaves the user with a pane that silently
+      // never appears.
+      toast.error(message)
+      console.warn('[web-runtime-session] failed to split terminal:', message)
     })
   return true
 }

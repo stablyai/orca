@@ -282,6 +282,9 @@ export type TakePendingOutputRequest = {
 
 export type TakePendingOutputResult = {
   records: PendingOutputRecord[]
+  /** Drained pending queue. Absent on older daemons. includeSnapshot still
+   *  keeps `records` as held-only so mixed-version adapters do not double-replay. */
+  drainedRecords?: PendingOutputRecord[]
   /** Monotonic per-session batch sequence. The history log stores it so the
    *  cold-restore reader can detect a lost batch (gap) and discard the log
    *  instead of replaying a stream with missing bytes. */

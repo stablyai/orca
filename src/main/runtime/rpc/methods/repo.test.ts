@@ -303,6 +303,33 @@ describe('repo RPC methods', () => {
     })
   })
 
+  it('persists agent worktree visibility updates', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      updateRepo: vi.fn().mockResolvedValue({
+        id: 'repo-1',
+        path: '/srv/repo',
+        agentWorktreeVisibility: 'show'
+      })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: REPO_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('repo.update', {
+        repo: 'repo-1',
+        updates: { agentWorktreeVisibility: 'show' }
+      })
+    )
+
+    expect(runtime.updateRepo).toHaveBeenCalledWith('repo-1', {
+      agentWorktreeVisibility: 'show'
+    })
+    expect(response).toMatchObject({
+      ok: true,
+      result: { repo: { id: 'repo-1', agentWorktreeVisibility: 'show' } }
+    })
+  })
+
   it('persists resolved GitHub upstream metadata updates', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',

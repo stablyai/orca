@@ -104,6 +104,9 @@ type PtyCallbacks = {
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
+  /** A stream re-established after loss carries only new bytes, so the pane must
+   *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
+  onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
@@ -127,6 +130,8 @@ export type PtyTransportRecoveryState = {
     | 'disposed'
   epoch: number
   attempt: number
+  /** Set only for a pane whose shell we cannot reach; drives the two-action disconnected banner. */
+  unreachablePane?: { onRetry: () => void; onStartNewTerminal: () => void }
 }
 
 export type PtyTransport = {
@@ -141,10 +146,18 @@ export type PtyTransport = {
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
     command?: string
+    commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata
+    /** Start a genuinely new shell: ignore the startup this transport was constructed with.
+     *  Omitting the fields is not enough — connect falls back to its constructor values, so a
+     *  "fresh" spawn would silently resume the saved agent session. */
+    suppressSavedStartup?: boolean
+    /** Refuse adoption: this pane's recorded shell cannot be reached, so attaching it would fail
+     *  and create nothing. The old shell is left alive and unbound. */
+    createFreshShellForUnreachablePane?: boolean
     launchToken?: string
     launchAgent?: TuiAgent
     startupCommandDelivery?: StartupCommandDelivery
@@ -221,6 +234,7 @@ export type IpcPtyTransportOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   agentPrompt?: string

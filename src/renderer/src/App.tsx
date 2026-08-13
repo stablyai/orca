@@ -85,7 +85,7 @@ import {
 } from '@/lib/floating-workspace-terminal-actions'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-current-workspace-status'
-import { OPEN_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
+import { TOGGLE_WORKSPACE_BOARD_EVENT } from './components/sidebar/useWorkspaceBoardPanel'
 import { WorkspacePortScanner } from './components/ports/WorkspacePortScanner'
 import { CrashReportDialog } from './components/crash-report/CrashReportDialog'
 import NewWorkspaceComposerModal from './components/NewWorkspaceComposerModal'
@@ -338,7 +338,6 @@ const TaskPage = lazy(() => import('./components/TaskPage'))
 const AutomationsPage = lazy(() => import('./components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('./components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('./components/settings/Settings'))
-const SkillsPage = lazy(() => import('./components/skills/SkillsPage'))
 const ArtifactsPage = lazy(() => import('./components/artifacts/ArtifactsPage'))
 const WorkspaceSpacePage = lazy(() => import('./components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('./components/mobile/MobilePage'))
@@ -1416,7 +1415,9 @@ function App(): React.JSX.Element {
         hideWorkspacesFromOtherDevices,
         alwaysShowDefaultBranchWorkspace,
         showDotfilesByWorktree,
-        filterRepoIds,
+        // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
+        // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
+        filterRepoIds: [...filterRepoIds],
         // Why (#9002): activeView is deliberately NOT included here. It used to
         // ride this same 150ms writer (#8265), which meant every top-level view
         // switch scheduled a full durable-state save. The narrow preference
@@ -1532,10 +1533,7 @@ function App(): React.JSX.Element {
   const showTitlebarExpandButton = workspaceChromeActive && !hasTabBar && effectiveActiveTabExpanded
   // Activity/Space are full-page navigation surfaces (like Settings), so the worktree sidebar is hidden there.
   const showSidebar =
-    activeView !== 'settings' &&
-    activeView !== 'activity' &&
-    activeView !== 'space' &&
-    activeView !== 'skills'
+    activeView !== 'settings' && activeView !== 'activity' && activeView !== 'space'
   // Tasks/Landing show the full titlebar only when the sidebar is collapsed; open, they mirror workspace view (creation suppresses it).
   const stackedSidebarOpen =
     !workspaceChromeActive && !creationLayoutActive && showSidebar && sidebarOpen
@@ -1708,7 +1706,7 @@ function App(): React.JSX.Element {
             }
             return claim('workspace.openBoard', () => {
               useAppStore.getState().setSidebarOpen(true)
-              window.dispatchEvent(new CustomEvent(OPEN_WORKSPACE_BOARD_EVENT))
+              window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
             })
           }
         ],
@@ -2402,7 +2400,6 @@ function App(): React.JSX.Element {
                               )}
                             >
                               {activeView === 'settings' ? <Settings /> : null}
-                              {activeView === 'skills' ? <SkillsPage /> : null}
                               {activeView === 'artifacts' ? <ArtifactsPage /> : null}
                               {activeView === 'tasks' ? <TaskPage /> : null}
                               {activeView === 'automations' ? <AutomationsPage /> : null}

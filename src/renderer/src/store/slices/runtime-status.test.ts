@@ -799,7 +799,7 @@ describe('runtime-status slice', () => {
 
     expect(list).toHaveBeenCalledTimes(2)
     expect(getStatus).toHaveBeenCalledTimes(2)
-    expect(publications).toBe(4)
+    expect(publications).toBe(3)
     expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status?.runtimeId).toBe(
       'runtime-2'
     )

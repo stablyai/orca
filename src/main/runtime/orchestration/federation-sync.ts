@@ -13,8 +13,11 @@ import {
   getFederationAckedThrough,
   recordFederationAckCheckpoint
 } from './federation-ack-checkpoints'
+import { parseFederatedWorkerReportPayload } from './federation-worker-report-payload'
 
 const MESSAGE_TYPE_SET = new Set<MessageType>(MESSAGE_TYPES)
+const FEDERATION_PULL_PAGE_SIZE = 50
+const MAX_FEDERATION_PULL_PAGES_PER_SYNC = 6
 
 function isMessageType(value: unknown): value is MessageType {
   return typeof value === 'string' && MESSAGE_TYPE_SET.has(value as MessageType)
@@ -43,6 +46,14 @@ export async function syncFederatedDispatch(
   runtime: OrcaRuntimeService,
   dispatchId: string
 ): Promise<{ imported: number; acknowledgedThrough: number }> {
+  return syncFederatedDispatchPages(runtime, dispatchId, MAX_FEDERATION_PULL_PAGES_PER_SYNC)
+}
+
+async function syncFederatedDispatchPages(
+  runtime: OrcaRuntimeService,
+  dispatchId: string,
+  remainingPages: number
+): Promise<{ imported: number; acknowledgedThrough: number }> {
   const db = runtime.getOrchestrationDb()
   const federated = db.getFederatedDispatch(dispatchId)
   const dispatch = db.getDispatchContextById(dispatchId)
@@ -70,7 +81,7 @@ export async function syncFederatedDispatch(
       dispatchId,
       afterSequence: federated.to_home_imported_sequence,
       ...(supportsLifecycleSettlement ? { replayUnacknowledged: true } : {}),
-      limit: 50
+      limit: FEDERATION_PULL_PAGE_SIZE
     },
     15_000
   )) as { runtimeEpoch: string; items: PulledRelayItem[] }
@@ -127,8 +138,14 @@ export async function syncFederatedDispatch(
     peerFingerprint: federated.peer_fingerprint,
     remoteRuntimeEpoch: pulled.runtimeEpoch
   }
-  if (cursor > getFederationAckedThrough(ackLease, ackIdentity)) {
-    await runtime.callOrchestrationWorkerServer(
+  const durableAcknowledgedThrough =
+    federated.remote_runtime_epoch === pulled.runtimeEpoch
+      ? (federated.to_home_acknowledged_sequence ?? 0)
+      : 0
+  if (
+    cursor > Math.max(getFederationAckedThrough(ackLease, ackIdentity), durableAcknowledgedThrough)
+  ) {
+    const delivered = (await runtime.callOrchestrationWorkerServer(
       federated.environment_id,
       'orchestration.federationAck',
       {
@@ -138,10 +155,20 @@ export async function syncFederatedDispatch(
       },
       15_000,
       { orchestrationRequestId: `relay_ack_${dispatchId}_${cursor}` }
-    )
+    )) as { acknowledgedThrough: number }
+    const keepRelayEligible =
+      pulled.items.length === FEDERATION_PULL_PAGE_SIZE && remainingPages === 1
+    const locallyAcknowledgedThrough = keepRelayEligible
+      ? Math.max(0, delivered.acknowledgedThrough - 1)
+      : delivered.acknowledgedThrough
+    db.recordFederatedHomeAcknowledgment({
+      dispatchId,
+      remoteRuntimeEpoch: pulled.runtimeEpoch,
+      sequence: locallyAcknowledgedThrough
+    })
     recordFederationAckCheckpoint(runtime, ackLease, {
       ...ackIdentity,
-      throughSequence: cursor
+      throughSequence: locallyAcknowledgedThrough
     })
   }
   const toWorker =
@@ -163,6 +190,13 @@ export async function syncFederatedDispatch(
       direction: 'to_worker',
       throughSequence: delivered.acknowledgedThrough
     })
+  }
+  if (pulled.items.length === FEDERATION_PULL_PAGE_SIZE && remainingPages > 1) {
+    const next = await syncFederatedDispatchPages(runtime, dispatchId, remainingPages - 1)
+    return {
+      imported: imported + next.imported,
+      acknowledgedThrough: next.acknowledgedThrough
+    }
   }
   return { imported, acknowledgedThrough: cursor }
 }
@@ -222,7 +256,7 @@ function parseFederatedLifecycle(
   }
   let payload
   try {
-    payload = parseWorkerReportPayload(message.payload)
+    payload = parseFederatedWorkerReportPayload(message.payload)
   } catch (error) {
     return {
       kind: 'rejected',
@@ -254,40 +288,5 @@ function parseFederatedLifecycle(
     taskId: payload.taskId,
     outcome: payload.outcome,
     result
-  }
-}
-
-function parseWorkerReportPayload(payload: string | null): {
-  taskId: string
-  dispatchId: string
-  outcome: WorkerReportOutcome
-  filesModified: string[]
-  reportPath: string | null
-} {
-  let parsed: unknown
-  try {
-    parsed = payload ? JSON.parse(payload) : null
-  } catch {
-    parsed = null
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new OrchestrationError('invalid_argument', 'Federated worker report is invalid.')
-  }
-  const report = parsed as Record<string, unknown>
-  if (
-    typeof report.taskId !== 'string' ||
-    typeof report.dispatchId !== 'string' ||
-    (report.outcome !== 'succeeded' && report.outcome !== 'failed')
-  ) {
-    throw new OrchestrationError('invalid_argument', 'Federated worker report is incomplete.')
-  }
-  return {
-    taskId: report.taskId,
-    dispatchId: report.dispatchId,
-    outcome: report.outcome,
-    filesModified: Array.isArray(report.filesModified)
-      ? report.filesModified.filter((file): file is string => typeof file === 'string')
-      : [],
-    reportPath: typeof report.reportPath === 'string' ? report.reportPath : null
   }
 }

@@ -1,6 +1,8 @@
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { isEquivalentPaneKey } from '../../../shared/stable-pane-id'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 
+// Why: legacy rows carry nullable pane keys, and a missing key is never proof of
+// identity — so absence is refused here rather than inside the shared comparison.
 export function equivalentLegacyPaneKey(
   a: string | null | undefined,
   b: string | null | undefined
@@ -8,12 +10,7 @@ export function equivalentLegacyPaneKey(
   if (!a || !b) {
     return false
   }
-  if (a === b) {
-    return true
-  }
-  const aLeaf = parsePaneKey(a)?.leafId
-  const bLeaf = parsePaneKey(b)?.leafId
-  return Boolean(aLeaf && bLeaf && aLeaf === bLeaf)
+  return isEquivalentPaneKey(a, b)
 }
 
 export function legacyReadOnlyError(): OrchestrationError {

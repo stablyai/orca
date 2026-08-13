@@ -26,14 +26,6 @@ const expectedOmpStatusExtension = posix.join(
   'omp-managed-status-extension',
   'orca-agent-status.ts'
 )
-function expectedAttributionShimDir(): string {
-  return join(
-    '/tmp/orca-user-data',
-    'orca-terminal-attribution',
-    process.platform === 'win32' ? 'win32' : 'posix'
-  )
-}
-
 const {
   handleMock,
   onMock,
@@ -253,9 +245,11 @@ import {
   getLocalPtyProvider,
   isCurrentPtyExit,
   restorePtyIncarnation,
+  bindPaneShell,
   type PrepareCodexSessionResume
 } from './pty'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
+import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { resetMacosLoginShellPreflightForTests } from '../providers/macos-tcc-login-shell'
 import {
@@ -1873,7 +1867,6 @@ describe('registerPtyHandlers', () => {
       launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
     ) => string | null,
     getSettings?: () => {
-      enableGitHubAttribution?: boolean
       agentStatusHooksEnabled?: boolean
       httpProxyUrl?: string
       httpProxyBypassRules?: string
@@ -1971,7 +1964,6 @@ describe('registerPtyHandlers', () => {
               isPackaged: true,
               userDataPath: '/tmp/orca-user-data',
               selectedCodexHomePath: null,
-              githubAttributionEnabled: false,
               agentStatusHooksEnabled: false,
               isWsl: context?.isWsl,
               wslDistro: context?.wslDistro
@@ -3135,59 +3127,6 @@ describe('registerPtyHandlers', () => {
       expect(env.ORCA_CLAUDE_AGENT_STATUS_SETTINGS).toBeUndefined()
     })
 
-    it('prepends local git/gh attribution shims when attribution is enabled', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
-        enableGitHubAttribution: true
-      }))
-
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.ORCA_GIT_COMMIT_TRAILER).toBe('Co-authored-by: Orca <help@stably.ai>')
-      expect(env.ORCA_GH_PR_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.ORCA_GH_ISSUE_FOOTER).toBe('Made with [Orca](https://github.com/stablyai/orca) 🐋')
-      expect(env.PATH).toContain(expectedAttributionShimDir())
-    })
-
-    it('skips git/gh attribution shims when attribution is disabled', async () => {
-      const env = await spawnAndGetEnv(undefined, undefined, undefined, () => ({
-        enableGitHubAttribution: false
-      }))
-
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-      expect(env.ORCA_GIT_COMMIT_TRAILER).toBeUndefined()
-      expect(env.ORCA_GH_PR_FOOTER).toBeUndefined()
-      expect(env.ORCA_GH_ISSUE_FOOTER).toBeUndefined()
-      expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
-    })
-
-    it('prepends git/gh attribution shims for daemon-backed local PTYs', async () => {
-      const daemonSpawn = vi.fn(async (options) => ({ id: 'daemon-pty', pid: 123, ...options }))
-      setLocalPtyProvider({
-        spawn: daemonSpawn,
-        write: vi.fn(),
-        resize: vi.fn(),
-        kill: vi.fn(),
-        shutdown: vi.fn(),
-        onData: vi.fn(() => vi.fn()),
-        onExit: vi.fn(() => vi.fn()),
-        listProcesses: vi.fn(async () => []),
-        getForegroundProcess: vi.fn(async () => null)
-      } as never)
-      handlers.clear()
-      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
-        enableGitHubAttribution: true
-      })) as never)
-
-      await handlers.get('pty:spawn')!(null, {
-        cols: 80,
-        rows: 24,
-        env: {}
-      })
-
-      const env = daemonSpawn.mock.calls.at(-1)![0].env
-      expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-      expect(env.PATH).toContain(expectedAttributionShimDir())
-    })
-
     it('overrides ambient CODEX_HOME with the Orca-managed home for system default', async () => {
       const env = await spawnAndGetEnv(
         undefined,
@@ -3489,7 +3428,6 @@ describe('registerPtyHandlers', () => {
           launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
         ) => string | null,
         getSettings?: () => {
-          enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
         },
@@ -3551,7 +3489,6 @@ describe('registerPtyHandlers', () => {
           launchContext?: { workspacePath?: string; launchAgent?: TuiAgent }
         ) => string | null,
         getSettings?: () => {
-          enableGitHubAttribution?: boolean
           httpProxyUrl?: string
           httpProxyBypassRules?: string
         },
@@ -4464,6 +4401,16 @@ describe('registerPtyHandlers', () => {
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
       })
 
+      it('asks surviving pre-upgrade daemons to delete legacy attribution env', async () => {
+        const spawnOptions = await daemonSpawnAndGetOptions({})
+
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS])
+        )
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GIT')
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
+      })
+
       it('deletes stale Claude scoped settings env from runtime-created daemon PTYs', async () => {
         type RuntimeSpawnController = {
           spawn(args: {
@@ -4499,6 +4446,38 @@ describe('registerPtyHandlers', () => {
         )
         expect(spawnOptions.env.ORCA_AGENT_HOOK_PORT).toBe('5678')
         expect(spawnOptions.env.ORCA_AGENT_HOOK_TOKEN).toBe('agent-token')
+      })
+
+      it('asks surviving pre-upgrade daemons to delete legacy attribution env for runtime PTYs', async () => {
+        type RuntimeSpawnController = {
+          spawn(args: {
+            cols: number
+            rows: number
+            worktreeId?: string
+            env?: Record<string, string>
+          }): Promise<{ id: string }>
+        }
+        const daemonSpawn = setupDaemonAdapter()
+        const runtime = {
+          setPtyController: vi.fn(),
+          registerPty: vi.fn(),
+          noteTerminalSpawnCommand: vi.fn(),
+          onPtySpawned: vi.fn(),
+          onPtyExit: vi.fn(),
+          onPtyData: vi.fn()
+        }
+        handlers.clear()
+        registerPtyHandlers(mainWindow as never, runtime as never)
+        const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
+
+        await controller.spawn({ cols: 80, rows: 24, worktreeId: 'wt-runtime', env: {} })
+
+        const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
+        expect(spawnOptions.envToDelete).toEqual(
+          expect.arrayContaining([...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS])
+        )
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GIT')
+        expect(spawnOptions.envToDelete).not.toContain('ORCA_REAL_GH')
       })
 
       it('strips inherited Claude child-session stamps from runtime-created PTYs', async () => {
@@ -4876,33 +4855,38 @@ describe('registerPtyHandlers', () => {
           onPtyData: vi.fn()
         }
         handlers.clear()
-        registerPtyHandlers(mainWindow as never, runtime as never, undefined, (() => ({
-          enableGitHubAttribution: true
-        })) as never)
+        registerPtyHandlers(mainWindow as never, runtime as never)
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as RuntimeSpawnController
 
-        await controller.spawn({
-          cols: 80,
-          rows: 24,
-          worktreeId: 'wt-runtime',
-          command: 'claude',
-          env: {
-            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca',
-            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
-          },
-          envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-        })
+        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
+        // the promotion below has something to beat instead of passing trivially.
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prevPackaged = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          await controller.spawn({
+            cols: 80,
+            rows: 24,
+            worktreeId: 'wt-runtime',
+            command: 'claude',
+            env: {
+              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'Orca'
+            },
+            envToDelete: ['TERM_PROGRAM']
+          })
+        } finally {
+          mockedApp.isPackaged = prevPackaged
+        }
 
         const spawnOptions = daemonSpawn.mock.calls.at(-1)?.[0] as DaemonSpawnCall
-        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
+        const spawnedPath = spawnOptions.env.PATH.split(delimiter)
+        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-        expect(spawnOptions.envToDelete).toEqual(
-          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
-        )
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
 
       it('strips inherited agent-hook endpoint env from development daemon PTYs', async () => {
@@ -4922,38 +4906,38 @@ describe('registerPtyHandlers', () => {
         }
       })
 
-      it('prepends attribution shims on the daemon path', async () => {
-        const env = await daemonSpawnAndGetEnv({}, undefined, () => ({
-          enableGitHubAttribution: true
-        }))
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBe('1')
-        expect(env.PATH).toContain(expectedAttributionShimDir())
-      })
-
       it('keeps the Agent Teams tmux shim ahead of host PATH shims on daemon pty:spawn', async () => {
-        const spawnOptions = await daemonSpawnAndGetOptions(
-          {
-            PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
-            ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
-            TERM_PROGRAM: 'Orca',
-            ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
-          },
-          undefined,
-          () => ({ enableGitHubAttribution: true }),
-          undefined,
-          {
-            command: 'claude',
-            envToDelete: ['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR']
-          }
-        )
+        // Why: dev mode makes buildPtyHostEnv prepend its own CLI shim on every platform, so
+        // the promotion below has something to beat instead of passing trivially.
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prevPackaged = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        let spawnOptions: Awaited<ReturnType<typeof daemonSpawnAndGetOptions>>
+        try {
+          spawnOptions = await daemonSpawnAndGetOptions(
+            {
+              PATH: `/tmp/orca-agent-teams-bin${delimiter}/usr/bin`,
+              ORCA_AGENT_TEAMS_TEAM_ID: 'team-test',
+              TERM_PROGRAM: 'Orca'
+            },
+            undefined,
+            undefined,
+            undefined,
+            {
+              command: 'claude',
+              envToDelete: ['TERM_PROGRAM']
+            }
+          )
+        } finally {
+          mockedApp.isPackaged = prevPackaged
+        }
 
-        expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/orca-agent-teams-bin')
-        expect(spawnOptions.env.PATH).toContain(expectedAttributionShimDir())
+        const spawnedPath = spawnOptions.env.PATH.split(delimiter)
+        expect(spawnedPath[0]).toBe('/tmp/orca-agent-teams-bin')
+        expect(spawnedPath.some((entry) => entry.includes(join('cli', 'bin')))).toBe(true)
         expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-        expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
-        expect(spawnOptions.envToDelete).toEqual(
-          expect.arrayContaining(['TERM_PROGRAM', 'ORCA_ATTRIBUTION_SHIM_DIR'])
-        )
+        expect(spawnOptions.envToDelete).toEqual(expect.arrayContaining(['TERM_PROGRAM']))
       })
 
       it('injects dev-mode ORCA_USER_DATA_PATH + dev CLI PATH on the daemon path', async () => {
@@ -4984,6 +4968,24 @@ describe('registerPtyHandlers', () => {
           expect(env.PATH).toContain(
             `${join('/tmp/orca-user-data', 'cli', 'bin')}${delimiter}/system/bin`
           )
+        } finally {
+          mockedApp.isPackaged = prev
+        }
+      })
+
+      it('drops a legacy shim PATH entry inherited from the host process on the daemon path', async () => {
+        // Why: the daemon path passes a sparse env, so the prepends re-read PATH from
+        // process.env — the scrub must outlive that fallback (pre-upgrade host or parent pane).
+        const { app } = await import('electron')
+        const mockedApp = app as unknown as { isPackaged: boolean }
+        const prev = mockedApp.isPackaged
+        mockedApp.isPackaged = false
+        try {
+          const env = await daemonSpawnAndGetEnv({}, undefined, undefined, {
+            PATH: `/tmp/orca-user-data/orca-terminal-attribution/posix${delimiter}/system/bin`
+          })
+          expect(env.PATH).not.toContain('orca-terminal-attribution')
+          expect(env.PATH).toContain('/system/bin')
         } finally {
           mockedApp.isPackaged = prev
         }
@@ -5168,14 +5170,6 @@ describe('registerPtyHandlers', () => {
         expect(env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/ambient/pi/agent')
       })
 
-      it('skips attribution shims on the daemon path when the setting is disabled', async () => {
-        const env = await daemonSpawnAndGetEnv({ PATH: '/usr/bin' }, undefined, () => ({
-          enableGitHubAttribution: false
-        }))
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
-        expect(env.PATH ?? '').not.toContain(expectedAttributionShimDir())
-      })
-
       it('does not mutate the caller-provided args.env on the daemon path', async () => {
         // Why: the handler clones baseEnv so IPC-provided env stays pristine; a regression would leak Orca host env back into the renderer's reused copy.
         const daemonSpawn = setupDaemonAdapter()
@@ -5296,7 +5290,10 @@ describe('registerPtyHandlers', () => {
             paneKey?: string
             tabId?: string
           }) => ({
-            id: 'ssh-pty'
+            id: 'ssh-pty',
+            // The host attests the shell's identity at spawn; the lease has to carry it or the
+            // reconnect fence has nothing to compare and attaches by pty id alone.
+            incarnationId: 'inc-host-ssh-pty'
           })
         )
         const store = {
@@ -5353,7 +5350,6 @@ describe('registerPtyHandlers', () => {
         // Why: host-local vars must be absent over SSH (they point at the local host/disk) — shipping them is useless or a credential leak.
         expect(env.ORCA_AGENT_HOOK_PORT).toBeUndefined()
         expect(env.ORCA_AGENT_HOOK_TOKEN).toBeUndefined()
-        expect(env.ORCA_ENABLE_GIT_ATTRIBUTION).toBeUndefined()
         expect(env.OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_CONFIG_DIR).toBeUndefined()
         expect(env.ORCA_OPENCODE_SOURCE_CONFIG_DIR).toBeUndefined()
@@ -5383,18 +5379,23 @@ describe('registerPtyHandlers', () => {
             worktreeId: 'wt-1',
             tabId: 'tab-1',
             leafId,
+            // Without this the field exists, loads and is read — and is never written, so the
+            // reconnect fence silently permits everything while every other clause stays green.
+            incarnationId: 'inc-host-ssh-pty',
             state: 'attached'
           })
         )
-        expect(store.persistPtyBinding).toHaveBeenCalledWith(
-          {
-            worktreeId: 'wt-1',
-            tabId: 'tab-1',
-            leafId,
-            ptyId: 'ssh-pty'
-          },
-          'ssh:ssh-1'
-        )
+        // STA-3077 step P inverted this: SSH pane bindings no longer go to a
+        // per-target `ssh:<target>` partition. One home (`local`) only, so the
+        // hostId argument is gone — pin its absence, not its old value.
+        expect(store.persistPtyBinding).toHaveBeenCalledWith({
+          worktreeId: 'wt-1',
+          tabId: 'tab-1',
+          leafId,
+          ptyId: 'ssh-pty',
+          incarnationId: 'inc-host-ssh-pty'
+        })
+        expect(store.persistPtyBinding.mock.calls.at(-1)).toHaveLength(1)
 
         store.upsertSshRemotePtyLease.mockClear()
         store.persistPtyBinding.mockClear()
@@ -6304,7 +6305,7 @@ describe('registerPtyHandlers', () => {
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
       })
 
-      it('preserves an SSH lease when runtime controller kill shutdown fails transiently', async () => {
+      it('retires a rejected SSH PTY after generic kill shutdown fails transiently', async () => {
         const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const store = {
           markSshRemotePtyLease: vi.fn()
@@ -6347,22 +6348,30 @@ describe('registerPtyHandlers', () => {
         )
         const controller = runtime.setPtyController.mock.calls[0]?.[0] as {
           kill: (ptyId: string) => boolean
+          retireRejectedPty: (ptyId: string) => void
         }
 
         try {
           expect(controller.kill('remote-pty')).toBe(true)
           await new Promise((resolve) => setImmediate(resolve))
+          expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+            'ssh-1',
+            'remote-pty',
+            'terminated'
+          )
+          controller.retireRejectedPty('remote-pty')
         } finally {
           warnSpy.mockRestore()
           deletePtyOwnership('remote-pty')
         }
 
-        expect(store.markSshRemotePtyLease).not.toHaveBeenCalledWith(
+        expect(store.markSshRemotePtyLease).toHaveBeenCalledWith(
           'ssh-1',
           'remote-pty',
           'terminated'
         )
         expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', -1, undefined)
+        expect(runtime.onPtyExit).toHaveBeenCalledWith('remote-pty', 0, undefined)
       })
 
       it('strips ORCA_PANE_KEY/TAB_ID/WORKTREE_ID from SSH spawn env when remote agent hooks are disabled', async () => {
@@ -6818,6 +6827,38 @@ describe('registerPtyHandlers', () => {
       expect.objectContaining({ immediate: true })
     )
     expect(fallbackShutdown).not.toHaveBeenCalled()
+  })
+
+  // Why: before the swap lands the pre-swap local provider owns no daemon id, so its
+  // "not in my table" would answer an authoritative dead for every restored session.
+  it('waits for the desktop startup barrier before pty:hasPty answers for a daemon id', async () => {
+    const barrier = makeDeferred()
+    const awaitLocalPtyProviderStartup = vi.fn(() => barrier.promise)
+    registerPtyHandlers(
+      mainWindow as never,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        awaitLocalPtyProviderStartup
+      }
+    )
+
+    const pending = handlers.get('pty:hasPty')!(null, { id: 'daemon-session' }) as Promise<
+      boolean | null
+    >
+    await Promise.resolve()
+    expect(awaitLocalPtyProviderStartup).toHaveBeenCalledTimes(1)
+
+    installObservableDaemonTestProvider()
+    ;(getLocalPtyProvider() as { hasPty?: (id: string) => boolean | null }).hasPty = vi.fn(
+      (id: string) => id === 'daemon-session'
+    )
+    barrier.resolve()
+
+    await expect(pending).resolves.toBe(true)
   })
 
   it('waits for the desktop startup barrier before runtime local kills resolve the provider', async () => {
@@ -7840,6 +7881,7 @@ describe('registerPtyHandlers', () => {
           id: opts.sessionId ?? 'daemon-pty'
         })),
         write,
+        hasPty: vi.fn(() => true),
         resize: vi.fn(args.resize ?? (() => {})),
         getAppliedSize: vi.fn(args.getAppliedSize ?? (async () => args.applied)),
         kill: vi.fn(),
@@ -8064,6 +8106,107 @@ describe('registerPtyHandlers', () => {
       expect(write).not.toHaveBeenCalled()
     })
 
+    it('does not forward queued host input after the pane rebinds', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      let resolveClaim: (claimed: boolean) => void = () => {}
+      const claimRemoteDesktopHost = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveClaim = resolve
+          })
+      )
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHost,
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      const leafId = '3f1c9a2e-7b4d-4e1a-9c8f-2d5e6a7b8c90'
+      const bindingStore = {
+        persistPtyBinding: vi.fn(() => true),
+        getWorkspaceSession: vi.fn(() => getDefaultWorkspaceSession())
+      }
+      bindPaneShell({
+        store: bindingStore,
+        worktreeId: 'repo-1:wt-1',
+        tabId: 'tab-1',
+        leafId,
+        ptyId: id
+      })
+      const claim = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      claim?.[1](mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'queued' })
+      const accepted = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id,
+        data: 'accepted'
+      })
+      bindPaneShell({
+        store: bindingStore,
+        worktreeId: 'repo-1:wt-1',
+        tabId: 'tab-1',
+        leafId,
+        ptyId: 'pty-successor'
+      })
+      resolveClaim(true)
+
+      await expect(accepted).resolves.toBe(false)
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+      clearProviderPtyState(id)
+      clearProviderPtyState('pty-successor')
+    })
+
+    it('does not forward queued host input after the PTY incarnation changes', async () => {
+      const write = setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 } })
+      let resolveClaim: (claimed: boolean) => void = () => {}
+      const runtime = {
+        setPtyController: vi.fn(),
+        createPreAllocatedTerminalHandle: vi.fn(() => null),
+        registerPty: vi.fn(),
+        getDriver: vi.fn(() => ({ kind: 'idle' })),
+        claimRemoteDesktopHost: vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveClaim = resolve
+            })
+        ),
+        onPtySpawned: vi.fn(),
+        onPtyExit: vi.fn(),
+        onPtyData: vi.fn()
+      }
+      handlers.clear()
+      registerPtyHandlers(mainWindow as never, runtime as never)
+      const spawn = await handlers.get('pty:spawn')!(null, { cols: 80, rows: 24, env: {} })
+      const id = (spawn as { id: string }).id
+      restorePtyIncarnation(id, 'incarnation-old')
+      const claim = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:claimViewport')
+      const writeEvent = onMock.mock.calls.find((entry: unknown[]) => entry[0] === 'pty:write')
+
+      claim?.[1](mainWindowIpcEvent, { id, cols: 125, rows: 48 })
+      writeEvent?.[1](mainWindowIpcEvent, { id, data: 'queued' })
+      const accepted = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+        id,
+        data: 'accepted'
+      })
+      restorePtyIncarnation(id, 'incarnation-new')
+      resolveClaim(true)
+
+      await expect(accepted).resolves.toBe(false)
+      await Promise.resolve()
+      expect(write).not.toHaveBeenCalled()
+      clearProviderPtyState(id)
+    })
+
     it('does not populate the remote reclaim cache when only a phone drives', async () => {
       const resizeSpy = vi.fn()
       setupProviderWithAppliedSize({ applied: { cols: 80, rows: 24 }, resize: resizeSpy })
@@ -8187,8 +8330,7 @@ describe('registerPtyHandlers', () => {
         TMUX: '/tmp/orca-claude-agent-teams/team-stale,0,1',
         ORCA_AGENT_TEAMS_TEAM_ID: 'team-stale',
         ORCA_AGENT_TEAMS_TOKEN: 'stale-token',
-        TERM_PROGRAM: 'Orca',
-        ORCA_ATTRIBUTION_SHIM_DIR: '/tmp/stale-attribution'
+        TERM_PROGRAM: 'Orca'
       },
       launchConfig: {
         agentCommand: 'claude --teammate-mode auto',
@@ -8221,7 +8363,6 @@ describe('registerPtyHandlers', () => {
     })
     expect(spawnOptions.env.PATH.split(delimiter)[0]).toBe('/tmp/fresh-agent-teams')
     expect(spawnOptions.env.TERM_PROGRAM).toBeUndefined()
-    expect(spawnOptions.env.ORCA_ATTRIBUTION_SHIM_DIR).toBeUndefined()
     expect(result.launchConfig?.agentEnv).toMatchObject({
       CLAUDE_PROFILE: 'captured',
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS: '1',
@@ -8667,12 +8808,17 @@ describe('registerPtyHandlers', () => {
         }
       }): Promise<{ id: string }>
     }
+    let emitExit: ((event: { exitCode: number; signal: number }) => void) | undefined
+    const kill = vi.fn(() => emitExit?.({ exitCode: 0, signal: 0 }))
     const proc = {
       onData: vi.fn(),
-      onExit: vi.fn(),
+      onExit: vi.fn((callback) => {
+        emitExit = callback
+        return makeDisposable()
+      }),
       write: vi.fn(),
       resize: vi.fn(),
-      kill: vi.fn(),
+      kill,
       process: 'zsh',
       pid: 12345
     }
@@ -8727,7 +8873,7 @@ describe('registerPtyHandlers', () => {
     expect(store.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({ expectedSourceBinding })
     )
-    expect(proc.kill).toHaveBeenCalledOnce()
+    expect(kill).toHaveBeenCalledOnce()
   })
 
   it('reports lower-owner commit before rejecting an early-exited runtime incarnation', async () => {
@@ -9641,6 +9787,9 @@ describe('registerPtyHandlers', () => {
     )
     expect(runtime.noteTerminalSpawnCommand).not.toHaveBeenCalled()
     expect(store.persistPtyBinding).toHaveBeenCalledOnce()
+    // STA-3077 step P inverted this: the reattach writer no longer passes a
+    // hostId slot at all (it used to pass `undefined` here for the local case),
+    // so the call is now strictly single-argument.
     expect(store.persistPtyBinding).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId,
@@ -9652,9 +9801,10 @@ describe('registerPtyHandlers', () => {
           ptyId: 'pty-persisted-owner',
           incarnationId: 'inc-stale-owner'
         }
-      }),
-      undefined
+      })
     )
+    expect(store.persistPtyBinding.mock.calls[0]!).toHaveLength(1)
+    expect(getPtyIdForPaneKey(paneKey)).toBe('pty-persisted-owner')
     expect(
       mainWindow.webContents.send.mock.calls.filter(([channel]) => channel === 'pty:spawned')
     ).toHaveLength(1)
@@ -10353,9 +10503,139 @@ describe('registerPtyHandlers', () => {
     expect(runtime.onPtyExit).toHaveBeenCalledWith('pty-already-retired-owner', 0, undefined)
   })
 
-  it('retires a dead owner from the exact SSH host session before fresh recovery', async () => {
+  // Sibling of the clause above, and the reason that one is driven by a proof. Retiring an owner
+  // authorizes a replacement carrying the pane's agent resume payload, so a bare not-found must
+  // not do it: a replaced relay answers exactly that for shells its predecessor still runs.
+  it('does not retire an SSH owner, nor respawn it, on a bare not-found', async () => {
+    const connectionId = 'ssh-unproven-stable-pane'
+    const tabId = 'tab-unproven-ssh-owner'
+    const leafId = '35353535-3535-4535-8535-353535353535'
+    const paneKey = makePaneKey(tabId, leafId)
+    const worktreeId = 'repo-ssh::/remote/unproven-stable-pane'
+    const livePtyId = `ssh:${connectionId}@@live-relay-pty`
+    const freshPtyId = `ssh:${connectionId}@@fresh-relay-pty`
+    const remoteSpawn = vi.fn(async (options: { attachOnly?: boolean; command?: string }) => {
+      if (options.attachOnly) {
+        // The reattach mints this only after verifying the relay's observed exit names this shell.
+        // A bare not-found reaches here too and must NOT retire the owner — pinned by the sibling
+        // clause below, because retirement authorizes a replacement carrying the resume payload.
+        throw new Error('PTY "live-relay-pty" not found')
+      }
+      return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
+    })
+    registerSshPtyProvider(connectionId, {
+      spawn: remoteSpawn,
+      write: vi.fn(),
+      resize: vi.fn(),
+      shutdown: vi.fn(),
+      sendSignal: vi.fn(),
+      getCwd: vi.fn(),
+      getInitialCwd: vi.fn(),
+      clearBuffer: vi.fn(),
+      acknowledgeDataEvent: vi.fn(),
+      onData: vi.fn(() => () => {}),
+      onReplay: vi.fn(() => () => {}),
+      onExit: vi.fn(() => () => {}),
+      listProcesses: vi.fn(),
+      hasChildProcesses: vi.fn(),
+      getForegroundProcess: vi.fn(),
+      serialize: vi.fn(),
+      revive: vi.fn(),
+      getDefaultShell: vi.fn(),
+      getProfiles: vi.fn()
+    } as never)
+    let session = {
+      tabsByWorktree: {
+        [worktreeId]: [{ id: tabId, worktreeId, ptyId: livePtyId }]
+      },
+      terminalLayoutsByTabId: {
+        [tabId]: {
+          root: { type: 'leaf' as const, leafId },
+          activeLeafId: leafId,
+          expandedLeafId: null,
+          ptyIdsByLeafId: { [leafId]: livePtyId }
+        }
+      },
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-live-ssh-owner' }
+    }
+    const store = {
+      // STA-3077 step P inverted these: the reader/retirer used to target the
+      // per-target `ssh:<connectionId>` partition while the renderer published
+      // pane membership to `local` — two homes, so supersession no-opped. Both
+      // sides now address the single default (local) partition, i.e. no hostId.
+      getWorkspaceSession: vi.fn((requestedHostId?: string) => {
+        expect(requestedHostId).toBeUndefined()
+        return session
+      }),
+      setWorkspaceSession: vi.fn((next, requestedHostId?: string) => {
+        expect(requestedHostId).toBeUndefined()
+        session = next
+      }),
+      flushOrThrow: vi.fn(),
+      persistPtyBinding: vi.fn(),
+      upsertSshRemotePtyLease: vi.fn(),
+      removeSshRemotePtyLease: vi.fn(),
+      markSshRemotePtyLease: vi.fn()
+    }
+    const runtime = {
+      setPtyController: vi.fn(),
+      resolveTerminalPane: vi.fn(() => {
+        throw new Error('terminal_not_found')
+      }),
+      createPreAllocatedTerminalHandle: vi.fn(() => 'term-fresh-ssh-owner'),
+      registerPreAllocatedHandleForPty: vi.fn(),
+      beginPtyRegistration: vi.fn(),
+      cancelPendingPtyRegistration: vi.fn(),
+      assertPtyRegistrationAllowed: vi.fn(),
+      registerPty: vi.fn(),
+      noteTerminalSpawnCommand: vi.fn(),
+      seedHeadlessTerminal: vi.fn(),
+      getDriver: vi.fn(() => ({ kind: 'host' })),
+      onPtySpawned: vi.fn(),
+      onPtyExit: vi.fn(),
+      onPtyData: vi.fn()
+    }
+
+    try {
+      registerPtyHandlers(
+        mainWindow as never,
+        runtime as never,
+        undefined,
+        undefined,
+        undefined,
+        store as never
+      )
+      await expect(
+        handlers.get('pty:spawn')!(null, {
+          cols: 80,
+          rows: 24,
+          cwd: '/remote/unproven-stable-pane',
+          command: 'codex resume a-session-that-may-still-be-running',
+          connectionId,
+          worktreeId,
+          tabId,
+          leafId,
+          env: {
+            ORCA_PANE_KEY: paneKey,
+            ORCA_TAB_ID: tabId,
+            ORCA_WORKTREE_ID: worktreeId
+          }
+        })
+      ).rejects.toThrow(/not found/i)
+
+      // Only the attach ran: no replacement carrying the resume payload.
+      expect(remoteSpawn).toHaveBeenCalledTimes(1)
+      expect(remoteSpawn.mock.calls[0]?.[0]).toMatchObject({ attachOnly: true })
+      // The pane keeps its owner, so the shell stays reattachable.
+      expect(store.setWorkspaceSession).not.toHaveBeenCalled()
+      expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    } finally {
+      unregisterSshPtyProvider(connectionId)
+    }
+  })
+
+  it('retires a dead owner from the local session — the one pane-binding home — before fresh recovery', async () => {
     const connectionId = 'ssh-dead-stable-pane'
-    const hostId = `ssh:${connectionId}`
     const tabId = 'tab-dead-ssh-owner'
     const leafId = '34343434-3434-4434-8434-343434343434'
     const paneKey = makePaneKey(tabId, leafId)
@@ -10364,7 +10644,8 @@ describe('registerPtyHandlers', () => {
     const freshPtyId = `ssh:${connectionId}@@fresh-relay-pty`
     const remoteSpawn = vi.fn(async (options: { attachOnly?: boolean; command?: string }) => {
       if (options.attachOnly) {
-        throw new Error('PTY "dead-relay-pty" not found')
+        // Proven exit: only this error authorizes retiring the owner (bare not-found must not).
+        throw new Error('SSH_SESSION_EXPIRED: dead-relay-pty')
       }
       return { id: freshPtyId, incarnationId: 'inc-fresh-ssh-owner' }
     })
@@ -10404,12 +10685,16 @@ describe('registerPtyHandlers', () => {
       terminalPtyIncarnationsByPaneKey: { [paneKey]: 'inc-dead-ssh-owner' }
     }
     const store = {
+      // STA-3077 step P inverted these: the reader/retirer used to target the
+      // per-target `ssh:<connectionId>` partition while the renderer published
+      // pane membership to `local` — two homes, so supersession no-opped. Both
+      // sides now address the single default (local) partition, i.e. no hostId.
       getWorkspaceSession: vi.fn((requestedHostId?: string) => {
-        expect(requestedHostId).toBe(hostId)
+        expect(requestedHostId).toBeUndefined()
         return session
       }),
       setWorkspaceSession: vi.fn((next, requestedHostId?: string) => {
-        expect(requestedHostId).toBe(hostId)
+        expect(requestedHostId).toBeUndefined()
         session = next
       }),
       flushOrThrow: vi.fn(),
@@ -10472,16 +10757,25 @@ describe('registerPtyHandlers', () => {
       expect(remoteSpawn.mock.calls[1]?.[0]).toMatchObject({
         command: 'codex resume exact-dead-ssh-provider-session'
       })
-      expect(store.setWorkspaceSession).toHaveBeenCalledWith(expect.anything(), hostId)
+      // STA-3077 step P inverted these: the retirement write and the fresh
+      // binding write both land in the single default (local) partition now, so
+      // no hostId is passed. The dead owner must still actually be retired.
+      expect(store.setWorkspaceSession).toHaveBeenCalledOnce()
+      expect(store.setWorkspaceSession.mock.calls[0]!).toHaveLength(1)
+      expect(
+        store.setWorkspaceSession.mock.calls[0]![0].terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[
+          leafId
+        ]
+      ).not.toBe(deadPtyId)
       expect(store.persistPtyBinding).toHaveBeenCalledWith(
         expect.objectContaining({
           worktreeId,
           tabId,
           leafId,
           ptyId: freshPtyId
-        }),
-        hostId
+        })
       )
+      expect(store.persistPtyBinding.mock.calls.at(-1)!).toHaveLength(1)
     } finally {
       unregisterSshPtyProvider(connectionId)
     }
@@ -10827,15 +11121,15 @@ describe('registerPtyHandlers', () => {
         state: 'attached'
       })
     )
-    expect(store.persistPtyBinding).toHaveBeenCalledWith(
-      {
-        worktreeId: 'wt-remote',
-        tabId: 'tab-remote',
-        leafId,
-        ptyId: 'ssh:ssh-1@@relay-pty'
-      },
-      'ssh:ssh-1'
-    )
+    // STA-3077 step P inverted this: the headless binding writer no longer
+    // targets `ssh:<target>`; one home (`local`) only, so no hostId argument.
+    expect(store.persistPtyBinding).toHaveBeenCalledWith({
+      worktreeId: 'wt-remote',
+      tabId: 'tab-remote',
+      leafId,
+      ptyId: 'ssh:ssh-1@@relay-pty'
+    })
+    expect(store.persistPtyBinding.mock.calls[0]!).toHaveLength(1)
     expect(store.persistPtyBinding.mock.invocationCallOrder[0]!).toBeLessThan(
       store.upsertSshRemotePtyLease.mock.invocationCallOrder[0]!
     )
@@ -10979,15 +11273,15 @@ describe('registerPtyHandlers', () => {
         persistHostSessionBinding: true
       })
 
-      expect(store.persistPtyBinding).toHaveBeenCalledWith(
-        {
-          worktreeId: 'wt-remote',
-          tabId: 'tab-remote',
-          leafId,
-          ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
-        },
-        'ssh:ssh-reattach-ok'
-      )
+      // STA-3077 step P inverted this: the reattach binding refresh writes to the
+      // single default (local) partition, so the `ssh:<target>` hostId is gone.
+      expect(store.persistPtyBinding).toHaveBeenCalledWith({
+        worktreeId: 'wt-remote',
+        tabId: 'tab-remote',
+        leafId,
+        ptyId: 'ssh:ssh-reattach-ok@@relay-pty'
+      })
+      expect(store.persistPtyBinding.mock.calls.at(-1)!).toHaveLength(1)
       expect(store.upsertSshRemotePtyLease).toHaveBeenCalledWith(
         expect.objectContaining({
           targetId: 'ssh-reattach-ok',
@@ -17662,6 +17956,31 @@ describe('registerPtyHandlers', () => {
     expect(mockProc.proc.write).toHaveBeenNthCalledWith(2, 'tail')
   })
 
+  it('stops a chunked write when the PTY incarnation changes between chunks', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    restorePtyIncarnation(result.id, 'incarnation-old')
+    const text = ['x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES), 'tail'].join('')
+
+    const writeResult = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+      id: result.id,
+      data: text
+    })
+    expect(mockProc.proc.write).toHaveBeenCalledOnce()
+    restorePtyIncarnation(result.id, 'incarnation-new')
+    await vi.runAllTimersAsync()
+
+    await expect(writeResult).resolves.toBe(false)
+    expect(mockProc.proc.write).toHaveBeenCalledOnce()
+    clearProviderPtyState(result.id)
+  })
+
   it('yields while validating accepted large acknowledged pty writes before provider writes', async () => {
     const mockProc = createMockProc()
     spawnMock.mockReturnValue(mockProc.proc)
@@ -17684,6 +18003,30 @@ describe('registerPtyHandlers', () => {
     await vi.runAllTimersAsync()
     await expect(writeResult).resolves.toBe(true)
     expect(mockProc.proc.write.mock.calls.map(([chunk]) => chunk).join('')).toBe(text)
+  })
+
+  it('drops a deferred write when the PTY incarnation changes during validation', async () => {
+    vi.useFakeTimers()
+    const mockProc = createMockProc()
+    spawnMock.mockReturnValue(mockProc.proc)
+    registerPtyHandlers(mainWindow as never)
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24
+    })) as { id: string }
+    restorePtyIncarnation(result.id, 'incarnation-old')
+    const text = 'é'.repeat(CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS + 1)
+
+    const writeResult = handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, {
+      id: result.id,
+      data: text
+    })
+    restorePtyIncarnation(result.id, 'incarnation-new')
+    await vi.runAllTimersAsync()
+
+    await expect(writeResult).resolves.toBe(false)
+    expect(mockProc.proc.write).not.toHaveBeenCalled()
+    clearProviderPtyState(result.id)
   })
 
   it('rejects oversized acknowledged pty writes before provider writes', async () => {

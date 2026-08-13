@@ -59,7 +59,7 @@ describe('federated worker agent launch', () => {
         dispatchId: 'ctx_remote',
         taskId: 'task_remote',
         taskSpec: 'remote cursor worker',
-        protocolVersion: 1,
+        protocolVersion: 3,
         worktree: 'id:repo::remote-worktree',
         agent: 'cursor',
         model: 'gpt-5.3-codex',

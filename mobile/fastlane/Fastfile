@@ -253,6 +253,9 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       app_identifier: BUNDLE_ID,
+      # distribute_only means there is no local .ipa to sniff, so fastlane would
+      # otherwise fall through to an interactive platform prompt and crash in CI.
+      app_platform: "ios",
       app_version: version,
       build_number: build_number,
       distribute_only: true,
