@@ -83,7 +83,10 @@ export function buildFontFamily(
   platform: TerminalFontPlatform = detectTerminalFontPlatform()
 ): string {
   const trimmed = fontFamily.trim()
-  const parts = trimmed ? [`"${trimmed}"`] : []
+  // JSON escaping of `"` and `\` coincides with CSS string escaping, so a
+  // family name cannot terminate the quoted string early (same approach as
+  // app-font-family.ts). Fallbacks below are static literals and stay as-is.
+  const parts = trimmed ? [JSON.stringify(trimmed)] : []
   // Track complete normalized family names: "My SF Mono Custom" is a distinct
   // CSS family from "SF Mono", so substring matching must not suppress a fallback.
   const knownFamilies = new Set(trimmed ? [trimmed.toLowerCase()] : [])

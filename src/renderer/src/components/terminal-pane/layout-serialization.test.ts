@@ -142,6 +142,16 @@ describe('buildFontFamily', () => {
     expect(result).toBe(`"My SF Mono Custom", ${FULL_FALLBACK}`)
   })
 
+  it('escapes double quotes in the chosen font so the CSS string stays intact', () => {
+    const result = buildFontFamily('Foo" Bar', 'darwin')
+    expect(result).toBe(`"Foo\\" Bar", ${FULL_FALLBACK}`)
+  })
+
+  it('escapes backslashes in the chosen font so the CSS string stays intact', () => {
+    const result = buildFontFamily('Foo\\Bar', 'darwin')
+    expect(result).toBe(`"Foo\\\\Bar", ${FULL_FALLBACK}`)
+  })
+
   it('does not duplicate Consolas when it is the input', () => {
     const result = buildFontFamily('Consolas', 'darwin')
     expect(result).toBe(`"Consolas", ${fallbackWithout('Consolas')}`)
