@@ -184,9 +184,16 @@ test('dragging a virtualized worktree downward keeps rows stable', async ({ orca
   await orcaPage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
   await orcaPage.mouse.down()
   try {
-    await orcaPage.mouse.move(scrollerBox.x + 2, scrollerBox.y + scrollerBox.height - 8, {
-      steps: 16
-    })
+    const edgeX = scrollerBox.x + 2
+    const edgeY = scrollerBox.y + scrollerBox.height - 8
+    // Keep the pointer in the edge zone while the renderer advances autoscroll.
+    for (let step = 0; step < 12; step++) {
+      await orcaPage.mouse.move(edgeX, edgeY, { steps: 2 })
+      if ((await source.count()) === 0) {
+        break
+      }
+      await orcaPage.waitForTimeout(100)
+    }
     await expect
       .poll(() => source.count(), {
         timeout: 10_000,
