@@ -1,20 +1,31 @@
-import { glabExecFileAsync } from '../git/runner'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
-import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
+import { isStableMissingGitRemoteError } from '../git/stable-missing-git-remote-error'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import type { IssueSourcePreference } from '../../shared/types'
-import { clearProjectRefInFlight, runProjectRefProbeOnce } from './project-ref-inflight'
+import {
+  clearProjectRefInFlight,
+  runProjectRefProbeOnce,
+  type ProjectRefProbeResult
+} from './project-ref-inflight'
+import {
+  clearSoleRemoteNameProbeCache,
+  resolveFromSoleRemote
+} from './gitlab-sole-remote-name-probe'
 import {
   _resetGlabUnauthenticatedHosts,
-  isGlabHostKnownUnauthenticated,
-  parseGlabAuthStatusHosts,
-  rememberGlabHostUnauthenticated,
+  GlabHostProbeUnavailableError,
+  isGlabConfiguredForRemoteHost,
   rememberGlabKnownHost,
   type LocalGitExecOptions
 } from './gitlab-known-host-probe'
 import {
+  clearProjectRefCache,
+  getCachedProjectRef,
+  getProjectRefCacheSize,
+  rememberProjectRef
+} from './gitlab-project-ref-cache'
+import {
   DEFAULT_GITLAB_HOSTS,
-  normalizeGitLabHost,
   parseGitLabProjectRef,
   parseRemoteProjectRefCandidate,
   type ProjectRef
@@ -28,41 +39,19 @@ export {
   parseGlabAuthStatusHosts
 } from './gitlab-known-host-probe'
 export type { LocalGitExecOptions } from './gitlab-known-host-probe'
-
-const PROJECT_REF_CACHE_MAX_ENTRIES = 512
-
-type CachedProjectRef = { value: ProjectRef | null; expiresAt: number }
-
-const projectRefCache = new Map<string, CachedProjectRef>()
+export { glabHostnameArgs, glabRepoExecOptions } from './gitlab-exec-options'
 
 /** @internal - exposed for tests only */
 export function _resetProjectRefCache(): void {
-  projectRefCache.clear()
+  clearProjectRefCache()
   clearProjectRefInFlight()
+  clearSoleRemoteNameProbeCache()
   _resetGlabUnauthenticatedHosts()
 }
 
 /** @internal - exposed for tests only */
 export function _getProjectRefCacheSize(): number {
-  return projectRefCache.size
-}
-
-function rememberProjectRefCacheEntry(cacheKey: string, value: ProjectRef | null): void {
-  // Why: "not GitLab" only holds until someone configures `origin` or logs into
-  // `glab` — a repo probed before either kept hosted-review detection stale for
-  // the life of the process. Negatives expire the way every other forge's do;
-  // positives still stay (see `createRemoteRefProbeCache`).
-  projectRefCache.set(cacheKey, {
-    value,
-    expiresAt: value === null ? Date.now() + NEGATIVE_ENTRY_TTL_MS : Number.POSITIVE_INFINITY
-  })
-  while (projectRefCache.size > PROJECT_REF_CACHE_MAX_ENTRIES) {
-    const oldestKey = projectRefCache.keys().next().value
-    if (oldestKey === undefined) {
-      return
-    }
-    projectRefCache.delete(oldestKey)
-  }
+  return getProjectRefCacheSize()
 }
 
 export async function getProjectRefForRemote(
@@ -72,6 +61,18 @@ export async function getProjectRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
+  return (
+    await probeProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions)
+  ).value
+}
+
+async function probeProjectRefForRemote(
+  repoPath: string,
+  remoteName: string,
+  knownHosts: readonly string[] = DEFAULT_GITLAB_HOSTS,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): Promise<ProjectRefProbeResult> {
   // Why: a reconnect replaces the host an answer came from under the same id, so
   // the generation is part of the signature; `knownHosts` carries the glab auth
   // state, so logging into a self-hosted instance re-asks rather than reusing a
@@ -80,12 +81,9 @@ export async function getProjectRefForRemote(
     ? `${connectionId}:${getSshGitProviderGeneration(connectionId)}`
     : `local:${localGitOptions.wslDistro ?? 'host'}`
   const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}\0${knownHosts.join(',')}`
-  const cached = projectRefCache.get(cacheKey)
-  if (cached) {
-    if (cached.expiresAt > Date.now()) {
-      return cached.value
-    }
-    projectRefCache.delete(cacheKey)
+  const cached = getCachedProjectRef(cacheKey)
+  if (cached !== undefined) {
+    return cached ? { status: 'found', value: cached } : { status: 'miss', value: null }
   }
 
   return runProjectRefProbeOnce(cacheKey, (ownsKey) =>
@@ -109,13 +107,13 @@ async function resolveProjectRefForRemote(
   cacheKey: string,
   ownsKey: () => boolean,
   localGitOptions: LocalGitExecOptions
-): Promise<ProjectRef | null> {
+): Promise<ProjectRefProbeResult> {
   // Why: a probe abandoned as stale still runs, and the repo state it read is
   // older than whatever its successor already published. It may answer its own
   // callers; it may not overwrite the cache.
   const publish = (value: ProjectRef | null): void => {
     if (ownsKey()) {
-      rememberProjectRefCacheEntry(cacheKey, value)
+      rememberProjectRef(cacheKey, value)
     }
   }
   try {
@@ -128,26 +126,21 @@ async function resolveProjectRefForRemote(
       remoteName
     )
     if (stdout === null) {
-      return null
+      return { status: 'unavailable', value: null }
     }
     const result = parseGitLabProjectRef(stdout, knownHosts)
     if (result) {
       publish(result)
-      return result
+      return { status: 'found', value: result }
     }
     const remoteCandidate = parseRemoteProjectRefCandidate(stdout)
     if (
       remoteCandidate &&
-      (await isGlabConfiguredForRemoteHost(
-        repoPath,
-        remoteCandidate,
-        connectionId,
-        localGitOptions
-      ))
+      (await isGlabConfiguredForRemoteHost(remoteCandidate, connectionId, localGitOptions))
     ) {
       rememberGlabKnownHost(remoteCandidate.host, connectionId, localGitOptions)
       publish(remoteCandidate)
-      return remoteCandidate
+      return { status: 'found', value: remoteCandidate }
     }
   } catch (error) {
     // Why: a wedged or killed probe is not evidence the remote is not GitLab —
@@ -155,12 +148,17 @@ async function resolveProjectRefForRemote(
     // SSH failures stay uncached outright rather than adopting the generic
     // cache's stable-missing-remote exception: keeping a connected host's
     // detection fresh is worth the extra probe.
-    if (connectionId || isTransientGitProbeError(error)) {
-      return null
+    if (isTransientGitProbeError(error) || error instanceof GlabHostProbeUnavailableError) {
+      return { status: 'unavailable', value: null }
+    }
+    if (connectionId) {
+      return isStableMissingGitRemoteError(error)
+        ? { status: 'miss', value: null }
+        : { status: 'unavailable', value: null }
     }
   }
   publish(null)
-  return null
+  return { status: 'miss', value: null }
 }
 
 export async function getProjectRef(
@@ -169,7 +167,19 @@ export async function getProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  return getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
+  const origin = await probeProjectRefForRemote(
+    repoPath,
+    'origin',
+    knownHosts,
+    connectionId,
+    localGitOptions
+  )
+  if (origin.status !== 'miss') {
+    return origin.value
+  }
+  return resolveFromSoleRemote(repoPath, ['origin'], connectionId, localGitOptions, (remoteName) =>
+    getProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions)
+  )
 }
 
 export async function getIssueProjectRef(
@@ -178,16 +188,36 @@ export async function getIssueProjectRef(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ProjectRef | null> {
-  const upstream = await getProjectRefForRemote(
+  const upstream = await probeProjectRefForRemote(
     repoPath,
     'upstream',
     knownHosts,
     connectionId,
     localGitOptions
   )
-  return (
-    upstream ??
-    getProjectRefForRemote(repoPath, 'origin', knownHosts, connectionId, localGitOptions)
+  if (upstream.status === 'found') {
+    return upstream.value
+  }
+  const origin = await probeProjectRefForRemote(
+    repoPath,
+    'origin',
+    knownHosts,
+    connectionId,
+    localGitOptions
+  )
+  if (origin.status === 'found') {
+    return origin.value
+  }
+  if (upstream.status === 'unavailable' || origin.status === 'unavailable') {
+    return null
+  }
+  return resolveFromSoleRemote(
+    repoPath,
+    ['upstream', 'origin'],
+    connectionId,
+    localGitOptions,
+    (remoteName) =>
+      getProjectRefForRemote(repoPath, remoteName, knownHosts, connectionId, localGitOptions)
   )
 }
 
@@ -205,15 +235,18 @@ export async function resolveIssueSource(
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<ResolvedIssueSource> {
   if (preference === 'upstream') {
-    const upstream = await getProjectRefForRemote(
+    const upstream = await probeProjectRefForRemote(
       repoPath,
       'upstream',
       knownHosts,
       connectionId,
       localGitOptions
     )
-    if (upstream) {
-      return { source: upstream, fellBack: false }
+    if (upstream.status === 'found') {
+      return { source: upstream.value, fellBack: false }
+    }
+    if (upstream.status === 'unavailable') {
+      return { source: null, fellBack: false }
     }
     const origin = await getProjectRefForRemote(
       repoPath,
@@ -239,62 +272,5 @@ export async function resolveIssueSource(
   return {
     source: await getIssueProjectRef(repoPath, knownHosts, connectionId, localGitOptions),
     fellBack: false
-  }
-}
-
-export function glabRepoExecOptions(
-  repoPath: string,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string } {
-  return connectionId
-    ? {}
-    : {
-        cwd: repoPath,
-        ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-      }
-}
-
-export function glabHostnameArgs(
-  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
-  connectionId?: string | null
-): string[] {
-  return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
-}
-
-async function isGlabConfiguredForRemoteHost(
-  repoPath: string,
-  projectRef: Pick<ProjectRef, 'host'>,
-  connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
-): Promise<boolean> {
-  // Why: this probe is per host, but the project-ref miss that reaches it is per
-  // repo — without the memo, every non-GitLab repo re-spawns `glab` each time
-  // its negative expires.
-  if (isGlabHostKnownUnauthenticated(projectRef.host, connectionId, localGitOptions)) {
-    return false
-  }
-  try {
-    const result = await glabExecFileAsync(
-      ['auth', 'status', '--hostname', projectRef.host],
-      glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-    )
-    if (result === undefined) {
-      rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
-      return false
-    }
-    return true
-  } catch (error) {
-    const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
-    const output =
-      [execLike.stdout, execLike.stderr, execLike.message]
-        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-        .join('\n') || String(error)
-    const hosts = parseGlabAuthStatusHosts(output).map(normalizeGitLabHost)
-    if (hosts.includes(normalizeGitLabHost(projectRef.host))) {
-      return true
-    }
-    rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
-    return false
   }
 }

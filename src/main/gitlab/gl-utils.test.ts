@@ -221,9 +221,17 @@ describe('gitlab project ref resolution', () => {
   })
 
   it('does not cache a local probe killed on its deadline as a definitive miss', async () => {
-    gitExecFileAsyncMock
-      .mockRejectedValueOnce(new Error('git timed out.'))
-      .mockResolvedValueOnce({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+    let originCalls = 0
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.length === 1) {
+        return { stdout: 'origin\n' }
+      }
+      originCalls += 1
+      if (originCalls === 1) {
+        throw new Error('git timed out.')
+      }
+      return { stdout: 'git@gitlab.com:fork/orca.git\n' }
+    })
 
     await expect(getProjectRef('/repo')).resolves.toBeNull()
     await expect(getProjectRef('/repo')).resolves.toEqual({
@@ -236,22 +244,31 @@ describe('gitlab project ref resolution', () => {
   it('re-probes a repo whose GitLab remote could have been added since the miss', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error("error: No such remote 'origin'"))
+    let hasOrigin = false
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args.length === 1) {
+        return { stdout: hasOrigin ? 'origin\n' : '' }
+      }
+      if (!hasOrigin) {
+        throw new Error("error: No such remote 'origin'")
+      }
+      return { stdout: 'git@gitlab.com:fork/orca.git\n' }
+    })
 
     await expect(getProjectRef('/repo')).resolves.toBeNull()
     await expect(getProjectRef('/repo')).resolves.toBeNull()
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
 
     // Nothing watches `.git/config`, and SSH/WSL repos have no file to watch, so
     // a remote configured after the miss is only visible once the negative ages out.
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'git@gitlab.com:fork/orca.git\n' })
+    hasOrigin = true
     vi.setSystemTime(1_000_000 + NEGATIVE_ENTRY_TTL_MS + 1)
 
     await expect(getProjectRef('/repo')).resolves.toEqual({
       host: 'gitlab.com',
       path: 'fork/orca'
     })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(2)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(3)
   })
 
   it('keeps a resolved project ref past the negative interval', async () => {
@@ -361,6 +378,20 @@ describe('resolveIssueSource', () => {
     await expect(resolveIssueSource('/repo', 'upstream')).resolves.toEqual({
       source: { host: 'gitlab.com', path: 'solo/orca' },
       fellBack: true
+    })
+  })
+
+  it("'upstream' + transient upstream failure does not probe origin", async () => {
+    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('git timed out'))
+
+    await expect(resolveIssueSource('/repo', 'upstream')).resolves.toEqual({
+      source: null,
+      fellBack: false
+    })
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'upstream'], {
+      cwd: '/repo',
+      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
     })
   })
 

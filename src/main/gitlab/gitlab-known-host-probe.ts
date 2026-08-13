@@ -2,16 +2,17 @@ import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
-import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
+import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost, type ProjectRef } from './project-ref-parser'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
+export const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
 const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
+const hostAuthInFlight: CoalescedProbes<boolean> = new Map()
 const unauthenticatedHostExpiries = new Map<string, number>()
 
 function knownHostsExecutionKey(
@@ -29,11 +30,13 @@ function knownHostsExecutionKey(
 export function _resetKnownHostsCache(): void {
   knownHostsCacheByExecutionContext.clear()
   knownHostsInFlightByExecutionContext.clear()
+  hostAuthInFlight.clear()
   unauthenticatedHostExpiries.clear()
 }
 
 /** @internal - exposed for tests only */
 export function _resetGlabUnauthenticatedHosts(): void {
+  hostAuthInFlight.clear()
   unauthenticatedHostExpiries.clear()
 }
 
@@ -120,6 +123,70 @@ export function rememberGlabKnownHosts(
     return
   }
   knownHostsCacheByExecutionContext.set(key, [...cached, ...additions])
+}
+
+export class GlabHostProbeUnavailableError extends Error {
+  constructor(cause: unknown) {
+    super('GitLab host authentication probe is unavailable', { cause })
+    this.name = 'GlabHostProbeUnavailableError'
+  }
+}
+
+function isDefinitiveGlabUnauthenticatedError(output: string): boolean {
+  return /(?:not|has not been) (?:logged in|authenticated)|authentication required|glab auth login|http 401|invalid (?:token|credentials)|no (?:authentication )?token/i.test(
+    output
+  )
+}
+
+export async function isGlabConfiguredForRemoteHost(
+  projectRef: Pick<ProjectRef, 'host'>,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<boolean> {
+  // Why: without the per-host memo, every non-GitLab repo respawns `glab` when
+  // its project-ref negative expires.
+  if (isGlabHostKnownUnauthenticated(projectRef.host, connectionId, localGitOptions)) {
+    return false
+  }
+  const key = unauthenticatedHostKey(projectRef.host, connectionId, localGitOptions)
+  return runCoalescedProbe(hostAuthInFlight, key, () =>
+    probeGlabConfiguredForRemoteHost(projectRef, connectionId, localGitOptions)
+  )
+}
+
+async function probeGlabConfiguredForRemoteHost(
+  projectRef: Pick<ProjectRef, 'host'>,
+  connectionId: string | null | undefined,
+  localGitOptions: LocalGitExecOptions
+): Promise<boolean> {
+  try {
+    const result = await glabExecFileAsync(['auth', 'status', '--hostname', projectRef.host], {
+      timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
+      ...(!connectionId && localGitOptions.wslDistro
+        ? { wslDistro: localGitOptions.wslDistro }
+        : {})
+    })
+    if (result === undefined) {
+      rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
+      return false
+    }
+    return true
+  } catch (error) {
+    const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
+    const output =
+      [execLike.stdout, execLike.stderr, execLike.message]
+        .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+        .join('\n') || String(error)
+    const hosts = parseGlabAuthStatusHosts(output).map(normalizeGitLabHost)
+    if (hosts.includes(normalizeGitLabHost(projectRef.host))) {
+      return true
+    }
+    if (!isDefinitiveGlabUnauthenticatedError(output)) {
+      throw new GlabHostProbeUnavailableError(error)
+    }
+    rememberGlabHostUnauthenticated(projectRef.host, connectionId, localGitOptions)
+    return false
+  }
 }
 
 export async function getGlabKnownHosts(
