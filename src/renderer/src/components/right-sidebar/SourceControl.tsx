@@ -117,6 +117,7 @@ import {
   type SourceControlEntryGroups,
   type SourceControlSectionArea
 } from './source-control-section-order'
+import { useSourceControlSectionCollapseState } from './source-control-section-collapse-state'
 import { SourceControlVirtualFileList } from './source-control-virtual-file-list'
 import { selectReviewCacheData, selectReviewCacheEntry } from './review-cache-entry-selection'
 import {
@@ -544,17 +545,12 @@ const SOURCE_CONTROL_TREE_DIRECTORY_PADDING_PX = 8
 const SOURCE_CONTROL_TREE_FILE_PADDING_PX = 20
 const CAPPED_STATUS_RETRY_TIMEOUT_MS = 15_000
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
-const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
 const SUBMODULE_WORKTREE_ONLY_LABEL = 'Stage inside submodule'
 const SUBMODULE_WORKTREE_ONLY_TOOLTIP =
   'The parent repo (including Stage All) cannot stage file changes inside a submodule'
 const SUBMODULE_LOADING_LABEL = 'Loading submodule changes…'
 const SUBMODULE_EMPTY_LABEL = 'No changes in submodule'
 const SUBMODULE_ERROR_LABEL = 'Failed to load submodule changes'
-
-function createDefaultCollapsedSections(): Set<string> {
-  return new Set(DEFAULT_COLLAPSED_SECTIONS)
-}
 
 function useCopyFeedbackState<T>(resetValue: T): [T, (value: T) => void] {
   const [value, setValue] = useState(resetValue)
@@ -1056,9 +1052,8 @@ function SourceControlInner(): React.JSX.Element {
   ])
 
   const [filterExpanded, setFilterExpanded] = useState(false)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    createDefaultCollapsedSections
-  )
+  const { collapsedSections, toggleSection } =
+    useSourceControlSectionCollapseState(activeWorktreeId)
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
   )
@@ -2066,7 +2061,6 @@ function SourceControlInner(): React.JSX.Element {
   // Why: reset worktree-specific state manually instead of key-remounting on switch (which caused a Windows IPC storm).
   useEffect(() => {
     setFilterExpanded(false)
-    setCollapsedSections(createDefaultCollapsedSections())
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
     setPendingDiscard(null)
@@ -5140,18 +5134,6 @@ function SourceControlInner(): React.JSX.Element {
     isFolder,
     worktreePath
   ])
-
-  const toggleSection = useCallback((section: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
-      if (next.has(section)) {
-        next.delete(section)
-      } else {
-        next.add(section)
-      }
-      return next
-    })
-  }, [])
 
   const toggleTreeDir = useCallback((key: string) => {
     setCollapsedTreeDirs((prev) => {

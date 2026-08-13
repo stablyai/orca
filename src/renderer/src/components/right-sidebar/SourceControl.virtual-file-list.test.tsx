@@ -11,6 +11,7 @@ import {
   SOURCE_CONTROL_FILE_ROW_OVERSCAN,
   SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS
 } from './source-control-virtual-file-list'
+import { clearSourceControlSectionCollapseStateForTests } from './source-control-section-collapse-state'
 
 const mocks = vi.hoisted(() => {
   const activeRepo = {
@@ -196,6 +197,7 @@ class NoopResizeObserver {
 
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  clearSourceControlSectionCollapseStateForTests()
   resetState()
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -236,6 +238,7 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount())
   container.remove()
+  clearSourceControlSectionCollapseStateForTests()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -340,7 +343,7 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(row('src/file-000.ts')?.className).toContain('bg-accent/60')
   })
 
-  it('collapses and re-expands a virtualized section', () => {
+  it('keeps a virtualized section collapsed across a Source Control remount', () => {
     resetState({
       gitStatusByWorktree: { [mocks.activeWorktree.id]: manyEntries(500) }
     })
@@ -358,8 +361,20 @@ describe('SourceControl virtualized changed-files list', () => {
     expect(mountedRows().length).toBe(0)
     expect(virtualList()).toBeNull()
 
+    // Simulate visiting Explorer or Checks, which fully unmounts Source Control.
+    act(() => root.unmount())
+    root = createRoot(container)
+    renderSourceControl()
+
+    expect(mountedRows().length).toBe(0)
+    expect(virtualList()).toBeNull()
+
+    const remountedChangesHeader = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Changes')
+    )
+    expect(remountedChangesHeader).toBeTruthy()
     act(() => {
-      changesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      remountedChangesHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(mountedRows().length).toBeGreaterThan(0)
     expect(mountedRows().length).toBeLessThanOrEqual(MAX_MOUNTED_ROWS)
