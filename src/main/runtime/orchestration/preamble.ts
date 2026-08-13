@@ -51,7 +51,9 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
-    workerKind: params.workerKind ?? 'prompt-returning-agent'
+    workerKind: params.workerKind ?? 'prompt-returning-agent',
+    coordinatorHandle: params.coordinatorHandle,
+    taskId: params.taskId
   })
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
@@ -146,34 +148,46 @@ ${params.taskSpec}`
 
 function buildPostWorkerDoneInstructions({
   cli,
-  workerKind
+  workerKind,
+  coordinatorHandle,
+  taskId
 }: {
   cli: string
   workerKind: NonNullable<PreambleParams['workerKind']>
+  coordinatorHandle: string
+  taskId: string
 }): string {
+  // Why: worker_done only persists to the coordinator inbox; idle coordinators
+  // are not auto-woken (#8698). Without one terminal-send wake, compliant
+  // workers leave the coordinator asleep indefinitely (#9968).
+  const wakeLine = `${cli} terminal send --terminal ${coordinatorHandle} --text "[wake] task ${taskId} done — check inbox" --enter`
+
   // Why: re-dispatch reaches idle agents as terminal input; inbox polling
   // after completion cannot receive that new TASK block and looks hung.
   if (workerKind === 'bare-shell') {
     return `=== AFTER YOU SEND worker_done ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
-stop and take no further actions — do NOT start new or unrelated work,
-do NOT run a sleep/poll loop, and do NOT keep calling
-\`${cli} orchestration check\`. The coordinator has already recorded your
-completion and expects no further output.
+worker_done ends your turn for this task. Your dispatched work is complete.
+First, send exactly one wake line so the coordinator sees the completion:
+\`${wakeLine}\`
+Then stop and take no further actions — do NOT start new or unrelated work,
+do NOT run a sleep/poll loop, do NOT send additional wake messages, and
+do NOT keep calling \`${cli} orchestration check\`.
 
-Exit the shell after completion. Bare-shell workers have no idle agent
+Exit the shell after that single wake. Bare-shell workers have no idle agent
 prompt for Orca to reuse; if the coordinator has more for you it will
 dispatch or prompt another worker with a fresh TASK block.`
   }
 
   return `=== AFTER YOU SEND worker_done ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
-stop, return to an idle prompt, and take no further actions — do NOT start
-new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
-\`${cli} orchestration check\`. The coordinator has already recorded your
-completion and expects no further output.
+worker_done ends your turn for this task. Your dispatched work is complete.
+First, send exactly one wake line so the coordinator sees the completion:
+\`${wakeLine}\`
+Then stop, return to an idle prompt, and take no further actions — do NOT
+start new or unrelated work, do NOT run a sleep/poll loop, do NOT send
+additional wake messages, and do NOT keep calling
+\`${cli} orchestration check\`.
 
 Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh

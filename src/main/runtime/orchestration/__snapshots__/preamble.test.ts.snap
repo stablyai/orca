@@ -74,11 +74,13 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
 === AFTER YOU SEND worker_done ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
-stop, return to an idle prompt, and take no further actions — do NOT start
-new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
-\`orca orchestration check\`. The coordinator has already recorded your
-completion and expects no further output.
+worker_done ends your turn for this task. Your dispatched work is complete.
+First, send exactly one wake line so the coordinator sees the completion:
+\`orca terminal send --terminal term_COORD --text "[wake] task task_SNAP done — check inbox" --enter\`
+Then stop, return to an idle prompt, and take no further actions — do NOT
+start new or unrelated work, do NOT run a sleep/poll loop, do NOT send
+additional wake messages, and do NOT keep calling
+\`orca orchestration check\`.
 
 Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh
