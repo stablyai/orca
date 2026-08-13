@@ -154,11 +154,12 @@ export function SpreadsheetCell({
       <span
         className={cn(
           wrapsText ? 'min-w-0' : 'truncate',
-          // Why: a label may run across empty columns, but never out of its own
-          // row — a 24pt title in a short row bled over the band below it. The
-          // span clips its own height while still being allowed to be wider than
-          // the cell.
-          overflowWidth === null ? undefined : 'max-h-full overflow-hidden'
+          // Why: `truncate` sets overflow-hidden, which lets flexbox shrink this
+          // below its content and truncate it at the cell's edge — the maxWidth
+          // alone was being ignored, so a label with empty columns beside it still
+          // ended in an ellipsis. It must also clip its own height, since a tall
+          // label in a short row bled over the band below it.
+          overflowWidth === null ? undefined : 'max-h-full shrink-0 overflow-hidden'
         )}
         style={overflowWidth === null ? undefined : { maxWidth: overflowWidth }}
       >

@@ -64,7 +64,8 @@ describe('SpreadsheetCell text clipping', () => {
 
     expect(cell.className).toContain('overflow-hidden')
     expect(label(cell).style.maxWidth).toBe('')
-    expect(label(cell).className).not.toContain('max-h-full')
+    expect(label(cell).classList).not.toContain('max-h-full')
+    expect(label(cell).classList).not.toContain('shrink-0')
   })
 
   it('lets a label run across empty neighbours up to the width it was given', () => {
@@ -72,7 +73,9 @@ describe('SpreadsheetCell text clipping', () => {
 
     expect(cell.className).toContain('overflow-visible')
     expect(label(cell).style.maxWidth).toBe('320px')
-    expect(label(cell).className).toContain('max-h-full overflow-hidden')
+    expect(label(cell).classList).toContain('max-h-full')
+    expect(label(cell).classList).toContain('overflow-hidden')
+    expect(label(cell).classList).toContain('shrink-0')
   })
 
   it('opts a zero overflow width into the overflow rather than out of it', () => {
@@ -80,6 +83,23 @@ describe('SpreadsheetCell text clipping', () => {
 
     expect(cell.className).toContain('overflow-visible')
     expect(label(cell).style.maxWidth).toBe('0')
+    expect(label(cell).classList).toContain('shrink-0')
+  })
+
+  it('keeps an overflowing label from being shrunk to its column by the flex row', () => {
+    expect(label(renderCell({ overflowWidth: 480 })).classList).toContain('shrink-0')
+    expect(label(renderCell({ overflowWidth: null })).classList).not.toContain('shrink-0')
+  })
+
+  it('clips an unwrapped label with an ellipsis whether or not it may overflow', () => {
+    expect(label(renderCell({ overflowWidth: 480 })).classList).toContain('truncate')
+    expect(label(renderCell({ overflowWidth: null })).classList).toContain('truncate')
+  })
+
+  it('lets a wrapped label shrink inside its own column', () => {
+    const span = label(renderCell({ cellStyle: { wrapText: true }, overflowWidth: null }))
+
+    expect([...span.classList]).toEqual(['min-w-0'])
   })
 
   it('shows the same text whether or not the label may overflow', () => {

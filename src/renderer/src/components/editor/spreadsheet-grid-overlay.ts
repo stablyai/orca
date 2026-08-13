@@ -56,12 +56,18 @@ export function buildSpreadsheetRectMap({
   columnWidths,
   rowCount,
   getRowHeight,
-  rowNumberColumnPx
+  rowNumberColumnPx,
+  headerRowHeightPx = 0
 }: {
   columnWidths: readonly number[]
   rowCount: number
   getRowHeight: (index: number) => number
   rowNumberColumnPx: number
+  /**
+   * Height of the sticky heading row. The layer covers the whole table, heading
+   * row included, so without this every placement sits one row too high.
+   */
+  headerRowHeightPx?: number
 }): (from: XlsxDrawingRange) => SpreadsheetOverlayRect {
   const columnOffsets = buildOffsets(columnWidths.length, (index) => columnWidths[index] ?? 0)
   const rowOffsets = buildOffsets(rowCount, getRowHeight)
@@ -70,14 +76,14 @@ export function buildSpreadsheetRectMap({
 
   return ({ fromRow, fromColumn, toRow, toColumn }) => {
     const left = rowNumberColumnPx + offsetAt(columnOffsets, fromColumn)
-    const top = offsetAt(rowOffsets, fromRow)
+    const top = headerRowHeightPx + offsetAt(rowOffsets, fromRow)
     return {
       left,
       top,
       // Why: the end cell is inclusive, so the rectangle runs to the start of the
       // track after it; a minimum keeps a single-cell range visible.
       width: Math.max(1, rowNumberColumnPx + offsetAt(columnOffsets, toColumn + 1) - left),
-      height: Math.max(1, offsetAt(rowOffsets, toRow + 1) - top)
+      height: Math.max(1, headerRowHeightPx + offsetAt(rowOffsets, toRow + 1) - top)
     }
   }
 }
@@ -109,7 +115,8 @@ export function buildSpreadsheetOverlayPlacements({
   columnWidths,
   rowCount,
   getRowHeight,
-  rowNumberColumnPx
+  rowNumberColumnPx,
+  headerRowHeightPx
 }: {
   drawings: readonly XlsxSheetDrawing[] | undefined
   sparklines: readonly (readonly (ResolvedXlsxSparkline | undefined)[] | undefined)[] | undefined
@@ -121,6 +128,7 @@ export function buildSpreadsheetOverlayPlacements({
   rowCount: number
   getRowHeight: (index: number) => number
   rowNumberColumnPx: number
+  headerRowHeightPx?: number
 }): SpreadsheetOverlayPlacements {
   const hasDrawings = drawings !== undefined && drawings.length > 0
   const hasSparklines = sparklines !== undefined && sparklines.length > 0
@@ -135,7 +143,8 @@ export function buildSpreadsheetOverlayPlacements({
     columnWidths,
     rowCount,
     getRowHeight,
-    rowNumberColumnPx
+    rowNumberColumnPx,
+    headerRowHeightPx
   })
   const drawingPlacements = (drawings ?? []).map((drawing) => ({
     drawing,

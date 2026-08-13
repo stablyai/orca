@@ -161,7 +161,8 @@ export function SpreadsheetGrid({
         columnWidths,
         rowCount: rows.length,
         getRowHeight: getRowHeightPx,
-        rowNumberColumnPx
+        rowNumberColumnPx,
+        headerRowHeightPx: rowHeightPx
       }),
     [
       drawings,
@@ -172,7 +173,8 @@ export function SpreadsheetGrid({
       columnWidths,
       rows,
       getRowHeightPx,
-      rowNumberColumnPx
+      rowNumberColumnPx,
+      rowHeightPx
     ]
   )
 
