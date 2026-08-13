@@ -13,6 +13,14 @@ export function isMarkdownUntitledName(currentName: string): boolean {
   return MARKDOWN_SUFFIX.test(currentName)
 }
 
+/**
+ * True for `.` and `..`, which pass a path-separator check but resolve to the containing or
+ * parent directory once joined into the worktree root.
+ */
+export function isReservedRelativeName(fileName: string): boolean {
+  return fileName === '.' || fileName === '..'
+}
+
 /** Resolves the file name a rename should produce, or '' when nothing usable was typed. */
 export function resolveUntitledRenameFileName(currentName: string, typedName: string): string {
   const trimmed = typedName.trim()

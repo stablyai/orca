@@ -66,6 +66,31 @@ describe('createUntitledEditorFile', () => {
     expect(createRuntimePathMock).not.toHaveBeenCalled()
   })
 
+  it('removes the created file when the initial write fails', async () => {
+    // Why: the placeholder is already on disk by then, so a failed write must not leave it behind.
+    writeRuntimeFileMock.mockRejectedValueOnce(new Error('EACCES: permission denied'))
+
+    await expect(
+      createUntitledEditorFile('/repo', 'wt-1', undefined, null, {
+        ext: '',
+        initialContent: () => 'body'
+      })
+    ).rejects.toThrow('EACCES')
+
+    expect(deleteRuntimePathMock).toHaveBeenCalledWith(expect.anything(), '/repo/untitled')
+  })
+
+  it('reports exhaustion using the caller-supplied label', async () => {
+    runtimePathExistsMock.mockResolvedValue(true)
+
+    await expect(
+      createUntitledEditorFile('/repo', 'wt-1', undefined, null, {
+        ext: '.md',
+        exhaustionErrorLabel: 'markdown file'
+      })
+    ).rejects.toThrow('Unable to create untitled markdown file after 100 attempts.')
+  })
+
   it('propagates non-EEXIST failures', async () => {
     createRuntimePathMock.mockRejectedValue(new Error('EACCES: permission denied'))
 

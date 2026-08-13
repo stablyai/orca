@@ -2062,6 +2062,10 @@ export const createEditorSlice: StateCreator<AppState, [], [], EditorSlice> = (s
             assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
         }
       )
+      // Why: the creator's last assertion happens before its final runtime call, so the host can
+      // still switch while that call is in flight. Re-check here or openFile binds the tab to the
+      // previous owner.
+      assertEditorFileOperationCurrent(get(), worktreeId, operationProvenance)
       get().openFile(fileInfo, { preview: false, targetGroupId: groupId })
     } catch (err) {
       toast.error(

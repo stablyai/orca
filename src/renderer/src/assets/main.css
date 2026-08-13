@@ -2180,8 +2180,9 @@ html.native-shell .app-layout {
 }
 
 /* Why: thinner than the 4px conflict bar above — both can share this lane on a conflicted file,
-   and the conflict marker should win the eye. Colors come from the shared --git-decoration-*
-   tokens, already defined for both themes. */
+   and the conflict marker should win the eye. Colors come from the dedicated --editor-gutter-*
+   tokens, not the --git-decoration-* file-tree palette; see docs/STYLEGUIDE.md for why they
+   differ. Both themes are covered. */
 .monaco-editor .orca-git-gutter {
   width: 3px !important;
   margin-left: 3px;

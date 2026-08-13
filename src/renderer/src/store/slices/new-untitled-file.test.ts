@@ -212,4 +212,27 @@ describe('openNewUntitledFileInActiveWorkspace', () => {
     expect(openFile).not.toHaveBeenCalled()
     expect(toastErrorMock).toHaveBeenCalledTimes(1)
   })
+
+  it('does not open the file when the host changes after creation resolves', async () => {
+    // Why: the creator's last assertion runs before its final runtime call, so a host switch
+    // during that call would otherwise reach openFile with stale provenance.
+    const store = createEditorStore()
+    const openFile = stubOpenFile(store)
+    createUntitledEditorFileMock.mockImplementation(async () => {
+      store.setState({
+        worktreesByRepo: {
+          'repo-1': [
+            { id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'ssh:ssh-9', branch: '' }
+          ]
+        }
+      } as unknown as Partial<AppState>)
+      return createdFile
+    })
+
+    await store.getState().openNewUntitledFileInActiveWorkspace('group-a')
+
+    expect(createUntitledEditorFileMock).toHaveBeenCalledTimes(1)
+    expect(openFile).not.toHaveBeenCalled()
+    expect(toastErrorMock).toHaveBeenCalledTimes(1)
+  })
 })

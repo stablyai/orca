@@ -1,6 +1,10 @@
 import React, { useCallback, useRef, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
-import { isMarkdownUntitledName, resolveUntitledRenameFileName } from './untitled-file-rename-path'
+import {
+  isMarkdownUntitledName,
+  isReservedRelativeName,
+  resolveUntitledRenameFileName
+} from './untitled-file-rename-path'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -100,6 +104,10 @@ export function UntitledFileRenameDialog({
     }
     if (/[/\\]/.test(fileName)) {
       setError('Name cannot contain path separators')
+      return
+    }
+    if (isReservedRelativeName(fileName)) {
+      setError('Name cannot be "." or ".."')
       return
     }
 

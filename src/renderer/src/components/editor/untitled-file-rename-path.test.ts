@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getUntitledFileRoot,
   isMarkdownUntitledName,
+  isReservedRelativeName,
   resolveUntitledRenameFileName
 } from './untitled-file-rename-path'
 
@@ -53,6 +54,22 @@ describe('resolveUntitledRenameFileName', () => {
   it('trims surrounding whitespace', () => {
     expect(resolveUntitledRenameFileName('untitled.md', '  notes  ')).toBe('notes.md')
     expect(resolveUntitledRenameFileName('untitled', '  main.go  ')).toBe('main.go')
+  })
+
+  it('rejects dot-only names that would escape or re-target the folder', () => {
+    // Why: these pass the separator check but join into the worktree root as `./` or `../`.
+    // Before New File they were unreachable — a forced .md turned "." into "..md".
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', '.'))).toBe(true)
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', '..'))).toBe(true)
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', '  ..  '))).toBe(true)
+  })
+
+  it('does not reject ordinary dotfiles or names that merely contain dots', () => {
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', '.gitignore'))).toBe(
+      false
+    )
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', '...'))).toBe(false)
+    expect(isReservedRelativeName(resolveUntitledRenameFileName('untitled', 'a.b'))).toBe(false)
   })
 
   it('returns an empty string when nothing usable was typed', () => {

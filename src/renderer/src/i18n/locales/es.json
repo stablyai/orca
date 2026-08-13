@@ -10107,7 +10107,7 @@
         },
         "EditorGitGutterSetting": {
           "0d6a6bc1e3": "Indicadores de cambios de Git",
-          "68bbcab1b6": "Muestra marcadores de líneas añadidas, modificadas y eliminadas en el margen del editor, comparado con el último commit."
+          "68bbcab1b6": "Muestra marcadores de líneas añadidas, modificadas y eliminadas en el margen del editor, en comparación con el último commit."
         }
       },
       "right": {
@@ -13074,7 +13074,7 @@
           "b6ed807cc6": "Nombre",
           "e365f3c638": "Asigne un nombre a su archivo de markdowns y elija una carpeta.",
           "674b046582": "Guardar como",
-          "02a35a6863": "Asigna un nombre al archivo y elige una carpeta."
+          "02a35a6863": "Asigne un nombre al archivo y elija una carpeta."
         },
         "export": {
           "active": {
