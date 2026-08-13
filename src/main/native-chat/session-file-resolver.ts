@@ -57,9 +57,17 @@ function ompSessionsDir(): string {
   )
 }
 
+/** Mirrors the AI Vault scanner's Droid root (`~/.factory/sessions`, honoring
+ *  FACTORY_HOME) so both resolve the same transcript for one session. */
+function droidSessionsDir(): string {
+  return join(process.env.FACTORY_HOME?.trim() || join(homedir(), '.factory'), 'sessions')
+}
+
 export type ResolveSessionFileOptions = {
   /** Override the Claude projects root (used by tests / isolated scans). */
   claudeProjectsDir?: string
+  /** Override the Droid sessions root (`~/.factory/sessions`). */
+  droidSessionsDir?: string
   /** Override the Codex sessions roots, searched in order (tests / isolated
    *  scans). Defaults to the orca-managed home then CODEX_HOME/~/.codex. */
   codexSessionsDirs?: string[]
@@ -147,6 +155,13 @@ async function resolveSessionFileById(
       // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
       // user left stopped. Only pay that after this host's own Codex roots miss.
       overrideDirs ? undefined : wslCodexSessionsDirs,
+      signal
+    )
+  }
+  if (transcriptAgent === 'droid') {
+    return resolveDroidSessionFile(
+      trimmedId,
+      options.droidSessionsDir ?? droidSessionsDir(),
       signal
     )
   }
@@ -241,6 +256,24 @@ async function findCodexRolloutInDirs(
     throw unavailable
   }
   return null
+}
+
+// Droid keeps one directory per working directory (`-Users-ran-Projects-orca`)
+// holding `<session id>.jsonl` plus a `<session id>.settings.json` sidecar, and
+// the hook's session_id is that exact base name — so match it the way Claude is
+// matched rather than as a suffix, which would let the sidecar or a longer id win.
+async function resolveDroidSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const targetName = `${sessionId}.jsonl`
+  const files = await walkSessionFiles(sessionsDir, 'droid', [], {
+    extensions: new Set(['.jsonl']),
+    filePredicate: (path) => basename(path) === targetName,
+    signal
+  })
+  return files[0] ?? null
 }
 
 async function resolveGrokSessionFile(

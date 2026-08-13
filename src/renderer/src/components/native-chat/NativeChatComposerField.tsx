@@ -7,6 +7,7 @@ import type {
 import { Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
+import { useAppStore } from '../../store'
 import { NATIVE_FILE_DROP_TARGET } from '../../../../shared/native-file-drop'
 import { basename } from '@/lib/path'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
@@ -97,10 +98,12 @@ export function NativeChatComposerField({
   sessionOptionsSurface,
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
+  const composerOnTop = useAppStore((store) => store.settings?.nativeChatComposerOnTop === true)
   return (
     <div className="shrink-0 bg-background">
-      {/* Extra bottom padding keeps the input box off the window rim. */}
-      <div className="px-3 pt-2 pb-4 sm:px-4">
+      {/* Extra padding on the rim side keeps the input box off the window edge —
+          which is the top edge in the composer-on-top layout. */}
+      <div className={cn('px-3 sm:px-4', composerOnTop ? 'pt-4 pb-2' : 'pt-2 pb-4')}>
         <div className="relative mx-auto w-full max-w-4xl">
           {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
             <NativeChatPickerMenu

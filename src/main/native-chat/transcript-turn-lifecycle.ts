@@ -8,6 +8,7 @@ import {
   timestampMs
 } from '../ai-vault/session-scanner-values'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
+import { decodeDroidTurnLifecycle } from './transcript-turn-lifecycle-droid'
 import {
   claudeInterruptedMessageId,
   CODEX_EVENT_TURN_ABORTED,
@@ -29,6 +30,9 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   }
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
+  }
+  if (transcriptAgent === 'droid') {
+    return decodeDroidTurnLifecycle
   }
   return null
 }

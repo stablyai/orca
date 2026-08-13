@@ -11,6 +11,7 @@ import { wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
+  decodeDroidTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
@@ -60,6 +61,9 @@ export async function readNativeChatTranscript(
     }
     if (transcriptAgent === 'codex') {
       return { messages: await readTranscript(filePath, decodeCodexTranscriptLine) }
+    }
+    if (transcriptAgent === 'droid') {
+      return { messages: await readTranscript(filePath, decodeDroidTranscriptLine) }
     }
     if (transcriptAgent === 'grok') {
       return { messages: await readTranscript(filePath, decodeGrokTranscriptLine) }

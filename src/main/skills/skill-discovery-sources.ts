@@ -170,6 +170,14 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'cursor'
+    ),
+    source(
+      'home-droid',
+      'Droid home',
+      pathApi.join(home, '.factory', 'skills'),
+      'home',
+      ['agent-skills'],
+      'droid'
     )
   ]
 
@@ -204,6 +212,14 @@ export function buildSkillDiscoverySources(
         'repo',
         ['claude'],
         'claude'
+      ),
+      source(
+        `repo-droid-${stablePathId(repoPath)}`,
+        `${label} .factory`,
+        pathApi.join(repoPath, '.factory', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'droid'
       )
     )
   }

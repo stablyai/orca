@@ -35,6 +35,14 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
         'grok'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.droid',
+        'droid'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.layout',
+        'layout'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.terminal',
         'terminal'
       ),

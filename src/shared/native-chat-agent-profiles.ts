@@ -28,6 +28,14 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
     skillPrefix: '/',
     groupedSlash: true,
     skillSourceOwner: 'grok'
+  },
+  // Droid registers every user-invocable skill as a slash command of its own
+  // name (skipping ones that collide with a built-in), so skills and commands
+  // share the `/` namespace exactly as they do in Claude.
+  droid: {
+    skillPrefix: '/',
+    groupedSlash: true,
+    skillSourceOwner: 'droid'
   }
 }
 

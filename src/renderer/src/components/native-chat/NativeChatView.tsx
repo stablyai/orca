@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
+import { nativeChatListOrientation } from './native-chat-list-orientation'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
@@ -37,11 +39,7 @@ import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
 } from '../../../../shared/native-chat-streaming'
-import {
-  shouldFocusNativeChatComposerFromEditingKey,
-  shouldFocusNativeChatPaneFromPointerTarget,
-  shouldRedirectNativeChatTyping
-} from './native-chat-typing-redirect'
+import { useNativeChatPaneCapture } from './use-native-chat-pane-capture'
 import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
@@ -358,42 +356,29 @@ function NativeChatResolvedView({
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
 
+  // Opt-in top-down reading order: composer pinned above the transcript with the
+  // newest turn directly beneath it.
+  const composerOnTop = useAppStore((s) => s.settings?.nativeChatComposerOnTop === true)
+  const paneCapture = useNativeChatPaneCapture({
+    rootRef,
+    composerRef,
+    onSelectionCapture: contextMenu.onSelectionCapture,
+    onContextMenuCapture: contextMenu.onContextMenuCapture
+  })
+
   return (
     <div
       ref={rootRef}
       data-native-chat-root="true"
       tabIndex={-1}
-      onPointerDownCapture={(event) => {
-        if (event.button === 2) {
-          contextMenu.onSelectionCapture()
-          event.preventDefault()
-          event.stopPropagation()
-          return
-        }
-        if (event.button === 0 && shouldFocusNativeChatPaneFromPointerTarget(event.target)) {
-          rootRef.current?.focus({ preventScroll: true })
-        }
-      }}
-      onKeyDownCapture={(event) => {
-        // Backspace/Delete outside an input focuses the composer (like typing)
-        // but inserts nothing — let the now-focused field handle the keystroke.
-        if (shouldFocusNativeChatComposerFromEditingKey(event)) {
-          composerRef.current?.focus()
-          return
-        }
-        if (!shouldRedirectNativeChatTyping(event)) {
-          return
-        }
-        if (!composerRef.current?.insertTypedText(event.key)) {
-          return
-        }
-        event.preventDefault()
-        event.stopPropagation()
-      }}
-      onMouseUpCapture={contextMenu.onSelectionCapture}
-      onKeyUpCapture={contextMenu.onSelectionCapture}
-      onContextMenuCapture={contextMenu.onContextMenuCapture}
-      className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
+      {...paneCapture}
+      // Why column-reverse rather than reordering the JSX: it flips only the
+      // painted order of the three regions (transcript, interactive card,
+      // composer) while the transcript keeps its own scroll container intact.
+      className={cn(
+        'flex h-full min-h-0 w-full bg-background focus:outline-none',
+        composerOnTop ? 'flex-col-reverse' : 'flex-col'
+      )}
     >
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
@@ -411,6 +396,7 @@ function NativeChatResolvedView({
             onLinkClick={nativeChatFileLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
+            orientation={nativeChatListOrientation(composerOnTop)}
           />
         )}
       </div>

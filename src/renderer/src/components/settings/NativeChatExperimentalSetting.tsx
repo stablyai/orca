@@ -20,6 +20,7 @@ export function NativeChatExperimentalSetting({
   const nativeChatEnabled = settings.experimentalNativeChat === true
   const openByDefault = settings.openAgentTabsInChatByDefault === true
   const defaultView: NativeChatDefaultView = openByDefault ? 'native-chat' : 'terminal-chat'
+  const composerOnTop = settings.nativeChatComposerOnTop === true
 
   return (
     <SearchableSetting
@@ -58,7 +59,31 @@ export function NativeChatExperimentalSetting({
         />
       </div>
       {nativeChatEnabled ? (
-        <div className="ml-4 border-l border-border pl-4">
+        <div className="ml-4 space-y-3 border-l border-border pl-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 shrink space-y-0.5">
+              <Label>
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.composerOnTopTitle',
+                  'Composer on top'
+                )}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.settings.ExperimentalPane.nativeChat.composerOnTopCopy',
+                  'Put the input above the transcript and read newest-first, so replies appear at eye level instead of the bottom of the pane.'
+                )}
+              </p>
+            </div>
+            <SettingsSwitch
+              checked={composerOnTop}
+              ariaLabel={translate(
+                'auto.components.settings.ExperimentalPane.nativeChat.composerOnTopToggleLabel',
+                'Toggle composer on top'
+              )}
+              onChange={() => updateSettings({ nativeChatComposerOnTop: !composerOnTop })}
+            />
+          </div>
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0 shrink space-y-0.5">
               <Label>

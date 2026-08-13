@@ -850,6 +850,17 @@ function hasAnyOwnField(record: Record<string, unknown>, keys: readonly string[]
   return keys.some((key) => hasOwnField(record, key))
 }
 
+/** The first present, non-null tool-input payload among alternative hook keys. */
+function firstDefinedToolInput(record: Record<string, unknown>, keys: readonly string[]): unknown {
+  for (const key of keys) {
+    const value = record[key]
+    if (value !== undefined && value !== null) {
+      return value
+    }
+  }
+  return undefined
+}
+
 function toolUpdate(
   fields: Pick<ToolSnapshot, 'toolName' | 'toolInput' | 'interactivePrompt'>,
   options?: { hasToolInputField?: boolean }
@@ -2137,8 +2148,17 @@ function extractDroidToolFields(
       deriveToolInputPreview(toolName, hookPayload.tool_input) ??
       deriveToolInputPreview(toolName, hookPayload.input) ??
       deriveToolInputPreview(toolName, hookPayload.arguments)
+    // Why: Droid reports AskUser's questionnaire under whichever of these keys the
+    // hook carries; without the envelope the question card has nothing to render
+    // and the pane can only show a bare "waiting" state.
+    const rawToolInput =
+      firstDefinedToolInput(hookPayload, ['tool_input', 'input', 'arguments']) ?? undefined
     const update: ToolSnapshot = toolUpdate(
-      { toolName, toolInput },
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, rawToolInput, eventName)
+      },
       { hasToolInputField: hasAnyOwnField(hookPayload, ['tool_input', 'input', 'arguments']) }
     )
     if (eventName === 'PostToolUse') {

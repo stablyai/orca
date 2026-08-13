@@ -1,4 +1,7 @@
+import { parseDroidQuestionnaire } from './native-chat-ask-droid-questionnaire'
 import type {
+  AskAnswerKeyGroup,
+  AskAnswerSelection,
   AskOption,
   AskPrompt,
   AskQuestion,
@@ -6,7 +9,15 @@ import type {
 } from './native-chat-ask-types'
 import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
 
-export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
+export type {
+  AskAnswerKeyGroup,
+  AskAnswerSelection,
+  AskOption,
+  AskPrompt,
+  AskQuestion,
+  InteractiveQuestionParser
+}
+export { buildDroidAskAnswerKeys } from './native-chat-ask-droid-keys'
 
 const QUESTION_TOOL_PARSERS = new Map<string, InteractiveQuestionParser>()
 
@@ -75,6 +86,10 @@ function parseOptions(raw: unknown): AskOption[] {
 for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) {
   QUESTION_TOOL_PARSERS.set(name, parseQuestionsShape)
 }
+// Droid's AskUser ships a plain-text questionnaire instead of a questions array.
+for (const name of ['AskUser', 'ask-user', 'ask_user']) {
+  QUESTION_TOOL_PARSERS.set(name, parseDroidQuestionnaire)
+}
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
@@ -139,17 +154,6 @@ export function resolveNativeChatAsk(args: {
 }): AskPrompt | null {
   return args.liveAsk ?? (args.transcriptSettled ? extractPendingAsk(args.messages) : null)
 }
-
-/** One question's chosen answer, normalized for delivery: the selected option
- *  indices (in option order) plus any free-text "other" answer. Index-based (not
- *  label text) so the answer can be delivered by the selector's stable option
- *  number — see `buildAskAnswerKeys`. */
-export type AskAnswerSelection = { indices: number[]; other?: string }
-
-/** A single keystroke group to write to the agent PTY. `raw` bytes (option
- *  numbers, Enter, arrows) are written verbatim as keystrokes; `text` is a
- *  free-text answer the caller runs through its paste sanitizer before writing. */
-export type AskAnswerKeyGroup = { raw: string } | { text: string }
 
 /** True when this question is answered (a picked option or typed free text). */
 function isAnswered(sel: AskAnswerSelection | undefined): boolean {

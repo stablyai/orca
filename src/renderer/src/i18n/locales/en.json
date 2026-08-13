@@ -6166,7 +6166,10 @@
             "defaultCopy": "Choose how new supported agent terminal tabs open.",
             "defaultViewLabel": "Default Chat UI view",
             "defaultViewTerminal": "Terminal chat",
-            "defaultViewNative": "Chat UI"
+            "defaultViewNative": "Chat UI",
+            "composerOnTopTitle": "Composer on top",
+            "composerOnTopCopy": "Put the input above the transcript and read newest-first, so replies appear at eye level instead of the bottom of the pane.",
+            "composerOnTopToggleLabel": "Toggle composer on top"
           },
           "agentDashboard": {
             "title": "Agent Dashboard",

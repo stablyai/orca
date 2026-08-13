@@ -4,6 +4,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG,
   createClaudeCatalogOptions
 } from './agent-session-option-catalog-claude-codex'
+import { DROID_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-droid'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
   GEMINI_SESSION_OPTION_CATALOG
@@ -33,7 +34,8 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   codex: CODEX_SESSION_OPTION_CATALOG,
   gemini: GEMINI_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
-  grok: GROK_SESSION_OPTION_CATALOG
+  grok: GROK_SESSION_OPTION_CATALOG,
+  droid: DROID_SESSION_OPTION_CATALOG
 }
 
 export function getAgentSessionOptionCatalog(agent: AgentType): AgentSessionOptionCatalog | null {
