@@ -4590,22 +4590,6 @@ export class OrchestrationDb {
       .get(afterRowId) as { dispatchId: string; rowId: number } | undefined
   }
 
-  findLatestTerminalFederatedDispatchPendingAcknowledgment():
-    | { dispatchId: string; rowId: number }
-    | undefined {
-    return this.db
-      .prepare(
-        `SELECT fd.dispatch_id AS dispatchId, fd.rowid AS rowId
-         FROM federated_dispatches fd
-         INNER JOIN worker_dispatches wd ON wd.dispatch_id = fd.dispatch_id
-         WHERE wd.state NOT IN ('starting', 'ready', 'stopping', 'start_unknown', 'stop_unknown')
-           AND fd.to_home_acknowledged_sequence < fd.to_home_imported_sequence
-         ORDER BY fd.rowid DESC
-         LIMIT 1`
-      )
-      .get() as { dispatchId: string; rowId: number } | undefined
-  }
-
   isFederatedDispatchRelayEligible(dispatchId: string): boolean {
     return Boolean(
       this.db
